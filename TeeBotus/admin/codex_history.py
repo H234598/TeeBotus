@@ -3439,14 +3439,7 @@ def _emit_follow_scan_report(instance_name: str, scan_report: Mapping[str, Any],
     for item in _watch_detail_items(scan_report.get("items", [])):
         if not isinstance(item, Mapping):
             continue
-        item_payload = item.get("item", {})
-        summary_prefix = item_payload.get("summary_prefix", "") if isinstance(item_payload, Mapping) else ""
-        lines.append(
-            "  import: "
-            f"status={item.get('status', '')} "
-            f"reason={item.get('reason', '')} "
-            f"summary={summary_prefix}"
-        )
+        lines.append(_watch_import_detail_line(item))
     print("\n".join(lines) + "\n", flush=True)
 
 
@@ -3855,14 +3848,7 @@ def _render_watch_report(payload: Mapping[str, Any]) -> str:
         for item in _watch_detail_items(instance.get("items", [])):
             if not isinstance(item, Mapping):
                 continue
-            item_payload = item.get("item", {})
-            summary_prefix = item_payload.get("summary_prefix", "") if isinstance(item_payload, Mapping) else ""
-            lines.append(
-                "  import: "
-                f"status={item.get('status', '')} "
-                f"reason={item.get('reason', '')} "
-                f"summary={summary_prefix}"
-            )
+            lines.append(_watch_import_detail_line(item))
         post_index = instance.get("post_index")
         if isinstance(post_index, Mapping):
             export = post_index.get("export", {})
@@ -3923,6 +3909,21 @@ def _watch_detail_items(items: Any) -> list[Mapping[str, Any]]:
             continue
         details.append(item)
     return details
+
+
+def _watch_import_detail_line(item: Mapping[str, Any]) -> str:
+    item_payload = item.get("item", {})
+    summary_prefix = item_payload.get("summary_prefix", "") if isinstance(item_payload, Mapping) else ""
+    path_text = str(item.get("path") or "")
+    line = (
+        "  import: "
+        f"status={item.get('status', '')} "
+        f"reason={item.get('reason', '')} "
+        f"summary={summary_prefix}"
+    )
+    if path_text:
+        line += f" path={path_text}"
+    return line
 
 
 def _git_output(repo_root: Path, *args: str) -> str:

@@ -1993,11 +1993,13 @@ def test_render_watch_report_omits_duplicate_import_details_but_keeps_counts() -
                             "status": "imported",
                             "reason": "",
                             "item": {"summary_prefix": "v1.0.0 #0002"},
+                            "path": "/tmp/sessions/imported.jsonl",
                         },
                         {
                             "status": "skipped",
                             "reason": "missing_final_text",
                             "item": {},
+                            "path": "/tmp/sessions/skipped.jsonl",
                         },
                     ],
                 }
@@ -2008,8 +2010,8 @@ def test_render_watch_report_omits_duplicate_import_details_but_keeps_counts() -
     assert "statuses: duplicate=2, imported=1, skipped=1" in rendered
     assert "summary=v1.0.0 #0001" not in rendered
     assert "import: status=duplicate" not in rendered
-    assert "import: status=imported reason= summary=v1.0.0 #0002" in rendered
-    assert "import: status=skipped reason=missing_final_text summary=" in rendered
+    assert "import: status=imported reason= summary=v1.0.0 #0002 path=/tmp/sessions/imported.jsonl" in rendered
+    assert "import: status=skipped reason=missing_final_text summary= path=/tmp/sessions/skipped.jsonl" in rendered
 
 
 def test_render_watch_report_formats_empty_dispatch_status_counts_as_none() -> None:
