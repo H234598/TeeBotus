@@ -697,13 +697,19 @@ def test_source_harvester_allows_reclassification_with_better_metadata(tmp_path)
 def test_source_harvester_rejects_executables_and_refuses_symlinks(tmp_path):
     source = tmp_path / "payload.sh"
     source.write_text("#!/bin/sh\nrm -rf /tmp/nope\n", encoding="utf-8")
+    spaced_source = tmp_path / "payload-spaced.sh "
+    spaced_source.write_text("#!/bin/sh\nrm -rf /tmp/nope-spaced\n", encoding="utf-8")
     harvester = SourceHarvester(tmp_path / "library")
 
     result = harvester.harvest_path(source, metadata={"title": "Payload", "license": "private"})
+    spaced_result = harvester.harvest_path(spaced_source, metadata={"title": "Payload spaced", "license": "private"})
 
     assert result.route == "rejected"
     assert result.stored_path is not None
     assert result.stored_path.parent == tmp_path / "library" / "rejected"
+    assert spaced_result.route == "rejected"
+    assert spaced_result.stored_path is not None
+    assert spaced_result.stored_path.parent == tmp_path / "library" / "rejected"
     for dirname in HARVEST_DIRS:
         assert (tmp_path / "library" / dirname).is_dir()
 

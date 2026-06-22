@@ -66,6 +66,14 @@ def test_source_quality_pipeline_rejects_executable_or_too_large_sources() -> No
             metadata={"title": "bad", "license": "private"},
         )
     )
+    spaced_executable = pipeline.evaluate(
+        SourceQualityInput(
+            identifier="payload-spaced.sh ",
+            size_bytes=10,
+            suffix=".sh ",
+            metadata={"title": "bad spaced", "license": "private"},
+        )
+    )
     huge = pipeline.evaluate(
         SourceQualityInput(
             identifier="huge.pdf",
@@ -77,6 +85,8 @@ def test_source_quality_pipeline_rejects_executable_or_too_large_sources() -> No
 
     assert executable.route == "rejected"
     assert executable.decision.status == "reject"
+    assert spaced_executable.route == "rejected"
+    assert spaced_executable.decision.status == "reject"
     assert huge.route == "rejected"
     assert "too large" in huge.decision.reason
 

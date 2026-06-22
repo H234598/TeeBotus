@@ -68,7 +68,7 @@ class SourceQualityInput:
         return cls(
             identifier=str(source_path),
             size_bytes=size,
-            suffix=source_path.suffix,
+            suffix=source_path.suffix.strip(),
             metadata=dict(metadata or {}),
             claims=tuple(str(item) for item in claims),
             evidence=tuple(str(item) for item in evidence),
@@ -146,7 +146,7 @@ def _deterministic_source_issues(
     allowed_suffixes: frozenset[str],
 ) -> tuple[str, ...]:
     issues: list[str] = []
-    suffix = str(source.suffix or Path(source.identifier).suffix or "").casefold()
+    suffix = str(source.suffix or Path(source.identifier).suffix or "").strip().casefold()
     if suffix in EXECUTABLE_SUFFIXES:
         issues.append(f"reject: executable suffix {suffix}")
     elif not suffix:
