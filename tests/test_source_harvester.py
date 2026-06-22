@@ -304,6 +304,84 @@ def test_source_harvester_manifest_append_uses_atomic_nofollow(tmp_path, monkeyp
     assert outside_manifest.read_text(encoding="utf-8") == "outside-before\n"
 
 
+@pytest.mark.skipif(not hasattr(os, "O_NOFOLLOW"), reason="requires atomic no-follow file open")
+def test_source_harvester_manifest_duplicate_read_uses_atomic_nofollow(tmp_path):
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    library_dir = tmp_path / "library"
+    outside_manifest = tmp_path / "outside_manifest.jsonl"
+    outside_manifest.write_text("outside-before\n", encoding="utf-8")
+
+    class SymlinkManifestBeforeDuplicatePipeline:
+        def __init__(self, manifest_path: Path, target_path: Path) -> None:
+            self.manifest_path = manifest_path
+            self.target_path = target_path
+            self.inner = SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91))
+
+        def evaluate(self, source_input):
+            self.manifest_path.symlink_to(self.target_path)
+            return self.inner.evaluate(source_input)
+
+    harvester = SourceHarvester(
+        library_dir,
+        quality_pipeline=SymlinkManifestBeforeDuplicatePipeline(library_dir / "harvest_manifest.jsonl", outside_manifest),
+    )
+
+    with pytest.raises(ValueError, match="symlink manifest file"):
+        harvester.harvest_path(
+            source,
+            metadata={"title": "Therapie", "license": "private"},
+            claims=("Schlafhygiene ist relevant.",),
+            evidence=("Schlafhygiene und Aktivierung.",),
+        )
+
+    assert outside_manifest.read_text(encoding="utf-8") == "outside-before\n"
+    assert not any((library_dir / "accepted").iterdir())
+
+
+@pytest.mark.skipif(not hasattr(os, "O_NOFOLLOW"), reason="requires atomic no-follow file open")
+def test_source_harvester_promote_manifest_read_uses_atomic_nofollow(tmp_path, monkeypatch):
+    library_dir = tmp_path / "library"
+    harvester = SourceHarvester(library_dir)
+    harvester.prepare()
+    staged = library_dir / "accepted" / "therapie.txt"
+    staged.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    sha256 = hashlib.sha256(staged.read_bytes()).hexdigest()
+    harvester.manifest_path.write_text(
+        json.dumps(
+            {
+                "accepted_for_ingest": True,
+                "route": "accepted",
+                "sha256": sha256,
+                "source_path": str(staged),
+                "stored_path": str(staged),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    outside_manifest = tmp_path / "outside_manifest.jsonl"
+    outside_manifest.write_text("outside-before\n", encoding="utf-8")
+    original_open = os.open
+
+    def open_and_swap_manifest(path, flags, *args, **kwargs):
+        if Path(path) == harvester.manifest_path:
+            harvester.manifest_path.unlink()
+            harvester.manifest_path.symlink_to(outside_manifest)
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(source_harvester_module.os, "open", open_and_swap_manifest)
+
+    with pytest.raises(ValueError, match="symlink manifest file"):
+        harvester.promote_accepted(staged)
+
+    assert outside_manifest.read_text(encoding="utf-8") == "outside-before\n"
+    assert not (library_dir / "books" / "therapie.txt").exists()
+
+
 def test_source_harvester_manifest_append_does_not_chmod_swapped_symlink(tmp_path, monkeypatch):
     source = tmp_path / "download" / "therapie.txt"
     source.parent.mkdir()

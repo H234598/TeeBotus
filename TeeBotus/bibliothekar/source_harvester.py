@@ -156,9 +156,7 @@ class SourceHarvester:
         return self.library_root / _route_dir(route) / f"{sha256[:16]}-{safe_name}"
 
     def _existing_path_for_hash(self, sha256: str, *, route: SourceRoute) -> Path | None:
-        if not self.manifest_path.exists():
-            return None
-        for line in self.manifest_path.read_text(encoding="utf-8").splitlines():
+        for line in _read_manifest_lines_nofollow(self.manifest_path):
             try:
                 row = json.loads(line)
             except json.JSONDecodeError:
@@ -177,9 +175,7 @@ class SourceHarvester:
         return None
 
     def _manifest_accepts_hash(self, sha256: str, staged_path: Path) -> bool:
-        if not self.manifest_path.exists():
-            return False
-        for line in self.manifest_path.read_text(encoding="utf-8").splitlines():
+        for line in _read_manifest_lines_nofollow(self.manifest_path):
             try:
                 row = json.loads(line)
             except json.JSONDecodeError:
@@ -337,6 +333,26 @@ def _append_manifest_row(path: Path, row: Mapping[str, Any]) -> None:
     _chmod_private_fd(fd)
     with os.fdopen(fd, "a", encoding="utf-8") as handle:
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+
+
+def _read_manifest_lines_nofollow(path: Path) -> tuple[str, ...]:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags)
+    except FileNotFoundError:
+        return ()
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise ValueError(f"SourceHarvester refuses symlink manifest file: {path}") from exc
+        raise
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError(f"SourceHarvester requires regular manifest file: {path}")
+        with os.fdopen(fd, "r", encoding="utf-8") as handle:
+            fd = -1
+            return tuple(handle.read().splitlines())
+    finally:
+        _close_fd_if_open(fd)
 
 
 def _copy_file_private(source: Path, destination: Path) -> os.stat_result:
