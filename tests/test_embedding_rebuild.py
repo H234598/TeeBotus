@@ -247,7 +247,10 @@ def test_rebuild_qdrant_bibliothekar_indexes_dry_run_avoids_qdrant_writes(tmp_pa
     instance_dir = instances_dir / "Depressionsbot"
     library_dir = instance_dir / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
-    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: qdrant\n", encoding="utf-8")
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        "## Bibliothekar\n- backend: qdrant\n- collection: therapy_books\n",
+        encoding="utf-8",
+    )
     (library_dir / "therapie.txt").write_text("Aktivierung und Schlaf.", encoding="utf-8")
 
     results = rebuild_qdrant_bibliothekar_indexes(
@@ -262,6 +265,7 @@ def test_rebuild_qdrant_bibliothekar_indexes_dry_run_avoids_qdrant_writes(tmp_pa
     assert results[0].chunk_count == 1
     assert results[0].point_count == 1
     assert results[0].point_ids == ()
+    assert results[0].collection_name == "therapy_books"
     assert results[0].embedding_provider == "fake"
     assert results[0].embedding_model == "teebotus-fake-bibliothekar-embedding-v1"
 

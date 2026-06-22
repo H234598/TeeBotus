@@ -251,6 +251,7 @@ def rebuild_qdrant_bibliothekar_indexes(
                         chunk_count=len(chunks),
                         point_count=len(chunks),
                         qdrant_url=effective_qdrant_url,
+                        collection_name=instructions.bibliothekar_collection or QDRANT_BIBLIOTHEKAR_COLLECTION,
                         embedding_config=effective_embedding_config,
                     )
                 )
