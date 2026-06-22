@@ -451,7 +451,13 @@ def test_llm_profiles_plan2_contract_rejects_selector_field_drift(monkeypatch) -
     def drifting_selector(purpose: str, **kwargs):
         route = original_selector(purpose, **kwargs)
         if route.purpose == "hard_reasoning":
-            return replace(route, api_key_env="", fallback_api_key_env="OPENAI_API_KEY", service_tier="flex")
+            return replace(
+                route,
+                api_key_env="",
+                fallback_api_key_env="OPENAI_API_KEY",
+                service_tier="flex",
+                fallback_service_tier="flex",
+            )
         return route
 
     monkeypatch.setattr(llm_profiles, "select_llm_route", drifting_selector)
@@ -462,6 +468,7 @@ def test_llm_profiles_plan2_contract_rejects_selector_field_drift(monkeypatch) -
     assert "routing hard_reasoning selector api_key_env=<empty> expected=OPENAI_API_KEY" in message
     assert "routing hard_reasoning selector service_tier=flex expected=<empty>" in message
     assert "routing hard_reasoning selector fallback_api_key_env=OPENAI_API_KEY expected=GEMINI_API_KEY" in message
+    assert "routing hard_reasoning selector fallback_service_tier=flex expected=<empty>" in message
 
 
 def test_llm_profiles_plan2_contract_rejects_unexpected_profiles_and_routes(monkeypatch) -> None:

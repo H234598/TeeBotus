@@ -837,11 +837,13 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
                 "fallback_model": selected.fallback_model,
                 "fallback_api_key_env": selected.fallback_api_key_env,
                 "fallback_base_url": selected.fallback_base_url,
+                "fallback_service_tier": selected.fallback_service_tier,
             }
             expected_values = {
                 "fallback_model": expected_fallback.model,
                 "fallback_api_key_env": expected_fallback.api_key_env,
                 "fallback_base_url": expected_fallback.base_url,
+                "fallback_service_tier": expected_fallback.service_tier,
             }
             for field, selected_value in fallback_fields.items():
                 expected_value = expected_values[field]
@@ -850,7 +852,12 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
                         f"routing {purpose} selector {field}={selected_value or '<empty>'} "
                         f"expected={expected_value or '<empty>'}"
                     )
-        elif selected.fallback_model or selected.fallback_api_key_env or selected.fallback_base_url:
+        elif (
+            selected.fallback_model
+            or selected.fallback_api_key_env
+            or selected.fallback_base_url
+            or selected.fallback_service_tier
+        ):
             errors.append(f"routing {purpose} selector fallback fields must be empty without fallback")
     if errors:
         return False, "llm profiles plan2 contract failed: " + "; ".join(errors)
