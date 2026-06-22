@@ -797,6 +797,20 @@ def test_runtime_status_text_redacts_schemeless_url_credentials() -> None:
     assert "error=<redacted>@matrix.example/_matrix" in text
 
 
+def test_runtime_status_text_redacts_username_only_url_userinfo() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    text = bot._sanitize_status_text(
+        "target=https://plain-userinfo-token@example.test/path "
+        "error=raw-userinfo-token@matrix.example/_matrix"
+    )
+
+    assert "plain-userinfo-token" not in text
+    assert "raw-userinfo-token" not in text
+    assert "target=https://<redacted>@example.test/path" in text
+    assert "error=<redacted>@matrix.example/_matrix" in text
+
+
 def test_runtime_status_text_redacts_url_credentials_with_invalid_port() -> None:
     bot = importlib.import_module("TeeBotus.bot")
 

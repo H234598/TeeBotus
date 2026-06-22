@@ -1962,7 +1962,7 @@ def _sanitize_status_url_value(value: str, *, value_prefix: str = "") -> str:
         parsed = urlsplit(value)
     except ValueError:
         return f"{value_prefix}{_status_redact_malformed_url_credentials(value)}"
-    if parsed.username is None or parsed.password is None:
+    if parsed.username is None and parsed.password is None:
         query = _sanitize_status_url_param_secrets(parsed.query)
         fragment = _sanitize_status_url_param_secrets(parsed.fragment)
         return f"{value_prefix}{urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, fragment))}"
@@ -1979,11 +1979,11 @@ def _status_redact_malformed_url_credentials(value: str) -> str:
     text = str(value or "")
     if "://" in text:
         return re.sub(
-            r"^([A-Za-z][A-Za-z0-9+.-]*://)(?:[^/\s:@]+:[^/\s@]*|:[^/\s@]+)@",
+            r"^([A-Za-z][A-Za-z0-9+.-]*://)(?:(?:[^/\s:@]+:[^/\s@]*|:[^/\s@]+)|(?:[^/\s:@]+(?=@[^\s@]*(?:[/:?#]))))@",
             r"\1<redacted>@",
             text,
         )
-    return re.sub(r"^(?:[^/\s:@]+:[^/\s@]*|:[^/\s@]+)@", "<redacted>@", text)
+    return re.sub(r"^(?:(?:[^/\s:@]+:[^/\s@]*|:[^/\s@]+)|(?:[^/\s:@]+(?=@[^\s@]*(?:[/:?#]))))@", "<redacted>@", text)
 
 
 def _status_redacted_url_netloc(parsed: Any) -> str:
@@ -2065,7 +2065,9 @@ _status_url_secret_param_pattern = re.compile(
     r"(?i)(^|[&#;])([^=&#;]{0,120}(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
     r"[^=&#;]{0,120})=([^&#;]*)"
 )
-_status_schemeless_credential_pattern = re.compile(r"(?:(?<!\S)|(?<==))[^/\s:@]+:[^/\s@]*@(?=[^\s]+)")
+_status_schemeless_credential_pattern = re.compile(
+    r"(?:(?<!\S)|(?<==))(?:(?:[^/\s:@]+:[^/\s@]*|:[^/\s@]+)|(?:[^/\s:@]+(?=@[^\s@]*(?:[/:?#]))))@(?=[^\s]+)"
+)
 
 
 def _sanitize_status_url_param_secrets(value: str) -> str:
