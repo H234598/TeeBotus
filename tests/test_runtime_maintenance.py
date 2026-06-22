@@ -84,6 +84,33 @@ def test_runtime_maintenance_compresses_old_logs(tmp_path):
     assert not path.exists()
 
 
+def test_runtime_maintenance_does_not_compress_replacement_after_age_check(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 8 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    os.utime(path, (old_mtime, old_mtime))
+    real_open = os.open
+    raced = False
+
+    def racing_open(file, flags, *args, **kwargs):
+        nonlocal raced
+        if Path(file) == path and not raced:
+            raced = True
+            path.unlink()
+            path.write_text("new log\n", encoding="utf-8")
+            os.utime(path, (now, now))
+        return real_open(file, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", racing_open)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert raced is True
+    assert path.read_text(encoding="utf-8") == "new log\n"
+    assert not (tmp_path / f"{path.name}.gz").exists()
+
+
 def test_runtime_maintenance_preserves_active_runtime_logs(tmp_path):
     now = time.time()
     old_mtime = now - 8 * 24 * 60 * 60

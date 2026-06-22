@@ -236,15 +236,16 @@ def maintain_runtime_directory(
     resolved_now = time.time() if now is None else now
     for path in list(_runtime_text_files(runtime_path)):
         try:
-            age = max(0.0, resolved_now - path.stat().st_mtime)
-            if path.stat().st_size > max_bytes or age >= compress_after_seconds:
-                gzip_file(path)
+            file_stat = path.stat()
+            age = max(0.0, resolved_now - file_stat.st_mtime)
+            if file_stat.st_size > max_bytes or age >= compress_after_seconds:
+                gzip_file(path, expected_stat=file_stat)
         except OSError:
             continue
     _archive_old_compressed_files(runtime_path, now=resolved_now, archive_after_seconds=monthly_archive_after_seconds)
 
 
-def gzip_file(path: Path) -> Path:
+def gzip_file(path: Path, *, expected_stat: os.stat_result | None = None) -> Path:
     if path.is_symlink() or path.suffix == ".gz" or not path.is_file():
         return path
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
@@ -262,6 +263,9 @@ def gzip_file(path: Path) -> Path:
         os.close(fd)
         raise
     if not stat_module.S_ISREG(source_stat.st_mode):
+        os.close(fd)
+        return path
+    if expected_stat is not None and not _same_file_stat(source_stat, expected_stat):
         os.close(fd)
         return path
     target = _unique_path(path.with_name(f"{path.name}.gz"))
@@ -366,9 +370,13 @@ def _unlink_if_same_file(path: Path, expected_stat: os.stat_result) -> None:
         current_stat = os.stat(path, follow_symlinks=False)
     except OSError:
         return
-    if (current_stat.st_dev, current_stat.st_ino) != (expected_stat.st_dev, expected_stat.st_ino):
+    if not _same_file_stat(current_stat, expected_stat):
         return
     _unlink_quietly(path)
+
+
+def _same_file_stat(left: os.stat_result, right: os.stat_result) -> bool:
+    return (left.st_dev, left.st_ino) == (right.st_dev, right.st_ino)
 
 
 def _next_rotated_path(path: Path) -> Path:
