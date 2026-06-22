@@ -536,6 +536,66 @@ def test_haystack_backend_rebuild_removes_stale_chunks_when_instance_filter_retu
     assert "therapie.txt" in selection.prompt_text
 
 
+def test_haystack_backend_preserves_source_quality_metadata(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    book_dir = library_dir / "books"
+    book_dir.mkdir(parents=True)
+    source = book_dir / "therapie.txt"
+    source.write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    accepted_path = library_dir / "accepted" / "therapie.txt"
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    manifest_path = library_dir / "harvest_manifest.jsonl"
+    rows = [
+        {
+            "accepted_for_ingest": True,
+            "decision": {
+                "confidence": 0.8,
+                "reason": "manual review downgraded source",
+                "requires_human_review": True,
+                "status": "weak",
+            },
+            "route": "accepted",
+            "sha256": sha256,
+            "source": {"metadata": {"license": "private", "title": "Therapiequelle"}},
+            "source_path": "/tmp/original-therapie.txt",
+            "stored_path": str(accepted_path),
+        },
+        {
+            "accepted_for_ingest": False,
+            "event": "promoted",
+            "route": "promoted",
+            "sha256": sha256,
+            "source_path": str(accepted_path),
+            "stored_path": str(source),
+        },
+    ]
+    manifest_path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+    fallback_store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    document_store = FakeDocumentStore()
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        fallback_store=fallback_store,
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+
+    backend.rebuild()
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=1))
+    payload = json.loads(selection.prompt_text)
+    prompt_chunk = payload["selected_library_chunks"][0]
+
+    assert document_store.documents[0].meta["source_quality"] == "weak"
+    assert prompt_chunk["source_quality"] == "weak"
+    assert prompt_chunk["citation_quality"] == "weak"
+    assert prompt_chunk["source_quality_reason"] == "manual review downgraded source"
+    assert prompt_chunk["source_requires_human_review"] is True
+    assert prompt_chunk["source_harvest_route"] == "accepted"
+
+
 def test_bibliothekar_service_applies_local_metadata_filters(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
