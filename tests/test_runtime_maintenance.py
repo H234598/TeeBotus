@@ -82,6 +82,26 @@ def test_runtime_maintenance_archives_compressed_logs_older_than_two_months(tmp_
         assert "teebotus-production.log.2026-03-01.gz" in archive.getnames()
 
 
+def test_runtime_maintenance_skips_archive_files_that_disappear_during_tar_add(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+
+    def disappearing_add(_self, name, *_args, **_kwargs):
+        os.unlink(name)
+        raise FileNotFoundError(name)
+
+    monkeypatch.setattr(tarfile.TarFile, "add", disappearing_add)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert not path.exists()
+    assert not list((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
+
+
 def test_runtime_maintenance_archives_old_uncompressed_logs_in_same_pass(tmp_path):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60

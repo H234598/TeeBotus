@@ -270,10 +270,27 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
     for month, paths in groups.items():
         archive_dir.mkdir(parents=True, exist_ok=True)
         archive_path = _unique_path(archive_dir / f"teebotus-runtime-{month}.tar.gz")
-        with tarfile.open(archive_path, "w:gz") as archive:
-            for path in paths:
-                archive.add(path, arcname=path.name)
-        for path in paths:
+        temporary = _unique_path(archive_dir / f".{archive_path.name}.tmp")
+        added_paths: list[Path] = []
+        try:
+            with tarfile.open(temporary, "w:gz") as archive:
+                for path in paths:
+                    try:
+                        archive.add(path, arcname=path.name)
+                    except FileNotFoundError:
+                        continue
+                    added_paths.append(path)
+            if not added_paths:
+                temporary.unlink()
+                continue
+            temporary.replace(archive_path)
+        except Exception:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
+            raise
+        for path in added_paths:
             try:
                 path.unlink()
             except FileNotFoundError:
