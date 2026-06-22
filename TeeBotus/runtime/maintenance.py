@@ -309,7 +309,7 @@ def _has_symlink_parent(path: Path) -> bool:
         try:
             if parent.is_symlink():
                 return True
-        except OSError:
+        except (OSError, ValueError):
             return True
     return False
 
@@ -746,5 +746,5 @@ def _unique_path(path: Path) -> Path:
 def _path_exists_or_symlink(path: Path) -> bool:
     try:
         return os.path.lexists(path)
-    except OSError:
+    except (OSError, ValueError):
         return True
