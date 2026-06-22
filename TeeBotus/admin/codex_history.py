@@ -2181,6 +2181,9 @@ def _assistant_text_from_codex_payload(payload: Mapping[str, Any]) -> str:
         return ""
     if role and role != "assistant":
         return ""
+    phase = str(payload.get("phase") or "").strip().casefold()
+    if role == "assistant" and phase and phase not in {"final", "final_answer"}:
+        return ""
     content = payload.get("content")
     return _text_from_codex_content(content).strip()
 

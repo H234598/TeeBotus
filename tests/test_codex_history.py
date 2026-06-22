@@ -1349,6 +1349,71 @@ def test_import_codex_session_file_skips_when_no_assistant_final_text(tmp_path: 
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID) == []
 
 
+def test_import_codex_session_file_skips_commentary_only_assistant_updates(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "commentary-only-session-demo", version="1.0.1")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    session_file = tmp_path / "sessions" / "commentary.jsonl"
+    rows = [
+        {"type": "session_meta", "payload": {"id": "sess-commentary-only", "cwd": str(repo)}},
+        {"type": "turn_context", "payload": {"turn_id": "turn-commentary-only"}},
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "phase": "commentary",
+                "content": [{"type": "output_text", "text": "Ich pruefe gerade nur den Zwischenstand."}],
+            },
+        },
+    ]
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+
+    result = import_codex_session_file(store, session_file)
+
+    assert result["status"] == "skipped"
+    assert result["reason"] == "missing_final_text"
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID) == []
+
+
+def test_import_codex_session_file_prefers_final_answer_over_commentary(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "final-phase-session-demo", version="1.0.2")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    session_file = tmp_path / "sessions" / "final-answer.jsonl"
+    rows = [
+        {"type": "session_meta", "payload": {"id": "sess-final-phase", "cwd": str(repo)}},
+        {"type": "turn_context", "payload": {"turn_id": "turn-final-phase"}},
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "phase": "commentary",
+                "content": [{"type": "output_text", "text": "Zwischenstand darf nicht Summary werden."}],
+            },
+        },
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "phase": "final_answer",
+                "content": [{"type": "output_text", "text": "Finale Summary soll importiert werden."}],
+            },
+        },
+    ]
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+
+    result = import_codex_session_file(store, session_file)
+
+    assert result["status"] == "imported"
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    assert len(rows) == 1
+    assert rows[0]["summary"]["title"] == "Finale Summary soll importiert werden."
+    assert "Zwischenstand" not in rows[0]["summary"]["markdown"]
+
+
 def test_import_codex_session_roots_skips_invalid_repo_root_without_aborting(tmp_path: Path) -> None:
     store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
     sessions_root = tmp_path / "sessions"
