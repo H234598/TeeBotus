@@ -67,6 +67,16 @@ def test_source_harvester_refuses_symlink_harvest_destination_file(tmp_path):
     assert not outside_target.exists()
 
 
+def test_source_harvester_file_hash_refuses_symlink(tmp_path):
+    source = tmp_path / "source.txt"
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    link = tmp_path / "link.txt"
+    link.symlink_to(source)
+
+    with pytest.raises(ValueError, match="refuses symlink sources"):
+        source_harvester_module._file_sha256(link)
+
+
 @pytest.mark.skipif(not hasattr(os, "O_NOFOLLOW"), reason="requires atomic no-follow file open")
 def test_source_harvester_refuses_harvest_destination_symlink_swapped_before_copy(tmp_path, monkeypatch):
     source = tmp_path / "download" / "therapie.txt"

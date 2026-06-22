@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import shutil
+import stat
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -234,9 +235,14 @@ def _route_dir(route: SourceRoute) -> str:
 
 def _file_sha256(path: Path) -> str:
     digest = hashlib.sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
+    fd = _open_existing_file_nofollow(path)
+    try:
+        with os.fdopen(fd, "rb") as handle:
+            fd = -1
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                digest.update(chunk)
+    finally:
+        _close_fd_if_open(fd)
     return digest.hexdigest()
 
 
@@ -340,10 +346,17 @@ def _copy_file_private(source: Path, destination: Path) -> None:
 def _open_existing_file_nofollow(path: Path) -> int:
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
-        return os.open(path, flags)
+        fd = os.open(path, flags)
     except OSError as exc:
         if exc.errno == errno.ELOOP:
             raise ValueError("SourceHarvester refuses symlink sources") from exc
+        raise
+    try:
+        if not stat.S_ISREG(os.fstat(fd).st_mode):
+            raise ValueError(f"SourceHarvester requires regular file: {path}")
+        return fd
+    except Exception:
+        _close_fd_if_open(fd)
         raise
 
 
