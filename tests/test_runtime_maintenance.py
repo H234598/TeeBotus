@@ -1250,6 +1250,44 @@ def test_gzip_file_closes_source_fd_when_temporary_open_fails(tmp_path, monkeypa
     assert not list(tmp_path.glob(".*.tmp"))
 
 
+def test_gzip_file_closes_source_fd_when_source_stat_raises_value_error(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    real_open = os.open
+    real_fstat = os.fstat
+    real_close = os.close
+    source_fd: int | None = None
+    closed_fds: list[int] = []
+
+    def recording_open(file, flags, *args, **kwargs):
+        nonlocal source_fd
+        fd = real_open(file, flags, *args, **kwargs)
+        if Path(file) == path:
+            source_fd = fd
+        return fd
+
+    def fail_source_fstat(fd):
+        if fd == source_fd:
+            raise ValueError("source stat failed")
+        return real_fstat(fd)
+
+    def fail_close_after_closing(fd):
+        closed_fds.append(fd)
+        real_close(fd)
+        raise ValueError("close cleanup failed")
+
+    monkeypatch.setattr(os, "open", recording_open)
+    monkeypatch.setattr(os, "fstat", fail_source_fstat)
+    monkeypatch.setattr(os, "close", fail_close_after_closing)
+
+    with pytest.raises(ValueError, match="source stat failed"):
+        gzip_file(path)
+
+    assert source_fd in closed_fds
+    assert path.read_text(encoding="utf-8") == "old log\n"
+    assert not (tmp_path / f"{path.name}.gz").exists()
+
+
 def test_gzip_file_closes_temporary_fd_when_temporary_stat_fails(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")

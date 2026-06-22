@@ -434,7 +434,7 @@ def gzip_file(path: Path | str, *, expected_stat: os.stat_result | None = None) 
         raise
     try:
         source_stat = os.fstat(fd)
-    except OSError:
+    except (OSError, ValueError):
         _close_fd_quietly(fd)
         raise
     if not stat_module.S_ISREG(source_stat.st_mode):
@@ -711,7 +711,7 @@ def _unlink_quietly(path: Path) -> None:
 def _close_fd_quietly(fd: int) -> None:
     try:
         os.close(fd)
-    except OSError:
+    except (OSError, ValueError):
         pass
 
 
