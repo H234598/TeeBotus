@@ -2304,6 +2304,7 @@ def _iter_codex_session_files(roots: Sequence[str | Path], *, limit: int) -> tup
     files = sorted(set(files), key=_codex_session_file_import_sort_key)
     if limit > 0:
         files = files[:limit]
+    files = sorted(files, key=_codex_session_file_processing_sort_key)
     return tuple(files)
 
 
@@ -2313,6 +2314,14 @@ def _codex_session_file_import_sort_key(path: Path) -> tuple[int, str]:
     except OSError:
         return (0, str(path))
     return (-int(stat.st_mtime_ns), str(path))
+
+
+def _codex_session_file_processing_sort_key(path: Path) -> tuple[int, str]:
+    try:
+        stat = path.stat()
+    except OSError:
+        return (0, str(path))
+    return (int(stat.st_mtime_ns), str(path))
 
 
 def _normalize_watch_event_mode(value: str) -> str:

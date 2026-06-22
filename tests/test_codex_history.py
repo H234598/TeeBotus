@@ -1400,6 +1400,45 @@ def test_import_codex_session_roots_limit_prefers_newest_session_mtime(tmp_path:
     assert rows[0]["summary"]["title"] == "Neue Summary gewinnt trotz spaeterem Pfadnamen."
 
 
+def test_import_codex_session_roots_numbers_limited_backfill_chronologically(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "watch-numbered-backfill-demo", version="3.0.1")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    sessions_root = tmp_path / "sessions"
+    old_session = write_codex_session(
+        sessions_root / "000-old.jsonl",
+        repo=repo,
+        session_id="sess-backfill-old",
+        turn_id="turn-old",
+        final_text="Alte Summary ausserhalb des Limits.",
+    )
+    middle_session = write_codex_session(
+        sessions_root / "001-middle.jsonl",
+        repo=repo,
+        session_id="sess-backfill-middle",
+        turn_id="turn-middle",
+        final_text="Mittlere Summary soll zuerst nummeriert werden.",
+    )
+    new_session = write_codex_session(
+        sessions_root / "002-new.jsonl",
+        repo=repo,
+        session_id="sess-backfill-new",
+        turn_id="turn-new",
+        final_text="Neue Summary soll danach nummeriert werden.",
+    )
+    os.utime(old_session, ns=(1_000_000_000, 1_000_000_000))
+    os.utime(middle_session, ns=(2_000_000_000, 2_000_000_000))
+    os.utime(new_session, ns=(3_000_000_000, 3_000_000_000))
+
+    report = import_codex_session_roots(store, (sessions_root,), limit=2)
+
+    assert [Path(item["path"]) for item in report["items"]] == [middle_session.resolve(), new_session.resolve()]
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    assert [(row["codex"]["session_id"], row["summary_prefix"]) for row in rows] == [
+        ("sess-backfill-middle", "v3.0.1 #0001"),
+        ("sess-backfill-new", "v3.0.1 #0002"),
+    ]
+
+
 def test_codex_history_watch_once_cli_imports_session_directory(tmp_path: Path, capsys) -> None:
     make_instance(tmp_path)
     repo = make_git_repo(tmp_path, "watch-cli-demo", version="3.0.0")
