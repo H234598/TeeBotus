@@ -385,6 +385,8 @@ def _read_harvest_source_metadata(library_dir: Path) -> dict[str, dict[str, Any]
         promoted_path = _manifest_library_path(library_dir, promoted_text)
         if promoted_path is None:
             continue
+        if not _manifest_file_matches_sha256(promoted_path, sha256):
+            continue
         source_path = _manifest_library_path(library_dir, row.get("source_path"), "accepted")
         accepted = (
             accepted_by_key.get((sha256, _manifest_path_key(source_path))) if source_path is not None else None
@@ -503,6 +505,16 @@ def _manifest_relative_from_library_prefix(raw_path: Path, library_dir: Path) ->
 
 def _manifest_path_key(path: Path) -> str:
     return path.resolve(strict=False).as_posix()
+
+
+def _manifest_file_matches_sha256(path: Path, sha256: str) -> bool:
+    expected = str(sha256 or "").strip().casefold()
+    if not expected:
+        return False
+    try:
+        return path.is_file() and not path.is_symlink() and _file_sha256(path).casefold() == expected
+    except OSError:
+        return False
 
 
 def _index_document(
