@@ -254,22 +254,24 @@ def rebuild_qdrant_bibliothekar_indexes(
                     )
                 )
                 continue
-            if not chunks:
-                results.append(
-                    _bibliothekar_rebuild_result(
-                        instance_name,
-                        "skipped",
-                        qdrant_url=effective_qdrant_url,
-                        embedding_config=effective_embedding_config,
-                        error="no chunks",
-                    )
-                )
-                continue
             index = qdrant_index_factory(
                 url=effective_qdrant_url,
                 collection=instructions.bibliothekar_collection or QDRANT_BIBLIOTHEKAR_COLLECTION,
                 embedding_provider=embedding_provider,
             )
+            if not chunks:
+                index.delete_instance(instance_name=instance_name)
+                results.append(
+                    _bibliothekar_rebuild_result(
+                        instance_name,
+                        "cleared",
+                        qdrant_url=effective_qdrant_url,
+                        collection_name=instructions.bibliothekar_collection or QDRANT_BIBLIOTHEKAR_COLLECTION,
+                        embedding_config=effective_embedding_config,
+                    )
+                )
+                continue
+            index.delete_instance(instance_name=instance_name)
             point_ids = index.index_chunks(instance_name=instance_name, chunks=chunks)
             results.append(
                 _bibliothekar_rebuild_result(

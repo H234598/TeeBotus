@@ -177,12 +177,16 @@ def test_rebuild_qdrant_memory_indexes_dry_run_avoids_qdrant_writes(tmp_path):
 
 def test_rebuild_qdrant_bibliothekar_indexes_uses_local_store_chunks(tmp_path):
     calls: list[tuple[str, str, str, int, list[str]]] = []
+    deleted_instances: list[str] = []
 
     class FakeQdrantBibliothekarIndex:
         def __init__(self, *, url=None, collection, embedding_provider, **_kwargs) -> None:
             self.url = str(url)
             self.collection = collection
             self.embedding_provider = embedding_provider
+
+        def delete_instance(self, *, instance_name: str) -> None:
+            deleted_instances.append(instance_name)
 
         def index_chunks(self, *, instance_name: str, chunks):
             chunk_list = list(chunks)
@@ -227,6 +231,7 @@ def test_rebuild_qdrant_bibliothekar_indexes_uses_local_store_chunks(tmp_path):
     assert results[0].embedding_provider == "hash"
     assert results[0].embedding_model == "custom-book-model"
     assert results[0].embedding_dimensions == 32
+    assert deleted_instances == ["Depressionsbot"]
     assert calls == [("Depressionsbot", "http://localhost:6334", "custom-book-model", 32, [results[0].point_ids[0].split(":", 1)[1]])]
 
 
@@ -256,6 +261,50 @@ def test_rebuild_qdrant_bibliothekar_indexes_dry_run_avoids_qdrant_writes(tmp_pa
     assert results[0].point_ids == ()
     assert results[0].embedding_provider == "fake"
     assert results[0].embedding_model == "teebotus-fake-bibliothekar-embedding-v1"
+
+
+def test_rebuild_qdrant_bibliothekar_indexes_clears_instance_when_library_is_empty(tmp_path):
+    deleted_instances: list[str] = []
+
+    class FakeQdrantBibliothekarIndex:
+        def __init__(self, *, url=None, collection, embedding_provider, **_kwargs) -> None:
+            self.url = str(url)
+            self.collection = collection
+            self.embedding_provider = embedding_provider
+
+        def delete_instance(self, *, instance_name: str) -> None:
+            deleted_instances.append(instance_name)
+
+        def index_chunks(self, *, instance_name: str, chunks):
+            raise AssertionError("empty Bibliothekar rebuild must not write Qdrant points")
+
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    (instance_dir / "data" / "Bibliothek").mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        """
+        ## Bibliothekar
+        - backend: qdrant
+        - collection: therapy_books
+        - qdrant_url: http://localhost:6334
+        """,
+        encoding="utf-8",
+    )
+
+    results = rebuild_qdrant_bibliothekar_indexes(
+        instances_dir=instances_dir,
+        instance_names=("Depressionsbot",),
+        qdrant_index_factory=FakeQdrantBibliothekarIndex,
+    )
+
+    assert len(results) == 1
+    assert results[0].status == "cleared"
+    assert results[0].chunk_count == 0
+    assert results[0].point_count == 0
+    assert results[0].point_ids == ()
+    assert results[0].collection_name == "therapy_books"
+    assert results[0].qdrant_url == "http://localhost:6334"
+    assert deleted_instances == ["Depressionsbot"]
 
 
 def test_rebuild_qdrant_codex_history_indexes_uses_admin_only_chunks(tmp_path):
