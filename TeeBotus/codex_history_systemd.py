@@ -77,6 +77,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-follow", dest="follow", action="store_false", help="Use the legacy bounded scan plus systemd restart loop.")
     parser.add_argument("--post-index", dest="post_index", action="store_true", default=True, help="Export admin-only Codex-History index after scans.")
     parser.add_argument("--no-post-index", dest="post_index", action="store_false", help="Disable post-scan Codex-History index export.")
+    parser.add_argument("--collector-dispatch", dest="collector_dispatch", action="store_true", default=True, help="Dispatch queued Codex-History summaries after collector scans.")
+    parser.add_argument("--no-collector-dispatch", dest="collector_dispatch", action="store_false", help="Disable post-scan Codex-History dispatch.")
+    parser.add_argument("--collector-dispatch-limit", type=int, default=100, help="Limit collector post-scan dispatch to latest N queued summaries.")
+    parser.add_argument("--collector-dispatch-dry-run", action="store_true", help="Resolve collector dispatch targets without sending messages.")
     parser.add_argument("--post-index-qdrant", action="store_true", help="Also rebuild the admin-only Codex-History Qdrant collection after scans.")
     parser.add_argument("--post-index-qdrant-url", default="", help="Override Qdrant URL for post-index rebuild.")
     parser.add_argument("--post-index-qdrant-dry-run", action="store_true", help="Count post-index Qdrant chunks without writing Qdrant.")
@@ -151,6 +155,9 @@ def main(argv: list[str] | None = None) -> int:
                 event_mode=args.event_mode,
                 poll_interval_seconds=float(args.poll_interval),
                 post_index=bool(args.post_index),
+                collector_dispatch=bool(args.collector_dispatch),
+                collector_dispatch_limit=int(args.collector_dispatch_limit or 0),
+                collector_dispatch_dry_run=bool(args.collector_dispatch_dry_run),
                 post_index_qdrant=bool(args.post_index_qdrant),
                 post_index_qdrant_url=args.post_index_qdrant_url,
                 post_index_qdrant_dry_run=bool(args.post_index_qdrant_dry_run),
@@ -176,6 +183,9 @@ def main(argv: list[str] | None = None) -> int:
             poll_interval_seconds=float(args.poll_interval),
             follow=bool(args.follow),
             post_index=bool(args.post_index),
+            collector_dispatch=bool(args.collector_dispatch),
+            collector_dispatch_limit=int(args.collector_dispatch_limit or 0),
+            collector_dispatch_dry_run=bool(args.collector_dispatch_dry_run),
             post_index_qdrant=bool(args.post_index_qdrant),
             post_index_qdrant_url=args.post_index_qdrant_url,
             post_index_qdrant_dry_run=bool(args.post_index_qdrant_dry_run),
@@ -293,6 +303,9 @@ def render_codex_history_systemd_unit(
     poll_interval_seconds: float = DEFAULT_POLL_INTERVAL_SECONDS,
     follow: bool = True,
     post_index: bool = True,
+    collector_dispatch: bool = True,
+    collector_dispatch_limit: int = 100,
+    collector_dispatch_dry_run: bool = False,
     post_index_qdrant: bool = False,
     post_index_qdrant_url: str = "",
     post_index_qdrant_dry_run: bool = False,
@@ -330,6 +343,9 @@ def render_codex_history_systemd_unit(
         instance=instance,
         session_args=session_args,
         post_index=post_index,
+        dispatch=collector_dispatch,
+        dispatch_limit=collector_dispatch_limit,
+        dispatch_dry_run=collector_dispatch_dry_run,
         post_index_qdrant=post_index_qdrant,
         post_index_qdrant_url=post_index_qdrant_url,
         post_index_qdrant_dry_run=post_index_qdrant_dry_run,
@@ -380,6 +396,9 @@ def render_codex_history_collector_timer_units(
     event_mode: str = "snapshot",
     poll_interval_seconds: float = 0,
     post_index: bool = True,
+    collector_dispatch: bool = True,
+    collector_dispatch_limit: int = 100,
+    collector_dispatch_dry_run: bool = False,
     post_index_qdrant: bool = False,
     post_index_qdrant_url: str = "",
     post_index_qdrant_dry_run: bool = False,
@@ -418,6 +437,9 @@ def render_codex_history_collector_timer_units(
         instance=instance,
         session_args=session_args,
         post_index=post_index,
+        dispatch=collector_dispatch,
+        dispatch_limit=collector_dispatch_limit,
+        dispatch_dry_run=collector_dispatch_dry_run,
         post_index_qdrant=post_index_qdrant,
         post_index_qdrant_url=post_index_qdrant_url,
         post_index_qdrant_dry_run=post_index_qdrant_dry_run,
@@ -658,6 +680,9 @@ def _collector_watch_command(
     instance: str,
     session_args: list[str],
     post_index: bool,
+    dispatch: bool,
+    dispatch_limit: int,
+    dispatch_dry_run: bool,
     post_index_qdrant: bool,
     post_index_qdrant_url: str,
     post_index_qdrant_dry_run: bool,
@@ -691,6 +716,11 @@ def _collector_watch_command(
     command.extend(session_args)
     if post_index or post_index_qdrant or post_index_qdrant_ensure:
         command.append("--post-index")
+    if dispatch:
+        command.append("--dispatch")
+        command.extend(["--dispatch-limit", str(_non_negative_int(dispatch_limit, label="dispatch limit"))])
+        if dispatch_dry_run:
+            command.append("--dispatch-dry-run")
     if post_index_qdrant:
         command.append("--post-index-qdrant")
     if post_index_qdrant_url:
@@ -732,7 +762,20 @@ def _default_collector_session_roots(repo_root: Path, *, run_user: str) -> tuple
     owner_home = _home_from_repo_root(repo_root)
     if owner_home is None:
         return ()
-    return (owner_home / ".codex" / "sessions", owner_home / ".codex-agents")
+    roots = [owner_home / ".codex" / "sessions"]
+    agents_root = owner_home / ".codex-agents"
+    if agents_root.is_dir():
+        roots.extend(
+            path / "sessions"
+            for path in sorted(agents_root.iterdir())
+            if path.is_dir() and _is_default_codex_agent_dir(path)
+        )
+    return tuple(roots)
+
+
+def _is_default_codex_agent_dir(path: Path) -> bool:
+    name = path.name
+    return len(name) == 2 and name[0].islower() and name[1] == "1"
 
 
 def _home_from_repo_root(repo_root: Path) -> Path | None:

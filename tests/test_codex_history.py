@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import subprocess
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -12,8 +13,10 @@ import pytest
 import TeeBotus.admin.codex_history as codex_history_module
 from TeeBotus.admin.codex_history import (
     _codex_history_graph_mermaid_source,
+    CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT,
     _normalize_remote_url,
     _repo_provider,
+    _update_watch_instance_report,
     acknowledge_codex_history_item,
     append_codex_history_summary,
     build_local_codex_history_categorizer,
@@ -1844,6 +1847,35 @@ def test_watch_codex_session_roots_for_instances_scans_all_instances_each_iterat
         rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
         assert len(rows) == 2
         assert [row["summary_prefix"] for row in rows] == ["v3.1.3 #0001", "v3.1.3 #0002"]
+
+
+def test_watch_follow_report_retains_recent_items_but_counts_all_statuses() -> None:
+    report: dict[str, object] = {
+        "ok": True,
+        "items": [],
+        "retained_items": 0,
+        "dropped_items": 0,
+        "status_counts": {},
+    }
+    status_counter: Counter[str] = Counter()
+    total_items = CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT + 3
+
+    for index in range(total_items):
+        _update_watch_instance_report(
+            report,
+            status_counter,
+            [{"status": "imported", "sequence": index}],
+            follow=True,
+        )
+
+    items = report["items"]
+    assert isinstance(items, list)
+    assert len(items) == CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT
+    assert report["retained_items"] == CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT
+    assert report["dropped_items"] == 3
+    assert report["status_counts"] == {"imported": total_items}
+    assert items[0]["sequence"] == 3
+    assert items[-1]["sequence"] == total_items - 1
 
 
 def test_watch_codex_session_roots_snapshot_skips_unchanged_iterations(tmp_path: Path) -> None:

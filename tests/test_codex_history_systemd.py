@@ -27,6 +27,8 @@ def test_render_codex_history_systemd_unit_matches_plan_shape(tmp_path: Path) ->
     assert "--max-iterations" not in unit.service_text
     assert "--limit 1000" in unit.service_text
     assert "--post-index" in unit.service_text
+    assert "--dispatch" in unit.service_text
+    assert "--dispatch-limit 100" in unit.service_text
     assert "--post-index-qdrant" not in unit.service_text
     assert "--once" not in unit.service_text
     assert "Restart=on-failure" in unit.service_text
@@ -151,11 +153,30 @@ def test_render_codex_history_collector_timer_units_builds_five_minute_oneshot(t
     assert "--event-mode snapshot" in units.service_text
     assert "--poll-interval 0" in units.service_text
     assert f"--sessions-root {tmp_path / 'sessions'}" in units.service_text
+    assert "--dispatch" in units.service_text
+    assert "--dispatch-limit 100" in units.service_text
     assert "Restart=" not in units.service_text
     assert "OnUnitActiveSec=5min" in units.timer_text
     assert "RandomizedDelaySec=0" in units.timer_text
     assert "Persistent=true" in units.timer_text
     assert "Unit=teebotus-codex-history-collector.service" in units.timer_text
+
+
+def test_render_codex_history_collector_timer_units_can_disable_dispatch(tmp_path: Path) -> None:
+    units = render_codex_history_collector_timer_units(
+        repo_root=tmp_path,
+        python_executable="/usr/bin/python3",
+        run_user="",
+        sessions_roots=(tmp_path / "sessions",),
+        collector_dispatch=False,
+        collector_dispatch_limit=7,
+        collector_dispatch_dry_run=True,
+    )
+
+    assert "--once" in units.service_text
+    assert "--dispatch" not in units.service_text
+    assert "--dispatch-limit" not in units.service_text
+    assert "--dispatch-dry-run" not in units.service_text
 
 
 def test_render_codex_history_index_systemd_units_can_enable_local_categorization(tmp_path: Path) -> None:

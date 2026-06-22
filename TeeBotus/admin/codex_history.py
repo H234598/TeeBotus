@@ -56,6 +56,7 @@ CODEX_HISTORY_GRAPH_DIRNAME = "graphs"
 CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE = "local_ollama"
 CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE = "local_ollama"
 CODEX_HISTORY_DISPATCHING_STALE_AFTER_SECONDS = 15 * 60
+CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT = 250
 CODEX_HISTORY_GRAPH_SVG_ENGINES = frozenset({"builtin", "auto", "mmdc"})
 CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
 CODEX_HISTORY_STRATEGY_PURPOSE = "codex_history_strategic_analysis"
@@ -816,10 +817,13 @@ def watch_codex_session_roots_for_instances(
             "event_mode": normalized_event_mode,
             "skipped_unchanged_iterations": 0,
             "items": [],
+            "retained_items": 0,
+            "dropped_items": 0,
             "status_counts": {},
         }
         for instance_name in stores
     }
+    status_counters_by_instance: dict[str, Counter[str]] = {instance_name: Counter() for instance_name in stores}
     skipped_unchanged = 0
     last_snapshot: tuple[tuple[str, int, int], ...] | None = None
     while True:
@@ -831,16 +835,12 @@ def watch_codex_session_roots_for_instances(
                 instance_report = reports_by_instance[instance_name]
                 instance_report["iterations"] = iterations
                 scan_report = import_codex_session_roots(store, roots, limit=limit)
-                iteration_items = scan_report.get("items", [])
-                if isinstance(iteration_items, list):
-                    items = instance_report.get("items", [])
-                    if isinstance(items, list):
-                        items.extend(iteration_items)
-                instance_items = instance_report.get("items", [])
-                if not isinstance(instance_items, list):
-                    instance_items = []
-                instance_report["ok"] = not any(item.get("status") == "error" for item in instance_items)
-                instance_report["status_counts"] = _status_counts(instance_items)
+                _update_watch_instance_report(
+                    instance_report,
+                    status_counters_by_instance[instance_name],
+                    scan_report.get("items", []),
+                    follow=follow,
+                )
                 if callable(post_scan):
                     post_scan(instance_name, scan_report)
         else:
@@ -871,6 +871,33 @@ def watch_codex_session_roots_for_instances(
         instance_report["iterations"] = iterations
         instance_report["skipped_unchanged_iterations"] = skipped_unchanged
     return list(reports_by_instance.values())
+
+
+def _update_watch_instance_report(
+    instance_report: dict[str, Any],
+    status_counter: Counter[str],
+    iteration_items: Any,
+    *,
+    follow: bool,
+) -> None:
+    if not isinstance(iteration_items, list):
+        iteration_items = []
+    status_counter.update(_status_counts(iteration_items))
+    items = instance_report.get("items", [])
+    if not isinstance(items, list):
+        items = []
+        instance_report["items"] = items
+    items.extend(iteration_items)
+    if follow and len(items) > CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT:
+        dropped = len(items) - CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT
+        del items[:dropped]
+        instance_report["dropped_items"] = int(instance_report.get("dropped_items", 0) or 0) + dropped
+    if any(isinstance(item, Mapping) and item.get("status") == "error" for item in iteration_items):
+        instance_report["ok"] = False
+    else:
+        instance_report["ok"] = bool(instance_report.get("ok", True))
+    instance_report["retained_items"] = len(items)
+    instance_report["status_counts"] = dict(sorted(status_counter.items()))
 
 
 def default_codex_session_roots() -> tuple[Path, ...]:
