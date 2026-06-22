@@ -334,6 +334,27 @@ def test_llm_profiles_plan2_contract_accepts_current_profiles() -> None:
     ) in message
 
 
+def test_llm_profiles_plan2_contract_rejects_wrong_api_key_env(monkeypatch) -> None:
+    from dataclasses import replace
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    profiles = dict(llm_profiles.load_llm_profiles())
+    default_profile, routing = llm_profiles.load_llm_routing()
+    profiles["gemini_flash_stateful"] = replace(profiles["gemini_flash_stateful"], api_key_env="OPENAI_API_KEY")
+    profiles["vertex_gemini_flash"] = replace(profiles["vertex_gemini_flash"], api_key_env="GEMINI_API_KEY")
+    profiles["openai_premium"] = replace(profiles["openai_premium"], api_key_env="GEMINI_API_KEY")
+    monkeypatch.setattr(llm_profiles, "load_llm_profiles", lambda: profiles)
+    monkeypatch.setattr(llm_profiles, "load_llm_routing", lambda: (default_profile, routing))
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "profile gemini_flash_stateful api_key_env=OPENAI_API_KEY expected=GEMINI_API_KEY" in message
+    assert "profile vertex_gemini_flash api_key_env=GEMINI_API_KEY expected=GOOGLE_APPLICATION_CREDENTIALS" in message
+    assert "profile openai_premium api_key_env=GEMINI_API_KEY expected=OPENAI_API_KEY" in message
+
+
 def test_local_secret_file_permission_check_accepts_missing_or_private_env(tmp_path: Path) -> None:
     ok, message = check_adapter_deps._check_local_secret_file_permissions(tmp_path)
 
