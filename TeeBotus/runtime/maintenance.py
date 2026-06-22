@@ -393,7 +393,10 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
     for month, paths in groups.items():
         try:
             archive_dir.mkdir(parents=True, exist_ok=True)
+            archive_dir_stat = archive_dir.stat(follow_symlinks=False)
         except OSError:
+            continue
+        if not stat_module.S_ISDIR(archive_dir_stat.st_mode):
             continue
         archive_path = _unique_path(archive_dir / f"teebotus-runtime-{month}.tar.gz")
         temporary: Path | None = None

@@ -850,6 +850,24 @@ def test_runtime_maintenance_keeps_sources_when_archive_directory_is_blocked(tmp
     assert blocked_archive_dir.read_text(encoding="utf-8") == "not a directory\n"
 
 
+def test_runtime_maintenance_refuses_symlinked_archive_directory(tmp_path):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    external_archive_dir = tmp_path / "external-archives"
+    external_archive_dir.mkdir()
+    archive_dir = tmp_path / "monthly_archives"
+    archive_dir.symlink_to(external_archive_dir, target_is_directory=True)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert path.read_bytes() == b"compressed-ish"
+    assert archive_dir.is_symlink()
+    assert not list(external_archive_dir.iterdir())
+
+
 def test_runtime_maintenance_groups_compressed_logs_with_single_stat(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60
