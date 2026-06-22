@@ -149,7 +149,10 @@ def install_stdio_tee(path: Path) -> None:
     target_path = _absolute_without_symlink_resolution(path)
     if _stream_tee_target(sys.stdout) == target_path and _stream_tee_target(sys.stderr) == target_path:
         return
-    handle = _open_append_text_no_follow(target_path)
+    try:
+        handle = _open_append_text_no_follow(target_path)
+    except (OSError, ValueError):
+        return
     if handle is None:
         return
     sys.stdout = _install_stream_tee(sys.stdout, handle, target_path)  # type: ignore[assignment]

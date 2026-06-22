@@ -1591,6 +1591,30 @@ def test_install_stdio_tee_skips_when_target_open_is_denied(tmp_path, monkeypatc
     assert not path.exists()
 
 
+def test_install_stdio_tee_skips_when_target_fdopen_fails(tmp_path, monkeypatch):
+    primary_stdout = io.StringIO()
+    primary_stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", primary_stdout)
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    path = tmp_path / "runtime" / STDIO_LOG_FILENAME
+    real_fdopen = os.fdopen
+
+    def fail_stdio_fdopen(fd, mode="r", *args, **kwargs):
+        if mode == "a":
+            raise OSError("stdio fdopen failed")
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    monkeypatch.setattr(os, "fdopen", fail_stdio_fdopen)
+
+    install_stdio_tee(path)
+    print("stdout only")
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    assert not isinstance(sys.stdout, TeeStream)
+    assert not isinstance(sys.stderr, TeeStream)
+
+
 def test_install_stdio_tee_refuses_symlinked_target_parent_before_mkdir(tmp_path, monkeypatch):
     primary_stdout = io.StringIO()
     primary_stderr = io.StringIO()
