@@ -14,7 +14,7 @@ Stand: 2026-06-19
 
 Quelle:
 
-- `/home/teladi/Downloads/Plan3.md` ist in `docs/Plan3.md` integriert.
+- `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/Plan3.md` ist in `docs/Plan3.md` integriert.
 - Download-SHA256: `86a7832047b1de63c50fb5776d7e98f3c54d277054cf518267e03be000fb8553`
 - Der Dokumentkoerper folgt dem aktuellen Download-Stand; dieser Kopf fuehrt den Repo-Status analog zu `docs/Codex_Outbox_History_Plan.md`.
 
@@ -1503,10 +1503,10 @@ TeeBotus/benchmarks/
 ### 12.2 Standard: keine Live-Kosten
 
 ```bash
-python3 scripts/run_benchmarks.py --quick \
-  --output /home/teladi/Downloads/teebotus-benchmarks-latest.md \
-  --json-output /home/teladi/Downloads/teebotus-benchmarks-latest.json
+python3 scripts/run_benchmarks.py --quick
 ```
+
+Der Quick-Lauf schreibt Markdown + JSON standardmaessig nach Obsidian-Incoming und sendet den Markdown-Bericht messenger-agnostisch an Admin-Accounts. Reine lokale Pruefungen koennen `--no-admin-notify` und `--no-obsidian` setzen.
 
 ### 12.3 Live nur explizit
 
@@ -1829,7 +1829,7 @@ Livebenchmarks optional.
 - AccountStore bleibt verschlüsselter Wahrheitsspeicher.
 - BibliothekarService behält LocalBackend und HaystackBackend.
 - LlamaIndexBackend ist optionaler Doc-Chat-Pilot.
-- Benchmarks liefern Markdown + JSON nach /home/teladi/Downloads.
+- Benchmarks liefern Markdown + JSON nach /home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming und der Quick-CLI-Lauf sendet den Markdown-Bericht an Admin-Accounts.
 - Keine Secrets im Repo oder Benchmarkoutput.
 ```
 

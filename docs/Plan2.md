@@ -14,7 +14,7 @@ Stand: 2026-06-19
 
 Quelle:
 
-- `/home/teladi/Downloads/Plan2.md` ist in `docs/Plan2.md` integriert.
+- `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/Plan2.md` ist in `docs/Plan2.md` integriert.
 - Download-SHA256: `b0e429bef5398e6cf067693f5390486ccb137f3ebef9770cb0509c585cd832f0`
 - Der Dokumentkoerper folgt dem aktuellen Download-Stand; dieser Kopf fuehrt den Repo-Status analog zu `docs/Codex_Outbox_History_Plan.md`.
 
@@ -1997,9 +1997,10 @@ Abdecken:
 Benchmarkregeln:
 
 - Keine echten API-Kosten in Standard-Benchmarks.
-- Netzwerk/Provider nur hinter explizitem Override.
+- Netzwerk/Provider in den Messungen nur hinter explizitem Override; der Quick-CLI-Lauf darf den fertigen Bericht danach an Admin-Accounts senden.
 - Fixtures muessen klein, versioniert und reproduzierbar sein.
-- Ausgabe als Markdown und JSON nach `/home/teladi/Downloads`.
+- Ausgabe als Markdown und JSON standardmaessig nach `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming`.
+- `python3 scripts/run_benchmarks.py --quick` verschickt den Markdown-Bericht zusaetzlich messenger-agnostisch an die Admin-Accounts; trockene Laeufe nutzen `--no-admin-notify` und bei Bedarf `--no-obsidian`.
 - Jeder Benchmark nennt Hardware-/Python-/Dependency-Kontext.
 - Jeder Benchmark misst mindestens Laufzeit, Durchsatz, Fehlerzahl und relevante Payload-/Indexgroessen.
 - Benchmarks duerfen nicht nur Smoke-Tests sein; sie muessen Vergleichswerte liefern.
@@ -2009,7 +2010,7 @@ Akzeptanz:
 
 ```bash
 python3 -m pytest -q tests/test_benchmarks_*.py
-python3 scripts/run_benchmarks.py --quick --output /home/teladi/Downloads/teebotus-benchmarks-latest.md --json-output /home/teladi/Downloads/teebotus-benchmarks-latest.json
+python3 scripts/run_benchmarks.py --quick
 ```
 
 Definition of Done:

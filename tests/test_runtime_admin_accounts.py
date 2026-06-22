@@ -13,6 +13,7 @@ from TeeBotus.runtime.admin_accounts import (
     STATUS_SUMMARY_INSTANCE_NAME,
     admin_account_group_status_lines,
     format_admin_notification_result_lines,
+    notify_benchmark_admin_accounts,
     notify_runtime_status_admin_accounts,
     resolve_admin_account_group,
     runtime_status_problem_lines,
@@ -180,6 +181,95 @@ def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -
     assert outbox[0]["markdown_filename"] == f"TeeBotus_release_{__version__}_0001.md"
     assert outbox[0]["markdown_document"].startswith(f"# Release TeeBotus {__version__}\n")
     assert account_store.read_status_dispatch_results(account_id)[0]["status"] == "sent"
+
+
+def test_benchmark_admin_notify_sends_markdown_attachment_to_routable_admin_account(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    account_store = status_summary_store_for(instances_dir)
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    sent: list[tuple[dict[str, object], SendAttachment, dict[str, object]]] = []
+
+    def sender(route: dict[str, object], action: SendAttachment, metadata: dict[str, object]) -> str:
+        sent.append((route, action, metadata))
+        return "ok"
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_benchmark_admin_accounts(
+            instances_dir=instances_dir,
+            markdown_document="# TeeBotus Benchmarks\n\nok\n",
+            markdown_filename="teebotus-benchmarks-latest.md",
+            json_artifact_path=tmp_path / "teebotus-benchmarks-latest.json",
+            benchmark_suite={"ok": True, "quick": True, "results": [{"name": "memory_jsonl"}]},
+            env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+            store_factory=lambda _root, _instance: account_store,
+            sender_factory=lambda _instance, _store: {"telegram": sender},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert lines == (f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={account_id} channel=telegram",)
+    assert len(sent) == 1
+    _route, action, metadata = sent[0]
+    assert isinstance(action, SendAttachment)
+    assert action.chat_id == "123"
+    assert action.caption == f"Benchmark TeeBotus {__version__}"
+    assert action.content_type == "text/markdown"
+    assert action.filename == "teebotus-benchmarks-latest.md"
+    assert action.data.decode("utf-8").startswith("# TeeBotus Benchmarks\n")
+    assert metadata == {"source": "benchmark_admin", "account_id": account_id}
+    outbox = account_store.read_status_outbox(account_id)
+    assert outbox[0]["kind"] == "benchmark_summary"
+    assert outbox[0]["status"] == "sent"
+    assert outbox[0]["summary_number"] == 1
+    assert outbox[0]["summary_prefix"] == f"v{__version__} #0001"
+    assert outbox[0]["message_text"] == f"Benchmark TeeBotus {__version__}"
+    assert outbox[0]["benchmark_ok"] is True
+    assert outbox[0]["benchmark_quick"] is True
+    assert outbox[0]["benchmark_result_count"] == 1
+    assert account_store.read_status_dispatch_results(account_id)[0]["status"] == "sent"
+
+
+def test_benchmark_admin_notify_uses_cross_instance_admin_route_but_writes_logger_outbox(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    logger_store = status_summary_store_for(instances_dir)
+    source_store = store_for(instances_dir / "Depressionsbot" / "data", "Depressionsbot")
+    identity = telegram_identity_key(123)
+    account_id = source_store.resolve_or_create_account(identity)
+    source_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    sent: list[tuple[dict[str, object], SendAttachment]] = []
+
+    def store_factory(_root: Path, instance_name: str) -> AccountStore:
+        if instance_name == STATUS_SUMMARY_INSTANCE_NAME:
+            return logger_store
+        if instance_name == "Depressionsbot":
+            return source_store
+        raise AssertionError(f"unexpected instance store: {instance_name}")
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_benchmark_admin_accounts(
+            instances_dir=instances_dir,
+            markdown_document="# TeeBotus Benchmarks\n\nok\n",
+            env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+            store_factory=store_factory,
+            sender_factory=lambda _instance, _store: {"telegram": lambda route, action, _metadata: sent.append((route, action)) or "ok"},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert lines == (f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={account_id} channel=telegram",)
+    assert len(sent) == 1
+    route, action = sent[0]
+    assert route["chat_id"] == "123"
+    assert route["route_source_instance"] == "Depressionsbot"
+    assert action.caption == f"Benchmark TeeBotus {__version__}"
+    assert logger_store.read_status_outbox(account_id)[0]["kind"] == "benchmark_summary"
+    assert source_store.read_status_outbox(account_id) == []
 
 
 def test_runtime_status_admin_notify_includes_code_authenticated_status_recipients(tmp_path) -> None:

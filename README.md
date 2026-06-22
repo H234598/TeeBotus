@@ -356,22 +356,22 @@ PYTHONPATH=. python3 scripts/benchmark_memory_store.py --backend postgres --entr
 PYTHONPATH=. python3 scripts/benchmark_memory_store.py --backend postgres --postgres-dsn 'postgresql://USER:PASSWORD@HOST:5432/DBNAME' --require-postgres
 ```
 
-Der uebergreifende Quick-Benchmark fuer Plan2-Kernpfade schreibt Markdown und JSON. Standardmaessig nutzt er keine echten Provider-Calls, keine Netzsendung und keine API-Kosten:
+Der uebergreifende Quick-Benchmark fuer Plan2-Kernpfade schreibt Markdown und JSON standardmaessig in den Obsidian-Incoming-Ordner und verschickt den Markdown-Bericht an die Admin-Accounts. Die Messungen selbst nutzen keine echten Provider-Calls und keine API-Kosten; der Admin-Versand ist mit `--no-admin-notify` abschaltbar:
 
 ```bash
-python3 scripts/run_benchmarks.py --quick --output /home/teladi/Downloads/teebotus-benchmarks-latest.md --json-output /home/teladi/Downloads/teebotus-benchmarks-latest.json
+python3 scripts/run_benchmarks.py --quick
 ```
 
 Abgedeckt werden Account-Memory, Bibliothekar lokal plus Haystack/Qdrant-Backendpfad mit Fake-DocumentStore, die lokale Retrieval-Matrix fuer e5-small/e5-base/bge-m3, Reranker und Local/LlamaIndex/Haystack, SourceHarvester-Quality-Gates inklusive `harvest -> promote -> index` ohne Blind-Ingest, LLM-Router, synthetische LLM-Nachrichtenpfad-Latenzen fuer OpenAI-Responses/Gemini-Interactions/LiteLLM/hf_pool ohne Provider-Calls, die LLM-Pfadmatrix aus Engine/Decision-Layer/Bibliothekar/Keyword-Memory/Fake-Qdrant, hf_pool-Health plus providerfreie hf_pool-Eval-Matrix, Proactive-Agent, Messenger-Adapter-Contracts, YouTube-/Transkriptionsparser, Status/Doctor, Datenbank-Fallback-Policy und LangGraph-Flows. PostgreSQL wird im Quick-Modus als `skipped` markiert, solange kein expliziter DSN uebergeben wird. Fuer Regressionen kann ein frueherer JSON-Lauf als Baseline verglichen werden:
 
 ```bash
-python3 scripts/run_benchmarks.py --quick --baseline-json /home/teladi/Downloads/teebotus-benchmarks-latest.json --output /home/teladi/Downloads/teebotus-benchmarks-compare.md --json-output /home/teladi/Downloads/teebotus-benchmarks-compare.json
+python3 scripts/run_benchmarks.py --quick --baseline-json /home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/teebotus-benchmarks-latest.json --output /home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/teebotus-benchmarks-compare.md --json-output /home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/teebotus-benchmarks-compare.json
 ```
 
 Live-Benchmarks bleiben opt-in und erzeugen getrennte `live_*`-Ergebnisse:
 
 ```bash
-python3 scripts/run_benchmarks.py --live-hf --live-qdrant --profile hf_pool_default --output /home/teladi/Downloads/teebotus-benchmarks-live.md --json-output /home/teladi/Downloads/teebotus-benchmarks-live.json
+python3 scripts/run_benchmarks.py --live-hf --live-qdrant --profile hf_pool_default --output /home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/teebotus-benchmarks-live.md --json-output /home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/teebotus-benchmarks-live.json
 ```
 
 Echte LLM-Provider/API-Latenzen sind ein Notfall-Benchmark und nie Teil der Standard- oder normalen Live-Laeufe. Er braucht bewusst zwei Schalter: CLI-Flag plus exakten Env-Bestaetigungswert. Fallbacks sind in diesem Benchmark zur Kostenkontrolle deaktiviert, und `--emergency-live-llm-max-calls` begrenzt die Gesamtzahl echter LLM-Calls:
@@ -379,8 +379,8 @@ Echte LLM-Provider/API-Latenzen sind ein Notfall-Benchmark und nie Teil der Stan
 ```bash
 TEEBOTUS_EMERGENCY_LIVE_LLM_BENCHMARK=NOTFALL_KOSTEN_AKZEPTIERT \
 python3 scripts/run_benchmarks.py --emergency-live-llm --emergency-live-llm-max-calls 3 \
-  --output /home/teladi/Downloads/teebotus-benchmarks-live-llm.md \
-  --json-output /home/teladi/Downloads/teebotus-benchmarks-live-llm.json
+  --output /home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/teebotus-benchmarks-live-llm.md \
+  --json-output /home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/teebotus-benchmarks-live-llm.json
 ```
 
 `hf_pool_eval_matrix` laeuft dagegen immer lokal und kostenfrei. Es prueft die
@@ -420,7 +420,7 @@ Optionale Live-/Security-Probes bleiben bewusst explizit und nicht blockierend:
 python3 scripts/check_plan2_acceptance.py --list --include-qdrant-live --include-audit
 ```
 
-Wenn eine alte Klartext-Sicherung vorhanden ist, kann der Runner zusaetzlich nur lesende Recovery-Reports und einen Legacy-Import-Dry-run nach `/home/teladi/Downloads` schreiben:
+Wenn eine alte Klartext-Sicherung vorhanden ist, kann der Runner zusaetzlich nur lesende Recovery-Reports und einen Legacy-Import-Dry-run nach `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming` schreiben:
 
 ```bash
 python3 scripts/check_plan2_acceptance.py --skip-runtime-status --legacy-instances-dir /home/teladi/TeeBotus_Backups/TeeBotus.bak2
@@ -487,7 +487,7 @@ und brauchen denselben Recovery-/Quarantaene-Pfad wie kaputte Payloads.
 
 ```bash
 python3 -m TeeBotus.admin memory-recovery --instances-dir instances
-python3 -m TeeBotus.admin memory-recovery --instances-dir instances --format json --output /home/teladi/Downloads/teebotus-memory-recovery.json
+python3 -m TeeBotus.admin memory-recovery --instances-dir instances --format json --output /home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/teebotus-memory-recovery.json
 ```
 
 Der Recovery-Report vergleicht SQLite-Primary, SQLite-Fallback und vorhandene JSON-Dateien pro Account. Er gibt nur Zaehler, Dateipfade und Fehlerklassen aus, keine Secrets und keine rohen Memory-Payloads. Wenn kein Source als `recoverable=True` markiert ist, darf der Bot keine automatische Datenmigration oder Loeschung versuchen; dann fehlt der passende alte Schluessel oder eine lesbare Sicherung.
@@ -507,7 +507,7 @@ python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi
 Fuer eine pruefbare Preflight-Akte koennen Markdown und JSON geschrieben werden:
 
 ```bash
-python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi/TeeBotus_Backups/TeeBotus.bak2 --target-instances-dir instances --replace-unreadable-account-metadata --json-output /home/teladi/Downloads/teebotus-legacy-import-preflight.json --markdown-output /home/teladi/Downloads/teebotus-legacy-import-preflight.md
+python3 scripts/import_legacy_user_memory.py --legacy-instances-dir /home/teladi/TeeBotus_Backups/TeeBotus.bak2 --target-instances-dir instances --replace-unreadable-account-metadata --json-output /home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/teebotus-legacy-import-preflight.json --markdown-output /home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/teebotus-legacy-import-preflight.md
 ```
 
 Der Preflight-Bericht enthaelt `apply_safety`. Vor einem echten Import muss `apply_allowed_now=true`, `apply_requires_stopped_bot=false` und `running_bot_process_count=0` gelten. Wenn dort laufende Prozesse aufgefuehrt sind, zuerst Bot und Proactive-Jobs stoppen und den Preflight erneut schreiben.

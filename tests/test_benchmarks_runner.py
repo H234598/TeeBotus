@@ -1285,6 +1285,8 @@ def test_run_benchmarks_cli_writes_markdown_and_json(tmp_path) -> None:
             str(markdown_path),
             "--json-output",
             str(json_path),
+            "--no-obsidian",
+            "--no-admin-notify",
         ]
     )
 
@@ -1301,6 +1303,120 @@ def test_run_benchmarks_cli_writes_markdown_and_json(tmp_path) -> None:
     assert payload["comparisons"]["stable_backend_rankings"]
     assert payload["regression"]["status"] == "not_configured"
     assert "TeeBotus Benchmarks" in markdown_path.read_text(encoding="utf-8")
+
+
+def test_run_benchmarks_cli_quick_writes_obsidian_and_notifies_admins(tmp_path, monkeypatch, capsys) -> None:
+    suite = {"ok": True, "quick": True, "results": [{"name": "memory_jsonl"}]}
+    notified: list[dict[str, object]] = []
+
+    async def fake_notify(**kwargs):  # noqa: ANN003
+        notified.append(kwargs)
+        return ()
+
+    monkeypatch.setattr(benchmark_module, "run_benchmarks", lambda **_kwargs: suite)
+    monkeypatch.setattr(benchmark_module, "render_markdown", lambda _suite: "# TeeBotus Benchmarks\n\nok\n")
+    monkeypatch.setattr(benchmark_module, "notify_benchmark_admin_accounts", fake_notify)
+
+    result = benchmark_module.main(["--quick", "--entries", "1", "--iterations", "1", "--obsidian-dir", str(tmp_path)])
+
+    assert result == 0
+    markdown_path = tmp_path / benchmark_module.DEFAULT_OBSIDIAN_BENCHMARK_MD
+    json_path = tmp_path / benchmark_module.DEFAULT_OBSIDIAN_BENCHMARK_JSON
+    assert markdown_path.read_text(encoding="utf-8") == "# TeeBotus Benchmarks\n\nok\n"
+    assert json.loads(json_path.read_text(encoding="utf-8")) == suite
+    assert len(notified) == 1
+    assert notified[0]["markdown_document"] == "# TeeBotus Benchmarks\n\nok\n"
+    assert notified[0]["markdown_filename"] == benchmark_module.DEFAULT_OBSIDIAN_BENCHMARK_MD
+    assert notified[0]["json_artifact_path"] == json_path
+    assert notified[0]["benchmark_suite"] == suite
+    captured = capsys.readouterr()
+    assert "benchmark_obsidian=written" in captured.err
+
+
+def test_run_benchmarks_cli_quick_side_effects_can_be_disabled(tmp_path, monkeypatch) -> None:
+    suite = {"ok": True, "quick": True, "results": []}
+    notified = False
+
+    async def fake_notify(**_kwargs):  # noqa: ANN003
+        nonlocal notified
+        notified = True
+        return ()
+
+    monkeypatch.setattr(benchmark_module, "run_benchmarks", lambda **_kwargs: suite)
+    monkeypatch.setattr(benchmark_module, "render_markdown", lambda _suite: "# TeeBotus Benchmarks\n")
+    monkeypatch.setattr(benchmark_module, "notify_benchmark_admin_accounts", fake_notify)
+
+    result = benchmark_module.main(
+        [
+            "--quick",
+            "--entries",
+            "1",
+            "--iterations",
+            "1",
+            "--obsidian-dir",
+            str(tmp_path),
+            "--no-obsidian",
+            "--no-admin-notify",
+        ]
+    )
+
+    assert result == 0
+    assert notified is False
+    assert not (tmp_path / benchmark_module.DEFAULT_OBSIDIAN_BENCHMARK_MD).exists()
+    assert not (tmp_path / benchmark_module.DEFAULT_OBSIDIAN_BENCHMARK_JSON).exists()
+
+
+def test_run_benchmarks_cli_admin_notify_uses_local_dotenv_defaults(tmp_path, monkeypatch) -> None:
+    suite = {"ok": True, "quick": True, "results": []}
+    notified: list[dict[str, object]] = []
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / ".env").write_text(
+        "TEEBOTUS_INSTANCES_DIR=dotenv-instances\n"
+        "TEEBOTUS_LOGGER_TELEGRAM_TOKEN='dotenv-token'\n",
+        encoding="utf-8",
+    )
+
+    async def fake_notify(**kwargs):  # noqa: ANN003
+        notified.append(kwargs)
+        return ()
+
+    monkeypatch.delenv("TEEBOTUS_INSTANCES_DIR", raising=False)
+    monkeypatch.delenv("TEEBOTUS_LOGGER_TELEGRAM_TOKEN", raising=False)
+    monkeypatch.setattr(benchmark_module, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(benchmark_module, "run_benchmarks", lambda **_kwargs: suite)
+    monkeypatch.setattr(benchmark_module, "render_markdown", lambda _suite: "# TeeBotus Benchmarks\n")
+    monkeypatch.setattr(benchmark_module, "notify_benchmark_admin_accounts", fake_notify)
+
+    result = benchmark_module.main(["--quick", "--no-obsidian"])
+
+    assert result == 0
+    assert len(notified) == 1
+    assert notified[0]["instances_dir"] == repo_root / "dotenv-instances"
+    assert notified[0]["env"]["TEEBOTUS_LOGGER_TELEGRAM_TOKEN"] == "dotenv-token"
+
+
+def test_run_benchmarks_cli_admin_notify_keeps_process_env_over_dotenv(tmp_path, monkeypatch) -> None:
+    suite = {"ok": True, "quick": True, "results": []}
+    notified: list[dict[str, object]] = []
+    repo_root = tmp_path / "repo"
+    repo_root.mkdir()
+    (repo_root / ".env").write_text("TEEBOTUS_INSTANCES_DIR=dotenv-instances\n", encoding="utf-8")
+
+    async def fake_notify(**kwargs):  # noqa: ANN003
+        notified.append(kwargs)
+        return ()
+
+    monkeypatch.setenv("TEEBOTUS_INSTANCES_DIR", "process-instances")
+    monkeypatch.setattr(benchmark_module, "REPO_ROOT", repo_root)
+    monkeypatch.setattr(benchmark_module, "run_benchmarks", lambda **_kwargs: suite)
+    monkeypatch.setattr(benchmark_module, "render_markdown", lambda _suite: "# TeeBotus Benchmarks\n")
+    monkeypatch.setattr(benchmark_module, "notify_benchmark_admin_accounts", fake_notify)
+
+    result = benchmark_module.main(["--quick", "--no-obsidian"])
+
+    assert result == 0
+    assert notified[0]["instances_dir"] == repo_root / "process-instances"
 
 
 def test_run_benchmarks_requires_explicit_include_live_for_postgres(monkeypatch) -> None:

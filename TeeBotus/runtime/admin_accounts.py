@@ -55,6 +55,13 @@ class RuntimeStatusSummaryPayload:
     markdown_filename: str
 
 
+@dataclass(frozen=True)
+class _AdminRouteResolution:
+    status: str
+    route: dict[str, Any] | None = None
+    reason: str = ""
+
+
 StoreFactory = Callable[[Path, str], AccountStore]
 SenderFactory = Callable[[str, AccountStore], Mapping[str, ProactiveSender]]
 
@@ -213,17 +220,27 @@ async def notify_runtime_status_admin_accounts(
         configured_account_ids=group.account_ids,
         include_status_auth_accounts=True,
     ):
-        if not _account_dir_exists(store, account_id):
-            results.append(AdminNotificationResult(instance_name, account_id, "skipped", "not_local"))
-            continue
         try:
-            route = select_proactive_route(store, account_id)
+            route_resolution = _resolve_admin_notification_route(
+                store,
+                account_id,
+                instances_dir=instances_dir,
+                summary_instance_name=instance_name,
+                store_factory=resolved_store_factory,
+            )
         except (AccountStoreError, OSError) as exc:
             results.append(AdminNotificationResult(instance_name, account_id, "failed", f"route:{type(exc).__name__}"))
             continue
-        if route is None:
-            results.append(AdminNotificationResult(instance_name, account_id, "skipped", "no_private_route"))
+        if route_resolution.status == "not_local":
+            results.append(AdminNotificationResult(instance_name, account_id, "skipped", "not_local"))
             continue
+        if route_resolution.status == "failed":
+            results.append(AdminNotificationResult(instance_name, account_id, "failed", route_resolution.reason or "route:failed"))
+            continue
+        if route_resolution.route is None:
+            results.append(AdminNotificationResult(instance_name, account_id, "skipped", route_resolution.reason or "no_private_route"))
+            continue
+        route = route_resolution.route
         channel = str(route.get("channel") or "").strip().casefold()
         if not channel:
             results.append(AdminNotificationResult(instance_name, account_id, "skipped", "no_channel"))
@@ -320,6 +337,157 @@ async def notify_runtime_status_admin_accounts(
     return tuple(results)
 
 
+async def notify_benchmark_admin_accounts(
+    *,
+    instances_dir: Path,
+    markdown_document: str,
+    markdown_filename: str = "teebotus-benchmarks-latest.md",
+    json_artifact_path: Path | str = "",
+    benchmark_suite: Mapping[str, Any] | None = None,
+    env: Mapping[str, str] | None = None,
+    store_factory: StoreFactory | None = None,
+    sender_factory: SenderFactory | None = None,
+    now: datetime | None = None,
+    summary_instance_name: str = STATUS_SUMMARY_INSTANCE_NAME,
+) -> tuple[AdminNotificationResult, ...]:
+    if not str(markdown_document or "").strip():
+        return (AdminNotificationResult(instance_name="benchmark", account_id="", status="skipped", reason="empty_markdown"),)
+    source = os.environ if env is None else env
+    resolved_store_factory = store_factory or _default_account_store
+    results: list[AdminNotificationResult] = []
+    instance_name = _summary_instance_name(summary_instance_name)
+    try:
+        store = resolved_store_factory(instances_dir / instance_name / "data" / "accounts", instance_name)
+    except Exception as exc:  # noqa: BLE001 - benchmark notify must not hide the benchmark report.
+        return (AdminNotificationResult(instance_name, "", "failed", f"store:{type(exc).__name__}"),)
+    group = resolve_admin_account_group(instance_name=instance_name, env=source)
+    for invalid_id in group.invalid_ids:
+        results.append(AdminNotificationResult(instance_name, invalid_id, "failed", "invalid_account_id"))
+    candidates: list[tuple[str, dict[str, Any], str, RuntimeStatusSummaryPayload]] = []
+    for account_id in _status_notification_candidate_account_ids(
+        store,
+        configured_account_ids=group.account_ids,
+        include_status_auth_accounts=True,
+    ):
+        try:
+            route_resolution = _resolve_admin_notification_route(
+                store,
+                account_id,
+                instances_dir=instances_dir,
+                summary_instance_name=instance_name,
+                store_factory=resolved_store_factory,
+            )
+        except (AccountStoreError, OSError) as exc:
+            results.append(AdminNotificationResult(instance_name, account_id, "failed", f"route:{type(exc).__name__}"))
+            continue
+        if route_resolution.status == "not_local":
+            results.append(AdminNotificationResult(instance_name, account_id, "skipped", "not_local"))
+            continue
+        if route_resolution.status == "failed":
+            results.append(AdminNotificationResult(instance_name, account_id, "failed", route_resolution.reason or "route:failed"))
+            continue
+        if route_resolution.route is None:
+            results.append(AdminNotificationResult(instance_name, account_id, "skipped", route_resolution.reason or "no_private_route"))
+            continue
+        route = route_resolution.route
+        channel = str(route.get("channel") or "").strip().casefold()
+        if not channel:
+            results.append(AdminNotificationResult(instance_name, account_id, "skipped", "no_channel"))
+            continue
+        try:
+            summary_payload = _queue_runtime_benchmark_summary(
+                store,
+                account_id,
+                markdown_document=markdown_document,
+                markdown_filename=markdown_filename,
+                json_artifact_path=json_artifact_path,
+                benchmark_suite=benchmark_suite,
+                route=route,
+                now=now,
+            )
+        except Exception as exc:  # noqa: BLE001 - one broken admin outbox must not block benchmark output.
+            results.append(AdminNotificationResult(instance_name, account_id, "failed", f"outbox:{type(exc).__name__}", channel=channel))
+            continue
+        candidates.append((account_id, route, channel, summary_payload))
+    if not candidates:
+        return tuple(results)
+    senders_by_channel: dict[str, ProactiveSender] = {}
+    sender_errors_by_channel: dict[str, str] = {}
+    candidate_channels = tuple(dict.fromkeys(channel for _account_id, _route, channel, _summary_payload in candidates))
+    if sender_factory is not None:
+        try:
+            senders = sender_factory(instance_name, store)
+        except Exception as exc:  # noqa: BLE001 - injected factories have no per-channel selector.
+            for channel in candidate_channels:
+                sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
+        else:
+            for channel in candidate_channels:
+                try:
+                    sender = _sender_for_channel(senders, channel)
+                except Exception as exc:
+                    sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
+                    continue
+                if sender is None or sender is _SENDER_NOT_FOUND:
+                    sender_errors_by_channel[channel] = "no_sender"
+                    continue
+                if not callable(sender):
+                    sender_errors_by_channel[channel] = "sender_factory:non_callable"
+                    continue
+                senders_by_channel[channel] = sender
+    else:
+        for channel in candidate_channels:
+            try:
+                resolved_sender_factory = _runtime_sender_factory(instances_dir, source, channels=(channel,))
+                senders = resolved_sender_factory(instance_name, store)
+            except Exception as exc:  # noqa: BLE001 - one runtime channel must not block other admin channels.
+                sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
+                continue
+            try:
+                sender = _sender_for_channel(senders, channel)
+            except Exception as exc:
+                sender_errors_by_channel[channel] = f"sender_factory:{type(exc).__name__}"
+                continue
+            if sender is None or sender is _SENDER_NOT_FOUND:
+                sender_errors_by_channel[channel] = "no_sender"
+                continue
+            if not callable(sender):
+                sender_errors_by_channel[channel] = "sender_factory:non_callable"
+                continue
+            senders_by_channel[channel] = sender
+    for account_id, route, channel, summary_payload in candidates:
+        sender_error = sender_errors_by_channel.get(channel)
+        if sender_error == "no_sender":
+            _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="skipped", reason=sender_error, channel=channel, now=now)
+            results.append(AdminNotificationResult(instance_name, account_id, "skipped", sender_error, channel=channel))
+            continue
+        if sender_error:
+            _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="failed", reason=sender_error, channel=channel, now=now)
+            results.append(AdminNotificationResult(instance_name, account_id, "failed", sender_error, channel=channel))
+            continue
+        sender = senders_by_channel[channel]
+        chat_id = str(route.get("chat_id") or "").strip()
+        action = SendAttachment(
+            chat_id,
+            summary_payload.markdown_document.encode("utf-8"),
+            summary_payload.markdown_filename,
+            "text/markdown",
+            caption=summary_payload.message_text,
+            track=False,
+        )
+        try:
+            outcome = sender(route, action, {"source": "benchmark_admin", "account_id": account_id})
+            if isawaitable(outcome):
+                await outcome
+        except Exception as exc:  # noqa: BLE001 - one failed admin must not block all admins.
+            reason = f"send:{type(exc).__name__}"
+            _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="failed", reason=reason, channel=channel, now=now)
+            results.append(AdminNotificationResult(instance_name, account_id, "failed", reason, channel=channel))
+            continue
+        _record_runtime_status_dispatch(store, account_id, summary_payload.item_id, status="sent", channel=channel, now=now)
+        results.append(AdminNotificationResult(instance_name, account_id, "sent", channel=channel))
+    return tuple(results)
+
+
 def _status_notification_candidate_account_ids(
     store: AccountStore,
     *,
@@ -348,6 +516,78 @@ def _status_notification_candidate_account_ids(
         seen.add(normalized)
         candidates.append(normalized)
     return tuple(candidates)
+
+
+def _resolve_admin_notification_route(
+    store: AccountStore,
+    account_id: str,
+    *,
+    instances_dir: Path,
+    summary_instance_name: str,
+    store_factory: StoreFactory,
+) -> _AdminRouteResolution:
+    if _account_dir_exists(store, account_id):
+        route = select_proactive_route(store, account_id)
+        if route is None:
+            return _AdminRouteResolution("skipped", reason="no_private_route")
+        return _AdminRouteResolution("routable", route=dict(route))
+
+    found_source_account = False
+    route_errors: list[str] = []
+    for source_instance_name, source_store in _admin_account_source_stores(
+        instances_dir,
+        account_id,
+        summary_instance_name=summary_instance_name,
+        store_factory=store_factory,
+    ):
+        found_source_account = True
+        try:
+            route = select_proactive_route(source_store, account_id)
+        except (AccountStoreError, OSError) as exc:
+            route_errors.append(f"{source_instance_name}:{type(exc).__name__}")
+            continue
+        if route is None:
+            continue
+        resolved_route = dict(route)
+        resolved_route.setdefault("route_source_instance", source_instance_name)
+        return _AdminRouteResolution("routable", route=resolved_route, reason="cross_instance")
+    if found_source_account:
+        if route_errors:
+            return _AdminRouteResolution("failed", reason=f"route:{route_errors[0]}")
+        return _AdminRouteResolution("skipped", reason="no_private_route")
+    return _AdminRouteResolution("not_local", reason="not_local")
+
+
+def _admin_account_source_stores(
+    instances_dir: Path,
+    account_id: str,
+    *,
+    summary_instance_name: str,
+    store_factory: StoreFactory,
+) -> tuple[tuple[str, AccountStore], ...]:
+    if TOKEN_HEX_RE.fullmatch(str(account_id or "").strip().casefold()) is None:
+        return ()
+    try:
+        instance_dirs = sorted(
+            (path for path in Path(instances_dir).iterdir() if path.is_dir()),
+            key=lambda path: path.name.casefold(),
+        )
+    except OSError:
+        return ()
+    stores: list[tuple[str, AccountStore]] = []
+    for instance_dir in instance_dirs:
+        instance_name = instance_dir.name
+        if instance_name == summary_instance_name:
+            continue
+        accounts_root = instance_dir / "data" / "accounts"
+        if not (accounts_root / "accounts" / str(account_id).casefold()).is_dir():
+            continue
+        try:
+            source_store = store_factory(accounts_root, instance_name)
+        except Exception:  # noqa: BLE001 - broken source stores must not block other instances.
+            continue
+        stores.append((instance_name, source_store))
+    return tuple(stores)
 
 
 def _queue_runtime_status_summary(
@@ -402,6 +642,61 @@ def _queue_runtime_status_summary(
             message_text=message_text,
             markdown_document=markdown_document,
             markdown_filename=markdown_filename,
+        )
+
+
+def _queue_runtime_benchmark_summary(
+    store: AccountStore,
+    account_id: str,
+    *,
+    markdown_document: str,
+    markdown_filename: str,
+    json_artifact_path: Path | str,
+    benchmark_suite: Mapping[str, Any] | None,
+    route: Mapping[str, Any],
+    now: datetime | None = None,
+) -> RuntimeStatusSummaryPayload:
+    timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
+    with store.status_outbox_lock(account_id):
+        rows = store.read_status_outbox(account_id)
+        summary_number = _next_status_summary_number(rows)
+        summary_prefix = _status_summary_prefix(summary_number)
+        message_text = _benchmark_admin_message_text()
+        safe_filename = _benchmark_markdown_filename(markdown_filename, summary_number)
+        item_id = _unique_status_item_id(rows)
+        suite = benchmark_suite if isinstance(benchmark_suite, Mapping) else {}
+        result_count = len(suite.get("results") or []) if isinstance(suite.get("results"), list) else 0
+        rows.append(
+            {
+                "id": item_id,
+                "schema_version": 1,
+                "kind": "benchmark_summary",
+                "status": "queued",
+                "created_at": timestamp,
+                "updated_at": timestamp,
+                "summary_number": summary_number,
+                "summary_prefix": summary_prefix,
+                "program_name": "TeeBotus",
+                "program_version": __version__,
+                "tag": f"v{__version__}",
+                "message_text": message_text,
+                "markdown_document": str(markdown_document or ""),
+                "markdown_filename": safe_filename,
+                "markdown_content_type": "text/markdown",
+                "json_artifact_path": str(json_artifact_path or ""),
+                "benchmark_ok": bool(suite.get("ok")) if suite else None,
+                "benchmark_quick": bool(suite.get("quick")) if suite else None,
+                "benchmark_result_count": result_count,
+                "route": dict(route),
+                "status_history": [{"at": timestamp, "status": "queued", "reason": "benchmark_completed"}],
+            }
+        )
+        store.write_status_outbox(account_id, rows)
+        return RuntimeStatusSummaryPayload(
+            item_id=item_id,
+            message_text=message_text,
+            markdown_document=str(markdown_document or ""),
+            markdown_filename=safe_filename,
         )
 
 
@@ -559,6 +854,10 @@ def _runtime_status_admin_message_text() -> str:
     return f"Release TeeBotus {__version__}"
 
 
+def _benchmark_admin_message_text() -> str:
+    return f"Benchmark TeeBotus {__version__}"
+
+
 def _summary_instance_name(value: str) -> str:
     text = str(value or "").strip() or STATUS_SUMMARY_INSTANCE_NAME
     if "/" in text or "\\" in text or text in {".", ".."}:
@@ -598,6 +897,14 @@ def _runtime_status_admin_markdown(
 def _runtime_status_markdown_filename(summary_number: int) -> str:
     safe_version = re.sub(r"[^A-Za-z0-9._-]+", "_", __version__).strip("._-") or "unknown"
     return f"TeeBotus_release_{safe_version}_{max(1, int(summary_number)):04d}.md"
+
+
+def _benchmark_markdown_filename(markdown_filename: str, summary_number: int) -> str:
+    requested = Path(str(markdown_filename or "")).name.strip()
+    if requested:
+        return requested
+    safe_version = re.sub(r"[^A-Za-z0-9._-]+", "_", __version__).strip("._-") or "unknown"
+    return f"TeeBotus_benchmarks_{safe_version}_{max(1, int(summary_number)):04d}.md"
 
 
 def _escape_markdown_inline(value: object) -> str:
