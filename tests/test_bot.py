@@ -1781,7 +1781,7 @@ class BotTests(unittest.TestCase):
 
         handle_update(api, {"message": {"text": "/ping", "chat": {"id": 123}}})
 
-        self.assertEqual(api.sent_messages, [(123, "pong")])
+        self.assertEqual(api.sent_messages, [(123, "Pong")])
 
     def test_handle_update_with_runtime_context_uses_modern_engine(self) -> None:
         class FixedWakeDatetime(datetime):
@@ -1817,6 +1817,7 @@ class BotTests(unittest.TestCase):
 
             with (
                 patch("TeeBotus.adapters.telegram_runtime._process_text_message", side_effect=AssertionError("legacy path used")),
+                patch("TeeBotus.adapters.telegram.time.sleep"),
                 patch("TeeBotus.runtime.notification_loudness.datetime", FixedWakeDatetime),
             ):
                 handle_update(
@@ -1828,8 +1829,8 @@ class BotTests(unittest.TestCase):
 
             account_id = account_store.get_account_for_identity(telegram_identity_key("456"))
 
-        self.assertEqual(api.sent_messages[0], ("123", "pong"))
-        self.assertIn("Nachrichten in diesem Chat auf laut", api.sent_messages[1][1])
+        self.assertEqual(api.sent_messages[:10], [("123", "Pong")] * 10)
+        self.assertIn("Nachrichten in diesem Chat auf laut", api.sent_messages[10][1])
         self.assertIsNotNone(account_id)
         self.assertEqual(message_tracker.list_for_chat("123", instance_name="Demo", channel="telegram")[0].message_ref, "101")
 
@@ -3272,7 +3273,7 @@ class BotTests(unittest.TestCase):
         instructions = BotInstructions(
             openai_enabled=False,
             openai_transcription_backend="local",
-            commands={"/ping": "pong"},
+            commands={"/ping": "Pong"},
         )
 
         with patch("TeeBotus.adapters.telegram_runtime.transcribe_local_audio", return_value="/ping") as transcribe:
@@ -3294,7 +3295,7 @@ class BotTests(unittest.TestCase):
         transcribe.assert_called_once()
         self.assertEqual(api.file_path_requests, ["file_1"])
         self.assertEqual(api.download_requests, ["voice/file_1.oga"])
-        self.assertEqual(api.sent_messages, [(123, "pong")])
+        self.assertEqual(api.sent_messages, [(123, "Pong")])
 
     def test_handle_update_voice_transcription_timeout_does_not_crash(self) -> None:
         from TeeBotus.instructions import BotInstructions
@@ -3425,7 +3426,7 @@ class BotTests(unittest.TestCase):
             ChatState(),
         )
 
-        self.assertEqual(api.sent_messages, [(123, "pong")])
+        self.assertEqual(api.sent_messages, [(123, "Pong")])
 
     def test_handle_update_voice_requires_openai_client(self) -> None:
         from TeeBotus.instructions import BotInstructions

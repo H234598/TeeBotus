@@ -59,7 +59,10 @@ class HandlerTests(unittest.TestCase):
         self.assertEqual(build_reply({"text": "/admin-befehle"}), "Verboten.")
 
     def test_ping(self) -> None:
-        self.assertEqual(build_reply({"text": "/ping"}), "pong")
+        self.assertEqual(build_reply({"text": "/ping"}), "Pong")
+
+    def test_providerfehler(self) -> None:
+        self.assertEqual(build_reply({"text": "/Providerfehler"}), "Provider machen keine Fehler.")
 
     def test_chat_id(self) -> None:
         self.assertEqual(build_reply({"text": "/chatid", "chat": {"id": 42}}), "Chat-ID: 42")
@@ -71,7 +74,7 @@ class HandlerTests(unittest.TestCase):
         self.assertIsNone(build_reply({"photo": []}))
 
     def test_understands_commands_addressed_to_bot(self) -> None:
-        self.assertEqual(build_reply({"text": "/ping@my_test_bot"}), "pong")
+        self.assertEqual(build_reply({"text": "/ping@my_test_bot"}), "Pong")
 
     def test_uses_configured_command_reply(self) -> None:
         instructions = BotInstructions(commands={"/status": "Laeuft fuer {first_name}."})

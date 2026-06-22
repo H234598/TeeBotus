@@ -11,6 +11,7 @@ from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_action
 from TeeBotus.adapters.signal import send_signal_actions, signal_message_to_event
 from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event, telegram_update_message
 from TeeBotus.runtime.actions import (
+    DelaySeconds,
     ExportFile,
     MessageButton,
     SendAttachment,
@@ -409,6 +410,31 @@ def test_signal_typing_is_stopped_after_followup_send():
 
     assert sent == [None, 123]
     assert context.calls == ["start_typing", ("send", "hi"), "stop_typing"]
+
+
+def test_signal_send_delay_preserves_result_alignment(monkeypatch):
+    class Context:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def send(self, text, **_kwargs):
+            self.calls.append(("send", text))
+            return len(self.calls)
+
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr("TeeBotus.adapters.signal.asyncio.sleep", fake_sleep)
+
+    context = Context()
+
+    sent = asyncio.run(send_signal_actions(context, [SendText("+491", "vorher"), DelaySeconds(1.0), SendText("+491", "danach")]))
+
+    assert sent == [1, None, 2]
+    assert sleeps == [1.0]
+    assert context.calls == [("send", "vorher"), ("send", "danach")]
 
 
 def test_signal_unknown_action_preserves_result_alignment():
@@ -1480,6 +1506,27 @@ def test_telegram_send_keeps_string_chat_ids_for_channels():
     assert api.calls == [("message", "@my_channel", "hi"), ("action", "@my_channel", "typing")]
 
 
+def test_telegram_send_delay_preserves_result_alignment(monkeypatch):
+    class API:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str]] = []
+
+        def send_message(self, chat_id, text):
+            self.calls.append((chat_id, text))
+            return len(self.calls)
+
+    sleeps: list[float] = []
+    monkeypatch.setattr("TeeBotus.adapters.telegram.time.sleep", lambda seconds: sleeps.append(seconds))
+
+    api = API()
+
+    sent = send_telegram_actions(api, [SendText("1", "vorher"), DelaySeconds(1.0), SendText("1", "danach")])
+
+    assert sent == [1, None, 2]
+    assert sleeps == [1.0]
+    assert api.calls == [("1", "vorher"), ("1", "danach")]
+
+
 def test_telegram_send_text_passes_formatted_text_when_supported():
     class API:
         def __init__(self) -> None:
@@ -2066,6 +2113,35 @@ def test_matrix_send_text_uses_room_send():
             "content": {"msgtype": "m.text", "body": "hi"},
         }
     ]
+
+
+def test_matrix_send_delay_preserves_result_alignment(monkeypatch):
+    class Response:
+        def __init__(self, event_id: str) -> None:
+            self.event_id = event_id
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def room_send(self, **kwargs):
+            self.calls.append(kwargs["content"]["body"])
+            return Response(f"$sent-{len(self.calls)}")
+
+    sleeps: list[float] = []
+
+    async def fake_sleep(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr("TeeBotus.adapters.matrix.asyncio.sleep", fake_sleep)
+
+    client = Client()
+
+    sent = asyncio.run(send_matrix_actions(client, [SendText("!room:example", "vorher"), DelaySeconds(1.0), SendText("!room:example", "danach")]))
+
+    assert sent == ["$sent-1", None, "$sent-2"]
+    assert sleeps == [1.0]
+    assert client.calls == ["vorher", "danach"]
 
 
 def test_matrix_send_text_rejects_response_without_event_id():

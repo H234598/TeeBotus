@@ -52,6 +52,11 @@ class SendTyping:
 
 
 @dataclass(frozen=True)
+class DelaySeconds:
+    seconds: float
+
+
+@dataclass(frozen=True)
 class SendReaction:
     chat_id: str
     message_ref: str
@@ -134,6 +139,7 @@ OutgoingAction = (
     | SendAttachment
     | DeleteTrackedMessages
     | SendTyping
+    | DelaySeconds
     | SendReaction
     | SendReceipt
     | SendEdit

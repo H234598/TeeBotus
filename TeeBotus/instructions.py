@@ -22,14 +22,16 @@ ALL_BOTS_DEFAULT_FILENAME = "ALL_BOTS_DEFAULT.md"
 EASTER_EGGS_FILENAME = "EASTER_EGGS.json"
 
 DEFAULT_COMMANDS = {
-    "/ping": "pong",
+    "/ping": "Pong",
+    "/providerfehler": "Provider machen keine Fehler.",
 }
 DEFAULT_RELEASE_LOG_URL = f"{DEFAULT_REPO_URL}/releases"
 
 DEFAULT_HELP_LINES = (
     "/start - Bot starten",
     "/help - Hilfe anzeigen",
-    "/ping - Verbindung testen",
+    "/ping - 10x Pong im Abstand von einer Sekunde senden",
+    "/providerfehler - Provider machen keine Fehler.",
     "/status - Bot-Status, Version, Memory-Groesse und Userfile-Verschluesselung anzeigen",
     f"/history - Release Log {DEFAULT_RELEASE_LOG_URL} und Commits anzeigen",
     "/account - TeeBotus-Account und verknuepfte Kommunikationswege anzeigen",

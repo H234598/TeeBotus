@@ -4,7 +4,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
-from TeeBotus.runtime.actions import SendText
+from TeeBotus.runtime.actions import DelaySeconds, SendText
 from TeeBotus.runtime.activity_profile import record_account_activity
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
@@ -59,8 +59,10 @@ def test_engine_asks_user_to_unmute_in_private_chat_type_variant(tmp_path, monke
 
     actions = engine.process(event_with_chat_type(identity, "/ping", chat_type="Private"))
 
-    assert len(actions) == 2
-    assert actions[1].text == NOTIFICATION_LOUDNESS_PROMPT
+    assert len(actions) == 20
+    assert [action.text for action in actions if isinstance(action, SendText)][:10] == ["Pong"] * 10
+    assert sum(isinstance(action, DelaySeconds) for action in actions) == 9
+    assert actions[-1].text == NOTIFICATION_LOUDNESS_PROMPT
 
 
 def prepare_account_with_route(account_store: AccountStore, identity: str) -> str:
@@ -88,10 +90,11 @@ def test_engine_asks_user_to_unmute_bot_messages_once_route_exists(tmp_path, mon
 
     actions = engine.process(event(identity, "/ping"))
 
-    assert len(actions) == 2
-    assert actions[0].text == "pong"
-    assert actions[1].text == NOTIFICATION_LOUDNESS_PROMPT
-    assert [button.label for button in actions[1].buttons] == ["Ja, ist laut", "Nein"]
+    assert len(actions) == 20
+    assert [action.text for action in actions if isinstance(action, SendText)][:10] == ["Pong"] * 10
+    assert sum(isinstance(action, DelaySeconds) for action in actions) == 9
+    assert actions[-1].text == NOTIFICATION_LOUDNESS_PROMPT
+    assert [button.label for button in actions[-1].buttons] == ["Ja, ist laut", "Nein"]
     state = account_store.read_agent_state(account_store.get_account_for_identity(identity) or "")
     route_state = state["notification_loudness"]["routes"]["telegram:1:chat-1"]
     assert route_state["status"] == "pending"

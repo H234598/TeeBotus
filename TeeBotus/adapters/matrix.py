@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from html import unescape
 from html.parser import HTMLParser
 from io import BytesIO
@@ -8,6 +9,7 @@ from typing import Any, Mapping
 from TeeBotus.runtime.accounts import matrix_identity_key
 from TeeBotus.runtime.action_buttons import text_with_button_fallback
 from TeeBotus.runtime.actions import (
+    DelaySeconds,
     DeleteTrackedMessages,
     ExportFile,
     NotifyLinkedIdentity,
@@ -89,6 +91,9 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 link_preview=action.link_preview,
             )
             sent.append(_matrix_required_event_id(response, "Matrix text send"))
+        elif isinstance(action, DelaySeconds):
+            await asyncio.sleep(max(0.0, float(action.seconds)))
+            sent.append(None)
         elif isinstance(action, SendTyping):
             await _send_matrix_typing(client, action.chat_id)
             sent.append(None)

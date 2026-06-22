@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from TeeBotus.runtime.accounts import telegram_identity_key
 from TeeBotus.runtime.action_buttons import text_with_button_fallback
 from TeeBotus.runtime.actions import (
+    DelaySeconds,
     DeleteTrackedMessages,
     ExportFile,
     MessageButton,
@@ -119,6 +121,9 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
                     buttons=action.buttons,
                 )
             )
+        elif isinstance(action, DelaySeconds):
+            time.sleep(max(0.0, float(action.seconds)))
+            sent.append(None)
         elif isinstance(action, SendTyping):
             api.send_chat_action(action.chat_id, "typing")
             sent.append(None)

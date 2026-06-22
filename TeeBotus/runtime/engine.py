@@ -46,7 +46,7 @@ from TeeBotus.runtime.action_buttons import (
 from TeeBotus.runtime.notification_loudness import maybe_handle_notification_loudness_response, maybe_notification_loudness_prompt_action
 from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder
 from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KINDS, ACCOUNT_MEMORY_TYPES, AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, runtime_secret_provider, utc_now
-from TeeBotus.runtime.actions import ExportFile, MessageButton, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
+from TeeBotus.runtime.actions import DelaySeconds, ExportFile, MessageButton, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks, parse_generated_image_blocks
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
@@ -250,6 +250,8 @@ class TeeBotusEngine:
         if result.handled or result.actions:
             return result
         instructions = self._current_instructions()
+        if command == "/ping":
+            return EngineResult(result.account_id, _ping_actions(event.chat_id), handled=True)
         if command == "/codex" and instructions.codex_enabled:
             return EngineResult(result.account_id, self._codex_actions(event, result.account_id, instructions), handled=True)
         route_to_command = parse_route_to_command(text)
@@ -1654,6 +1656,15 @@ def _command_name(text: str) -> str:
     if "@" in first:
         first = first.split("@", maxsplit=1)[0]
     return first
+
+
+def _ping_actions(chat_id: str) -> list[OutgoingAction]:
+    actions: list[OutgoingAction] = []
+    for index in range(10):
+        if index:
+            actions.append(DelaySeconds(1.0))
+        actions.append(SendText(chat_id, "Pong"))
+    return actions
 
 
 def _parse_admin_command_args(text: str) -> tuple[str, str]:

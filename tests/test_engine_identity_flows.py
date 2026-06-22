@@ -22,7 +22,7 @@ from TeeBotus.runtime.accounts import (
     signal_identity_key,
     telegram_identity_key,
 )
-from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, SendAttachment, SendTyping
+from TeeBotus.runtime.actions import DelaySeconds, DeleteTrackedMessages, ExportFile, SendAttachment, SendText, SendTyping
 from TeeBotus.runtime.admin_accounts import is_runtime_admin_account
 from TeeBotus.runtime.status_auth import authorize_status_recipient, status_auth_state_authorized
 from TeeBotus.runtime.engine import MEMORY_PAGE_LIMIT_NOTE, TeeBotusEngine, should_ignore_event_without_account
@@ -626,8 +626,18 @@ def test_engine_handles_default_builtin_reply_after_identity_flows(tmp_path):
 
     actions = engine.process(event(telegram_identity_key(1), "/ping"))
 
+    assert len(actions) == 19
+    assert [action.text for action in actions if isinstance(action, SendText)] == ["Pong"] * 10
+    assert [action.seconds for action in actions if isinstance(action, DelaySeconds)] == [1.0] * 9
+
+
+def test_engine_handles_providerfehler_builtin_reply_after_identity_flows(tmp_path):
+    engine = TeeBotusEngine(account_store=store(tmp_path))
+
+    actions = engine.process(event(telegram_identity_key(1), "/Providerfehler"))
+
     assert len(actions) == 1
-    assert actions[0].text == "pong"
+    assert actions[0].text == "Provider machen keine Fehler."
 
 
 def test_engine_uses_configured_builtin_reply_after_identity_flows(tmp_path):

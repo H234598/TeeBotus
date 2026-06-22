@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import mimetypes
@@ -9,6 +10,7 @@ from typing import Any
 from TeeBotus.runtime.accounts import signal_identity_key
 from TeeBotus.runtime.action_buttons import text_with_button_fallback
 from TeeBotus.runtime.actions import (
+    DelaySeconds,
     DeleteTrackedMessages,
     ExportFile,
     NotifyLinkedIdentity,
@@ -117,6 +119,10 @@ async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | No
                     )
                 )
                 typing_target = await _stop_signal_typing_if_started(context, typing_target)
+            elif isinstance(action, DelaySeconds):
+                typing_target = await _stop_signal_typing_if_started(context, typing_target)
+                await asyncio.sleep(max(0.0, float(action.seconds)))
+                sent.append(None)
             elif isinstance(action, SendTyping):
                 typing_target = await _stop_signal_typing_if_started(context, typing_target)
                 typing_target = await _start_signal_typing(context, action.chat_id)
