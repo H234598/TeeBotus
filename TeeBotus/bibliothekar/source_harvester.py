@@ -89,6 +89,7 @@ class SourceHarvester:
             return result
 
         stored_path = self._stored_path(source, sha256, report.route)
+        _refuse_symlink_destination_file(stored_path)
         if copy:
             shutil.copy2(source, stored_path)
         else:
@@ -283,8 +284,7 @@ def _looks_like_uri_destination(value: str) -> bool:
 
 
 def _unique_destination(candidate: Path, *, sha256: str) -> Path:
-    if candidate.is_symlink():
-        raise ValueError(f"SourceHarvester refuses symlink destination file: {candidate}")
+    _refuse_symlink_destination_file(candidate)
     if not candidate.exists():
         return candidate
     try:
@@ -296,11 +296,15 @@ def _unique_destination(candidate: Path, *, sha256: str) -> Path:
     suffix = candidate.suffix
     for index in range(2, 10_000):
         versioned = candidate.with_name(f"{stem}-{index}{suffix}")
-        if versioned.is_symlink():
-            raise ValueError(f"SourceHarvester refuses symlink destination file: {versioned}")
+        _refuse_symlink_destination_file(versioned)
         if not versioned.exists():
             return versioned
     raise FileExistsError(candidate)
+
+
+def _refuse_symlink_destination_file(path: Path) -> None:
+    if path.is_symlink():
+        raise ValueError(f"SourceHarvester refuses symlink destination file: {path}")
 
 
 def _same_path(left: object, right: Path) -> bool:

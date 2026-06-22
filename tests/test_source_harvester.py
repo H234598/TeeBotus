@@ -38,6 +38,32 @@ def test_source_harvester_routes_accepted_file_without_blind_ingest(tmp_path):
     assert manifest[0]["decision"]["status"] == "trusted"
 
 
+def test_source_harvester_refuses_symlink_harvest_destination_file(tmp_path):
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    outside_target = tmp_path / "outside-accepted.txt"
+    library_dir = tmp_path / "library"
+    accepted_dir = library_dir / "accepted"
+    accepted_dir.mkdir(parents=True)
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    (accepted_dir / f"{sha256[:16]}-{source.name}").symlink_to(outside_target)
+    harvester = SourceHarvester(
+        library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+
+    with pytest.raises(ValueError, match="symlink destination file"):
+        harvester.harvest_path(
+            source,
+            metadata={"title": "Therapie", "license": "private"},
+            claims=("Schlafhygiene ist relevant.",),
+            evidence=("Schlafhygiene und Aktivierung.",),
+        )
+
+    assert not outside_target.exists()
+
+
 def test_source_harvester_promotes_accepted_source_before_indexing(tmp_path):
     instances_dir = tmp_path / "instances"
     source = tmp_path / "download" / "therapie.txt"
