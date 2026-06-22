@@ -578,6 +578,29 @@ def test_rebuild_qdrant_codex_history_indexes_rejects_unsafe_collection_name(tmp
     assert "Qdrant collection name" in results[0].error
 
 
+def test_rebuild_qdrant_codex_history_indexes_rejects_negative_limit_before_clear(tmp_path):
+    class UnexpectedQdrantBibliothekarIndex:
+        def __init__(self, **_kwargs) -> None:
+            raise AssertionError("negative limit must fail before creating qdrant index")
+
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: qdrant\n", encoding="utf-8")
+    AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+
+    results = rebuild_qdrant_codex_history_indexes(
+        instances_dir=instances_dir,
+        instance_names=("Depressionsbot",),
+        limit=-5,
+        secret_provider=StaticSecretProvider(b"a" * 32),
+        qdrant_index_factory=UnexpectedQdrantBibliothekarIndex,
+    )
+
+    assert results[0].status == "error"
+    assert "limit must be zero or a positive integer" in results[0].error
+
+
 def test_rebuild_qdrant_codex_history_indexes_repo_filter_does_not_clear_instance(tmp_path):
     calls: list[list[str]] = []
 

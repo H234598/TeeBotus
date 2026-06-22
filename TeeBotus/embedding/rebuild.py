@@ -349,6 +349,7 @@ def rebuild_qdrant_codex_history_indexes(
     selected_instances = _resolve_instruction_instance_names(root, instance_names)
     target_collection = _optional_override(collection_name, default=QDRANT_CODEX_HISTORY_COLLECTION)
     collection_error = _qdrant_collection_name_error(target_collection)
+    limit_value, limit_error = _codex_history_limit(limit)
     results: list[QdrantCodexHistoryRebuildResult] = []
     for instance_name in selected_instances:
         instructions = _load_instance_memory_instructions(root, instance_name)
@@ -369,6 +370,18 @@ def rebuild_qdrant_codex_history_indexes(
                 )
             )
             continue
+        if limit_error:
+            results.append(
+                _codex_history_rebuild_result(
+                    instance_name,
+                    "error",
+                    qdrant_url=effective_qdrant_url,
+                    collection_name=target_collection,
+                    embedding_config=effective_embedding_config,
+                    error=limit_error,
+                )
+            )
+            continue
         try:
             embedding_provider = build_embedding_provider(effective_embedding_config)
             store = AccountStore(
@@ -382,7 +395,7 @@ def rebuild_qdrant_codex_history_indexes(
                 instance_dir=root / instance_name,
                 instance_name=instance_name,
                 repo=repo,
-                limit=limit,
+                limit=limit_value,
             )
             if dry_run:
                 results.append(
@@ -397,7 +410,7 @@ def rebuild_qdrant_codex_history_indexes(
                     )
                 )
                 continue
-            full_rebuild = _is_full_codex_history_rebuild(repo=repo, limit=limit)
+            full_rebuild = _is_full_codex_history_rebuild(repo=repo, limit=limit_value)
             if not chunks:
                 if full_rebuild:
                     index = qdrant_index_factory(
@@ -462,7 +475,17 @@ def rebuild_qdrant_codex_history_indexes(
 
 
 def _is_full_codex_history_rebuild(*, repo: str, limit: int) -> bool:
-    return not str(repo or "").strip() and int(limit or 0) <= 0
+    return not str(repo or "").strip() and int(limit or 0) == 0
+
+
+def _codex_history_limit(value: object) -> tuple[int, str]:
+    try:
+        parsed = int(value or 0)
+    except (TypeError, ValueError):
+        return 0, "Codex-History rebuild limit must be zero or a positive integer."
+    if parsed < 0:
+        return parsed, "Codex-History rebuild limit must be zero or a positive integer."
+    return parsed, ""
 
 
 def ensure_qdrant_collections_for_instances(
