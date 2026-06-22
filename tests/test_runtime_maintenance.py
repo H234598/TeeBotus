@@ -1243,6 +1243,39 @@ def test_runtime_maintenance_keeps_sources_when_archive_fdopen_fails(tmp_path, m
     assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
 
 
+def test_runtime_maintenance_refuses_archive_when_runtime_root_becomes_symlink(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = runtime_dir / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    moved_runtime_dir = tmp_path / "runtime-moved"
+    external_runtime_dir = tmp_path / "external-runtime"
+    external_runtime_dir.mkdir()
+    real_stat = Path.stat
+    raced = False
+
+    def racing_source_stat(self, *args, **kwargs):
+        nonlocal raced
+        result = real_stat(self, *args, **kwargs)
+        if self == path and kwargs.get("follow_symlinks") is False and not raced:
+            raced = True
+            runtime_dir.rename(moved_runtime_dir)
+            runtime_dir.symlink_to(external_runtime_dir, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(Path, "stat", racing_source_stat)
+
+    maintain_runtime_directory(runtime_dir, now=now)
+
+    assert raced is True
+    assert runtime_dir.is_symlink()
+    assert (moved_runtime_dir / path.name).read_bytes() == b"compressed-ish"
+    assert not list(external_runtime_dir.iterdir())
+
+
 def test_runtime_maintenance_keeps_sources_when_archive_directory_becomes_symlink(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60

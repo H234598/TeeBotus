@@ -500,6 +500,8 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
         groups.setdefault(month, []).append((path, stat))
 
     for month, paths in groups.items():
+        if _has_symlink_parent(archive_dir):
+            continue
         try:
             archive_dir.mkdir(parents=True, exist_ok=True)
             archive_dir_stat = archive_dir.stat(follow_symlinks=False)
@@ -542,6 +544,8 @@ def _add_regular_file_to_archive(
     *,
     expected_stat: os.stat_result | None = None,
 ) -> os.stat_result | None:
+    if _has_symlink_parent(path):
+        return None
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(path, flags)
