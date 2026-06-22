@@ -804,6 +804,8 @@ def _chunk_has_library_source_path(chunk: dict[str, Any]) -> bool:
         if normalized.startswith("/") or normalized.startswith("../") or "/../" in normalized:
             return False
         parts = tuple(part for part in normalized.split("/") if part and part != ".")
+        if any(part == ".." for part in parts):
+            return False
         if parts and parts[0] in LIBRARY_STAGING_DIRNAMES:
             return False
         if any(part in FORBIDDEN_LIBRARY_SOURCE_PATH_PARTS for part in parts):

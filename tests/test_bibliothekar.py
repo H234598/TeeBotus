@@ -1092,6 +1092,50 @@ def test_bibliothekar_rejects_absolute_or_uri_chunk_source_paths(tmp_path):
     assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["therapie.txt"]
 
 
+def test_bibliothekar_rebuilds_traversal_chunk_source_paths(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    index = store.rebuild()
+    path_markers = {
+        "parent_exact": "..",
+        "parent_terminal": "books/..",
+    }
+    index["chunk_count"] = int(index["chunk_count"]) + len(path_markers)
+    store.index_path.write_text(json.dumps(index, ensure_ascii=False, indent=2), encoding="utf-8")
+    with store.chunks_path.open("a", encoding="utf-8") as file:
+        for chunk_id, source_path in path_markers.items():
+            file.write(
+                json.dumps(
+                    {
+                        **_plan2_chunk_meta(
+                            chunk_id=chunk_id,
+                            relative_path=source_path,
+                            locator="Seite 1",
+                        ),
+                        "file_type": "txt",
+                        "suffix": ".txt",
+                        "instance_name": "Depressionsbot",
+                        "topics": ["therapie"],
+                        "categories": ["psychologie"],
+                        "text": f"Traversal-Pfad darf nicht in Quellenkontext: {source_path}",
+                    },
+                    ensure_ascii=False,
+                    sort_keys=True,
+                )
+                + "\n"
+            )
+
+    selection = store.select("Therapie", max_chunks=3)
+    payload = json.loads(selection.prompt_text)
+
+    assert "Traversal-Pfad" not in selection.prompt_text
+    assert '".."' not in selection.prompt_text
+    assert "books/.." not in selection.prompt_text
+    assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["therapie.txt"]
+
+
 def test_haystack_backend_rejects_contaminated_document_store_chunks_with_account_memory_paths(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
@@ -1182,6 +1226,64 @@ def test_haystack_backend_rejects_absolute_or_uri_source_paths(tmp_path):
 
     assert "C:/Users" not in selection.prompt_text
     assert "file:///home" not in selection.prompt_text
+    assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["therapie.txt"]
+
+
+def test_haystack_backend_rejects_traversal_source_paths(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    fallback_store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    fallback_store.rebuild()
+    document_store = FakeDocumentStore()
+    document_store.documents = [
+        FakeDocument(
+            content="Traversal-Pfad darf nicht in Haystack-Kontext: parent exact.",
+            id="parent_exact",
+            meta={
+                **_plan2_chunk_meta(
+                    chunk_id="parent_exact",
+                    relative_path="..",
+                    locator="Seite 1",
+                ),
+                "file_type": "txt",
+                "suffix": ".txt",
+                "instance_name": "Depressionsbot",
+                "topics": ["therapie"],
+                "categories": ["psychologie"],
+            },
+        ),
+        FakeDocument(
+            content="Traversal-Pfad darf nicht in Haystack-Kontext: parent terminal.",
+            id="parent_terminal",
+            meta={
+                **_plan2_chunk_meta(
+                    chunk_id="parent_terminal",
+                    relative_path="books/..",
+                    locator="Seite 1",
+                ),
+                "file_type": "txt",
+                "suffix": ".txt",
+                "instance_name": "Depressionsbot",
+                "topics": ["therapie"],
+                "categories": ["psychologie"],
+            },
+        ),
+    ]
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        fallback_store=fallback_store,
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=3))
+    payload = json.loads(selection.prompt_text)
+
+    assert "Traversal-Pfad" not in selection.prompt_text
+    assert '".."' not in selection.prompt_text
+    assert "books/.." not in selection.prompt_text
     assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["therapie.txt"]
 
 
