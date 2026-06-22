@@ -235,9 +235,16 @@ class TeeStream:
 
 
 def _stream_tee_target(stream: object) -> Path | None:
-    if isinstance(stream, TeeStream) and getattr(stream.secondary, "closed", False):
+    if isinstance(stream, TeeStream):
+        try:
+            if getattr(stream.secondary, "closed", False):
+                return None
+        except Exception:
+            return None
+    try:
+        target = getattr(stream, "_teebotus_tee_target", None)
+    except Exception:
         return None
-    target = getattr(stream, "_teebotus_tee_target", None)
     if isinstance(target, Path):
         return _absolute_without_symlink_resolution(target)
     return None

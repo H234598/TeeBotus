@@ -2216,6 +2216,34 @@ def test_install_stdio_tee_repairs_closed_existing_target(tmp_path, monkeypatch)
     assert "stderr after repair" in log_text
 
 
+def test_install_stdio_tee_repairs_existing_target_when_closed_lookup_fails(tmp_path, monkeypatch):
+    class BrokenClosedSecondary(io.StringIO):
+        @property
+        def closed(self):
+            raise RuntimeError("closed lookup failed")
+
+    primary_stdout = io.StringIO()
+    primary_stderr = io.StringIO()
+    monkeypatch.setattr(
+        sys,
+        "stdout",
+        TeeStream(primary_stdout, BrokenClosedSecondary(), tmp_path / "old-stdio.log"),
+    )
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    path = tmp_path / STDIO_LOG_FILENAME
+
+    install_stdio_tee(path)
+    print("stdout after broken closed repair")
+    print("stderr after broken closed repair", file=sys.stderr)
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    assert isinstance(sys.stdout, TeeStream)
+    assert isinstance(sys.stderr, TeeStream)
+    assert "stdout after broken closed repair" in path.read_text(encoding="utf-8")
+    assert "stderr after broken closed repair" in path.read_text(encoding="utf-8")
+
+
 def test_install_stdio_tee_skips_when_target_directory_cannot_be_created(tmp_path, monkeypatch):
     primary_stdout = io.StringIO()
     primary_stderr = io.StringIO()
