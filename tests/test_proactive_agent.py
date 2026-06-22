@@ -945,6 +945,7 @@ def test_check_proactive_agent_account_allows_uppercase_route_values_in_outbox(t
         category="reminder",
         intent="follow_up",
         message_text="Ping",
+        reason_memory_ids=("mem_follow_up",),
         due_at="2026-06-15T11:00:00+00:00",
         now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
     )

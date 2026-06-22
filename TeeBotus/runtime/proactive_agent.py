@@ -1483,8 +1483,6 @@ def _proactive_outbox_item_has_provenance(item: Mapping[str, Any]) -> bool:
     reason_memory_ids = item.get("reason_memory_ids")
     if isinstance(reason_memory_ids, list) and any(str(memory_id or "").strip() for memory_id in reason_memory_ids):
         return True
-    if isinstance(item.get("route"), Mapping) and str(item.get("policy_reason") or "").strip():
-        return True
     planner = item.get("planner")
     if isinstance(planner, Mapping):
         for key in ("source_memory_id", "reflection_memory_id", "fingerprint", "source"):
