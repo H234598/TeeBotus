@@ -378,5 +378,6 @@ __all__ = [
     "provider_is_stateful_google_gemini",
     "reset_gemini_free_tier_budget_state",
     "resolve_gemini_free_tier_limits",
+    "route_uses_gemini_api",
     "route_uses_google_gemini",
 ]
