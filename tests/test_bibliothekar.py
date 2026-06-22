@@ -518,6 +518,55 @@ def test_bibliothekar_harvest_manifest_ignores_external_accepted_metadata(tmp_pa
     assert "External Therapy Source" not in json.dumps(payload, ensure_ascii=False)
 
 
+def test_bibliothekar_harvest_manifest_rejects_traversal_accepted_metadata_path(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    book_dir = library_dir / "books"
+    book_dir.mkdir(parents=True)
+    source = book_dir / "therapie.txt"
+    source.write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    accepted_path = library_dir / "accepted" / "therapie.txt"
+    accepted_path.parent.mkdir(parents=True)
+    accepted_path.write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    traversal_accepted_path = library_dir / "books" / ".." / "accepted" / "therapie.txt"
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    manifest_path = library_dir / "harvest_manifest.jsonl"
+    rows = [
+        {
+            "accepted_for_ingest": True,
+            "decision": {
+                "confidence": 0.8,
+                "reason": "traversal accepted path should be ignored",
+                "requires_human_review": False,
+                "status": "usable",
+            },
+            "route": "accepted",
+            "sha256": sha256,
+            "source": {"metadata": {"license": "private", "title": "Traversal Therapy Source"}},
+            "source_path": "/tmp/original-therapie.txt",
+            "stored_path": str(traversal_accepted_path),
+        },
+        {
+            "accepted_for_ingest": False,
+            "event": "promoted",
+            "route": "promoted",
+            "sha256": sha256,
+            "source_path": str(traversal_accepted_path),
+            "stored_path": str(source),
+        },
+    ]
+    manifest_path.write_text("\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in rows) + "\n", encoding="utf-8")
+
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+    payload = json.loads(store.select("Therapie", max_chunks=1).prompt_text)
+    chunk = payload["selected_library_chunks"][0]
+
+    assert chunk["title"] == "therapie"
+    assert chunk["source_quality"] == "unreviewed"
+    assert chunk["source_harvest_route"] == "manual"
+    assert "Traversal Therapy Source" not in json.dumps(payload, ensure_ascii=False)
+
+
 def test_bibliothekar_context_is_added_to_engine_openai_prompt(tmp_path):
     instances_dir = tmp_path / "instances"
     library_dir = instances_dir / "Depressionsbot" / "data" / "Bibliothek"

@@ -472,6 +472,8 @@ def _manifest_path_candidates(library_dir: Path, value: object) -> tuple[Path, .
     if _looks_like_absolute_or_uri_source_path(normalized_text):
         return ()
     raw_path = Path(text)
+    if any(part == ".." for part in raw_path.parts):
+        return ()
     if raw_path.is_absolute():
         return (raw_path,)
     candidates: list[Path] = []
