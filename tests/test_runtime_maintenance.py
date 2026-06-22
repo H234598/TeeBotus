@@ -430,6 +430,36 @@ def test_gzip_file_does_not_overwrite_temporary_file_created_during_open(tmp_pat
         assert handle.read() == "old log\n"
 
 
+def test_gzip_file_does_not_publish_temporary_path_replaced_before_publish(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    target = tmp_path / f"{path.name}.gz"
+    temporary = tmp_path / f".{target.name}.tmp"
+    external = tmp_path / "external-target"
+    external.write_text("do not publish\n", encoding="utf-8")
+    real_link = os.link
+    raced = False
+
+    def racing_link(source, destination, *args, **kwargs):
+        nonlocal raced
+        if Path(source) == temporary and Path(destination) == target and not raced:
+            raced = True
+            temporary.unlink()
+            temporary.symlink_to(external)
+        return real_link(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(os, "link", racing_link)
+
+    with pytest.raises(OSError, match="temporary file changed before publish"):
+        gzip_file(path)
+
+    assert raced is True
+    assert path.read_text(encoding="utf-8") == "old log\n"
+    assert temporary.is_symlink()
+    assert external.read_text(encoding="utf-8") == "do not publish\n"
+    assert not os.path.lexists(target)
+
+
 def test_gzip_file_preserves_source_replaced_before_cleanup(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")
