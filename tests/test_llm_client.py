@@ -464,6 +464,73 @@ def test_litellm_text_client_normalizes_fallback_api_key_model_names(monkeypatch
     ]
 
 
+def test_litellm_text_client_does_not_reuse_primary_credentials_for_cross_provider_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str, str]] = []
+
+    def completion(**kwargs):
+        model = str(kwargs["model"])
+        api_key = str(kwargs.get("api_key") or "")
+        api_base = str(kwargs.get("api_base") or "")
+        calls.append((model, api_key, api_base))
+        if model == "openai/gpt-primary":
+            raise RuntimeError("primary unavailable")
+        return {"choices": [{"message": {"content": f"ok:{model}"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="litellm",
+            model="openai/gpt-primary",
+            api_key="openai-key",
+            api_base="https://openai.example/v1",
+            fallback_models=("groq/llama-3.1-8b-instant",),
+        )
+    ).create_reply("Ping", BotInstructions(), None)
+
+    assert response.model == "groq/llama-3.1-8b-instant"
+    assert calls == [
+        ("openai/gpt-primary", "openai-key", "https://openai.example/v1"),
+        ("groq/llama-3.1-8b-instant", "", ""),
+    ]
+
+
+def test_litellm_text_client_reuses_primary_credentials_for_same_provider_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, str, str]] = []
+
+    def completion(**kwargs):
+        model = str(kwargs["model"])
+        api_key = str(kwargs.get("api_key") or "")
+        api_base = str(kwargs.get("api_base") or "")
+        calls.append((model, api_key, api_base))
+        if model == "groq/primary-down":
+            raise RuntimeError("primary unavailable")
+        return {"choices": [{"message": {"content": f"ok:{api_key}"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="groq",
+            model="primary-down",
+            api_key="primary-key",
+            api_base="https://groq.example/v1",
+            fallback_models=("fallback-ok",),
+        )
+    ).create_reply("Ping", BotInstructions(), None)
+
+    assert response.text == "ok:primary-key"
+    assert response.model == "groq/fallback-ok"
+    assert calls == [
+        ("groq/primary-down", "primary-key", "https://groq.example/v1"),
+        ("groq/fallback-ok", "primary-key", "https://groq.example/v1"),
+    ]
+
+
 def test_litellm_model_gemini_detection_prefers_explicit_model_prefix() -> None:
     assert litellm_provider._model_uses_gemini_api(
         provider="litellm_gemini_stateless",

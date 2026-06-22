@@ -124,6 +124,7 @@ class LiteLLMTextClient:
         self.provider = normalize_llm_provider(resolved.provider)
         self.provider_name = self.provider if self.provider in {"litellm_gemini_stateless", "litellm_gemini_paid_stateless"} else "litellm"
         self.model = resolved.model.strip()
+        self.normalized_model = _litellm_model_name(self.provider, self.model)
         self.fallback_models = tuple(item.strip() for item in resolved.fallback_models if item.strip())
         self.fallback_api_keys = {
             _litellm_model_name(self.provider, str(model or "").strip()): str(api_key or "").strip()
@@ -177,10 +178,20 @@ class LiteLLMTextClient:
 
         errors: list[str] = []
         base_kwargs = self._completion_kwargs(user_text, instructions)
-        _validate_litellm_local_service_targets(models, base_kwargs, fallback_api_bases=self.fallback_api_bases)
+        primary_model = models[0]
+        for model in models:
+            _validate_litellm_local_service_targets(
+                (model,),
+                self._completion_kwargs_for_model(base_kwargs, model, primary_model=primary_model),
+            )
         for model in models:
             for ring_key in self._api_key_attempts_for_model(model):
-                kwargs = self._completion_kwargs_for_model(base_kwargs, model, api_key_override=ring_key)
+                kwargs = self._completion_kwargs_for_model(
+                    base_kwargs,
+                    model,
+                    api_key_override=ring_key,
+                    primary_model=primary_model,
+                )
                 quota_owner = quota_owner_id(
                     api_key=str(kwargs.get("api_key") or ""),
                     provider=_quota_owner_provider(provider=self.provider, model=model),
@@ -310,8 +321,12 @@ class LiteLLMTextClient:
         model: str,
         *,
         api_key_override: str | None = None,
+        primary_model: str = "",
     ) -> dict[str, object]:
         kwargs = dict(base_kwargs)
+        if self._uses_distinct_provider_scope(model, primary_model=primary_model):
+            kwargs.pop("api_base", None)
+            kwargs.pop("api_key", None)
         api_base = self.fallback_api_bases.get(model)
         if api_base:
             kwargs["api_base"] = api_base
@@ -324,6 +339,14 @@ class LiteLLMTextClient:
         if self.service_tier and _model_uses_google_gemini(provider=self.provider, model=model):
             kwargs["service_tier"] = self.service_tier
         return kwargs
+
+    def _uses_distinct_provider_scope(self, model: str, *, primary_model: str = "") -> bool:
+        primary = primary_model or self.normalized_model
+        if not model or not primary or model == primary:
+            return False
+        primary_scope = _litellm_provider_scope(self.provider, primary)
+        target_scope = _litellm_provider_scope(self.provider, model)
+        return bool(primary_scope and target_scope and primary_scope != target_scope)
 
     def _api_key_attempts_for_model(self, model: str) -> tuple[str | None, ...]:
         if self.api_key_ring is None:
@@ -460,6 +483,44 @@ def _litellm_model_name(provider: str, model: str) -> str:
     if prefix and not value.startswith(prefix):
         return f"{prefix}{value}"
     return value
+
+
+def _litellm_provider_scope(provider: str, model: str) -> str:
+    value = str(model or "").strip().casefold()
+    if value.startswith(("ollama/", "ollama_chat/")):
+        return "ollama"
+    for prefix in KNOWN_LITELLM_MODEL_PREFIXES:
+        if value.startswith(prefix):
+            return _litellm_prefix_scope(prefix[:-1])
+    return _litellm_provider_alias_scope(provider)
+
+
+def _litellm_prefix_scope(prefix: str) -> str:
+    normalized = str(prefix or "").strip().casefold()
+    if normalized == "ollama_chat":
+        return "ollama"
+    return normalized
+
+
+def _litellm_provider_alias_scope(provider: str) -> str:
+    normalized = normalize_llm_provider(provider)
+    if normalized in {
+        "gemini",
+        "litellm_gemini_stateless",
+        "litellm_gemini_stateful",
+        "litellm_gemini_paid_stateless",
+        "litellm_gemini_paid_stateful",
+    }:
+        return "gemini"
+    if normalized in {"litellm", "openai"}:
+        return "openai"
+    if normalized == "ollama":
+        return "ollama"
+    if normalized == "huggingface":
+        return "huggingface"
+    if normalized in {"groq", "vertex_ai"}:
+        return normalized
+    return normalized
 
 
 def _resolve_litellm_api_key(instructions: BotInstructions, default_api_key: str) -> str:
