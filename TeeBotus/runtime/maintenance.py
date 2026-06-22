@@ -360,7 +360,7 @@ def maintain_runtime_directory(
             age = max(0.0, resolved_now - file_stat.st_mtime)
             if file_stat.st_size > max_bytes or age >= compress_after_seconds:
                 gzip_file(path, expected_stat=file_stat)
-        except OSError:
+        except (OSError, ValueError):
             continue
     _archive_old_compressed_files(runtime_path, now=resolved_now, archive_after_seconds=monthly_archive_after_seconds)
 

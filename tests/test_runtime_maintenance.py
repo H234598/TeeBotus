@@ -297,6 +297,41 @@ def test_runtime_maintenance_does_not_compress_replacement_after_age_check(tmp_p
     assert not (tmp_path / f"{path.name}.gz").exists()
 
 
+def test_runtime_maintenance_continues_when_gzip_fdopen_fails(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 8 * 24 * 60 * 60
+    broken = tmp_path / "teebotus-production.log.2026-06-01"
+    broken.write_text("broken log\n", encoding="utf-8")
+    os.utime(broken, (old_mtime, old_mtime))
+    compressible = tmp_path / "Security_Events.jsonl.2026-06-01"
+    compressible.write_text("compress me\n", encoding="utf-8")
+    os.utime(compressible, (old_mtime, old_mtime))
+    real_open = os.open
+    real_fdopen = os.fdopen
+    broken_fds: set[int] = set()
+
+    def recording_open(file, flags, *args, **kwargs):
+        fd = real_open(file, flags, *args, **kwargs)
+        if Path(file) == broken:
+            broken_fds.add(fd)
+        return fd
+
+    def fail_broken_fdopen(fd, mode="r", *args, **kwargs):
+        if fd in broken_fds and mode == "rb":
+            raise ValueError("broken gzip source fdopen")
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", recording_open)
+    monkeypatch.setattr(os, "fdopen", fail_broken_fdopen)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert broken.read_text(encoding="utf-8") == "broken log\n"
+    assert not (tmp_path / f"{broken.name}.gz").exists()
+    assert not compressible.exists()
+    assert (tmp_path / f"{compressible.name}.gz").exists()
+
+
 def test_runtime_maintenance_preserves_active_runtime_logs(tmp_path):
     now = time.time()
     old_mtime = now - 8 * 24 * 60 * 60
