@@ -429,6 +429,29 @@ def test_llm_profiles_plan2_contract_rejects_selector_field_drift(monkeypatch) -
     assert "routing hard_reasoning selector fallback_api_key_env=OPENAI_API_KEY expected=GEMINI_API_KEY" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_unexpected_profiles_and_routes(monkeypatch) -> None:
+    from dataclasses import replace
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    profiles = dict(llm_profiles.load_llm_profiles())
+    default_profile, routing = llm_profiles.load_llm_routing()
+    broken_routing = dict(routing)
+    profiles["gemini_flash"] = replace(profiles["gemini_flash_stateful"], name="gemini_flash")
+    broken_routing["legacy_bibliothekar"] = replace(
+        broken_routing["bibliothekar_answer"],
+        purpose="legacy_bibliothekar",
+    )
+    monkeypatch.setattr(llm_profiles, "load_llm_profiles", lambda: profiles)
+    monkeypatch.setattr(llm_profiles, "load_llm_routing", lambda: (default_profile, broken_routing))
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "unexpected profile(s): gemini_flash" in message
+    assert "unexpected routing purpose(s): legacy_bibliothekar" in message
+
+
 def test_local_secret_file_permission_check_accepts_missing_or_private_env(tmp_path: Path) -> None:
     ok, message = check_adapter_deps._check_local_secret_file_permissions(tmp_path)
 

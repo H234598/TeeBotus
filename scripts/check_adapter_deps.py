@@ -438,6 +438,9 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         errors.append("default_profile must be local_ollama")
     if default_profile not in profiles:
         errors.append(f"default_profile missing {default_profile or '<empty>'}")
+    unexpected_profiles = sorted(set(profiles) - set(expected_profiles))
+    if unexpected_profiles:
+        errors.append(f"unexpected profile(s): {','.join(unexpected_profiles)}")
     for name, (provider, model_prefix, exact_model, api_key_env) in expected_profiles.items():
         profile = profiles.get(name)
         if profile is None:
@@ -478,6 +481,9 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         "codex_history_categorization": ("local_ollama", ""),
         "codex_history_strategic_analysis": ("local_ollama", ""),
     }
+    unexpected_routes = sorted(set(routing) - set(expected_routes))
+    if unexpected_routes:
+        errors.append(f"unexpected routing purpose(s): {','.join(unexpected_routes)}")
     for purpose, (profile, fallback) in expected_routes.items():
         rule = routing.get(purpose)
         if rule is None:
