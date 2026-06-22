@@ -15,10 +15,12 @@ from TeeBotus.llm.free_tier import (
     GeminiFreeTierLimits,
     estimate_litellm_input_tokens,
     provider_is_paid_google_gemini,
+    provider_is_stateful_google_gemini,
     quota_owner_id,
     resolve_gemini_free_tier_limits,
 )
 from TeeBotus.llm.keyring import RotatingAPIKeyRing
+from TeeBotus.llm.litellm_provider import normalize_llm_provider
 from TeeBotus.llm.service_tier import normalize_service_tier
 
 LOGGER = logging.getLogger("TeeBotus.llm.litellm_gemini_provider")
@@ -219,16 +221,11 @@ def _litellm_gemini_model_id(value: object) -> str:
 
 
 def _normalize_litellm_gemini_stateful_provider(value: object) -> str:
-    text = str(value or "").strip().casefold().replace("-", "_")
-    if text in {
-        "litellm_gemini_paid_stateful",
-        "litellm_gemini_paid_statefull",
-        "litellm_gemini_paid_interactions",
-        "gemini_paid_stateful",
-        "gemini_paid_statefull",
-        "gemini_paid_interactions",
-    }:
+    provider = normalize_llm_provider(str(value or ""))
+    if provider_is_paid_google_gemini(provider):
         return "litellm_gemini_paid_stateful"
+    if provider_is_stateful_google_gemini(provider):
+        return "litellm_gemini_stateful"
     return "litellm_gemini_stateful"
 
 

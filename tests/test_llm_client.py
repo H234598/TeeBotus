@@ -16,7 +16,7 @@ from TeeBotus.llm.free_tier import (
 )
 from TeeBotus.llm.gemini_interactions_provider import GeminiInteractionsClient, GeminiInteractionsSettings
 from TeeBotus.llm.hf_pool.provider import HFPoolProvider
-from TeeBotus.llm.litellm_gemini_provider import LiteLLMGeminiStatefulClient
+from TeeBotus.llm.litellm_gemini_provider import LiteLLMGeminiStatefulClient, LiteLLMGeminiStatefulSettings
 from TeeBotus.llm_client import LLMAPIError, LLMImage, LLMVoice, LiteLLMSettings, LiteLLMTextClient, build_text_llm_client, normalize_llm_provider
 
 
@@ -508,6 +508,26 @@ def test_build_text_llm_client_can_build_paid_gemini_stateful_client() -> None:
     )
 
     assert isinstance(client, LiteLLMGeminiStatefulClient)
+    assert client.provider == "litellm_gemini_paid_stateful"
+    assert client.gemini_free_tier_limits.status_summary() == "off"
+    assert client.capabilities.previous_response_id is True
+
+
+def test_gemini_stateful_client_uses_central_paid_alias_scope() -> None:
+    client = LiteLLMGeminiStatefulClient(
+        LiteLLMGeminiStatefulSettings(
+            provider="gemini_paid_stateless_litellm",
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-key",
+            gemini_free_tier_limits=GeminiFreeTierLimits(
+                enabled=True,
+                requests_per_minute=0,
+                input_tokens_per_minute=0,
+                requests_per_day=0,
+            ),
+        )
+    )
+
     assert client.provider == "litellm_gemini_paid_stateful"
     assert client.gemini_free_tier_limits.status_summary() == "off"
     assert client.capabilities.previous_response_id is True
