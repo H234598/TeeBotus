@@ -577,6 +577,24 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
                     and not isinstance(raw_route["fallback"], str)
                 ):
                     errors.append(f"raw routing purpose {raw_name} fallback must be string or null")
+                expected_profile, expected_fallback = expected_routes[normalized_name]
+                if isinstance(raw_route.get("profile"), str) and raw_route.get("profile") != expected_profile:
+                    errors.append(
+                        f"raw routing purpose {raw_name} profile={raw_route.get('profile') or '<empty>'} "
+                        f"expected={expected_profile}"
+                    )
+                raw_fallback = raw_route.get("fallback")
+                if expected_fallback:
+                    if isinstance(raw_fallback, str) and raw_fallback != expected_fallback:
+                        errors.append(
+                            f"raw routing purpose {raw_name} fallback={raw_fallback or '<empty>'} "
+                            f"expected={expected_fallback}"
+                        )
+                elif raw_fallback is not None:
+                    raw_fallback_text = raw_fallback if isinstance(raw_fallback, str) else str(raw_fallback)
+                    errors.append(
+                        f"raw routing purpose {raw_name} fallback={raw_fallback_text or '<empty>'} expected=<null>"
+                    )
     unexpected_routes = sorted(set(routing) - set(expected_routes))
     if unexpected_routes:
         errors.append(f"unexpected routing purpose(s): {','.join(unexpected_routes)}")

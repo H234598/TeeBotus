@@ -677,6 +677,48 @@ def test_llm_profiles_plan2_contract_rejects_raw_routing_non_scalar_fallback(mon
     assert "raw routing purpose hard_reasoning fallback must be string or null" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_raw_routing_wrong_profile_value(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            payload["purposes"]["hard_reasoning"]["profile"] = "local_ollama"
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw routing purpose hard_reasoning profile=local_ollama expected=openai_premium" in message
+
+
+def test_llm_profiles_plan2_contract_rejects_raw_routing_empty_string_fallback(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            payload["purposes"]["normal_chat"]["fallback"] = ""
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw routing purpose normal_chat fallback=<empty> expected=<null>" in message
+
+
 def test_local_secret_file_permission_check_accepts_missing_or_private_env(tmp_path: Path) -> None:
     ok, message = check_adapter_deps._check_local_secret_file_permissions(tmp_path)
 
