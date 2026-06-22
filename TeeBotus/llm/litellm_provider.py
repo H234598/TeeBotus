@@ -321,14 +321,14 @@ class LiteLLMTextClient:
         ring_key = str(api_key_override or "").strip()
         if ring_key:
             kwargs["api_key"] = ring_key
-        if self.service_tier and route_uses_google_gemini(provider=self.provider, model=model):
+        if self.service_tier and _model_uses_google_gemini(provider=self.provider, model=model):
             kwargs["service_tier"] = self.service_tier
         return kwargs
 
     def _api_key_attempts_for_model(self, model: str) -> tuple[str | None, ...]:
         if self.api_key_ring is None:
             return (None,)
-        if not route_uses_gemini_api(provider=self.provider, model=model):
+        if not _model_uses_gemini_api(provider=self.provider, model=model):
             return (None,)
         return tuple(self.api_key_ring.ordered_keys())
 
@@ -340,7 +340,7 @@ class LiteLLMTextClient:
         kwargs: Mapping[str, object],
         ring_key: str | None,
     ) -> GeminiBudgetReservation | None:
-        if not route_uses_google_gemini(provider=self.provider, model=model):
+        if not _model_uses_google_gemini(provider=self.provider, model=model):
             return None
         messages = kwargs.get("messages")
         if not isinstance(messages, Sequence):
@@ -642,7 +642,7 @@ def _litellm_response_cost(response: object) -> object | None:
 
 
 def _quota_owner_provider(*, provider: str, model: str) -> str:
-    if route_uses_google_gemini(provider=provider, model=model):
+    if _model_uses_google_gemini(provider=provider, model=model):
         return "google_gemini_paid" if provider_is_paid_google_gemini(provider) else "google_gemini"
     return provider
 
@@ -672,17 +672,33 @@ def _resolve_litellm_gemini_free_tier_limits(
     fallback_models: tuple[str, ...] = (),
     explicit_limits: GeminiFreeTierLimits | None,
 ) -> GeminiFreeTierLimits:
-    if provider_is_paid_google_gemini(provider):
+    if provider_is_paid_google_gemini(provider) and _model_uses_google_gemini(provider=provider, model=model):
         return GeminiFreeTierLimits(enabled=False, requests_per_minute=None, input_tokens_per_minute=None, requests_per_day=None)
-    if route_uses_google_gemini(provider=provider, model=model):
+    if _model_uses_google_gemini(provider=provider, model=model):
         return explicit_limits or resolve_gemini_free_tier_limits(provider=provider, model=model)
     fallback_model = next(
-        (candidate for candidate in fallback_models if route_uses_google_gemini(provider=provider, model=candidate)),
+        (candidate for candidate in fallback_models if _model_uses_google_gemini(provider=provider, model=candidate)),
         "",
     )
     if fallback_model:
         return explicit_limits or resolve_gemini_free_tier_limits(provider=provider, model=fallback_model)
     return GeminiFreeTierLimits(enabled=False, requests_per_minute=None, input_tokens_per_minute=None, requests_per_day=None)
+
+
+def _model_uses_google_gemini(*, provider: str, model: str) -> bool:
+    if _has_explicit_litellm_model_prefix(model):
+        return route_uses_google_gemini(provider="", model=model)
+    return route_uses_google_gemini(provider=provider, model=model)
+
+
+def _model_uses_gemini_api(*, provider: str, model: str) -> bool:
+    if _has_explicit_litellm_model_prefix(model):
+        return route_uses_gemini_api(provider="", model=model)
+    return route_uses_gemini_api(provider=provider, model=model)
+
+
+def _has_explicit_litellm_model_prefix(model: str) -> bool:
+    return str(model or "").strip().casefold().startswith(KNOWN_LITELLM_MODEL_PREFIXES)
 
 
 def _response_value(response: object, key: str) -> object:
