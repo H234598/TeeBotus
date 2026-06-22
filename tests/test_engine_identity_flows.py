@@ -8,6 +8,7 @@ import subprocess
 import pytest
 
 from TeeBotus import __version__
+from TeeBotus.core import status as status_core
 from TeeBotus.core.status import build_status_reply
 from TeeBotus.core.youtube import _has_youtube_transcript_intent
 from TeeBotus.instructions import BotInstructions
@@ -1031,6 +1032,24 @@ def test_status_uses_central_llm_provider_aliases(tmp_path):
     assert "- Chat/Text: huggingface / huggingface/Qwen/Qwen2.5-7B-Instruct" in text
     assert "HUGGINGFACE_API_KEY fehlt" in text
     assert "hugging_face / huggingface/Qwen" not in text
+
+
+def test_status_google_helpers_delegate_to_central_gemini_route_logic(monkeypatch):
+    monkeypatch.setattr(
+        status_core,
+        "route_uses_google_gemini",
+        lambda *, provider, model: provider == "future_google_alias" and model == "future-model",
+    )
+    monkeypatch.setattr(
+        status_core,
+        "provider_is_paid_google_gemini",
+        lambda provider: provider == "future_paid_google_alias",
+    )
+
+    assert status_core._model_uses_google("future_google_alias", "future-model") is True
+    assert status_core._default_api_key_env("future_google_alias", "future-model") == "GEMINI_API_KEY"
+    assert status_core._provider_is_paid_gemini("future_paid_google_alias") is True
+    assert status_core._default_api_key_env("vertex_ai", "vertex_ai/gemini-3.5-flash") == "GOOGLE_APPLICATION_CREDENTIALS"
 
 
 def test_engine_help_carries_formatted_release_log_link(tmp_path):
