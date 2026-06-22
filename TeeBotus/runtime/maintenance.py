@@ -279,6 +279,8 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
     archive_dir = runtime_path / "monthly_archives"
     groups: dict[str, list[Path]] = {}
     for path in runtime_path.glob("*.gz"):
+        if _is_temporary_runtime_file(path):
+            continue
         try:
             stat = path.stat()
         except OSError:
@@ -338,7 +340,7 @@ def _close_quietly(stream: object) -> None:
 
 
 def _is_temporary_runtime_file(path: Path) -> bool:
-    return path.name.startswith(".") or path.suffix == ".tmp"
+    return path.name.startswith(".") or ".tmp" in path.suffixes
 
 
 def _unique_path(path: Path) -> Path:

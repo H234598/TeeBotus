@@ -188,6 +188,33 @@ def test_runtime_maintenance_groups_compressed_logs_with_single_stat(tmp_path, m
     assert len(archives) == 1
 
 
+def test_runtime_maintenance_preserves_temporary_compressed_runtime_files(tmp_path):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    temporary_files = (
+        tmp_path / "teebotus-production.log.tmp.gz",
+        tmp_path / ".teebotus-production.log.2026-03-01.gz",
+    )
+    for path in temporary_files:
+        path.write_bytes(b"temporary")
+        os.utime(path, (old_mtime, old_mtime))
+    archiveable = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    archiveable.write_bytes(b"compressed-ish")
+    os.utime(archiveable, (old_mtime, old_mtime))
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    for path in temporary_files:
+        assert path.exists()
+    assert not archiveable.exists()
+    archives = sorted((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert len(archives) == 1
+    with tarfile.open(archives[0], "r:gz") as archive:
+        names = archive.getnames()
+    assert archiveable.name in names
+    assert all(path.name not in names for path in temporary_files)
+
+
 def test_runtime_maintenance_skips_archive_files_that_disappear_during_tar_add(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60
