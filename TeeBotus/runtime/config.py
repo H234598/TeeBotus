@@ -33,6 +33,7 @@ class AccountRunConfig:
     label: str
     openai_api_key: str
     llm_enabled: str = ""
+    structured_decision_enabled: str = ""
     llm_provider: str = ""
     llm_model: str = ""
     llm_fallback_models: str = ""
@@ -442,6 +443,27 @@ def resolve_llm_setting(
     return ""
 
 
+def resolve_structured_decision_setting(
+    instance_name: str,
+    channel: str,
+    slot: int,
+    env: Mapping[str, str] | None = None,
+) -> str:
+    source = os.environ if env is None else env
+    slot = _validate_slot_number(slot, label="structured decision runtime slot")
+    instance_token = normalize_instance_env_token(instance_name)
+    channel_token = _normalize_llm_channel(channel, label="structured decision runtime channel").upper()
+    direct = _first_nonempty_env_value(
+        source,
+        f"TEEBOTUS_STRUCTURED_DECISION_ENABLED_{instance_token}_{channel_token}_{slot}",
+        f"TEEBOTUS_STRUCTURED_DECISION_ENABLED_{instance_token}_{channel_token}",
+        f"TEEBOTUS_STRUCTURED_DECISION_ENABLED_{instance_token}_{slot}",
+        f"TEEBOTUS_STRUCTURED_DECISION_ENABLED_{instance_token}",
+        "TEEBOTUS_STRUCTURED_DECISION_ENABLED",
+    )
+    return direct or resolve_llm_setting(instance_name, channel, slot, "STRUCTURED_DECISION_ENABLED", source)
+
+
 def _resolve_indexed_secret(value: str | None, slot: int, *, label: str) -> str:
     values = parse_slot_csv(value, label=label)
     index = slot - 1
@@ -670,6 +692,7 @@ def _resolve_llm_runtime_kwargs(
 ) -> dict[str, str]:
     return {
         "llm_enabled": resolve_llm_setting(instance_name, channel, slot, "ENABLED", env),
+        "structured_decision_enabled": resolve_structured_decision_setting(instance_name, channel, slot, env),
         "llm_provider": resolve_llm_setting(instance_name, channel, slot, "PROVIDER", env),
         "llm_model": resolve_llm_setting(instance_name, channel, slot, "MODEL", env),
         "llm_fallback_models": resolve_llm_setting(instance_name, channel, slot, "FALLBACK_MODELS", env),

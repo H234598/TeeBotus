@@ -1,21 +1,24 @@
 from __future__ import annotations
 
-import json
+import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable
 from typing import Protocol
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 from TeeBotus.instructions import BotInstructions
-from TeeBotus.llm.base import LLMResponse
+from TeeBotus.llm.base import LLMAPIError, LLMResponse
 from TeeBotus.llm.hf_pool.errors import HFPoolRateLimited, HFPoolTargetUnavailable
 from TeeBotus.llm.hf_pool.metrics import HFPoolUsageEvent
 from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 from TeeBotus.llm.hf_pool.scheduler import ScheduledTarget
 from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, HFPoolRuntimeStateStore, hf_pool_state_key, hf_pool_state_lookup, hf_pool_state_pop
+from TeeBotus.llm.litellm_provider import LiteLLMSettings, LiteLLMTextClient
+from TeeBotus.runtime.log_context import logging_context, next_llm_call_id
+
+
+LOGGER = logging.getLogger("TeeBotus.llm.hf_pool.executor")
 
 
 class HFPoolExecutor(Protocol):
@@ -40,7 +43,9 @@ HFPoolOpener = Callable[..., Any]
 
 
 @dataclass
-class OpenAICompatibleHFPoolExecutor:
+class LiteLLMHFPoolExecutor:
+    """HF-pool executor whose provider calls are routed through LiteLLM."""
+
     opener: HFPoolOpener | None = None
     state: HFPoolRuntimeState | None = None
     usage_events: list[HFPoolUsageEvent] | None = None
@@ -50,53 +55,92 @@ class OpenAICompatibleHFPoolExecutor:
         state = self._runtime_state()
         self._raise_if_in_cooldown(scheduled, state)
         started = time.monotonic()
-        request = self._request(scheduled, user_text, instructions)
+        call_id = next_llm_call_id("hf_pool")
+        provider = _target_litellm_provider(scheduled)
+        model = scheduled.target.request_model
+        api_base = str(scheduled.target.base_url or "").strip()
+        context = logging_context(
+            component="hf_pool",
+            operation="litellm_completion",
+            llm_call_id=call_id,
+            provider="hf_pool",
+            model=model,
+            api_base=_safe_endpoint_for_log(api_base),
+        )
         try:
-            response = (self.opener or urlopen)(request, timeout=max(1, int(scheduled.pool.timeout_seconds)))
-            status_code = int(getattr(response, "status", getattr(response, "code", 200)) or 200)
-            raw = response.read() if hasattr(response, "read") else b"{}"
-            close = getattr(response, "close", None)
-            if callable(close):
-                close()
-        except HTTPError as exc:
-            self._record_failure(scheduled, state, exc.code)
-            error_text = _http_error_text(exc)
-            self._append_usage(scheduled, "rate_limited" if exc.code == 429 else "http_error", started, {"http_status": exc.code}, state)
-            if exc.code == 429:
-                raise HFPoolRateLimited(redact_hf_secrets(error_text)) from exc
-            raise HFPoolTargetUnavailable(redact_hf_secrets(error_text)) from exc
-        except (URLError, TimeoutError, OSError) as exc:
-            self._record_failure(scheduled, state, 0)
-            self._append_usage(scheduled, "transport_error", started, {}, state)
-            raise HFPoolTargetUnavailable(redact_hf_secrets(str(exc))) from exc
-        if not 200 <= status_code < 300:
+            with context:
+                LOGGER.info(
+                    "HF pool LiteLLM request started call_id=%s pool=%s target=%s provider=%s model=%s api_base=%s timeout_seconds=%s request_chars=%s",
+                    call_id,
+                    scheduled.pool.name,
+                    scheduled.target.name,
+                    provider,
+                    model,
+                    _safe_endpoint_for_log(api_base),
+                    max(1, int(scheduled.pool.timeout_seconds)),
+                    len(user_text),
+                )
+                if self.opener is not None:
+                    LOGGER.debug("HF pool opener argument is ignored because live calls are routed through LiteLLM.")
+                litellm_response = self._litellm_client(scheduled, provider=provider, model=model).create_reply(
+                    user_text,
+                    instructions,
+                    None,
+                )
+        except Exception as exc:  # noqa: BLE001 - executor boundary normalizes LiteLLM/provider failures.
+            rate_limited = _is_rate_limited_error(exc)
+            status_code = 429 if rate_limited else 0
             self._record_failure(scheduled, state, status_code)
-            self._append_usage(scheduled, "http_error", started, {"http_status": status_code}, state)
-            raise HFPoolTargetUnavailable(f"hf_pool HTTP {status_code}")
-        try:
-            payload = json.loads(raw.decode("utf-8")) if raw else {}
-        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-            self._record_failure(scheduled, state, status_code)
-            self._append_usage(scheduled, "invalid_json", started, {"http_status": status_code}, state)
-            raise HFPoolTargetUnavailable("hf_pool target returned invalid JSON") from exc
-        text = _extract_chat_text(payload)
+            usage = {"http_status": status_code, "error_type": type(exc).__name__}
+            self._append_usage(scheduled, "rate_limited" if rate_limited else "provider_error", started, usage, state)
+            detail = _redact_executor_error(exc, scheduled)
+            if rate_limited:
+                raise HFPoolRateLimited(detail) from exc
+            raise HFPoolTargetUnavailable(detail) from exc
+        text = str(litellm_response.text or "").strip()
         if not text:
-            self._record_failure(scheduled, state, status_code)
-            self._append_usage(scheduled, "empty_response", started, {"http_status": status_code}, state)
-            raise HFPoolTargetUnavailable("hf_pool target returned no message content")
+            self._record_failure(scheduled, state, 0)
+            self._append_usage(scheduled, "empty_response", started, {}, state)
+            raise HFPoolTargetUnavailable("hf_pool LiteLLM target returned no message content")
         state_key = hf_pool_state_key(scheduled.pool.name, scheduled.target.name)
         state.successes[state_key] = state.successes.get(state_key, 0) + 1
         hf_pool_state_pop(state.failures, scheduled.pool.name, scheduled.target.name)
         hf_pool_state_pop(state.cooldowns, scheduled.pool.name, scheduled.target.name)
-        usage = dict(payload.get("usage") or {}) if isinstance(payload.get("usage"), dict) else {}
+        usage = dict(litellm_response.usage or {})
+        usage.setdefault("litellm_provider", litellm_response.provider)
+        usage.setdefault("litellm_model", litellm_response.model)
         self._append_usage(scheduled, "ok", started, usage, state)
+        LOGGER.info(
+            "HF pool LiteLLM request finished call_id=%s pool=%s target=%s provider=%s model=%s elapsed_ms=%s response_chars=%s usage=%s",
+            call_id,
+            scheduled.pool.name,
+            scheduled.target.name,
+            provider,
+            model,
+            int((time.monotonic() - started) * 1000),
+            len(text),
+            _compact_usage_for_log(usage),
+        )
         return LLMResponse(
             text=text,
-            response_id=str(payload.get("id") or "") or None,
+            response_id=litellm_response.response_id,
             provider="hf_pool",
-            model=scheduled.target.request_model,
+            model=model,
             usage=usage,
-            raw=payload if isinstance(payload, dict) else None,
+            raw=litellm_response.raw,
+        )
+
+    def _litellm_client(self, scheduled: ScheduledTarget, *, provider: str, model: str) -> LiteLLMTextClient:
+        return LiteLLMTextClient(
+            LiteLLMSettings(
+                provider=provider,
+                model=model,
+                api_key=scheduled.api_key,
+                api_base=str(scheduled.target.base_url or "").strip(),
+                timeout=max(1, int(scheduled.pool.timeout_seconds)),
+                timeout_override=True,
+                use_instruction_fallback_models=False,
+            )
         )
 
     def _runtime_state(self) -> HFPoolRuntimeState:
@@ -112,22 +156,6 @@ class OpenAICompatibleHFPoolExecutor:
         self.state = state
         if self.state_store is not None:
             self.state_store.save(state)
-
-    def _request(self, scheduled: ScheduledTarget, user_text: str, instructions: BotInstructions) -> Request:
-        body: dict[str, Any] = {
-            "model": scheduled.target.request_model,
-            "messages": [
-                {"role": "system", "content": instructions.openai_instructions_text()},
-                {"role": "user", "content": str(user_text or "")},
-            ],
-        }
-        if instructions.openai_max_output_tokens:
-            body["max_tokens"] = int(instructions.openai_max_output_tokens)
-        endpoint = _chat_completions_endpoint(scheduled.target.base_url)
-        headers = {"Accept": "application/json", "Content-Type": "application/json"}
-        if scheduled.api_key:
-            headers["Authorization"] = f"Bearer {scheduled.api_key}"
-        return Request(endpoint, data=json.dumps(body, ensure_ascii=False, separators=(",", ":")).encode("utf-8"), method="POST", headers=headers)
 
     def _raise_if_in_cooldown(self, scheduled: ScheduledTarget, state: HFPoolRuntimeState) -> None:
         cooldown_until = hf_pool_state_lookup(state.cooldowns, scheduled.pool.name, scheduled.target.name, "")
@@ -175,11 +203,28 @@ class OpenAICompatibleHFPoolExecutor:
         self._persist_state(state)
 
 
-def _chat_completions_endpoint(base_url: str) -> str:
-    base = str(base_url or "https://router.huggingface.co/v1").strip().rstrip("/")
-    if base.endswith("/chat/completions"):
-        return base
-    return f"{base}/chat/completions"
+OpenAICompatibleHFPoolExecutor = LiteLLMHFPoolExecutor
+
+
+def _target_litellm_provider(scheduled: ScheduledTarget) -> str:
+    kind = str(scheduled.target.kind or "").strip().casefold().replace("-", "_")
+    if kind in {"openai_compatible", "openai_chat", "litellm"}:
+        return "litellm"
+    if kind == "groq":
+        return "groq"
+    return "huggingface"
+
+
+def _safe_endpoint_for_log(endpoint: str) -> str:
+    text = str(endpoint or "").strip()
+    if "@" in text:
+        return text.split("@", maxsplit=1)[-1]
+    return text[:180]
+
+
+def _compact_usage_for_log(usage: dict[str, Any]) -> dict[str, Any]:
+    keys = ("input_tokens", "prompt_tokens", "output_tokens", "completion_tokens", "total_tokens", "response_cost")
+    return {key: usage[key] for key in keys if key in usage}
 
 
 def _record_average_latency(state: HFPoolRuntimeState, pool_name: str, target_name: str, latency_ms: int) -> None:
@@ -192,43 +237,19 @@ def _record_average_latency(state: HFPoolRuntimeState, pool_name: str, target_na
     state.avg_latency_ms[state_key] = ((previous * completed) + latency_ms) / (completed + 1)
 
 
-def _extract_chat_text(payload: Any) -> str:
-    if not isinstance(payload, dict):
-        return ""
-    choices = payload.get("choices")
-    if not isinstance(choices, list) or not choices:
-        return ""
-    first = choices[0]
-    if not isinstance(first, dict):
-        return ""
-    message = first.get("message")
-    if isinstance(message, dict):
-        content = message.get("content")
-        if isinstance(content, str):
-            return content
-        if isinstance(content, list):
-            return "".join(str(item.get("text", "")) for item in content if isinstance(item, dict)).strip()
-    text = first.get("text")
-    return str(text or "").strip()
+def _is_rate_limited_error(exc: Exception) -> bool:
+    status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    if str(status or "").strip() == "429":
+        return True
+    text = f"{type(exc).__name__} {exc}".casefold()
+    return any(marker in text for marker in ("429", "rate limit", "ratelimit", "resource_exhausted", "quota exceeded", "too many requests"))
 
 
-def _http_error_text(exc: HTTPError) -> str:
-    try:
-        raw = exc.read()
-    except Exception:  # pragma: no cover - defensive only.
-        raw = b""
-    detail = ""
-    if raw:
-        try:
-            payload = json.loads(raw.decode("utf-8"))
-            if isinstance(payload, dict):
-                error = payload.get("error")
-                if isinstance(error, dict):
-                    detail = str(error.get("message") or error)
-                else:
-                    detail = str(error or payload)
-            else:
-                detail = str(payload)
-        except Exception:
-            detail = raw.decode("utf-8", errors="replace")
-    return f"hf_pool HTTP {exc.code}: {detail}".strip()
+def _redact_executor_error(exc: Exception, scheduled: ScheduledTarget) -> str:
+    detail = str(exc)
+    if isinstance(exc, LLMAPIError):
+        detail = str(exc)
+    api_key = str(scheduled.api_key or "").strip()
+    if api_key:
+        detail = detail.replace(api_key, "<REDACTED>")
+    return redact_hf_secrets(detail)

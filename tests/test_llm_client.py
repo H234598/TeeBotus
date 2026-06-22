@@ -20,10 +20,13 @@ from TeeBotus.llm.litellm_gemini_provider import LiteLLMGeminiStatefulClient
 from TeeBotus.llm_client import LLMAPIError, LLMImage, LLMVoice, LiteLLMSettings, LiteLLMTextClient, build_text_llm_client, normalize_llm_provider
 
 
-def test_build_text_llm_client_uses_openai_client_by_default() -> None:
+def test_build_text_llm_client_routes_default_openai_text_through_litellm() -> None:
     openai_client = object()
+    client = build_text_llm_client(instructions=BotInstructions(), openai_client=openai_client)
 
-    assert build_text_llm_client(instructions=BotInstructions(), openai_client=openai_client) is openai_client
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.provider == "litellm"
+    assert client.model == "openai/gpt-5.5"
 
 
 def test_gemini_rest_is_not_supported_as_text_llm_provider() -> None:

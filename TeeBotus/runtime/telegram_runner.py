@@ -13,7 +13,7 @@ from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, runtime_secret_provider
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService
-from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig, resolve_llm_setting
+from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig, resolve_llm_setting, resolve_structured_decision_setting
 from TeeBotus.runtime.llm_factory import build_runtime_structured_decision_runner, build_runtime_text_llm_client
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.state import RuntimeStateStore
@@ -82,7 +82,7 @@ class TelegramRuntimeBridge:
         )
         self.structured_decision_runner = build_runtime_structured_decision_runner(
             instructions=instructions,
-            enabled=run_config.llm_enabled,
+            enabled=run_config.structured_decision_enabled or run_config.llm_enabled,
             runtime_llm_configured=_run_config_has_llm_route(run_config),
             allow_remote_fallback=run_config.llm_allow_remote_fallback,
         )
@@ -160,6 +160,7 @@ def build_telegram_runtime_bridge(
         telegram_token=getattr(api, "token", ""),
         openai_api_key=openai_api_key,
         llm_enabled=resolve_llm_setting(instance_name, "telegram", adapter_slot, "ENABLED"),
+        structured_decision_enabled=resolve_structured_decision_setting(instance_name, "telegram", adapter_slot),
         llm_provider=resolve_llm_setting(instance_name, "telegram", adapter_slot, "PROVIDER"),
         llm_model=resolve_llm_setting(instance_name, "telegram", adapter_slot, "MODEL"),
         llm_fallback_models=resolve_llm_setting(instance_name, "telegram", adapter_slot, "FALLBACK_MODELS"),

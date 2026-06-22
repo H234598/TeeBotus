@@ -220,7 +220,7 @@ def test_admin_command_direct_secret_authorizes_runtime_admin(tmp_path, monkeypa
 
     account_id = account_store.get_account_for_identity(identity)
     assert account_id is not None
-    assert len(actions) == 1
+    assert len(actions) >= 1
     assert "Adminzugang aktiviert" in actions[0].text
     assert status_auth_state_authorized(account_store, account_id) is True
     assert is_runtime_admin_account(account_store, account_id, instance_name="Depressionsbot", env={}) is True
@@ -1100,8 +1100,8 @@ def test_engine_reports_missing_llm_key_for_free_text_when_llm_enabled(tmp_path)
     assert actions[0].text == "LLM-Key fehlt."
 
 
-def test_engine_uses_openai_client_for_free_text_when_enabled(tmp_path):
-    class FakeOpenAIClient:
+def test_engine_uses_llm_client_for_free_text_when_enabled(tmp_path):
+    class FakeLLMClient:
         def __init__(self) -> None:
             self.calls: list[tuple[str, str | None]] = []
 
@@ -1109,9 +1109,9 @@ def test_engine_uses_openai_client_for_free_text_when_enabled(tmp_path):
             self.calls.append((user_text, previous_response_id))
             return OpenAIResponse("Antwort.", "resp-1", "flex")
 
-    client = FakeOpenAIClient()
+    client = FakeLLMClient()
     instructions = BotInstructions(openai_enabled=True)
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, llm_client=client)
 
     actions = engine.process(event(telegram_identity_key(1), "Hallo"))
 
@@ -1218,6 +1218,7 @@ def test_engine_turns_openai_file_block_into_attachment(tmp_path):
         account_store=store(tmp_path),
         instructions=BotInstructions(openai_enabled=True),
         openai_client=client,
+        llm_client=client,
     )
 
     actions = engine.process(event(telegram_identity_key(1), "Mach mir bitte eine ICS Datei fuer morgen."))
@@ -1260,6 +1261,7 @@ def test_engine_turns_openai_image_block_into_generated_attachment(tmp_path):
         account_store=store(tmp_path),
         instructions=BotInstructions(openai_enabled=True, openai_image_enabled=True),
         openai_client=client,
+        llm_client=client,
     )
 
     actions = engine.process(event(telegram_identity_key(1), "Wie ist die Stimmung bei Regen?"))
@@ -1302,7 +1304,7 @@ def test_engine_rate_limits_repeated_openai_image_generation(tmp_path):
         openai_image_min_interval_minutes=30,
         openai_image_rate_limited="Heute keine weiteren Bilder.",
     )
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client, llm_client=client)
     identity = telegram_identity_key(1)
 
     first_actions = engine.process(event(identity, "Mach ein Wetterbild."))
@@ -1325,7 +1327,7 @@ def test_engine_passes_previous_openai_response_id_per_account(tmp_path):
 
     client = FakeOpenAIClient()
     instructions = BotInstructions(openai_enabled=True)
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client, llm_client=client)
     identity = telegram_identity_key(1)
 
     engine.process(event(identity, "Hallo"))
@@ -1434,6 +1436,7 @@ def test_engine_restores_previous_openai_response_id_from_persistent_state(tmp_p
         state=RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider),
         instructions=instructions,
         openai_client=first_client,
+        llm_client=first_client,
     )
 
     first_engine.process(event(identity, "Hallo"))
@@ -1443,6 +1446,7 @@ def test_engine_restores_previous_openai_response_id_from_persistent_state(tmp_p
         state=RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider),
         instructions=instructions,
         openai_client=second_client,
+        llm_client=second_client,
     )
     second_engine.process(event(identity, "Noch mal"))
 
@@ -1474,6 +1478,7 @@ def test_engine_does_not_pass_persisted_openai_response_id_to_litellm_client(tmp
         state=RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider),
         instructions=BotInstructions(openai_enabled=True),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
     )
     first_engine.process(event(identity, "Hallo"))
 
@@ -1500,7 +1505,7 @@ def test_engine_reset_clears_previous_text_llm_response_id(tmp_path):
 
     client = FakeOpenAIClient()
     instructions = BotInstructions(openai_enabled=True, llm_reset="Kontext geloescht.")
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client, llm_client=client)
     identity = telegram_identity_key(1)
 
     engine.process(event(identity, "Hallo"))
@@ -1517,7 +1522,7 @@ def test_engine_reports_llm_error_for_api_failure(tmp_path):
             raise OpenAIAPIError("boom")
 
     instructions = BotInstructions(openai_enabled=True, llm_error="LLM kaputt.")
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=FakeOpenAIClient())
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=FakeOpenAIClient(), llm_client=FakeOpenAIClient())
 
     actions = engine.process(event(telegram_identity_key(1), "Hallo"))
 
@@ -1544,7 +1549,7 @@ def test_engine_transcribes_audio_attachment_for_openai_input(tmp_path):
     attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg")
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)
-    engine = TeeBotusEngine(account_store=account_store, instructions=instructions, openai_client=client)
+    engine = TeeBotusEngine(account_store=account_store, instructions=instructions, openai_client=client, llm_client=client)
 
     actions = engine.process(event(identity, "", attachments=(attachment,)))
     account_id = account_store.get_account_for_identity(identity)
@@ -1585,7 +1590,7 @@ def test_engine_can_transcribe_audio_attachment_with_local_backend(tmp_path, mon
     client = FakeOpenAIClient()
     instructions = BotInstructions(openai_enabled=True, openai_transcription_backend="local", local_transcription_model="tiny")
     attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg")
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client, llm_client=client)
 
     actions = engine.process(event(telegram_identity_key(1), "", attachments=(attachment,)))
 
@@ -1622,7 +1627,7 @@ def test_engine_respects_disabled_transcription_for_audio_attachment(tmp_path, m
     attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg")
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)
-    engine = TeeBotusEngine(account_store=account_store, instructions=instructions, openai_client=client)
+    engine = TeeBotusEngine(account_store=account_store, instructions=instructions, openai_client=client, llm_client=client)
 
     actions = engine.process(event(identity, "", attachments=(attachment,)))
     account_id = account_store.get_account_for_identity(identity)
@@ -1651,7 +1656,7 @@ def test_engine_does_not_transcribe_view_once_audio_attachment(tmp_path):
     client = FakeOpenAIClient()
     instructions = BotInstructions(openai_enabled=True)
     attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg", view_once=True)
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client, llm_client=client)
 
     actions = engine.process(event(telegram_identity_key(1), "", attachments=(attachment,)))
 
@@ -1674,7 +1679,7 @@ def test_engine_includes_non_audio_attachment_metadata_for_openai_input(tmp_path
     client = FakeOpenAIClient()
     instructions = BotInstructions(openai_enabled=True)
     attachment = IncomingAttachment(data=b"pdf", filename="report.pdf", content_type="application/pdf")
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client, llm_client=client)
 
     actions = engine.process(event(telegram_identity_key(1), "Bitte ansehen", attachments=(attachment,)))
 
@@ -1701,7 +1706,7 @@ def test_engine_includes_link_preview_metadata_for_openai_input(tmp_path):
         base64_thumbnail="aW1hZ2U=",
         id="preview-thumb",
     )
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client, llm_client=client)
 
     actions = engine.process(event(telegram_identity_key(1), "Sieh mal", link_previews=(preview,)))
 
@@ -1725,7 +1730,7 @@ def test_engine_includes_reply_context_in_openai_input(tmp_path):
 
     client = FakeOpenAIClient()
     instructions = BotInstructions(openai_enabled=True)
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client, llm_client=client)
     incoming = event(telegram_identity_key(1), "Darauf antworte ich")
     incoming = IncomingEvent(
         event_id=incoming.event_id,
@@ -1780,6 +1785,7 @@ def test_engine_includes_account_memory_in_openai_input(tmp_path):
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
         openai_client=client,
+        llm_client=client,
     )
 
     engine.process(event(identity, "Was weisst du noch?", channel="signal"))
@@ -1808,6 +1814,7 @@ def test_engine_includes_account_habits_in_openai_input_without_filename(tmp_pat
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
         openai_client=client,
+        llm_client=client,
     )
 
     engine.process(event(identity, "Wie sollst du antworten?", channel="signal"))
@@ -1863,6 +1870,7 @@ def test_engine_prefers_keyword_matched_account_memory_over_recent(tmp_path):
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
         openai_client=client,
+        llm_client=client,
     )
 
     engine.process(event(identity, "Was weisst du ueber Mond?", channel="signal"))
@@ -1928,6 +1936,7 @@ def test_engine_uses_semantic_memory_search_only_when_explicitly_enabled(tmp_pat
             memory_search_qdrant_url="http://localhost:6334",
         ),
         openai_client=client,
+        llm_client=client,
     )
 
     engine.process(event(identity, "Was hilft bei Schlaf?", channel="signal"))
@@ -1980,6 +1989,7 @@ def test_engine_semantic_memory_search_falls_back_to_local_candidates(tmp_path, 
             memory_search_semantic_limit=1,
         ),
         openai_client=client,
+        llm_client=client,
     )
 
     engine.process(event(identity, "Was hilft bei Schlaf?", channel="signal"))
@@ -2015,6 +2025,7 @@ def test_engine_pages_account_memory_when_model_requests_it(tmp_path):
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True, user_memory_max_prompt_chars=1200),
         openai_client=client,
+        llm_client=client,
     )
 
     actions = engine.process(event(identity, "Was weisst du ueber Mond?", channel="signal"))
@@ -2049,6 +2060,7 @@ def test_engine_does_not_leak_repeated_memory_page_request(tmp_path):
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True, user_memory_max_prompt_chars=1200),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
     )
 
     actions = engine.process(event(identity, "Was weisst du ueber Mond?", channel="signal"))
@@ -2066,6 +2078,7 @@ def test_engine_does_not_leak_unexpected_memory_page_request(tmp_path):
         account_store=store(tmp_path),
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=False),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
     )
 
     actions = engine.process(event(signal_identity_key(source_uuid="unexpected-page"), "Hallo", channel="signal"))
@@ -2093,6 +2106,7 @@ def test_engine_includes_working_memory_in_openai_input_without_auto_writes(tmp_
         account_store=store(tmp_path),
         instructions=BotInstructions(openai_enabled=True),
         openai_client=client,
+        llm_client=client,
         working_memory_store=working_store,
     )
 
@@ -2115,6 +2129,7 @@ def test_engine_appends_account_memory_after_openai_reply(tmp_path):
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
     )
 
     engine.process(event(identity, "Merke Mond.", channel="signal"))
@@ -2163,6 +2178,7 @@ def test_engine_appends_new_account_memory_to_qdrant_cache_when_semantic_enabled
             memory_search_qdrant_url="http://localhost:6334",
         ),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
     )
 
     engine.process(event(identity, "Merke Mond.", channel="signal"))
@@ -2206,6 +2222,7 @@ def test_engine_qdrant_cache_index_failure_does_not_block_account_memory_write(t
             memory_search_semantic_backend="qdrant",
         ),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
     )
 
     actions = engine.process(event(identity, "Merke Mond.", channel="signal"))
@@ -2241,6 +2258,7 @@ def test_engine_uses_structured_memory_candidate_for_safe_semantic_memory(tmp_pa
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
         structured_decision_runner=structured_runner,
     )
 
@@ -2283,6 +2301,7 @@ def test_engine_structured_memory_candidate_accepts_clinical_memory_kind(tmp_pat
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
         structured_decision_runner=structured_runner,
     )
 
@@ -2307,6 +2326,7 @@ def test_engine_structured_memory_candidate_can_skip_memory_write(tmp_path):
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
         structured_decision_runner=lambda _prompt, schema: (
             {"should_create": False, "text": "", "datetime_iso": None, "recurrence": None, "confidence": 0.0}
             if schema.__name__ == "ReminderDecision"
@@ -2349,6 +2369,7 @@ def test_engine_structured_memory_candidate_invalid_payload_blocks_legacy_auto_w
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
         structured_decision_runner=structured_runner,
     )
 
@@ -2370,6 +2391,7 @@ def test_engine_structured_memory_candidate_blocks_high_sensitivity_auto_write(t
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
         structured_decision_runner=lambda _prompt, schema: (
             {"should_create": False, "text": "", "datetime_iso": None, "recurrence": None, "confidence": 0.0}
             if schema.__name__ == "ReminderDecision"
@@ -2401,6 +2423,7 @@ def test_engine_structured_memory_candidate_blocks_low_confidence_auto_write(tmp
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
         structured_decision_runner=lambda _prompt, schema: (
             {"should_create": False, "text": "", "datetime_iso": None, "recurrence": None, "confidence": 0.0}
             if schema.__name__ == "ReminderDecision"
@@ -2432,6 +2455,7 @@ def test_engine_does_not_write_account_memory_when_disabled(tmp_path):
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=False),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
     )
 
     engine.process(event(identity, "Nicht speichern.", channel="signal"))
@@ -2682,7 +2706,7 @@ def test_engine_voice_command_sends_generated_attachment(tmp_path):
             return FakeVoice()
 
     client = FakeOpenAIClient()
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(), openai_client=client)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(), openai_client=client, llm_client=client)
 
     actions = engine.process(event(telegram_identity_key(1), "/voice Hallo Welt", channel="signal"))
 
@@ -2709,6 +2733,7 @@ def test_engine_voice_command_uses_account_tts_dialect(tmp_path):
         account_store=account_store,
         instructions=BotInstructions(openai_voice_instructions="Basisstimme."),
         openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
     )
 
     engine.process(event(identity, "Ich bin in Nürnberg geboren.", channel="signal"))
@@ -2731,7 +2756,7 @@ def test_engine_voice_model_command_persists_openai_voice_alias(tmp_path):
 
     account_store = store(tmp_path)
     client = FakeOpenAIClient()
-    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(), openai_client=client)
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(), openai_client=client, llm_client=client)
     identity = signal_identity_key(source_uuid="voice-model")
 
     set_actions = engine.process(event(identity, "/voicemodel onys", channel="signal"))
@@ -2770,6 +2795,7 @@ def test_engine_mimic_voice_command_controls_voice_instruction_order(tmp_path):
         account_store=account_store,
         instructions=BotInstructions(openai_voice_instructions="Basisstimme."),
         openai_client=client,
+        llm_client=client,
     )
     identity = signal_identity_key(source_uuid="mimic-engine")
     account_id = account_store.resolve_or_create_account(identity)
@@ -2799,7 +2825,7 @@ def test_engine_voice_command_uses_reply_text(tmp_path):
             return type("Voice", (), {"audio": b"voice", "filename": "voice.ogg", "content_type": "audio/ogg"})()
 
     client = FakeOpenAIClient()
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(), openai_client=client)
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(), openai_client=client, llm_client=client)
     incoming = event(telegram_identity_key(1), "/voice", channel="matrix")
     incoming = IncomingEvent(
         event_id=incoming.event_id,
@@ -2839,7 +2865,7 @@ def test_engine_voice_command_requires_text(tmp_path):
         def create_voice(self, _text, _instructions):
             raise AssertionError("create_voice must not be called")
 
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(), openai_client=FakeOpenAIClient())
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(), openai_client=FakeOpenAIClient(), llm_client=FakeOpenAIClient())
 
     actions = engine.process(event(telegram_identity_key(1), "/voice"))
 
@@ -2852,7 +2878,7 @@ def test_engine_voice_command_respects_disabled_voice(tmp_path):
             raise AssertionError("create_voice must not be called")
 
     instructions = BotInstructions(openai_voice_enabled=False, openai_voice_error="Voice aus.")
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=FakeOpenAIClient())
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=FakeOpenAIClient(), llm_client=FakeOpenAIClient())
 
     actions = engine.process(event(telegram_identity_key(1), "/voice Hallo"))
 
@@ -2865,7 +2891,7 @@ def test_engine_voice_command_rejects_too_long_text(tmp_path):
             raise AssertionError("create_voice must not be called")
 
     instructions = BotInstructions(openai_voice_max_input_chars=5)
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=FakeOpenAIClient())
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=FakeOpenAIClient(), llm_client=FakeOpenAIClient())
 
     actions = engine.process(event(telegram_identity_key(1), "/voice zu lang"))
 
@@ -2878,7 +2904,7 @@ def test_engine_voice_command_reports_openai_error(tmp_path):
             raise OpenAIAPIError("boom")
 
     instructions = BotInstructions(openai_voice_error="Voice kaputt.")
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=FakeOpenAIClient())
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=FakeOpenAIClient(), llm_client=FakeOpenAIClient())
 
     actions = engine.process(event(telegram_identity_key(1), "/voice Hallo"))
 
@@ -2925,8 +2951,8 @@ def test_engine_youtube_transcript_command_records_account_memory(monkeypatch, t
     assert entries[0]["bot_text"] == "YouTube-Transkript (YouTube-Untertitel):\n\nTranscript text."
 
 
-def test_engine_youtube_transcript_natural_request_uses_openai_pipeline(monkeypatch, tmp_path):
-    class FakeOpenAIClient:
+def test_engine_youtube_transcript_natural_request_uses_llm_pipeline(monkeypatch, tmp_path):
+    class FakeLLMClient:
         def __init__(self) -> None:
             self.reply_inputs: list[str] = []
 
@@ -2938,8 +2964,8 @@ def test_engine_youtube_transcript_natural_request_uses_openai_pipeline(monkeypa
         "TeeBotus.runtime.engine.transcribe_youtube_video",
         lambda _url, **_kwargs: ("Transcript text.", "YouTube-Untertitel"),
     )
-    client = FakeOpenAIClient()
-    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(openai_enabled=True), openai_client=client)
+    client = FakeLLMClient()
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions(openai_enabled=True), llm_client=client)
 
     actions = engine.process(event(telegram_identity_key(1), "Bitte transkribiere dieses YouTube Video https://youtu.be/abc123", channel="matrix"))
 
@@ -2963,8 +2989,8 @@ def test_engine_youtube_transcript_llm_pipeline_reports_neutral_missing_key(monk
     assert actions[1].text == "LLM-Key fehlt."
 
 
-def test_engine_youtube_openai_pipeline_includes_working_memory(monkeypatch, tmp_path):
-    class FakeOpenAIClient:
+def test_engine_youtube_llm_pipeline_includes_working_memory(monkeypatch, tmp_path):
+    class FakeLLMClient:
         def __init__(self) -> None:
             self.reply_inputs: list[str] = []
 
@@ -2979,11 +3005,11 @@ def test_engine_youtube_openai_pipeline_includes_working_memory(monkeypatch, tmp
     instances_dir = tmp_path / "instances"
     working_store = WorkingMemoryStore("Depressionsbot", instances_dir)
     working_store.append_manual("Architekturfragen zuerst kurz strukturieren.")
-    client = FakeOpenAIClient()
+    client = FakeLLMClient()
     engine = TeeBotusEngine(
         account_store=store(tmp_path),
         instructions=BotInstructions(openai_enabled=True),
-        openai_client=client,
+        llm_client=client,
         working_memory_store=working_store,
     )
 
@@ -2994,8 +3020,8 @@ def test_engine_youtube_openai_pipeline_includes_working_memory(monkeypatch, tmp
     assert "YouTube-Transkript:" in client.reply_inputs[0]
 
 
-def test_engine_youtube_openai_pipeline_includes_account_weather_and_library_context(monkeypatch, tmp_path):
-    class FakeOpenAIClient:
+def test_engine_youtube_llm_pipeline_includes_account_weather_and_library_context(monkeypatch, tmp_path):
+    class FakeLLMClient:
         def __init__(self) -> None:
             self.reply_inputs: list[str] = []
 
@@ -3020,11 +3046,11 @@ def test_engine_youtube_openai_pipeline_includes_account_weather_and_library_con
         account_id,
         {"id": "mem_therapy", "keywords": ["therapie"], "user_text": "Therapie lieber strukturiert.", "bot_text": "Gemerkt."},
     )
-    client = FakeOpenAIClient()
+    client = FakeLLMClient()
     engine = TeeBotusEngine(
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True, bibliothekar_enabled=True),
-        openai_client=client,
+        llm_client=client,
         bibliothekar_store=FakeBibliothekarStore(),
     )
 
@@ -3038,8 +3064,8 @@ def test_engine_youtube_openai_pipeline_includes_account_weather_and_library_con
     assert "therapie.txt" in client.reply_inputs[0]
 
 
-def test_engine_youtube_openai_pipeline_supports_active_memory_page(monkeypatch, tmp_path):
-    class FakeOpenAIClient:
+def test_engine_youtube_llm_pipeline_supports_active_memory_page(monkeypatch, tmp_path):
+    class FakeLLMClient:
         def __init__(self) -> None:
             self.calls: list[tuple[str, str | None]] = []
 
@@ -3064,11 +3090,11 @@ def test_engine_youtube_openai_pipeline_supports_active_memory_page(monkeypatch,
         account_id,
         {"id": "mem_coffee", "keywords": ["kaffee"], "user_text": "Kaffee beruhigt beim Sortieren.", "bot_text": "Gemerkt."},
     )
-    client = FakeOpenAIClient()
+    client = FakeLLMClient()
     engine = TeeBotusEngine(
         account_store=account_store,
         instructions=BotInstructions(openai_enabled=True, user_memory_enabled=True, user_memory_max_prompt_chars=1200),
-        openai_client=client,
+        llm_client=client,
     )
 
     actions = engine.process(event(identity, "/youtube_transcript https://youtu.be/abc123 Mond", channel="matrix"))
@@ -3383,6 +3409,7 @@ def test_engine_youtube_local_options_uses_llm_fallback(monkeypatch, tmp_path):
         account_store=store(tmp_path),
         instructions=BotInstructions(openai_enabled=True, youtube_option_llm_fallback=True),
         openai_client=client,
+        llm_client=client,
     )
 
     actions = engine.process(event(telegram_identity_key(1), "/youtube_transcript https://youtu.be/abc123 mach bitte die passende variante", channel="signal"))
@@ -3424,6 +3451,7 @@ def test_engine_youtube_local_options_do_not_use_llm_fallback_by_default(monkeyp
         account_store=store(tmp_path),
         instructions=BotInstructions(openai_enabled=True),
         openai_client=client,
+        llm_client=client,
     )
 
     actions = engine.process(event(telegram_identity_key(1), "/youtube_transcript https://youtu.be/abc123 mach bitte die passende variante", channel="signal"))

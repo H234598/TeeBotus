@@ -116,7 +116,8 @@ def test_default_profile_files_define_plan2_provider_profiles() -> None:
         model="vertex_ai/gemini-2.5-flash",
         api_key_env="GOOGLE_APPLICATION_CREDENTIALS",
     )
-    assert profiles["openai_premium"].provider == "openai"
+    assert profiles["openai_premium"].provider == "litellm"
+    assert profiles["openai_premium"].model == "openai/gpt-5.5"
     assert profiles["openai_premium"].api_key_env == "OPENAI_API_KEY"
     assert routing["structured_decision"].profile == "hf_pool_structured"
     assert routing["structured_decision"].fallback == "local_ollama"
@@ -900,17 +901,12 @@ def test_runtime_text_client_filtered_remote_instruction_fallback_is_not_reused(
     assert calls == ["ollama/broken"]
 
 
-def test_runtime_text_client_builds_openai_client_for_openai_profile_env_key() -> None:
+def test_runtime_text_client_routes_openai_profile_through_litellm() -> None:
     captured: list[str] = []
 
     class FakeOpenAIClient:
         def __init__(self, api_key: str) -> None:
             captured.append(api_key)
-            self.calls: list[str] = []
-
-        def create_reply(self, _user_text, instructions, _previous_response_id=None):
-            self.calls.append(instructions.openai_model)
-            return object()
 
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(),
@@ -920,12 +916,14 @@ def test_runtime_text_client_builds_openai_client_for_openai_profile_env_key() -
         openai_client_factory=FakeOpenAIClient,
     )
 
-    assert captured == ["profile-openai-key"]
-    client.create_reply("Ping", BotInstructions(openai_model="gpt-ignored"), None)
-    assert client.client.calls == ["gpt-5.5"]
+    assert isinstance(client, LiteLLMTextClient)
+    assert captured == []
+    assert client.provider == "litellm"
+    assert client.model == "openai/gpt-5.5"
+    assert client.api_key == "profile-openai-key"
 
 
-def test_runtime_text_client_applies_openai_route_model_to_legacy_client() -> None:
+def test_runtime_text_client_routes_openai_route_through_litellm() -> None:
     class FakeOpenAIClient:
         def __init__(self) -> None:
             self.calls: list[str] = []
@@ -941,13 +939,13 @@ def test_runtime_text_client_applies_openai_route_model_to_legacy_client() -> No
         purpose="hard_reasoning",
     )
 
-    client.create_reply("Ping", BotInstructions(openai_model="gpt-legacy"), None)
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.provider == "litellm"
+    assert client.model == "openai/gpt-5.5"
+    assert openai_client.calls == []
 
-    assert client.client is openai_client
-    assert openai_client.calls == ["gpt-5.5"]
 
-
-def test_runtime_text_client_builds_openai_client_for_direct_runtime_openai_provider() -> None:
+def test_runtime_text_client_routes_direct_runtime_openai_provider_through_litellm() -> None:
     captured: list[str] = []
 
     class FakeOpenAIClient:
@@ -965,11 +963,14 @@ def test_runtime_text_client_builds_openai_client_for_direct_runtime_openai_prov
         openai_client_factory=FakeOpenAIClient,
     )
 
-    assert isinstance(client, FakeOpenAIClient)
-    assert captured == ["runtime-openai-key"]
+    assert isinstance(client, LiteLLMTextClient)
+    assert captured == []
+    assert client.provider == "litellm"
+    assert client.model == "openai/gpt-5.5"
+    assert client.api_key == "runtime-openai-key"
 
 
-def test_runtime_text_client_applies_direct_openai_runtime_model_override() -> None:
+def test_runtime_text_client_applies_direct_openai_runtime_model_to_litellm() -> None:
     class FakeOpenAIClient:
         def __init__(self) -> None:
             self.models: list[str] = []
@@ -986,13 +987,13 @@ def test_runtime_text_client_applies_direct_openai_runtime_model_override() -> N
         model="gpt-runtime",
     )
 
-    client.create_reply("Ping", BotInstructions(openai_model="gpt-legacy"), None)
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.provider == "litellm"
+    assert client.model == "openai/gpt-runtime"
+    assert openai_client.models == []
 
-    assert client.client is openai_client
-    assert openai_client.models == ["gpt-runtime"]
 
-
-def test_runtime_text_client_builds_openai_client_for_legacy_default_key() -> None:
+def test_runtime_text_client_routes_legacy_default_openai_key_through_litellm() -> None:
     captured: list[str] = []
 
     class FakeOpenAIClient:
@@ -1009,8 +1010,11 @@ def test_runtime_text_client_builds_openai_client_for_legacy_default_key() -> No
         openai_client_factory=FakeOpenAIClient,
     )
 
-    assert isinstance(client, FakeOpenAIClient)
-    assert captured == ["legacy-openai-key"]
+    assert isinstance(client, LiteLLMTextClient)
+    assert captured == []
+    assert client.provider == "litellm"
+    assert client.model == "openai/gpt-5.5"
+    assert client.api_key == "legacy-openai-key"
 
 
 def test_runtime_structured_decision_runner_respects_disabled_flag() -> None:
@@ -1090,6 +1094,45 @@ def test_runtime_structured_decision_runner_guards_provider_errors(monkeypatch) 
     assert getattr(runner, "llm_provider") == "hf_pool"
     assert getattr(runner, "model_name") == "pool:default#structured_decision"
     assert calls == [{"purpose": "structured_decision", "allow_remote_fallback": True}]
+
+
+def test_runtime_structured_decision_runner_respects_max_output_retries_env(monkeypatch) -> None:
+    import TeeBotus.ai_structures.pydantic_ai_adapter as adapter
+    import TeeBotus.decisions.pydantic_agent as pydantic_agent
+
+    calls: list[dict[str, object]] = []
+
+    def fake_builder(
+        model: str, *, output_retries: int | None = None, **_kwargs: object
+    ) -> object:
+        calls.append({"model": model, "output_retries": output_retries})
+
+        def runner(_prompt: str, _schema: type[object]) -> object:
+            return object()
+
+        return runner
+
+    def fake_selector(_purpose: str, allow_remote_fallback: bool = False):
+        assert allow_remote_fallback is False
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            model="mocked-structured-model",
+            base_url="",
+            fallback_model="",
+            fallback_base_url="",
+            purpose="structured_decision",
+            fallback_profile_name="",
+        )
+
+    monkeypatch.setattr(adapter, "build_pydantic_ai_model_runner", fake_builder)
+    pydantic_agent.build_router_pydantic_ai_model_runner(
+        route_selector=fake_selector,
+        env={"TEEBOTUS_STRUCTURED_DECISION_MAX_OUTPUT_RETRIES": "2"}
+    )
+
+    assert calls
+    assert calls[0]["output_retries"] == 2
 
 
 def test_simple_yaml_fallback_parser_handles_plan2_shape(tmp_path: Path, monkeypatch) -> None:

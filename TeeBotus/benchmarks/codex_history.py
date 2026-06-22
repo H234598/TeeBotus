@@ -89,8 +89,10 @@ def benchmark_codex_history_session_importer(*, iterations: int) -> BenchmarkRes
         elapsed_ms = _timed_ms(_import)
         status_counts = report.get("status_counts", {})
         outbox_path = store.account_dir(INSTANCE_STATE_ACCOUNT_ID) / CODEX_HISTORY_OUTBOX_FILENAME
+        outbox_rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+        outbox_size = outbox_path.stat().st_size if outbox_path.exists() else _json_payload_size(outbox_rows)
         imported = int(status_counts.get("imported", 0))
-        ok = imported == session_count and outbox_path.exists()
+        ok = imported == session_count and len(outbox_rows) >= session_count
         return result(
             name="codex_history_session_importer",
             category="codex_history",
@@ -99,7 +101,7 @@ def benchmark_codex_history_session_importer(*, iterations: int) -> BenchmarkRes
             ok=bool(ok),
             errors=0 if ok else 1,
             payload_bytes=payload_bytes,
-            index_bytes=outbox_path.stat().st_size if outbox_path.exists() else 0,
+            index_bytes=outbox_size,
             note="import_codex_session_roots batch",
             details={
                 "session_count": session_count,
@@ -170,10 +172,11 @@ def benchmark_codex_history_watcher_poll_loop(*, iterations: int) -> BenchmarkRe
         )
         payload_bytes = sum(path.stat().st_size for path in sessions_root.glob("*.jsonl") if path.is_file())
         outbox_path = store.account_dir(INSTANCE_STATE_ACCOUNT_ID) / CODEX_HISTORY_OUTBOX_FILENAME
+        outbox_rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
         status_counts = dict(watch_status_counts)
-        outbox_size = outbox_path.stat().st_size if outbox_path.exists() else 0
+        outbox_size = outbox_path.stat().st_size if outbox_path.exists() else _json_payload_size(outbox_rows)
         imported = int(status_counts.get("imported", 0))
-        ok = imported == wrote["count"] and outbox_size > 0
+        ok = imported == wrote["count"] and len(outbox_rows) >= wrote["count"]
         return result(
             name="codex_history_watcher_poll_loop",
             category="codex_history",
@@ -243,6 +246,12 @@ def _timed_ms(func: Callable[[], Any]) -> float:
     start = time.perf_counter()
     func()
     return (time.perf_counter() - start) * 1000
+
+
+def _json_payload_size(rows: list[dict[str, Any]]) -> int:
+    if not rows:
+        return 0
+    return len(json.dumps(rows, ensure_ascii=False, sort_keys=True).encode("utf-8"))
 
 
 __all__ = [

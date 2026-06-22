@@ -12,6 +12,10 @@ Instanz-`## Systemprompt` nachgestellt.
 - echo: true
 - echo_prefix: "Echo: "
 
+## LLM
+
+- error: Ich kann das Textmodell gerade nicht erreichen. Bitte versuche es gleich nochmal.
+
 ## OpenAI
 
 - enabled: false

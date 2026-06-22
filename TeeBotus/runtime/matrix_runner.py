@@ -92,7 +92,7 @@ class MatrixRuntimeBridge:
         )
         self.structured_decision_runner = build_runtime_structured_decision_runner(
             instructions=instructions,
-            enabled=run_config.llm_enabled,
+            enabled=run_config.structured_decision_enabled or run_config.llm_enabled,
             runtime_llm_configured=_run_config_has_llm_route(run_config),
             allow_remote_fallback=run_config.llm_allow_remote_fallback,
         )

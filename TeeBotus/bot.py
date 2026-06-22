@@ -27,6 +27,9 @@ from TeeBotus import __version__
 
 _TELEGRAM_MODULE = "TeeBotus.adapters.telegram_runtime"
 ALLOW_BROKEN_ACCOUNT_MEMORY_START_ENV = "TEEBOTUS_ALLOW_BROKEN_ACCOUNT_MEMORY_START"
+LOCAL_OLLAMA_OFFLOAD_ENV = "TEEBOTUS_LLM_OFFLOAD_LOCAL_OLLAMA"
+LOCAL_OLLAMA_OFFLOAD_PROFILE_ENV = "TEEBOTUS_LLM_OFFLOAD_LOCAL_OLLAMA_PROFILE"
+LOCAL_OLLAMA_OFFLOAD_DEFAULT_PROFILE = "hf_pool_default"
 _COMPAT_EXPORT_MODULES = (
     _TELEGRAM_MODULE,
     "TeeBotus.core.youtube",
@@ -666,6 +669,8 @@ def _runtime_status_structured_decision_line(account: Any, *, instructions: Any 
         detail += f" fallback={route.fallback_profile_name} fallback_model={route.fallback_model}"
         if route.fallback_base_url:
             detail += f" fallback_base_url={_sanitize_status_url(route.fallback_base_url)}"
+    if offload_detail := _runtime_status_local_ollama_offload_detail(route, instance_names=(str(account.instance_name),)):
+        detail += f" {offload_detail}"
     if allow_remote_fallback:
         detail += " remote_fallback=enabled"
     if route_error:
@@ -674,6 +679,11 @@ def _runtime_status_structured_decision_line(account: Any, *, instructions: Any 
 
 
 def _structured_decision_enabled_for_status(account: Any, instructions: Any | None) -> tuple[bool, str]:
+    structured_override = _parse_optional_status_bool(getattr(account, "structured_decision_enabled", ""))
+    if structured_override is False:
+        return False, "runtime_structured_decision_disabled"
+    if structured_override is True:
+        return True, "runtime_structured_decision_enabled"
     enabled_override = _parse_optional_status_bool(getattr(account, "llm_enabled", ""))
     if enabled_override is False:
         return False, "runtime_llm_disabled"
@@ -807,6 +817,8 @@ def _runtime_status_decision_line(purpose: str, *, instance_names: Sequence[str]
         if route.fallback_api_key_env:
             configured = bool(os.environ.get(route.fallback_api_key_env, "").strip())
             detail += f" fallback_api_key={'configured' if configured else 'missing'}"
+    if offload_detail := _runtime_status_local_ollama_offload_detail(route, instance_names=instance_names):
+        detail += f" {offload_detail}"
     if status_error:
         detail += f" error={_sanitize_status_text(status_error)}"
     return _sanitize_status_text(detail)
@@ -901,6 +913,8 @@ def _runtime_status_api_budget_route_line(route: Any, *, instance_names: Sequenc
             f" fallback_profile={_sanitize_status_text(getattr(route, 'fallback_profile_name', '') or '<direct>')} "
             f"fallback_model={_sanitize_status_text(fallback_model)}"
         )
+    if offload_detail := _runtime_status_local_ollama_offload_detail(route, instance_names=instance_names):
+        detail += f" {offload_detail}"
     if error:
         detail += f" error={_sanitize_status_text(error)}"
     return _sanitize_status_text(detail)
@@ -918,6 +932,19 @@ def _status_api_key_state(route: Any, *, provider: str, model: str, instance_nam
     gemini_key_instances = _status_gemini_key_instance_availability(instance_names, provider=provider, model=model)
     if gemini_key_instances is not None:
         configured_instances, total_instances = gemini_key_instances
+        if configured_instances == total_instances:
+            return "configured"
+        if configured_instances:
+            return "partial"
+        return "missing"
+    openai_key_instances = _status_openai_key_instance_availability(
+        instance_names,
+        provider=provider,
+        model=model,
+        api_key_env=str(getattr(route, "api_key_env", "") or "").strip(),
+    )
+    if openai_key_instances is not None:
+        configured_instances, total_instances = openai_key_instances
         if configured_instances == total_instances:
             return "configured"
         if configured_instances:
@@ -1122,6 +1149,20 @@ def _runtime_route_key_status(route: Any, *, instance_names: Sequence[str] = ())
         return "missing_key", f"missing api key for all {total_instances} instances"
     if _status_gemini_key_ring_count(instance_name="", provider=provider, model=model):
         return "configured", ""
+    openai_key_instances = _status_openai_key_instance_availability(
+        instance_names,
+        provider=provider,
+        model=model,
+        api_key_env=api_key_env,
+    )
+    if openai_key_instances is not None:
+        configured_instances, total_instances = openai_key_instances
+        if configured_instances == total_instances:
+            return "configured", ""
+        if configured_instances:
+            missing = total_instances - configured_instances
+            return "degraded", f"missing api key for {missing}/{total_instances} instances"
+        return "missing_key", f"missing api key for all {total_instances} instances"
     api_key_env = str(getattr(route, "api_key_env", "") or "").strip()
     if api_key_env and os.environ.get(api_key_env, "").strip():
         return "configured", ""
@@ -1400,6 +1441,143 @@ def _status_gemini_key_instance_availability(
         return None
     configured = sum(1 for name in names if _status_gemini_key_ring_count(instance_name=name, provider=provider, model=model))
     return configured, len(names)
+
+
+def _status_openai_key_instance_availability(
+    instance_names: Sequence[str],
+    *,
+    provider: str,
+    model: object,
+    api_key_env: str,
+) -> tuple[int, int] | None:
+    if _normalize_status_llm_provider(provider) != "openai":
+        return None
+    names = _unique_status_instance_names(instance_names)
+    if not names:
+        return None
+    configured = sum(1 for name in names if _status_instance_api_key_configured(api_key_env or "OPENAI_API_KEY", name))
+    return configured, len(names)
+
+
+def _status_instance_api_key_configured(api_key_env: str, instance_name: str) -> bool:
+    env_name = str(api_key_env or "").strip()
+    if env_name and os.environ.get(env_name, "").strip():
+        return True
+    token = _status_instance_env_token(instance_name)
+    if not token:
+        return False
+    candidates = []
+    if env_name:
+        candidates.append(f"{env_name}_{token}")
+    if env_name != "OPENAI_API_KEY":
+        candidates.append(f"OPENAI_API_KEY_{token}")
+    for candidate in candidates:
+        if os.environ.get(candidate, "").strip():
+            return True
+    list_candidates = []
+    if env_name and not env_name.endswith("S"):
+        list_candidates.append(f"{env_name}S_{token}")
+    if env_name != "OPENAI_API_KEY":
+        list_candidates.append(f"OPENAI_API_KEYS_{token}")
+    return any(os.environ.get(candidate, "").strip() for candidate in list_candidates)
+
+
+def _runtime_status_local_ollama_offload_detail(route: Any, *, instance_names: Sequence[str]) -> str:
+    if not _status_route_has_local_ollama_target(route):
+        return ""
+    names = _unique_status_instance_names(instance_names)
+    if not names:
+        names = ("",)
+    enabled: list[tuple[str, str, str, str, str, str]] = []
+    for name in names:
+        if not _status_local_ollama_offload_enabled(name):
+            continue
+        profile_name = _status_local_ollama_offload_profile(name)
+        provider, model, status, error = _status_offload_profile_status(profile_name, instance_name=name)
+        enabled.append((name, profile_name, provider, model, status, error))
+    if not enabled:
+        return ""
+    total = len(names)
+    enabled_count = len(enabled)
+    state = "enabled" if enabled_count == total else "partial"
+    profile_names = sorted({profile_name for _name, profile_name, _provider, _model, _status, _error in enabled})
+    providers = sorted({provider for _name, _profile, provider, _model, _status, _error in enabled if provider})
+    models = sorted({model for _name, _profile, _provider, model, _status, _error in enabled if model})
+    statuses = [status for _name, _profile, _provider, _model, status, _error in enabled if status]
+    effective_status = "configured" if statuses and all(status == "configured" for status in statuses) else "degraded"
+    detail = (
+        f"local_ollama_offload={state} offload_instances={enabled_count}/{total} "
+        f"offload_profile={','.join(profile_names)} effective_status={effective_status}"
+    )
+    if providers:
+        detail += f" offload_provider={','.join(providers)}"
+    if models:
+        detail += f" offload_model={','.join(models)}"
+    instance_profiles = [
+        f"{_status_instance_env_token(name) or 'GLOBAL'}:{profile_name}"
+        for name, profile_name, _provider, _model, _status, _error in enabled
+    ]
+    detail += f" offload_map={','.join(instance_profiles)}"
+    errors = sorted({_sanitize_status_text(error) for _name, _profile, _provider, _model, _status, error in enabled if error})
+    if errors:
+        detail += f" offload_error={';'.join(errors)}"
+    return _sanitize_status_text(detail)
+
+
+def _status_route_has_local_ollama_target(route: Any) -> bool:
+    provider = _normalize_status_llm_provider(getattr(route, "provider", ""))
+    fallback_provider = _normalize_status_llm_provider(getattr(route, "fallback_provider", ""))
+    return (
+        provider in {"ollama", "local_ollama"}
+        or fallback_provider in {"ollama", "local_ollama"}
+        or _status_model_uses_ollama(getattr(route, "model", ""))
+        or _status_model_uses_ollama(getattr(route, "fallback_model", ""))
+        or str(getattr(route, "profile_name", "") or "").strip() == "local_ollama"
+        or str(getattr(route, "fallback_profile_name", "") or "").strip() == "local_ollama"
+    )
+
+
+def _status_local_ollama_offload_enabled(instance_name: str) -> bool:
+    return _status_env_bool(_status_first_instance_env(LOCAL_OLLAMA_OFFLOAD_ENV, instance_name))
+
+
+def _status_local_ollama_offload_profile(instance_name: str) -> str:
+    return _status_first_instance_env(LOCAL_OLLAMA_OFFLOAD_PROFILE_ENV, instance_name) or LOCAL_OLLAMA_OFFLOAD_DEFAULT_PROFILE
+
+
+def _status_offload_profile_status(profile_name: str, *, instance_name: str) -> tuple[str, str, str, str]:
+    try:
+        from TeeBotus.llm.profiles import load_llm_profiles
+
+        profile = load_llm_profiles()[profile_name]
+    except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose bad offload configuration.
+        return "", "", "broken", f"{type(exc).__name__}: {exc}"
+    route_like = types.SimpleNamespace(
+        provider=profile.provider,
+        model=profile.model,
+        base_url=profile.base_url,
+        api_key_env=profile.api_key_env,
+    )
+    status, error = _runtime_route_key_status(route_like, instance_names=(instance_name,) if instance_name else ())
+    return str(profile.provider or ""), str(profile.model or ""), status, error
+
+
+def _status_first_instance_env(base_key: str, instance_name: str) -> str:
+    token = _status_instance_env_token(instance_name)
+    if token:
+        value = str(os.environ.get(f"{base_key}_{token}", "") or "").strip()
+        if value:
+            return value
+    return str(os.environ.get(base_key, "") or "").strip()
+
+
+def _status_instance_env_token(instance_name: str) -> str:
+    token = "".join(char if char.isalnum() else "_" for char in str(instance_name or "").strip().upper())
+    return "_".join(part for part in token.split("_") if part)
+
+
+def _status_env_bool(value: object) -> bool:
+    return str(value or "").strip().casefold() in {"1", "true", "yes", "ja", "on", "enabled", "an"}
 
 
 def _unique_status_instance_names(instance_names: Sequence[str]) -> tuple[str, ...]:
@@ -1938,7 +2116,7 @@ def _run_signal_runtime(config: Any) -> int:
     try:
         return int(run_signal_accounts(config))
     except SignalRuntimeError as exc:
-        print("TeeBotus Signal runtime error", file=sys.stderr)
+        print(f"TeeBotus Signal runtime error: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
 
 
@@ -1951,8 +2129,8 @@ def _start_signal_runtime_background(config: Any) -> int:
     try:
         start_signal_accounts_in_background(config)
     except SignalRuntimeError as exc:
-        print("TeeBotus Signal runtime error", file=sys.stderr)
-        return 2
+        print(f"TeeBotus Signal runtime error in background: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 0
     return 0
 
 
@@ -2040,7 +2218,7 @@ def _main_impl(argv: list[str] | None = None) -> int:
     try:
         from TeeBotus.runtime.maintenance import configure_runtime_logging
 
-        configure_runtime_logging(level=os.getenv("LOG_LEVEL", "INFO"), tee_stdio=True)
+        configure_runtime_logging(level=os.getenv("TEEBOTUS_LOG_LEVEL") or os.getenv("LOG_LEVEL", "INFO"), tee_stdio=True)
     except Exception:  # noqa: BLE001 - logging setup must not block startup.
         print("TeeBotus runtime logging setup failed", file=sys.stderr)
 

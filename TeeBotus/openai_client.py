@@ -8,6 +8,7 @@ import urllib.request
 import uuid
 import base64
 import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from hashlib import sha256
@@ -15,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .instructions import BotInstructions
+from TeeBotus.runtime.log_context import logging_context, next_llm_call_id
 
 RESPONSES_URL = "https://api.openai.com/v1/responses"
 IMAGES_URL = "https://api.openai.com/v1/images/generations"
@@ -74,20 +76,45 @@ class OpenAIClient:
             },
         )
 
-        try:
-            timeout = instructions.openai_timeout_seconds or self.timeout
-            with urllib.request.urlopen(request, timeout=timeout) as response:
-                response_payload = json.loads(response.read().decode("utf-8"))
-        except TimeoutError as exc:
-            raise OpenAIAPIError(f"OpenAI network timeout: {exc}") from exc
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", errors="replace")
-            raise OpenAIAPIError(f"OpenAI HTTP error {exc.code}: {detail}") from exc
-        except urllib.error.URLError as exc:
-            raise OpenAIAPIError(f"OpenAI network error: {exc.reason}") from exc
+        call_id = next_llm_call_id("openai")
+        timeout = instructions.openai_timeout_seconds or self.timeout
+        with logging_context(
+            component="openai_client",
+            operation="reply",
+            llm_call_id=call_id,
+            provider="openai",
+            model=instructions.openai_model,
+            api_base="https://api.openai.com/v1",
+        ):
+            started_at = time.perf_counter()
+            LOGGER.info(
+                "OpenAI reply request started call_id=%s model=%s timeout_seconds=%s request_chars=%s previous_response=%s",
+                call_id,
+                instructions.openai_model,
+                timeout,
+                len(user_text),
+                bool(previous_response_id),
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=timeout) as response:
+                    response_payload = json.loads(response.read().decode("utf-8"))
+            except TimeoutError as exc:
+                raise OpenAIAPIError(f"OpenAI network timeout: {exc}") from exc
+            except urllib.error.HTTPError as exc:
+                detail = exc.read().decode("utf-8", errors="replace")
+                raise OpenAIAPIError(f"OpenAI HTTP error {exc.code}: {detail}") from exc
+            except urllib.error.URLError as exc:
+                raise OpenAIAPIError(f"OpenAI network error: {exc.reason}") from exc
 
-        log_openai_usage("reply", payload, response_payload)
-        text = extract_output_text(response_payload)
+            log_openai_usage("reply", payload, response_payload)
+            text = extract_output_text(response_payload)
+            LOGGER.info(
+                "OpenAI reply request finished call_id=%s elapsed_ms=%s response_id=%s response_chars=%s",
+                call_id,
+                int((time.perf_counter() - started_at) * 1000),
+                response_payload.get("id") if isinstance(response_payload, dict) else None,
+                len(text),
+            )
         if not text:
             raise OpenAIAPIError(summarize_empty_response(response_payload, instructions.openai_max_output_tokens))
         service_tier = response_payload.get("service_tier")

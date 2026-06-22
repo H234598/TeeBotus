@@ -469,6 +469,7 @@ def test_pydantic_ai_router_runner_uses_teebotus_structured_decision_route() -> 
             "model": "pool:default#structured_decision",
             "output_type": BibliothekarQueryDecision,
             "system_prompt": "Nur strukturiert.",
+            "retries": {"output": 2},
         }
     ]
 
@@ -508,7 +509,9 @@ def test_pydantic_ai_adapter_resolves_hf_pool_selector_to_openai_compatible_mode
     )
 
     assert getattr(runner, "model_name") == "pool:default#structured_decision"
-    assert getattr(runner, "pydantic_ai_model_name") == "Qwen/Qwen3-4B-Instruct-2507"
+    assert getattr(runner, "pydantic_ai_model_name") == "huggingface/Qwen/Qwen3-4B-Instruct-2507"
+    assert getattr(runner, "pydantic_ai_provider") == "litellm"
+    assert getattr(runner, "litellm_provider") == "huggingface"
     assert getattr(runner, "hf_pool_name") == "default"
     assert getattr(runner, "hf_pool_target") == "qwen_structured_test"
     assert getattr(runner, "hf_pool_request_model") == "Qwen/Qwen3-4B-Instruct-2507"
@@ -564,7 +567,9 @@ def test_pydantic_ai_adapter_uses_persistent_hf_pool_cooldown_state(tmp_path) ->
     )
 
     assert getattr(runner, "hf_pool_target") == "low_structured"
-    assert getattr(runner, "pydantic_ai_model_name") == "low-model"
+    assert getattr(runner, "pydantic_ai_model_name") == "huggingface/low-model"
+    assert getattr(runner, "pydantic_ai_provider") == "litellm"
+    assert getattr(runner, "litellm_provider") == "huggingface"
     assert getattr(runner, "hf_pool_state_loaded") is True
 
 
@@ -575,9 +580,50 @@ def test_pydantic_ai_adapter_resolves_ollama_selector_to_local_model() -> None:
     )
 
     assert getattr(runner, "model_name") == "ollama_chat/llama3.1:8b"
-    assert getattr(runner, "pydantic_ai_model_name") == "llama3.1:8b"
-    assert getattr(runner, "pydantic_ai_provider") == "ollama"
-    assert getattr(runner, "pydantic_ai_base_url") == "http://127.0.0.1:11434/v1"
+    assert getattr(runner, "pydantic_ai_model_name") == "ollama/llama3.1:8b"
+    assert getattr(runner, "pydantic_ai_provider") == "litellm"
+    assert getattr(runner, "litellm_provider") == "ollama"
+    assert getattr(runner, "pydantic_ai_base_url") == "http://127.0.0.1:11434"
+
+
+def test_pydantic_ai_litellm_structured_runner_validates_json(monkeypatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    def completion(**kwargs):
+        calls.append(kwargs)
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": json.dumps(
+                            {
+                                "should_search": True,
+                                "query": "Therapie Schlaf",
+                                "confidence": 0.91,
+                                "reason_short": "structured via litellm",
+                                "source": "model",
+                            }
+                        )
+                    }
+                }
+            ],
+            "usage": {"prompt_tokens": 10, "completion_tokens": 5},
+        }
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    runner = build_pydantic_ai_model_runner(
+        "ollama_chat/llama3.1:8b",
+        base_url="http://127.0.0.1:11434",
+        system_prompt="Nur JSON.",
+    )
+
+    decision = runner("Therapie Schlaf", BibliothekarQueryDecision)
+
+    assert decision.query == "Therapie Schlaf"
+    assert decision.should_search is True
+    assert calls[0]["model"] == "ollama/llama3.1:8b"
+    assert calls[0]["api_base"] == "http://127.0.0.1:11434"
+    assert "Return only valid JSON" in calls[0]["messages"][0]["content"]
 
 
 def test_pydantic_ai_router_runner_uses_local_fallback_when_hf_pool_unavailable(tmp_path) -> None:
@@ -608,9 +654,10 @@ def test_pydantic_ai_router_runner_uses_local_fallback_when_hf_pool_unavailable(
     )
 
     assert getattr(runner, "model_name") == "pool:default#structured_decision"
-    assert getattr(runner, "pydantic_ai_model_name") == "llama3.1:8b"
-    assert getattr(runner, "pydantic_ai_provider") == "ollama"
-    assert getattr(runner, "pydantic_ai_base_url") == "http://127.0.0.1:11434/v1"
+    assert getattr(runner, "pydantic_ai_model_name") == "ollama/llama3.1:8b"
+    assert getattr(runner, "pydantic_ai_provider") == "litellm"
+    assert getattr(runner, "litellm_provider") == "ollama"
+    assert getattr(runner, "pydantic_ai_base_url") == "http://127.0.0.1:11434"
     assert getattr(runner, "llm_provider") == "hf_pool"
     assert getattr(runner, "llm_fallback_used") is True
     assert getattr(runner, "llm_fallback_profile") == "local_ollama"

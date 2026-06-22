@@ -11,12 +11,44 @@ from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
+from TeeBotus.runtime.log_context import format_log_context
+
 RUNTIME_DIR = Path("data/runtime")
 PRODUCTION_LOG_FILENAME = "teebotus-production.log"
 STDIO_LOG_FILENAME = "teebotus-stdio.log"
 MAX_RUNTIME_TEXT_FILE_BYTES = 2 * 1024 * 1024
 COMPRESS_AFTER_SECONDS = 7 * 24 * 60 * 60
 MONTHLY_ARCHIVE_AFTER_SECONDS = 60 * 24 * 60 * 60
+DEBUG_ALL = 1
+LOG_LEVEL_ALIASES = {
+    "critical": logging.CRITICAL,
+    "crit": logging.CRITICAL,
+    "error": logging.ERROR,
+    "err": logging.ERROR,
+    "warning": logging.WARNING,
+    "warn": logging.WARNING,
+    "info": logging.INFO,
+    "debug": logging.DEBUG,
+    "debug_all": DEBUG_ALL,
+    "debug-all": DEBUG_ALL,
+    "debug all": DEBUG_ALL,
+    "all": DEBUG_ALL,
+    "finest": DEBUG_ALL,
+}
+THIRD_PARTY_LOG_LEVELS = {
+    "httpx": logging.INFO,
+    "httpcore": logging.WARNING,
+    "urllib3": logging.INFO,
+    "LiteLLM": logging.INFO,
+    "litellm": logging.INFO,
+    "asyncio": logging.WARNING,
+    "apscheduler": logging.INFO,
+    "tzlocal": logging.WARNING,
+    "websockets": logging.WARNING,
+    "websockets.client": logging.WARNING,
+}
+
+logging.addLevelName(DEBUG_ALL, "DEBUG_ALL")
 
 
 def runtime_dir() -> Path:
@@ -28,6 +60,7 @@ def runtime_log_path(base_dir: Path | None = None) -> Path:
 
 
 def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | None = None, tee_stdio: bool = False) -> None:
+    resolved_level = normalize_log_level(level)
     directory = base_dir or runtime_dir()
     directory.mkdir(parents=True, exist_ok=True)
     maintain_runtime_directory(directory)
@@ -36,15 +69,50 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | Non
     if tee_stdio:
         install_stdio_tee(directory / STDIO_LOG_FILENAME)
 
-    formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s%(teebotus_context)s")
+    context_filter = TeeBotusLogContextFilter()
     stream_handler = logging.StreamHandler(sys.stdout)
     stream_handler.setFormatter(formatter)
+    stream_handler.addFilter(context_filter)
     handlers: list[logging.Handler] = [stream_handler]
     if not stdout_targets_log:
         file_handler = RuntimeTimedRotatingFileHandler(log_path)
         file_handler.setFormatter(formatter)
+        file_handler.addFilter(context_filter)
         handlers.append(file_handler)
-    logging.basicConfig(level=level, handlers=handlers, force=True)
+    logging.basicConfig(level=resolved_level, handlers=handlers, force=True)
+    _configure_third_party_loggers(resolved_level)
+    logging.getLogger("TeeBotus.runtime.maintenance").info(
+        "Runtime logging configured level=%s numeric_level=%s available_levels=critical,error,warning,info,debug,debug_all,finest",
+        logging.getLevelName(resolved_level),
+        resolved_level,
+    )
+
+
+def normalize_log_level(level: str | int) -> int:
+    if isinstance(level, int):
+        return max(DEBUG_ALL, min(logging.CRITICAL, level))
+    text = str(level or "INFO").strip()
+    if not text:
+        return logging.INFO
+    if text.isdigit():
+        return max(DEBUG_ALL, min(logging.CRITICAL, int(text)))
+    normalized = text.casefold().replace("_", " ").replace("-", " ")
+    return LOG_LEVEL_ALIASES.get(normalized, LOG_LEVEL_ALIASES.get(text.casefold(), logging.INFO))
+
+
+class TeeBotusLogContextFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        context = format_log_context()
+        record.teebotus_context = f" context={context}" if context else ""
+        return True
+
+
+def _configure_third_party_loggers(level: int) -> None:
+    if level <= DEBUG_ALL:
+        return
+    for logger_name, logger_level in THIRD_PARTY_LOG_LEVELS.items():
+        logging.getLogger(logger_name).setLevel(logger_level)
 
 
 def install_stdio_tee(path: Path) -> None:

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from TeeBotus import __version__
+from TeeBotus.artifact_outputs import legacy_import_preflight_path
 from TeeBotus.core.rich_text import html_with_single_link
 from TeeBotus.core.version_notifications import DEFAULT_REPO_URL, github_repo_url
 from TeeBotus.mcp_tools import DEFAULT_MCP_TOOL_POLICIES, MCPToolPolicy, resolve_mcp_tool_policies
@@ -1550,6 +1551,10 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
     for account_dir in account_dirs:
         account_id = account_dir.name
         profile_error = ""
+        require_resolvable = True
+        if not (account_dir / ACCOUNT_PROFILE_FILENAME).exists():
+            profile_error = "profile_unreadable:missing_account_profile"
+            require_resolvable = False
         try:
             store._read_account_profile(account_id)
         except AccountStoreError as exc:
@@ -1560,7 +1565,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
             has_broken_metadata = True
         try:
             with _suppress_expected_account_memory_health_logs():
-                health = store.check_structured_memory_index(account_id, require_resolvable=not profile_error)
+                health = store.check_structured_memory_index(account_id, require_resolvable=require_resolvable and not profile_error)
         except AccountStoreError as exc:
             lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
             has_broken_memory = True
@@ -1622,8 +1627,8 @@ def _account_memory_recovery_lines(*, instance_name: str, project_root: Path) ->
     legacy = _find_legacy_plaintext_backup(project_root=project_root, instance_name=instance_name)
     if legacy:
         legacy_artifact_name = safe_artifact_name(instance_name, default="instance")
-        legacy_preflight_json = Path.home() / "Downloads" / f"teebotus-legacy-import-preflight-{legacy_artifact_name}.json"
-        legacy_preflight_md = Path.home() / "Downloads" / f"teebotus-legacy-import-preflight-{legacy_artifact_name}.md"
+        legacy_preflight_json = legacy_import_preflight_path(legacy_artifact_name, ext=".json")
+        legacy_preflight_md = legacy_import_preflight_path(legacy_artifact_name, ext=".md")
         legacy_command = shlex.join(
             [
                 "python3",
@@ -1761,8 +1766,24 @@ def _account_memory_account_dirs(accounts_dir: Path) -> list[Path]:
     return sorted(
         path
         for path in children
-        if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name) and not (path / "Account_Tombstone.json").exists()
+        if path.is_dir()
+        and TOKEN_HEX_RE.fullmatch(path.name)
+        and not (path / "Account_Tombstone.json").exists()
+        and not _account_memory_account_dir_is_stale(path)
     )
+
+
+def _account_memory_account_dir_is_stale(account_dir: Path) -> bool:
+    try:
+        for path in account_dir.iterdir():
+            if not path.is_file():
+                return False
+            if not path.name.endswith(".lock"):
+                return False
+        return True
+    except OSError:
+        LOGGER.exception("Failed to inspect account memory account directory.")
+        return False
 
 
 def _find_legacy_plaintext_backup(*, project_root: Path, instance_name: str) -> dict[str, str | int] | None:

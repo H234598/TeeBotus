@@ -150,6 +150,8 @@ def is_program_history_request(text: str) -> bool:
 
 
 def _normalize_command(text: str) -> str:
+    if not text.strip():
+        return ""
     command = text.split(maxsplit=1)[0].lower()
     if "@" in command:
         command = command.split("@", maxsplit=1)[0]

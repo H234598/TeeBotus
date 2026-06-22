@@ -9,7 +9,7 @@ from typing import Mapping
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.hf_pool.config import DEFAULT_HF_POOL_CONFIG_PATH, HFPool, HFPoolConfig, load_hf_pool_config
 from TeeBotus.llm.hf_pool.errors import HFPoolRateLimited, HFPoolTargetUnavailable, HFPoolUnavailable
-from TeeBotus.llm.hf_pool.executor import HFPoolOpener, OpenAICompatibleHFPoolExecutor
+from TeeBotus.llm.hf_pool.executor import HFPoolOpener, LiteLLMHFPoolExecutor
 from TeeBotus.llm.hf_pool.metrics import HFPoolUsageEvent
 from TeeBotus.llm.hf_pool.models_feed import (
     HFPoolModelInfo,
@@ -287,7 +287,7 @@ def _live_target_status(
     state_store: HFPoolRuntimeStateStore | None,
 ) -> tuple[str, str, int | None]:
     usage_events: list[HFPoolUsageEvent] = []
-    executor = OpenAICompatibleHFPoolExecutor(opener=opener, usage_events=usage_events, state_store=state_store)
+    executor = LiteLLMHFPoolExecutor(opener=opener, usage_events=usage_events, state_store=state_store)
     instructions = BotInstructions(
         openai_system_prompt="HF pool health check. Reply briefly.",
         openai_max_output_tokens=16,

@@ -15,13 +15,14 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from TeeBotus.artifact_outputs import DEFAULT_OBSIDIAN_INCOMING_DIR
 from scripts import check_plan2_acceptance  # noqa: E402
 from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing  # noqa: E402
 from TeeBotus.llm.router import normalize_llm_provider  # noqa: E402
 
-DEFAULT_BENCHMARK_MD = Path.home() / "Downloads" / "teebotus-plan3-benchmarks-latest.md"
-DEFAULT_BENCHMARK_JSON = Path.home() / "Downloads" / "teebotus-plan3-benchmarks-latest.json"
-DEFAULT_STATE_EVALUATION_MD = Path.home() / "Downloads" / "teebotus-plan3-benchmarks-latest-2.md"
+DEFAULT_BENCHMARK_MD = DEFAULT_OBSIDIAN_INCOMING_DIR / "teebotus-plan3-benchmarks-latest.md"
+DEFAULT_BENCHMARK_JSON = DEFAULT_OBSIDIAN_INCOMING_DIR / "teebotus-plan3-benchmarks-latest.json"
+DEFAULT_STATE_EVALUATION_MD = DEFAULT_OBSIDIAN_INCOMING_DIR / "teebotus-plan3-benchmarks-latest-2.md"
 DEFAULT_PROFILES_PATH = REPO_ROOT / "config" / "llm_profiles.yaml"
 DEFAULT_ROUTING_PATH = REPO_ROOT / "config" / "llm_routing.yaml"
 

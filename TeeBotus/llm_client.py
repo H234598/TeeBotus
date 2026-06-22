@@ -58,8 +58,11 @@ def build_text_llm_client(
     env: Mapping[str, str] | None = None,
 ) -> object | None:
     resolved_provider = normalize_llm_provider(provider or instructions.llm_provider)
+    resolved_model = str(model or "").strip()
+    resolved_api_key = str(api_key or default_api_key or "").strip()
     if resolved_provider == "openai":
-        return openai_client
+        resolved_provider = "litellm"
+        resolved_model = _openai_litellm_model(resolved_model or str(instructions.llm_model or "").strip() or instructions.openai_model)
     if resolved_provider in {"litellm_gemini_stateful", "litellm_gemini_paid_stateful"}:
         from TeeBotus.llm.litellm_gemini_provider import LiteLLMGeminiStatefulClient, LiteLLMGeminiStatefulSettings
 
@@ -68,9 +71,9 @@ def build_text_llm_client(
         parsed_max_tokens = _parse_positive_int(max_tokens)
         return LiteLLMGeminiStatefulClient(
             LiteLLMGeminiStatefulSettings(
-                model=model,
+                model=resolved_model,
                 provider=resolved_provider,
-                api_key=api_key or default_api_key,
+                api_key=resolved_api_key,
                 api_key_ring=api_key_ring,
                 timeout=parsed_timeout or instructions.llm_timeout_seconds or instructions.openai_timeout_seconds,
                 temperature=parsed_temperature,
@@ -104,12 +107,12 @@ def build_text_llm_client(
         return LiteLLMTextClient(
             LiteLLMSettings(
                 provider=resolved_provider,
-                model=model,
+                model=resolved_model,
                 fallback_models=parse_fallback_models(fallback_models),
                 fallback_api_keys=fallback_api_keys,
                 fallback_api_bases=fallback_api_bases,
                 use_instruction_fallback_models=use_instruction_fallback_models,
-                api_key=api_key or default_api_key,
+                api_key=resolved_api_key,
                 api_key_ring=api_key_ring,
                 api_base=api_base or instructions.llm_base_url,
                 timeout=parsed_timeout or instructions.llm_timeout_seconds or instructions.openai_timeout_seconds,
@@ -123,6 +126,13 @@ def build_text_llm_client(
             )
         )
     raise LLMAPIError(f"Unsupported LLM provider: {provider or instructions.llm_provider}")
+
+
+def _openai_litellm_model(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    return text if text.casefold().startswith("openai/") else f"openai/{text}"
 
 
 def _build_hf_pool_fallback_client(
@@ -157,11 +167,11 @@ def _build_hf_pool_fallback_client(
             use_instruction_fallback_models=False,
             api_key=primary_api_key,
             api_base=primary_api_base,
-                timeout=parsed_timeout or instructions.llm_timeout_seconds or instructions.openai_timeout_seconds,
-                temperature=parsed_temperature,
-                max_tokens=parsed_max_tokens,
-                service_tier=instructions.llm_service_tier,
-                timeout_override=parsed_timeout is not None,
+            timeout=parsed_timeout or instructions.llm_timeout_seconds or instructions.openai_timeout_seconds,
+            temperature=parsed_temperature,
+            max_tokens=parsed_max_tokens,
+            service_tier=instructions.llm_service_tier,
+            timeout_override=parsed_timeout is not None,
             temperature_override=parsed_temperature is not None,
             max_tokens_override=parsed_max_tokens is not None,
         )

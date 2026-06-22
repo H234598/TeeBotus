@@ -17,6 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from TeeBotus.artifact_outputs import DEFAULT_OBSIDIAN_INCOMING_DIR
 from TeeBotus.embedding import EmbeddingProvider, FakeEmbeddingProvider, check_embedding_provider  # noqa: E402
 from TeeBotus.embedding.config import EmbeddingConfig, build_account_memory_embedding_provider  # noqa: E402
 from TeeBotus.runtime.qdrant import resolve_qdrant_url  # noqa: E402
@@ -209,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Benchmark TeeBotus semantic usermemory side indexes.")
-    parser.add_argument("--output-dir", default="/home/teladi/Downloads")
+    parser.add_argument("--output-dir", default=str(DEFAULT_OBSIDIAN_INCOMING_DIR))
     parser.add_argument("--sizes", type=int, nargs="+", default=[1000, 10000, 100000])
     parser.add_argument("--dimensions", type=int, nargs="+", default=[64, 384, 1024])
     parser.add_argument("--batch-size", type=int, default=256)

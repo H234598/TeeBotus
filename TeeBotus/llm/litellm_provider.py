@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -22,6 +23,7 @@ from TeeBotus.llm.free_tier import (
     route_uses_google_gemini,
 )
 from TeeBotus.llm.keyring import RotatingAPIKeyRing
+from TeeBotus.runtime.log_context import logging_context, next_llm_call_id
 
 LOGGER = logging.getLogger("TeeBotus.llm.litellm_provider")
 LOCAL_OLLAMA_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
@@ -204,12 +206,33 @@ class LiteLLMTextClient:
                         self.api_key_ring.mark_limited(ring_key)  # type: ignore[union-attr]
                         break
                     continue
+                call_id = next_llm_call_id("litellm")
+                started_at = time.perf_counter()
+                api_base_log = _safe_litellm_api_base(kwargs.get("api_base"))
                 try:
-                    response = completion(model=model, **kwargs)
+                    with logging_context(
+                        component="litellm",
+                        operation="completion",
+                        purpose=self.provider_name,
+                        llm_call_id=call_id,
+                        provider=self.provider,
+                        model=model,
+                        api_base=api_base_log,
+                    ):
+                        LOGGER.info(
+                            "LiteLLM completion started call_id=%s provider=%s model=%s api_base=%s timeout=%s fallback_count=%s",
+                            call_id,
+                            self.provider,
+                            model,
+                            api_base_log,
+                            kwargs.get("timeout"),
+                            len(models) - 1,
+                        )
+                        response = completion(model=model, **kwargs)
                 except Exception as exc:  # LiteLLM normalizes provider exceptions, but versions differ.
                     detail = _redact_litellm_error(exc, kwargs)
                     errors.append(f"provider={self.provider} model={model}: {type(exc).__name__}: {detail}")
-                    LOGGER.warning("LiteLLM completion failed for provider=%s model=%s: %s", self.provider, model, detail)
+                    LOGGER.warning("LiteLLM completion failed call_id=%s provider=%s model=%s: %s", call_id, self.provider, model, detail)
                     if ring_key and _is_usage_limit_error(exc, detail):
                         key_was_limited = True
                         self.api_key_ring.mark_limited(ring_key)  # type: ignore[union-attr]
@@ -223,6 +246,15 @@ class LiteLLMTextClient:
                     continue
                 usage = _extract_usage(response)
                 _add_litellm_response_cost(usage, response)
+                LOGGER.info(
+                    "LiteLLM completion finished call_id=%s provider=%s model=%s elapsed_ms=%s response_chars=%s usage=%s",
+                    call_id,
+                    self.provider,
+                    model,
+                    int((time.perf_counter() - started_at) * 1000),
+                    len(text),
+                    _compact_usage_for_log(usage),
+                )
                 if reservation is not None:
                     actual_input_tokens = _extract_input_tokens(usage)
                     if actual_input_tokens is not None:
@@ -601,6 +633,24 @@ def _quota_owner_provider(*, provider: str, model: str) -> str:
     if route_uses_google_gemini(provider=provider, model=model):
         return "google_gemini_paid" if provider_is_paid_google_gemini(provider) else "google_gemini"
     return provider
+
+
+def _safe_litellm_api_base(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    split = urlsplit(text)
+    if not split.scheme or not split.netloc:
+        return text[:160]
+    host = split.hostname or ""
+    port = f":{split.port}" if split.port is not None else ""
+    path = split.path.rstrip("/")
+    return f"{split.scheme}://{host}{port}{path}"[:160]
+
+
+def _compact_usage_for_log(usage: Mapping[str, Any]) -> dict[str, Any]:
+    keys = ("input_tokens", "prompt_tokens", "output_tokens", "completion_tokens", "total_tokens")
+    return {key: usage[key] for key in keys if key in usage}
 
 
 def _resolve_litellm_gemini_free_tier_limits(

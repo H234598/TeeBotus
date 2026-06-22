@@ -424,6 +424,12 @@ def _timed_ms(func: Callable[[], Any]) -> float:
     return (time.perf_counter() - start) * 1000
 
 
+def _timed_value_ms(func: Callable[[], Any]) -> tuple[float, Any]:
+    start = time.perf_counter()
+    value = func()
+    return (time.perf_counter() - start) * 1000, value
+
+
 @dataclass(frozen=True)
 class _LLMMessagePathSpec:
     name: str
@@ -1071,10 +1077,10 @@ def _measure_live_llm_candidate(candidate: dict[str, Any], *, source: Mapping[st
             llm_model=str(candidate.get("model") or ""),
             user_memory_enabled=False,
             llm_timeout_seconds=30,
-            llm_max_output_tokens=16,
+            llm_max_output_tokens=64,
             llm_temperature=0.0,
             openai_timeout_seconds=30,
-            openai_max_output_tokens=16,
+            openai_max_output_tokens=64,
         )
         client = build_runtime_text_llm_client(
             instructions=instructions,
@@ -1100,9 +1106,15 @@ def _measure_live_llm_candidate(candidate: dict[str, Any], *, source: Mapping[st
         identity = telegram_identity_key(93001)
         latencies: list[float] = []
         errors: list[str] = []
+        calls = 0
         for index in range(iterations):
+            calls += 1
             try:
-                latencies.append(_timed_ms(lambda index=index: engine.process(_live_llm_event(identity, index))))
+                latency_ms, actions = _timed_value_ms(lambda index=index: engine.process(_live_llm_event(identity, index)))
+                latencies.append(latency_ms)
+                if fallback_reply := _live_llm_fallback_reply(actions, instructions):
+                    errors.append(f"fallback reply: {fallback_reply}")
+                    break
             except Exception as exc:  # noqa: BLE001 - benchmark report must contain provider boundary failures.
                 errors.append(_redact_live_llm_error(exc, source))
                 break
@@ -1110,7 +1122,7 @@ def _measure_live_llm_candidate(candidate: dict[str, Any], *, source: Mapping[st
         return {
             **candidate,
             "ok": ok,
-            "calls": len(latencies) + len(errors),
+            "calls": calls,
             "total_ms": sum(latencies),
             "mean_ms": statistics.fmean(latencies) if latencies else 0.0,
             "median_ms": statistics.median(latencies) if latencies else 0.0,
@@ -1135,6 +1147,23 @@ def _live_llm_event(identity_key: str, index: int) -> IncomingEvent:
         text="Antworte exakt mit: OK",
         message_ref=f"live-llm-{index}",
     )
+
+
+def _live_llm_fallback_reply(actions: object, instructions: BotInstructions) -> str:
+    fallback_texts = {
+        str(instructions.llm_error or "").strip(),
+        str(instructions.llm_missing_key or "").strip(),
+        str(instructions.openai_error or "").strip(),
+        str(instructions.openai_missing_key or "").strip(),
+    }
+    for action in actions if isinstance(actions, (list, tuple)) else ():
+        text = str(getattr(action, "text", "") or "").strip()
+        if not text:
+            continue
+        lowered = text.casefold()
+        if text in fallback_texts or "gerade nicht erreichen" in lowered or "api gerade nicht" in lowered:
+            return text[:240]
+    return ""
 
 
 def _redact_live_llm_error(exc: BaseException, source: Mapping[str, str]) -> str:

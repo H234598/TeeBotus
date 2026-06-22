@@ -16,6 +16,9 @@ from urllib.parse import urlparse
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from TeeBotus.artifact_outputs import DEFAULT_OBSIDIAN_INCOMING_DIR, obsidian_incoming_path
 _BENCHMARK_CORE_SPEC = importlib.util.spec_from_file_location(
     "teebotus_benchmark_core_for_plan2_acceptance",
     REPO_ROOT / "TeeBotus" / "benchmarks" / "core.py",
@@ -24,14 +27,14 @@ if _BENCHMARK_CORE_SPEC is None or _BENCHMARK_CORE_SPEC.loader is None:
     raise RuntimeError("Unable to load TeeBotus benchmark core constants.")
 _BENCHMARK_CORE = importlib.util.module_from_spec(_BENCHMARK_CORE_SPEC)
 _BENCHMARK_CORE_SPEC.loader.exec_module(_BENCHMARK_CORE)
-DEFAULT_BENCHMARK_MD = Path.home() / "Downloads" / "teebotus-benchmarks-latest.md"
-DEFAULT_BENCHMARK_JSON = Path.home() / "Downloads" / "teebotus-benchmarks-latest.json"
-DEFAULT_MEMORY_RECOVERY_JSON = Path.home() / "Downloads" / "teebotus-memory-recovery-with-legacy.json"
-DEFAULT_MEMORY_RECOVERY_TEXT = Path.home() / "Downloads" / "teebotus-memory-recovery-with-legacy.md"
-DEFAULT_LEGACY_IMPORT_JSON = Path.home() / "Downloads" / "teebotus-legacy-import-preflight.json"
-DEFAULT_LEGACY_IMPORT_MD = Path.home() / "Downloads" / "teebotus-legacy-import-preflight.md"
-DEFAULT_LEGACY_REHEARSAL_JSON = Path.home() / "Downloads" / "teebotus-legacy-import-rehearsal.json"
-DEFAULT_LEGACY_REHEARSAL_MD = Path.home() / "Downloads" / "teebotus-legacy-import-rehearsal.md"
+DEFAULT_BENCHMARK_MD = DEFAULT_OBSIDIAN_INCOMING_DIR / "teebotus-benchmarks-latest.md"
+DEFAULT_BENCHMARK_JSON = DEFAULT_OBSIDIAN_INCOMING_DIR / "teebotus-benchmarks-latest.json"
+DEFAULT_MEMORY_RECOVERY_JSON = DEFAULT_OBSIDIAN_INCOMING_DIR / "teebotus-memory-recovery-with-legacy.json"
+DEFAULT_MEMORY_RECOVERY_TEXT = DEFAULT_OBSIDIAN_INCOMING_DIR / "teebotus-memory-recovery-with-legacy.md"
+DEFAULT_LEGACY_IMPORT_JSON = obsidian_incoming_path("teebotus-legacy-import-preflight.json")
+DEFAULT_LEGACY_IMPORT_MD = obsidian_incoming_path("teebotus-legacy-import-preflight.md")
+DEFAULT_LEGACY_REHEARSAL_JSON = obsidian_incoming_path("teebotus-legacy-import-rehearsal.json")
+DEFAULT_LEGACY_REHEARSAL_MD = obsidian_incoming_path("teebotus-legacy-import-rehearsal.md")
 DEFAULT_LEGACY_REHEARSAL_COPY_DIR = Path("/tmp/teebotus-plan2-legacy-import-rehearsal")
 ACCOUNT_ID_RE = re.compile(r"[0-9a-f]{128}")
 LEGACY_IMPORT_REPORT_MODES = frozenset({"dry-run", "apply", "rehearsal-apply", "apply-blocked"})

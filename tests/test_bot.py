@@ -1061,6 +1061,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 ChatState(),
                 memory_store,
+                llm_client=openai_client,
             )
 
             memory_path = account_memory_dir(memory_store, 456) / "User_Memory_Index.json"
@@ -1088,6 +1089,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 ChatState(),
                 memory_store,
+                llm_client=openai_client,
             )
 
             self.assertIn("Persistentes Nutzergedaechtnis fuer diesen Account", openai_client.reply_inputs[-1])
@@ -1300,6 +1302,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 ChatState(),
                 memory_store,
+                llm_client=openai_client,
             )
             handle_update(
                 api,
@@ -1314,6 +1317,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 ChatState(),
                 memory_store,
+                llm_client=openai_client,
             )
 
             self.assertTrue((account_memory_dir(memory_store, 456) / "User_Memory_Index.json").exists())
@@ -1345,6 +1349,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 ChatState(),
                 memory_store,
+                llm_client=openai_client,
             )
             habits_path = account_memory_dir(memory_store, 456) / "User_Habbits_and_behave.md"
             habits_path.write_text("Ada mag knappe Antworten.", encoding="utf-8")
@@ -1362,6 +1367,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 ChatState(),
                 memory_store,
+                llm_client=openai_client,
             )
 
             self.assertIn("Interne, admingepflegte Zusatzhinweise", openai_client.reply_inputs[-1])
@@ -1395,6 +1401,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 chat_state,
                 memory_store,
+                llm_client=openai_client,
             )
             handle_update(
                 api,
@@ -1409,6 +1416,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 chat_state,
                 memory_store,
+                llm_client=openai_client,
             )
 
             memory_dir = account_memory_dir(memory_store, 456)
@@ -1433,6 +1441,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 chat_state,
                 memory_store,
+                llm_client=openai_client,
             )
 
             payload = read_account_memory_index(memory_store, 456)
@@ -1467,6 +1476,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 chat_state,
                 memory_store,
+                llm_client=openai_client,
             )
             account_id = memory_store.get_account_for_identity(telegram_identity_key("", username="AdaUser"))
             self.assertIsNotNone(account_id)
@@ -1479,6 +1489,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 chat_state,
                 memory_store,
+                llm_client=openai_client,
             )
             handle_update(
                 api,
@@ -1487,6 +1498,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 chat_state,
                 memory_store,
+                llm_client=openai_client,
             )
 
             self.assertEqual(api.sent_messages[-1], (123, instructions.user_memory_reset_success))
@@ -1591,6 +1603,7 @@ class BotTests(unittest.TestCase):
                     memory_store,
                     None,
                     working_store,
+                    llm_client=openai_client,
                 )
 
             handle_update(
@@ -1608,6 +1621,7 @@ class BotTests(unittest.TestCase):
                 memory_store,
                 None,
                 working_store,
+                llm_client=openai_client,
             )
 
             self.assertIn("nur deine eigenen Erinnerungen", api.sent_messages[-1][1])
@@ -1630,6 +1644,7 @@ class BotTests(unittest.TestCase):
                 memory_store,
                 None,
                 working_store,
+                llm_client=openai_client,
             )
 
             self.assertIn("nur deine eigenen Erinnerungen", api.sent_messages[-1][1])
@@ -1649,6 +1664,7 @@ class BotTests(unittest.TestCase):
                 memory_store,
                 None,
                 working_store,
+                llm_client=openai_client,
             )
 
             self.assertIn("Instanz-/Arbeitsgedaechtnis enthaelt keine userbezogenen Daten", api.sent_messages[-1][1])
@@ -1674,6 +1690,7 @@ class BotTests(unittest.TestCase):
             instructions,
             openai_client,
             ChatState(),
+            llm_client=openai_client,
         )
 
         self.assertEqual(api.sent_messages, [(123, "AI: Bitte loesche meine Erinnerungen nicht.")])
@@ -1749,6 +1766,7 @@ class BotTests(unittest.TestCase):
                 None,
                 None,
                 working_store,
+                llm_client=openai_client,
             )
 
             openai_input = openai_client.reply_inputs[-1]
@@ -2138,7 +2156,8 @@ class BotTests(unittest.TestCase):
 
         log_text = "\n".join(logs.output)
         self.assertIn("Incoming Telegram message chat_id=123 message_id=55 type=text", log_text)
-        self.assertIn("Outgoing Telegram message chat_id=123 message_id=101 type=text", log_text)
+        self.assertIn("Outgoing Telegram message", log_text)
+        self.assertIn("chat_id=123 message_id=101 type=text", log_text)
         self.assertNotIn("streng geheim", log_text)
         self.assertNotIn("Echo:", log_text)
 
@@ -2174,14 +2193,14 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(api.sent_messages, [])
 
-    def test_handle_update_uses_openai_for_unmatched_text_when_enabled(self) -> None:
+    def test_handle_update_uses_llm_client_for_unmatched_text_when_enabled(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
         openai_client = FakeOpenAIClient()
         instructions = BotInstructions(openai_enabled=True)
 
-        handle_update(api, {"message": {"text": "Was ist los?", "chat": {"id": 123}}}, instructions, openai_client, ChatState())
+        handle_update(api, {"message": {"text": "Was ist los?", "chat": {"id": 123}}}, instructions, openai_client, ChatState(), llm_client=openai_client)
 
         self.assertEqual(api.chat_actions, [(123, "typing")])
         self.assertEqual(api.sent_messages, [(123, "AI: Was ist los?")])
@@ -2196,7 +2215,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.chat_actions, [(123, "typing")])
         self.assertEqual(api.sent_messages, [(123, "YouTube-Transkript (YouTube-Untertitel):\n\nTranscript text.")])
 
-    def test_handle_update_youtube_transcript_natural_request_uses_openai_pipeline(self) -> None:
+    def test_handle_update_youtube_transcript_natural_request_uses_llm_pipeline(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
@@ -2210,6 +2229,7 @@ class BotTests(unittest.TestCase):
                 instructions,
                 openai_client,
                 ChatState(),
+                llm_client=openai_client,
             )
 
         transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=False)
@@ -2411,6 +2431,7 @@ class BotTests(unittest.TestCase):
                 BotInstructions(openai_enabled=True),
                 openai_client,
                 chat_state,
+                llm_client=openai_client,
             )
 
         transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=True, live_callback=None)
@@ -2515,6 +2536,7 @@ class BotTests(unittest.TestCase):
                         openai_client,
                         chat_state,
                         instance_name="Demo",
+                        llm_client=openai_client,
                     )
 
             transcribe.assert_called_once_with("https://youtu.be/abc123", local_allowed=True, live_callback=None, instance_name="Demo")
@@ -2599,6 +2621,7 @@ class BotTests(unittest.TestCase):
                         openai_client,
                         chat_state,
                         instance_name="Demo",
+                        llm_client=openai_client,
                     )
 
             self.assertEqual(
@@ -2647,6 +2670,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 chat_state,
                 youtube_job_runner=runner,
+                llm_client=openai_client,
             )
 
             self.assertEqual(len(runner.jobs), 1)
@@ -2771,6 +2795,7 @@ class BotTests(unittest.TestCase):
             chat_state,
             None,
             bot_identity,
+            llm_client=openai_client,
         )
 
         self.assertEqual(openai_client.reply_inputs, [])
@@ -2791,6 +2816,7 @@ class BotTests(unittest.TestCase):
             chat_state,
             None,
             bot_identity,
+            llm_client=openai_client,
         )
 
         self.assertEqual(api.sent_messages, [(-100123, "Ich bin Bote der Wahrheit.\n\nAI: Hallo @BoteDerWahrheitBot.")])
@@ -2829,6 +2855,7 @@ class BotTests(unittest.TestCase):
                 chat_state,
                 user_memory_store,
                 bot_identity,
+                llm_client=openai_client,
             )
 
         self.assertEqual(api.sent_messages, [(-100123, "Ich bin Depressionsbot.\n\nAI: Mondhase, bitte antworte.")])
@@ -2855,6 +2882,7 @@ class BotTests(unittest.TestCase):
             chat_state,
             None,
             bot_identity,
+            llm_client=openai_client,
         )
 
         self.assertEqual(api.sent_messages, [(-100123, "Ich bin Bote der Wahrheit.\n\nAI: BdW, bitte antworte.")])
@@ -2884,6 +2912,7 @@ class BotTests(unittest.TestCase):
                     chat_state,
                     None,
                     bot_identity,
+                    llm_client=openai_client,
                 )
 
                 self.assertEqual(api.sent_messages, [(-100123, f"Ich bin TeeBotus Logger.\n\nAI: {alias}, bitte Status.")])
@@ -2970,6 +2999,7 @@ class BotTests(unittest.TestCase):
             chat_state,
             None,
             bot_identity,
+            llm_client=openai_client,
         )
         handle_update(
             api,
@@ -2985,6 +3015,7 @@ class BotTests(unittest.TestCase):
             chat_state,
             None,
             bot_identity,
+            llm_client=openai_client,
         )
 
         self.assertEqual(api.sent_messages[0], (-100123, "Ich bin Depressionsbot.\n\nAI: Depressionsbot, hallo."))
@@ -3011,6 +3042,7 @@ class BotTests(unittest.TestCase):
             chat_state,
             None,
             bot_identity,
+            llm_client=openai_client,
         )
         handle_update(
             api,
@@ -3020,6 +3052,7 @@ class BotTests(unittest.TestCase):
             chat_state,
             None,
             bot_identity,
+            llm_client=openai_client,
         )
 
         self.assertEqual(api.sent_messages[0], (123, "Ich bin Depressionsbot.\n\nAI: Hallo"))
@@ -3032,6 +3065,7 @@ class BotTests(unittest.TestCase):
             api = FakeAPI()
             instructions = BotInstructions(openai_enabled=True, user_memory_enabled=True)
             bot_identity = BotIdentity(id=99, first_name="Depressionsbot", username="DepressionsBot")
+            llm_client = FakeOpenAIClient()
             memory_store = account_memory_store(directory)
             message_base = {
                 "chat": {"id": 123, "type": "private"},
@@ -3046,6 +3080,7 @@ class BotTests(unittest.TestCase):
                 ChatState(),
                 memory_store,
                 bot_identity,
+                llm_client=llm_client,
             )
             account_id = memory_store.get_account_for_identity("telegram:user:456")
 
@@ -3065,6 +3100,7 @@ class BotTests(unittest.TestCase):
                 ChatState(),
                 memory_store,
                 bot_identity,
+                llm_client=llm_client,
             )
 
             self.assertEqual(api.sent_messages[-1], (123, "AI: Hallo"))
@@ -3080,6 +3116,7 @@ class BotTests(unittest.TestCase):
                 ChatState(),
                 memory_store,
                 bot_identity,
+                llm_client=llm_client,
             )
 
             self.assertEqual(api.sent_messages[-1], (123, "Ich bin Depressionsbot.\n\nAI: Nochmal"))
@@ -3149,6 +3186,7 @@ class BotTests(unittest.TestCase):
             instructions,
             openai_client,
             ChatState(),
+            llm_client=openai_client,
         )
 
         self.assertEqual(len(openai_client.reply_inputs), 1)
@@ -3213,6 +3251,7 @@ class BotTests(unittest.TestCase):
             instructions,
             openai_client,
             ChatState(),
+            llm_client=openai_client,
         )
 
         self.assertEqual(api.file_path_requests, ["file_1"])
@@ -3311,6 +3350,7 @@ class BotTests(unittest.TestCase):
                 openai_client,
                 ChatState(),
                 account_memory_store(directory),
+                llm_client=openai_client,
             )
 
             memory_store = account_memory_store(directory)
@@ -3440,7 +3480,8 @@ class BotTests(unittest.TestCase):
 
         log_text = "\n".join(logs.output)
         self.assertIn("Incoming Telegram message chat_id=123 message_id=60 type=voice", log_text)
-        self.assertIn("Outgoing Telegram message chat_id=123 message_id=101 type=text", log_text)
+        self.assertIn("Outgoing Telegram message", log_text)
+        self.assertIn("chat_id=123 message_id=101 type=text", log_text)
         self.assertNotIn("streng geheim", log_text)
         self.assertNotIn("Echo:", log_text)
 
@@ -3611,7 +3652,8 @@ class BotTests(unittest.TestCase):
 
         log_text = "\n".join(logs.output)
         self.assertIn("Incoming Telegram message chat_id=123 message_id=56 type=text", log_text)
-        self.assertIn("Outgoing Telegram message chat_id=123 message_id=101 type=voice bytes=11", log_text)
+        self.assertIn("Outgoing Telegram message", log_text)
+        self.assertIn("chat_id=123 message_id=101 type=voice bytes=11", log_text)
         self.assertNotIn("sehr privat", log_text)
 
     def test_voice_command_uses_replied_message_text(self) -> None:
@@ -3852,9 +3894,10 @@ class BotTests(unittest.TestCase):
         from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
+        llm_client = LongReplyOpenAIClient()
         instructions = BotInstructions(openai_enabled=True)
 
-        handle_update(api, {"message": {"text": "lang bitte", "chat": {"id": 123}}}, instructions, LongReplyOpenAIClient(), ChatState())
+        handle_update(api, {"message": {"text": "lang bitte", "chat": {"id": 123}}}, instructions, None, ChatState(), llm_client=llm_client)
 
         self.assertGreater(len(api.sent_messages), 1)
         self.assertTrue(all(len(text) <= TELEGRAM_MESSAGE_CHUNK_SIZE for _, text in api.sent_messages))
@@ -3874,6 +3917,7 @@ class BotTests(unittest.TestCase):
                 instructions,
                 openai_client,
                 chat_state,
+                llm_client=openai_client,
             )
 
         self.assertEqual(api.sent_messages, [(123, "Kurz eins."), (123, "Kurz zwei.")])
@@ -3902,6 +3946,7 @@ class BotTests(unittest.TestCase):
                 instructions,
                 openai_client,
                 chat_state,
+                llm_client=openai_client,
             )
 
         self.assertEqual(
@@ -3926,6 +3971,7 @@ class BotTests(unittest.TestCase):
                 instructions,
                 openai_client,
                 chat_state,
+                llm_client=openai_client,
             )
 
         self.assertEqual(api.sent_voices, [(123, b"voice-bytes", "voice.ogg", "audio/ogg")])
@@ -3935,10 +3981,11 @@ class BotTests(unittest.TestCase):
         from TeeBotus.instructions import BotInstructions
 
         api = FakeAPI()
+        llm_client = FailingOpenAIClient()
         instructions = BotInstructions(openai_enabled=True)
 
         with self.assertLogs("TeeBotus", level="ERROR") as logs:
-            handle_update(api, {"message": {"text": "Was ist los?", "chat": {"id": 123}}}, instructions, FailingOpenAIClient(), ChatState())
+            handle_update(api, {"message": {"text": "Was ist los?", "chat": {"id": 123}}}, instructions, None, ChatState(), llm_client=llm_client)
 
         self.assertIn("Text LLM request failed: short failure", "\n".join(logs.output))
         self.assertEqual(api.sent_messages, [(123, instructions.llm_error)])

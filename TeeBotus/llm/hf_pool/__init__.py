@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from TeeBotus.llm.hf_pool.config import HFPool, HFPoolConfig, load_hf_pool_config
 from TeeBotus.llm.hf_pool.errors import HFPoolConfigError, HFPoolError, HFPoolRateLimited, HFPoolTargetUnavailable, HFPoolUnavailable
-from TeeBotus.llm.hf_pool.executor import HFPoolMockExecutor, OpenAICompatibleHFPoolExecutor
+from TeeBotus.llm.hf_pool.executor import HFPoolMockExecutor, LiteLLMHFPoolExecutor, OpenAICompatibleHFPoolExecutor
 from TeeBotus.llm.hf_pool.health import HFPoolHealth, check_hf_pool, format_hf_pool_status_lines
 from TeeBotus.llm.hf_pool.metrics import HFPoolUsageEvent
 from TeeBotus.llm.hf_pool.models_feed import (
@@ -27,6 +27,7 @@ __all__ = [
     "HFPoolModelInfo",
     "HFPoolModelsFeed",
     "HFPoolMockExecutor",
+    "LiteLLMHFPoolExecutor",
     "OpenAICompatibleHFPoolExecutor",
     "HFPoolProvider",
     "HFPoolRateLimited",

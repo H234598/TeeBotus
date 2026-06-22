@@ -21,7 +21,10 @@ from TeeBotus.openai_client import OpenAIAPIError, OpenAIImage, OpenAIResponse, 
 
 def test_plan1_llm_package_exports_existing_router_and_litellm_adapter() -> None:
     assert normalize_llm_provider("lite-llm") == "litellm"
-    assert build_text_llm_client(instructions=BotInstructions(), openai_client="openai-client") == "openai-client"
+    default_client = build_text_llm_client(instructions=BotInstructions(), openai_client="openai-client")
+    assert isinstance(default_client, LiteLLMTextClient)
+    assert default_client.provider == "litellm"
+    assert default_client.model == "openai/gpt-5.5"
     assert LiteLLMTextClient.__name__ == "LiteLLMTextClient"
     assert LiteLLMGeminiStatefulClient.__name__ == "LiteLLMGeminiStatefulClient"
     assert LITELLM_TEXT_CAPABILITIES.text is True

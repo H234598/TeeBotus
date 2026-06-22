@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from TeeBotus.artifact_outputs import DEFAULT_OBSIDIAN_INCOMING_DIR
 
 
 README = Path(__file__).resolve().parents[1] / "README.md"
@@ -27,8 +28,8 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "check_plan2_acceptance.py --skip-runtime-status --legacy-instances-dir /home/teladi/TeeBotus_Backups/TeeBotus.bak2" in text
     assert "Backup-Root oder direkt auf einen konkreten `instances*`-Unterordner" in text
     assert "/home/teladi/TeeBotus_Backups/TeeBotus.bak2/instances.bak" in text
-    assert "--json-output /home/teladi/Downloads/teebotus-legacy-import-preflight.json" in text
-    assert "--markdown-output /home/teladi/Downloads/teebotus-legacy-import-preflight.md" in text
+    assert f"--json-output {DEFAULT_OBSIDIAN_INCOMING_DIR / 'teebotus-legacy-import-preflight.json'}" in text
+    assert f"--markdown-output {DEFAULT_OBSIDIAN_INCOMING_DIR / 'teebotus-legacy-import-preflight.md'}" in text
     assert "apply_safety" in text
     assert "apply_allowed_now=true" in text
     assert "running_bot_process_count=0" in text
@@ -52,7 +53,7 @@ def test_readme_documents_plan2_llm_rag_graph_and_benchmark_topics() -> None:
     assert "--extension" in text
     assert "dieselben Filter laufen ueber den lokalen Store und das Haystack/Qdrant-Backend" in text
     assert "scripts/run_benchmarks.py --quick" in text
-    assert "--baseline-json /home/teladi/Downloads/teebotus-benchmarks-latest.json" in text
+    assert f"--baseline-json {DEFAULT_OBSIDIAN_INCOMING_DIR / 'teebotus-benchmarks-latest.json'}" in text
     assert "scripts/check_plan2_acceptance.py" in text
     assert "startet keine Bot-Loops" in text
     assert "--adapter-deps-python-only" in text

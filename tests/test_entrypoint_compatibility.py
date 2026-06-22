@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from TeeBotus import __version__
+from TeeBotus.artifact_outputs import DEFAULT_OBSIDIAN_INCOMING_DIR
 from TeeBotus.core.status import account_memory_index_health_lines
 from TeeBotus.runtime.accounts import INSTANCE_STATE_ACCOUNT_ID, AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
@@ -600,8 +601,8 @@ def test_account_memory_status_suggests_detected_plaintext_legacy_backup(tmp_pat
         f'command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir {tmp_path / "TeeBotus.bak2"} '
         f'--target-instances-dir {project_root / "instances"} --instance Demo --replace-unreadable '
         f'--replace-unreadable-account-metadata '
-        f'--json-output {Path.home() / "Downloads" / "teebotus-legacy-import-preflight-Demo.json"} '
-        f'--markdown-output {Path.home() / "Downloads" / "teebotus-legacy-import-preflight-Demo.md"}" '
+        f'--json-output {DEFAULT_OBSIDIAN_INCOMING_DIR / "teebotus-legacy-import-preflight-Demo.json"} '
+        f'--markdown-output {DEFAULT_OBSIDIAN_INCOMING_DIR / "teebotus-legacy-import-preflight-Demo.md"}" '
         f'apply_command="python3 scripts/import_legacy_user_memory.py --legacy-instances-dir {tmp_path / "TeeBotus.bak2"} '
         f'--target-instances-dir {project_root / "instances"} --instance Demo --replace-unreadable '
         '--replace-unreadable-account-metadata --apply"'

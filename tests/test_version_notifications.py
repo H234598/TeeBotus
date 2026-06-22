@@ -5366,6 +5366,16 @@ def test_account_memory_index_health_reports_none_without_accounts_or_instance_s
     assert lines == ["account_memory=Demo status=none"]
 
 
+def test_account_memory_index_health_skips_lock_only_account_dir(tmp_path: Path) -> None:
+    account_dir = tmp_path / "instances" / "Demo" / "data" / "accounts" / "accounts" / ("a" * 128)
+    account_dir.mkdir(parents=True)
+    (account_dir / "session.lock").write_text("", encoding="utf-8")
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == ["account_memory=Demo status=none"]
+
+
 def test_account_memory_index_health_reports_stale_instance_collection_without_account_dirs(
     tmp_path: Path,
     monkeypatch,

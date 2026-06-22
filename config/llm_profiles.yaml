@@ -10,6 +10,11 @@ profiles:
     model: huggingface/mistralai/Mistral-7B-Instruct-v0.3
     api_key_env: HUGGINGFACE_API_KEY
 
+  hf_qwen:
+    provider: litellm
+    model: huggingface/Qwen/Qwen2.5-7B-Instruct
+    api_key_env: HUGGINGFACE_API_KEY
+
   hf_pool_default:
     provider: hf_pool
     model: pool:default#normal_chat
@@ -86,6 +91,6 @@ profiles:
     api_key_env: GOOGLE_APPLICATION_CREDENTIALS
 
   openai_premium:
-    provider: openai
-    model: gpt-5.5
+    provider: litellm
+    model: openai/gpt-5.5
     api_key_env: OPENAI_API_KEY

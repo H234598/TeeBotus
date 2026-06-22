@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from TeeBotus.admin.accounts_report import DEFAULT_INSTANCES_DIR, ReadOnlySecretToolInstanceSecretProvider, discover_instances, parse_csv
+from TeeBotus.artifact_outputs import legacy_import_preflight_path
 from TeeBotus.runtime.accounts import (
     ACCOUNTS_DIRNAME,
     ACCOUNT_MEMORY_KEY_PURPOSE,
@@ -1226,9 +1227,9 @@ def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instan
             "--replace-unreadable",
             "--replace-unreadable-account-metadata",
             "--json-output",
-            str(Path.home() / "Downloads" / f"teebotus-legacy-import-preflight-{artifact_name}.json"),
+            str(legacy_import_preflight_path(artifact_name, ext=".json")),
             "--markdown-output",
-            str(Path.home() / "Downloads" / f"teebotus-legacy-import-preflight-{artifact_name}.md"),
+            str(legacy_import_preflight_path(artifact_name, ext=".md")),
         ]
     )
     apply_command = shlex.join(

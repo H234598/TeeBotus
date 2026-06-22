@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 import json
+import logging
 from pathlib import Path
 import re
 from subprocess import TimeoutExpired
@@ -75,6 +76,8 @@ from TeeBotus.runtime.bibliothekar_service import BibliothekarService
 from TeeBotus.runtime.codex_command import execute_codex_admin_command
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
+LOGGER = logging.getLogger("TeeBotus.runtime.engine")
+DEBUG_ALL = 1
 PRIVATE_ONLY = "Bitte privat."
 LINKED_NOTICE = "Ein neuer Kommunikationsweg wurde mit deinem TeeBotus-Account verbunden. Wenn du das nicht warst, schreibe innerhalb der Sicherheitsfrist: WTF?"
 CURRENT_CHAT_CLEANUP_NOTE = "Ich lösche nur die in diesem aktuellen Chat gemerkten Botnachrichten, nicht Nachrichten in anderen Chats oder Messengern."
@@ -152,6 +155,7 @@ class TeeBotusEngine:
         youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
         background_action_dispatcher: Callable[[IncomingEvent, list[OutgoingAction]], None] | None = None,
         structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
+        skip_memory_candidate_structured_decision: bool | str | None = None,
         route_to_client_factory: Callable[..., object | None] | None = None,
         cross_instance_store_factory: Callable[[Path, str], AccountStore] | None = None,
         codex_runner: Callable[..., Any] | None = None,
@@ -164,7 +168,7 @@ class TeeBotusEngine:
         self._instructions = instructions
         self.project_root = project_root or PROJECT_ROOT
         self.openai_client = openai_client
-        self.llm_client = llm_client or openai_client
+        self.llm_client = llm_client
         self.llm_enabled_override = _parse_optional_bool(llm_enabled_override)
         self.bot_address_names = frozenset(_normalize_address_name(name) for name in bot_address_names if str(name or "").strip())
         self.working_memory_store = working_memory_store
@@ -172,6 +176,7 @@ class TeeBotusEngine:
         self.youtube_job_runner = youtube_job_runner
         self.background_action_dispatcher = background_action_dispatcher
         self.structured_decision_runner = structured_decision_runner
+        self.skip_memory_candidate_structured_decision = _parse_optional_bool(skip_memory_candidate_structured_decision) is True
         self.route_to_client_factory = route_to_client_factory or build_runtime_text_llm_client
         self.cross_instance_store_factory = cross_instance_store_factory
         self.codex_runner = codex_runner
@@ -792,6 +797,16 @@ class TeeBotusEngine:
         if not callable(create_reply):
             return [SendText(event.chat_id, instructions.llm_error)]
         try:
+            LOGGER.info(
+                "LLM action pipeline started instance=%s channel=%s event_id=%s account_id=%s client=%s text_chars=%s attachments=%s",
+                event.instance,
+                event.channel,
+                event.event_id,
+                account_id,
+                type(self.llm_client).__name__,
+                len(text),
+                len(event.attachments),
+            )
             attachment_context = _build_attachment_context(event, self.openai_client, instructions, self.account_store, account_id)
             account_memory_selection = _select_account_memory(self.account_store, account_id, instructions, text)
             account_memory_context = account_memory_selection.prompt_text
@@ -799,6 +814,19 @@ class TeeBotusEngine:
             working_memory_context = _build_working_memory_context(self.working_memory_store, text)
             library_context = _build_bibliothekar_context(self.bibliothekar_store, instructions, text, structured_decision_runner=self.structured_decision_runner)
             previous_response_id = _previous_response_id_for_client(self.llm_client, self.state, event.instance, account_id)
+            LOGGER.log(
+                DEBUG_ALL,
+                "LLM action context built instance=%s event_id=%s attachment_chars=%s account_memory_chars=%s account_memory_ids=%s weather_chars=%s working_memory_chars=%s library_chars=%s previous_response=%s",
+                event.instance,
+                event.event_id,
+                len(attachment_context),
+                len(account_memory_context),
+                ",".join(account_memory_selection.selected_ids) if account_memory_selection.selected_ids else "<none>",
+                len(weather_context),
+                len(working_memory_context),
+                len(library_context),
+                bool(previous_response_id),
+            )
             response = create_reply(
                 _build_openai_user_input(
                     event,
@@ -814,6 +842,15 @@ class TeeBotusEngine:
                 previous_response_id,
             )
             response_text = str(getattr(response, "text", "") or "").strip()
+            LOGGER.info(
+                "LLM action reply received instance=%s event_id=%s provider=%s model=%s response_chars=%s response_id=%s",
+                event.instance,
+                event.event_id,
+                getattr(response, "provider", ""),
+                getattr(response, "model", ""),
+                len(response_text),
+                getattr(response, "response_id", None),
+            )
             page_request = _parse_memory_page_request(response_text)
             if page_request is not None and instructions.user_memory_enabled:
                 first_response_id = _persistable_previous_response_id(response)
@@ -830,13 +867,21 @@ class TeeBotusEngine:
                     instructions,
                     first_response_id or previous_response_id,
                 )
-        except (OpenAIAPIError, LLMAPIError):
+        except (OpenAIAPIError, LLMAPIError) as exc:
+            LOGGER.warning(
+                "LLM action pipeline failed instance=%s event_id=%s error=%s: %s",
+                event.instance,
+                event.event_id,
+                type(exc).__name__,
+                exc,
+            )
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         response_id = _persistable_previous_response_id(response)
         if response_id:
             self.state.set_previous_response_id(event.instance, account_id, response_id)
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
+            LOGGER.warning("LLM action response empty instance=%s event_id=%s.", event.instance, event.event_id)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         if _parse_memory_page_request(response_text) is not None:
             response_text = MEMORY_PAGE_LIMIT_NOTE
@@ -874,6 +919,16 @@ class TeeBotusEngine:
             visible_text = "\n".join(part for part in (visible_text, instructions.openai_image_rate_limited) if part).strip()
         if memory_notes:
             memory_response_text = "\n".join(part for part in (visible_text, *memory_notes) if part).strip()
+        LOGGER.log(
+            DEBUG_ALL,
+            "LLM action visible output instance=%s event_id=%s visible_chars=%s files=%s images=%s preview=%s",
+            event.instance,
+            event.event_id,
+            len(visible_text),
+            len(files),
+            len(generated_images),
+            _preview_for_log(visible_text),
+        )
         _append_account_memory_interaction(
             self.account_store,
             account_id,
@@ -882,6 +937,7 @@ class TeeBotusEngine:
             memory_response_text or response_text,
             instructions,
             structured_decision_runner=self.structured_decision_runner,
+            skip_structured_candidate=self.skip_memory_candidate_structured_decision,
         )
         actions: list[OutgoingAction] = [SendTyping(event.chat_id)]
         if visible_text:
@@ -1421,6 +1477,7 @@ class TeeBotusEngine:
             bot_text,
             instructions,
             structured_decision_runner=self.structured_decision_runner,
+            skip_structured_candidate=self.skip_memory_candidate_structured_decision,
         )
 
     def _infer_youtube_local_options_with_llm(self, text: str, instructions: BotInstructions) -> tuple[bool, bool] | None:
@@ -2056,6 +2113,7 @@ def _append_account_memory_interaction(
     instructions: BotInstructions,
     *,
     structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
+    skip_structured_candidate: bool = False,
 ) -> None:
     if not instructions.user_memory_enabled:
         return
@@ -2063,8 +2121,12 @@ def _append_account_memory_interaction(
     bot_text = _clip_text(bot_text, instructions.user_memory_max_entry_chars)
     if not user_text and not bot_text:
         return
-    candidate = _memory_candidate_decision(user_text, bot_text, structured_decision_runner=structured_decision_runner)
-    if structured_decision_runner is not None and candidate is None:
+    candidate = (
+        None
+        if skip_structured_candidate
+        else _memory_candidate_decision(user_text, bot_text, structured_decision_runner=structured_decision_runner)
+    )
+    if structured_decision_runner is not None and candidate is None and not skip_structured_candidate:
         return
     if candidate is not None:
         if not candidate.should_store or candidate.memory_type == "none" or candidate.confidence < 0.7 or candidate.sensitivity == "high":
@@ -2307,6 +2369,13 @@ def _memory_keywords(text: str) -> list[str]:
         if len(keywords) >= 24:
             break
     return keywords
+
+
+def _preview_for_log(text: object, *, limit: int = 240) -> str:
+    preview = re.sub(r"\s+", " ", str(text or "")).strip()
+    if len(preview) <= limit:
+        return preview
+    return f"{preview[:limit]}..."
 
 
 def _is_memory_reset_confirmation(text: str) -> bool:

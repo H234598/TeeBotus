@@ -9,7 +9,7 @@ from TeeBotus.llm.base import LLMResponse
 from TeeBotus.llm.capabilities import HF_POOL_TEXT_CAPABILITIES
 from TeeBotus.llm.hf_pool.config import DEFAULT_HF_POOL_CONFIG_PATH, load_hf_pool_config
 from TeeBotus.llm.hf_pool.errors import HFPoolUnavailable
-from TeeBotus.llm.hf_pool.executor import HFPoolExecutor, OpenAICompatibleHFPoolExecutor
+from TeeBotus.llm.hf_pool.executor import HFPoolExecutor, LiteLLMHFPoolExecutor
 from TeeBotus.llm.hf_pool.redaction import redact_hf_secrets
 from TeeBotus.llm.hf_pool.scheduler import select_target
 from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState, SQLiteHFPoolRuntimeStateStore, default_hf_pool_state_path
@@ -147,7 +147,7 @@ def _executor_from_env(env: Mapping[str, str] | None) -> HFPoolExecutor | None:
         return None
     state_db = str(source.get("TEEBOTUS_HF_POOL_STATE_DB", "") or "").strip()
     state_path = Path(state_db).expanduser() if state_db else default_hf_pool_state_path()
-    return OpenAICompatibleHFPoolExecutor(state_store=SQLiteHFPoolRuntimeStateStore(state_path))
+    return LiteLLMHFPoolExecutor(state_store=SQLiteHFPoolRuntimeStateStore(state_path))
 
 
 def _max_attempts(pool: object) -> int:

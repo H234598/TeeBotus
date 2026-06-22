@@ -2,11 +2,9 @@ from __future__ import annotations
 
 import logging
 import os
-from dataclasses import replace
 from typing import Any, Callable, Mapping
 
 from TeeBotus.instructions import BotInstructions
-from TeeBotus.llm.capabilities import OPENAI_CAPABILITIES
 from TeeBotus.llm.free_tier import resolve_gemini_free_tier_limits, route_uses_google_gemini
 from TeeBotus.llm.keyring import resolve_gemini_api_key_ring
 from TeeBotus.llm.profiles import LLMProfile, LLMRoute, load_llm_profiles, select_llm_route
@@ -15,6 +13,9 @@ from TeeBotus.llm_client import build_text_llm_client, normalize_llm_provider, p
 from TeeBotus.openai_client import OpenAIClient
 
 LOGGER = logging.getLogger("TeeBotus.runtime.llm_factory")
+LOCAL_OLLAMA_OFFLOAD_ENV = "TEEBOTUS_LLM_OFFLOAD_LOCAL_OLLAMA"
+LOCAL_OLLAMA_OFFLOAD_PROFILE_ENV = "TEEBOTUS_LLM_OFFLOAD_LOCAL_OLLAMA_PROFILE"
+LOCAL_OLLAMA_OFFLOAD_DEFAULT_PROFILE = "hf_pool_default"
 
 
 def build_runtime_text_llm_client(
@@ -40,17 +41,20 @@ def build_runtime_text_llm_client(
     instance_name: str = "",
     openai_client_factory: Callable[[str], object] = OpenAIClient,
 ) -> object | None:
+    source = os.environ if env is None else env
     enabled_override = _parse_optional_bool(enabled)
     if enabled_override is False:
         return None
     if enabled_override is None and instructions.llm_enabled is False:
         return None
-    runtime_profile_name = str(profile or "").strip()
+    runtime_profile_name = _offloaded_profile_name(str(profile or "").strip(), env=source, instance_name=instance_name)
     route_purpose = str(purpose or "").strip()
     has_direct_provider = bool(str(provider or "").strip())
     has_direct_model = bool(str(model or "").strip())
     has_runtime_route_override = bool(runtime_profile_name or route_purpose or has_direct_provider or has_direct_model)
-    profile_name = runtime_profile_name or ("" if has_runtime_route_override else str(instructions.llm_profile or "").strip())
+    profile_name = runtime_profile_name or (
+        "" if has_runtime_route_override else _offloaded_profile_name(str(instructions.llm_profile or "").strip(), env=source, instance_name=instance_name)
+    )
     remote_fallback_allowed = _parse_bool(allow_remote_fallback)
     if profile_name:
         return _build_profile_client(
@@ -72,7 +76,11 @@ def build_runtime_text_llm_client(
             openai_client_factory=openai_client_factory,
         )
     if route_purpose and not (has_direct_provider or has_direct_model):
-        route = select_llm_route(route_purpose, allow_remote_fallback=remote_fallback_allowed)
+        route = _offloaded_route(
+            select_llm_route(route_purpose, allow_remote_fallback=remote_fallback_allowed),
+            env=source,
+            instance_name=instance_name,
+        )
         return _build_route_client(
             route,
             instructions=instructions,
@@ -87,18 +95,33 @@ def build_runtime_text_llm_client(
             max_tokens=max_tokens,
             service_tier=service_tier,
             gemini_key_scope=gemini_key_scope,
-            env=env,
+            env=source,
             instance_name=instance_name,
             openai_client_factory=openai_client_factory,
         )
     resolved_provider = normalize_llm_provider(provider or instructions.llm_provider)
     resolved_model = str(model or instructions.llm_model or "").strip()
+    if _local_ollama_offload_enabled(source, instance_name) and _uses_local_ollama(resolved_provider, resolved_model):
+        return _build_profile_client(
+            _local_ollama_offload_profile(source, instance_name),
+            instructions=instructions,
+            openai_client=openai_client,
+            default_api_key=default_api_key,
+            override_api_key=api_key,
+            fallback_models=fallback_models,
+            allow_remote_fallback=True,
+            api_base=api_base,
+            timeout=timeout,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            service_tier=service_tier,
+            gemini_key_scope=gemini_key_scope,
+            env=source,
+            instance_name=instance_name,
+            openai_client_factory=openai_client_factory,
+        )
     resolved_api_key = str(api_key or "").strip() or default_api_key
     resolved_openai_client = openai_client
-    if resolved_provider == "openai" and resolved_openai_client is None and resolved_api_key:
-        resolved_openai_client = openai_client_factory(resolved_api_key)
-    if resolved_provider == "openai" and resolved_openai_client is not None and resolved_model:
-        return _OpenAITextModelOverrideClient(resolved_openai_client, resolved_model)
     return build_text_llm_client(
         instructions=instructions,
         openai_client=resolved_openai_client,
@@ -181,7 +204,14 @@ def build_runtime_structured_decision_runner(
         try:
             return runner(prompt, schema)
         except Exception as exc:  # noqa: BLE001 - structured subtasks are best-effort.
-            LOGGER.warning("Structured decision runner failed; using deterministic fallback: %s: %s", type(exc).__name__, exc)
+            schema_name = str(getattr(schema, "__name__", schema))
+            LOGGER.warning(
+                "Structured decision runner failed; using deterministic fallback: schema=%s error=%s retries=%s %s",
+                schema_name,
+                type(exc).__name__,
+                getattr(runner, "pydantic_ai_output_retries", "n/a"),
+                exc,
+            )
             return None
 
     for name in (
@@ -232,11 +262,6 @@ def _build_route_client(
     resolved_api_base = str(api_base or "").strip() or route.base_url
     resolved_provider = normalize_llm_provider(route.provider)
     resolved_openai_client = openai_client
-    if resolved_provider == "openai" and resolved_openai_client is None:
-        key = resolved_api_key or default_api_key
-        resolved_openai_client = openai_client_factory(key) if key else None
-    if resolved_provider == "openai" and resolved_openai_client is not None:
-        return _OpenAITextModelOverrideClient(resolved_openai_client, route.model)
     resolved_fallback_models = filter_runtime_fallback_models(
         provider=route.provider,
         fallback_models=fallback_models or route.fallback_models,
@@ -313,11 +338,6 @@ def _build_profile_client(
     resolved_api_base = str(api_base or "").strip() or profile.base_url
     resolved_provider = normalize_llm_provider(profile.provider)
     resolved_openai_client = openai_client
-    if resolved_provider == "openai" and resolved_openai_client is None:
-        key = resolved_api_key or default_api_key
-        resolved_openai_client = openai_client_factory(key) if key else None
-    if resolved_provider == "openai" and resolved_openai_client is not None:
-        return _OpenAITextModelOverrideClient(resolved_openai_client, profile.model)
     return build_text_llm_client(
         instructions=instructions,
         openai_client=resolved_openai_client,
@@ -365,6 +385,81 @@ def _require_profile(profiles: Mapping[str, LLMProfile], profile_name: str) -> L
     if profile_name not in profiles:
         raise KeyError(f"Unknown LLM profile: {profile_name}")
     return profiles[profile_name]
+
+
+def _offloaded_profile_name(profile_name: str, *, env: Mapping[str, str], instance_name: str) -> str:
+    name = str(profile_name or "").strip()
+    if not name:
+        return name
+    profiles = load_llm_profiles()
+    profile = profiles.get(name)
+    if profile is None or not _local_ollama_offload_enabled(env, instance_name):
+        return name
+    if not _uses_local_ollama(profile.provider, profile.model):
+        return name
+    offload_profile = _local_ollama_offload_profile(env, instance_name)
+    LOGGER.info(
+        "Offloading local Ollama LLM profile instance=%s from_profile=%s to_profile=%s.",
+        instance_name or "unknown",
+        name,
+        offload_profile,
+    )
+    return offload_profile
+
+
+def _offloaded_route(route: LLMRoute, *, env: Mapping[str, str], instance_name: str) -> LLMRoute:
+    if not _local_ollama_offload_enabled(env, instance_name) or not _uses_local_ollama(route.provider, route.model):
+        return route
+    profile_name = _local_ollama_offload_profile(env, instance_name)
+    profile = _require_profile(load_llm_profiles(), profile_name)
+    LOGGER.info(
+        "Offloading local Ollama LLM route instance=%s purpose=%s from_profile=%s to_profile=%s.",
+        instance_name or "unknown",
+        route.purpose,
+        route.profile_name,
+        profile_name,
+    )
+    return LLMRoute(
+        purpose=route.purpose,
+        profile_name=profile.name,
+        provider=profile.provider,
+        model=profile.model,
+        base_url=profile.base_url,
+        api_key_env=profile.api_key_env,
+        service_tier=profile.service_tier,
+        fallback_profile_name=route.fallback_profile_name,
+        fallback_model=route.fallback_model,
+        fallback_api_key_env=route.fallback_api_key_env,
+        fallback_base_url=route.fallback_base_url,
+    )
+
+
+def _local_ollama_offload_enabled(env: Mapping[str, str], instance_name: str) -> bool:
+    return _parse_bool(_first_instance_env(env, LOCAL_OLLAMA_OFFLOAD_ENV, instance_name))
+
+
+def _local_ollama_offload_profile(env: Mapping[str, str], instance_name: str) -> str:
+    return _first_instance_env(env, LOCAL_OLLAMA_OFFLOAD_PROFILE_ENV, instance_name).strip() or LOCAL_OLLAMA_OFFLOAD_DEFAULT_PROFILE
+
+
+def _uses_local_ollama(provider: str, model: str) -> bool:
+    normalized_provider = normalize_llm_provider(provider)
+    normalized_model = str(model or "").strip().casefold()
+    return normalized_provider == "ollama" or normalized_model.startswith(("ollama/", "ollama_chat/"))
+
+
+def _first_instance_env(env: Mapping[str, str], base_key: str, instance_name: str) -> str:
+    token = _instance_env_token(instance_name)
+    if token:
+        value = str(env.get(f"{base_key}_{token}", "") or "").strip()
+        if value:
+            return value
+    return str(env.get(base_key, "") or "").strip()
+
+
+def _instance_env_token(instance_name: str) -> str:
+    token = "".join(char if char.isalnum() else "_" for char in str(instance_name or "").strip().upper())
+    return "_".join(part for part in token.split("_") if part)
 
 
 def _gemini_api_key_ring_for_route(
@@ -423,19 +518,6 @@ def _route_uses_gemini_api(*, provider: str, model: str) -> bool:
         "litellm_gemini_paid_stateless",
         "litellm_gemini_paid_stateful",
     } or normalized_model.startswith("gemini/")
-
-
-class _OpenAITextModelOverrideClient:
-    capabilities = OPENAI_CAPABILITIES
-
-    def __init__(self, client: object, model: str) -> None:
-        self.client = client
-        self.model = str(model or "").strip()
-
-    def create_reply(self, user_text: str, instructions: BotInstructions, previous_response_id: str | None = None) -> Any:
-        create_reply = getattr(self.client, "create_reply")
-        effective_instructions = replace(instructions, openai_model=self.model) if self.model else instructions
-        return create_reply(user_text, effective_instructions, previous_response_id)
 
 
 def _parse_bool(value: bool | str) -> bool:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 
 from TeeBotus.llm.hf_pool.doctor import main as doctor_main
 from TeeBotus.llm.hf_pool.health import HFPoolHealth, HFPoolTargetHealth, check_hf_pool, format_hf_pool_status_lines
@@ -224,26 +226,24 @@ def test_hf_pool_doctor_cli_uses_state_db_without_live_network(monkeypatch, caps
     assert "until=2999-01-01T00:00:00+00:00" in captured.out
 
 
-def test_hf_pool_live_check_marks_configured_target_healthy_without_secret_leak(tmp_path):
+def test_hf_pool_live_check_marks_configured_target_healthy_without_secret_leak(monkeypatch, tmp_path):
     path = _enabled_config(tmp_path)
     calls: list[dict[str, object]] = []
 
-    def opener(request, *, timeout):
-        calls.append(
-            {
-                "url": request.full_url,
-                "timeout": timeout,
-                "authorization": request.get_header("Authorization"),
-                "body": json.loads(request.data.decode("utf-8")),
-            }
-        )
-        return _Response()
+    def completion(**kwargs):
+        calls.append(kwargs)
+        return {
+            "id": "health-ok",
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 2, "completion_tokens": 1},
+        }
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
 
     health = check_hf_pool(
         config_path=path,
         env={"HF_TOKEN_MAIN": "hf_TESTSECRET123"},
         live=True,
-        opener=opener,
     )
     lines = "\n".join(format_hf_pool_status_lines(health))
 
@@ -253,8 +253,8 @@ def test_hf_pool_live_check_marks_configured_target_healthy_without_secret_leak(
     assert "target=live_target status=healthy" in lines
     assert "latency_ms=" in lines
     assert "hf_TESTSECRET123" not in lines
-    assert calls[0]["authorization"] == "Bearer hf_TESTSECRET123"
-    assert calls[0]["body"]["model"] == "Qwen/Qwen3-4B-Instruct-2507"
+    assert calls[0]["api_key"] == "hf_TESTSECRET123"
+    assert calls[0]["model"] == "huggingface/Qwen/Qwen3-4B-Instruct-2507"
 
 
 def test_hf_pool_models_validation_enriches_configured_target_without_chat_live_check(tmp_path):
@@ -377,35 +377,40 @@ def test_hf_pool_doctor_cli_can_validate_models(monkeypatch, capsys, tmp_path):
     assert "hf_TESTSECRET123" not in captured.out
 
 
-def test_hf_pool_live_check_reports_errors_redacted_and_nonfatal(tmp_path):
+def test_hf_pool_live_check_reports_errors_redacted_and_nonfatal(monkeypatch, tmp_path):
     path = _enabled_config(tmp_path)
 
-    def opener(_request, *, timeout):
+    def completion(**_kwargs):
         raise OSError("transport failed for hf_TESTSECRET123")
 
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
     health = check_hf_pool(
         config_path=path,
         env={"HF_TOKEN_MAIN": "hf_TESTSECRET123"},
         live=True,
-        opener=opener,
     )
     lines = "\n".join(format_hf_pool_status_lines(health))
 
     assert health.status == "unavailable"
     assert health.targets[0].status == "unavailable"
     assert "hf_TESTSECRET123" not in lines
-    assert "hf_<REDACTED>" in lines
+    assert "<redacted>" in lines
 
 
 def test_hf_pool_doctor_live_cli_records_usage_in_state_db(monkeypatch, capsys, tmp_path):
     path = _enabled_config(tmp_path)
     state_db = tmp_path / "hf_pool_state.sqlite3"
 
-    def opener(_request, *, timeout):
-        return _Response()
+    def completion(**_kwargs):
+        return {
+            "id": "health-ok",
+            "choices": [{"message": {"content": "ok"}}],
+            "usage": {"prompt_tokens": 2, "completion_tokens": 1},
+        }
 
     monkeypatch.setenv("HF_TOKEN_MAIN", "hf_TESTSECRET123")
-    exit_code = doctor_main(["--config", str(path), "--live", "--state-db", str(state_db)], opener=opener)
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    exit_code = doctor_main(["--config", str(path), "--live", "--state-db", str(state_db)])
 
     captured = capsys.readouterr()
     usage = SQLiteHFPoolRuntimeStateStore(state_db).read_usage()

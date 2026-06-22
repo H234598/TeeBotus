@@ -12,6 +12,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
+from contextvars import copy_context
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,6 +43,7 @@ from TeeBotus.core.youtube import (
 )
 from TeeBotus.handlers import build_reply, is_admin_help_request, should_use_openai
 from TeeBotus.instructions import BotInstructions, InstructionStore, format_help_text_html, render_template
+from TeeBotus.llm.base import LLMAPIError
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, runtime_secret_provider, telegram_identity_key
 from TeeBotus.runtime.action_buttons import LEGAL_CONSENT_BUTTONS, MEMORY_RESET_BUTTONS, YOUTUBE_LOCAL_OPTIONS_BUTTONS
@@ -50,6 +52,7 @@ from TeeBotus.runtime.admin_accounts import is_runtime_admin_account
 from TeeBotus.runtime.engine import TeeBotusEngine, account_bot_address_names
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
+from TeeBotus.runtime.log_context import logging_context
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.adapters.telegram import (
@@ -88,9 +91,15 @@ TELADI_EMERGENCY_CHAT_ID = 395935293
 TELADI_EMERGENCY_COOLDOWN_SECONDS = 24 * 60 * 60
 DEFAULT_INSTANCE_NAME = "Bote_der_Wahrheit"
 BOT_INSTRUCTION_FILENAME = "Bot_Verhalten.md"
+TELEGRAM_GET_UPDATES_OFFSET_FILENAME = "Telegram_GetUpdates_Offset.json"
 ALL_BOTS_DEFAULT_FILENAME = "ALL_BOTS_DEFAULT.md"
 MULTI_BOT_POLL_TIMEOUT_SECONDS = 5
 USER_MEMORY_INDEX_FILENAME = "User_Memory_Index.json"
+TELEGRAM_RUNTIME_PROCESS_TIMEOUT_SECONDS = 0
+TELEGRAM_RUNTIME_DISPATCH_TIMEOUT_SECONDS = 30
+TELEGRAM_RUNTIME_PROCESS_TIMEOUT_ENV = "TELEGRAM_RUNTIME_PROCESS_TIMEOUT_SECONDS"
+TELEGRAM_RUNTIME_DISPATCH_TIMEOUT_ENV = "TELEGRAM_RUNTIME_DISPATCH_TIMEOUT_SECONDS"
+TELEGRAM_RUNTIME_LLM_TIMEOUT_FALLBACK = "Ich kann das Textmodell gerade nicht erreichen. Bitte versuche es gleich nochmal."
 YOUTUBE_LIVE_CHUNK_WORDS = 310
 WORKING_MEMORY_INDEX_FILENAME = "Working_Memorys.json"
 WORKING_MEMORY_ENTRIES_FILENAME = "Working_Memorys.entries.jsonl"
@@ -312,6 +321,17 @@ class TelegramAPI:
         formatted_text: str = "",
         reply_markup: str = "",
     ) -> int | None:
+        bot_instance = getattr(self, "instance_name", "unknown")
+        adapter_slot = getattr(self, "adapter_slot", "unknown")
+        LOGGER.info(
+            "Telegram API sendMessage request instance=%s slot=%s chat_id=%s chars=%s parse_mode=%s has_reply_markup=%s",
+            bot_instance,
+            adapter_slot,
+            chat_id,
+            len(text),
+            bool(_telegram_parse_mode(text_mode)),
+            bool(reply_markup),
+        )
         parse_mode = _telegram_parse_mode(text_mode)
         body = formatted_text if parse_mode and formatted_text else text
         params: dict[str, Any] = {
@@ -329,9 +349,32 @@ class TelegramAPI:
         )
         result = payload.get("result")
         if not isinstance(result, dict):
+            LOGGER.warning(
+                "Telegram API sendMessage returned invalid result instance=%s slot=%s chat_id=%s payload=%r",
+                bot_instance,
+                adapter_slot,
+                chat_id,
+                payload,
+            )
             return None
         message_id = result.get("message_id")
-        return int(message_id) if isinstance(message_id, int) else None
+        if not isinstance(message_id, int):
+            LOGGER.warning(
+                "Telegram API sendMessage returned non-id result instance=%s slot=%s chat_id=%s message_id=%r",
+                bot_instance,
+                adapter_slot,
+                chat_id,
+                message_id,
+            )
+            return None
+        LOGGER.info(
+            "Telegram API sendMessage ok instance=%s slot=%s chat_id=%s message_id=%s",
+            bot_instance,
+            adapter_slot,
+            chat_id,
+            message_id,
+        )
+        return message_id
 
     def copy_message(self, chat_id: int, from_chat_id: int, message_id: int) -> int | None:
         payload = self.request(
@@ -800,6 +843,7 @@ def build_telegram_runtime_context(
         bibliothekar_store=bibliothekar_store,
         youtube_job_runner=youtube_job_runner,
         structured_decision_runner=structured_decision_runner,
+        skip_memory_candidate_structured_decision=True,
         background_action_dispatcher=lambda event, actions: _dispatch_modern_telegram_actions(
             api,
             message_tracker,
@@ -825,15 +869,33 @@ def build_telegram_runtime_context(
 def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update: dict[str, Any], chat_state: ChatState) -> bool:
     message = telegram_update_message(update)
     if not isinstance(message, dict):
+        LOGGER.info(
+            "Telegram runtime message missing/invalid for runtime update context instance=%s slot=%s update_keys=%s",
+            context.instance_name,
+            context.adapter_slot,
+            sorted(update.keys()),
+        )
         return False
     callback_query_id = telegram_update_callback_query_id(update)
     if callback_query_id:
         try:
             context.api.answer_callback_query(callback_query_id)
+            LOGGER.debug(
+                "Telegram callback query answered instance=%s callback_query_id=%s slot=%s",
+                context.instance_name,
+                callback_query_id,
+                context.adapter_slot,
+            )
         except (TelegramAPIError, TelegramNetworkError, OSError, ValueError):
             LOGGER.exception("Telegram callback_query answer failed instance=%s callback_query_id=%s.", context.instance_name, callback_query_id)
     chat = message.get("chat")
     if not isinstance(chat, dict) or "id" not in chat:
+        LOGGER.info(
+            "Telegram runtime update missing chat payload instance=%s slot=%s message_id=%s",
+            context.instance_name,
+            context.adapter_slot,
+            message.get("message_id", "unknown"),
+        )
         return False
     chat_id = int(chat["id"])
     chat_state.record_received_message(chat_id, _message_id_or_none(message))
@@ -844,12 +906,26 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
         adapter_slot=context.adapter_slot,
     )
     if event is None:
+        LOGGER.info(
+            "Telegram runtime update converted to no event instance=%s slot=%s message_id=%s",
+            context.instance_name,
+            context.adapter_slot,
+            message.get("message_id", "unknown"),
+        )
         return False
     status_auth = _telegram_status_auth_pre_gate(context.account_store, event)
     if status_auth is not None:
         return _dispatch_telegram_status_auth_pre_gate(context.api, event, status_auth)
     event = _with_telegram_reply_text(event, message)
     event = _with_telegram_attachments(context.api, event, message)
+    LOGGER.debug(
+        "Telegram runtime event prepared instance=%s slot=%s event_id=%s message_id=%s attachments=%s",
+        context.instance_name,
+        context.adapter_slot,
+        event.event_id,
+        message.get("message_id", "unknown"),
+        len(event.attachments),
+    )
     try:
         should_ignore = context.engine.should_ignore_without_account(event)
     except (AccountStoreError, OSError, ValueError, AttributeError):
@@ -902,9 +978,84 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
         return True
     event = event.with_account(account_id)
     _record_codex_history_telegram_reply(context, event, message)
+    process_timeout = _telegram_runtime_timeout_seconds(
+        TELEGRAM_RUNTIME_PROCESS_TIMEOUT_ENV,
+        TELEGRAM_RUNTIME_PROCESS_TIMEOUT_SECONDS,
+    )
+    dispatch_timeout = _telegram_runtime_timeout_seconds(
+        TELEGRAM_RUNTIME_DISPATCH_TIMEOUT_ENV,
+        TELEGRAM_RUNTIME_DISPATCH_TIMEOUT_SECONDS,
+    )
+    LOGGER.debug(
+        "Telegram runtime timeout settings instance=%s slot=%s event_id=%s process_timeout=%s dispatch_timeout=%s",
+        context.instance_name,
+        context.adapter_slot,
+        event.event_id,
+        process_timeout,
+        dispatch_timeout,
+    )
+    instructions = context.instruction_store.get()
     try:
-        engine_result = context.engine.process_result(event)
-    except (AccountStoreError, OSError, ValueError, AttributeError):
+        LOGGER.info(
+            "Telegram runtime processing started instance=%s slot=%s event_id=%s chat_id=%s message_id=%s has_text=%s",
+            context.instance_name,
+            context.adapter_slot,
+            event.event_id,
+            chat_id,
+            message.get("message_id", "unknown"),
+            bool(event.text),
+        )
+        engine_started_at = time.perf_counter()
+        with logging_context(
+            instance=context.instance_name,
+            channel=event.channel,
+            slot=context.adapter_slot,
+            event_id=event.event_id,
+            chat_id=chat_id,
+            message_id=message.get("message_id", "unknown"),
+        ):
+            timeout_hit, engine_result = _run_with_runtime_timeout(
+                "engine processing",
+                lambda: context.engine.process_result(event),
+                timeout_seconds=process_timeout,
+            )
+        if timeout_hit or engine_result is None:
+            LOGGER.warning(
+                "Telegram runtime processing timed out instance=%s slot=%s event_id=%s chat_id=%s message_id=%s elapsed_ms=%s timeout_seconds=%s",
+                context.instance_name,
+                context.adapter_slot,
+                event.event_id,
+                chat_id,
+                message.get("message_id", "unknown"),
+                int((time.perf_counter() - engine_started_at) * 1000),
+                process_timeout,
+            )
+            try:
+                context.api.send_message(str(chat_id), _runtime_timeout_fallback_text(instructions, message))
+            except (TelegramAPIError, TelegramNetworkError, OSError):
+                LOGGER.exception(
+                    "Telegram runtime timeout reply failed instance=%s chat_id=%s.",
+                    context.instance_name,
+                    chat_id,
+                )
+            return True
+        LOGGER.info(
+            "Telegram engine result instance=%s slot=%s event_id=%s handled=%s actions=%s action_types=%s",
+            context.instance_name,
+            context.adapter_slot,
+            event.event_id,
+            engine_result.handled,
+            len(engine_result.actions),
+            tuple(type(action).__name__ for action in engine_result.actions),
+        )
+        LOGGER.debug(
+            "Telegram engine processing duration_ms=%s instance=%s slot=%s event_id=%s",
+            int((time.perf_counter() - engine_started_at) * 1000),
+            context.instance_name,
+            context.adapter_slot,
+            event.event_id,
+        )
+    except Exception:
         LOGGER.exception(
             "Telegram engine processing failed instance=%s chat_id=%s message_id=%s.",
             context.instance_name,
@@ -921,14 +1072,52 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
             )
         return True
     event = event.with_account(engine_result.account_id)
-    _dispatch_modern_telegram_actions(
-        context.api,
-        context.message_tracker,
-        event,
-        engine_result.actions,
-        account_store=context.account_store,
-        instance_name=context.instance_name,
-    )
+    try:
+        dispatch_started_at = time.perf_counter()
+        timeout_hit, _ = _run_with_runtime_timeout(
+            "action dispatch",
+            lambda: _dispatch_modern_telegram_actions(
+                context.api,
+                context.message_tracker,
+                event,
+                engine_result.actions,
+                account_store=context.account_store,
+                instance_name=context.instance_name,
+            ),
+            timeout_seconds=dispatch_timeout,
+        )
+        if timeout_hit:
+            LOGGER.warning(
+                "Telegram action dispatch timed out instance=%s slot=%s event_id=%s chat_id=%s message_id=%s elapsed_ms=%s timeout_seconds=%s",
+                context.instance_name,
+                context.adapter_slot,
+                event.event_id,
+                event.chat_id,
+                message.get("message_id", "unknown"),
+                int((time.perf_counter() - dispatch_started_at) * 1000),
+                dispatch_timeout,
+            )
+            try:
+                context.api.send_message(
+                    str(chat_id),
+                    _runtime_timeout_fallback_text(instructions, message),
+                )
+            except (TelegramAPIError, TelegramNetworkError, OSError):
+                LOGGER.exception(
+                    "Telegram dispatch-timeout fallback failed instance=%s chat_id=%s.",
+                    context.instance_name,
+                    chat_id,
+                )
+            return True
+    except Exception:
+        LOGGER.exception(
+            "Telegram action dispatch failed hard instance=%s slot=%s event_id=%s chat_id=%s actions=%s",
+            context.instance_name,
+            context.adapter_slot,
+            event.event_id,
+            event.chat_id,
+            tuple(type(action).__name__ for action in engine_result.actions),
+        )
     return bool(engine_result.handled or engine_result.actions)
 
 
@@ -948,6 +1137,64 @@ def _telegram_status_auth_pre_gate(account_store: AccountStore, event: IncomingE
     if status_auth.allowed:
         return None
     return status_auth
+
+
+_RuntimeTimeoutResult = tuple[bool, Any | None]
+
+
+def _run_with_runtime_timeout(label: str, callback: Callable[[], Any], timeout_seconds: int) -> _RuntimeTimeoutResult:
+    if timeout_seconds <= 0:
+        return False, callback()
+    result: dict[str, Any] = {}
+
+    def _run() -> None:
+        try:
+            result["value"] = callback()
+        except Exception as exc:  # noqa: BLE001 - callers need original failure context.
+            result["exception"] = exc
+
+    callback_context = copy_context()
+    thread = threading.Thread(
+        target=lambda: callback_context.run(_run),
+        name=f"teebotus-telegram-runtime-{label.replace(' ', '_')}",
+        daemon=True,
+    )
+    thread.start()
+    thread.join(timeout=timeout_seconds)
+    if thread.is_alive():
+        return True, None
+    if "exception" in result:
+        raise result["exception"]
+    return False, result.get("value")
+
+
+def _telegram_runtime_timeout_seconds(env_var: str, default_seconds: int) -> int:
+    configured = os.getenv(env_var, "").strip()
+    default_seconds = max(0, int(default_seconds))
+    if not configured:
+        return default_seconds
+    try:
+        parsed = int(configured)
+    except (TypeError, ValueError):
+        LOGGER.warning("Invalid timeout value for %s=%r. Using fallback %s.", env_var, configured, default_seconds)
+        return default_seconds
+    parsed = max(0, parsed)
+    if parsed != default_seconds:
+        LOGGER.info(
+            "Runtime timeout override from environment %s=%s (default=%s) for Telegram runtime.",
+            env_var,
+            parsed,
+            default_seconds,
+        )
+    return parsed
+
+
+def _runtime_timeout_fallback_text(instructions: BotInstructions, message: dict[str, Any]) -> str:
+    if instructions.llm_error:
+        return instructions.llm_error
+    if should_use_openai(message, instructions) and instructions.openai_error:
+        return instructions.openai_error
+    return TELEGRAM_RUNTIME_LLM_TIMEOUT_FALLBACK
 
 
 def _dispatch_telegram_status_auth_pre_gate(api: TelegramAPI, event: IncomingEvent, status_auth: StatusAuthGateResult) -> bool:
@@ -1110,24 +1357,70 @@ def _dispatch_modern_telegram_actions(
     account_store: AccountStore,
     instance_name: str,
 ) -> None:
-    _notify_telegram_linked_identities(api, message_tracker, account_store, actions, instance_name=instance_name)
-    _delete_tracked_telegram_messages(api, message_tracker, event, actions)
-    try:
-        sent_refs = send_telegram_actions(api, actions)
-    except (TelegramAPIError, TelegramNetworkError, OSError, ValueError):
-        LOGGER.exception(
-            "Telegram action dispatch failed instance=%s chat_id=%s message_ref=%s.",
+    LOGGER.info(
+        "Dispatching %s Telegram actions instance=%s slot=%s event_id=%s chat_id=%s",
+        len(actions),
+        event.instance,
+        event.adapter_slot,
+        event.event_id,
+        event.chat_id,
+    )
+    if not actions:
+        LOGGER.info(
+            "Telegram action list empty; no outbound calls instance=%s slot=%s event_id=%s chat_id=%s",
             event.instance,
+            event.adapter_slot,
+            event.event_id,
+            event.chat_id,
+        )
+        return
+    LOGGER.debug(
+        "Telegram actions detail instance=%s slot=%s event_id=%s action_types=%s",
+        event.instance,
+        event.adapter_slot,
+        event.event_id,
+        tuple(type(action).__name__ for action in actions),
+    )
+    try:
+        _notify_telegram_linked_identities(api, message_tracker, account_store, actions, instance_name=instance_name)
+        _delete_tracked_telegram_messages(api, message_tracker, event, actions)
+        sent_refs = send_telegram_actions(api, actions)
+    except Exception:
+        LOGGER.exception(
+            "Telegram action dispatch failed instance=%s slot=%s event_id=%s chat_id=%s message_ref=%s.",
+            event.instance,
+            event.adapter_slot,
+            event.event_id,
             event.chat_id,
             event.message_ref,
         )
         return
+    if len(sent_refs) != len(actions):
+        LOGGER.warning(
+            "Telegram action dispatch returned ref count mismatch instance=%s slot=%s event_id=%s expected=%s returned=%s",
+            event.instance,
+            event.adapter_slot,
+            event.event_id,
+            len(actions),
+            len(sent_refs),
+        )
     for action, sent_ref in zip(actions, sent_refs):
         if sent_ref is None:
             continue
         should_track = isinstance(action, (SendText, SendAttachment, SendEdit, SendPoll, ExportFile)) and getattr(action, "track", True)
         if not should_track:
             continue
+        action_name = type(action).__name__
+        LOGGER.info(
+            "Outgoing Telegram action dispatched instance=%s slot=%s event_id=%s chat_id=%s action=%s track=%s message_ref=%s",
+            event.instance,
+            event.adapter_slot,
+            event.event_id,
+            event.chat_id,
+            action_name,
+            should_track,
+            sent_ref,
+        )
         _record_telegram_sent_ref(
             message_tracker,
             SentMessageRef(
@@ -1253,6 +1546,7 @@ def handle_update(
     instance_name: str = "",
     bibliothekar_store: BibliothekarService | BibliothekarStore | None = None,
     runtime_context: TelegramRuntimeContext | None = None,
+    llm_client: object | None = None,
 ) -> None:
     instructions = instructions or BotInstructions()
     chat_state = chat_state or ChatState()
@@ -1292,7 +1586,20 @@ def handle_update(
         _message_kind(message),
     )
     if runtime_context is not None:
-        _handle_update_with_runtime_context(runtime_context, update, chat_state)
+        LOGGER.info(
+            "Telegram runtime context active instance=%s slot=%s message_id=%s",
+            runtime_context.instance_name,
+            runtime_context.adapter_slot,
+            message.get("message_id", "unknown"),
+        )
+        handled = _handle_update_with_runtime_context(runtime_context, update, chat_state)
+        LOGGER.debug(
+            "Telegram runtime update handled=%s instance=%s slot=%s message_id=%s",
+            handled,
+            runtime_context.instance_name,
+            runtime_context.adapter_slot,
+            message.get("message_id", "unknown"),
+        )
         return
 
     chat_state.record_received_message(chat_id, _message_id_or_none(message))
@@ -1322,11 +1629,15 @@ def handle_update(
             message,
             instructions,
             openai_client,
+            llm_client,
             user_memory_store,
             bot_identity,
             working_memory_store,
             instance_name,
         )
+        return
+
+    if not text:
         return
 
     if not _should_process_for_bot(message, text, bot_identity, first_contact, user_memory_store, instructions.bot_aliases):
@@ -1358,6 +1669,7 @@ def handle_update(
         message,
         instructions,
         openai_client,
+        llm_client,
         text,
         user_memory_store,
         user_memory,
@@ -1377,6 +1689,7 @@ def _process_text_message(
     message: dict[str, Any],
     instructions: BotInstructions,
     openai_client: OpenAIClient | None,
+    llm_client: object | None,
     text: str,
     user_memory_store: AccountStore | None = None,
     user_memory: UserMemoryRecord | None = None,
@@ -1443,6 +1756,7 @@ def _process_text_message(
         user_memory,
         instructions,
         openai_client,
+        llm_client,
         bot_identity,
         first_contact,
         working_memory_store,
@@ -1462,6 +1776,7 @@ def _process_text_message(
             user_memory,
             instructions,
             openai_client,
+            llm_client,
             bot_identity,
             first_contact,
             working_memory_store,
@@ -1520,8 +1835,14 @@ def _process_text_message(
         return
 
     if should_use_openai(message, instructions):
-        if openai_client is None:
+        if llm_client is None:
             reply = _with_first_contact_intro(instructions.llm_missing_key, first_contact, bot_identity)
+            _send_tracked_message(api, chat_state, chat_id, reply)
+            _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
+            return
+        create_reply = getattr(llm_client, "create_reply", None)
+        if not callable(create_reply):
+            reply = _with_first_contact_intro(instructions.llm_error, first_contact, bot_identity)
             _send_tracked_message(api, chat_state, chat_id, reply)
             _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
             return
@@ -1530,7 +1851,7 @@ def _process_text_message(
             working_memory = _prepare_working_memory(working_memory_store, text)
             weather_text = _prepare_weather_context(user_memory_store, user_memory, text)
             library_text = _prepare_bibliothekar_context(bibliothekar_store, instructions, text)
-            openai_response = openai_client.create_reply(
+            llm_response = create_reply(
                 _build_openai_user_input(
                     message,
                     text,
@@ -1544,15 +1865,15 @@ def _process_text_message(
                 instructions,
                 chat_state.get_previous_response_id(chat_id),
             )
-        except OpenAIAPIError as exc:
+        except (LLMAPIError, OpenAIAPIError) as exc:
             LOGGER.error("Text LLM request failed: %s", exc)
             reply = _with_first_contact_intro(instructions.llm_error, first_contact, bot_identity)
             _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
             _send_tracked_message(api, chat_state, chat_id, reply)
             _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
             return
-        chat_state.set_previous_response_id(chat_id, openai_response.response_id)
-        reply = _with_first_contact_intro(openai_response.text, first_contact, bot_identity)
+        chat_state.set_previous_response_id(chat_id, getattr(llm_response, "response_id", None))
+        reply = _with_first_contact_intro(str(getattr(llm_response, "text", "") or llm_response), first_contact, bot_identity)
         _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
         _send_openai_response(
             api,
@@ -1599,6 +1920,7 @@ def _handle_incoming_voice_message(
     message: dict[str, Any],
     instructions: BotInstructions,
     openai_client: OpenAIClient | None,
+    llm_client: object | None,
     user_memory_store: AccountStore | None = None,
     bot_identity: BotIdentity | None = None,
     working_memory_store: WorkingMemoryStore | None = None,
@@ -1681,6 +2003,7 @@ def _handle_incoming_voice_message(
         transcribed_message,
         instructions,
         openai_client,
+        llm_client,
         transcribed_text,
         user_memory_store,
         user_memory,
@@ -3144,6 +3467,8 @@ def run_polling(
     instance = instance_name or _resolve_instance_name()
     instruction_store = instruction_store or InstructionStore(_resolve_instruction_path(instance))
     adapter_slot = int(token_label) if str(token_label).isdigit() else 1
+    api.instance_name = instance
+    api.adapter_slot = adapter_slot
     if runtime_context is None:
         resolved_openai_api_key = openai_api_key if openai_api_key is not None else _resolve_openai_api_key(instance)
         from TeeBotus.runtime.telegram_runner import build_telegram_runtime_bridge
@@ -3181,7 +3506,8 @@ def run_polling(
         bot_identity.display_name or "unknown",
         bot_identity.mention or "unknown",
     )
-    offset: int | None = None
+    offset_path = _telegram_update_offset_path(instance, token_label)
+    offset: int | None = _read_telegram_update_offset(offset_path)
     retry_delay = INITIAL_RETRY_DELAY_SECONDS
 
     try:
@@ -3190,21 +3516,43 @@ def run_polling(
                 updates = api.get_updates(offset, timeout=poll_timeout)
                 retry_delay = INITIAL_RETRY_DELAY_SECONDS
                 for update in updates:
-                    handle_update(
-                        api,
-                        update,
-                        instruction_store.get(),
-                        openai_client,
-                        chat_state,
-                        user_memory_store,
-                        bot_identity,
-                        working_memory_store,
-                        youtube_job_runner,
-                        instance,
-                        bibliothekar_store,
-                        runtime_context=runtime_context,
-                    )
-                    offset = int(update["update_id"]) + 1
+                    update_id = _safe_telegram_update_id(update)
+                    if update_id is None:
+                        LOGGER.warning("Skipping malformed Telegram update payload: %r", update)
+                        continue
+                    if offset is not None and update_id < offset:
+                        LOGGER.debug("Skipping stale Telegram update_id=%s offset=%s", update_id, offset)
+                        continue
+                    persisted_offset = update_id + 1
+                    try:
+                        handle_update(
+                            api,
+                            update,
+                            instruction_store.get(),
+                            openai_client,
+                            chat_state,
+                            user_memory_store,
+                            bot_identity,
+                            working_memory_store,
+                            youtube_job_runner,
+                            instance,
+                            bibliothekar_store,
+                            runtime_context=runtime_context,
+                        )
+                    except Exception:
+                        LOGGER.exception(
+                            "Telegram update handling failed instance=%s token_slot=%s update_id=%s.",
+                            instance,
+                            token_label,
+                            update_id,
+                        )
+                        # Keep the same offset in case this was a transient shutdown during handling,
+                        # so the update is retried after restart once before being dropped.
+                        _write_telegram_update_offset(offset_path, persisted_offset)
+                        offset = persisted_offset
+                    else:
+                        _write_telegram_update_offset(offset_path, persisted_offset)
+                        offset = persisted_offset
             except KeyboardInterrupt:
                 LOGGER.info("Bot stopped.")
                 return
@@ -3254,16 +3602,51 @@ def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:
     _notify_recent_users_for_current_version(instance_configs)
     for instance_config in instance_configs:
         for config in instance_config.token_configs:
+            adapter_slot = _telegram_slot_from_label(config.label)
+            api = TelegramAPI(config.token)
+            api.instance_name = instance_config.instance_name
+            api.adapter_slot = adapter_slot
+            try:
+                from TeeBotus.runtime.telegram_runner import build_telegram_runtime_bridge
+            except Exception:
+                LOGGER.exception(
+                    "Failed to initialize runtime bridge for instance=%s slot=%s. Falling back to direct polling.",
+                    instance_config.instance_name,
+                    adapter_slot,
+                )
+                thread = threading.Thread(
+                    target=run_polling,
+                    kwargs={
+                        "api": api,
+                        "instruction_store": InstructionStore(instance_config.instruction_path),
+                        "instance_name": instance_config.instance_name,
+                        "stop_event": stop_event,
+                        "poll_timeout": MULTI_BOT_POLL_TIMEOUT_SECONDS,
+                        "token_label": config.label,
+                        "openai_api_key": config.openai_api_key,
+                        "youtube_job_runner": youtube_job_runner,
+                    },
+                    name=f"telegram-bot-{instance_config.instance_name}-{config.label}",
+                    daemon=True,
+                )
+                threads.append(thread)
+                thread.start()
+                continue
+            bridge = build_telegram_runtime_bridge(
+                api=api,
+                instance_name=instance_config.instance_name,
+                adapter_slot=adapter_slot,
+                instances_dir=_resolve_instances_dir(),
+                instruction_store=InstructionStore(instance_config.instruction_path),
+                openai_api_key=config.openai_api_key,
+                secret_provider=runtime_secret_provider(),
+                youtube_job_runner=youtube_job_runner,
+            )
             thread = threading.Thread(
-                target=run_polling,
+                target=bridge.run_polling,
                 kwargs={
-                    "api": TelegramAPI(config.token),
-                    "instruction_store": InstructionStore(instance_config.instruction_path),
-                    "instance_name": instance_config.instance_name,
                     "stop_event": stop_event,
                     "poll_timeout": MULTI_BOT_POLL_TIMEOUT_SECONDS,
-                    "token_label": config.label,
-                    "openai_api_key": config.openai_api_key,
                     "youtube_job_runner": youtube_job_runner,
                 },
                 name=f"telegram-bot-{instance_config.instance_name}-{config.label}",
@@ -3292,6 +3675,8 @@ def _notify_recent_users_for_current_version(instance_configs: list[InstanceRunC
         for token_config in instance_config.token_configs:
             adapter_slot = _telegram_slot_from_label(token_config.label)
             api = TelegramAPI(token_config.token)
+            api.instance_name = instance_config.instance_name
+            api.adapter_slot = adapter_slot
             store = AccountStore(
                 instances_dir / instance_config.instance_name / "data" / "accounts",
                 instance_config.instance_name,
@@ -3344,7 +3729,7 @@ def _notify_recent_users_for_current_version(instance_configs: list[InstanceRunC
 def main(argv: list[str] | None = None) -> int:
     _load_dotenv(PROJECT_ROOT / ".env")
     _load_runtime_config_defaults(PROJECT_ROOT / ALL_BOTS_DEFAULT_FILENAME)
-    configure_runtime_logging(level=os.getenv("LOG_LEVEL", "INFO"), tee_stdio=True)
+    configure_runtime_logging(level=os.getenv("TEEBOTUS_LOG_LEVEL") or os.getenv("LOG_LEVEL", "INFO"), tee_stdio=True)
 
     args = list(sys.argv[1:] if argv is None else argv)
     if any(arg != "--all" for arg in args):
@@ -3614,6 +3999,44 @@ def _resolve_telegram_tokens(instance_name: str) -> list[str]:
     return _dedupe_tokens(candidates)
 
 
+def _telegram_update_offset_path(instance_name: str, token_label: str = "1") -> Path:
+    suffix = str(token_label or "1").strip() or "1"
+    filename = f"{Path(TELEGRAM_GET_UPDATES_OFFSET_FILENAME).stem}_{suffix}.json"
+    return _resolve_instances_dir() / instance_name / "data" / filename
+
+
+def _safe_telegram_update_id(update: dict[str, Any]) -> int | None:
+    raw_update_id = update.get("update_id")
+    if raw_update_id is None:
+        return None
+    try:
+        return int(raw_update_id)
+    except (TypeError, ValueError):
+        return None
+
+
+def _read_telegram_update_offset(path: Path) -> int | None:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict):
+        return None
+    try:
+        raw_offset = payload.get("offset")
+        return int(raw_offset) if str(raw_offset).strip() else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _write_telegram_update_offset(path: Path, offset: int) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"offset": int(offset), "updated_at": _utc_timestamp()}) + "\n", encoding="utf-8")
+    except OSError:
+        LOGGER.exception("Failed to persist telegram update offset path=%s offset=%s.", path, offset)
+
+
 def _has_instance_telegram_tokens(instance_name: str) -> bool:
     instance_token_key = _instance_env_key("TELEGRAM_BOT_TOKEN", instance_name)
     instance_tokens_key = _instance_env_key("TELEGRAM_BOT_TOKENS", instance_name)
@@ -3756,10 +4179,14 @@ def _message_kind(message: dict[str, Any]) -> str:
 
 def _send_untracked_message(api: TelegramAPI, chat_id: int, text: str) -> None:
     chunks = split_telegram_message(text)
+    instance_name = getattr(api, "instance_name", "unknown")
+    slot = getattr(api, "adapter_slot", "unknown")
     for index, chunk in enumerate(chunks, start=1):
         message_id = api.send_message(chat_id, chunk)
         LOGGER.info(
-            "Outgoing Telegram message chat_id=%s message_id=%s type=text chars=%s chunk=%s/%s tracked=false",
+            "Outgoing Telegram message instance=%s slot=%s chat_id=%s message_id=%s type=text chars=%s chunk=%s/%s tracked=false",
+            instance_name,
+            slot,
             chat_id,
             message_id if message_id is not None else "unknown",
             len(chunk),
@@ -3786,30 +4213,56 @@ def _send_telegram_message(
     formatted_text: str = "",
     reply_markup: str = "",
 ) -> int | None:
+    bot_instance = getattr(api, "instance_name", "unknown")
+    adapter_slot = getattr(api, "adapter_slot", "unknown")
+    LOGGER.info(
+        "Preparing to send Telegram text action instance=%s slot=%s chat_id=%s chars=%s text_mode=%s reply_markup=%s",
+        bot_instance,
+        adapter_slot,
+        chat_id,
+        len(text),
+        bool(text_mode or formatted_text),
+        bool(reply_markup),
+    )
+    message_id: int | None = None
     if text_mode or formatted_text:
         try:
             kwargs = {"text_mode": text_mode, "formatted_text": formatted_text}
             if reply_markup:
                 kwargs["reply_markup"] = reply_markup
-            return api.send_message(chat_id, text, **kwargs)
+            message_id = api.send_message(chat_id, text, **kwargs)
         except TypeError as exc:
             if "text_mode" not in str(exc) and "formatted_text" not in str(exc) and "reply_markup" not in str(exc):
                 raise
-            return api.send_message(chat_id, text)
-    if reply_markup:
+            message_id = api.send_message(chat_id, text)
+    elif reply_markup:
         try:
-            return api.send_message(chat_id, text, reply_markup=reply_markup)
+            message_id = api.send_message(chat_id, text, reply_markup=reply_markup)
         except TypeError as exc:
             if "reply_markup" not in str(exc):
                 raise
-            return api.send_message(chat_id, text)
-    return api.send_message(chat_id, text)
+            message_id = api.send_message(chat_id, text)
+    else:
+        message_id = api.send_message(chat_id, text)
+    LOGGER.info(
+        "Telegram text action sent instance=%s slot=%s chat_id=%s message_id=%s text_mode=%s",
+        bot_instance,
+        adapter_slot,
+        chat_id,
+        message_id if message_id is not None else "unknown",
+        bool(text_mode or formatted_text),
+    )
+    return message_id
 
 
 def _copy_untracked_message(api: TelegramAPI, chat_id: int, from_chat_id: int, message_id: int) -> None:
     copied_message_id = api.copy_message(chat_id, from_chat_id, message_id)
+    instance_name = getattr(api, "instance_name", "unknown")
+    slot = getattr(api, "adapter_slot", "unknown")
     LOGGER.info(
-        "Outgoing Telegram message chat_id=%s message_id=%s type=copy source_chat_id=%s source_message_id=%s tracked=false",
+        "Outgoing Telegram message instance=%s slot=%s chat_id=%s message_id=%s type=copy source_chat_id=%s source_message_id=%s tracked=false",
+        instance_name,
+        slot,
         chat_id,
         copied_message_id if copied_message_id is not None else "unknown",
         from_chat_id,
@@ -3828,6 +4281,8 @@ def _send_tracked_message(
     buttons: tuple[MessageButton, ...] = (),
 ) -> None:
     chunk_pairs = _telegram_text_chunks(text, formatted_text=formatted_text)
+    instance_name = getattr(api, "instance_name", chat_state.instance_name or "unknown")
+    slot = getattr(api, "adapter_slot", "unknown")
     for index, (chunk, formatted_chunk) in enumerate(chunk_pairs, start=1):
         chunk_buttons = buttons if index == len(chunk_pairs) else ()
         message_id = _send_telegram_message(
@@ -3840,7 +4295,9 @@ def _send_tracked_message(
         )
         chat_state.record_sent_message(chat_id, message_id)
         LOGGER.info(
-            "Outgoing Telegram message chat_id=%s message_id=%s type=text chars=%s chunk=%s/%s",
+            "Outgoing Telegram message instance=%s slot=%s chat_id=%s message_id=%s type=text chars=%s chunk=%s/%s",
+            instance_name,
+            slot,
             chat_id,
             message_id if message_id is not None else "unknown",
             len(chunk),
@@ -3852,8 +4309,12 @@ def _send_tracked_message(
 def _send_tracked_voice(api: TelegramAPI, chat_state: ChatState, chat_id: int, audio: bytes, filename: str, content_type: str) -> None:
     message_id = api.send_voice(chat_id, audio, filename, content_type)
     chat_state.record_sent_message(chat_id, message_id)
+    instance_name = getattr(api, "instance_name", chat_state.instance_name or "unknown")
+    slot = getattr(api, "adapter_slot", "unknown")
     LOGGER.info(
-        "Outgoing Telegram message chat_id=%s message_id=%s type=voice bytes=%s",
+        "Outgoing Telegram message instance=%s slot=%s chat_id=%s message_id=%s type=voice bytes=%s",
+        instance_name,
+        slot,
         chat_id,
         message_id if message_id is not None else "unknown",
         len(audio),
@@ -3867,12 +4328,12 @@ def _send_openai_response(
     message: dict[str, Any],
     text: str,
     instructions: BotInstructions,
-    openai_client: OpenAIClient,
+    openai_client: OpenAIClient | None,
     *,
     voice_instructions: BotInstructions | None = None,
 ) -> None:
     _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, text, chat_state.instance_name, "reply")
-    if _should_consider_auto_voice(text, instructions) and chat_state.should_send_auto_voice(
+    if openai_client is not None and _should_consider_auto_voice(text, instructions) and chat_state.should_send_auto_voice(
         chat_id,
         instructions.openai_auto_voice_every,
     ):
@@ -4093,6 +4554,7 @@ def _handle_youtube_transcript_request(
     user_memory: UserMemoryRecord | None,
     instructions: BotInstructions,
     openai_client: OpenAIClient | None,
+    llm_client: object | None,
     bot_identity: BotIdentity,
     first_contact: bool,
     working_memory_store: WorkingMemoryStore | None,
@@ -4122,7 +4584,7 @@ def _handle_youtube_transcript_request(
         if exc.needs_local_transcription:
             live_enabled, llm_enabled = _parse_youtube_local_options(text, instance_name=instance_name)
             if live_enabled is None or llm_enabled is None:
-                inferred_options = _infer_youtube_local_options_with_llm(text, instructions, openai_client)
+                inferred_options = _infer_youtube_local_options_with_llm(text, instructions, llm_client)
                 if inferred_options is not None:
                     _record_youtube_parser_miss(instance_name, text, (live_enabled, llm_enabled), inferred_options, "initial-request")
                     live_enabled = live_enabled if live_enabled is not None else inferred_options[0]
@@ -4143,6 +4605,7 @@ def _handle_youtube_transcript_request(
                 user_memory,
                 instructions,
                 openai_client,
+                llm_client,
                 bot_identity,
                 first_contact,
                 working_memory_store,
@@ -4160,8 +4623,8 @@ def _handle_youtube_transcript_request(
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
-    if instructions.text_llm_enabled() and openai_client is not None:
-        _send_youtube_transcript_to_openai_pipeline(
+    if instructions.text_llm_enabled() and llm_client is not None:
+        _send_youtube_transcript_to_llm_pipeline(
             api,
             chat_state,
             chat_id,
@@ -4172,6 +4635,7 @@ def _handle_youtube_transcript_request(
             url,
             instructions,
             openai_client,
+            llm_client,
             user_memory_store,
             user_memory,
             bot_identity,
@@ -4180,7 +4644,7 @@ def _handle_youtube_transcript_request(
         )
         return
 
-    if instructions.text_llm_enabled() and openai_client is None:
+    if instructions.text_llm_enabled() and llm_client is None:
         reply = _with_first_contact_intro(instructions.llm_missing_key, first_contact, bot_identity)
     else:
         reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
@@ -4199,6 +4663,7 @@ def _handle_pending_youtube_local_options(
     user_memory: UserMemoryRecord | None,
     instructions: BotInstructions,
     openai_client: OpenAIClient | None,
+    llm_client: object | None,
     bot_identity: BotIdentity,
     first_contact: bool,
     working_memory_store: WorkingMemoryStore | None,
@@ -4212,7 +4677,7 @@ def _handle_pending_youtube_local_options(
 
     live_enabled, llm_enabled = _parse_youtube_local_options(text, instance_name=instance_name)
     if live_enabled is None or llm_enabled is None:
-        inferred_options = _infer_youtube_local_options_with_llm(text, instructions, openai_client)
+        inferred_options = _infer_youtube_local_options_with_llm(text, instructions, llm_client)
         if inferred_options is not None:
             _record_youtube_parser_miss(instance_name, text, (live_enabled, llm_enabled), inferred_options, "pending-options")
             live_enabled = live_enabled if live_enabled is not None else inferred_options[0]
@@ -4237,6 +4702,7 @@ def _handle_pending_youtube_local_options(
         user_memory,
         instructions,
         openai_client,
+        llm_client,
         bot_identity,
         first_contact,
         working_memory_store,
@@ -4259,6 +4725,7 @@ def _start_youtube_local_transcription(
     user_memory: UserMemoryRecord | None,
     instructions: BotInstructions,
     openai_client: OpenAIClient | None,
+    llm_client: object | None,
     bot_identity: BotIdentity,
     first_contact: bool,
     working_memory_store: WorkingMemoryStore | None,
@@ -4284,6 +4751,7 @@ def _start_youtube_local_transcription(
                 first_contact,
                 working_memory_store,
                 instance_name,
+                llm_client,
             )
         )
         reply = "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist."
@@ -4310,6 +4778,7 @@ def _start_youtube_local_transcription(
         first_contact,
         working_memory_store,
         instance_name,
+        llm_client,
     )
 
 
@@ -4330,6 +4799,7 @@ def _run_youtube_local_transcription_job(
     first_contact: bool,
     working_memory_store: WorkingMemoryStore | None,
     instance_name: str = "",
+    llm_client: object | None = None,
 ) -> None:
     try:
         api.send_chat_action(chat_id, "typing")
@@ -4353,8 +4823,8 @@ def _run_youtube_local_transcription_job(
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
         return
 
-    if llm_enabled and instructions.text_llm_enabled() and openai_client is not None:
-        _send_youtube_transcript_to_openai_pipeline(
+    if llm_enabled and instructions.text_llm_enabled() and llm_client is not None:
+        _send_youtube_transcript_to_llm_pipeline(
             api,
             chat_state,
             chat_id,
@@ -4365,6 +4835,7 @@ def _run_youtube_local_transcription_job(
             url,
             instructions,
             openai_client,
+            llm_client,
             user_memory_store,
             user_memory,
             bot_identity,
@@ -4373,7 +4844,7 @@ def _run_youtube_local_transcription_job(
         )
         return
 
-    if llm_enabled and instructions.text_llm_enabled() and openai_client is None:
+    if llm_enabled and instructions.text_llm_enabled() and llm_client is None:
         reply = _with_first_contact_intro(instructions.llm_missing_key, first_contact, bot_identity)
     else:
         reply = f"YouTube-Transkript ({source}):\n\n{transcript}"
@@ -4387,9 +4858,12 @@ def _run_youtube_local_transcription_job(
 def _infer_youtube_local_options_with_llm(
     text: str,
     instructions: BotInstructions,
-    openai_client: OpenAIClient | None,
+    llm_client: object | None,
 ) -> tuple[bool, bool] | None:
-    if openai_client is None:
+    if llm_client is None:
+        return None
+    create_reply = getattr(llm_client, "create_reply", None)
+    if not callable(create_reply):
         return None
     prompt = (
         "Klassifiziere ausschliesslich die Optionen fuer eine lokale YouTube-Transkription.\n"
@@ -4401,11 +4875,11 @@ def _infer_youtube_local_options_with_llm(
         f"Nachricht:\n{text.strip()}"
     )
     try:
-        response = openai_client.create_reply(prompt, instructions, None)
-    except OpenAIAPIError as exc:
-        LOGGER.warning("OpenAI YouTube option classification failed: %s", exc)
+        response = create_reply(prompt, instructions, None)
+    except (LLMAPIError, OpenAIAPIError) as exc:
+        LOGGER.warning("LLM YouTube option classification failed: %s", exc)
         return None
-    return _parse_youtube_local_options_from_llm_response(response.text)
+    return _parse_youtube_local_options_from_llm_response(str(getattr(response, "text", "") or response))
 
 
 def _build_youtube_live_callback(api: TelegramAPI, chat_state: ChatState, chat_id: int):
@@ -4432,7 +4906,7 @@ def _build_youtube_live_callback(api: TelegramAPI, chat_state: ChatState, chat_i
     return emit
 
 
-def _send_youtube_transcript_to_openai_pipeline(
+def _send_youtube_transcript_to_llm_pipeline(
     api: TelegramAPI,
     chat_state: ChatState,
     chat_id: int,
@@ -4442,7 +4916,8 @@ def _send_youtube_transcript_to_openai_pipeline(
     source: str,
     url: str,
     instructions: BotInstructions,
-    openai_client: OpenAIClient,
+    openai_client: OpenAIClient | None,
+    llm_client: object,
     user_memory_store: AccountStore | None,
     user_memory: UserMemoryRecord | None,
     bot_identity: BotIdentity,
@@ -4450,11 +4925,17 @@ def _send_youtube_transcript_to_openai_pipeline(
     working_memory_store: WorkingMemoryStore | None,
 ) -> None:
     pipeline_text = _build_youtube_pipeline_text(user_text, transcript, source, url)
+    create_reply = getattr(llm_client, "create_reply", None)
+    if not callable(create_reply):
+        reply = _with_first_contact_intro(instructions.llm_error, first_contact, bot_identity)
+        _send_tracked_message(api, chat_state, chat_id, reply)
+        _record_user_memory(user_memory_store, user_memory, message, user_text, reply, instructions, api)
+        return
     try:
         api.send_chat_action(chat_id, "typing")
         working_memory = _prepare_working_memory(working_memory_store, pipeline_text)
         weather_text = _prepare_weather_context(user_memory_store, user_memory, user_text)
-        openai_response = openai_client.create_reply(
+        llm_response = create_reply(
             _build_openai_user_input(
                 message,
                 pipeline_text,
@@ -4466,7 +4947,7 @@ def _send_youtube_transcript_to_openai_pipeline(
             instructions,
             chat_state.get_previous_response_id(chat_id),
         )
-    except OpenAIAPIError as exc:
+    except (LLMAPIError, OpenAIAPIError) as exc:
         LOGGER.error("Text LLM request failed after YouTube transcript: %s", exc)
         reply = _with_first_contact_intro(instructions.llm_error, first_contact, bot_identity)
         try:
@@ -4479,8 +4960,8 @@ def _send_youtube_transcript_to_openai_pipeline(
         LOGGER.warning("Telegram request failed during YouTube transcript text LLM pipeline: %s", exc)
         return
 
-    chat_state.set_previous_response_id(chat_id, openai_response.response_id)
-    reply = _with_first_contact_intro(openai_response.text, first_contact, bot_identity)
+    chat_state.set_previous_response_id(chat_id, getattr(llm_response, "response_id", None))
+    reply = _with_first_contact_intro(str(getattr(llm_response, "text", "") or llm_response), first_contact, bot_identity)
     try:
         _send_openai_response(
             api,

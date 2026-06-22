@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import sys
+import types
 
 import pytest
 
@@ -67,24 +69,15 @@ def test_hf_pool_provider_live_executor_requires_explicit_env(monkeypatch, tmp_p
     path = _enabled_config(tmp_path)
     calls: list[dict[str, object]] = []
 
-    def fake_urlopen(request, *, timeout):
-        calls.append(
-            {
-                "url": request.full_url,
-                "timeout": timeout,
-                "authorization": request.get_header("Authorization"),
-                "body": json.loads(request.data.decode("utf-8")),
-            }
-        )
-        return _Response(
-            {
-                "id": "hf-live-test",
-                "choices": [{"message": {"content": "live ok"}}],
-                "usage": {"prompt_tokens": 2, "completion_tokens": 1},
-            }
-        )
+    def completion(**kwargs):
+        calls.append(kwargs)
+        return {
+            "id": "hf-live-test",
+            "choices": [{"message": {"content": "live ok"}}],
+            "usage": {"prompt_tokens": 2, "completion_tokens": 1},
+        }
 
-    monkeypatch.setattr("TeeBotus.llm.hf_pool.executor.urlopen", fake_urlopen)
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
     provider = HFPoolProvider(
         config_path=path,
         env={
@@ -97,11 +90,22 @@ def test_hf_pool_provider_live_executor_requires_explicit_env(monkeypatch, tmp_p
     response = provider.create_reply("ping", BotInstructions(openai_system_prompt="System."))
 
     assert response.text == "live ok"
-    assert response.response_id == "hf-live-test"
-    assert response.usage == {"prompt_tokens": 2, "completion_tokens": 1}
-    assert calls[0]["authorization"] == "Bearer hf-secret"
-    assert calls[0]["body"]["messages"][-1] == {"role": "user", "content": "ping"}
-
+    assert response.response_id is None
+    assert response.usage["prompt_tokens"] == 2
+    assert response.usage["completion_tokens"] == 1
+    assert calls == [
+        {
+            "model": "huggingface/Qwen/Qwen3-4B-Instruct-2507",
+            "messages": [
+                {"role": "system", "content": "System."},
+                {"role": "user", "content": "ping"},
+            ],
+            "timeout": 60,
+            "max_tokens": 700,
+            "api_base": "https://router.huggingface.co/v1",
+            "api_key": "hf-secret",
+        }
+    ]
 
 def test_hf_pool_provider_uses_mock_executor_for_configured_target(tmp_path):
     path = _enabled_config(tmp_path)

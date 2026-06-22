@@ -11,7 +11,7 @@ from typing import Any, Callable
 from TeeBotus.benchmarks.core import BenchmarkResult, result
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMResponse
-from TeeBotus.llm.hf_pool.executor import OpenAICompatibleHFPoolExecutor
+from TeeBotus.llm.hf_pool.executor import LiteLLMHFPoolExecutor
 from TeeBotus.llm.hf_pool.health import check_hf_pool, format_hf_pool_status_lines
 from TeeBotus.llm.hf_pool.provider import HFPoolProvider
 from TeeBotus.llm.hf_pool.state import HFPoolRuntimeState
@@ -131,7 +131,7 @@ def benchmark_hf_pool_eval_matrix(*, iterations: int) -> BenchmarkResult:
             purpose="normal_chat",
             config_path=config_path,
             env={},
-            executor=OpenAICompatibleHFPoolExecutor(opener=forbidden_opener, state=cooldown_state),
+            executor=LiteLLMHFPoolExecutor(opener=forbidden_opener, state=cooldown_state),
             fallback_client=cooldown_fallback,
         )
         cooldown_ms = _timed_ms(lambda: cooldown_provider.create_reply("Trigger cooldown", BotInstructions()))
