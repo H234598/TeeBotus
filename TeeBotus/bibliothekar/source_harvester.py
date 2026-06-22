@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from TeeBotus.runtime.bibliothekar import _coerce_bool, _is_allowed_library_source_path, _manifest_library_path
+from TeeBotus.runtime.bibliothekar import _coerce_bool, _is_allowed_library_source_path, _manifest_library_path, _manifest_sha256, _manifest_token
 from TeeBotus.runtime.source_quality import SourceQualityInput, SourceQualityPipeline, SourceQualityReport, SourceRoute
 
 
@@ -151,7 +151,7 @@ class SourceHarvester:
                 row = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if not isinstance(row, dict) or row.get("sha256") != sha256 or row.get("route") != route:
+            if not isinstance(row, dict) or _manifest_sha256(row.get("sha256")) != sha256 or _manifest_token(row.get("route")) != route:
                 continue
             if route == "accepted" and not _coerce_bool(row.get("accepted_for_ingest")):
                 continue
@@ -173,9 +173,9 @@ class SourceHarvester:
             if not isinstance(row, dict):
                 continue
             stored = _manifest_library_path(self.library_root, row.get("stored_path"), "accepted")
-            if row.get("sha256") != sha256 or stored is None or not _same_path(stored, staged_path):
+            if _manifest_sha256(row.get("sha256")) != sha256 or stored is None or not _same_path(stored, staged_path):
                 continue
-            if row.get("route") == "accepted" and _coerce_bool(row.get("accepted_for_ingest")):
+            if _manifest_token(row.get("route")) == "accepted" and _coerce_bool(row.get("accepted_for_ingest")):
                 return True
         return False
 
