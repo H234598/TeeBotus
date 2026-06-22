@@ -806,6 +806,22 @@ def test_embedding_cli_memory_rebuild_rejects_side_index_collection_override(cap
     assert "cannot be combined with --side-index-dimensions" in capsys.readouterr().err
 
 
+def test_embedding_cli_memory_rebuild_rejects_unsafe_collection_name(capsys, tmp_path):
+    with pytest.raises(SystemExit) as exc_info:
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "memory-rebuild",
+                "--collection",
+                "unsafe/name",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "letters, numbers, underscore, dot or dash" in capsys.readouterr().err
+
+
 def test_embedding_cli_memory_rebuild_rejects_non_positive_side_index_dimensions(capsys, tmp_path):
     with pytest.raises(SystemExit) as exc_info:
         embedding_cli_main(
@@ -1063,6 +1079,22 @@ def test_embedding_cli_codex_history_rebuild_rejects_negative_limit(capsys, tmp_
 
     assert exc_info.value.code == 2
     assert "--limit must be zero or a positive integer" in capsys.readouterr().err
+
+
+def test_embedding_cli_codex_history_rebuild_rejects_unsafe_collection_name(capsys, tmp_path):
+    with pytest.raises(SystemExit) as exc_info:
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "codex-history-rebuild",
+                "--collection",
+                "codex history",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "letters, numbers, underscore, dot or dash" in capsys.readouterr().err
 
 
 def test_ensure_qdrant_collections_for_instances_uses_instance_memory_search_config(monkeypatch, tmp_path):

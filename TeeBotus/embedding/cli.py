@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from contextlib import contextmanager
 from dataclasses import asdict
 from collections.abc import Iterator
@@ -22,6 +23,9 @@ from TeeBotus.runtime.qdrant import (
     qdrant_user_memory_side_collection,
     qdrant_user_memory_side_collection_spec,
 )
+
+
+_QDRANT_COLLECTION_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,255}$")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -198,10 +202,13 @@ def _memory_collection_from_args(args: argparse.Namespace) -> str:
 
 
 def _validate_memory_rebuild_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    collection = str(getattr(args, "collection", "") or "").strip()
+    if collection:
+        _validate_cli_collection_name(parser, collection, "--collection")
     if getattr(args, "side_index_dimensions", None) is None:
         return
     side_dimensions = _positive_cli_int(parser, args.side_index_dimensions, "--side-index-dimensions")
-    if str(getattr(args, "collection", "") or "").strip():
+    if collection:
         parser.error("--collection cannot be combined with --side-index-dimensions.")
     if args.embedding_dimensions is not None and int(args.embedding_dimensions) != side_dimensions:
         parser.error("--embedding-dimensions must match --side-index-dimensions for memory side-index rebuilds.")
@@ -213,6 +220,7 @@ def _validate_collections_ensure_args(parser: argparse.ArgumentParser, args: arg
 
 
 def _validate_codex_history_rebuild_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    _validate_cli_collection_name(parser, str(getattr(args, "collection", "") or ""), "--collection")
     if int(getattr(args, "limit", 0) or 0) < 0:
         parser.error("--limit must be zero or a positive integer.")
 
@@ -226,6 +234,12 @@ def _positive_cli_int(parser: argparse.ArgumentParser, value: object, argument_n
     if parsed < 1:
         parser.error(f"{argument_name} must be a positive integer.")
     return parsed
+
+
+def _validate_cli_collection_name(parser: argparse.ArgumentParser, value: str, argument_name: str) -> None:
+    name = str(value or "").strip()
+    if not _QDRANT_COLLECTION_NAME_RE.fullmatch(name):
+        parser.error(f"{argument_name} must contain only letters, numbers, underscore, dot or dash.")
 
 
 def _status_exit_code(results: tuple[object, ...], *, ok_statuses: set[str]) -> int:
