@@ -536,6 +536,40 @@ def test_gzip_file_does_not_publish_temporary_path_replaced_before_publish(tmp_p
     assert not os.path.lexists(target)
 
 
+def test_gzip_file_does_not_utime_temporary_symlink_replacement(tmp_path, monkeypatch):
+    source_mtime = 1_700_000_000
+    external_mtime = 1_710_000_000
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    os.utime(path, (source_mtime, source_mtime))
+    target = tmp_path / f"{path.name}.gz"
+    temporary = tmp_path / f".{target.name}.tmp"
+    external = tmp_path / "external-target"
+    external.write_text("do not touch mtime\n", encoding="utf-8")
+    os.utime(external, (external_mtime, external_mtime))
+    real_utime = os.utime
+    raced = False
+
+    def racing_utime(file, times=None, *args, **kwargs):
+        nonlocal raced
+        if Path(file) == temporary and not raced:
+            raced = True
+            temporary.unlink()
+            temporary.symlink_to(external)
+        return real_utime(file, times, *args, **kwargs)
+
+    monkeypatch.setattr(os, "utime", racing_utime)
+
+    with pytest.raises(OSError, match="temporary file changed before publish"):
+        gzip_file(path)
+
+    assert raced is True
+    assert path.read_text(encoding="utf-8") == "old log\n"
+    assert temporary.is_symlink()
+    assert external.stat().st_mtime == pytest.approx(external_mtime)
+    assert not os.path.lexists(target)
+
+
 def test_gzip_file_preserves_source_replaced_before_cleanup(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")

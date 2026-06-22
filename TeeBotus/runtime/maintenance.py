@@ -294,7 +294,7 @@ def gzip_file(path: Path, *, expected_stat: os.stat_result | None = None) -> Pat
             temporary_fd = None
             with gzip.GzipFile(fileobj=raw_sink, mode="wb") as sink:
                 shutil.copyfileobj(source, sink)
-        os.utime(temporary, (source_stat.st_atime, source_stat.st_mtime))
+        os.utime(temporary, (source_stat.st_atime, source_stat.st_mtime), follow_symlinks=False)
         published = _publish_temporary_file(temporary, target, expected_stat=temporary_stat)
     except Exception:
         if source_fd is not None:
