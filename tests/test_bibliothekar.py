@@ -664,6 +664,37 @@ def test_haystack_backend_keeps_partial_file_filters_via_local_fallback(tmp_path
     assert "therapie.txt" not in selection.prompt_text
 
 
+def test_haystack_backend_applies_local_only_filters_after_document_store_read(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+    (library_dir / "technik.txt").write_text("Python Software Daten System Algorithmus.", encoding="utf-8")
+    document_store = FakeDocumentStore()
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+    backend.rebuild()
+
+    selection = backend.search(
+        BibliothekarQuery(
+            text="System Therapie",
+            filters={"title": "technik"},
+            max_chunks=3,
+        )
+    )
+    payload = json.loads(selection.prompt_text)
+
+    assert document_store.filter_calls[-1]["filters"] == {
+        "operator": "AND",
+        "conditions": [{"field": "meta.instance_name", "operator": "in", "value": ["Depressionsbot"]}],
+    }
+    assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["technik.txt"]
+    assert "therapie.txt" not in selection.prompt_text
+
+
 def test_haystack_backend_does_not_push_private_account_filters_to_document_store(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)

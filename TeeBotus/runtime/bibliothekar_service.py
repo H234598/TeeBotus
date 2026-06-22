@@ -377,11 +377,12 @@ class HaystackBibliothekarBackend:
 
     def _search_document_store_chunks(self, document_store: Any, filters: Mapping[str, object] | None) -> list[dict[str, Any]]:
         pushed_filters = self._document_store_filters(filters)
+        active_filters = _active_chunk_filters(filters or {})
         chunks = self._chunks_from_document_store(document_store, filters=pushed_filters)
         if chunks:
-            return chunks
+            return _apply_chunk_filters(chunks, filters) if active_filters else chunks
         fallback_chunks = self._chunks_from_document_store(document_store)
-        if _active_chunk_filters(filters or {}):
+        if active_filters:
             return _apply_chunk_filters(fallback_chunks, filters)
         return fallback_chunks
 
