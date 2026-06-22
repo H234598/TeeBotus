@@ -194,6 +194,11 @@ def build_profiled_text_llm_client(
     source = os.environ if env is None else env
     api_key = source.get(route.api_key_env, "").strip() if route.api_key_env else ""
     fallback_api_key = source.get(route.fallback_api_key_env, "").strip() if route.fallback_api_key_env else ""
+    gemini_key_model = _first_google_gemini_model(route)
+    uses_gemini_api = _route_uses_gemini_api(route.provider, route.model) or _route_uses_gemini_api(
+        route.provider,
+        route.fallback_model,
+    )
     return build_text_llm_client(
         instructions=instructions,
         openai_client=openai_client,
@@ -203,9 +208,9 @@ def build_profiled_text_llm_client(
         fallback_api_keys={route.fallback_model: fallback_api_key} if route.fallback_model and fallback_api_key else None,
         fallback_api_bases={route.fallback_model: route.fallback_base_url} if route.fallback_model and route.fallback_base_url else None,
         api_key=api_key,
-        api_key_ring=resolve_gemini_api_key_ring(source) if _route_uses_gemini_api(route.provider, route.model) else (),
-        gemini_free_tier_limits=resolve_gemini_free_tier_limits(source, provider=route.provider, model=route.model)
-        if route_uses_google_gemini(provider=route.provider, model=route.model)
+        api_key_ring=resolve_gemini_api_key_ring(source) if uses_gemini_api else (),
+        gemini_free_tier_limits=resolve_gemini_free_tier_limits(source, provider=route.provider, model=gemini_key_model)
+        if gemini_key_model
         else None,
         service_tier=resolve_gemini_service_tier(
             source,
@@ -231,6 +236,14 @@ def normalize_llm_purpose(value: object) -> str:
 
 def _route_uses_gemini_api(provider: str, model: str) -> bool:
     return route_uses_gemini_api(provider=provider, model=model)
+
+
+def _first_google_gemini_model(route: LLMRoute) -> str:
+    if route_uses_google_gemini(provider=route.provider, model=route.model):
+        return route.model
+    if route_uses_google_gemini(provider=route.provider, model=route.fallback_model):
+        return route.fallback_model
+    return ""
 
 
 def _require_profile(profiles: Mapping[str, LLMProfile], name: str) -> LLMProfile:

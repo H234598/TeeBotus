@@ -362,6 +362,38 @@ def test_litellm_text_client_tries_fallback_models(monkeypatch: pytest.MonkeyPat
     assert response.model == "ollama/llama3.1:8b"
 
 
+def test_litellm_text_client_uses_gemini_key_ring_only_for_gemini_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    def completion(**kwargs):
+        model = str(kwargs["model"])
+        api_key = str(kwargs.get("api_key") or "")
+        calls.append((model, api_key))
+        if model == "openai/gpt-test":
+            raise RuntimeError("primary unavailable")
+        return {"choices": [{"message": {"content": f"ok:{api_key}"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="litellm",
+            model="openai/gpt-test",
+            api_key="openai-key",
+            fallback_models=("gemini/gemini-3.5-flash",),
+            fallback_api_keys={"gemini/gemini-3.5-flash": "single-gemini-key"},
+            api_key_ring=("gemini-ring-a", "gemini-ring-b"),
+        )
+    ).create_reply("Ping", BotInstructions(), None)
+
+    assert response.text == "ok:gemini-ring-a"
+    assert response.model == "gemini/gemini-3.5-flash"
+    assert calls == [
+        ("openai/gpt-test", "openai-key"),
+        ("gemini/gemini-3.5-flash", "gemini-ring-a"),
+    ]
+
+
 def test_litellm_text_client_keeps_explicit_cross_provider_fallback_prefixes(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 

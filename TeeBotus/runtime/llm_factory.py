@@ -139,6 +139,11 @@ def build_runtime_text_llm_client(
             instance_name=instance_name,
             provider=resolved_provider,
             model=resolved_model,
+            fallback_models=filter_runtime_fallback_models(
+                provider=resolved_provider,
+                fallback_models=fallback_models or instructions.llm_fallback_models,
+                allow_remote_fallback=remote_fallback_allowed,
+            ),
             explicit_api_key=api_key,
             scope=gemini_key_scope,
         ),
@@ -147,6 +152,11 @@ def build_runtime_text_llm_client(
             instance_name=instance_name,
             provider=resolved_provider,
             model=resolved_model,
+            fallback_models=filter_runtime_fallback_models(
+                provider=resolved_provider,
+                fallback_models=fallback_models or instructions.llm_fallback_models,
+                allow_remote_fallback=remote_fallback_allowed,
+            ),
         ),
         api_base=api_base,
         purpose=route_purpose or "normal_chat",
@@ -285,6 +295,7 @@ def _build_route_client(
             instance_name=instance_name,
             provider=route.provider,
             model=route.model,
+            fallback_models=resolved_fallback_models,
             explicit_api_key=override_api_key,
             scope=gemini_key_scope,
         ),
@@ -293,6 +304,7 @@ def _build_route_client(
             instance_name=instance_name,
             provider=route.provider,
             model=route.model,
+            fallback_models=resolved_fallback_models,
         ),
         api_base=resolved_api_base,
         purpose=route.purpose,
@@ -355,6 +367,11 @@ def _build_profile_client(
             instance_name=instance_name,
             provider=profile.provider,
             model=profile.model,
+            fallback_models=filter_runtime_fallback_models(
+                provider=profile.provider,
+                fallback_models=fallback_models,
+                allow_remote_fallback=allow_remote_fallback,
+            ),
             explicit_api_key=override_api_key,
             scope=gemini_key_scope,
         ),
@@ -363,6 +380,11 @@ def _build_profile_client(
             instance_name=instance_name,
             provider=profile.provider,
             model=profile.model,
+            fallback_models=filter_runtime_fallback_models(
+                provider=profile.provider,
+                fallback_models=fallback_models,
+                allow_remote_fallback=allow_remote_fallback,
+            ),
         ),
         api_base=resolved_api_base,
         purpose="normal_chat",
@@ -468,12 +490,18 @@ def _gemini_api_key_ring_for_route(
     instance_name: str,
     provider: str,
     model: str,
-    explicit_api_key: str,
+    fallback_models: str | tuple[str, ...] = (),
+    explicit_api_key: str = "",
     scope: str = "",
 ) -> tuple[str, ...]:
-    if str(explicit_api_key or "").strip():
+    primary_uses_gemini = _route_uses_gemini_api(provider=provider, model=model)
+    fallback_uses_gemini = any(
+        _route_uses_gemini_api(provider=provider, model=fallback_model)
+        for fallback_model in parse_fallback_models(fallback_models)
+    )
+    if str(explicit_api_key or "").strip() and primary_uses_gemini:
         return ()
-    if not _route_uses_gemini_api(provider=provider, model=model):
+    if not primary_uses_gemini and not fallback_uses_gemini:
         return ()
     return resolve_gemini_api_key_ring(env, instance_name=instance_name, scope=scope)
 
@@ -484,10 +512,22 @@ def _gemini_free_tier_limits_for_route(
     instance_name: str,
     provider: str,
     model: str,
+    fallback_models: str | tuple[str, ...] = (),
 ):
-    if not route_uses_google_gemini(provider=provider, model=model):
+    if route_uses_google_gemini(provider=provider, model=model):
+        limit_model = model
+    else:
+        limit_model = next(
+            (
+                fallback_model
+                for fallback_model in parse_fallback_models(fallback_models)
+                if route_uses_google_gemini(provider=provider, model=fallback_model)
+            ),
+            "",
+        )
+    if not limit_model:
         return None
-    return resolve_gemini_free_tier_limits(env, instance_name=instance_name, provider=provider, model=model)
+    return resolve_gemini_free_tier_limits(env, instance_name=instance_name, provider=provider, model=limit_model)
 
 
 def _gemini_service_tier_for_route(

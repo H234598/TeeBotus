@@ -20,6 +20,7 @@ from TeeBotus.llm.free_tier import (
     provider_is_paid_google_gemini,
     quota_owner_id,
     resolve_gemini_free_tier_limits,
+    route_uses_gemini_api,
     route_uses_google_gemini,
 )
 from TeeBotus.llm.keyring import RotatingAPIKeyRing
@@ -145,6 +146,7 @@ class LiteLLMTextClient:
         self.gemini_free_tier_limits = _resolve_litellm_gemini_free_tier_limits(
             provider=self.provider,
             model=self.model,
+            fallback_models=self.fallback_models,
             explicit_limits=resolved.gemini_free_tier_limits,
         )
         self.gemini_free_tier_guard = GeminiFreeTierGuard(self.gemini_free_tier_limits)
@@ -170,17 +172,15 @@ class LiteLLMTextClient:
         if not models:
             raise LLMAPIError("LiteLLM model must not be empty")
 
-        key_attempts = self.api_key_ring.ordered_keys() if self.api_key_ring else (None,)
         if previous_response_id:
             LOGGER.debug("Ignoring previous_response_id for LiteLLM text provider; provider has no Responses state capability.")
 
         errors: list[str] = []
-        for ring_key in key_attempts:
-            base_kwargs = self._completion_kwargs(user_text, instructions, api_key_override=ring_key)
-            _validate_litellm_local_service_targets(models, base_kwargs, fallback_api_bases=self.fallback_api_bases)
-            key_was_limited = False
-            for model in models:
-                kwargs = self._completion_kwargs_for_model(base_kwargs, model)
+        base_kwargs = self._completion_kwargs(user_text, instructions)
+        _validate_litellm_local_service_targets(models, base_kwargs, fallback_api_bases=self.fallback_api_bases)
+        for model in models:
+            for ring_key in self._api_key_attempts_for_model(model):
+                kwargs = self._completion_kwargs_for_model(base_kwargs, model, api_key_override=ring_key)
                 quota_owner = quota_owner_id(
                     api_key=str(kwargs.get("api_key") or ""),
                     provider=_quota_owner_provider(provider=self.provider, model=model),
@@ -202,9 +202,8 @@ class LiteLLMTextClient:
                         reservation.reason,
                     )
                     if ring_key:
-                        key_was_limited = True
                         self.api_key_ring.mark_limited(ring_key)  # type: ignore[union-attr]
-                        break
+                        continue
                     continue
                 call_id = next_llm_call_id("litellm")
                 started_at = time.perf_counter()
@@ -234,16 +233,15 @@ class LiteLLMTextClient:
                     errors.append(f"provider={self.provider} model={model}: {type(exc).__name__}: {detail}")
                     LOGGER.warning("LiteLLM completion failed call_id=%s provider=%s model=%s: %s", call_id, self.provider, model, detail)
                     if ring_key and _is_usage_limit_error(exc, detail):
-                        key_was_limited = True
                         self.api_key_ring.mark_limited(ring_key)  # type: ignore[union-attr]
                         LOGGER.warning("Gemini/LiteLLM API key hit a usage limit; trying next configured key.")
-                        break
-                    continue
+                        continue
+                    break
                 text = _extract_litellm_text(response)
                 if not text:
                     errors.append(f"provider={self.provider} model={model}: empty text")
                     LOGGER.warning("LiteLLM completion returned empty text for provider=%s model=%s.", self.provider, model)
-                    continue
+                    break
                 usage = _extract_usage(response)
                 _add_litellm_response_cost(usage, response)
                 LOGGER.info(
@@ -273,8 +271,6 @@ class LiteLLMTextClient:
                     model=model,
                     usage=usage,
                 )
-            if not key_was_limited:
-                break
         detail = "; ".join(errors) if errors else "no models attempted"
         raise LLMAPIError(f"LiteLLM completion failed for all configured models: {detail}")
 
@@ -308,7 +304,13 @@ class LiteLLMTextClient:
             kwargs["api_key"] = api_key
         return kwargs
 
-    def _completion_kwargs_for_model(self, base_kwargs: dict[str, object], model: str) -> dict[str, object]:
+    def _completion_kwargs_for_model(
+        self,
+        base_kwargs: dict[str, object],
+        model: str,
+        *,
+        api_key_override: str | None = None,
+    ) -> dict[str, object]:
         kwargs = dict(base_kwargs)
         api_base = self.fallback_api_bases.get(model)
         if api_base:
@@ -316,9 +318,19 @@ class LiteLLMTextClient:
         api_key = self.fallback_api_keys.get(model)
         if api_key:
             kwargs["api_key"] = api_key
+        ring_key = str(api_key_override or "").strip()
+        if ring_key:
+            kwargs["api_key"] = ring_key
         if self.service_tier and route_uses_google_gemini(provider=self.provider, model=model):
             kwargs["service_tier"] = self.service_tier
         return kwargs
+
+    def _api_key_attempts_for_model(self, model: str) -> tuple[str | None, ...]:
+        if self.api_key_ring is None:
+            return (None,)
+        if not route_uses_gemini_api(provider=self.provider, model=model):
+            return (None,)
+        return tuple(self.api_key_ring.ordered_keys())
 
     def _reserve_google_free_tier_budget(
         self,
@@ -657,11 +669,20 @@ def _resolve_litellm_gemini_free_tier_limits(
     *,
     provider: str,
     model: str,
+    fallback_models: tuple[str, ...] = (),
     explicit_limits: GeminiFreeTierLimits | None,
 ) -> GeminiFreeTierLimits:
     if provider_is_paid_google_gemini(provider):
         return GeminiFreeTierLimits(enabled=False, requests_per_minute=None, input_tokens_per_minute=None, requests_per_day=None)
-    return explicit_limits or resolve_gemini_free_tier_limits(provider=provider, model=model)
+    if route_uses_google_gemini(provider=provider, model=model):
+        return explicit_limits or resolve_gemini_free_tier_limits(provider=provider, model=model)
+    fallback_model = next(
+        (candidate for candidate in fallback_models if route_uses_google_gemini(provider=provider, model=candidate)),
+        "",
+    )
+    if fallback_model:
+        return explicit_limits or resolve_gemini_free_tier_limits(provider=provider, model=fallback_model)
+    return GeminiFreeTierLimits(enabled=False, requests_per_minute=None, input_tokens_per_minute=None, requests_per_day=None)
 
 
 def _response_value(response: object, key: str) -> object:

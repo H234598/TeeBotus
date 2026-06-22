@@ -180,6 +180,42 @@ def test_runtime_profile_client_uses_paid_gemini_profile_without_free_tier_guard
     assert client.gemini_free_tier_limits.status_summary() == "off"
 
 
+def test_runtime_route_client_uses_gemini_key_ring_for_gemini_fallback(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "TeeBotus.runtime.llm_factory.select_llm_route",
+        lambda *_args, **_kwargs: LLMRoute(
+            purpose="hard_reasoning",
+            profile_name="openai_premium",
+            provider="litellm",
+            model="openai/gpt-test",
+            api_key_env="OPENAI_API_KEY",
+            fallback_profile_name="gemini_flash_stateful",
+            fallback_model="gemini/gemini-3.5-flash",
+            fallback_api_key_env="GEMINI_API_KEY",
+        ),
+    )
+
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="hard_reasoning",
+        allow_remote_fallback=True,
+        env={
+            "OPENAI_API_KEY": "openai-key",
+            "GEMINI_API_KEY": "single-gemini-key",
+            "GEMINI_API_KEYS_ACCOUNT_1": "a1,a2",
+            "GEMINI_API_KEYS_ACCOUNT_2": "b1",
+        },
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.api_key == "openai-key"
+    assert client.fallback_models == ("gemini/gemini-3.5-flash",)
+    assert client.api_key_ring is not None
+    assert client.api_key_ring.keys == ("a1", "b1", "a2")
+    assert client.gemini_free_tier_limits.active
+
+
 def test_runtime_profile_client_uses_gemini_service_tier_env_switch() -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(),
@@ -465,6 +501,41 @@ def test_profiled_text_client_passes_gemini_service_tier_from_profile() -> None:
 
     assert isinstance(client, LiteLLMTextClient)
     assert client.service_tier == "flex"
+
+
+def test_profiled_text_client_uses_gemini_key_ring_for_gemini_fallback() -> None:
+    profiles = {
+        "openai_premium": LLMProfile("openai_premium", "litellm", "openai/gpt-test", api_key_env="OPENAI_API_KEY"),
+        "gemini_flash": LLMProfile(
+            "gemini_flash",
+            "litellm",
+            "gemini/gemini-3.5-flash",
+            api_key_env="GEMINI_API_KEY",
+        ),
+    }
+    routing = {"hard_reasoning": LLMRoutingRule("hard_reasoning", "openai_premium", "gemini_flash")}
+
+    client = build_profiled_text_llm_client(
+        purpose="hard_reasoning",
+        instructions=BotInstructions(),
+        openai_client=None,
+        profiles=profiles,
+        routing=routing,
+        allow_remote_fallback=True,
+        env={
+            "OPENAI_API_KEY": "openai-key",
+            "GEMINI_API_KEY": "single-gemini-key",
+            "GEMINI_API_KEYS_ACCOUNT_1": "a1,a2",
+            "GEMINI_API_KEYS_ACCOUNT_2": "b1",
+        },
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.api_key == "openai-key"
+    assert client.fallback_models == ("gemini/gemini-3.5-flash",)
+    assert client.api_key_ring is not None
+    assert client.api_key_ring.keys == ("a1", "b1", "a2")
+    assert client.gemini_free_tier_limits.active
 
 
 def test_profiled_text_client_does_not_reuse_instruction_remote_fallbacks_when_route_blocks_them() -> None:
