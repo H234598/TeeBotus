@@ -110,12 +110,14 @@ def admin_account_group_status_lines(
     project_root: Path,
     env: Mapping[str, str] | None = None,
     store: AccountStore | None = None,
+    store_factory: StoreFactory | None = None,
 ) -> tuple[str, ...]:
     group = resolve_admin_account_group(instance_name=instance_name, env=env)
     if not group.account_ids and not group.invalid_ids:
         return (f"admin_accounts={instance_name} status=disabled source={group.source} accounts=0",)
+    resolved_store_factory = store_factory or _default_account_store
     try:
-        resolved_store = store or _default_account_store(project_root / "instances" / instance_name / "data" / "accounts", instance_name)
+        resolved_store = store or resolved_store_factory(project_root / "instances" / instance_name / "data" / "accounts", instance_name)
     except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose store problems.
         return (
             f"admin_accounts={instance_name} status=broken source={group.source} accounts={len(group.account_ids)} "
@@ -129,17 +131,22 @@ def admin_account_group_status_lines(
 
     account_lines: list[str] = []
     local_count = 0
+    cross_instance_count = 0
     routable_count = 0
     not_local_count = 0
     warning_count = 0
     for account_id in account_ids:
-        account_dir = resolved_store.account_dir(account_id)
-        if not account_dir.is_dir():
-            not_local_count += 1
-            continue
-        local_count += 1
+        is_local = _account_dir_exists(resolved_store, account_id)
+        if is_local:
+            local_count += 1
         try:
-            route = select_proactive_route(resolved_store, account_id)
+            route_resolution = _resolve_admin_notification_route(
+                resolved_store,
+                account_id,
+                instances_dir=project_root / "instances",
+                summary_instance_name=instance_name,
+                store_factory=resolved_store_factory,
+            )
         except (AccountStoreError, OSError) as exc:
             warning_count += 1
             account_lines.append(
@@ -147,19 +154,34 @@ def admin_account_group_status_lines(
                 f"error={_status_token(f'{type(exc).__name__}:{exc}')}"
             )
             continue
-        if route is None:
-            warning_count += 1
-            account_lines.append(f"admin_account={instance_name}/{account_id} status=warning reason=no_private_route")
+        if route_resolution.status == "not_local":
+            not_local_count += 1
             continue
+        if route_resolution.status == "failed":
+            warning_count += 1
+            account_lines.append(f"admin_account={instance_name}/{account_id} status=warning reason={_status_token(route_resolution.reason)}")
+            continue
+        if route_resolution.route is None:
+            warning_count += 1
+            account_lines.append(
+                f"admin_account={instance_name}/{account_id} status=warning "
+                f"reason={_status_token(route_resolution.reason or 'no_private_route')}"
+            )
+            continue
+        route = route_resolution.route
+        source_instance = _status_token(route.get("route_source_instance") or instance_name)
+        if source_instance != _status_token(instance_name):
+            cross_instance_count += 1
         routable_count += 1
         channel = _status_token(route.get("channel") or "unknown")
         slot = _status_token(route.get("adapter_slot") if route.get("adapter_slot") is not None else "unknown")
-        account_lines.append(f"admin_account={instance_name}/{account_id} status=routable channel={channel} slot={slot}")
+        account_lines.append(f"admin_account={instance_name}/{account_id} status=routable channel={channel} slot={slot} source_instance={source_instance}")
 
     status = "broken" if group.invalid_ids else "configured"
     lines = [
         f"admin_accounts={instance_name} status={status} source={group.source} accounts={len(account_ids)} "
-        f"local={local_count} not_local={not_local_count} routable={routable_count} warnings={warning_count} invalid={len(group.invalid_ids)}"
+        f"local={local_count} cross_instance={cross_instance_count} not_local={not_local_count} "
+        f"routable={routable_count} warnings={warning_count} invalid={len(group.invalid_ids)}"
     ]
     for invalid_id in group.invalid_ids:
         lines.append(f"admin_account={instance_name}/{_status_token(invalid_id)} status=broken reason=invalid_account_id")
@@ -526,11 +548,19 @@ def _resolve_admin_notification_route(
     summary_instance_name: str,
     store_factory: StoreFactory,
 ) -> _AdminRouteResolution:
-    if _account_dir_exists(store, account_id):
-        route = select_proactive_route(store, account_id)
-        if route is None:
-            return _AdminRouteResolution("skipped", reason="no_private_route")
-        return _AdminRouteResolution("routable", route=dict(route))
+    local_route_error = ""
+    local_account_exists = _account_dir_exists(store, account_id)
+    local_account_without_route = False
+    if local_account_exists:
+        try:
+            route = select_proactive_route(store, account_id)
+        except (AccountStoreError, OSError) as exc:
+            local_route_error = f"{summary_instance_name}:{type(exc).__name__}"
+        else:
+            if route is None:
+                local_account_without_route = True
+            else:
+                return _AdminRouteResolution("routable", route=dict(route))
 
     found_source_account = False
     route_errors: list[str] = []
@@ -554,6 +584,10 @@ def _resolve_admin_notification_route(
     if found_source_account:
         if route_errors:
             return _AdminRouteResolution("failed", reason=f"route:{route_errors[0]}")
+        return _AdminRouteResolution("skipped", reason="no_private_route")
+    if local_route_error:
+        return _AdminRouteResolution("failed", reason=f"route:{local_route_error}")
+    if local_account_exists or local_account_without_route:
         return _AdminRouteResolution("skipped", reason="no_private_route")
     return _AdminRouteResolution("not_local", reason="not_local")
 

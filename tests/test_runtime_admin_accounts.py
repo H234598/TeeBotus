@@ -84,7 +84,7 @@ def test_admin_account_status_uses_account_route(tmp_path) -> None:
     )
 
     assert lines[0].startswith("admin_accounts=Depressionsbot status=configured")
-    assert f"admin_account=Depressionsbot/{account_id} status=routable channel=telegram slot=1" in lines
+    assert f"admin_account=Depressionsbot/{account_id} status=routable channel=telegram slot=1 source_instance=Depressionsbot" in lines
 
 
 def test_admin_account_status_summarizes_not_local_accounts_without_ids(tmp_path) -> None:
@@ -99,9 +99,43 @@ def test_admin_account_status_summarizes_not_local_accounts_without_ids(tmp_path
 
     assert lines == (
         "admin_accounts=Depressionsbot status=configured source=TEEBOTUS_ADMIN_ACCOUNT_IDS "
-        "accounts=1 local=0 not_local=1 routable=0 warnings=0 invalid=0",
+        "accounts=1 local=0 cross_instance=0 not_local=1 routable=0 warnings=0 invalid=0",
     )
     assert DEFAULT_ADMIN_ACCOUNT_IDS[0] not in "\n".join(lines)
+
+
+def test_admin_account_status_reports_cross_instance_routable_admin(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    logger_store = status_summary_store_for(instances_dir)
+    source_store = store_for(instances_dir / "Depressionsbot" / "data", "Depressionsbot")
+    identity = telegram_identity_key(123)
+    account_id = source_store.resolve_or_create_account(identity)
+    source_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    logger_store.account_dir(account_id).mkdir(parents=True)
+
+    def store_factory(_root: Path, instance_name: str) -> AccountStore:
+        if instance_name == STATUS_SUMMARY_INSTANCE_NAME:
+            return logger_store
+        if instance_name == "Depressionsbot":
+            return source_store
+        raise AssertionError(f"unexpected instance store: {instance_name}")
+
+    lines = admin_account_group_status_lines(
+        instance_name=STATUS_SUMMARY_INSTANCE_NAME,
+        project_root=tmp_path,
+        env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+        store=logger_store,
+        store_factory=store_factory,
+    )
+
+    assert lines[0] == (
+        f"admin_accounts={STATUS_SUMMARY_INSTANCE_NAME} status=configured source=TEEBOTUS_ADMIN_ACCOUNT_IDS "
+        "accounts=1 local=1 cross_instance=1 not_local=0 routable=1 warnings=0 invalid=0"
+    )
+    assert (
+        f"admin_account={STATUS_SUMMARY_INSTANCE_NAME}/{account_id} status=routable "
+        "channel=telegram slot=1 source_instance=Depressionsbot"
+    ) in lines
 
 
 def test_runtime_status_problem_lines_extracts_warnings_and_errors() -> None:
@@ -240,6 +274,7 @@ def test_benchmark_admin_notify_uses_cross_instance_admin_route_but_writes_logge
     identity = telegram_identity_key(123)
     account_id = source_store.resolve_or_create_account(identity)
     source_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    logger_store.account_dir(account_id).mkdir(parents=True)
     sent: list[tuple[dict[str, object], SendAttachment]] = []
 
     def store_factory(_root: Path, instance_name: str) -> AccountStore:
