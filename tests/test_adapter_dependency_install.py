@@ -386,6 +386,27 @@ def test_llm_profiles_plan2_contract_rejects_wrong_purpose_routes(monkeypatch) -
     assert "routing missing codex_history_strategic_analysis" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_selector_route_drift(monkeypatch) -> None:
+    from dataclasses import replace
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_selector = llm_profiles.select_llm_route
+
+    def drifting_selector(purpose: str, **kwargs):
+        route = original_selector(purpose, **kwargs)
+        if route.purpose == "hard_reasoning":
+            return replace(route, fallback_profile_name="", fallback_model="", fallback_api_key_env="")
+        return route
+
+    monkeypatch.setattr(llm_profiles, "select_llm_route", drifting_selector)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "routing hard_reasoning selector fallback=<empty> expected=gemini_flash_stateful" in message
+
+
 def test_local_secret_file_permission_check_accepts_missing_or_private_env(tmp_path: Path) -> None:
     ok, message = check_adapter_deps._check_local_secret_file_permissions(tmp_path)
 

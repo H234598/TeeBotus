@@ -404,7 +404,7 @@ def _optional_dependency_name_version(dependency: str) -> tuple[str, str]:
 
 def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     try:
-        from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing
+        from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing, select_llm_route
     except Exception as exc:
         return False, f"llm profiles plan2 contract import_error={type(exc).__name__}: {exc}"
     try:
@@ -487,6 +487,26 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
             errors.append(
                 f"routing {purpose} profile={rule.profile or '<empty>'} fallback={rule.fallback or '<empty>'} "
                 f"expected={profile}/{fallback or '<empty>'}"
+            )
+        try:
+            selected = select_llm_route(
+                purpose,
+                profiles=profiles,
+                default_profile=default_profile,
+                routing=routing,
+                allow_remote_fallback=True,
+            )
+        except Exception as exc:
+            errors.append(f"routing {purpose} selector failed: {type(exc).__name__}: {exc}")
+            continue
+        if selected.profile_name != profile:
+            errors.append(
+                f"routing {purpose} selector profile={selected.profile_name or '<empty>'} expected={profile}"
+            )
+        if selected.fallback_profile_name != fallback:
+            errors.append(
+                f"routing {purpose} selector fallback={selected.fallback_profile_name or '<empty>'} "
+                f"expected={fallback or '<empty>'}"
             )
     if errors:
         return False, "llm profiles plan2 contract failed: " + "; ".join(errors)
