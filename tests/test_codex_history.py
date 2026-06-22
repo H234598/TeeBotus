@@ -385,7 +385,8 @@ def test_codex_history_latest_by_repo_uses_summary_order_over_row_order(tmp_path
     assert latest["summary_prefix"] != first["summary_prefix"]
 
 
-def test_codex_history_bibliothekar_export_writes_admin_only_docs(tmp_path: Path) -> None:
+def test_codex_history_bibliothekar_export_writes_admin_only_docs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_CODEX_HISTORY_TIMEZONE", "Europe/Berlin")
     instance_dir = make_instance(tmp_path)
     repo = make_git_repo(tmp_path, "bibliothekar-export-demo", version="1.8.6")
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
@@ -401,6 +402,14 @@ def test_codex_history_bibliothekar_export_writes_admin_only_docs(tmp_path: Path
         changed_files=["TeeBotus/admin/codex_history.py", "docs/Codex_Outbox_History_Plan.md"],
         tests=["pytest tests/test_codex_history.py"],
     )
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    rows[0]["created_at"] = "2026-06-19T12:00:00+00:00"
+    rows[0]["updated_at"] = "2026-06-19T12:30:00+00:00"
+    rows[0]["delivery"]["sent_at"] = "2026-06-19T13:00:00+00:00"
+    rows[0]["delivery"]["accepted_at"] = "2026-06-19T13:05:00+00:00"
+    rows[0]["delivery"]["delivered_at"] = "2026-06-19T13:10:00+00:00"
+    rows[0]["delivery"]["acknowledged_at"] = "2026-06-19T13:15:00+00:00"
+    store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
 
     result = export_codex_history_bibliothekar_docs(
         store,
@@ -425,6 +434,13 @@ def test_codex_history_bibliothekar_export_writes_admin_only_docs(tmp_path: Path
     assert "Qdrant und Bibliothekar" in exported_text
     assert fake_key not in exported_text
     assert "<redacted:openai-key>" in exported_text
+    assert "- Erstellt: `2026-06-19T14:00:00+02:00`" in exported_text
+    assert "- Aktualisiert: `2026-06-19T14:30:00+02:00`" in exported_text
+    assert "- Sent: `2026-06-19T15:00:00+02:00`" in exported_text
+    assert "- Accepted: `2026-06-19T15:05:00+02:00`" in exported_text
+    assert "- Delivered: `2026-06-19T15:10:00+02:00`" in exported_text
+    assert "- Acknowledged: `2026-06-19T15:15:00+02:00`" in exported_text
+    assert "2026-06-19T13:15:00+00:00" not in exported_text
 
 
 def test_codex_history_bibliothekar_chunks_are_admin_only_and_citeable(tmp_path: Path) -> None:
@@ -860,7 +876,10 @@ def test_codex_history_index_cli_exports_and_dry_runs_qdrant(tmp_path: Path, cap
     assert not (tmp_path / "Depressionsbot" / "data" / "Bibliothek").exists()
 
 
-def test_codex_history_dispatch_sends_markdown_attachment_and_marks_accepted(tmp_path: Path) -> None:
+def test_codex_history_dispatch_sends_markdown_attachment_and_marks_accepted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TEEBOTUS_CODEX_HISTORY_TIMEZONE", "Europe/Berlin")
     repo = make_git_repo(tmp_path, "dispatch-demo", version="1.9.0")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     admin_id = store.resolve_or_create_account(telegram_identity_key(42), display_label="Admin")
@@ -872,6 +891,9 @@ def test_codex_history_dispatch_sends_markdown_attachment_and_marks_accepted(tmp
         bullets=["Summary wird als Markdown-Datei versendet."],
         session_id="sess-dispatch",
     )
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    rows[0]["created_at"] = "2026-06-19T12:00:00+00:00"
+    store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
     sent: list[tuple[dict[str, object], SendAttachment, dict[str, object]]] = []
 
     def sender(route: dict[str, object], action: SendAttachment, metadata: dict[str, object]) -> str:
@@ -911,6 +933,7 @@ def test_codex_history_dispatch_sends_markdown_attachment_and_marks_accepted(tmp
     assert dispatch["account_id"] == admin_id
     assert dispatch["status"] == "accepted"
     assert dispatch["message_ref"] == "telegram-msg-1"
+    assert Path(dispatch["obsidian_path"]).name.startswith("20260619T140000_")
 
 
 def test_codex_history_acknowledge_marks_item_without_deleting_it(tmp_path: Path, capsys) -> None:

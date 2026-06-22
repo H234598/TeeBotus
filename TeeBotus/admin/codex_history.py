@@ -204,6 +204,19 @@ def _display_timestamp(value: object) -> str:
     return parsed.astimezone(display_timezone).isoformat(timespec="seconds")
 
 
+def _display_codex_history_timestamp(value: object) -> str:
+    return redact_codex_history_text(_display_timestamp(value)).strip()
+
+
+def _display_timestamp_filename_prefix(value: object) -> str:
+    displayed = _display_timestamp(value)
+    date_prefix = re.sub(r"[^0-9T]+", "", displayed[:19].replace("-", "").replace(":", ""))
+    if date_prefix:
+        return date_prefix
+    fallback = _display_timestamp(utc_now())
+    return re.sub(r"[^0-9T]+", "", fallback[:19].replace("-", "").replace(":", ""))
+
+
 def _build_codex_history_summary_item(
     rows: Sequence[Mapping[str, Any]],
     *,
@@ -1773,7 +1786,7 @@ def build_codex_history_markdown(
         f"- Version: `{version.get('tag', '')}`",
         f"- Commit: `{repo.get('head_commit', '') or '<none>'}`",
         f"- Branch: `{repo.get('branch', '') or '<none>'}`",
-        f"- Erstellt: `{_display_timestamp(created_at)}`",
+        f"- Erstellt: `{_display_codex_history_timestamp(created_at)}`",
         "",
         "## Zusammenfassung",
     ]
@@ -2069,9 +2082,7 @@ def _write_codex_history_dispatch_markdown(item: Mapping[str, Any]) -> tuple[str
     if not markdown:
         markdown = f"# {item.get('summary_prefix', 'untagged')} {summary.get('title', 'Codex run summary')}\n"
     created_at = str(item.get("created_at") or "").strip()
-    date_prefix = re.sub(r"[^0-9T]+", "", created_at[:19].replace("-", "").replace(":", ""))
-    if not date_prefix:
-        date_prefix = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    date_prefix = _display_timestamp_filename_prefix(created_at)
     repo_name = str(project.get("repo_name") or "project").strip() or "project"
     semver = str(version.get("semver") or "untagged").strip() or "untagged"
     summary_number = item.get("summary_number") or version.get("summary_number") or 1
@@ -4177,12 +4188,12 @@ def _codex_history_bibliothekar_markdown(item: Mapping[str, Any]) -> str:
         f"- Tag: `{redact_codex_history_text(version.get('tag', '')).strip()}`",
         f"- Summary: `{redact_codex_history_text(item.get('summary_prefix', '')).strip()}`",
         f"- Status: `{redact_codex_history_text(item.get('status', '')).strip()}`",
-        f"- Erstellt: `{redact_codex_history_text(_display_timestamp(item.get('created_at', ''))).strip()}`",
-        f"- Aktualisiert: `{redact_codex_history_text(item.get('updated_at', '')).strip()}`",
-        f"- Sent: `{redact_codex_history_text(delivery.get('sent_at', '')).strip()}`",
-        f"- Accepted: `{redact_codex_history_text(delivery.get('accepted_at', '')).strip()}`",
-        f"- Delivered: `{redact_codex_history_text(delivery.get('delivered_at', '')).strip()}`",
-        f"- Acknowledged: `{redact_codex_history_text(delivery.get('acknowledged_at', '')).strip()}`",
+        f"- Erstellt: `{_display_codex_history_timestamp(item.get('created_at', ''))}`",
+        f"- Aktualisiert: `{_display_codex_history_timestamp(item.get('updated_at', ''))}`",
+        f"- Sent: `{_display_codex_history_timestamp(delivery.get('sent_at', ''))}`",
+        f"- Accepted: `{_display_codex_history_timestamp(delivery.get('accepted_at', ''))}`",
+        f"- Delivered: `{_display_codex_history_timestamp(delivery.get('delivered_at', ''))}`",
+        f"- Acknowledged: `{_display_codex_history_timestamp(delivery.get('acknowledged_at', ''))}`",
         "",
         "## Codex",
         f"- Source: `{redact_codex_history_text(item.get('source', '')).strip()}`",
@@ -4271,7 +4282,7 @@ def _codex_history_graph_markdown(items: Sequence[Mapping[str, Any]], *, instanc
         f"- Repo-Filter: `{redact_codex_history_text(repo_filter).strip() or '<alle>'}`",
         f"- Repos: `{len(repos)}`",
         f"- Summaries: `{len(items)}`",
-        f"- Erstellt: `{_display_timestamp(utc_now())}`",
+        f"- Erstellt: `{_display_codex_history_timestamp(utc_now())}`",
         "",
         "```mermaid",
         "flowchart LR",
@@ -4362,7 +4373,7 @@ def _codex_history_graph_artifact_markdown(
         f"- Quelle: `{redact_codex_history_text(source_path).strip()}`",
         f"- Repos: `{int(repo_count or 0)}`",
         f"- Summaries: `{int(item_count or 0)}`",
-        f"- Erstellt: `{redact_codex_history_text(_display_timestamp(created_at)).strip()}`",
+        f"- Erstellt: `{_display_codex_history_timestamp(created_at)}`",
         "",
         "Das zugehoerige SVG wird als Attachment dieses Codex-History-Outbox-Eintrags versendet.",
         "",
@@ -4734,7 +4745,7 @@ def _codex_history_strategy_markdown(
         f"- Instanz: `{redact_codex_history_text(instance_name).strip()}`",
         f"- Repo-Filter: `{redact_codex_history_text(repo_filter).strip() or '<alle>'}`",
         f"- Analysierte Summaries: `{len(source_items)}`",
-        f"- Erstellt: `{redact_codex_history_text(_display_timestamp(created_at)).strip()}`",
+        f"- Erstellt: `{_display_codex_history_timestamp(created_at)}`",
         f"- Confidence: `{redact_codex_history_text(analysis.get('confidence', '')).strip()}`",
         "",
     ]
