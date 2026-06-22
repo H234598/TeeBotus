@@ -12,7 +12,7 @@ from TeeBotus.instructions import BotInstructions, parse_instructions
 from TeeBotus.openai_client import OpenAIResponse
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.actions import SendText
-from TeeBotus.runtime.bibliothekar import BibliothekarStore, LIBRARY_SCHEMA_VERSION
+from TeeBotus.runtime.bibliothekar import BibliothekarStore, LIBRARY_SCHEMA_VERSION, _is_allowed_library_source_path
 from TeeBotus.runtime.bibliothekar_service import (
     BibliothekarQuery,
     BibliothekarService,
@@ -97,6 +97,14 @@ def test_bibliothekar_indexes_plan2_source_metadata_and_prompt_payload(tmp_path)
     assert prompt_chunk["ingested_at"] == chunk["ingested_at"]
     assert prompt_chunk["chunk_index"] == 1
     assert prompt_chunk["embedding_model"] == "intfloat/multilingual-e5-small"
+
+
+def test_bibliothekar_library_source_path_rejects_terminal_traversal_segments(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+
+    assert _is_allowed_library_source_path(library_dir / "books" / "therapie.txt", library_dir) is True
+    assert _is_allowed_library_source_path(library_dir / "..", library_dir) is False
+    assert _is_allowed_library_source_path(library_dir / "books" / "..", library_dir) is False
 
 
 def test_bibliothekar_rebuilds_legacy_schema_without_plan2_metadata(tmp_path):

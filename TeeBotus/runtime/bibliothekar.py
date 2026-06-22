@@ -332,6 +332,8 @@ def _is_allowed_library_source_path(path: Path, library_dir: Path) -> bool:
     parts = tuple(part for part in normalized.split("/") if part and part != ".")
     if not parts:
         return False
+    if any(part == ".." for part in parts):
+        return False
     if parts[0] in LIBRARY_STAGING_DIRNAMES:
         return False
     if LIBRARY_META_DIRNAME.casefold() in parts:
