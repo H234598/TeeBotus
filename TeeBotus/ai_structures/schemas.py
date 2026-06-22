@@ -123,7 +123,7 @@ class YouTubeOptionsDecision(BaseModel):
 class BibliothekarQueryDecision(BaseModel):
     should_search: bool
     query: str = Field(default="", max_length=800)
-    filters: dict[str, str] = Field(default_factory=dict)
+    filters: dict[str, str | list[str]] = Field(default_factory=dict)
     requires_sources: bool = True
     confidence: float = Field(ge=0.0, le=1.0)
     reason_short: str = Field(default="", max_length=240)
@@ -144,12 +144,25 @@ class BibliothekarQueryDecision(BaseModel):
 
     @field_validator("filters", mode="before")
     @classmethod
-    def _coerce_filters(cls, value: Any) -> dict[str, str]:
+    def _coerce_filters(cls, value: Any) -> dict[str, str | list[str]]:
         if value is None:
             return {}
         if not isinstance(value, dict):
             raise ValueError("filters must be an object")
-        return {str(key).strip(): str(item).strip() for key, item in value.items() if str(key).strip()}
+        filters: dict[str, str | list[str]] = {}
+        for key, item in value.items():
+            normalized_key = str(key).strip()
+            if not normalized_key:
+                continue
+            if isinstance(item, (list, tuple, set, frozenset)):
+                normalized_values = [str(entry).strip() for entry in item if str(entry).strip()]
+                if normalized_values:
+                    filters[normalized_key] = normalized_values
+                continue
+            normalized_value = str(item).strip()
+            if normalized_value:
+                filters[normalized_key] = normalized_value
+        return filters
 
     @property
     def should_query_bibliothekar(self) -> bool:

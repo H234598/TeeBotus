@@ -48,6 +48,29 @@ def test_bibliothekar_query_decision_accepts_plan3_alias_fields() -> None:
     assert decision.filters == {"topic": "Depression"}
 
 
+def test_bibliothekar_query_decision_preserves_list_filters() -> None:
+    decision = BibliothekarQueryDecision.model_validate(
+        {
+            "should_search": True,
+            "query": "Quellen",
+            "filters": {
+                "topics": [" Depression ", "", " Schlaf "],
+                "file": [" kapitel1.md "],
+                "empty": [],
+                "title": " Aktivierung ",
+                " ": "ignored",
+            },
+            "confidence": 0.91,
+        }
+    )
+
+    assert decision.filters == {
+        "topics": ["Depression", "Schlaf"],
+        "file": ["kapitel1.md"],
+        "title": "Aktivierung",
+    }
+
+
 def test_memory_candidate_schema_keeps_existing_safety_rules() -> None:
     candidate = MemoryCandidate(
         should_store=True,
