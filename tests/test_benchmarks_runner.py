@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 from TeeBotus import __version__ as TEEBOTUS_VERSION
+from TeeBotus.benchmarks import llm_routing
 from TeeBotus.benchmarks import suite as benchmark_suite
 from TeeBotus.runtime.qdrant_memory import QDRANT_MEMORY_PAYLOAD_SCHEMA_VERSION
 from scripts import run_benchmarks as benchmark_module
@@ -605,6 +606,28 @@ def test_emergency_live_llm_benchmark_is_double_gated_without_provider_calls() -
     assert result["details"]["required_confirmation"] == "NOTFALL_KOSTEN_AKZEPTIERT"
     for counter in benchmark_module.STANDARD_BENCHMARK_FORBIDDEN_CALL_COUNTERS:
         assert result["details"][counter] == 0
+
+
+def test_live_llm_candidate_runnable_uses_central_gemini_api_scope() -> None:
+    runnable, reason = llm_routing._live_llm_candidate_runnable(
+        provider="gemini_paid_interactions",
+        model="custom-gemini-model",
+        api_key_env="",
+        source={"GEMINI_API_KEYS_ACCOUNT_1": "gemini-key"},
+    )
+
+    assert runnable is True
+    assert reason == ""
+
+    runnable, reason = llm_routing._live_llm_candidate_runnable(
+        provider="google_vertex",
+        model="custom-vertex-model",
+        api_key_env="",
+        source={"GEMINI_API_KEYS_ACCOUNT_1": "gemini-key"},
+    )
+
+    assert runnable is False
+    assert reason == "missing GOOGLE_APPLICATION_CREDENTIALS"
 
 
 def test_benchmark_quality_gate_flags_incomplete_standard_results() -> None:

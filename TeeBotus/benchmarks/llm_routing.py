@@ -22,9 +22,16 @@ from TeeBotus.llm.capabilities import (
     OPENAI_CAPABILITIES,
     LLMCapabilities,
 )
-from TeeBotus.llm.free_tier import GeminiFreeTierGuard, reset_gemini_free_tier_budget_state, resolve_gemini_free_tier_limits
+from TeeBotus.llm.free_tier import (
+    GeminiFreeTierGuard,
+    reset_gemini_free_tier_budget_state,
+    resolve_gemini_free_tier_limits,
+    route_uses_gemini_api,
+    route_uses_google_gemini,
+)
 from TeeBotus.llm.gemini_limits_refresh import cached_gemini_free_tier_limit_values, refresh_gemini_free_tier_limits_if_due
 from TeeBotus.llm.keyring import RotatingAPIKeyRing, resolve_gemini_api_key_ring
+from TeeBotus.llm_client import normalize_llm_provider
 from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing, select_llm_route
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
 import TeeBotus.runtime.engine as runtime_engine
@@ -1035,25 +1042,20 @@ def _live_llm_candidate_runnable(
     api_key_env: str,
     source: Mapping[str, str],
 ) -> tuple[bool, str]:
-    normalized_provider = str(provider or "").strip().casefold()
+    normalized_provider = normalize_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
     if normalized_provider == "hf_pool":
         return True, ""
     if normalized_model.startswith(("ollama/", "ollama_chat/")):
         return True, ""
-    if normalized_provider in {
-        "gemini",
-        "gemini_interactions",
-        "litellm_gemini_stateless",
-        "litellm_gemini_stateful",
-        "litellm_gemini_paid_stateless",
-        "litellm_gemini_paid_stateful",
-    } or normalized_model.startswith("gemini/"):
+    if route_uses_gemini_api(provider=provider, model=model):
         if (api_key_env and source.get(api_key_env, "").strip()) or resolve_gemini_api_key_ring(source):
             return True, ""
         return False, "missing Gemini API key or key ring"
     if api_key_env and source.get(api_key_env, "").strip():
         return True, ""
+    if route_uses_google_gemini(provider=provider, model=model):
+        return False, f"missing {api_key_env or 'GOOGLE_APPLICATION_CREDENTIALS'}"
     if normalized_provider == "openai" or normalized_model.startswith("openai/"):
         return False, f"missing {api_key_env or 'OPENAI_API_KEY'}"
     if normalized_model.startswith("groq/"):
