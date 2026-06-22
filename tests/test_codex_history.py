@@ -276,6 +276,41 @@ def test_codex_history_markdown_displays_berlin_time(monkeypatch: pytest.MonkeyP
     assert "2026-06-19T12:00:00+00:00" not in markdown
 
 
+def test_codex_history_markdown_separates_comments_and_embeds_code_blocks() -> None:
+    markdown = build_codex_history_markdown(
+        summary_prefix="v1.2.3 #0001",
+        title="Formatcheck",
+        repo={"repo_name": "TeeBotus", "repo_root": "/tmp/TeeBotus", "head_commit": "abc", "branch": "main"},
+        version={"tag": "v1.2.3"},
+        bullets=["Summary ist lesbarer."],
+        changed_files=["TeeBotus/admin/codex_history.py", "tests/test_codex_history.py"],
+        tests=["pytest tests/test_codex_history.py"],
+        created_at="2026-06-19T12:00:00+00:00",
+        goal="Repo-Logikfehler finden",
+        auftrag="Summary-Format verbessern.",
+        intermediate_messages=[
+            {
+                "phase": "commentary",
+                "turn_id": "turn-1",
+                "text": "Ich trenne Kommentare und pruefe ```Fences```.",
+            }
+        ],
+    )
+
+    assert "> Codex-Run-Summary fuer Admins." in markdown
+    assert "## Metadaten" in markdown
+    assert "```text\nprojekt=TeeBotus" in markdown
+    assert "## Arbeitsverlauf" in markdown
+    assert "### Kommentar 1" in markdown
+    assert "- Phase: `commentary`" in markdown
+    assert "- Turn: `turn-1`" in markdown
+    assert "````text\nIch trenne Kommentare und pruefe ```Fences```.\n````" in markdown
+    assert "- Dateien: `2`" in markdown
+    assert "```text\nTeeBotus/admin/codex_history.py\ntests/test_codex_history.py\n```" in markdown
+    assert "- Checks: `1`" in markdown
+    assert "```bash\npytest tests/test_codex_history.py\n```" in markdown
+
+
 def test_codex_history_markdown_time_rewrite_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TEEBOTUS_CODEX_HISTORY_TIMEZONE", "Europe/Berlin")
     old_markdown = "\n".join(
@@ -1881,6 +1916,8 @@ def test_import_codex_session_file_prefers_final_answer_over_commentary(tmp_path
     assert "- Auftrag: `Bitte Summary-Import pruefen.`" in rows[0]["summary"]["markdown"]
     assert "## Arbeitsverlauf" in rows[0]["summary"]["markdown"]
     assert "- Zwischenantworten: `1`" in rows[0]["summary"]["markdown"]
+    assert "### Kommentar 1" in rows[0]["summary"]["markdown"]
+    assert "```text\nZwischenstand darf nicht Summary werden.\n```" in rows[0]["summary"]["markdown"]
 
 
 def test_import_codex_session_file_imports_each_final_turn_from_explicit_file(tmp_path: Path) -> None:

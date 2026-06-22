@@ -1842,15 +1842,21 @@ def build_codex_history_markdown(
     current_task: str = "",
     intermediate_messages: Sequence[Mapping[str, Any] | str] = (),
 ) -> str:
-    lines = [
-        f"# {summary_prefix} {title}",
-        "",
+    metadata_lines = [
         f"- Projekt: `{repo.get('repo_name', '')}`",
         f"- Repo: `{repo.get('repo_root', '')}`",
         f"- Version: `{version.get('tag', '')}`",
         f"- Commit: `{repo.get('head_commit', '') or '<none>'}`",
         f"- Branch: `{repo.get('branch', '') or '<none>'}`",
         f"- Erstellt: `{_display_codex_history_timestamp(created_at)}`",
+    ]
+    lines = [
+        f"# {summary_prefix} {title}",
+        "",
+        "> Codex-Run-Summary fuer Admins. Enthaelt Projektkontext, Arbeitsverlauf, geaenderte Dateien und Verifikation.",
+        "",
+        "## Metadaten",
+        *metadata_lines,
     ]
     goal_text = _markdown_header_value(goal)
     auftrag_text = _markdown_header_value(auftrag)
@@ -1861,6 +1867,21 @@ def build_codex_history_markdown(
         lines.append(f"- Auftrag: `{auftrag_text}`")
     if current_task_text and current_task_text != auftrag_text:
         lines.append(f"- Bearbeiteter Auftrag: `{current_task_text}`")
+    context_block = [
+        f"projekt={repo.get('repo_name', '')}",
+        f"repo={repo.get('repo_root', '')}",
+        f"version={version.get('tag', '')}",
+        f"commit={repo.get('head_commit', '') or '<none>'}",
+        f"branch={repo.get('branch', '') or '<none>'}",
+        f"erstellt={_display_codex_history_timestamp(created_at)}",
+    ]
+    if goal_text:
+        context_block.append(f"goal={goal_text}")
+    if auftrag_text:
+        context_block.append(f"auftrag={auftrag_text}")
+    if current_task_text and current_task_text != auftrag_text:
+        context_block.append(f"bearbeiteter_auftrag={current_task_text}")
+    lines.extend(["", _markdown_code_fence("\n".join(context_block), language="text")])
     lines.extend(["", "## Zusammenfassung"])
     if bullets:
         lines.extend(f"- {bullet}" for bullet in bullets)
@@ -1871,25 +1892,43 @@ def build_codex_history_markdown(
         lines.append("")
         lines.append("## Arbeitsverlauf")
         lines.append(f"- Zwischenantworten: `{len(normalized_intermediate)}`")
-        for message in normalized_intermediate[:5]:
+        if len(normalized_intermediate) > 5:
+            lines.append(f"- Angezeigt: `5`, weitere: `{len(normalized_intermediate) - 5}`")
+        for index, message in enumerate(normalized_intermediate[:5], start=1):
             phase = _markdown_header_value(message.get("phase", "")) or "commentary"
-            text = _truncate(str(message.get("text") or ""), 260)
+            turn_id = _markdown_header_value(message.get("turn_id", ""), max_length=96)
+            text = str(message.get("text") or "").strip()
             if text:
-                lines.append(f"- `{phase}`: {text}")
+                lines.extend(["", f"### Kommentar {index}", f"- Phase: `{phase}`"])
+                if turn_id:
+                    lines.append(f"- Turn: `{turn_id}`")
+                lines.extend(["", _markdown_code_fence(_truncate(text, 900), language="text")])
     lines.append("")
     lines.append("## Geaenderte Dateien")
     if changed_files:
-        lines.extend(f"- `{path}`" for path in changed_files)
+        lines.append(f"- Dateien: `{len(changed_files)}`")
+        lines.extend(["", _markdown_code_fence("\n".join(str(path) for path in changed_files), language="text")])
     else:
         lines.append("- Keine Dateien angegeben.")
     lines.append("")
     lines.append("## Verifikation")
     if tests:
-        lines.extend(f"- `{test}`" for test in tests)
+        lines.append(f"- Checks: `{len(tests)}`")
+        lines.extend(["", _markdown_code_fence("\n".join(str(test) for test in tests), language="bash")])
     else:
         lines.append("- Keine Tests angegeben.")
     lines.append("")
     return "\n".join(lines)
+
+
+def _markdown_code_fence(body: str, *, language: str = "text") -> str:
+    text = redact_codex_history_text(body).rstrip()
+    fence = "```"
+    longest_backtick_run = max((len(match.group(0)) for match in re.finditer(r"`+", text)), default=0)
+    if longest_backtick_run >= len(fence):
+        fence = "`" * (longest_backtick_run + 1)
+    language_name = re.sub(r"[^A-Za-z0-9_+.-]", "", str(language or "text")) or "text"
+    return f"{fence}{language_name}\n{text}\n{fence}"
 
 
 def _markdown_header_value(value: object, *, max_length: int = 320) -> str:
