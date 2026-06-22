@@ -361,7 +361,7 @@ def _read_harvest_source_metadata(library_dir: Path) -> dict[str, dict[str, Any]
     accepted_by_key: dict[tuple[str, str], dict[str, Any]] = {}
     accepted_by_hash: dict[str, dict[str, Any]] = {}
     for row in rows:
-        if row.get("event") == "promoted":
+        if row.get("event") == "promoted" or row.get("route") != "accepted":
             continue
         sha256 = str(row.get("sha256") or "").strip()
         stored_path = str(row.get("stored_path") or "").strip()
