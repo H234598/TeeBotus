@@ -583,11 +583,13 @@ def import_codex_session_file(store: AccountStore, session_file: str | Path) -> 
     imported: list[dict[str, Any]] = []
     with store.codex_history_outbox_lock(account_id):
         rows = store.read_codex_history_outbox(account_id)
-        result = _build_codex_session_import_result(rows, session_file)
-        if result.get("status") == "imported" and isinstance(result.get("item"), Mapping):
-            item = dict(result["item"])
+        results = _build_codex_session_import_results(rows, session_file)
+        result = _aggregate_codex_session_import_results(results, session_file)
+        for item_result in results:
+            if item_result.get("status") == "imported" and isinstance(item_result.get("item"), Mapping):
+                imported.append(dict(item_result["item"]))
+        if imported:
             store.write_codex_history_outbox(account_id, rows)
-            imported.append(item)
     for item in imported:
         project = item.get("project", {})
         if isinstance(project, Mapping):
@@ -604,17 +606,20 @@ def import_codex_session_roots(store: AccountStore, roots: Sequence[str | Path],
         rows = store.read_codex_history_outbox(account_id)
         for session_file in session_files:
             try:
-                result = _build_codex_session_import_result(rows, session_file)
+                file_results = _build_codex_session_import_results(rows, session_file)
             except (OSError, ValueError, AccountStoreError) as exc:
-                result = {
-                    "status": "error",
-                    "reason": type(exc).__name__,
-                    "error": redact_codex_history_text(str(exc)).strip(),
-                    "path": str(session_file),
-                }
-            if result.get("status") == "imported" and isinstance(result.get("item"), Mapping):
-                imported_items.append(dict(result["item"]))
-            results.append(result)
+                file_results = [
+                    {
+                        "status": "error",
+                        "reason": type(exc).__name__,
+                        "error": redact_codex_history_text(str(exc)).strip(),
+                        "path": str(session_file),
+                    }
+                ]
+            for result in file_results:
+                if result.get("status") == "imported" and isinstance(result.get("item"), Mapping):
+                    imported_items.append(dict(result["item"]))
+                results.append(result)
         if imported_items:
             store.write_codex_history_outbox(account_id, rows)
     for item in imported_items:
@@ -628,16 +633,70 @@ def import_codex_session_roots(store: AccountStore, roots: Sequence[str | Path],
     }
 
 
-def _build_codex_session_import_result(rows: list[dict[str, Any]], session_file: str | Path) -> dict[str, Any]:
+def _aggregate_codex_session_import_results(results: Sequence[Mapping[str, Any]], session_file: str | Path) -> dict[str, Any]:
+    if len(results) == 1:
+        return dict(results[0])
+    counts = _status_counts(results)
+    imported = [result for result in results if result.get("status") == "imported" and isinstance(result.get("item"), Mapping)]
+    if imported:
+        status = "imported"
+    elif counts and set(counts) == {"duplicate"}:
+        status = "duplicate"
+    elif counts and set(counts) == {"skipped"}:
+        status = "skipped"
+    elif counts and set(counts) == {"error"}:
+        status = "error"
+    else:
+        status = "mixed"
+    aggregate: dict[str, Any] = {
+        "status": status,
+        "items": [dict(result) for result in results],
+        "status_counts": counts,
+        "path": str(_safe_repo_root(Path(session_file), operation="session file", allow_hidden_segments=True)),
+    }
+    if imported:
+        aggregate["item"] = dict(imported[-1]["item"])
+    return aggregate
+
+
+def _build_codex_session_import_results(rows: list[dict[str, Any]], session_file: str | Path) -> list[dict[str, Any]]:
     path = _safe_repo_root(Path(session_file), operation="session file", allow_hidden_segments=True)
     parsed = _parse_codex_session_file(path)
-    if not parsed["final_text"]:
+    final_messages = parsed.get("final_messages", ())
+    if not isinstance(final_messages, Sequence) or isinstance(final_messages, (str, bytes, bytearray)):
+        final_messages = ()
+    if not final_messages:
+        return [{"status": "skipped", "reason": "missing_final_text", "path": str(path)}]
+    results: list[dict[str, Any]] = []
+    for message in final_messages:
+        if not isinstance(message, Mapping):
+            continue
+        result = _build_codex_session_import_result(
+            rows,
+            path,
+            parsed=parsed,
+            turn_id=str(message.get("turn_id") or parsed.get("turn_id") or "").strip(),
+            final_text=str(message.get("final_text") or "").strip(),
+        )
+        results.append(result)
+    if not results:
+        return [{"status": "skipped", "reason": "missing_final_text", "path": str(path)}]
+    return results
+
+
+def _build_codex_session_import_result(
+    rows: list[dict[str, Any]],
+    path: Path,
+    *,
+    parsed: Mapping[str, Any],
+    turn_id: str,
+    final_text: str,
+) -> dict[str, Any]:
+    if not final_text:
         return {"status": "skipped", "reason": "missing_final_text", "path": str(path)}
     repo_root = str(parsed["cwd"] or path.parent)
-    final_text = str(parsed["final_text"])
     final_hash = "sha256:" + hashlib.sha256(final_text.encode("utf-8")).hexdigest()
     session_id = str(parsed["session_id"] or path.stem)
-    turn_id = str(parsed["turn_id"] or "")
     dedupe_key = _codex_session_dedupe_key(session_id=session_id, turn_id=turn_id, final_message_hash=final_hash)
     existing = _find_codex_history_by_dedupe_key_in_rows(rows, dedupe_key)
     if existing is not None:
@@ -2134,6 +2193,7 @@ def _parse_codex_session_file(path: Path) -> dict[str, Any]:
     turn_id = ""
     cwd = ""
     final_text = ""
+    final_messages: list[dict[str, str]] = []
     try:
         source_mtime = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(timespec="seconds")
     except OSError:
@@ -2141,7 +2201,7 @@ def _parse_codex_session_file(path: Path) -> dict[str, Any]:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError:
-        return {"session_id": "", "turn_id": "", "cwd": "", "final_text": "", "source_mtime": source_mtime}
+        return {"session_id": "", "turn_id": "", "cwd": "", "final_text": "", "final_messages": [], "source_mtime": source_mtime}
     for raw_line in lines:
         if not raw_line.strip():
             continue
@@ -2165,11 +2225,13 @@ def _parse_codex_session_file(path: Path) -> dict[str, Any]:
         text = _assistant_text_from_codex_payload(payload)
         if text:
             final_text = text
+            final_messages.append({"turn_id": turn_id, "final_text": text})
     return {
         "session_id": session_id,
         "turn_id": turn_id,
         "cwd": cwd,
         "final_text": final_text,
+        "final_messages": final_messages,
         "source_mtime": source_mtime,
     }
 
