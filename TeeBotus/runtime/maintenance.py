@@ -130,8 +130,8 @@ def install_stdio_tee(path: Path) -> None:
     if _stream_tee_target(sys.stdout) == resolved_path and _stream_tee_target(sys.stderr) == resolved_path:
         return
     handle = resolved_path.open("a", encoding="utf-8", buffering=1)
-    sys.stdout = TeeStream(sys.stdout, handle, resolved_path)  # type: ignore[assignment]
-    sys.stderr = TeeStream(sys.stderr, handle, resolved_path)  # type: ignore[assignment]
+    sys.stdout = _install_stream_tee(sys.stdout, handle, resolved_path)  # type: ignore[assignment]
+    sys.stderr = _install_stream_tee(sys.stderr, handle, resolved_path)  # type: ignore[assignment]
 
 
 class TeeStream:
@@ -180,6 +180,14 @@ def _stream_tee_target(stream: object) -> Path | None:
     if isinstance(target, Path):
         return target.resolve()
     return None
+
+
+def _install_stream_tee(stream: object, secondary: object, target: Path) -> object:
+    if _stream_tee_target(stream) == target:
+        return stream
+    if isinstance(stream, TeeStream):
+        stream = stream.primary
+    return TeeStream(stream, secondary, target)
 
 
 class RuntimeTimedRotatingFileHandler(TimedRotatingFileHandler):

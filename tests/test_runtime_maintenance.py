@@ -20,6 +20,7 @@ from TeeBotus.runtime.maintenance import (
     TeeStream,
     configure_runtime_logging,
     gzip_file,
+    install_stdio_tee,
     maintain_runtime_directory,
     normalize_log_level,
     rotate_runtime_text_file_if_needed,
@@ -263,6 +264,43 @@ def test_configure_runtime_logging_can_tee_stdio_to_runtime_log(tmp_path, monkey
     stdio_log = tmp_path / STDIO_LOG_FILENAME
     assert "stdout probe" in stdio_log.read_text(encoding="utf-8")
     assert "stderr probe" in stdio_log.read_text(encoding="utf-8")
+
+
+def test_install_stdio_tee_repairs_half_installed_state_without_double_stdout_writes(tmp_path, monkeypatch):
+    primary_stdout = io.StringIO()
+    primary_stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", primary_stdout)
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    path = tmp_path / STDIO_LOG_FILENAME
+
+    install_stdio_tee(path)
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    install_stdio_tee(path)
+    print("stdout once")
+    print("stderr once", file=sys.stderr)
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    assert path.read_text(encoding="utf-8").splitlines().count("stdout once") == 1
+    assert path.read_text(encoding="utf-8").splitlines().count("stderr once") == 1
+
+
+def test_install_stdio_tee_retargets_existing_tee_without_writing_old_target(tmp_path, monkeypatch):
+    primary_stdout = io.StringIO()
+    primary_stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", primary_stdout)
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    old_path = tmp_path / "old-stdio.log"
+    new_path = tmp_path / "new-stdio.log"
+
+    install_stdio_tee(old_path)
+    install_stdio_tee(new_path)
+    print("new target only")
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    assert old_path.read_text(encoding="utf-8") == ""
+    assert "new target only" in new_path.read_text(encoding="utf-8")
 
 
 def test_tee_stream_keeps_primary_stream_working_when_secondary_fails():
