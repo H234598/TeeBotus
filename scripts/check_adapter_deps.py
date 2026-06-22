@@ -416,6 +416,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     expected_profiles = {
         "local_ollama": ("litellm", "ollama_chat/", ""),
         "hf_mistral": ("litellm", "huggingface/", ""),
+        "hf_qwen": ("litellm", "huggingface/", ""),
         "hf_pool_default": ("hf_pool", "pool:", ""),
         "hf_pool_structured": ("hf_pool", "pool:", ""),
         "hf_pool_quality": ("hf_pool", "pool:", ""),
@@ -460,6 +461,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
             errors.append(f"profile {name} model={profile.model or '<empty>'} expected={expected_model}")
     for name in (
         "hf_mistral",
+        "hf_qwen",
         "groq_fast",
         "gemini_flash_stateless",
         "gemini_flash_stateful",
@@ -496,7 +498,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         return False, "llm profiles plan2 contract failed: " + "; ".join(errors)
     return True, (
         "llm profiles plan2 contract=ok "
-        "profiles=local_ollama,hf_pool_structured,hf_mistral,groq_fast,"
+        "profiles=local_ollama,hf_pool_structured,hf_mistral,hf_qwen,groq_fast,"
         "gemini_flash_stateless,gemini_flash_stateful,gemini_flash_paid_stateless,gemini_flash_paid_stateful,"
         "gemini_2_5_flash_stateless,gemini_2_5_flash_stateful,gemini_2_5_flash_paid_stateless,"
         "gemini_2_5_flash_paid_stateful,vertex_gemini_flash,vertex_gemini_2_5_flash,openai_premium"

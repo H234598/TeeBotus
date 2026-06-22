@@ -325,7 +325,7 @@ def test_llm_profiles_plan2_contract_accepts_current_profiles() -> None:
 
     assert ok
     assert (
-        "profiles=local_ollama,hf_pool_structured,hf_mistral,groq_fast,"
+        "profiles=local_ollama,hf_pool_structured,hf_mistral,hf_qwen,groq_fast,"
         "gemini_flash_stateless,gemini_flash_stateful,gemini_flash_paid_stateless,"
         "gemini_flash_paid_stateful,gemini_2_5_flash_stateless,gemini_2_5_flash_stateful,"
         "gemini_2_5_flash_paid_stateless,gemini_2_5_flash_paid_stateful,"
