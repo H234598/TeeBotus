@@ -63,7 +63,17 @@ def _split_safe_relative_parts(value: str, *, operation: str) -> tuple[bool, tup
 
 
 def _safe_repo_root(value: Path, *, operation: str = "repo access") -> Path:
-    is_absolute, parts = _split_safe_relative_parts(str(value), operation=operation)
+    raw = str(value).strip()
+    if not raw:
+        raise ValueError(f"{operation} must not be empty")
+    if "\x00" in raw or "\r" in raw or "\n" in raw or "\t" in raw:
+        raise ValueError(f"{operation} contains invalid control character")
+    if "\\" in raw:
+        raise ValueError(f"{operation} contains invalid path separator")
+    path = Path(raw)
+    if not path.is_absolute():
+        path = Path.cwd() / path
+    is_absolute, parts = _split_safe_relative_parts(str(path.resolve()), operation=operation)
     if is_absolute:
         return Path("/").joinpath(*parts).resolve() if parts else Path("/").resolve()
     return Path.cwd().joinpath(*parts).resolve() if parts else Path.cwd()

@@ -1552,9 +1552,6 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
         account_id = account_dir.name
         profile_error = ""
         require_resolvable = True
-        if not (account_dir / ACCOUNT_PROFILE_FILENAME).exists():
-            profile_error = "profile_unreadable:missing_account_profile"
-            require_resolvable = False
         try:
             store._read_account_profile(account_id)
         except AccountStoreError as exc:
@@ -1775,12 +1772,14 @@ def _account_memory_account_dirs(accounts_dir: Path) -> list[Path]:
 
 def _account_memory_account_dir_is_stale(account_dir: Path) -> bool:
     try:
+        saw_file = False
         for path in account_dir.iterdir():
             if not path.is_file():
                 return False
+            saw_file = True
             if not path.name.endswith(".lock"):
                 return False
-        return True
+        return saw_file
     except OSError:
         LOGGER.exception("Failed to inspect account memory account directory.")
         return False
