@@ -8,7 +8,7 @@ from typing import Any
 from TeeBotus.embedding.config import EmbeddingConfig, build_account_memory_embedding_provider, build_embedding_provider
 from TeeBotus.admin.codex_history import codex_history_bibliothekar_chunks
 from TeeBotus.instructions import BotInstructions, load_instructions
-from TeeBotus.runtime.accounts import AccountStore, InstanceSecretProvider, runtime_secret_provider, validate_sha512_token
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, runtime_secret_provider, validate_sha512_token
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.qdrant import (
     DEFAULT_BIBLIOTHEKAR_EMBEDDING_DIMENSIONS,
@@ -119,11 +119,7 @@ def rebuild_qdrant_memory_indexes(
     selected_instances = _resolve_instance_names(root, instance_names)
     target_collection = _optional_override(collection_name, default=QDRANT_USER_MEMORY_COLLECTION)
     collection_error = _qdrant_collection_name_error(target_collection)
-    requested_accounts = tuple(
-        validate_sha512_token(str(account_id or "").strip().lower(), field_name="account_id")
-        for account_id in account_ids
-        if str(account_id or "").strip()
-    )
+    requested_accounts, requested_accounts_error = _memory_requested_accounts(account_ids)
     results: list[QdrantMemoryRebuildResult] = []
     for instance_name in selected_instances:
         instructions = _load_instance_memory_instructions(root, instance_name)
@@ -143,6 +139,19 @@ def rebuild_qdrant_memory_indexes(
                     collection_name=target_collection,
                     embedding_config=effective_embedding_config,
                     error=collection_error,
+                )
+            )
+            continue
+        if requested_accounts_error:
+            results.append(
+                _rebuild_result(
+                    instance_name,
+                    "",
+                    "error",
+                    qdrant_url=effective_qdrant_url,
+                    collection_name=target_collection,
+                    embedding_config=effective_embedding_config,
+                    error=requested_accounts_error,
                 )
             )
             continue
@@ -675,6 +684,19 @@ def _qdrant_collection_name_error(value: object) -> str:
     if QDRANT_COLLECTION_NAME_RE.fullmatch(str(value or "").strip()):
         return ""
     return "Qdrant collection name must contain only letters, numbers, underscore, dot or dash."
+
+
+def _memory_requested_accounts(account_ids: Iterable[str]) -> tuple[tuple[str, ...], str]:
+    accounts: list[str] = []
+    for account_id in account_ids:
+        raw = str(account_id or "").strip()
+        if not raw:
+            continue
+        try:
+            accounts.append(validate_sha512_token(raw.lower(), field_name="account_id"))
+        except AccountStoreError as exc:
+            return (), str(exc)
+    return tuple(accounts), ""
 
 
 def _resolve_collection_memory_embedding_config(

@@ -248,6 +248,26 @@ def test_rebuild_qdrant_memory_indexes_dry_run_rejects_unsafe_collection_name(tm
     assert "Qdrant collection name" in results[0].error
 
 
+def test_rebuild_qdrant_memory_indexes_reports_invalid_requested_account_id(tmp_path):
+    class UnexpectedQdrantMemoryIndex:
+        def __init__(self, **_kwargs) -> None:
+            raise AssertionError("invalid requested account_id must fail before creating qdrant index")
+
+    results = rebuild_qdrant_memory_indexes(
+        instances_dir=tmp_path / "instances",
+        instance_names=("Depressionsbot",),
+        account_ids=("not-a-sha512-token",),
+        secret_provider=StaticSecretProvider(b"a" * 32),
+        qdrant_index_factory=UnexpectedQdrantMemoryIndex,
+    )
+
+    assert len(results) == 1
+    assert results[0].instance_name == "Depressionsbot"
+    assert results[0].status == "error"
+    assert results[0].account_id == ""
+    assert "account_id must be a 128 character lowercase hex SHA-512 token" in results[0].error
+
+
 def test_rebuild_qdrant_bibliothekar_indexes_uses_local_store_chunks(tmp_path):
     calls: list[tuple[str, str, str, int, list[str]]] = []
     deleted_instances: list[str] = []
