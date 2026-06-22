@@ -61,6 +61,8 @@ class SQLiteAccountMemoryBackend:
         self.last_index_read_error = ""
         self.last_collection_read_error = ""
         self.last_collection_skipped = 0
+        self._cipher_key: bytes | None = None
+        self._cipher: AESGCM | None = None
 
     @property
     def key(self) -> bytes:
@@ -68,6 +70,14 @@ class SQLiteAccountMemoryBackend:
         if len(key) != 32:
             raise AccountStoreError("sqlite memory encryption key has invalid length")
         return key
+
+    @property
+    def cipher(self) -> AESGCM:
+        key = self.key
+        if self._cipher is None or self._cipher_key != key:
+            self._cipher = AESGCM(key)
+            self._cipher_key = key
+        return self._cipher
 
     def read_entries(self, account_id: str) -> list[dict[str, Any]]:
         self.last_entry_read_error = ""
@@ -289,6 +299,73 @@ class SQLiteAccountMemoryBackend:
                 )
                 for ordinal, row in enumerate(normalized_rows):
                     self._insert_collection_item(connection, account_id, collection_name, row, ordinal)
+
+    def append_collection_items(self, account_id: str, collection: str, rows: Iterable[dict[str, Any]]) -> None:
+        collection_name = _normalize_collection_name(collection)
+        self._ensure_schema()
+        normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
+        if not normalized_rows:
+            return
+        with self._connect() as connection:
+            with connection:
+                self._guard_account_key_sample_decryptable(connection, account_id)
+                start_ordinal = connection.execute(
+                    """
+                    SELECT COALESCE(MAX(ordinal), -1) + 1
+                    FROM account_jsonl_collections
+                    WHERE instance_name = ? AND account_id = ? AND collection = ?
+                    """,
+                    (self.instance_name, account_id, collection_name),
+                ).fetchone()[0]
+                for offset, row in enumerate(normalized_rows):
+                    self._insert_collection_item(connection, account_id, collection_name, row, int(start_ordinal) + offset)
+
+    def replace_collection_item(self, account_id: str, collection: str, item_key: str, row: dict[str, Any]) -> bool:
+        collection_name = _normalize_collection_name(collection)
+        normalized_item_key = str(item_key or "").strip()
+        if not normalized_item_key or not isinstance(row, dict):
+            return False
+        self._ensure_schema()
+        with self._connect() as connection:
+            with connection:
+                existing = connection.execute(
+                    """
+                    SELECT ordinal, payload_nonce, payload_ciphertext
+                    FROM account_jsonl_collections
+                    WHERE instance_name = ? AND account_id = ? AND collection = ? AND item_key = ?
+                    ORDER BY ordinal ASC
+                    LIMIT 1
+                    """,
+                    (self.instance_name, account_id, collection_name, normalized_item_key),
+                ).fetchone()
+                if existing is None:
+                    return False
+                ordinal = int(existing[0])
+                self._decrypt_json(
+                    account_id,
+                    _collection_payload_id(collection_name, normalized_item_key),
+                    bytes(existing[1]),
+                    bytes(existing[2]),
+                )
+                nonce, ciphertext = self._encrypt_json(account_id, _collection_payload_id(collection_name, normalized_item_key), dict(row))
+                updated = connection.execute(
+                    """
+                    UPDATE account_jsonl_collections
+                    SET created_at = ?, updated_at = ?, payload_nonce = ?, payload_ciphertext = ?
+                    WHERE instance_name = ? AND account_id = ? AND collection = ? AND ordinal = ?
+                    """,
+                    (
+                        str(row.get("created_at") or ""),
+                        str(row.get("updated_at") or ""),
+                        nonce,
+                        ciphertext,
+                        self.instance_name,
+                        account_id,
+                        collection_name,
+                        ordinal,
+                    ),
+                )
+                return int(updated.rowcount or 0) > 0
 
     def read_collection_names(self, account_id: str) -> tuple[str, ...]:
         if not self.config.path.exists():
@@ -513,15 +590,71 @@ class SQLiteAccountMemoryBackend:
                     "existing SQLite account memory collection rows are not decryptable with the current key; refusing destructive write"
                 ) from exc
 
+    def _guard_account_key_sample_decryptable(self, connection: sqlite3.Connection, account_id: str) -> None:
+        entry_row = connection.execute(
+            """
+            SELECT memory_id, payload_nonce, payload_ciphertext
+            FROM memory_entries
+            WHERE instance_name = ? AND account_id = ?
+            ORDER BY ordinal ASC
+            LIMIT 1
+            """,
+            (self.instance_name, account_id),
+        ).fetchone()
+        if entry_row is not None:
+            try:
+                self._decrypt_json(account_id, str(entry_row[0]), bytes(entry_row[1]), bytes(entry_row[2]))
+            except AccountStoreError as exc:
+                raise AccountStoreError("existing SQLite account memory entries are not decryptable with the current key") from exc
+            return
+        index_row = connection.execute(
+            """
+            SELECT payload_nonce, payload_ciphertext
+            FROM memory_indexes
+            WHERE instance_name = ? AND account_id = ?
+            LIMIT 1
+            """,
+            (self.instance_name, account_id),
+        ).fetchone()
+        if index_row is not None:
+            try:
+                self._decrypt_json(account_id, "index", bytes(index_row[0]), bytes(index_row[1]))
+            except AccountStoreError as exc:
+                raise AccountStoreError("existing SQLite account memory index is not decryptable with the current key") from exc
+            return
+        if not _table_exists(connection, "account_jsonl_collections"):
+            return
+        collection_row = connection.execute(
+            """
+            SELECT collection, item_key, payload_nonce, payload_ciphertext
+            FROM account_jsonl_collections
+            WHERE instance_name = ? AND account_id = ?
+            ORDER BY collection ASC, ordinal ASC
+            LIMIT 1
+            """,
+            (self.instance_name, account_id),
+        ).fetchone()
+        if collection_row is None:
+            return
+        try:
+            self._decrypt_json(
+                account_id,
+                _collection_payload_id(str(collection_row[0]), str(collection_row[1])),
+                bytes(collection_row[2]),
+                bytes(collection_row[3]),
+            )
+        except AccountStoreError as exc:
+            raise AccountStoreError("existing SQLite account memory collection rows are not decryptable with the current key") from exc
+
     def _encrypt_json(self, account_id: str, memory_id: str, payload: dict[str, Any]) -> tuple[bytes, bytes]:
         nonce = os.urandom(12)
         raw = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
-        ciphertext = AESGCM(self.key).encrypt(nonce, raw, self._aad(account_id, memory_id))
+        ciphertext = self.cipher.encrypt(nonce, raw, self._aad(account_id, memory_id))
         return nonce, ciphertext
 
     def _decrypt_json(self, account_id: str, memory_id: str, nonce: bytes, ciphertext: bytes) -> dict[str, Any]:
         try:
-            raw = AESGCM(self.key).decrypt(nonce, ciphertext, self._aad(account_id, memory_id))
+            raw = self.cipher.decrypt(nonce, ciphertext, self._aad(account_id, memory_id))
             data = json.loads(raw.decode("utf-8"))
         except Exception as exc:  # noqa: BLE001
             raise AccountStoreError("SQLite account memory payload could not be decrypted") from exc

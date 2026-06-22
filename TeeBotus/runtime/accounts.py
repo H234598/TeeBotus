@@ -516,6 +516,8 @@ class SecretToolInstanceSecretProvider:
                 [self._secret_tool(), *args],
                 input=input_text,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 capture_output=True,
                 check=False,
             )
@@ -2994,6 +2996,20 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._write_account_jsonl_collection(account_id, CODEX_HISTORY_OUTBOX_FILENAME, CODEX_HISTORY_OUTBOX_COLLECTION, list(rows))
 
+    def replace_codex_history_outbox_item(self, account_id: str, item: dict[str, Any]) -> bool:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        item_id = str(item.get("id") or "").strip() if isinstance(item, dict) else ""
+        if not item_id:
+            return False
+        backend = self.account_memory_backend
+        replace_collection_item = getattr(backend, "replace_collection_item", None) if backend is not None else None
+        if not callable(replace_collection_item):
+            return False
+        replaced = bool(replace_collection_item(account_id, CODEX_HISTORY_OUTBOX_COLLECTION, item_id, dict(item)))
+        if replaced:
+            self._unlink_migrated_account_file(self.account_dir(account_id) / CODEX_HISTORY_OUTBOX_FILENAME)
+        return replaced
+
     def append_codex_history_item(self, account_id: str, item: dict[str, Any]) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         with self.codex_history_outbox_lock(account_id):
@@ -3039,24 +3055,38 @@ class AccountStore:
         normalized_results = [dict(result) for result in results if isinstance(result, dict)]
         if not normalized_results:
             return ()
+        timestamp = utc_now()
+        created_ids: list[str] = []
+        for result in normalized_results:
+            result_id = str(result.get("id") or f"chdisp_{uuid.uuid4().hex}").strip()
+            while not result_id or result_id in created_ids:
+                result_id = f"chdisp_{uuid.uuid4().hex}"
+            result["id"] = result_id
+            result.setdefault("schema_version", 1)
+            result.setdefault("created_at", timestamp)
+            result.setdefault("updated_at", result["created_at"])
+            created_ids.append(result_id)
+        backend = self.account_memory_backend
+        append_collection_items = getattr(backend, "append_collection_items", None) if backend is not None else None
+        if callable(append_collection_items):
+            with self.codex_history_outbox_lock(account_id):
+                append_collection_items(account_id, CODEX_HISTORY_DISPATCH_RESULTS_COLLECTION, normalized_results)
+                self._unlink_migrated_account_file(self.account_dir(account_id) / CODEX_HISTORY_DISPATCH_RESULTS_FILENAME)
+            return tuple(created_ids)
         with self.codex_history_outbox_lock(account_id):
             rows = self.read_codex_history_dispatch_results(account_id)
             existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
-            timestamp = utc_now()
-            created_ids: list[str] = []
+            final_created_ids: list[str] = []
             for result in normalized_results:
-                result_id = str(result.get("id") or f"chdisp_{uuid.uuid4().hex}").strip()
+                result_id = str(result.get("id") or "").strip()
                 while not result_id or result_id in existing_ids:
                     result_id = f"chdisp_{uuid.uuid4().hex}"
                 result["id"] = result_id
-                result.setdefault("schema_version", 1)
-                result.setdefault("created_at", timestamp)
-                result.setdefault("updated_at", result["created_at"])
                 rows.append(result)
                 existing_ids.add(result_id)
-                created_ids.append(result_id)
+                final_created_ids.append(result_id)
             self.write_codex_history_dispatch_results(account_id, rows)
-            return tuple(created_ids)
+            return tuple(final_created_ids)
 
     def read_codex_history_projects(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")

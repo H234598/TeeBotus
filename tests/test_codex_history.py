@@ -181,6 +181,42 @@ def test_codex_history_uses_sql_collection_when_account_backend_is_enabled(tmp_p
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["summary_prefix"] == "v1.0.0 #0001"
 
 
+def test_codex_history_dispatch_updates_sql_collections(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(tmp_path / "memory.sqlite3"))
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", str(tmp_path / "memory.backup.sqlite3"))
+    repo = make_git_repo(tmp_path, "sql-dispatch-demo", version="1.0.1")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(420), display_label="Admin")
+    store.update_identity_route(telegram_identity_key(420), channel="telegram", chat_id="420", chat_type="private", adapter_slot=1)
+    item = append_codex_history_summary(store, repo_root=repo, title="SQL Dispatch", bullets=["Gezielter SQL-Pfad."])
+    sent: list[SendAttachment] = []
+
+    def sender(_route: dict[str, object], action: SendAttachment, _metadata: dict[str, object]) -> str:
+        sent.append(action)
+        return "telegram-sql-1"
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="Depressionsbot",
+            account_ids=(admin_id,),
+            senders={"telegram": sender},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["status_counts"] == {"accepted": 1}
+    assert sent[0].chat_id == "420"
+    assert not (store.account_dir(INSTANCE_STATE_ACCOUNT_ID) / CODEX_HISTORY_OUTBOX_FILENAME).exists()
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["id"] == item["id"]
+    assert persisted["status"] == "accepted"
+    dispatch = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert dispatch["status"] == "accepted"
+    assert dispatch["message_ref"] == "telegram-sql-1"
+
+
 def test_append_codex_history_summary_numbers_per_repo_and_redacts_secrets(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     repo_a = make_git_repo(tmp_path, "alpha", version="1.2.3")

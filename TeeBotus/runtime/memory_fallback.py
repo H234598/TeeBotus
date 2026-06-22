@@ -117,6 +117,40 @@ class WarningFallbackAccountMemoryBackend:
             dirty_key=(account_id, collection_name),
         )
 
+    def append_collection_items(self, account_id: str, collection: str, rows: list[dict[str, Any]]) -> None:
+        collection_name = str(collection or "").strip()
+        normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
+        if not normalized_rows:
+            return
+        self._write(
+            f"write_collection:{collection_name}",
+            account_id,
+            lambda backend: self._append_collection_items_on_backend(backend, account_id, collection_name, normalized_rows),
+            self._dirty_collections,
+            dirty_key=(account_id, collection_name),
+        )
+
+    def replace_collection_item(self, account_id: str, collection: str, item_key: str, row: dict[str, Any]) -> bool:
+        collection_name = str(collection or "").strip()
+        normalized_item_key = str(item_key or "").strip()
+        if not collection_name or not normalized_item_key or not isinstance(row, dict):
+            return False
+        primary_result = {"replaced": False}
+
+        def callback(backend: Any) -> None:
+            replaced = self._replace_collection_item_on_backend(backend, account_id, collection_name, normalized_item_key, dict(row))
+            if backend is self.primary:
+                primary_result["replaced"] = bool(replaced)
+
+        self._write(
+            f"write_collection:{collection_name}",
+            account_id,
+            callback,
+            self._dirty_collections,
+            dirty_key=(account_id, collection_name),
+        )
+        return bool(primary_result["replaced"])
+
     def read_collection_names(self, account_id: str) -> tuple[str, ...]:
         try:
             if any(key[0] == account_id for key in self._dirty_collections):
@@ -520,6 +554,45 @@ class WarningFallbackAccountMemoryBackend:
         sync_failed_set.discard(stale_key)
         if not self._stale_fallback_entries and not self._stale_fallback_indexes and not self._stale_fallback_collections:
             self.last_fallback_sync_error = ""
+
+    def _append_collection_items_on_backend(
+        self,
+        backend: Any,
+        account_id: str,
+        collection: str,
+        rows: list[dict[str, Any]],
+    ) -> None:
+        append_collection_items = getattr(backend, "append_collection_items", None)
+        if callable(append_collection_items):
+            append_collection_items(account_id, collection, rows)
+            return
+        existing_rows = list(backend.read_collection(account_id, collection))
+        backend.write_collection(account_id, collection, existing_rows + [dict(row) for row in rows])
+
+    def _replace_collection_item_on_backend(
+        self,
+        backend: Any,
+        account_id: str,
+        collection: str,
+        item_key: str,
+        row: dict[str, Any],
+    ) -> bool:
+        replace_collection_item = getattr(backend, "replace_collection_item", None)
+        if callable(replace_collection_item):
+            return bool(replace_collection_item(account_id, collection, item_key, row))
+        existing_rows = list(backend.read_collection(account_id, collection))
+        replaced = False
+        for index, existing in enumerate(existing_rows):
+            if not isinstance(existing, dict):
+                continue
+            if str(existing.get("id") or "").strip() != item_key:
+                continue
+            existing_rows[index] = dict(row)
+            replaced = True
+            break
+        if replaced:
+            backend.write_collection(account_id, collection, existing_rows)
+        return replaced
 
     def _fallback_stale_set(self, operation: str) -> set[Any]:
         if operation in {"write_entries", "read_entries"}:

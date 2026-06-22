@@ -412,14 +412,15 @@ async def dispatch_codex_history_outbox(
             item_results.append(
                 await _dispatch_codex_history_item_to_account(
                     store,
-                item,
-                account_id,
-                instance_name=instance_name,
-                senders=resolved_senders,
-                instances_dir=instances_dir,
-                secret_provider=secret_provider,
-                now=timestamp,
-            )
+                    item,
+                    account_id,
+                    instance_name=instance_name,
+                    senders=resolved_senders,
+                    instances_dir=instances_dir,
+                    secret_provider=secret_provider,
+                    now=timestamp,
+                    persist_result=False,
+                )
             )
         if not item_results:
             item_results.append(
@@ -431,8 +432,10 @@ async def dispatch_codex_history_outbox(
                     reason="no_recipient_accounts",
                     now=timestamp,
                     instance_name=instance_name,
+                    persist=False,
                 )
             )
+        store.append_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID, item_results)
         final_status = _overall_dispatch_status(item_results)
         final_reason = _overall_dispatch_reason(item_results)
         _update_codex_history_item_status(store, item_id, final_status, reason=final_reason, now=timestamp, dispatch_results=item_results)
@@ -2491,6 +2494,7 @@ async def _dispatch_codex_history_item_to_account(
     instances_dir: str | Path | None,
     secret_provider: InstanceSecretProvider | None,
     now: str,
+    persist_result: bool = True,
 ) -> dict[str, Any]:
     route, route_reason = _resolve_codex_history_dispatch_route(
         store,
@@ -2508,6 +2512,7 @@ async def _dispatch_codex_history_item_to_account(
             reason=route_reason or "no_private_route",
             now=now,
             instance_name=instance_name,
+            persist=persist_result,
         )
     channel = str(route.get("channel") or "").strip().casefold()
     chat_id = str(route.get("chat_id") or "").strip()
@@ -2521,6 +2526,7 @@ async def _dispatch_codex_history_item_to_account(
             now=now,
             instance_name=instance_name,
             route=route,
+            persist=persist_result,
         )
     sender = _sender_for_channel(senders, channel)
     if sender is None:
@@ -2533,6 +2539,7 @@ async def _dispatch_codex_history_item_to_account(
             now=now,
             instance_name=instance_name,
             route=route,
+            persist=persist_result,
         )
     action = _codex_history_attachment_action(item, chat_id)
     try:
@@ -2557,6 +2564,7 @@ async def _dispatch_codex_history_item_to_account(
             now=now,
             instance_name=instance_name,
             route=route,
+            persist=persist_result,
         )
     obsidian_path, obsidian_error = _write_codex_history_dispatch_markdown(item)
     return _record_codex_history_dispatch_result(
@@ -2571,6 +2579,7 @@ async def _dispatch_codex_history_item_to_account(
         message_ref=str(sent_ref or ""),
         obsidian_path=obsidian_path,
         obsidian_error=obsidian_error,
+        persist=persist_result,
     )
 
 
@@ -2722,6 +2731,7 @@ def _record_codex_history_dispatch_result(
     receipt_type: str = "",
     obsidian_path: str = "",
     obsidian_error: str = "",
+    persist: bool = True,
 ) -> dict[str, Any]:
     route = route if isinstance(route, Mapping) else {}
     version = item.get("version", {})
@@ -2757,7 +2767,8 @@ def _record_codex_history_dispatch_result(
     normalized_obsidian_error = redact_codex_history_text(obsidian_error).strip()
     if normalized_obsidian_error:
         row["obsidian_error"] = normalized_obsidian_error[:240]
-    store.append_codex_history_dispatch_result(INSTANCE_STATE_ACCOUNT_ID, row)
+    if persist:
+        store.append_codex_history_dispatch_result(INSTANCE_STATE_ACCOUNT_ID, row)
     return row
 
 
@@ -2820,6 +2831,9 @@ def _update_codex_history_item_status(
                 history = []
                 item["status_history"] = history
             history.append({"at": now, "status": normalized_status, "reason": normalized_reason})
+            replace_item = getattr(store, "replace_codex_history_outbox_item", None)
+            if callable(replace_item) and replace_item(INSTANCE_STATE_ACCOUNT_ID, item):
+                return
             break
         store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
 
