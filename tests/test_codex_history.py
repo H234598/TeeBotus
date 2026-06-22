@@ -9,6 +9,7 @@ from pathlib import Path
 
 import pytest
 
+import TeeBotus.admin.codex_history as codex_history_module
 from TeeBotus.admin.codex_history import (
     _codex_history_graph_mermaid_source,
     _normalize_remote_url,
@@ -1765,6 +1766,46 @@ def test_watch_codex_session_roots_rejects_unknown_event_mode(tmp_path: Path) ->
         assert "event mode" in str(exc)
     else:
         raise AssertionError("expected invalid event mode rejection")
+
+
+def test_watchdog_event_mode_falls_back_to_sleep_when_backend_unavailable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sleep_calls: list[float] = []
+    monkeypatch.setattr(
+        codex_history_module,
+        "_wait_for_watchdog_codex_session_change",
+        lambda _roots, *, timeout_seconds: None,
+    )
+
+    codex_history_module._wait_for_codex_session_change(
+        (tmp_path / "sessions",),
+        poll_interval_seconds=0.5,
+        event_mode="watchdog",
+        sleep=sleep_calls.append,
+    )
+
+    assert sleep_calls == [0.5]
+
+
+def test_watchdog_event_mode_does_not_sleep_again_after_watchdog_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sleep_calls: list[float] = []
+    monkeypatch.setattr(
+        codex_history_module,
+        "_wait_for_watchdog_codex_session_change",
+        lambda _roots, *, timeout_seconds: False,
+    )
+
+    codex_history_module._wait_for_codex_session_change(
+        (tmp_path / "sessions",),
+        poll_interval_seconds=0.5,
+        event_mode="watchdog",
+        sleep=sleep_calls.append,
+    )
+
+    assert sleep_calls == []
 
 
 def test_codex_history_watch_once_rejects_missing_instance(tmp_path: Path, capsys) -> None:

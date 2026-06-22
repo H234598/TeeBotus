@@ -2353,19 +2353,20 @@ def _wait_for_codex_session_change(
         return
     normalized_event_mode = _normalize_watch_event_mode(event_mode)
     if normalized_event_mode in {"auto", "watchdog"}:
-        if _wait_for_watchdog_codex_session_change(roots, timeout_seconds=poll_interval_seconds):
+        watchdog_result = _wait_for_watchdog_codex_session_change(roots, timeout_seconds=poll_interval_seconds)
+        if watchdog_result is True:
             return
-        if normalized_event_mode == "watchdog":
+        if watchdog_result is False and normalized_event_mode == "watchdog":
             return
     sleep(float(poll_interval_seconds))
 
 
-def _wait_for_watchdog_codex_session_change(roots: Sequence[str | Path], *, timeout_seconds: float) -> bool:
+def _wait_for_watchdog_codex_session_change(roots: Sequence[str | Path], *, timeout_seconds: float) -> bool | None:
     try:
         from watchdog.events import FileSystemEventHandler  # type: ignore[import-not-found]
         from watchdog.observers import Observer  # type: ignore[import-not-found]
     except ImportError:
-        return False
+        return None
 
     changed = threading.Event()
 
@@ -2392,7 +2393,7 @@ def _wait_for_watchdog_codex_session_change(roots: Sequence[str | Path], *, time
         observer.schedule(handler, str(watch_root), recursive=True)
         scheduled = True
     if not scheduled:
-        return False
+        return None
     try:
         observer.start()
         return bool(changed.wait(max(0.0, float(timeout_seconds))))
