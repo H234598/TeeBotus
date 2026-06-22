@@ -779,6 +779,24 @@ def test_runtime_status_text_redacts_url_query_and_fragment_secrets() -> None:
     assert "target=https://<redacted>@example.test/path?api_key=<redacted>&ok=1&api_key_env=GEMINI_API_KEY#access_token=<redacted>;token=configured" in text
 
 
+def test_runtime_status_text_redacts_schemeless_url_credentials() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    text = bot._sanitize_status_text(
+        "target=user:plain-password@signal.example:8080/path?token=plain-token "
+        "base_url=:redis-password@example.test/0 "
+        "error=user:raw-password@matrix.example/_matrix"
+    )
+
+    assert "plain-password" not in text
+    assert "plain-token" not in text
+    assert "redis-password" not in text
+    assert "raw-password" not in text
+    assert "target=<redacted>@signal.example:8080/path?token=<redacted>" in text
+    assert "base_url=<redacted>@example.test/0" in text
+    assert "error=<redacted>@matrix.example/_matrix" in text
+
+
 def test_runtime_status_text_redacts_structured_secret_assignments() -> None:
     bot = importlib.import_module("TeeBotus.bot")
 

@@ -1911,7 +1911,13 @@ def _sanitize_admin_status_output(output: str) -> str:
 
 def _sanitize_status_url_credentials(value: str) -> str:
     lowered = value.lower()
-    if "://" not in value and not lowered.startswith("target=") and not lowered.startswith("base_url=") and not lowered.startswith("url="):
+    if (
+        "://" not in value
+        and not lowered.startswith("target=")
+        and not lowered.startswith("base_url=")
+        and not lowered.startswith("url=")
+        and not _status_schemeless_credential_pattern.search(value)
+    ):
         return value
     segments = re.split(r"(\s+)", value)
     for index, segment in enumerate(segments):
@@ -1926,11 +1932,29 @@ def _sanitize_status_url_credentials_segment(segment: str) -> str:
     for prefix in ("target=", "base_url=", "url="):
         if lowered.startswith(prefix):
             return _sanitize_status_url_value(segment[len(prefix) :], value_prefix=segment[: len(prefix)])
+    if assignment := re.match(r"([A-Za-z_][A-Za-z0-9._-]*=)(.+)", segment):
+        prefix = assignment.group(1)
+        remainder = assignment.group(2)
+        if _status_schemeless_credential_pattern.search(remainder):
+            return _sanitize_status_url_value(remainder, value_prefix=prefix)
     return _sanitize_status_url_value(segment)
 
 
 def _sanitize_status_url_value(value: str, *, value_prefix: str = "") -> str:
     if "://" not in value:
+        try:
+            parsed_schemeless = urlsplit(f"//{value}")
+        except ValueError:
+            return f"{value_prefix}{value}"
+        if parsed_schemeless.hostname and (parsed_schemeless.username is not None or parsed_schemeless.password is not None):
+            host = parsed_schemeless.hostname or ""
+            netloc = f"<redacted>@{host}"
+            if parsed_schemeless.port is not None:
+                netloc = f"{netloc}:{parsed_schemeless.port}"
+            query = _sanitize_status_url_param_secrets(parsed_schemeless.query)
+            fragment = _sanitize_status_url_param_secrets(parsed_schemeless.fragment)
+            rendered = urlunsplit(("", netloc, parsed_schemeless.path, query, fragment)).removeprefix("//")
+            return f"{value_prefix}{rendered}"
         return f"{value_prefix}{value}"
     try:
         parsed = urlsplit(value)
@@ -2018,6 +2042,7 @@ _status_url_secret_param_pattern = re.compile(
     r"(?i)(^|[&#;])([^=&#;]{0,120}(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
     r"[^=&#;]{0,120})=([^&#;]*)"
 )
+_status_schemeless_credential_pattern = re.compile(r"(?:(?<!\S)|(?<==))[^/\s:@]+:[^/\s@]*@(?=[^\s]+)")
 
 
 def _sanitize_status_url_param_secrets(value: str) -> str:
