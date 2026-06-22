@@ -1212,6 +1212,23 @@ def test_configure_runtime_logging_uses_file_handler_when_stdout_is_not_runtime_
     assert any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
 
 
+def test_configure_runtime_logging_refuses_symlinked_runtime_log_path(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    external = tmp_path / "external.log"
+    external.write_text("", encoding="utf-8")
+    log_path = tmp_path / "teebotus-production.log"
+    log_path.symlink_to(external)
+
+    configure_runtime_logging(base_dir=tmp_path)
+    logging.getLogger("TeeBotus.test").warning("probe")
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    handlers = logging.getLogger().handlers
+    assert not any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
+    assert external.read_text(encoding="utf-8") == ""
+
+
 def test_configure_runtime_logging_caps_provider_sdk_logs_during_debug_all(tmp_path):
     for logger_name in ("litellm", "LiteLLM", "openai", "openai._base_client"):
         logging.getLogger(logger_name).setLevel(logging.NOTSET)

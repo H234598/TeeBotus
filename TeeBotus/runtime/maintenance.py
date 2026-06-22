@@ -82,10 +82,14 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | Non
     stream_handler.addFilter(context_filter)
     handlers: list[logging.Handler] = [stream_handler]
     if not stdout_targets_log:
-        file_handler = RuntimeTimedRotatingFileHandler(log_path)
-        file_handler.setFormatter(formatter)
-        file_handler.addFilter(context_filter)
-        handlers.append(file_handler)
+        try:
+            file_handler = RuntimeTimedRotatingFileHandler(log_path)
+        except OSError:
+            file_handler = None
+        if file_handler is not None:
+            file_handler.setFormatter(formatter)
+            file_handler.addFilter(context_filter)
+            handlers.append(file_handler)
     logging.basicConfig(level=resolved_level, handlers=handlers, force=True)
     _configure_third_party_loggers(resolved_level)
     logging.getLogger("TeeBotus.runtime.maintenance").info(
@@ -221,8 +225,15 @@ def _absolute_without_symlink_resolution(path: Path) -> Path:
 
 class RuntimeTimedRotatingFileHandler(TimedRotatingFileHandler):
     def __init__(self, filename: Path) -> None:
-        super().__init__(filename, when="midnight", interval=1, backupCount=0, encoding="utf-8")
+        super().__init__(filename, when="midnight", interval=1, backupCount=0, encoding="utf-8", delay=True)
         self.suffix = "%Y-%m-%d"
+        self.stream = self._open()
+
+    def _open(self):  # type: ignore[override]
+        stream = _open_append_text_no_follow(Path(self.baseFilename))
+        if stream is None:
+            raise OSError(f"refusing unsafe runtime log path: {self.baseFilename}")
+        return stream
 
     def doRollover(self) -> None:  # noqa: N802 - stdlib override name
         super().doRollover()
