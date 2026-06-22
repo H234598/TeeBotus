@@ -629,6 +629,8 @@ def test_llm_profiles_plan2_contract_rejects_duplicate_raw_config_top_level_alia
 
     def fake_loader(path):
         payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            payload["Profiles"] = payload["profiles"]
         if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
             payload["default-profile"] = payload["default_profile"]
         return payload
@@ -638,6 +640,7 @@ def test_llm_profiles_plan2_contract_rejects_duplicate_raw_config_top_level_alia
     ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
 
     assert not ok
+    assert "duplicate raw profile config key profiles: Profiles,profiles" in message
     assert "duplicate raw routing config key default_profile: default-profile,default_profile" in message
 
 
