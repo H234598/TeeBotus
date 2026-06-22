@@ -252,7 +252,7 @@ def maintain_runtime_directory(
 
 
 def gzip_file(path: Path, *, expected_stat: os.stat_result | None = None) -> Path:
-    if path.is_symlink() or path.suffix == ".gz" or not path.is_file():
+    if path.is_symlink() or _is_compressed_runtime_file(path) or not path.is_file():
         return path
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
@@ -293,7 +293,7 @@ def _runtime_text_files(runtime_path: Path) -> list[Path]:
     result: list[Path] = []
     for pattern in ("*.log", "*.log.*", "*.jsonl", "*.jsonl.*"):
         for path in runtime_path.glob(pattern):
-            if path.is_symlink() or not path.is_file() or path.suffix == ".gz":
+            if path.is_symlink() or not path.is_file() or _is_compressed_runtime_file(path):
                 continue
             if _is_temporary_runtime_file(path):
                 continue
@@ -308,8 +308,10 @@ def _runtime_text_files(runtime_path: Path) -> list[Path]:
 def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_after_seconds: int) -> None:
     archive_dir = runtime_path / "monthly_archives"
     groups: dict[str, list[tuple[Path, os.stat_result]]] = {}
-    for path in runtime_path.glob("*.gz"):
+    for path in runtime_path.iterdir():
         if path.is_symlink():
+            continue
+        if not _is_compressed_runtime_file(path):
             continue
         if _is_temporary_runtime_file(path):
             continue
@@ -448,6 +450,10 @@ def _close_quietly(stream: object) -> None:
 
 def _is_temporary_runtime_file(path: Path) -> bool:
     return path.name.startswith(".") or ".tmp" in path.suffixes
+
+
+def _is_compressed_runtime_file(path: Path) -> bool:
+    return ".gz" in path.suffixes
 
 
 def _unique_path(path: Path) -> Path:

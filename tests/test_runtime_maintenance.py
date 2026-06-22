@@ -253,6 +253,19 @@ def test_runtime_maintenance_preserves_temporary_runtime_files(tmp_path):
     assert (tmp_path / f"{rotated.name}.gz").exists()
 
 
+def test_runtime_maintenance_does_not_recompress_numbered_compressed_logs(tmp_path):
+    now = time.time()
+    old_mtime = now - 8 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-06-01.gz.1"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert path.read_bytes() == b"compressed-ish"
+    assert not (tmp_path / f"{path.name}.gz").exists()
+
+
 def test_runtime_maintenance_preserves_symlinked_runtime_text_files(tmp_path):
     now = time.time()
     old_mtime = now - 8 * 24 * 60 * 60
@@ -485,6 +498,22 @@ def test_runtime_maintenance_archives_compressed_logs_older_than_two_months(tmp_
     assert not path.exists()
     with tarfile.open(archives[0], "r:gz") as archive:
         assert "teebotus-production.log.2026-03-01.gz" in archive.getnames()
+
+
+def test_runtime_maintenance_archives_numbered_compressed_logs(tmp_path):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz.1"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    archives = sorted((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert len(archives) == 1
+    assert not path.exists()
+    with tarfile.open(archives[0], "r:gz") as archive:
+        assert path.name in archive.getnames()
 
 
 def test_runtime_maintenance_groups_compressed_logs_with_single_stat(tmp_path, monkeypatch):
