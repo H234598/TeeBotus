@@ -22,12 +22,23 @@ class HandlerTests(unittest.TestCase):
         self.assertIn("/export [json|md|txt|csv|yaml|pdf|tex] - eigenen Account als Datei exportieren", reply)
         self.assertIn("/cleanup N - loescht die letzten N seit Bot-Start gemerkten Nachrichten in diesem Chat", reply)
         self.assertIn("/cleanup all - loescht alle seit Bot-Start gemerkten Nachrichten in diesem Chat", reply)
+        self.assertNotIn("/admin yes|no", reply)
+        self.assertNotIn("/Admin-Befehle", reply)
         self.assertNotIn("Admin-Befehle:", reply)
         self.assertNotIn("/codex [Projekt] [Repo]", reply)
         self.assertNotIn("/RouteToOpenAI", reply)
 
-    def test_help_can_include_admin_section(self) -> None:
+    def test_help_never_includes_admin_section(self) -> None:
         reply = build_reply({"text": "/help"}, include_admin_help=True)
+
+        self.assertIsNotNone(reply)
+        assert reply is not None
+        self.assertNotIn("/admin yes|no", reply)
+        self.assertNotIn("/Admin-Befehle", reply)
+        self.assertNotIn("Admin-Befehle:", reply)
+
+    def test_admin_help_command_can_include_admin_section(self) -> None:
+        reply = build_reply({"text": "/admin-befehle"}, include_admin_help=True)
 
         self.assertIsNotNone(reply)
         assert reply is not None
@@ -43,6 +54,9 @@ class HandlerTests(unittest.TestCase):
         self.assertIn("/proactive_review - Proactive-Human-Review-Queue verwalten.", reply)
         self.assertIn("/codex_index - Codex-History Index-/Obsidian-Export anstossen.", reply)
         self.assertIn("/embedding_rebuild - Qdrant-/Embedding-Indizes warten.", reply)
+
+    def test_admin_help_command_for_regular_user_is_forbidden(self) -> None:
+        self.assertEqual(build_reply({"text": "/admin-befehle"}), "Verboten.")
 
     def test_ping(self) -> None:
         self.assertEqual(build_reply({"text": "/ping"}), "pong")

@@ -150,12 +150,14 @@ def test_help_hides_admin_section_for_regular_accounts(tmp_path, monkeypatch):
 
     assert len(actions) == 1
     assert "Befehle:" in actions[0].text
+    assert "/admin yes|no" not in actions[0].text
+    assert "/Admin-Befehle" not in actions[0].text
     assert "Admin-Befehle:" not in actions[0].text
     assert "/codex [Projekt] [Repo]" not in actions[0].text
     assert "/RouteToOpenAI" not in actions[0].text
 
 
-def test_help_shows_admin_section_for_runtime_admin_accounts(tmp_path, monkeypatch):
+def test_help_hides_admin_section_for_runtime_admin_accounts(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
@@ -163,6 +165,36 @@ def test_help_shows_admin_section_for_runtime_admin_accounts(tmp_path, monkeypat
 
     engine.process(event(identity, "/admin yes 18hhGfuu3"))
     actions = engine.process(event(identity, "/help"))
+
+    assert len(actions) == 1
+    assert "Befehle:" in actions[0].text
+    assert "/admin yes|no" not in actions[0].text
+    assert "/Admin-Befehle" not in actions[0].text
+    assert "Admin-Befehle:" not in actions[0].text
+    assert "/codex [Projekt] [Repo]" not in actions[0].text
+    assert "/RouteToOpenAI" not in actions[0].text
+
+
+def test_admin_help_request_is_forbidden_for_regular_accounts(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    actions = engine.process(event(identity, "/admin-befehle"))
+
+    assert len(actions) == 1
+    assert actions[0].text == "Verboten."
+
+
+def test_admin_help_request_shows_admin_section_for_runtime_admin_accounts(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    engine.process(event(identity, "/admin yes 18hhGfuu3"))
+    actions = engine.process(event(identity, "/admin-befehle"))
 
     assert len(actions) == 1
     assert "Admin-Befehle:" in actions[0].text
@@ -173,6 +205,18 @@ def test_help_shows_admin_section_for_runtime_admin_accounts(tmp_path, monkeypat
     assert "/RouteToGemini <Prompt> - Prompt direkt an Gemini senden." in actions[0].text
     assert "/proactive_review - Proactive-Human-Review-Queue verwalten." in actions[0].text
     assert "/codex_index - Codex-History Index-/Obsidian-Export anstossen." in actions[0].text
+
+
+def test_bare_admin_command_is_forbidden(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    actions = engine.process(event(identity, "/admin"))
+
+    assert len(actions) == 1
+    assert actions[0].text == "Verboten."
 
 
 def test_account_command_shows_admin_status(tmp_path, monkeypatch):

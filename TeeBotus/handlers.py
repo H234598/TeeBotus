@@ -9,6 +9,7 @@ from .instructions import BotInstructions, render_template
 
 DEFAULT_INSTRUCTIONS = BotInstructions()
 HELP_TEXT = DEFAULT_INSTRUCTIONS.help_text()
+ADMIN_FORBIDDEN_TEXT = "Verboten."
 ADMIN_HELP_COMMANDS = frozenset(
     {
         "/admin-befehle",
@@ -37,11 +38,11 @@ def build_reply(
     if command == "/start":
         return render_template(instructions.start, message, text)
     if command == "/help":
-        return instructions.help_text(include_admin=include_admin_help)
+        return instructions.help_text()
     if command in ADMIN_HELP_COMMANDS:
         if include_admin_help:
             return instructions.admin_help_text()
-        return render_template(instructions.unknown_command, message, text)
+        return ADMIN_FORBIDDEN_TEXT
     if command == "/chatid":
         chat_id = message.get("chat", {}).get("id")
         template = instructions.chatid if chat_id is not None else instructions.chatid_missing

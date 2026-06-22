@@ -38,7 +38,6 @@ DEFAULT_HELP_LINES = (
     "/rotate_secret - neues Account-Secret erzeugen",
     "/linked_accounts - verknuepfte Kommunikationswege anzeigen",
     "/account_edit - Account-Verknuepfungen bearbeiten",
-    "/admin yes|no - Adminzugang per Secret aktivieren oder fuer diesen Account abmelden",
     "/voice Text - Text als Sprachnachricht senden. Ohne Text nutzt /voice den Text der beantworteten Nachricht.",
     "/voicemodel <stimme> - Stimme fuer deine Sprachnachrichten waehlen. OpenAI-Voices: https://platform.openai.com/docs/guides/text-to-speech#voice-options",
     "/mimic_voice on|off|before|after - Sprechweise aus deinen Sprachnachrichten fuer TTS leicht nachahmen",
@@ -50,7 +49,6 @@ DEFAULT_HELP_LINES = (
     "/cleanup N - loescht die letzten N seit Bot-Start gemerkten Nachrichten in diesem Chat.",
     "/cleanup all - loescht alle seit Bot-Start gemerkten Nachrichten in diesem Chat.",
     "/export [json|md|txt|csv|yaml|pdf|tex] - eigenen Account als Datei exportieren.",
-    "/Admin-Befehle - erweiterte Admin-Befehlsuebersicht anzeigen.",
 )
 
 DEFAULT_ADMIN_HELP_LINES = (

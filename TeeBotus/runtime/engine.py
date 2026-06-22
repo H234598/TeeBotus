@@ -28,7 +28,7 @@ from TeeBotus.core.local_transcription import LocalTranscriptionError, transcrib
 from TeeBotus.core.export import ExportError, SUPPORTED_EXPORT_FORMATS, export_account_data_from_store
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent, redact_registration_secrets
 from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply, build_status_reply_html
-from TeeBotus.handlers import build_reply, is_admin_help_request
+from TeeBotus.handlers import ADMIN_FORBIDDEN_TEXT, build_reply, is_admin_help_request
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.capabilities import LLMCapabilities
 from TeeBotus.llm_client import LLMAPIError
@@ -345,7 +345,7 @@ class TeeBotusEngine:
             return EngineResult(result.account_id, [], handled=False)
         if _has_youtube_transcript_intent(text):
             return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, instructions), handled=True)
-        include_admin_help = (command == "/help" or is_admin_help_request(text)) and self._account_is_help_admin(event.instance, result.account_id)
+        include_admin_help = is_admin_help_request(text) and self._account_is_help_admin(event.instance, result.account_id)
         reply = build_reply(
             _event_to_handler_message(event),
             instructions,
@@ -425,6 +425,8 @@ class TeeBotusEngine:
             except (AccountStoreError, OSError, ValueError):
                 return [SendText(event.chat_id, "Adminzugang konnte gerade nicht gespeichert werden.", track=False)]
             return [SendText(event.chat_id, ADMIN_AUTH_DISABLED, track=False)]
+        if not mode:
+            return [SendText(event.chat_id, ADMIN_FORBIDDEN_TEXT, track=False)]
         return [SendText(event.chat_id, ADMIN_AUTH_USAGE, track=False)]
 
     def _admin_authorize_actions(self, event: IncomingEvent, account_id: str, secret_text: str) -> list[OutgoingAction]:
