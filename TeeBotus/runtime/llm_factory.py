@@ -168,6 +168,11 @@ def build_runtime_text_llm_client(
             instance_name=instance_name,
             provider=resolved_provider,
             model=resolved_model,
+            fallback_models=filter_runtime_fallback_models(
+                provider=resolved_provider,
+                fallback_models=fallback_models or instructions.llm_fallback_models,
+                allow_remote_fallback=remote_fallback_allowed,
+            ),
             explicit_service_tier=service_tier or instructions.llm_service_tier,
         ),
         use_instruction_fallback_models=False,
@@ -316,6 +321,7 @@ def _build_route_client(
             instance_name=instance_name,
             provider=route.provider,
             model=route.model,
+            fallback_models=resolved_fallback_models,
             explicit_service_tier=service_tier or route.service_tier or instructions.llm_service_tier,
         ),
         use_instruction_fallback_models=False,
@@ -396,6 +402,11 @@ def _build_profile_client(
             instance_name=instance_name,
             provider=profile.provider,
             model=profile.model,
+            fallback_models=filter_runtime_fallback_models(
+                provider=profile.provider,
+                fallback_models=fallback_models,
+                allow_remote_fallback=allow_remote_fallback,
+            ),
             explicit_service_tier=service_tier or profile.service_tier or instructions.llm_service_tier,
         ),
         use_instruction_fallback_models=False,
@@ -536,13 +547,25 @@ def _gemini_service_tier_for_route(
     instance_name: str,
     provider: str,
     model: str,
-    explicit_service_tier: str,
+    fallback_models: str | tuple[str, ...] = (),
+    explicit_service_tier: str = "",
 ) -> str:
+    if route_uses_google_gemini(provider=provider, model=model):
+        service_tier_model = model
+    else:
+        service_tier_model = next(
+            (
+                fallback_model
+                for fallback_model in parse_fallback_models(fallback_models)
+                if route_uses_google_gemini(provider=provider, model=fallback_model)
+            ),
+            model,
+        )
     return resolve_gemini_service_tier(
         env,
         instance_name=instance_name,
         provider=provider,
-        model=model,
+        model=service_tier_model,
         explicit_service_tier=explicit_service_tier,
     )
 

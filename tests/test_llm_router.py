@@ -205,6 +205,7 @@ def test_runtime_route_client_uses_gemini_key_ring_for_gemini_fallback(monkeypat
             "GEMINI_API_KEY": "single-gemini-key",
             "GEMINI_API_KEYS_ACCOUNT_1": "a1,a2",
             "GEMINI_API_KEYS_ACCOUNT_2": "b1",
+            "TEEBOTUS_GEMINI_SERVICE_TIER": "flex",
         },
     )
 
@@ -214,6 +215,7 @@ def test_runtime_route_client_uses_gemini_key_ring_for_gemini_fallback(monkeypat
     assert client.api_key_ring is not None
     assert client.api_key_ring.keys == ("a1", "b1", "a2")
     assert client.gemini_free_tier_limits.active
+    assert client.service_tier == "flex"
 
 
 def test_runtime_profile_client_uses_gemini_service_tier_env_switch() -> None:
@@ -527,6 +529,7 @@ def test_profiled_text_client_uses_gemini_key_ring_for_gemini_fallback() -> None
             "GEMINI_API_KEY": "single-gemini-key",
             "GEMINI_API_KEYS_ACCOUNT_1": "a1,a2",
             "GEMINI_API_KEYS_ACCOUNT_2": "b1",
+            "TEEBOTUS_GEMINI_SERVICE_TIER": "flex",
         },
     )
 
@@ -536,6 +539,7 @@ def test_profiled_text_client_uses_gemini_key_ring_for_gemini_fallback() -> None
     assert client.api_key_ring is not None
     assert client.api_key_ring.keys == ("a1", "b1", "a2")
     assert client.gemini_free_tier_limits.active
+    assert client.service_tier == "flex"
 
 
 def test_profiled_text_client_does_not_reuse_instruction_remote_fallbacks_when_route_blocks_them() -> None:

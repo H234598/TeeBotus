@@ -215,7 +215,7 @@ def build_profiled_text_llm_client(
         service_tier=resolve_gemini_service_tier(
             source,
             provider=route.provider,
-            model=route.model,
+            model=gemini_key_model or route.model,
             explicit_service_tier=route.service_tier or instructions.llm_service_tier,
         ),
         api_base=route.base_url,
