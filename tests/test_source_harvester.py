@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
 
+from TeeBotus.bibliothekar import source_harvester as source_harvester_module
 from TeeBotus.bibliothekar.source_harvester import HARVEST_DIRS, SourceHarvester
 from TeeBotus.runtime.bibliothekar import BibliothekarStore
 from TeeBotus.runtime.source_quality import FakeNLIVerifier, SourceQualityPipeline
@@ -111,6 +113,33 @@ def test_source_harvester_refuses_manifest_symlink_swapped_before_append(tmp_pat
     harvester = SourceHarvester(
         library_dir,
         quality_pipeline=SymlinkManifestPipeline(library_dir / "harvest_manifest.jsonl", outside_manifest),
+    )
+
+    with pytest.raises(ValueError, match="symlink manifest file"):
+        harvester.harvest_path(
+            source,
+            metadata={"title": "Therapie", "license": "private"},
+            claims=("Schlafhygiene ist relevant.",),
+            evidence=("Schlafhygiene und Aktivierung.",),
+        )
+
+    assert outside_manifest.read_text(encoding="utf-8") == "outside-before\n"
+
+
+@pytest.mark.skipif(not hasattr(os, "O_NOFOLLOW"), reason="requires atomic no-follow file open")
+def test_source_harvester_manifest_append_uses_atomic_nofollow(tmp_path, monkeypatch):
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    library_dir = tmp_path / "library"
+    library_dir.mkdir()
+    outside_manifest = tmp_path / "outside_manifest.jsonl"
+    outside_manifest.write_text("outside-before\n", encoding="utf-8")
+    (library_dir / "harvest_manifest.jsonl").symlink_to(outside_manifest)
+    monkeypatch.setattr(source_harvester_module, "_refuse_symlink_manifest_file", lambda path: None)
+    harvester = SourceHarvester(
+        library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
     )
 
     with pytest.raises(ValueError, match="symlink manifest file"):

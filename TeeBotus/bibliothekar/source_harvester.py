@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import errno
 import hashlib
 import json
+import os
 import shutil
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -309,7 +311,14 @@ def _refuse_symlink_manifest_file(path: Path) -> None:
 
 def _append_manifest_row(path: Path, row: Mapping[str, Any]) -> None:
     _refuse_symlink_manifest_file(path)
-    with path.open("a", encoding="utf-8") as handle:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags, 0o600)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise ValueError(f"SourceHarvester refuses symlink manifest file: {path}") from exc
+        raise
+    with os.fdopen(fd, "a", encoding="utf-8") as handle:
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
     _chmod_private_file(path)
 
