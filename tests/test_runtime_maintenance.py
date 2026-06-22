@@ -185,6 +185,26 @@ def test_rotate_runtime_text_file_keeps_rotated_file_when_compression_fails(tmp_
     assert not list(tmp_path.glob(".*.tmp"))
 
 
+def test_rotate_runtime_text_file_keeps_rotated_file_when_compression_value_error_fails(tmp_path, monkeypatch):
+    path = tmp_path / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+    rotated = tmp_path / "Security_Events.jsonl.2026-06-22-181200"
+    monkeypatch.setattr("TeeBotus.runtime.maintenance._next_rotated_path", lambda _path: rotated)
+
+    def fail_copy(*_args, **_kwargs):
+        raise ValueError("copy failed")
+
+    monkeypatch.setattr(shutil, "copyfileobj", fail_copy)
+
+    result = rotate_runtime_text_file_if_needed(path, max_bytes=4)
+
+    assert result == rotated
+    assert rotated.read_text(encoding="utf-8") == "0123456789\n"
+    assert not path.exists()
+    assert not (tmp_path / f"{rotated.name}.gz").exists()
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
 def test_rotate_runtime_text_file_preserves_active_runtime_log_names(tmp_path):
     for filename in ACTIVE_RUNTIME_TEXT_FILENAMES:
         path = tmp_path / filename
