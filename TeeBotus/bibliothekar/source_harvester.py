@@ -156,6 +156,8 @@ class SourceHarvester:
             if route == "accepted" and not _coerce_bool(row.get("accepted_for_ingest")):
                 continue
             stored = Path(str(row.get("stored_path") or ""))
+            if not _path_under(stored, self.library_root / _route_dir(route)):
+                continue
             if stored.exists():
                 return stored
         return None
@@ -289,6 +291,14 @@ def _same_path(left: object, right: Path) -> bool:
         return Path(left_text).resolve(strict=False) == right.resolve(strict=False)
     except OSError:
         return False
+
+
+def _path_under(path: Path, root: Path) -> bool:
+    try:
+        path.resolve(strict=False).relative_to(root.resolve(strict=False))
+    except (OSError, ValueError):
+        return False
+    return True
 
 
 def _chmod_private_dir(path: Path) -> None:

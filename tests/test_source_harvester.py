@@ -149,6 +149,49 @@ def test_source_harvester_ignores_non_ingestable_accepted_duplicate_rows(tmp_pat
     assert rows[-1]["accepted_for_ingest"] is True
 
 
+def test_source_harvester_ignores_external_accepted_duplicate_paths(tmp_path):
+    instances_dir = tmp_path / "instances"
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    external = tmp_path / "outside-accepted.txt"
+    external.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", instances_dir)
+    harvester = SourceHarvester(
+        store.library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+    harvester.prepare()
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    harvester.manifest_path.write_text(
+        json.dumps(
+            {
+                "accepted_for_ingest": True,
+                "route": "accepted",
+                "sha256": sha256,
+                "source_path": str(source),
+                "stored_path": str(external),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+
+    assert result.duplicate_of is None
+    assert result.accepted_for_ingest is True
+    assert result.stored_path is not None
+    assert result.stored_path.parent == store.library_dir / "accepted"
+
+
 def test_source_harvester_rejects_absolute_promote_destination_dir(tmp_path):
     source = tmp_path / "download" / "therapie.txt"
     source.parent.mkdir()

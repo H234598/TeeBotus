@@ -367,6 +367,8 @@ def _read_harvest_source_metadata(library_dir: Path) -> dict[str, dict[str, Any]
         stored_path = str(row.get("stored_path") or "").strip()
         if not sha256 or not stored_path or not _coerce_bool(row.get("accepted_for_ingest")):
             continue
+        if not _manifest_path_under(library_dir, stored_path, "accepted"):
+            continue
         accepted_by_key[(sha256, stored_path)] = row
         accepted_by_hash[sha256] = row
     metadata: dict[str, dict[str, Any]] = {}
@@ -427,6 +429,17 @@ def _coerce_bool(value: object) -> bool:
     if text in {"1", "true", "wahr", "yes", "ja", "j", "y", "on"}:
         return True
     return bool(value)
+
+
+def _manifest_path_under(library_dir: Path, value: object, subdir: str) -> bool:
+    text = str(value or "").strip()
+    if not text:
+        return False
+    try:
+        Path(text).resolve(strict=False).relative_to((library_dir / subdir).resolve(strict=False))
+    except (OSError, ValueError):
+        return False
+    return True
 
 
 def _index_document(

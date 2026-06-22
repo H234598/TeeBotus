@@ -379,6 +379,53 @@ def test_bibliothekar_harvest_manifest_ignores_nonaccepted_ingest_rows(tmp_path)
     assert "Quarantined Therapy Source" not in json.dumps(payload, ensure_ascii=False)
 
 
+def test_bibliothekar_harvest_manifest_ignores_external_accepted_metadata(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    book_dir = library_dir / "books"
+    book_dir.mkdir(parents=True)
+    source = book_dir / "therapie.txt"
+    source.write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    external_accepted = tmp_path / "outside-accepted.txt"
+    external_accepted.write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    manifest_path = library_dir / "harvest_manifest.jsonl"
+    rows = [
+        {
+            "accepted_for_ingest": True,
+            "decision": {
+                "confidence": 0.8,
+                "reason": "external accepted path should be ignored",
+                "requires_human_review": False,
+                "status": "usable",
+            },
+            "route": "accepted",
+            "sha256": sha256,
+            "source": {"metadata": {"license": "private", "title": "External Therapy Source"}},
+            "source_path": "/tmp/original-therapie.txt",
+            "stored_path": str(external_accepted),
+        },
+        {
+            "accepted_for_ingest": False,
+            "event": "promoted",
+            "route": "promoted",
+            "sha256": sha256,
+            "source_path": str(external_accepted),
+            "stored_path": str(source),
+        },
+    ]
+    manifest_path.write_text("\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in rows) + "\n", encoding="utf-8")
+
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+    payload = json.loads(store.select("Therapie", max_chunks=1).prompt_text)
+    chunk = payload["selected_library_chunks"][0]
+
+    assert chunk["title"] == "therapie"
+    assert chunk["source_quality"] == "unreviewed"
+    assert chunk["source_harvest_route"] == "manual"
+    assert "External Therapy Source" not in json.dumps(payload, ensure_ascii=False)
+
+
 def test_bibliothekar_context_is_added_to_engine_openai_prompt(tmp_path):
     instances_dir = tmp_path / "instances"
     library_dir = instances_dir / "Depressionsbot" / "data" / "Bibliothek"
