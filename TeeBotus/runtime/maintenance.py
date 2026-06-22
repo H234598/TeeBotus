@@ -475,14 +475,14 @@ def _runtime_text_files(runtime_path: Path) -> list[Path]:
     for pattern in ("*.log", "*.log.*", "*.jsonl", "*.jsonl.*"):
         try:
             candidates = list(runtime_path.glob(pattern))
-        except OSError:
+        except (OSError, ValueError):
             continue
         for path in candidates:
             if _is_compressed_runtime_file(path) or _is_temporary_runtime_file(path):
                 continue
             try:
                 path_stat = path.stat(follow_symlinks=False)
-            except OSError:
+            except (OSError, ValueError):
                 continue
             if not stat_module.S_ISREG(path_stat.st_mode):
                 continue
@@ -499,7 +499,7 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
     groups: dict[str, list[tuple[Path, os.stat_result]]] = {}
     try:
         candidates = list(runtime_path.iterdir())
-    except OSError:
+    except (OSError, ValueError):
         return
     for path in candidates:
         if not _is_compressed_runtime_file(path):
@@ -508,7 +508,7 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
             continue
         try:
             stat = path.stat(follow_symlinks=False)
-        except OSError:
+        except (OSError, ValueError):
             continue
         if not stat_module.S_ISREG(stat.st_mode):
             continue
@@ -524,7 +524,7 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
         try:
             archive_dir.mkdir(parents=True, exist_ok=True)
             archive_dir_stat = archive_dir.stat(follow_symlinks=False)
-        except OSError:
+        except (OSError, ValueError):
             continue
         if not stat_module.S_ISDIR(archive_dir_stat.st_mode):
             continue
@@ -568,7 +568,7 @@ def _add_regular_file_to_archive(
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(path, flags)
-    except OSError:
+    except (OSError, ValueError):
         return None
     try:
         archived_stat = os.fstat(fd)
@@ -600,7 +600,7 @@ def _add_regular_file_to_archive(
 def _unlink_if_same_file(path: Path, expected_stat: os.stat_result) -> None:
     try:
         current_stat = os.stat(path, follow_symlinks=False)
-    except OSError:
+    except (OSError, ValueError):
         return
     if not _same_file_stat(current_stat, expected_stat):
         return
@@ -623,17 +623,17 @@ def _link_file_to_unique_path(source: Path, target: Path, *, expected_stat: os.s
                 return None
             linked = _unique_path(target)
             continue
-        except OSError:
+        except (OSError, ValueError):
             return None
         try:
             linked_stat = os.stat(linked, follow_symlinks=False)
-        except OSError:
+        except (OSError, ValueError):
             return None
         if _same_file_stat(linked_stat, expected_stat):
             return linked
         try:
             current_source_stat = os.stat(source, follow_symlinks=False)
-        except OSError:
+        except (OSError, ValueError):
             current_source_stat = None
         if current_source_stat is not None and _same_file_stat(linked_stat, current_source_stat):
             _unlink_if_same_file(linked, linked_stat)
@@ -702,7 +702,7 @@ def _publish_temporary_file(temporary: Path, target: Path, *, expected_stat: os.
 def _unlink_quietly(path: Path) -> None:
     try:
         path.unlink()
-    except OSError:
+    except (OSError, ValueError):
         pass
 
 

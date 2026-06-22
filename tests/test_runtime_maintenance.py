@@ -625,6 +625,22 @@ def test_runtime_maintenance_skips_text_scan_when_runtime_glob_fails(tmp_path, m
     assert not (tmp_path / "monthly_archives").exists()
 
 
+def test_runtime_maintenance_skips_text_scan_when_runtime_glob_raises_value_error(tmp_path, monkeypatch):
+    now = time.time()
+    real_glob = Path.glob
+
+    def fail_runtime_glob(self, pattern):
+        if self == tmp_path:
+            raise ValueError(f"glob failed for {pattern}")
+        return real_glob(self, pattern)
+
+    monkeypatch.setattr(Path, "glob", fail_runtime_glob)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert not (tmp_path / "monthly_archives").exists()
+
+
 def test_runtime_maintenance_skips_text_file_replaced_by_symlink_after_scan(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 8 * 24 * 60 * 60
@@ -1345,6 +1361,22 @@ def test_runtime_maintenance_skips_archive_scan_when_runtime_listing_fails(tmp_p
     assert not (tmp_path / "monthly_archives").exists()
 
 
+def test_runtime_maintenance_skips_archive_scan_when_runtime_listing_raises_value_error(tmp_path, monkeypatch):
+    now = time.time()
+    real_iterdir = Path.iterdir
+
+    def fail_runtime_iterdir(self):
+        if self == tmp_path:
+            raise ValueError("runtime listing failed")
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", fail_runtime_iterdir)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert not (tmp_path / "monthly_archives").exists()
+
+
 def test_runtime_maintenance_keeps_sources_when_archive_write_fails(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60
@@ -1463,6 +1495,28 @@ def test_runtime_maintenance_keeps_sources_when_archive_directory_is_blocked(tmp
 
     assert path.read_bytes() == b"compressed-ish"
     assert blocked_archive_dir.read_text(encoding="utf-8") == "not a directory\n"
+
+
+def test_runtime_maintenance_keeps_sources_when_archive_directory_mkdir_raises_value_error(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    archive_dir = tmp_path / "monthly_archives"
+    real_mkdir = Path.mkdir
+
+    def fail_archive_mkdir(self, *args, **kwargs):
+        if self == archive_dir:
+            raise ValueError("archive mkdir failed")
+        return real_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", fail_archive_mkdir)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert path.read_bytes() == b"compressed-ish"
+    assert not archive_dir.exists()
 
 
 def test_runtime_maintenance_refuses_symlinked_archive_directory(tmp_path):
