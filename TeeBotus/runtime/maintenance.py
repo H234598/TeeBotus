@@ -232,7 +232,9 @@ def _open_append_text_no_follow(path: Path) -> object | None:
 
 
 def _absolute_without_symlink_resolution(path: Path) -> Path:
-    return Path(os.path.abspath(path))
+    if path.is_absolute():
+        return path
+    return Path.cwd() / path
 
 
 def _has_symlink_parent(path: Path) -> bool:

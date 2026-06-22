@@ -1540,6 +1540,29 @@ def test_install_stdio_tee_refuses_symlinked_target_parent_before_mkdir(tmp_path
     assert not (external_parent / "runtime").exists()
 
 
+def test_install_stdio_tee_refuses_symlinked_parent_hidden_by_dotdot(tmp_path, monkeypatch):
+    primary_stdout = io.StringIO()
+    primary_stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", primary_stdout)
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    external_parent = tmp_path / "external-parent"
+    nested_target = external_parent / "nested"
+    nested_target.mkdir(parents=True)
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.symlink_to(nested_target, target_is_directory=True)
+    path = linked_parent / ".." / "runtime" / STDIO_LOG_FILENAME
+
+    install_stdio_tee(path)
+    print("stdout only")
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    assert not isinstance(sys.stdout, TeeStream)
+    assert not isinstance(sys.stderr, TeeStream)
+    assert not (external_parent / "runtime").exists()
+    assert not (tmp_path / "runtime").exists()
+
+
 def test_install_stdio_tee_retargets_existing_tee_without_writing_old_target(tmp_path, monkeypatch):
     primary_stdout = io.StringIO()
     primary_stderr = io.StringIO()
