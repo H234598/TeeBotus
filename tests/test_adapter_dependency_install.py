@@ -355,6 +355,33 @@ def test_llm_profiles_plan2_contract_rejects_wrong_api_key_env(monkeypatch) -> N
     assert "profile openai_premium api_key_env=GEMINI_API_KEY expected=OPENAI_API_KEY" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_wrong_purpose_routes(monkeypatch) -> None:
+    from dataclasses import replace
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    profiles = llm_profiles.load_llm_profiles()
+    default_profile, routing = llm_profiles.load_llm_routing()
+    broken_routing = dict(routing)
+    broken_routing["bibliothekar_answer"] = replace(
+        broken_routing["bibliothekar_answer"],
+        profile="local_ollama",
+        fallback="",
+    )
+    broken_routing.pop("codex_history_strategic_analysis")
+    monkeypatch.setattr(llm_profiles, "load_llm_profiles", lambda: profiles)
+    monkeypatch.setattr(llm_profiles, "load_llm_routing", lambda: (default_profile, broken_routing))
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert (
+        "routing bibliothekar_answer profile=local_ollama fallback=<empty> "
+        "expected=gemini_flash_stateful/local_ollama"
+    ) in message
+    assert "routing missing codex_history_strategic_analysis" in message
+
+
 def test_local_secret_file_permission_check_accepts_missing_or_private_env(tmp_path: Path) -> None:
     ok, message = check_adapter_deps._check_local_secret_file_permissions(tmp_path)
 

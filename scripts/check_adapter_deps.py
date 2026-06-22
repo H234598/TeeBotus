@@ -468,17 +468,26 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
             errors.append(f"routing {purpose} unknown profile {rule.profile}")
         if rule.fallback and rule.fallback not in profiles:
             errors.append(f"routing {purpose} unknown fallback {rule.fallback}")
-    for purpose in ("normal_chat", "private"):
+    expected_routes = {
+        "normal_chat": ("local_ollama", ""),
+        "hard_reasoning": ("openai_premium", "gemini_flash_stateful"),
+        "cheap_fast": ("groq_fast", "local_ollama"),
+        "private": ("local_ollama", ""),
+        "bibliothekar_answer": ("gemini_flash_stateful", "local_ollama"),
+        "structured_decision": ("hf_pool_structured", "local_ollama"),
+        "codex_history_categorization": ("local_ollama", ""),
+        "codex_history_strategic_analysis": ("local_ollama", ""),
+    }
+    for purpose, (profile, fallback) in expected_routes.items():
         rule = routing.get(purpose)
         if rule is None:
             errors.append(f"routing missing {purpose}")
-        elif rule.fallback:
-            errors.append(f"routing {purpose} must not define fallback")
-    structured = routing.get("structured_decision")
-    if structured is None:
-        errors.append("routing missing structured_decision")
-    elif structured.profile != "hf_pool_structured" or structured.fallback != "local_ollama":
-        errors.append("routing structured_decision must be hf_pool_structured with local_ollama fallback")
+            continue
+        if rule.profile != profile or rule.fallback != fallback:
+            errors.append(
+                f"routing {purpose} profile={rule.profile or '<empty>'} fallback={rule.fallback or '<empty>'} "
+                f"expected={profile}/{fallback or '<empty>'}"
+            )
     if errors:
         return False, "llm profiles plan2 contract failed: " + "; ".join(errors)
     return True, (
