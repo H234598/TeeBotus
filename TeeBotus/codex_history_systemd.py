@@ -25,7 +25,8 @@ DEFAULT_RESTART_SEC = "5s"
 DEFAULT_POLL_INTERVAL_SECONDS = 300.0
 DEFAULT_LIMIT = 1000
 DEFAULT_COLLECTOR_TIMER_LIMIT = 10
-DEFAULT_DISPATCH_LIMIT = 50
+DEFAULT_COLLECTOR_DISPATCH_LIMIT = 0
+DEFAULT_INDEX_DISPATCH_LIMIT = 50
 DEFAULT_MAX_ITERATIONS = 1
 DEFAULT_COLLECTOR_INTERVAL = "1min"
 DEFAULT_COLLECTOR_RANDOMIZED_DELAY = "0"
@@ -92,8 +93,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--collector-dispatch-limit",
         type=int,
-        default=DEFAULT_DISPATCH_LIMIT,
-        help="Limit collector post-scan dispatch to latest N queued summaries.",
+        default=DEFAULT_COLLECTOR_DISPATCH_LIMIT,
+        help="Limit collector post-scan dispatch to latest N queued summaries; 0 means all.",
     )
     parser.add_argument("--collector-dispatch-dry-run", action="store_true", help="Resolve collector dispatch targets without sending messages.")
     parser.add_argument("--post-index-qdrant", action="store_true", help="Also rebuild the admin-only Codex-History Qdrant collection after scans.")
@@ -142,7 +143,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--index-dispatch-limit",
         type=int,
-        default=DEFAULT_DISPATCH_LIMIT,
+        default=DEFAULT_INDEX_DISPATCH_LIMIT,
         help="Max queued Codex-History items to dispatch after periodic indexing; 0 means all.",
     )
     parser.add_argument("--index-dispatch-dry-run", action="store_true", help="Dry-run the post-index dispatch step.")
@@ -325,7 +326,7 @@ def render_codex_history_systemd_unit(
     follow: bool = True,
     post_index: bool = True,
     collector_dispatch: bool = True,
-    collector_dispatch_limit: int = DEFAULT_DISPATCH_LIMIT,
+    collector_dispatch_limit: int = DEFAULT_COLLECTOR_DISPATCH_LIMIT,
     collector_dispatch_dry_run: bool = False,
     post_index_qdrant: bool = False,
     post_index_qdrant_url: str = "",
@@ -418,7 +419,7 @@ def render_codex_history_collector_timer_units(
     poll_interval_seconds: float = 0,
     post_index: bool = True,
     collector_dispatch: bool = True,
-    collector_dispatch_limit: int = DEFAULT_DISPATCH_LIMIT,
+    collector_dispatch_limit: int = DEFAULT_COLLECTOR_DISPATCH_LIMIT,
     collector_dispatch_dry_run: bool = False,
     post_index_qdrant: bool = False,
     post_index_qdrant_url: str = "",
@@ -546,7 +547,7 @@ def render_codex_history_index_systemd_units(
     strategic_analysis_force: bool = False,
     strategic_analysis_dry_run: bool = False,
     dispatch: bool = False,
-    dispatch_limit: int = DEFAULT_DISPATCH_LIMIT,
+    dispatch_limit: int = DEFAULT_INDEX_DISPATCH_LIMIT,
     dispatch_dry_run: bool = False,
 ) -> CodexHistoryIndexSystemdUnits:
     service_name = _service_name(service_name)

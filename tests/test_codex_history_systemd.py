@@ -45,7 +45,7 @@ def test_render_codex_history_systemd_unit_matches_plan_shape(tmp_path: Path) ->
     assert "--limit 1000" in unit.service_text
     assert "--post-index" in unit.service_text
     assert "--dispatch" in unit.service_text
-    assert "--dispatch-limit 50" in unit.service_text
+    assert "--dispatch-limit 0" in unit.service_text
     assert "--post-index-qdrant" not in unit.service_text
     assert "--once" not in unit.service_text
     assert "Restart=on-failure" in unit.service_text
@@ -200,7 +200,7 @@ def test_render_codex_history_collector_timer_units_builds_five_minute_oneshot(t
     assert "--limit 10" in units.service_text
     assert f"--sessions-root {tmp_path / 'sessions'}" in units.service_text
     assert "--dispatch" in units.service_text
-    assert "--dispatch-limit 50" in units.service_text
+    assert "--dispatch-limit 0" in units.service_text
     assert "Restart=" not in units.service_text
     assert "OnUnitActiveSec=5min" in units.timer_text
     assert "RandomizedDelaySec=0" in units.timer_text
@@ -396,7 +396,7 @@ def test_codex_history_systemd_print_mode_can_output_collector_timer(tmp_path: P
     assert captured.out.count("--sessions-root") == 1
     assert f"--sessions-root {tmp_path / 'sessions'}" in captured.out
     assert "--limit 10" in captured.out
-    assert "--dispatch-limit 50" in captured.out
+    assert "--dispatch-limit 0" in captured.out
     assert "OnUnitActiveSec=1min" in captured.out
 
 

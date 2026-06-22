@@ -279,7 +279,7 @@ Type=simple
 User=root
 WorkingDirectory=/home/teladi/TeeBotus
 EnvironmentFile=-/home/teladi/TeeBotus/.env
-ExecStart=/home/teladi/TeeBotus/.venv-py313/bin/python -m TeeBotus.admin codex-history watch --instances-dir /home/teladi/TeeBotus/instances --event-mode auto --poll-interval 300 --limit 1000 --follow --sessions-root /home/teladi/.codex/sessions --sessions-root /home/teladi/.codex-agents --post-index --dispatch --dispatch-limit 50
+ExecStart=/home/teladi/TeeBotus/.venv-py313/bin/python -m TeeBotus.admin codex-history watch --instances-dir /home/teladi/TeeBotus/instances --event-mode auto --poll-interval 300 --limit 1000 --follow --sessions-root /home/teladi/.codex/sessions --sessions-root /home/teladi/.codex-agents --post-index --dispatch --dispatch-limit 0
 Restart=on-failure
 RestartSec=5
 UMask=0077
@@ -524,7 +524,7 @@ Stand 2026-06-19:
 - `codex-history index` aktualisiert vor dem Export die Summary-Kontextbloecke fuer Altbestand: repo-lokale Vorher/Nachher-Links und eingebetteten Mermaid-Kontext.
 - `codex-history watch --post-index` aktualisiert den admin-only Bibliothekar-Export nach Watcher-Scans; `--post-index-qdrant` haengt optional den separaten Qdrant-Rebuild an.
 - `teebotus-codex-history-collector` rendert standardmaessig `--post-index`, kann den Export mit `--no-post-index` abschalten und Qdrant explizit mit `--post-index-qdrant` aktivieren.
-- `teebotus-codex-history-collector --collector-timer` rendert einen leichten Oneshot pro Minute mit `--limit 10`, `--post-index`, `--dispatch` und `--dispatch-limit 50`; groessere Backfills laufen weiter explizit ueber `--limit ...` oder den persistenten Follow-Collector.
+- `teebotus-codex-history-collector --collector-timer` rendert einen leichten Oneshot pro Minute mit `--limit 10`, `--post-index`, `--dispatch` und `--dispatch-limit 0` (`0` = alle wartenden Outbox-Eintraege); groessere Backfills laufen weiter explizit ueber `--limit ...` oder den persistenten Follow-Collector.
 - `teebotus-codex-history-collector --index-timer` rendert/installiert zusaetzlich einen low-priority Oneshot-Service plus Timer fuer `codex-history index --qdrant --qdrant-ensure`; Default-Rhythmus: `24h`.
 - `codex-history categorize` annotiert Codex-History-Eintraege optional mit einem lokalen, remote-geblockten LLM-Profil; `codex-history index --categorize` kann diesen Schritt vor Export/Qdrant ausfuehren.
 - `codex-history graph-export` schreibt eine admin-only Mermaid-Projekthistory nach `data/Codex_History_Bibliothek/graphs`; `codex-history index --graph` kann sie im selben Batch erzeugen.
