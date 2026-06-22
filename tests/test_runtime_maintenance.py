@@ -611,6 +611,25 @@ def test_runtime_maintenance_skips_compressed_directories_before_archive_setup(t
     assert not (tmp_path / "monthly_archives").exists()
 
 
+def test_runtime_maintenance_keeps_sources_when_archive_write_fails(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+
+    def fail_addfile(_self, _tarinfo, _fileobj=None):
+        raise OSError("unexpected end of data")
+
+    monkeypatch.setattr(tarfile.TarFile, "addfile", fail_addfile)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert path.read_bytes() == b"compressed-ish"
+    assert not list((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
+
+
 def test_runtime_maintenance_groups_compressed_logs_with_single_stat(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60

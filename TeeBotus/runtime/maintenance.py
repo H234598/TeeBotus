@@ -342,10 +342,11 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
     for month, paths in groups.items():
         archive_dir.mkdir(parents=True, exist_ok=True)
         archive_path = _unique_path(archive_dir / f"teebotus-runtime-{month}.tar.gz")
+        temporary: Path | None = None
         temporary_fd: int | None = None
-        temporary, temporary_fd = _create_unique_file(archive_dir / f".{archive_path.name}.tmp")
         added_paths: list[tuple[Path, os.stat_result]] = []
         try:
+            temporary, temporary_fd = _create_unique_file(archive_dir / f".{archive_path.name}.tmp")
             with os.fdopen(temporary_fd, "wb") as raw_archive:
                 temporary_fd = None
                 with tarfile.open(fileobj=raw_archive, mode="w:gz") as archive:
@@ -358,11 +359,12 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
                 _unlink_quietly(temporary)
                 continue
             _publish_temporary_file(temporary, archive_path)
-        except Exception:
+        except (OSError, tarfile.TarError):
             if temporary_fd is not None:
                 _close_fd_quietly(temporary_fd)
-            _unlink_quietly(temporary)
-            raise
+            if temporary is not None:
+                _unlink_quietly(temporary)
+            continue
         for path, archived_stat in added_paths:
             _unlink_if_same_file(path, archived_stat)
 
