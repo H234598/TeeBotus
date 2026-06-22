@@ -158,7 +158,7 @@ class SourceHarvester:
             stored = _manifest_library_path(self.library_root, row.get("stored_path"), _route_dir(route))
             if stored is None:
                 continue
-            if stored.exists():
+            if _file_matches_sha256(stored, sha256):
                 return stored
         return None
 
@@ -290,6 +290,16 @@ def _same_path(left: object, right: Path) -> bool:
         return True
     try:
         return Path(left_text).resolve(strict=False) == right.resolve(strict=False)
+    except OSError:
+        return False
+
+
+def _file_matches_sha256(path: Path, sha256: str) -> bool:
+    expected = str(sha256 or "").strip().casefold()
+    if not expected:
+        return False
+    try:
+        return path.is_file() and not path.is_symlink() and _file_sha256(path).casefold() == expected
     except OSError:
         return False
 

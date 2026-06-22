@@ -223,6 +223,49 @@ def test_source_harvester_detects_duplicate_with_normalized_manifest_route_and_h
     assert result.accepted_for_ingest is False
 
 
+def test_source_harvester_ignores_stale_duplicate_path_with_wrong_hash(tmp_path):
+    instances_dir = tmp_path / "instances"
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", instances_dir)
+    harvester = SourceHarvester(
+        store.library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+    harvester.prepare()
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    stale_path = store.library_dir / "accepted" / f"{sha256[:16]}-{source.name}"
+    stale_path.write_text("anderer Inhalt mit falschem Hash", encoding="utf-8")
+    harvester.manifest_path.write_text(
+        json.dumps(
+            {
+                "accepted_for_ingest": True,
+                "route": "accepted",
+                "sha256": sha256,
+                "source_path": str(source),
+                "stored_path": str(stale_path),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+
+    assert result.duplicate_of is None
+    assert result.accepted_for_ingest is True
+    assert result.stored_path == stale_path
+    assert result.stored_path.read_text(encoding="utf-8") == "Schlafhygiene und Aktivierung."
+
+
 def test_source_harvester_ignores_external_accepted_duplicate_paths(tmp_path):
     instances_dir = tmp_path / "instances"
     source = tmp_path / "download" / "therapie.txt"
