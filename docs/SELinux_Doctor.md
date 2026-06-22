@@ -8,6 +8,13 @@ Der sichere Pfad ist:
 teebotus-selinux-doctor
 ```
 
+Der Doctor prueft standardmaessig zuerst User-systemd und danach System-systemd. Das ist wichtig, weil TeeBotus hier als User-Unit laufen kann. Bei Bedarf kann der Scope explizit gesetzt werden:
+
+```bash
+teebotus-selinux-doctor --unit-scope user
+teebotus-selinux-doctor --unit-scope system
+```
+
 Ohne Root ist die Ausgabe absichtlich defensiv: Der SELinux-Modulstore ist auf Fedora normalerweise nicht lesbar. Fuer eine echte Modulpruefung:
 
 ```bash

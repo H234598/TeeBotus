@@ -44,6 +44,7 @@ class SELinuxDoctorReport:
     failed_removals: tuple[str, ...]
     unit_present: bool
     unit_active: str
+    unit_scope: str
     notes: tuple[str, ...]
     commands: tuple[SELinuxCommandResult, ...]
 
@@ -52,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Diagnose and narrowly undo TeeBotus SELinux audit2allow panic modules.")
     parser.add_argument("--format", choices=("text", "json"), default="text")
     parser.add_argument("--unit", default=DEFAULT_UNIT, help="systemd unit to inspect.")
+    parser.add_argument("--unit-scope", choices=("auto", "user", "system"), default="auto", help="systemd manager scope to inspect.")
     parser.add_argument("--module", action="append", default=[], help="Exact SELinux module name to remove with --apply; repeatable.")
     parser.add_argument("--remove-suspect", action="store_true", help="With --apply, remove modules matching the narrow panic-systemd pattern.")
     parser.add_argument("--apply", action="store_true", help="Actually run semodule -r for selected modules. Default is dry-run.")
@@ -59,6 +61,7 @@ def main(argv: list[str] | None = None) -> int:
 
     report = collect_selinux_report(
         unit=args.unit,
+        unit_scope=args.unit_scope,
         explicit_modules=tuple(args.module or ()),
         remove_suspect=bool(args.remove_suspect),
         apply=bool(args.apply),
@@ -73,6 +76,7 @@ def main(argv: list[str] | None = None) -> int:
 def collect_selinux_report(
     *,
     unit: str = DEFAULT_UNIT,
+    unit_scope: str = "auto",
     explicit_modules: Sequence[str] = (),
     remove_suspect: bool = False,
     apply: bool = False,
@@ -102,13 +106,13 @@ def collect_selinux_report(
     if manual_review_modules:
         notes.append("Additional systemd-looking local modules exist; review them manually before removal.")
 
-    unit_show = _capture(run, ("systemctl", "show", unit, "--property=LoadState,ActiveState,SubState", "--no-pager"))
-    commands.append(unit_show)
-    unit_fields = _parse_systemctl_show(unit_show.stdout) if unit_show.returncode == 0 else {}
-    unit_present = unit_fields.get("LoadState") == "loaded"
-    unit_active = "/".join(part for part in (unit_fields.get("ActiveState", ""), unit_fields.get("SubState", "")) if part)
+    unit_state, unit_commands = _resolve_unit_state(run, unit, scope=unit_scope)
+    commands.extend(unit_commands)
+    unit_present = unit_state["present"]
+    unit_active = unit_state["active"]
+    resolved_unit_scope = unit_state["scope"]
     if not unit_present:
-        notes.append(f"{unit} is not loaded; no active system service needs SELinux allow rules right now.")
+        notes.append(f"{unit} is not loaded in the checked systemd manager(s); no active service there needs SELinux allow rules right now.")
 
     selected_for_removal = _selected_modules(explicit_modules, suspect_modules, remove_suspect=remove_suspect)
     removed: list[str] = []
@@ -134,6 +138,7 @@ def collect_selinux_report(
         failed_removals=tuple(failed),
         unit_present=unit_present,
         unit_active=unit_active,
+        unit_scope=resolved_unit_scope,
         notes=tuple(notes),
         commands=tuple(commands),
     )
@@ -144,7 +149,8 @@ def render_selinux_report(report: SELinuxDoctorReport) -> str:
         "TeeBotus SELinux Doctor",
         f"- SELinux: {report.enforcing}",
         f"- Module lesbar: {'ja' if report.modules_readable else 'nein'}",
-        f"- Collector-Unit geladen: {'ja' if report.unit_present else 'nein'}",
+        f"- Collector-Unit geladen: {'ja' if report.unit_present else 'nein'}"
+        + (f" ({report.unit_scope})" if report.unit_scope else ""),
     ]
     if report.unit_active:
         lines.append(f"- Collector-Unit Status: {report.unit_active}")
@@ -226,6 +232,30 @@ def _parse_systemctl_show(output: str) -> dict[str, str]:
         key, value = raw_line.split("=", 1)
         fields[key.strip()] = value.strip()
     return fields
+
+
+def _resolve_unit_state(run: CommandRunner, unit: str, *, scope: str) -> tuple[dict[str, Any], tuple[SELinuxCommandResult, ...]]:
+    normalized_scope = str(scope or "auto").strip().casefold()
+    if normalized_scope not in {"auto", "user", "system"}:
+        raise ValueError("unit scope must be auto, user, or system")
+    commands: list[SELinuxCommandResult] = []
+    attempts: list[tuple[str, tuple[str, ...]]] = []
+    if normalized_scope in {"auto", "user"}:
+        attempts.append(("user", ("systemctl", "--user", "show", unit, "--property=LoadState,ActiveState,SubState", "--no-pager")))
+    if normalized_scope in {"auto", "system"}:
+        attempts.append(("system", ("systemctl", "show", unit, "--property=LoadState,ActiveState,SubState", "--no-pager")))
+    last_state = {"present": False, "active": "", "scope": normalized_scope if normalized_scope != "auto" else ""}
+    for attempt_scope, command in attempts:
+        result = _capture(run, command)
+        commands.append(result)
+        fields = _parse_systemctl_show(result.stdout) if result.returncode == 0 else {}
+        active = "/".join(part for part in (fields.get("ActiveState", ""), fields.get("SubState", "")) if part)
+        present = fields.get("LoadState") == "loaded"
+        state = {"present": present, "active": active, "scope": attempt_scope}
+        if present:
+            return state, tuple(commands)
+        last_state = state
+    return last_state, tuple(commands)
 
 
 def _selected_modules(

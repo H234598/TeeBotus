@@ -19,7 +19,7 @@ def test_selinux_doctor_detects_panic_systemd_modules_without_removing() -> None
             return completed(command, stdout="Enforcing\n")
         if tuple(command) == ("semodule", "-l"):
             return completed(command, stdout="systemd 1.0\nmy-systemd 1.0\nlocal_systemd_fix 1.0\nteebotus 1.0\n")
-        if tuple(command[:2]) == ("systemctl", "show"):
+        if tuple(command[:3]) == ("systemctl", "--user", "show"):
             return completed(command, stdout="LoadState=loaded\nActiveState=active\nSubState=running\n")
         raise AssertionError(f"unexpected command {command}")
 
@@ -43,7 +43,7 @@ def test_selinux_doctor_apply_removes_only_selected_suspect_modules() -> None:
             return completed(command, stdout="Enforcing\n")
         if tuple(command) == ("semodule", "-l"):
             return completed(command, stdout="systemd 1.0\nmy-systemd 1.0\nother_systemd 1.0\n")
-        if tuple(command[:2]) == ("systemctl", "show"):
+        if tuple(command[:3]) == ("systemctl", "--user", "show"):
             return completed(command, stdout="LoadState=loaded\nActiveState=active\nSubState=running\n")
         if tuple(command) == ("semodule", "-r", "my-systemd"):
             return completed(command, stdout="")
@@ -65,6 +65,8 @@ def test_selinux_doctor_explicit_module_removal_requires_apply() -> None:
             return completed(command, stdout="Enforcing\n")
         if tuple(command) == ("semodule", "-l"):
             return completed(command, stdout="custom_policy 1.0\n")
+        if tuple(command[:3]) == ("systemctl", "--user", "show"):
+            return completed(command, stdout="LoadState=not-found\nActiveState=inactive\nSubState=dead\n")
         if tuple(command[:2]) == ("systemctl", "show"):
             return completed(command, stdout="LoadState=not-found\nActiveState=inactive\nSubState=dead\n")
         return completed(command)
@@ -82,6 +84,8 @@ def test_selinux_doctor_reports_permission_denied_module_store() -> None:
             return completed(command, stdout="Enforcing\n")
         if tuple(command) == ("semodule", "-l"):
             return completed(command, returncode=1, stderr="Permission denied\n")
+        if tuple(command[:3]) == ("systemctl", "--user", "show"):
+            return completed(command, stdout="LoadState=not-found\nActiveState=inactive\nSubState=dead\n")
         if tuple(command[:2]) == ("systemctl", "show"):
             return completed(command, stdout="LoadState=not-found\nActiveState=inactive\nSubState=dead\n")
         raise AssertionError(f"unexpected command {command}")
@@ -92,6 +96,49 @@ def test_selinux_doctor_reports_permission_denied_module_store() -> None:
     assert report.modules_readable is False
     assert report.suspect_modules == ()
     assert any("rerun via sudo" in note for note in report.notes)
+
+
+def test_selinux_doctor_auto_detects_user_unit_before_system_unit() -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def runner(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(tuple(command))
+        if tuple(command) == ("getenforce",):
+            return completed(command, stdout="Enforcing\n")
+        if tuple(command) == ("semodule", "-l"):
+            return completed(command, stdout="")
+        if tuple(command[:3]) == ("systemctl", "--user", "show"):
+            return completed(command, stdout="LoadState=loaded\nActiveState=active\nSubState=running\n")
+        raise AssertionError(f"unexpected command {command}")
+
+    report = collect_selinux_report(runner=runner)
+
+    assert report.unit_present is True
+    assert report.unit_scope == "user"
+    assert report.unit_active == "active/running"
+    assert not any(command[:2] == ("systemctl", "show") for command in calls)
+    assert "Collector-Unit geladen: ja (user)" in render_selinux_report(report)
+
+
+def test_selinux_doctor_can_check_system_unit_explicitly() -> None:
+    calls: list[tuple[str, ...]] = []
+
+    def runner(command: Sequence[str]) -> subprocess.CompletedProcess[str]:
+        calls.append(tuple(command))
+        if tuple(command) == ("getenforce",):
+            return completed(command, stdout="Enforcing\n")
+        if tuple(command) == ("semodule", "-l"):
+            return completed(command, stdout="")
+        if tuple(command[:2]) == ("systemctl", "show"):
+            return completed(command, stdout="LoadState=loaded\nActiveState=inactive\nSubState=dead\n")
+        raise AssertionError(f"unexpected command {command}")
+
+    report = collect_selinux_report(unit_scope="system", runner=runner)
+
+    assert report.unit_present is True
+    assert report.unit_scope == "system"
+    assert report.unit_active == "inactive/dead"
+    assert not any(command[:3] == ("systemctl", "--user", "show") for command in calls)
 
 
 def test_selinux_doctor_cli_json_outputs_report(monkeypatch, capsys) -> None:
