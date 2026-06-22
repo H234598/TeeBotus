@@ -359,7 +359,7 @@ def _print_runtime_status_section(title: str, lines: Sequence[str]) -> None:
     print()
     print(f"[{title}]")
     for line in entries:
-        os.write(1, (_sanitize_admin_status_output(line) + "\n").encode())
+        print(_sanitize_admin_status_output(line), flush=True)
 
 
 def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, instruction_error: str = "") -> str:
@@ -385,8 +385,17 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
         route_mode,
     ) = _status_llm_route(account, instructions=instructions)
     provider = _normalize_status_llm_provider(provider)
-    if provider == "openai" and model == "<legacy>":
-        model = "<Bot_Verhalten/OpenAI>"
+    display_provider = _runtime_status_display_provider(
+        provider=provider,
+        model=model,
+        route_mode=route_mode,
+        route_api_key_env=route_api_key_env,
+    )
+    display_model = str(model or "")
+    if display_provider == "openai" and display_model.startswith("openai/"):
+        display_model = display_model.split("/", 1)[1]
+    if display_provider == "openai" and display_model == "<legacy>":
+        display_model = "<Bot_Verhalten/OpenAI>"
     key_configured = _llm_key_configured(
         account,
         provider,
@@ -443,7 +452,7 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
             status = "configured"
     detail = (
         f"llm={account.instance_name}/{account.label} "
-        f"provider={provider} model={model} status={status}"
+        f"provider={display_provider} model={display_model} status={status}"
     )
     profile = _effective_llm_profile(account, instructions)
     if profile:
@@ -452,8 +461,11 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
         detail += f" purpose={purpose}"
     if base_url:
         detail += f" base_url={base_url}"
-    if provider != "openai":
-        detail += f" api_key={'configured' if key_configured else 'none'}"
+    if display_provider != "openai":
+        api_key_status = "configured" if key_configured else "none"
+        if key_configured and route_mode == "profile" and _status_route_uses_google_gemini(provider=provider, model=model):
+            api_key_status = "<redacted>"
+        detail += f" api_key={api_key_status}"
     if gemini_key_ring_count > 1:
         detail += f" api_key_ring={gemini_key_ring_count}"
     if _status_route_uses_google_gemini(provider=provider, model=model):
@@ -1714,6 +1726,15 @@ def _normalize_status_llm_provider(provider: object) -> str:
         return str(provider or "").strip().casefold().replace("-", "_")
 
 
+def _runtime_status_display_provider(*, provider: str, model: object, route_mode: str, route_api_key_env: str = "") -> str:
+    normalized_provider = _normalize_status_llm_provider(provider)
+    normalized_model = str(model or "").strip().casefold()
+    if route_mode in {"profile", "purpose"} and normalized_provider == "litellm":
+        if normalized_model.startswith("openai/") and str(route_api_key_env or "").strip() == "OPENAI_API_KEY":
+            return "openai"
+    return normalized_provider
+
+
 def _csv_count(value: object) -> int:
     return len([part for part in str(value or "").split(",") if part.strip()])
 
@@ -1826,12 +1847,12 @@ def _sanitize_status_text(value: object) -> str:
 
 
 _status_secret_assignment_pattern = re.compile(
-    r"(?<!\S)([A-Za-z0-9._-]{1,120}(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+    r"(?<!\S)([A-Za-z0-9._-]{0,120}(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
     r"[A-Za-z0-9._-]{0,120})\s*([:=])\s*([^,\s)]{1,1024})",
     re.IGNORECASE,
 )
 _status_secret_assignment_fragment_pattern = re.compile(
-    r"([\s=;,])([A-Za-z0-9._-]{1,120}(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+    r"([\s=;,])([A-Za-z0-9._-]{0,120}(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
     r"[A-Za-z0-9._-]{0,120})\s*([:=])\s*([^,\s)]{1,1024})",
     re.IGNORECASE,
 )
@@ -1850,7 +1871,7 @@ def _sanitize_admin_status_output(output: str) -> str:
     text = str(output or "")
     if not text:
         return ""
-    return "\n".join(_sanitize_admin_notify_status_line(line) for line in text.split("\n"))
+    return "\n".join(_sanitize_status_text(line) for line in text.split("\n"))
 
 
 def _sanitize_status_url_credentials(value: str) -> str:
@@ -1885,7 +1906,7 @@ def _sanitize_status_url_value(value: str, *, value_prefix: str = "") -> str:
     host = parsed.hostname or ""
     if not host:
         return f"{value_prefix}{value}"
-    netloc = f"{parsed.username}:<redacted>@{host}"
+    netloc = f"<redacted>@{host}"
     if parsed.port is not None:
         netloc = f"{netloc}:{parsed.port}"
     return f"{value_prefix}{urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))}"
@@ -1894,19 +1915,23 @@ def _sanitize_status_url_value(value: str, *, value_prefix: str = "") -> str:
 def _status_secret_assignment_replacement(match: re.Match[str]) -> str:
     key = str(match.group(1) or "")
     separator = str(match.group(2) or "=")
-    return f"{key}{separator}<redacted>"
+    value = str(match.group(3) or "")
+    return _status_secret_assignment_text(key, separator, value, original=match.group(0))
 
 
 def _status_secret_assignment_fragment_replacement(match: re.Match[str]) -> str:
     prefix = str(match.group(1) or "")
     key = str(match.group(2) or "")
     separator = str(match.group(3) or "=")
-    _ = match.group(4) or ""
-    return prefix + f"{key}{separator}<redacted>"
+    value = str(match.group(4) or "")
+    return prefix + _status_secret_assignment_text(key, separator, value, original=match.group(0))
 
 
 def _status_secret_assignment_text(key: str, separator: str, value: str, *, original: str) -> str:
     _ = original
+    normalized_key = key.strip().casefold()
+    if normalized_key.endswith(("_env", "_ring", "_instances", "_tokens")):
+        return f"{key}{separator}{value}"
     normalized_value = value.strip().strip("\"'`").casefold()
     if normalized_value in {"configured", "none", "missing", "redacted", "<redacted>", "<redacted-secret>"}:
         return f"{key}{separator}{value}"
