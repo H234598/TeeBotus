@@ -209,6 +209,12 @@ class TeeStream:
             except (OSError, ValueError):
                 pass
 
+    def close(self) -> None:
+        _close_quietly(self.secondary)
+        primary_close = getattr(self.primary, "close", None)
+        if callable(primary_close):
+            primary_close()
+
     def fileno(self) -> int:
         fileno = getattr(self.primary, "fileno")
         return int(fileno())

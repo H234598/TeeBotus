@@ -2346,6 +2346,17 @@ def test_tee_stream_delegates_unknown_attributes_to_primary():
     assert tee.closed is True
 
 
+def test_tee_stream_closes_primary_and_secondary():
+    primary = io.StringIO()
+    secondary = io.StringIO()
+    tee = TeeStream(primary, secondary, Path("secondary.log"))
+
+    tee.close()
+
+    assert primary.closed is True
+    assert secondary.closed is True
+
+
 def test_tee_stream_keeps_primary_stream_working_when_secondary_is_closed():
     primary = io.StringIO()
     secondary = io.StringIO()
