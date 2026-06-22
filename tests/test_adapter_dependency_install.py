@@ -613,6 +613,30 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_trimmed_api_key_env(mon
     assert "raw profile openai_premium api_key_env=OPENAI_API_KEY  expected=OPENAI_API_KEY" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_raw_profile_wrong_static_model_value(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            payload["profiles"]["hf_mistral"]["model"] = "huggingface/mistralai/Other-Instruct"
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert (
+        "raw profile hf_mistral model=huggingface/mistralai/Other-Instruct "
+        "expected=huggingface/mistralai/Mistral-7B-Instruct-v0.3"
+    ) in message
+
+
 def test_llm_profiles_plan2_contract_rejects_raw_routing_alias_key(monkeypatch) -> None:
     from copy import deepcopy
 

@@ -426,14 +426,14 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         return False, f"llm profiles plan2 contract unreadable: {type(exc).__name__}: {exc}"
     errors: list[str] = []
     expected_profiles = {
-        "local_ollama": ("litellm", "ollama_chat/", "", ""),
-        "hf_mistral": ("litellm", "huggingface/", "", "HUGGINGFACE_API_KEY"),
-        "hf_qwen": ("litellm", "huggingface/", "", "HUGGINGFACE_API_KEY"),
+        "local_ollama": ("litellm", "ollama_chat/", "ollama_chat/llama3.2:3b", ""),
+        "hf_mistral": ("litellm", "huggingface/", "huggingface/mistralai/Mistral-7B-Instruct-v0.3", "HUGGINGFACE_API_KEY"),
+        "hf_qwen": ("litellm", "huggingface/", "huggingface/Qwen/Qwen2.5-7B-Instruct", "HUGGINGFACE_API_KEY"),
         "hf_pool_default": ("hf_pool", "pool:", "", ""),
         "hf_pool_structured": ("hf_pool", "pool:", "", ""),
         "hf_pool_quality": ("hf_pool", "pool:", "", ""),
         "hf_pool_bibliothekar": ("hf_pool", "pool:", "", ""),
-        "groq_fast": ("litellm", "groq/", "", "GROQ_API_KEY"),
+        "groq_fast": ("litellm", "groq/", "groq/llama-3.1-8b-instant", "GROQ_API_KEY"),
         "gemini_flash_stateless": ("litellm_gemini_stateless", "gemini/", "gemini/gemini-3.5-flash", "GEMINI_API_KEY"),
         "gemini_flash_stateful": ("litellm_gemini_stateful", "gemini/", "gemini/gemini-3.5-flash", "GEMINI_API_KEY"),
         "gemini_flash_paid_stateless": ("litellm_gemini_paid_stateless", "gemini/", "gemini/gemini-3.5-flash", "GEMINI_API_KEY"),
