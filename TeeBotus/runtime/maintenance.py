@@ -72,7 +72,10 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | Non
     if runtime_directory_ready:
         try:
             directory.mkdir(parents=True, exist_ok=True)
-            maintain_runtime_directory(directory)
+            directory_stat = directory.stat(follow_symlinks=False)
+            runtime_directory_ready = stat_module.S_ISDIR(directory_stat.st_mode)
+            if runtime_directory_ready:
+                maintain_runtime_directory(directory)
         except OSError:
             runtime_directory_ready = False
     log_path = runtime_log_path(directory)

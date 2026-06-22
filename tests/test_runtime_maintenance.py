@@ -1347,7 +1347,7 @@ def test_configure_runtime_logging_refuses_symlinked_runtime_directory(tmp_path,
     runtime_dir = tmp_path / "runtime-link"
     runtime_dir.symlink_to(external_runtime_dir, target_is_directory=True)
 
-    configure_runtime_logging(base_dir=runtime_dir)
+    configure_runtime_logging(base_dir=runtime_dir, tee_stdio=True)
     logging.getLogger("TeeBotus.test").warning("probe")
     for handler in logging.getLogger().handlers:
         handler.flush()
@@ -1355,6 +1355,7 @@ def test_configure_runtime_logging_refuses_symlinked_runtime_directory(tmp_path,
     handlers = logging.getLogger().handlers
     assert not any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
     assert not (external_runtime_dir / "teebotus-production.log").exists()
+    assert not (external_runtime_dir / STDIO_LOG_FILENAME).exists()
 
 
 def test_configure_runtime_logging_refuses_symlinked_runtime_ancestor(tmp_path, monkeypatch):
