@@ -490,6 +490,9 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         for normalized_name, raw_names in sorted(duplicate_normalized_profiles.items()):
             errors.append(f"duplicate raw profile {normalized_name}: {','.join(raw_names)}")
         allowed_raw_profile_keys = {"provider", "model", "base_url", "api_key_env", "service_tier"}
+        canonical_profile_field_keys = {
+            key.strip().casefold().replace("-", "_"): key for key in allowed_raw_profile_keys
+        }
         unexpected_raw_profiles = sorted(raw_profile_names - set(expected_profiles))
         missing_raw_profiles = sorted(set(expected_profiles) - raw_profile_names)
         if unexpected_raw_profiles:
@@ -506,6 +509,10 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
                 errors.append(
                     f"raw profile {name} key(s) must be string: {','.join(non_string_profile_field_keys)}"
                 )
+            for raw_key in sorted(key for key in raw_profile if isinstance(key, str)):
+                canonical_key = canonical_profile_field_keys.get(raw_key.strip().casefold().replace("-", "_"))
+                if canonical_key and raw_key != canonical_key:
+                    errors.append(f"raw profile {name} key {raw_key} must use canonical key {canonical_key}")
             unexpected_keys = sorted(str(key) for key in raw_profile if str(key) not in allowed_raw_profile_keys)
             if unexpected_keys:
                 errors.append(f"raw profile {name} unexpected key(s): {','.join(unexpected_keys)}")
@@ -664,6 +671,17 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
                         f"raw routing purpose {raw_name} key(s) must be string: "
                         f"{','.join(non_string_route_field_keys)}"
                     )
+                canonical_route_field_keys = {
+                    "profile": "profile",
+                    "fallback": "fallback",
+                    "fallback_profile": "fallback",
+                }
+                for raw_key in sorted(key for key in raw_route if isinstance(key, str)):
+                    canonical_key = canonical_route_field_keys.get(raw_key.strip().casefold().replace("-", "_"))
+                    if canonical_key and raw_key != canonical_key:
+                        errors.append(
+                            f"raw routing purpose {raw_name} key {raw_key} must use canonical key {canonical_key}"
+                        )
                 unexpected_keys = sorted(str(key) for key in raw_route if str(key) not in {"profile", "fallback"})
                 if unexpected_keys:
                     errors.append(f"raw routing purpose {raw_name} unexpected key(s): {','.join(unexpected_keys)}")

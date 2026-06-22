@@ -645,6 +645,27 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_unknown_keys(monkeypatc
     assert "raw profile local_ollama unexpected key(s): api_base" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_raw_profile_field_alias_key(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            payload["profiles"]["openai_premium"]["api-key-env"] = "OPENAI_API_KEY"
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw profile openai_premium key api-key-env must use canonical key api_key_env" in message
+
+
 def test_llm_profiles_plan2_contract_rejects_raw_profile_missing_required_keys(monkeypatch) -> None:
     from copy import deepcopy
 
@@ -838,6 +859,7 @@ def test_llm_profiles_plan2_contract_rejects_raw_routing_unknown_keys(monkeypatc
     ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
 
     assert not ok
+    assert "raw routing purpose hard_reasoning key fallback_profile must use canonical key fallback" in message
     assert "raw routing purpose hard_reasoning unexpected key(s): fallback_profile" in message
 
 
