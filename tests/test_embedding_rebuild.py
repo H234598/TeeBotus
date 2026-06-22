@@ -643,6 +643,18 @@ def test_embedding_cli_memory_rebuild_dry_run_json(monkeypatch, capsys, tmp_path
     assert payload[0]["embedding_model"] == ""
 
 
+def test_embedding_cli_memory_rebuild_returns_failure_when_no_accounts(monkeypatch, capsys, tmp_path):
+    def fake_rebuild(**_kwargs):
+        from TeeBotus.embedding.rebuild import QdrantMemoryRebuildResult
+
+        return (QdrantMemoryRebuildResult("Depressionsbot", "", "skipped", error="no accounts"),)
+
+    monkeypatch.setattr("TeeBotus.embedding.cli.rebuild_qdrant_memory_indexes", fake_rebuild)
+
+    assert embedding_cli_main(["--instances-dir", str(tmp_path / "instances"), "memory-rebuild"]) == 1
+    assert "status=skipped" in capsys.readouterr().out
+
+
 def test_embedding_cli_memory_rebuild_passes_explicit_legacy_raw_cleanup(monkeypatch, capsys, tmp_path):
     def fake_rebuild(**kwargs):
         assert kwargs["include_legacy_raw_account_id_cleanup"] is True
@@ -827,7 +839,9 @@ def test_embedding_cli_memory_rebuild_loads_local_dotenv_without_overriding_env(
         captured_env["backend"] = os.environ.get("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "")
         captured_env["path"] = os.environ.get("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", "")
         captured_env["fallback"] = os.environ.get("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", "")
-        return ()
+        from TeeBotus.embedding.rebuild import QdrantMemoryRebuildResult
+
+        return (QdrantMemoryRebuildResult("Depressionsbot", "a" * 128, "rebuilt", point_count=1),)
 
     monkeypatch.setattr("TeeBotus.embedding.cli.rebuild_qdrant_memory_indexes", fake_rebuild)
 
@@ -863,7 +877,9 @@ def test_embedding_cli_memory_rebuild_uses_shared_dotenv_loader_for_nested_insta
     def fake_rebuild(**_kwargs):
         captured_env["backend"] = os.environ.get("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "")
         captured_env["path"] = os.environ.get("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", "")
-        return ()
+        from TeeBotus.embedding.rebuild import QdrantMemoryRebuildResult
+
+        return (QdrantMemoryRebuildResult("Depressionsbot", "a" * 128, "rebuilt", point_count=1),)
 
     monkeypatch.setattr("TeeBotus.embedding.cli.rebuild_qdrant_memory_indexes", fake_rebuild)
 
@@ -936,6 +952,12 @@ def test_embedding_cli_bibliothekar_rebuild_dry_run_json(monkeypatch, capsys, tm
     assert payload[0]["collection_name"] == QDRANT_BIBLIOTHEKAR_COLLECTION
 
 
+def test_embedding_cli_bibliothekar_rebuild_returns_failure_when_no_instances(monkeypatch, tmp_path):
+    monkeypatch.setattr("TeeBotus.embedding.cli.rebuild_qdrant_bibliothekar_indexes", lambda **_kwargs: ())
+
+    assert embedding_cli_main(["--instances-dir", str(tmp_path / "instances"), "bibliothekar-rebuild"]) == 1
+
+
 def test_embedding_cli_codex_history_rebuild_dry_run_json(monkeypatch, capsys, tmp_path):
     def fake_rebuild(**kwargs):
         assert kwargs["instances_dir"] == str(tmp_path / "instances")
@@ -1002,6 +1024,29 @@ def test_embedding_cli_codex_history_rebuild_dry_run_json(monkeypatch, capsys, t
     assert payload[0]["status"] == "dry_run"
     assert payload[0]["chunk_count"] == 2
     assert payload[0]["collection_name"] == "codex_history_test"
+
+
+def test_embedding_cli_codex_history_rebuild_allows_empty_repo_filter_skip(monkeypatch, capsys, tmp_path):
+    def fake_rebuild(**_kwargs):
+        from TeeBotus.embedding.rebuild import QdrantCodexHistoryRebuildResult
+
+        return (QdrantCodexHistoryRebuildResult("Depressionsbot", "skipped", error="no codex history chunks"),)
+
+    monkeypatch.setattr("TeeBotus.embedding.cli.rebuild_qdrant_codex_history_indexes", fake_rebuild)
+
+    assert (
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "codex-history-rebuild",
+                "--repo",
+                "missing-repo",
+            ]
+        )
+        == 0
+    )
+    assert "status=skipped" in capsys.readouterr().out
 
 
 def test_embedding_cli_codex_history_rebuild_rejects_negative_limit(capsys, tmp_path):

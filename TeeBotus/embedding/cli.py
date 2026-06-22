@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 for result in results:
                     print(_format_memory_rebuild_result(result))
-            return 1 if any(result.status == "error" for result in results) else 0
+            return _status_exit_code(results, ok_statuses={"dry_run", "rebuilt"})
         if args.command == "collections-ensure":
             _validate_collections_ensure_args(parser, args)
             results = ensure_qdrant_collections_for_instances(
@@ -75,7 +75,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 for result in results:
                     print(_format_bibliothekar_rebuild_result(result))
-            return 1 if any(result.status == "error" for result in results) else 0
+            return _status_exit_code(results, ok_statuses={"cleared", "dry_run", "rebuilt"})
         if args.command == "codex-history-rebuild":
             _validate_codex_history_rebuild_args(parser, args)
             results = rebuild_qdrant_codex_history_indexes(
@@ -93,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 for result in results:
                     print(_format_codex_history_rebuild_result(result))
-            return 1 if any(result.status == "error" for result in results) else 0
+            return _status_exit_code(results, ok_statuses={"cleared", "dry_run", "rebuilt", "skipped"})
     parser.print_help()
     return 2
 
@@ -226,6 +226,16 @@ def _positive_cli_int(parser: argparse.ArgumentParser, value: object, argument_n
     if parsed < 1:
         parser.error(f"{argument_name} must be a positive integer.")
     return parsed
+
+
+def _status_exit_code(results: tuple[object, ...], *, ok_statuses: set[str]) -> int:
+    if not results:
+        return 1
+    for result in results:
+        status = str(getattr(result, "status", "") or "").strip()
+        if status not in ok_statuses:
+            return 1
+    return 0
 
 
 @contextmanager
