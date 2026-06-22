@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,6 +32,7 @@ from TeeBotus.admin.codex_history import (
     record_codex_history_delivery_receipt,
     record_codex_history_reply,
     run_codex_history_index,
+    _watch_payload_ok,
     watch_codex_session_roots,
 )
 from TeeBotus.runtime.actions import SendAttachment
@@ -54,6 +56,17 @@ def make_instance(tmp_path: Path, name: str = "Depressionsbot") -> Path:
     instance_dir.mkdir(parents=True)
     (instance_dir / "Bot_Verhalten.md").write_text("## Hilfe\n", encoding="utf-8")
     return instance_dir
+
+
+@pytest.fixture(autouse=True)
+def redirect_codex_history_obsidian(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def fake_obsidian_incoming_path(*parts: str) -> Path:
+        path = tmp_path / "obsidian_incoming"
+        for part in parts:
+            path = path / str(part)
+        return path
+
+    monkeypatch.setattr("TeeBotus.admin.codex_history.obsidian_incoming_path", fake_obsidian_incoming_path)
 
 
 def make_git_repo(tmp_path: Path, name: str, version: str = "1.2.3") -> Path:
@@ -1186,6 +1199,38 @@ def test_codex_history_dispatch_marks_missing_sender_failed_without_deleting_ite
     assert dispatch["reason"] == "missing_sender:telegram"
 
 
+def test_codex_history_dispatch_requeues_transient_sender_errors(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "retry-sender-demo", version="1.0.3")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(9), display_label="Admin")
+    store.update_identity_route(telegram_identity_key(9), channel="telegram", chat_id="9", chat_type="private", adapter_slot=1)
+    item = append_codex_history_summary(store, repo_root=repo, title="Retry Sender", bullets=["Transienter Fehler."])
+
+    def failing_sender(_route: dict[str, object], _action: SendAttachment, _metadata: dict[str, object]) -> str:
+        raise RuntimeError("temporary network issue")
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="Depressionsbot",
+            account_ids=(admin_id,),
+            senders={"telegram": failing_sender},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["status_counts"] == {"failed": 1}
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["id"] == item["id"]
+    assert persisted["status"] == "queued"
+    assert persisted["delivery"]["attempts"] == 1
+    assert persisted["last_reason"].startswith("send_error:RuntimeError")
+    dispatch = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert dispatch["status"] == "failed"
+    assert dispatch["reason"].startswith("send_error:RuntimeError")
+
+
 def test_import_codex_session_file_creates_redacted_deduped_history_item(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "watch-demo", version="2.1.0")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
@@ -1251,6 +1296,37 @@ def test_import_codex_session_roots_skips_invalid_repo_root_without_aborting(tmp
     assert report["items"][0]["reason"] == "invalid_repo_root"
     assert ".codex-agents" in report["items"][0]["error"]
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID) == []
+
+
+def test_import_codex_session_roots_limit_prefers_newest_session_mtime(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "watch-newest-limit-demo", version="3.0.0")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    sessions_root = tmp_path / "sessions"
+    old_session = write_codex_session(
+        sessions_root / "000-old.jsonl",
+        repo=repo,
+        session_id="sess-old",
+        turn_id="turn-old",
+        final_text="Alte Summary darf bei limit=1 nicht gewinnen.",
+    )
+    new_session = write_codex_session(
+        sessions_root / "999-new.jsonl",
+        repo=repo,
+        session_id="sess-new",
+        turn_id="turn-new",
+        final_text="Neue Summary gewinnt trotz spaeterem Pfadnamen.",
+    )
+    os.utime(old_session, ns=(1_000_000_000, 1_000_000_000))
+    os.utime(new_session, ns=(2_000_000_000, 2_000_000_000))
+
+    report = import_codex_session_roots(store, (sessions_root,), limit=1)
+
+    assert report["status_counts"] == {"imported": 1}
+    assert Path(report["items"][0]["path"]) == new_session.resolve()
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    assert len(rows) == 1
+    assert rows[0]["codex"]["session_id"] == "sess-new"
+    assert rows[0]["summary"]["title"] == "Neue Summary gewinnt trotz spaeterem Pfadnamen."
 
 
 def test_codex_history_watch_once_cli_imports_session_directory(tmp_path: Path, capsys) -> None:
@@ -1454,6 +1530,27 @@ def test_watch_codex_session_roots_snapshot_skips_unchanged_iterations(tmp_path:
     assert result["status_counts"] == {"imported": 1}
     rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
     assert len(rows) == 1
+
+
+def test_watch_payload_ok_keeps_timer_successful_when_dispatch_has_channel_failure() -> None:
+    assert (
+        _watch_payload_ok(
+            [
+                {
+                    "ok": True,
+                    "dispatch": {
+                        "ok": False,
+                        "instances": [
+                            {
+                                "status_counts": {"accepted": 18, "failed": 1},
+                            }
+                        ],
+                    },
+                }
+            ]
+        )
+        is True
+    )
 
 
 def test_codex_history_watch_cli_can_run_bounded_poll_loop(tmp_path: Path, capsys) -> None:

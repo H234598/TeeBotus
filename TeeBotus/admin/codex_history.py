@@ -25,6 +25,7 @@ from urllib.parse import urlsplit
 from typing import Any
 
 from TeeBotus import __version__
+from TeeBotus.artifact_outputs import obsidian_incoming_path
 from TeeBotus.admin.accounts_report import (
     BOT_INSTRUCTION_FILENAME,
     DEFAULT_INSTANCES_DIR,
@@ -33,7 +34,7 @@ from TeeBotus.admin.accounts_report import (
     parse_csv,
 )
 from TeeBotus.runtime.actions import SendAttachment
-from TeeBotus.runtime.admin_accounts import resolve_admin_account_group
+from TeeBotus.runtime.admin_accounts import runtime_admin_account_ids
 from TeeBotus.runtime.accounts import (
     INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_STATE_ACCOUNT_ID,
@@ -50,6 +51,7 @@ CODEX_HISTORY_DISPATCHABLE_KINDS = frozenset({"codex_run_summary", "codex_strate
 CODEX_HISTORY_INDEXABLE_KINDS = frozenset({"codex_run_summary", "codex_strategy_analysis"})
 CODEX_HISTORY_BIBLIOTHEKAR_DIRNAME = "Codex_History_Bibliothek"
 CODEX_HISTORY_BIBLIOTHEKAR_README = "README.md"
+CODEX_HISTORY_DISPATCH_OBSIDIAN_DIRNAME = "Codex_History_Dispatches"
 CODEX_HISTORY_GRAPH_DIRNAME = "graphs"
 CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE = "local_ollama"
 CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE = "local_ollama"
@@ -326,6 +328,7 @@ async def dispatch_codex_history_outbox(
     candidate_account_ids = _codex_history_dispatch_account_ids(store, instance_name=instance_name, account_ids=account_ids, env=env)
     rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
     items = [row for row in rows if _codex_history_item_dispatchable(row)]
+    items.sort(key=_codex_history_dispatch_sort_key, reverse=True)
     if limit > 0:
         items = items[:limit]
     result_rows: list[dict[str, Any]] = []
@@ -686,6 +689,7 @@ def watch_codex_session_roots(
     limit: int = 1000,
     sleep: Callable[[float], None] = time.sleep,
     post_scan: Callable[[Mapping[str, Any]], None] | None = None,
+    post_idle: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     iterations = 0
     if not follow and max_iterations < 1:
@@ -709,6 +713,15 @@ def watch_codex_session_roots(
                 post_scan(report)
         else:
             skipped_unchanged += 1
+            if callable(post_idle):
+                post_idle(
+                    {
+                        "ok": True,
+                        "items": [],
+                        "status_counts": {},
+                        "reason": "unchanged_snapshot",
+                    }
+                )
         if current_snapshot is not None:
             last_snapshot = current_snapshot
         if not follow and max_iterations > 0 and iterations >= max_iterations:
@@ -735,8 +748,17 @@ def default_codex_session_roots() -> tuple[Path, ...]:
     roots = [Path.home() / ".codex" / "sessions"]
     agents_root = Path.home() / ".codex-agents"
     if agents_root.is_dir():
-        roots.extend(path / "sessions" for path in sorted(agents_root.iterdir()) if path.is_dir())
+        roots.extend(
+            path / "sessions"
+            for path in sorted(agents_root.iterdir())
+            if path.is_dir() and _is_default_codex_agent_dir(path)
+        )
     return tuple(roots)
+
+
+def _is_default_codex_agent_dir(path: Path) -> bool:
+    name = path.name
+    return len(name) == 2 and name[0].islower() and name[1] == "1"
 
 
 def export_codex_history_bibliothekar_docs(
@@ -1608,8 +1630,7 @@ def _codex_history_dispatch_account_ids(
 ) -> tuple[str, ...]:
     candidates = tuple(str(account_id or "").strip().casefold() for account_id in account_ids if str(account_id or "").strip())
     if not candidates:
-        group = resolve_admin_account_group(instance_name=instance_name, env=env)
-        candidates = tuple(group.account_ids)
+        candidates = tuple(runtime_admin_account_ids(store, instance_name=instance_name, env=env))
     seen: set[str] = set()
     result: list[str] = []
     for account_id in candidates:
@@ -1627,6 +1648,14 @@ def _codex_history_item_dispatchable(item: Mapping[str, Any]) -> bool:
         return False
     status = str(item.get("status") or "queued").strip().casefold()
     return status in CODEX_HISTORY_DISPATCHABLE_STATUSES
+
+
+def _codex_history_dispatch_sort_key(item: Mapping[str, Any]) -> tuple[str, str, str]:
+    return (
+        str(item.get("created_at") or "").strip(),
+        str(item.get("updated_at") or "").strip(),
+        str(item.get("id") or "").strip(),
+    )
 
 
 def _dry_run_dispatch_rows(item: Mapping[str, Any], account_ids: Sequence[str], store: AccountStore) -> list[dict[str, Any]]:
@@ -1728,6 +1757,7 @@ async def _dispatch_codex_history_item_to_account(
             instance_name=instance_name,
             route=route,
         )
+    obsidian_path, obsidian_error = _write_codex_history_dispatch_markdown(item)
     return _record_codex_history_dispatch_result(
         store,
         item,
@@ -1738,6 +1768,8 @@ async def _dispatch_codex_history_item_to_account(
         instance_name=instance_name,
         route=route,
         message_ref=str(sent_ref or ""),
+        obsidian_path=obsidian_path,
+        obsidian_error=obsidian_error,
     )
 
 
@@ -1808,6 +1840,37 @@ def _codex_history_markdown_filename(repo_name: str, semver: str, summary_number
     return f"{safe_repo}_release_{safe_semver}_{max(1, number):04d}.md"
 
 
+def _write_codex_history_dispatch_markdown(item: Mapping[str, Any]) -> tuple[str, str]:
+    summary = item.get("summary", {})
+    project = item.get("project", {})
+    version = item.get("version", {})
+    if not isinstance(summary, Mapping):
+        summary = {}
+    if not isinstance(project, Mapping):
+        project = {}
+    if not isinstance(version, Mapping):
+        version = {}
+    markdown = str(summary.get("markdown") or "").strip()
+    if not markdown:
+        markdown = f"# {item.get('summary_prefix', 'untagged')} {summary.get('title', 'Codex run summary')}\n"
+    created_at = str(item.get("created_at") or "").strip()
+    date_prefix = re.sub(r"[^0-9T]+", "", created_at[:19].replace("-", "").replace(":", ""))
+    if not date_prefix:
+        date_prefix = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S")
+    repo_name = str(project.get("repo_name") or "project").strip() or "project"
+    semver = str(version.get("semver") or "untagged").strip() or "untagged"
+    summary_number = item.get("summary_number") or version.get("summary_number") or 1
+    base_name = _codex_history_markdown_filename(repo_name, semver, summary_number)
+    item_id = _safe_filename_component(str(item.get("id") or "codex-history"), default="codex-history", max_length=48)
+    path = obsidian_incoming_path(CODEX_HISTORY_DISPATCH_OBSIDIAN_DIRNAME, f"{date_prefix}_{item_id}_{base_name}")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(markdown.rstrip() + "\n", encoding="utf-8")
+    except OSError as exc:
+        return "", f"{type(exc).__name__}:{exc}"
+    return str(path), ""
+
+
 def _record_codex_history_dispatch_result(
     store: AccountStore,
     item: Mapping[str, Any],
@@ -1822,6 +1885,8 @@ def _record_codex_history_dispatch_result(
     reply_message_ref: str = "",
     reply_text_preview: str = "",
     receipt_type: str = "",
+    obsidian_path: str = "",
+    obsidian_error: str = "",
 ) -> dict[str, Any]:
     route = route if isinstance(route, Mapping) else {}
     version = item.get("version", {})
@@ -1851,6 +1916,12 @@ def _record_codex_history_dispatch_result(
     normalized_receipt_type = _normalize_delivery_receipt_type(receipt_type) if str(receipt_type or "").strip() else ""
     if normalized_receipt_type:
         row["receipt_type"] = normalized_receipt_type
+    normalized_obsidian_path = str(obsidian_path or "").strip()
+    if normalized_obsidian_path:
+        row["obsidian_path"] = normalized_obsidian_path
+    normalized_obsidian_error = redact_codex_history_text(obsidian_error).strip()
+    if normalized_obsidian_error:
+        row["obsidian_error"] = normalized_obsidian_error[:240]
     store.append_codex_history_dispatch_result(INSTANCE_STATE_ACCOUNT_ID, row)
     return row
 
@@ -1927,10 +1998,22 @@ def _overall_dispatch_status(rows: Sequence[Mapping[str, Any]]) -> str:
     if "accepted" in statuses:
         return "accepted"
     if "failed" in statuses:
+        failed_rows = [
+            row
+            for row in rows
+            if isinstance(row, Mapping) and str(row.get("status") or "").strip().casefold() == "failed"
+        ]
+        if failed_rows and all(_codex_history_dispatch_failure_retryable(row) for row in failed_rows):
+            return "queued"
         return "failed"
     if "skipped" in statuses:
         return "skipped"
     return "failed"
+
+
+def _codex_history_dispatch_failure_retryable(row: Mapping[str, Any]) -> bool:
+    reason = str(row.get("reason") or "").strip().casefold()
+    return reason.startswith("send_error:")
 
 
 def _overall_dispatch_reason(rows: Sequence[Mapping[str, Any]]) -> str:
@@ -2118,10 +2201,18 @@ def _iter_codex_session_files(roots: Sequence[str | Path], *, limit: int) -> tup
         if not root.is_dir():
             continue
         files.extend(path for path in root.rglob("*.jsonl") if path.is_file())
-    files = sorted(set(files), key=lambda path: str(path))
+    files = sorted(set(files), key=_codex_session_file_import_sort_key)
     if limit > 0:
         files = files[:limit]
     return tuple(files)
+
+
+def _codex_session_file_import_sort_key(path: Path) -> tuple[int, str]:
+    try:
+        stat = path.stat()
+    except OSError:
+        return (0, str(path))
+    return (-int(stat.st_mtime_ns), str(path))
 
 
 def _normalize_watch_event_mode(value: str) -> str:
@@ -2498,6 +2589,9 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     watch_parser.add_argument("--post-index-qdrant-url", default="", help="Override Qdrant URL for post-index rebuild.")
     watch_parser.add_argument("--post-index-qdrant-dry-run", action="store_true", help="Count post-index Qdrant chunks without writing Qdrant.")
     watch_parser.add_argument("--post-index-qdrant-ensure", action="store_true", help="Ensure Qdrant collections before post-index rebuild.")
+    watch_parser.add_argument("--dispatch", action="store_true", help="After each scan, dispatch queued Codex-History summaries to status admins.")
+    watch_parser.add_argument("--dispatch-limit", type=int, default=100, help="Limit post-scan dispatch to latest N queued summaries.")
+    watch_parser.add_argument("--dispatch-dry-run", action="store_true", help="Resolve post-scan dispatch targets without sending messages.")
 
     args = parser.parse_args(list(argv) if argv is not None else None)
     if args.command == "append":
@@ -2853,6 +2947,9 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                 post_index = _watch_post_index_report(store, instances_dir, instance_name, args, provider)
                 if post_index:
                     instance_report["post_index"] = post_index
+                dispatch_report = _watch_dispatch_report(store, instances_dir, instance_name, args)
+                if dispatch_report:
+                    instance_report["dispatch"] = dispatch_report
                 instance_reports.append(instance_report)
             payload = {
                 "ok": _watch_payload_ok(instance_reports),
@@ -2886,9 +2983,11 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                 poll_interval_seconds = 0.0
             instance_reports: list[dict[str, Any]] = []
             selected = discover_instances(instances_dir, selected_instances)
+            sender_factory = None if args.dispatch_dry_run or not args.dispatch else _runtime_sender_factory(instances_dir)
             for instance_name in selected:
                 store = _store_for_instance(instances_dir, instance_name, provider)
                 post_index_reports: list[dict[str, Any]] = []
+                dispatch_reports: list[dict[str, Any]] = []
                 watch_report = watch_codex_session_roots(
                     store,
                     safe_roots,
@@ -2904,12 +3003,25 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                         args,
                         provider,
                         post_index_reports,
+                        dispatch_reports,
+                        sender_factory=sender_factory,
+                    ),
+                    post_idle=_watch_dispatch_idle_callback(
+                        store,
+                        instances_dir,
+                        instance_name,
+                        args,
+                        dispatch_reports,
+                        sender_factory=sender_factory,
                     ),
                 )
                 instance_report = {"instance": instance_name, **watch_report}
                 if post_index_reports:
                     instance_report["post_index"] = post_index_reports[-1]
                     instance_report["post_index_runs"] = post_index_reports
+                if dispatch_reports:
+                    instance_report["dispatch"] = dispatch_reports[-1]
+                    instance_report["dispatch_runs"] = dispatch_reports
                 instance_reports.append(instance_report)
             payload = {
                 "ok": _watch_payload_ok(instance_reports),
@@ -3002,18 +3114,100 @@ def _watch_post_index_callback(
     args: argparse.Namespace,
     provider: InstanceSecretProvider | None,
     reports: list[dict[str, Any]],
+    dispatch_reports: list[dict[str, Any]],
+    *,
+    sender_factory: Any | None = None,
 ) -> Callable[[Mapping[str, Any]], None] | None:
     qdrant = bool(getattr(args, "post_index_qdrant", False))
     qdrant_ensure = bool(getattr(args, "post_index_qdrant_ensure", False))
-    if not (bool(getattr(args, "post_index", False)) or qdrant or qdrant_ensure):
+    dispatch = bool(getattr(args, "dispatch", False))
+    if not (bool(getattr(args, "post_index", False)) or qdrant or qdrant_ensure or dispatch):
         return None
 
     def _callback(_scan_report: Mapping[str, Any]) -> None:
         post_index = _watch_post_index_report(store, instances_dir, instance_name, args, provider)
         if post_index:
             reports.append(post_index)
+        dispatch_report = _watch_dispatch_report(
+            store,
+            instances_dir,
+            instance_name,
+            args,
+            sender_factory=sender_factory,
+        )
+        if dispatch_report:
+            dispatch_reports.append(dispatch_report)
+            _emit_follow_dispatch_report(dispatch_report, args)
 
     return _callback
+
+
+def _watch_dispatch_idle_callback(
+    store: AccountStore,
+    instances_dir: Path,
+    instance_name: str,
+    args: argparse.Namespace,
+    dispatch_reports: list[dict[str, Any]],
+    *,
+    sender_factory: Any | None = None,
+) -> Callable[[Mapping[str, Any]], None] | None:
+    if not bool(getattr(args, "dispatch", False)):
+        return None
+
+    def _callback(_idle_report: Mapping[str, Any]) -> None:
+        dispatch_report = _watch_dispatch_report(
+            store,
+            instances_dir,
+            instance_name,
+            args,
+            sender_factory=sender_factory,
+        )
+        if dispatch_report:
+            dispatch_reports.append(dispatch_report)
+            _emit_follow_dispatch_report(dispatch_report, args)
+
+    return _callback
+
+
+def _emit_follow_dispatch_report(dispatch_report: Mapping[str, Any], args: argparse.Namespace) -> None:
+    if not bool(getattr(args, "follow", False)):
+        return
+    if str(getattr(args, "format", "text") or "text") != "text":
+        return
+    print(_render_dispatch_report(dispatch_report), end="", flush=True)
+
+
+def _watch_dispatch_report(
+    store: AccountStore,
+    instances_dir: Path,
+    instance_name: str,
+    args: argparse.Namespace,
+    *,
+    sender_factory: Any | None = None,
+) -> dict[str, Any]:
+    if not bool(getattr(args, "dispatch", False)):
+        return {}
+    dry_run = bool(getattr(args, "dispatch_dry_run", False))
+    if dry_run:
+        senders: dict[str, Any] = {}
+    else:
+        factory = sender_factory or _runtime_sender_factory(instances_dir)
+        senders = dict(factory(instance_name, store))
+    report = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name=instance_name,
+            senders=senders,
+            dry_run=dry_run,
+            limit=int(getattr(args, "dispatch_limit", 0) or 0),
+        )
+    )
+    return {
+        "ok": bool(report.get("ok", True)),
+        "dry_run": dry_run,
+        "instances_dir": str(instances_dir),
+        "instances": [report],
+    }
 
 
 def _watch_post_index_report(
@@ -3050,6 +3244,10 @@ def _watch_payload_ok(instance_reports: Sequence[Mapping[str, Any]]) -> bool:
         post_index = report.get("post_index")
         if isinstance(post_index, Mapping) and not bool(post_index.get("ok", True)):
             return False
+        # Dispatch failures are persisted per item; retryable channel send
+        # errors are requeued by dispatch status handling. The watcher itself
+        # should still exit successfully so systemd timers do not enter a
+        # failed state on channel errors.
     return True
 
 
@@ -3404,6 +3602,33 @@ def _render_watch_report(payload: Mapping[str, Any]) -> str:
                         f"status={result.get('status', '')} "
                         f"points={result.get('point_count', 0)}"
                     )
+        dispatch = instance.get("dispatch")
+        if isinstance(dispatch, Mapping):
+            dispatch_instances = dispatch.get("instances", [])
+            if isinstance(dispatch_instances, Sequence) and not isinstance(dispatch_instances, (str, bytes, bytearray)):
+                for dispatch_instance in dispatch_instances:
+                    if not isinstance(dispatch_instance, Mapping):
+                        continue
+                    dispatch_counts = dispatch_instance.get("status_counts", {})
+                    if not isinstance(dispatch_counts, Mapping):
+                        dispatch_counts = {}
+                    lines.append(
+                        "  dispatch: "
+                        f"ok={bool(dispatch_instance.get('ok', False))} "
+                        f"dry_run={bool(dispatch_instance.get('dry_run', False))} "
+                        f"statuses={','.join(f'{key}={value}' for key, value in sorted(dispatch_counts.items()))}"
+                    )
+                    for item in dispatch_instance.get("items", []) or []:
+                        if not isinstance(item, Mapping):
+                            continue
+                        lines.append(
+                            "  dispatch_item: "
+                            f"item={item.get('codex_history_item_id', '')} "
+                            f"account={item.get('account_id', '')} "
+                            f"channel={item.get('channel', '')} "
+                            f"status={item.get('status', '')} "
+                            f"reason={item.get('reason', '')}"
+                        )
     return "\n".join(lines) + "\n"
 
 
