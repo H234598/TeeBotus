@@ -108,6 +108,27 @@ def test_runtime_maintenance_preserves_temporary_runtime_files(tmp_path):
     assert (tmp_path / f"{rotated.name}.gz").exists()
 
 
+def test_runtime_maintenance_preserves_symlinked_runtime_text_files(tmp_path):
+    now = time.time()
+    old_mtime = now - 8 * 24 * 60 * 60
+    target = tmp_path / "external-target.txt"
+    target.write_text("do not copy\n", encoding="utf-8")
+    symlink = tmp_path / "linked-runtime.log"
+    symlink.symlink_to(target)
+    os.utime(symlink, (old_mtime, old_mtime), follow_symlinks=False)
+    rotated = tmp_path / "teebotus-production.log.2026-06-01"
+    rotated.write_text("rotated log\n", encoding="utf-8")
+    os.utime(rotated, (old_mtime, old_mtime))
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert symlink.is_symlink()
+    assert symlink.read_text(encoding="utf-8") == "do not copy\n"
+    assert not (tmp_path / f"{symlink.name}.gz").exists()
+    assert not rotated.exists()
+    assert (tmp_path / f"{rotated.name}.gz").exists()
+
+
 def test_gzip_file_removes_partial_temporary_file_on_copy_failure(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")
@@ -213,6 +234,31 @@ def test_runtime_maintenance_preserves_temporary_compressed_runtime_files(tmp_pa
         names = archive.getnames()
     assert archiveable.name in names
     assert all(path.name not in names for path in temporary_files)
+
+
+def test_runtime_maintenance_preserves_symlinked_compressed_runtime_files(tmp_path):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    target = tmp_path / "external-compressed.gz"
+    target.write_bytes(b"do-not-archive")
+    symlink = tmp_path / "linked-runtime.log.gz"
+    symlink.symlink_to(target)
+    os.utime(symlink, (old_mtime, old_mtime), follow_symlinks=False)
+    archiveable = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    archiveable.write_bytes(b"compressed-ish")
+    os.utime(archiveable, (old_mtime, old_mtime))
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert symlink.is_symlink()
+    assert target.exists()
+    assert not archiveable.exists()
+    archives = sorted((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert len(archives) == 1
+    with tarfile.open(archives[0], "r:gz") as archive:
+        names = archive.getnames()
+    assert archiveable.name in names
+    assert symlink.name not in names
 
 
 def test_runtime_maintenance_skips_archive_files_that_disappear_during_tar_add(tmp_path, monkeypatch):
