@@ -2105,6 +2105,16 @@ def test_tee_stream_keeps_primary_stream_working_when_secondary_fails():
     assert primary.getvalue() == "probe"
 
 
+def test_tee_stream_reports_primary_writable_status():
+    class ReadOnlyPrimary(io.StringIO):
+        def writable(self):
+            return False
+
+    tee = TeeStream(ReadOnlyPrimary(), io.StringIO(), Path("secondary.log"))
+
+    assert tee.writable() is False
+
+
 def test_tee_stream_keeps_primary_stream_working_when_secondary_is_closed():
     primary = io.StringIO()
     secondary = io.StringIO()

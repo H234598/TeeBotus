@@ -215,7 +215,8 @@ class TeeStream:
         return bool(isatty()) if callable(isatty) else False
 
     def writable(self) -> bool:
-        return True
+        writable = getattr(self.primary, "writable", None)
+        return bool(writable()) if callable(writable) else True
 
 
 def _stream_tee_target(stream: object) -> Path | None:
