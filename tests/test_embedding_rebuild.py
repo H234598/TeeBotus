@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 
+import pytest
+
 from TeeBotus.embedding.cli import main as embedding_cli_main
 from TeeBotus.embedding.config import EmbeddingConfig
 from TeeBotus.embedding.rebuild import (
@@ -712,6 +714,82 @@ def test_embedding_cli_memory_rebuild_can_target_1024d_side_index(monkeypatch, c
 
     output = capsys.readouterr().out
     assert "collection=teebotus_user_memory_1024d" in output
+
+
+def test_embedding_cli_memory_rebuild_side_index_sets_default_model_and_dimensions(monkeypatch, capsys, tmp_path):
+    def fake_rebuild(**kwargs):
+        assert kwargs["collection_name"] == "teebotus_user_memory_384d"
+        assert kwargs["embedding_overrides"] == {
+            "model_name": "intfloat/multilingual-e5-small",
+            "dimensions": 384,
+        }
+        from TeeBotus.embedding.rebuild import QdrantMemoryRebuildResult
+
+        return (
+            QdrantMemoryRebuildResult(
+                "Depressionsbot",
+                "a" * 128,
+                "dry_run",
+                point_count=2,
+                collection_name="teebotus_user_memory_384d",
+                embedding_model="intfloat/multilingual-e5-small",
+                embedding_dimensions=384,
+            ),
+        )
+
+    monkeypatch.setattr("TeeBotus.embedding.cli.rebuild_qdrant_memory_indexes", fake_rebuild)
+
+    assert (
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "memory-rebuild",
+                "--dry-run",
+                "--side-index-dimensions",
+                "384",
+            ]
+        )
+        == 0
+    )
+
+    output = capsys.readouterr().out
+    assert "collection=teebotus_user_memory_384d" in output
+    assert "embedding_model=intfloat/multilingual-e5-small embedding_dimensions=384" in output
+
+
+def test_embedding_cli_memory_rebuild_rejects_side_index_dimension_mismatch(capsys, tmp_path):
+    with pytest.raises(SystemExit) as exc_info:
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "memory-rebuild",
+                "--side-index-dimensions",
+                "1024",
+                "--embedding-dimensions",
+                "384",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "must match --side-index-dimensions" in capsys.readouterr().err
+
+
+def test_embedding_cli_memory_rebuild_rejects_non_positive_side_index_dimensions(capsys, tmp_path):
+    with pytest.raises(SystemExit) as exc_info:
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "memory-rebuild",
+                "--side-index-dimensions",
+                "0",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "--side-index-dimensions must be a positive integer" in capsys.readouterr().err
 
 
 def test_embedding_cli_memory_rebuild_loads_local_dotenv_without_overriding_env(monkeypatch, tmp_path):

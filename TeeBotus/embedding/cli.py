@@ -15,7 +15,12 @@ from TeeBotus.embedding.rebuild import (
     rebuild_qdrant_codex_history_indexes,
     rebuild_qdrant_memory_indexes,
 )
-from TeeBotus.runtime.qdrant import QDRANT_CODEX_HISTORY_COLLECTION, QDRANT_USER_MEMORY_COLLECTION, qdrant_user_memory_side_collection
+from TeeBotus.runtime.qdrant import (
+    QDRANT_CODEX_HISTORY_COLLECTION,
+    QDRANT_USER_MEMORY_COLLECTION,
+    qdrant_user_memory_side_collection,
+    qdrant_user_memory_side_collection_spec,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -23,6 +28,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     with _dotenv_defaults_for_instances_dir(args.instances_dir):
         if args.command == "memory-rebuild":
+            _validate_memory_rebuild_args(parser, args)
             results = rebuild_qdrant_memory_indexes(
                 instances_dir=args.instances_dir,
                 instance_names=args.instance,
@@ -162,12 +168,19 @@ def _build_parser() -> argparse.ArgumentParser:
 
 def _embedding_overrides_from_args(args: argparse.Namespace) -> dict[str, Any]:
     overrides: dict[str, Any] = {}
+    side_index_spec = None
+    if getattr(args, "command", "") == "memory-rebuild" and getattr(args, "side_index_dimensions", None) is not None:
+        side_index_spec = qdrant_user_memory_side_collection_spec(int(args.side_index_dimensions))
     if args.embedding_provider is not None:
         overrides["provider"] = args.embedding_provider
     if args.embedding_model is not None:
         overrides["model_name"] = args.embedding_model
+    elif side_index_spec is not None and side_index_spec.embedding_model:
+        overrides["model_name"] = side_index_spec.embedding_model
     if args.embedding_dimensions is not None:
         overrides["dimensions"] = args.embedding_dimensions
+    elif side_index_spec is not None:
+        overrides["dimensions"] = side_index_spec.vector_size
     if args.embedding_endpoint is not None:
         overrides["endpoint"] = args.embedding_endpoint
     if args.embedding_api_key_env is not None:
@@ -176,9 +189,24 @@ def _embedding_overrides_from_args(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _memory_collection_from_args(args: argparse.Namespace) -> str:
-    if getattr(args, "side_index_dimensions", None):
+    if getattr(args, "side_index_dimensions", None) is not None:
         return qdrant_user_memory_side_collection(int(args.side_index_dimensions))
     return str(getattr(args, "collection", "") or QDRANT_USER_MEMORY_COLLECTION).strip() or QDRANT_USER_MEMORY_COLLECTION
+
+
+def _validate_memory_rebuild_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    if getattr(args, "side_index_dimensions", None) is None:
+        return
+    try:
+        side_dimensions = int(args.side_index_dimensions)
+    except (TypeError, ValueError):
+        parser.error("--side-index-dimensions must be a positive integer.")
+        return
+    if side_dimensions < 1:
+        parser.error("--side-index-dimensions must be a positive integer.")
+        return
+    if args.embedding_dimensions is not None and int(args.embedding_dimensions) != side_dimensions:
+        parser.error("--embedding-dimensions must match --side-index-dimensions for memory side-index rebuilds.")
 
 
 @contextmanager
