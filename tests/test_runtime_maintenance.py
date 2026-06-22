@@ -816,6 +816,22 @@ def test_runtime_maintenance_skips_compressed_directories_before_archive_setup(t
     assert not (tmp_path / "monthly_archives").exists()
 
 
+def test_runtime_maintenance_skips_archive_scan_when_runtime_listing_fails(tmp_path, monkeypatch):
+    now = time.time()
+    real_iterdir = Path.iterdir
+
+    def fail_runtime_iterdir(self):
+        if self == tmp_path:
+            raise PermissionError("runtime listing failed")
+        return real_iterdir(self)
+
+    monkeypatch.setattr(Path, "iterdir", fail_runtime_iterdir)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert not (tmp_path / "monthly_archives").exists()
+
+
 def test_runtime_maintenance_keeps_sources_when_archive_write_fails(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60

@@ -373,7 +373,11 @@ def _runtime_text_files(runtime_path: Path) -> list[Path]:
 def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_after_seconds: int) -> None:
     archive_dir = runtime_path / "monthly_archives"
     groups: dict[str, list[tuple[Path, os.stat_result]]] = {}
-    for path in runtime_path.iterdir():
+    try:
+        candidates = list(runtime_path.iterdir())
+    except OSError:
+        return
+    for path in candidates:
         if not _is_compressed_runtime_file(path):
             continue
         if _is_temporary_runtime_file(path):
