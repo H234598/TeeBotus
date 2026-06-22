@@ -693,13 +693,65 @@ def watch_codex_session_roots(
     post_scan: Callable[[Mapping[str, Any]], None] | None = None,
     post_idle: Callable[[Mapping[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
+    def _post_scan(_instance_name: str, report: Mapping[str, Any]) -> None:
+        if callable(post_scan):
+            post_scan(report)
+
+    def _post_idle(_instance_name: str, report: Mapping[str, Any]) -> None:
+        if callable(post_idle):
+            post_idle(report)
+
+    reports = watch_codex_session_roots_for_instances(
+        {"": store},
+        roots,
+        poll_interval_seconds=poll_interval_seconds,
+        max_iterations=max_iterations,
+        follow=follow,
+        event_mode=event_mode,
+        limit=limit,
+        sleep=sleep,
+        post_scan=_post_scan if callable(post_scan) else None,
+        post_idle=_post_idle if callable(post_idle) else None,
+    )
+    report = dict(reports[0]) if reports else {}
+    report.pop("instance", None)
+    return report
+
+
+def watch_codex_session_roots_for_instances(
+    stores: Mapping[str, AccountStore],
+    roots: Sequence[str | Path],
+    *,
+    poll_interval_seconds: float = 1.0,
+    max_iterations: int = 1,
+    follow: bool = False,
+    event_mode: str = "poll",
+    limit: int = 1000,
+    sleep: Callable[[float], None] = time.sleep,
+    post_scan: Callable[[str, Mapping[str, Any]], None] | None = None,
+    post_idle: Callable[[str, Mapping[str, Any]], None] | None = None,
+) -> list[dict[str, Any]]:
+    if not stores:
+        return []
     iterations = 0
     if not follow and max_iterations < 1:
         max_iterations = 1
     if poll_interval_seconds < 0:
         poll_interval_seconds = 0.0
     normalized_event_mode = _normalize_watch_event_mode(event_mode)
-    items: list[dict[str, Any]] = []
+    reports_by_instance: dict[str, dict[str, Any]] = {
+        instance_name: {
+            "instance": instance_name,
+            "ok": True,
+            "iterations": 0,
+            "follow": bool(follow),
+            "event_mode": normalized_event_mode,
+            "skipped_unchanged_iterations": 0,
+            "items": [],
+            "status_counts": {},
+        }
+        for instance_name in stores
+    }
     skipped_unchanged = 0
     last_snapshot: tuple[tuple[str, int, int], ...] | None = None
     while True:
@@ -707,23 +759,35 @@ def watch_codex_session_roots(
         current_snapshot = _codex_session_roots_snapshot(roots, limit=limit) if normalized_event_mode != "poll" else None
         should_scan = normalized_event_mode == "poll" or last_snapshot is None or current_snapshot != last_snapshot
         if should_scan:
-            report = import_codex_session_roots(store, roots, limit=limit)
-            iteration_items = report.get("items", [])
-            if isinstance(iteration_items, list):
-                items.extend(iteration_items)
-            if callable(post_scan):
-                post_scan(report)
+            for instance_name, store in stores.items():
+                instance_report = reports_by_instance[instance_name]
+                instance_report["iterations"] = iterations
+                scan_report = import_codex_session_roots(store, roots, limit=limit)
+                iteration_items = scan_report.get("items", [])
+                if isinstance(iteration_items, list):
+                    items = instance_report.get("items", [])
+                    if isinstance(items, list):
+                        items.extend(iteration_items)
+                instance_items = instance_report.get("items", [])
+                if not isinstance(instance_items, list):
+                    instance_items = []
+                instance_report["ok"] = not any(item.get("status") == "error" for item in instance_items)
+                instance_report["status_counts"] = _status_counts(instance_items)
+                if callable(post_scan):
+                    post_scan(instance_name, scan_report)
         else:
             skipped_unchanged += 1
-            if callable(post_idle):
-                post_idle(
-                    {
-                        "ok": True,
-                        "items": [],
-                        "status_counts": {},
-                        "reason": "unchanged_snapshot",
-                    }
-                )
+            idle_report = {
+                "ok": True,
+                "items": [],
+                "status_counts": {},
+                "reason": "unchanged_snapshot",
+            }
+            for instance_name, instance_report in reports_by_instance.items():
+                instance_report["iterations"] = iterations
+                instance_report["skipped_unchanged_iterations"] = skipped_unchanged
+                if callable(post_idle):
+                    post_idle(instance_name, idle_report)
         if current_snapshot is not None:
             last_snapshot = current_snapshot
         if not follow and max_iterations > 0 and iterations >= max_iterations:
@@ -735,15 +799,10 @@ def watch_codex_session_roots(
                 event_mode=normalized_event_mode,
                 sleep=sleep,
             )
-    return {
-        "ok": not any(item.get("status") == "error" for item in items),
-        "iterations": iterations,
-        "follow": bool(follow),
-        "event_mode": normalized_event_mode,
-        "skipped_unchanged_iterations": skipped_unchanged,
-        "items": items,
-        "status_counts": _status_counts(items),
-    }
+    for instance_report in reports_by_instance.values():
+        instance_report["iterations"] = iterations
+        instance_report["skipped_unchanged_iterations"] = skipped_unchanged
+    return list(reports_by_instance.values())
 
 
 def default_codex_session_roots() -> tuple[Path, ...]:
@@ -3025,38 +3084,66 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             instance_reports: list[dict[str, Any]] = []
             selected = discover_instances(instances_dir, selected_instances)
             sender_factory = None if args.dispatch_dry_run or not args.dispatch else _runtime_sender_factory(instances_dir)
-            for instance_name in selected:
-                store = _store_for_instance(instances_dir, instance_name, provider)
+            stores = {instance_name: _store_for_instance(instances_dir, instance_name, provider) for instance_name in selected}
+            post_index_reports_by_instance: dict[str, list[dict[str, Any]]] = {}
+            dispatch_reports_by_instance: dict[str, list[dict[str, Any]]] = {}
+            post_scan_callbacks: dict[str, Callable[[Mapping[str, Any]], None]] = {}
+            post_idle_callbacks: dict[str, Callable[[Mapping[str, Any]], None]] = {}
+            for instance_name, store in stores.items():
                 post_index_reports: list[dict[str, Any]] = []
                 dispatch_reports: list[dict[str, Any]] = []
-                watch_report = watch_codex_session_roots(
+                post_index_reports_by_instance[instance_name] = post_index_reports
+                dispatch_reports_by_instance[instance_name] = dispatch_reports
+                callback = _watch_post_index_callback(
                     store,
-                    safe_roots,
-                    poll_interval_seconds=poll_interval_seconds,
-                    max_iterations=max_iterations,
-                    follow=bool(args.follow),
-                    event_mode=str(args.event_mode or "poll"),
-                    limit=int(args.limit or 0),
-                    post_scan=_watch_post_index_callback(
-                        store,
-                        instances_dir,
-                        instance_name,
-                        args,
-                        provider,
-                        post_index_reports,
-                        dispatch_reports,
-                        sender_factory=sender_factory,
-                    ),
-                    post_idle=_watch_dispatch_idle_callback(
-                        store,
-                        instances_dir,
-                        instance_name,
-                        args,
-                        dispatch_reports,
-                        sender_factory=sender_factory,
-                    ),
+                    instances_dir,
+                    instance_name,
+                    args,
+                    provider,
+                    post_index_reports,
+                    dispatch_reports,
+                    sender_factory=sender_factory,
                 )
-                instance_report = {"instance": instance_name, **watch_report}
+                if callback is not None:
+                    post_scan_callbacks[instance_name] = callback
+                idle_callback = _watch_dispatch_idle_callback(
+                    store,
+                    instances_dir,
+                    instance_name,
+                    args,
+                    dispatch_reports,
+                    sender_factory=sender_factory,
+                )
+                if idle_callback is not None:
+                    post_idle_callbacks[instance_name] = idle_callback
+
+            def _post_scan(instance_name: str, scan_report: Mapping[str, Any]) -> None:
+                _emit_follow_scan_report(instance_name, scan_report, args)
+                callback = post_scan_callbacks.get(instance_name)
+                if callback is not None:
+                    callback(scan_report)
+
+            def _post_idle(instance_name: str, idle_report: Mapping[str, Any]) -> None:
+                callback = post_idle_callbacks.get(instance_name)
+                if callback is not None:
+                    callback(idle_report)
+
+            raw_instance_reports = watch_codex_session_roots_for_instances(
+                stores,
+                safe_roots,
+                poll_interval_seconds=poll_interval_seconds,
+                max_iterations=max_iterations,
+                follow=bool(args.follow),
+                event_mode=str(args.event_mode or "poll"),
+                limit=int(args.limit or 0),
+                post_scan=_post_scan,
+                post_idle=_post_idle if post_idle_callbacks else None,
+            )
+            instance_reports = []
+            for instance_report in raw_instance_reports:
+                instance_name = str(instance_report.get("instance") or "")
+                post_index_reports = post_index_reports_by_instance.get(instance_name, [])
+                dispatch_reports = dispatch_reports_by_instance.get(instance_name, [])
                 if post_index_reports:
                     instance_report["post_index"] = post_index_reports[-1]
                     instance_report["post_index_runs"] = post_index_reports
@@ -3208,6 +3295,29 @@ def _watch_dispatch_idle_callback(
             _emit_follow_dispatch_report(dispatch_report, args)
 
     return _callback
+
+
+def _emit_follow_scan_report(instance_name: str, scan_report: Mapping[str, Any], args: argparse.Namespace) -> None:
+    if not bool(getattr(args, "follow", False)):
+        return
+    if str(getattr(args, "format", "text") or "text") != "text":
+        return
+    lines = ["TeeBotus Codex-History Scan", "", f"Instance: {instance_name}"]
+    status_counts = scan_report.get("status_counts", {})
+    if isinstance(status_counts, Mapping):
+        lines.append("  statuses: " + ", ".join(f"{key}={value}" for key, value in sorted(status_counts.items())))
+    for item in scan_report.get("items", []) or []:
+        if not isinstance(item, Mapping):
+            continue
+        item_payload = item.get("item", {})
+        summary_prefix = item_payload.get("summary_prefix", "") if isinstance(item_payload, Mapping) else ""
+        lines.append(
+            "  import: "
+            f"status={item.get('status', '')} "
+            f"reason={item.get('reason', '')} "
+            f"summary={summary_prefix}"
+        )
+    print("\n".join(lines) + "\n", flush=True)
 
 
 def _emit_follow_dispatch_report(dispatch_report: Mapping[str, Any], args: argparse.Namespace) -> None:

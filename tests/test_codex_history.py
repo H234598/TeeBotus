@@ -34,6 +34,7 @@ from TeeBotus.admin.codex_history import (
     run_codex_history_index,
     _watch_payload_ok,
     watch_codex_session_roots,
+    watch_codex_session_roots_for_instances,
 )
 from TeeBotus.runtime.actions import SendAttachment
 from TeeBotus.runtime.accounts import (
@@ -1575,6 +1576,43 @@ def test_watch_codex_session_roots_runs_post_scan_callback_per_scan(tmp_path: Pa
 
     assert result["iterations"] == 2
     assert status_counts == [{"imported": 1}, {"duplicate": 1, "imported": 1}]
+
+
+def test_watch_codex_session_roots_for_instances_scans_all_instances_each_iteration(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "watch-multi-instance-demo", version="3.1.3")
+    sessions_root = tmp_path / "sessions"
+    stores = {
+        "Alpha": AccountStore(tmp_path / "alpha-accounts", "Alpha", provider()),
+        "Beta": AccountStore(tmp_path / "beta-accounts", "Beta", provider()),
+    }
+    write_codex_session(sessions_root / "first.jsonl", repo=repo, session_id="sess-multi-1", turn_id="turn-1")
+    scan_events: list[tuple[str, dict[str, int]]] = []
+
+    def sleep(_seconds: float) -> None:
+        write_codex_session(sessions_root / "second.jsonl", repo=repo, session_id="sess-multi-2", turn_id="turn-2")
+
+    result = watch_codex_session_roots_for_instances(
+        stores,
+        (sessions_root,),
+        poll_interval_seconds=0.25,
+        max_iterations=2,
+        sleep=sleep,
+        post_scan=lambda instance, report: scan_events.append((instance, dict(report.get("status_counts", {})))),
+    )
+
+    assert [report["instance"] for report in result] == ["Alpha", "Beta"]
+    assert [report["iterations"] for report in result] == [2, 2]
+    assert [report["status_counts"] for report in result] == [{"duplicate": 1, "imported": 2}, {"duplicate": 1, "imported": 2}]
+    assert scan_events == [
+        ("Alpha", {"imported": 1}),
+        ("Beta", {"imported": 1}),
+        ("Alpha", {"duplicate": 1, "imported": 1}),
+        ("Beta", {"duplicate": 1, "imported": 1}),
+    ]
+    for store in stores.values():
+        rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+        assert len(rows) == 2
+        assert [row["summary_prefix"] for row in rows] == ["v3.1.3 #0001", "v3.1.3 #0002"]
 
 
 def test_watch_codex_session_roots_snapshot_skips_unchanged_iterations(tmp_path: Path) -> None:
