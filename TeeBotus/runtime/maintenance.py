@@ -280,12 +280,13 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
     groups: dict[str, list[Path]] = {}
     for path in runtime_path.glob("*.gz"):
         try:
-            age = now - path.stat().st_mtime
+            stat = path.stat()
         except OSError:
             continue
+        age = now - stat.st_mtime
         if age < archive_after_seconds:
             continue
-        month = datetime.fromtimestamp(path.stat().st_mtime).strftime("%Y-%m")
+        month = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m")
         groups.setdefault(month, []).append(path)
 
     for month, paths in groups.items():

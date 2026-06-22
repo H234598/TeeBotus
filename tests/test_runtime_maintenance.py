@@ -163,6 +163,31 @@ def test_runtime_maintenance_archives_compressed_logs_older_than_two_months(tmp_
         assert "teebotus-production.log.2026-03-01.gz" in archive.getnames()
 
 
+def test_runtime_maintenance_groups_compressed_logs_with_single_stat(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    real_stat = Path.stat
+    stat_calls: dict[Path, int] = {}
+
+    def counting_stat(self, *args, **kwargs):
+        if self == path:
+            stat_calls[self] = stat_calls.get(self, 0) + 1
+            if stat_calls[self] > 1:
+                raise FileNotFoundError(self)
+        return real_stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", counting_stat)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert stat_calls[path] == 1
+    archives = sorted((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert len(archives) == 1
+
+
 def test_runtime_maintenance_skips_archive_files_that_disappear_during_tar_add(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60
