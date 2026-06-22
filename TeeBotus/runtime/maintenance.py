@@ -612,6 +612,8 @@ def _link_file_to_unique_path(source: Path, target: Path, *, expected_stat: os.s
         try:
             os.link(source, linked, follow_symlinks=False)
         except FileExistsError:
+            if _has_symlink_parent(target):
+                return None
             linked = _unique_path(target)
             continue
         except OSError:

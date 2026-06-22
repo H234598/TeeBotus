@@ -84,6 +84,41 @@ def test_rotate_runtime_text_file_does_not_overwrite_target_created_during_rotat
         assert handle.read() == "0123456789\n"
 
 
+def test_rotate_runtime_text_file_refuses_link_retry_when_parent_becomes_symlink(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    path = runtime_dir / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+    rotated = runtime_dir / "Security_Events.jsonl.2026-06-22-181200"
+    moved_runtime_dir = tmp_path / "runtime-moved"
+    external_runtime_dir = tmp_path / "external-runtime"
+    external_runtime_dir.mkdir()
+    real_link = os.link
+    raced = False
+    monkeypatch.setattr("TeeBotus.runtime.maintenance._next_rotated_path", lambda _path: rotated)
+
+    def racing_link(source, destination, *args, **kwargs):
+        nonlocal raced
+        destination_path = Path(destination)
+        if destination_path == rotated and not raced:
+            raced = True
+            rotated.write_text("existing rotated\n", encoding="utf-8")
+            runtime_dir.rename(moved_runtime_dir)
+            runtime_dir.symlink_to(external_runtime_dir, target_is_directory=True)
+            raise FileExistsError(destination)
+        return real_link(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(os, "link", racing_link)
+
+    assert rotate_runtime_text_file_if_needed(path, max_bytes=4) is None
+
+    assert raced is True
+    assert runtime_dir.is_symlink()
+    assert (moved_runtime_dir / path.name).read_text(encoding="utf-8") == "0123456789\n"
+    assert (moved_runtime_dir / rotated.name).read_text(encoding="utf-8") == "existing rotated\n"
+    assert not list(external_runtime_dir.iterdir())
+
+
 def test_rotate_runtime_text_file_skips_broken_symlink_rotation_target(tmp_path, monkeypatch):
     path = tmp_path / "Security_Events.jsonl"
     path.write_text("0123456789\n", encoding="utf-8")
