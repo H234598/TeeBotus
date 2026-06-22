@@ -278,9 +278,7 @@ def _looks_like_uri_destination(value: str) -> bool:
     scheme, separator, _rest = text.partition(":")
     if not separator:
         return False
-    if scheme == "file":
-        return True
-    return "://" in text and bool(scheme) and scheme[0].isalpha() and all(char.isalnum() or char in {"+", "-", "."} for char in scheme)
+    return bool(scheme) and scheme[0].isalpha() and all(char.isalnum() or char in {"+", "-", "."} for char in scheme)
 
 
 def _unique_destination(candidate: Path, *, sha256: str) -> Path:

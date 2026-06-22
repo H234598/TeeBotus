@@ -577,7 +577,7 @@ def test_source_harvester_rejects_absolute_promote_destination_dir(tmp_path):
         harvester.promote_accepted(harvest.stored_path, destination_dir=str(tmp_path / "outside"))
 
 
-@pytest.mark.parametrize("destination_dir", ("https://example.test/books", "file:books"))
+@pytest.mark.parametrize("destination_dir", ("https://example.test/books", "file:books", "mailto:books", "urn:books"))
 def test_source_harvester_rejects_uri_promote_destination_dir(tmp_path, destination_dir):
     source = tmp_path / "download" / "therapie.txt"
     source.parent.mkdir()
