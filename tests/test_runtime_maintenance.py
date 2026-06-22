@@ -835,6 +835,37 @@ def test_gzip_file_does_not_utime_temporary_symlink_replacement(tmp_path, monkey
     assert not os.path.lexists(target)
 
 
+def test_gzip_file_refuses_publish_when_parent_becomes_symlink(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    path = runtime_dir / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    moved_runtime_dir = tmp_path / "runtime-moved"
+    external_runtime_dir = tmp_path / "external-runtime"
+    external_runtime_dir.mkdir()
+    real_utime = os.utime
+    raced = False
+
+    def racing_utime(file, times=None, *args, **kwargs):
+        nonlocal raced
+        result = real_utime(file, times, *args, **kwargs)
+        if Path(file).name.startswith(f".{path.name}.gz.tmp") and not raced:
+            raced = True
+            runtime_dir.rename(moved_runtime_dir)
+            runtime_dir.symlink_to(external_runtime_dir, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(os, "utime", racing_utime)
+
+    with pytest.raises(OSError, match="unsafe runtime publish path"):
+        gzip_file(path)
+
+    assert raced is True
+    assert runtime_dir.is_symlink()
+    assert (moved_runtime_dir / path.name).read_text(encoding="utf-8") == "old log\n"
+    assert not list(external_runtime_dir.iterdir())
+
+
 def test_gzip_file_preserves_source_replaced_before_cleanup(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")

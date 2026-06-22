@@ -642,6 +642,8 @@ def _next_rotated_path(path: Path) -> Path:
 
 
 def _publish_temporary_file(temporary: Path, target: Path, *, expected_stat: os.stat_result) -> Path:
+    if _has_symlink_parent(temporary) or _has_symlink_parent(target):
+        raise OSError(f"refusing unsafe runtime publish path: {target}")
     published = target
     while True:
         try:
