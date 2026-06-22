@@ -190,9 +190,9 @@ class TeeStream:
 
     def write(self, text: str) -> int:
         primary_write = getattr(self.primary, "write")
-        secondary_write = getattr(self.secondary, "write")
         written = primary_write(text)
         try:
+            secondary_write = getattr(self.secondary, "write")
             secondary_write(text)
         except Exception:
             pass
@@ -206,12 +206,12 @@ class TeeStream:
                 primary_flush()
             except Exception as exc:
                 primary_exception = exc
-        secondary_flush = getattr(self.secondary, "flush", None)
-        if callable(secondary_flush):
-            try:
+        try:
+            secondary_flush = getattr(self.secondary, "flush", None)
+            if callable(secondary_flush):
                 secondary_flush()
-            except Exception:
-                pass
+        except Exception:
+            pass
         if primary_exception is not None:
             raise primary_exception
 
@@ -707,7 +707,10 @@ def _close_fd_quietly(fd: int) -> None:
 
 
 def _close_quietly(stream: object) -> None:
-    close = getattr(stream, "close", None)
+    try:
+        close = getattr(stream, "close", None)
+    except Exception:
+        return
     if callable(close):
         try:
             close()

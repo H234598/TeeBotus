@@ -2480,6 +2480,29 @@ def test_tee_stream_keeps_primary_stream_working_when_secondary_raises_runtime_e
     assert primary.getvalue() == "probe"
 
 
+def test_tee_stream_keeps_primary_stream_working_when_secondary_has_no_write():
+    primary = io.StringIO()
+    tee = TeeStream(primary, object(), Path("secondary.log"))
+
+    assert tee.write("probe") == 5
+
+    assert primary.getvalue() == "probe"
+
+
+def test_tee_stream_ignores_secondary_flush_attribute_failures():
+    class BrokenFlushSecondary:
+        @property
+        def flush(self):
+            raise RuntimeError("flush lookup failed")
+
+    primary = io.StringIO()
+    tee = TeeStream(primary, BrokenFlushSecondary(), Path("secondary.log"))
+
+    tee.flush()
+
+    assert primary.getvalue() == ""
+
+
 def test_tee_stream_flushes_secondary_when_primary_flush_fails():
     class FailingPrimary(io.StringIO):
         def flush(self):
@@ -2562,6 +2585,20 @@ def test_tee_stream_closes_primary_when_secondary_close_raises_runtime_error():
 
     primary = io.StringIO()
     tee = TeeStream(primary, RuntimeFailingSecondary(), Path("secondary.log"))
+
+    tee.close()
+
+    assert primary.closed is True
+
+
+def test_tee_stream_closes_primary_when_secondary_close_lookup_fails():
+    class BrokenCloseSecondary:
+        @property
+        def close(self):
+            raise RuntimeError("close lookup failed")
+
+    primary = io.StringIO()
+    tee = TeeStream(primary, BrokenCloseSecondary(), Path("secondary.log"))
 
     tee.close()
 
