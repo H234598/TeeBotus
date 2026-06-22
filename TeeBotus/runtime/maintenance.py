@@ -440,7 +440,7 @@ def gzip_file(path: Path | str, *, expected_stat: os.stat_result | None = None) 
     if not stat_module.S_ISREG(source_stat.st_mode):
         _close_fd_quietly(fd)
         return path
-    if expected_stat is not None and not _same_file_stat(source_stat, expected_stat):
+    if expected_stat is not None and not _same_file_snapshot(source_stat, expected_stat):
         _close_fd_quietly(fd)
         return path
     target = _unique_path(path.with_name(f"{path.name}.gz"))
@@ -580,7 +580,7 @@ def _add_regular_file_to_archive(
     if not stat_module.S_ISREG(archived_stat.st_mode):
         _close_fd_quietly(fd)
         return None
-    if expected_stat is not None and not _same_file_stat(archived_stat, expected_stat):
+    if expected_stat is not None and not _same_file_snapshot(archived_stat, expected_stat):
         _close_fd_quietly(fd)
         return None
     try:

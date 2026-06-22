@@ -1225,6 +1225,31 @@ def test_gzip_file_preserves_source_modified_in_place_before_cleanup(tmp_path, m
         assert handle.read() == "old log\n"
 
 
+def test_gzip_file_skips_source_modified_in_place_before_open_with_expected_stat(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    expected_stat = path.stat()
+    real_open = os.open
+    raced = False
+
+    def modify_before_open(file, flags, *args, **kwargs):
+        nonlocal raced
+        if Path(file) == path and (flags & os.O_ACCMODE) == os.O_RDONLY and not raced:
+            raced = True
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write("new log\n")
+        return real_open(file, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", modify_before_open)
+
+    result = gzip_file(path, expected_stat=expected_stat)
+
+    assert raced is True
+    assert result == path
+    assert path.read_text(encoding="utf-8") == "old log\nnew log\n"
+    assert not (tmp_path / f"{path.name}.gz").exists()
+
+
 def test_gzip_file_keeps_published_target_when_temporary_cleanup_fails(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")
@@ -2074,6 +2099,33 @@ def test_runtime_maintenance_skips_archive_files_that_disappear_before_open(tmp_
     maintain_runtime_directory(tmp_path, now=now)
 
     assert not path.exists()
+    assert not list((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
+
+
+def test_runtime_maintenance_skips_archive_source_modified_in_place_before_open(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    real_open = os.open
+    raced = False
+
+    def modify_before_open(file, flags, *args, **kwargs):
+        nonlocal raced
+        if Path(file) == path and (flags & os.O_ACCMODE) == os.O_RDONLY and not raced:
+            raced = True
+            with path.open("ab") as handle:
+                handle.write(b"-modified")
+        return real_open(file, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", modify_before_open)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert raced is True
+    assert path.read_bytes() == b"compressed-ish-modified"
     assert not list((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
     assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
 
