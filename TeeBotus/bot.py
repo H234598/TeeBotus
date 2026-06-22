@@ -1831,6 +1831,7 @@ def _sanitize_status_text(value: object) -> str:
     text = str(value or "").strip()
     if not text:
         return ""
+    text = _status_private_key_block_pattern.sub("redacted-private-key", text)
     text = re.sub(r"\bsk-[A-Za-z0-9_-]{8,}\b", "sk-<redacted>", text)
     text = re.sub(r"\bxox[baprs]-[A-Za-z0-9_-]{8,}\b", "xox-<redacted>", text)
     text = re.sub(r"\bsyt_[A-Za-z0-9_=-]{8,}\b", "syt_<redacted>", text)
@@ -1855,6 +1856,10 @@ def _sanitize_status_text(value: object) -> str:
 _status_sensitive_assignment_key_pattern = (
     r"(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|"
     r"refresh[_-]?token|client[_-]?secret|token|secret|password)"
+)
+_status_private_key_block_pattern = re.compile(
+    r"-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----",
+    re.IGNORECASE,
 )
 _status_secret_assignment_value_pattern = (
     r"<redacted(?:-secret)?>|\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|"

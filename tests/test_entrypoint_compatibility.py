@@ -831,6 +831,30 @@ def test_runtime_status_text_redacts_structured_secret_assignments() -> None:
     assert "tokens=provider_usage_response" in text
 
 
+def test_runtime_status_text_redacts_multiline_private_key_blocks() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    private_key_body = "ABCDEFSECRET"
+    text = bot._sanitize_status_text(
+        "private_key=-----BEGIN PRIVATE KEY-----\n"
+        f"{private_key_body}\n"
+        "-----END PRIVATE KEY----- "
+        "service_account_private_key=\"-----BEGIN ENCRYPTED PRIVATE KEY-----\n"
+        f"{private_key_body}\n"
+        "-----END ENCRYPTED PRIVATE KEY-----\" ok=1"
+    )
+
+    assert "BEGIN PRIVATE KEY" not in text
+    assert "END PRIVATE KEY" not in text
+    assert "BEGIN ENCRYPTED PRIVATE KEY" not in text
+    assert "END ENCRYPTED PRIVATE KEY" not in text
+    assert private_key_body not in text
+    assert "private_key=<redacted>" in text
+    assert "service_account_private_key=<redacted>" in text
+    assert "<redacted>>" not in text
+    assert "ok=1" in text
+
+
 def test_runtime_status_text_redacts_oauth_jwt_and_authorization_tokens() -> None:
     bot = importlib.import_module("TeeBotus.bot")
 
