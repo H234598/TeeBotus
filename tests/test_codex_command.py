@@ -21,9 +21,12 @@ def test_parse_codex_command_supports_default_bracket_and_known_positional() -> 
     default = parse_codex_admin_command("/codex mach weiter")
     bracket = parse_codex_admin_command("/codex [Projekt A] [/tmp/repo-a] pruefe status")
     positional = parse_codex_admin_command("/codex ProjektA repo-a teste", (("ProjektA", "/tmp/repo-a"),))
+    status = parse_codex_admin_command("/codex")
+    spawn = parse_codex_admin_command("/codex spawn pruefe Bauplan")
 
     assert default is not None
     assert default.prompt == "mach weiter"
+    assert default.action == "resume"
     assert default.project_filter == ""
     assert default.repo_filter == ""
     assert bracket is not None
@@ -34,6 +37,12 @@ def test_parse_codex_command_supports_default_bracket_and_known_positional() -> 
     assert positional.project_filter == "ProjektA"
     assert positional.repo_filter == "repo-a"
     assert positional.prompt == "teste"
+    assert status is not None
+    assert status.action == "status"
+    assert status.prompt == ""
+    assert spawn is not None
+    assert spawn.action == "spawn"
+    assert spawn.prompt == "pruefe Bauplan"
 
 
 def test_resolve_codex_session_target_uses_latest_session_for_latest_history_repo(tmp_path: Path) -> None:
@@ -101,6 +110,76 @@ def test_execute_codex_admin_command_resumes_selected_session_via_stdin(tmp_path
     assert calls[0]["cwd"] == str(repo_a)
     assert calls[0]["input"] == "mach bitte weiter"
     assert calls[0]["env"]["CODEX_HOME"] == str(tmp_path / ".codex")  # type: ignore[index]
+
+
+def test_execute_codex_admin_command_reports_switch_status_without_cli(tmp_path: Path) -> None:
+    repo = tmp_path / "TeeBotus"
+    repo.mkdir()
+    session_root = tmp_path / ".codex-agents" / "a1" / "sessions"
+    _write_session(session_root, "dddddddd-dddd-dddd-dddd-dddddddddddd", repo, mtime=30)
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    store.write_codex_history_outbox(
+        INSTANCE_STATE_ACCOUNT_ID,
+        [_history_item("hist-d", "TeeBotus", repo, session_root / "dummy.jsonl", "2026-06-19T14:00:00+00:00")],
+    )
+
+    result = execute_codex_admin_command(
+        store,
+        instance_name="Depressionsbot",
+        text="/codex",
+        project_root=repo,
+        session_roots=(tmp_path / ".codex-agents",),
+        executable="/definitely/not/codex",
+    )
+
+    assert result.ok
+    assert "Codex-Schalter" in result.text
+    assert "Sessions: 1 gefunden" in result.text
+    assert "Agent-Sessions: 1" in result.text
+    assert "dddddddd-dddd-dddd-dddd-dddddddddddd" in result.text
+    assert "/codex spawn [Auftrag]" in result.text
+
+
+def test_execute_codex_admin_command_spawns_new_agent_home_with_goal_prompt(tmp_path: Path, monkeypatch) -> None:
+    repo = tmp_path / "TeeBotus"
+    repo.mkdir()
+    agents_root = tmp_path / ".codex-agents"
+    (agents_root / "a1" / "sessions").mkdir(parents=True)
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    monkeypatch.setattr("TeeBotus.runtime.codex_command.shutil.which", lambda _name: "/usr/bin/codex")
+    calls: list[dict[str, object]] = []
+
+    def runner(args, **kwargs):
+        calls.append({"args": args, **kwargs})
+        codex_home = agents_root / "a2"
+        _write_session(codex_home / "sessions", "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee", repo, mtime=40)
+        return subprocess.CompletedProcess(args, 0, stdout="spawn fertig", stderr="")
+
+    result = execute_codex_admin_command(
+        store,
+        instance_name="Depressionsbot",
+        text="/codex spawn suche naechsten kleinen Logikfehler",
+        project_root=repo,
+        session_roots=(agents_root,),
+        runner=runner,
+    )
+
+    assert result.ok
+    assert result.target is not None
+    assert result.target.session_id == "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee"
+    assert result.target.codex_home == str(agents_root / "a2")
+    assert calls[0]["args"][:4] == ["tmux", "new-session", "-d", "-s"]
+    assert calls[0]["args"][4] == "teebotus-codex-depressionsbot-a2"
+    assert calls[0]["cwd"] == str(repo)
+    assert calls[0]["input"] is None
+    assert f"export CODEX_HOME={agents_root / 'a2'}" in calls[0]["args"][-1]
+    assert "--no-alt-screen" in calls[0]["args"][-1]
+    prompt_text = (agents_root / "a2" / "spawn_prompt.txt").read_text(encoding="utf-8")
+    assert "/goal Entwickle und finde Logikfehler." in prompt_text
+    assert "Bauplaene!" in prompt_text
+    assert "suche naechsten kleinen Logikfehler" in prompt_text
+    assert "tmux: teebotus-codex-depressionsbot-a2" in result.text
+    assert "spawn fertig" in result.text
 
 
 def _write_session(root: Path, session_id: str, cwd: Path, *, mtime: int) -> Path:

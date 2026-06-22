@@ -54,6 +54,8 @@ DEFAULT_HELP_LINES = (
 )
 
 DEFAULT_ADMIN_HELP_LINES = (
+    "/codex - Codex-Schalterstatus, gefundene Sessions und IDs anzeigen.",
+    "/codex spawn [Auftrag] - neue Codex-Agent-Session mit TeeBotus-Goal und Bauplan-Hinweis starten.",
     "/codex [Projekt] [Repo] <Prompt> - Codex in der aktuellen Session des zuletzt gemeldeten Repos fortsetzen.",
     "/RouteToOpenAI <Prompt> - Prompt direkt an OpenAI senden.",
     "/RouteToOAI <Prompt> - Kurzform fuer OpenAI-Routing.",

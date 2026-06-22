@@ -15,6 +15,11 @@ from TeeBotus.runtime.accounts import INSTANCE_STATE_ACCOUNT_ID, AccountStore, A
 
 CODEX_COMMAND = "/codex"
 CODEX_OUTPUT_LIMIT = 3600
+CODEX_STATUS_SESSION_LIMIT = 12
+CODEX_SPAWN_GOAL = "Entwickle und finde Logikfehler. Bleibe moeglichst bei einer Datei bzw. einem Thema um Token zu sparen."
+CODEX_SPAWN_PLAN_DIR = Path(
+    "/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/Projekte/TeeBotus/Bauplaene!"
+)
 
 
 @dataclass(frozen=True)
@@ -22,6 +27,7 @@ class CodexCommandRequest:
     prompt: str
     project_filter: str = ""
     repo_filter: str = ""
+    action: str = "resume"
 
 
 @dataclass(frozen=True)
@@ -82,10 +88,44 @@ def execute_codex_admin_command(
     request = parse_codex_admin_command(text, _known_targets(account_store, session_roots=session_roots))
     if request is None:
         return CodexCommandResult("ignored")
+    if request.action == "status":
+        return CodexCommandResult(
+            "ok",
+            text=_format_codex_switch_status(
+                account_store,
+                project_root=project_root,
+                session_roots=session_roots,
+            ),
+        )
     if not request.prompt:
         return CodexCommandResult("usage")
     if shutil.which(executable) is None:
         return CodexCommandResult("not_found")
+    if request.action == "spawn":
+        if shutil.which("tmux") is None:
+            return CodexCommandResult("error", error="tmux wurde nicht gefunden.")
+        try:
+            output, target, agent_home, tmux_session = _run_codex_spawn(
+                project_root=project_root,
+                instance_name=instance_name,
+                user_prompt=request.prompt,
+                timeout_seconds=max(1, int(timeout_seconds or 300)),
+                session_roots=session_roots,
+                runner=runner or subprocess.run,
+                executable=executable,
+            )
+        except subprocess.TimeoutExpired:
+            return CodexCommandResult("error", error=f"Timeout nach {max(1, int(timeout_seconds or 300))}s")
+        except OSError as exc:
+            return CodexCommandResult("error", error=str(exc))
+        if output.returncode != 0:
+            return CodexCommandResult("error", error=_short_process_error(output), target=target)
+        response_text = (output.stdout or "").strip() or (output.stderr or "").strip()
+        return CodexCommandResult(
+            "ok",
+            text=_format_codex_spawn_response(response_text, target, agent_home=agent_home, tmux_session=tmux_session),
+            target=target,
+        )
     try:
         target = resolve_codex_session_target(
             account_store,
@@ -130,7 +170,13 @@ def parse_codex_admin_command(text: str, known_targets: Sequence[tuple[str, str]
         return None
     rest = parts[1].strip() if len(parts) > 1 else ""
     if not rest:
-        return CodexCommandRequest(prompt="")
+        return CodexCommandRequest(prompt="", action="status")
+    lowered_rest = rest.casefold()
+    if lowered_rest in {"status", "sessions", "instanzen"}:
+        return CodexCommandRequest(prompt="", action="status")
+    if lowered_rest == "spawn" or lowered_rest.startswith("spawn "):
+        prompt = rest[5:].strip()
+        return CodexCommandRequest(prompt=prompt or CODEX_SPAWN_GOAL, action="spawn")
     bracket_match = re.match(r"^\[(?P<project>[^\]]*)\]\s+\[(?P<repo>[^\]]*)\]\s+(?P<prompt>.+)$", rest, re.DOTALL)
     if bracket_match:
         return CodexCommandRequest(
@@ -435,6 +481,206 @@ def _timestamp_sort_key(value: str) -> float:
         return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone(timezone.utc).timestamp()
     except ValueError:
         return 0.0
+
+
+def _format_codex_switch_status(
+    account_store: AccountStore,
+    *,
+    project_root: str | Path,
+    session_roots: Sequence[str | Path] | None,
+) -> str:
+    sessions = _discover_codex_sessions(session_roots)
+    unique_sessions = _dedupe_codex_sessions(sessions)
+    agent_sessions = [session for session in unique_sessions if _is_agent_codex_home(session.codex_home)]
+    known_targets = _known_targets(account_store, session_roots=session_roots)
+    latest_history = _latest_history_target(account_store, project_filter="", repo_filter="")
+
+    lines = [
+        "Codex-Schalter",
+        f"Sessions: {len(unique_sessions)} gefunden",
+        f"Agent-Sessions: {len(agent_sessions)}",
+        f"Bekannte Repos: {len(known_targets)}",
+        f"Aktuelles Repo: {Path(project_root).name}",
+    ]
+    if latest_history is not None:
+        lines.append(f"Letzte Summary: {latest_history.repo_name or latest_history.repo_root or 'unbekannt'}")
+        if latest_history.session_id:
+            lines.append(f"Letzte Session-ID: {latest_history.session_id}")
+    if unique_sessions:
+        lines.append("")
+        lines.append("Letzte Sessions:")
+        for session in sorted(unique_sessions, key=lambda item: (item.mtime, item.path.as_posix()), reverse=True)[:CODEX_STATUS_SESSION_LIMIT]:
+            repo = Path(session.cwd).name if session.cwd else "unbekannt"
+            marker = "agent" if _is_agent_codex_home(session.codex_home) else "main"
+            lines.append(f"- {session.session_id} | {repo} | {marker} | {session.cwd or session.path}")
+        remaining = len(unique_sessions) - CODEX_STATUS_SESSION_LIMIT
+        if remaining > 0:
+            lines.append(f"- ... {remaining} weitere")
+    else:
+        lines.append("")
+        lines.append("Keine Codex-Session-JSONL gefunden.")
+
+    lines.extend(
+        (
+            "",
+            "Befehle:",
+            "- /codex spawn [Auftrag]",
+            "- /codex [Projekt] [Repo] <Befehl>",
+            "- /codex <Befehl>",
+        )
+    )
+    return "\n".join(lines).strip()
+
+
+def _dedupe_codex_sessions(sessions: Sequence[_CodexSessionInfo]) -> tuple[_CodexSessionInfo, ...]:
+    by_id: dict[str, _CodexSessionInfo] = {}
+    for session in sessions:
+        current = by_id.get(session.session_id)
+        if current is None or (session.mtime, session.path.as_posix()) > (current.mtime, current.path.as_posix()):
+            by_id[session.session_id] = session
+    return tuple(by_id.values())
+
+
+def _is_agent_codex_home(codex_home: str | Path) -> bool:
+    return ".codex-agents" in Path(str(codex_home or "")).parts
+
+
+def _run_codex_spawn(
+    *,
+    project_root: str | Path,
+    instance_name: str,
+    user_prompt: str,
+    timeout_seconds: int,
+    session_roots: Sequence[str | Path] | None,
+    runner: Runner,
+    executable: str,
+) -> tuple[subprocess.CompletedProcess[str], CodexSessionTarget | None, Path, str]:
+    repo_root = str(Path(project_root).expanduser().resolve(strict=False))
+    agent_home = _allocate_codex_agent_home(session_roots)
+    prompt_path = agent_home / "spawn_prompt.txt"
+    prompt_path.write_text(_build_codex_spawn_prompt(instance_name=instance_name, project_root=repo_root, user_prompt=user_prompt), encoding="utf-8")
+    tmux_session = _codex_tmux_session_name(agent_home=agent_home, instance_name=instance_name)
+    shell_command = _codex_tmux_shell_command(executable=executable, repo_root=repo_root, agent_home=agent_home, prompt_path=prompt_path)
+    args = ["tmux", "new-session", "-d", "-s", tmux_session, "-c", repo_root, shell_command]
+    output = runner(
+        args,
+        cwd=repo_root,
+        input=None,
+        text=True,
+        capture_output=True,
+        timeout=timeout_seconds,
+        check=False,
+        env=dict(os.environ),
+    )
+    target = _latest_spawned_target(agent_home, repo_root=repo_root)
+    return output, target, agent_home, tmux_session
+
+
+def _build_codex_spawn_prompt(*, instance_name: str, project_root: str, user_prompt: str) -> str:
+    extra = str(user_prompt or "").strip()
+    lines = [
+        f"/goal {CODEX_SPAWN_GOAL}",
+        "",
+        f"Arbeite im Repo: {project_root}",
+        f"TeeBotus-Instanz: {instance_name or 'unbekannt'}",
+        f"Pruefe zuerst lokale Bauplaene unter: {CODEX_SPAWN_PLAN_DIR}",
+        "Pflege den passenden Bauplan waehrend der Arbeit.",
+    ]
+    if extra and extra != CODEX_SPAWN_GOAL:
+        lines.extend(("", "Zusatzauftrag:", extra))
+    return "\n".join(lines).strip()
+
+
+def _allocate_codex_agent_home(session_roots: Sequence[str | Path] | None) -> Path:
+    agents_root = _codex_agents_root_from_session_roots(session_roots)
+    agents_root.mkdir(parents=True, exist_ok=True)
+    start = _next_codex_agent_number(agents_root)
+    for number in range(start, start + 1000):
+        candidate = agents_root / f"a{number}"
+        try:
+            candidate.mkdir(parents=False, exist_ok=False)
+            (candidate / "sessions").mkdir()
+            return candidate
+        except FileExistsError:
+            continue
+    raise OSError(f"Kein freier Codex-Agent-Slot unter {agents_root}")
+
+
+def _codex_agents_root_from_session_roots(session_roots: Sequence[str | Path] | None) -> Path:
+    if session_roots:
+        for root in session_roots:
+            path = Path(root).expanduser().resolve(strict=False)
+            parts = path.parts
+            if ".codex-agents" in parts:
+                index = parts.index(".codex-agents")
+                return Path(*parts[: index + 1])
+    return Path.home() / ".codex-agents"
+
+
+def _next_codex_agent_number(agents_root: Path) -> int:
+    highest = 0
+    for child in agents_root.iterdir():
+        if not child.is_dir():
+            continue
+        match = re.fullmatch(r"a(\d+)", child.name)
+        if match:
+            highest = max(highest, int(match.group(1)))
+    return highest + 1
+
+
+def _latest_spawned_target(agent_home: Path, *, repo_root: str) -> CodexSessionTarget | None:
+    sessions = _discover_codex_sessions((agent_home / "sessions",))
+    session = _latest_session_for_repo(sessions, repo_root)
+    if session is None and sessions:
+        session = sorted(sessions, key=lambda item: (item.mtime, item.path.as_posix()))[-1]
+    if session is None:
+        return None
+    return CodexSessionTarget(
+        session_id=session.session_id,
+        codex_home=session.codex_home,
+        repo_root=session.cwd or repo_root,
+        repo_name=Path(session.cwd or repo_root).name,
+        session_path=str(session.path),
+        source="spawn",
+    )
+
+
+def _codex_tmux_session_name(*, agent_home: Path, instance_name: str) -> str:
+    normalized_instance = re.sub(r"[^a-zA-Z0-9_-]+", "-", str(instance_name or "teebotus")).strip("-").lower()
+    if not normalized_instance:
+        normalized_instance = "teebotus"
+    return f"teebotus-codex-{normalized_instance}-{agent_home.name}"[:80]
+
+
+def _codex_tmux_shell_command(*, executable: str, repo_root: str, agent_home: Path, prompt_path: Path) -> str:
+    return (
+        f"export CODEX_HOME={shlex.quote(str(agent_home))}; "
+        f"exec {shlex.quote(executable)} --no-alt-screen -C {shlex.quote(repo_root)} "
+        f"\"$(cat {shlex.quote(str(prompt_path))})\""
+    )
+
+
+def _format_codex_spawn_response(
+    output: str,
+    target: CodexSessionTarget | None,
+    *,
+    agent_home: Path,
+    tmux_session: str,
+) -> str:
+    lines = ["Codex-Spawn in tmux gestartet."]
+    lines.append(f"tmux: {tmux_session}")
+    lines.append(f"CODEX_HOME: {agent_home}")
+    if target is not None:
+        lines.append(f"Session: {target.session_id}")
+        lines.append(f"Repo: {target.repo_name or target.repo_root}")
+    else:
+        lines.append("Session: erscheint, sobald Codex die Session-JSONL angelegt hat.")
+    body = str(output or "").strip()
+    if body:
+        if len(body) > CODEX_OUTPUT_LIMIT:
+            body = body[: CODEX_OUTPUT_LIMIT - 80].rstrip() + "\n\n[gekuerzt]"
+        lines.extend(("", body))
+    return "\n".join(lines).strip()
 
 
 def _run_codex_resume(
