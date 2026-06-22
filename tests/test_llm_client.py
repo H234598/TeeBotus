@@ -16,6 +16,7 @@ from TeeBotus.llm.free_tier import (
 )
 from TeeBotus.llm.gemini_interactions_provider import GeminiInteractionsClient, GeminiInteractionsSettings
 from TeeBotus.llm.hf_pool.provider import HFPoolProvider
+from TeeBotus.llm import litellm_provider
 from TeeBotus.llm.litellm_gemini_provider import LiteLLMGeminiStatefulClient, LiteLLMGeminiStatefulSettings
 from TeeBotus.llm_client import LLMAPIError, LLMImage, LLMVoice, LiteLLMSettings, LiteLLMTextClient, build_text_llm_client, normalize_llm_provider
 
@@ -428,6 +429,33 @@ def test_litellm_text_client_does_not_use_gemini_ring_for_explicit_openai_fallba
         ("gemini/gemini-3.5-flash", "gemini-ring-a", "flex"),
         ("openai/gpt-test", "openai-key", ""),
     ]
+
+
+def test_litellm_model_gemini_detection_prefers_explicit_model_prefix() -> None:
+    assert litellm_provider._model_uses_gemini_api(
+        provider="litellm_gemini_stateless",
+        model="gemini-3.5-flash",
+    )
+    assert litellm_provider._model_uses_google_gemini(
+        provider="litellm_gemini_stateless",
+        model="gemini-3.5-flash",
+    )
+    assert not litellm_provider._model_uses_gemini_api(
+        provider="litellm_gemini_stateless",
+        model="openai/gpt-test",
+    )
+    assert not litellm_provider._model_uses_google_gemini(
+        provider="litellm_gemini_stateless",
+        model="openai/gpt-test",
+    )
+    assert not litellm_provider._model_uses_gemini_api(
+        provider="litellm_gemini_stateless",
+        model="vertex_ai/gemini-3.5-flash",
+    )
+    assert litellm_provider._model_uses_google_gemini(
+        provider="litellm_gemini_stateless",
+        model="vertex_ai/gemini-3.5-flash",
+    )
 
 
 def test_litellm_text_client_keeps_explicit_cross_provider_fallback_prefixes(monkeypatch: pytest.MonkeyPatch) -> None:
