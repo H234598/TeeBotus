@@ -38,6 +38,16 @@ def test_rotate_runtime_text_file_compresses_oversized_active_file(tmp_path):
         assert handle.read() == "0123456789\n"
 
 
+def test_rotate_runtime_text_file_preserves_active_runtime_log_names(tmp_path):
+    for filename in ACTIVE_RUNTIME_TEXT_FILENAMES:
+        path = tmp_path / filename
+        path.write_text("0123456789\n", encoding="utf-8")
+
+        assert rotate_runtime_text_file_if_needed(path, max_bytes=4) is None
+        assert path.read_text(encoding="utf-8") == "0123456789\n"
+        assert not list(tmp_path.glob(f"{filename}.*.gz"))
+
+
 def test_runtime_maintenance_compresses_old_logs(tmp_path):
     now = time.time()
     path = tmp_path / "teebotus-production.log.2026-06-01"
