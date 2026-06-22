@@ -142,6 +142,43 @@ def test_source_harvester_move_refuses_replaced_source_before_unlink(tmp_path, m
     assert source.read_text(encoding="utf-8") == replacement_text
 
 
+def test_source_harvester_move_keeps_source_when_manifest_append_fails(tmp_path):
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source_text = "Schlafhygiene und Aktivierung."
+    source.write_text(source_text, encoding="utf-8")
+    library_dir = tmp_path / "library"
+    outside_manifest = tmp_path / "outside_manifest.jsonl"
+    outside_manifest.write_text("outside-before\n", encoding="utf-8")
+
+    class SymlinkManifestPipeline:
+        def __init__(self, manifest_path: Path, target_path: Path) -> None:
+            self.manifest_path = manifest_path
+            self.target_path = target_path
+            self.inner = SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91))
+
+        def evaluate(self, source_input):
+            self.manifest_path.symlink_to(self.target_path)
+            return self.inner.evaluate(source_input)
+
+    harvester = SourceHarvester(
+        library_dir,
+        quality_pipeline=SymlinkManifestPipeline(library_dir / "harvest_manifest.jsonl", outside_manifest),
+    )
+
+    with pytest.raises(ValueError, match="symlink manifest file"):
+        harvester.harvest_path(
+            source,
+            copy=False,
+            metadata={"title": "Therapie", "license": "private"},
+            claims=("Schlafhygiene ist relevant.",),
+            evidence=("Schlafhygiene und Aktivierung.",),
+        )
+
+    assert source.read_text(encoding="utf-8") == source_text
+    assert outside_manifest.read_text(encoding="utf-8") == "outside-before\n"
+
+
 def test_source_harvester_refuses_symlink_manifest_file_before_copy(tmp_path):
     source = tmp_path / "download" / "therapie.txt"
     source.parent.mkdir()

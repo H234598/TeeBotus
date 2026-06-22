@@ -94,9 +94,11 @@ class SourceHarvester:
 
         stored_path = self._stored_path(source, sha256, report.route)
         _refuse_symlink_destination_file(stored_path)
-        _copy_or_move_file_private(source, stored_path, copy=copy)
+        source_stat = _copy_file_private(source, stored_path)
         result = SourceHarvestResult(source, report.route, stored_path, sha256, report)
         self._append_manifest(result)
+        if not copy:
+            _unlink_if_same_file(source, source_stat)
         return result
 
     def promote_accepted(
@@ -128,9 +130,11 @@ class SourceHarvester:
             raise ValueError("destination_dir must resolve to an indexed Bibliothek source path")
         _ensure_private_dir(target_dir, label="promote destination directory", root=self.library_root)
         promoted_path = _unique_destination(candidate_path, sha256=sha256)
-        _copy_or_move_file_private(staged, promoted_path, copy=copy)
+        source_stat = _copy_file_private(staged, promoted_path)
         result = SourcePromoteResult(staged, promoted_path, sha256, copied=copy)
         self._append_promote_manifest(result)
+        if not copy:
+            _unlink_if_same_file(staged, source_stat)
         return result
 
     def _stored_path(self, source: Path, sha256: str, route: SourceRoute) -> Path:
@@ -319,12 +323,6 @@ def _append_manifest_row(path: Path, row: Mapping[str, Any]) -> None:
     _chmod_private_fd(fd)
     with os.fdopen(fd, "a", encoding="utf-8") as handle:
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
-
-
-def _copy_or_move_file_private(source: Path, destination: Path, *, copy: bool) -> None:
-    source_stat = _copy_file_private(source, destination)
-    if not copy:
-        _unlink_if_same_file(source, source_stat)
 
 
 def _copy_file_private(source: Path, destination: Path) -> os.stat_result:
