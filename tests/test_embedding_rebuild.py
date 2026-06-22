@@ -1004,6 +1004,22 @@ def test_embedding_cli_codex_history_rebuild_dry_run_json(monkeypatch, capsys, t
     assert payload[0]["collection_name"] == "codex_history_test"
 
 
+def test_embedding_cli_codex_history_rebuild_rejects_negative_limit(capsys, tmp_path):
+    with pytest.raises(SystemExit) as exc_info:
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "codex-history-rebuild",
+                "--limit",
+                "-5",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "--limit must be zero or a positive integer" in capsys.readouterr().err
+
+
 def test_ensure_qdrant_collections_for_instances_uses_instance_memory_search_config(monkeypatch, tmp_path):
     monkeypatch.setattr("TeeBotus.instructions.PROJECT_ROOT", tmp_path)
     calls: list[tuple[str, list[tuple[str, int, str]]]] = []

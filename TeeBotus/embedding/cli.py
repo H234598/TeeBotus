@@ -77,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
                     print(_format_bibliothekar_rebuild_result(result))
             return 1 if any(result.status == "error" for result in results) else 0
         if args.command == "codex-history-rebuild":
+            _validate_codex_history_rebuild_args(parser, args)
             results = rebuild_qdrant_codex_history_indexes(
                 instances_dir=args.instances_dir,
                 instance_names=args.instance,
@@ -209,6 +210,11 @@ def _validate_memory_rebuild_args(parser: argparse.ArgumentParser, args: argpars
 def _validate_collections_ensure_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     for value in getattr(args, "include_memory_side_index", ()) or ():
         _positive_cli_int(parser, value, "--include-memory-side-index")
+
+
+def _validate_codex_history_rebuild_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    if int(getattr(args, "limit", 0) or 0) < 0:
+        parser.error("--limit must be zero or a positive integer.")
 
 
 def _positive_cli_int(parser: argparse.ArgumentParser, value: object, argument_name: str) -> int:
