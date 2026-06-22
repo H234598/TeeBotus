@@ -372,7 +372,19 @@ def test_codex_history_systemd_print_mode_can_output_index_timer(tmp_path: Path,
 
 
 def test_codex_history_systemd_print_mode_can_output_collector_timer(tmp_path: Path, capsys) -> None:
-    result = main(["--repo-root", str(tmp_path), "--collector-timer", "--user-unit", "--print"])
+    result = main(
+        [
+            "--repo-root",
+            str(tmp_path),
+            "--collector-timer",
+            "--user-unit",
+            "--sessions-root",
+            "sessions",
+            "--sessions-root",
+            str(tmp_path / "sessions"),
+            "--print",
+        ]
+    )
 
     captured = capsys.readouterr()
     assert result == 0
@@ -380,6 +392,9 @@ def test_codex_history_systemd_print_mode_can_output_collector_timer(tmp_path: P
     assert "# teebotus-codex-history-collector.timer" in captured.out
     assert "Type=oneshot" in captured.out
     assert "--once" in captured.out
+    assert captured.out.count("--sessions-root") == 1
+    assert f"--sessions-root {tmp_path / 'sessions'}" in captured.out
+    assert "--dispatch-limit 50" in captured.out
     assert "OnUnitActiveSec=5min" in captured.out
 
 
