@@ -154,6 +154,48 @@ def test_rebuild_qdrant_memory_indexes_uses_instance_memory_search_config_by_def
     assert results[0].embedding_dimensions == 48
 
 
+def test_rebuild_qdrant_memory_indexes_ignores_blank_qdrant_url_override(monkeypatch, tmp_path):
+    monkeypatch.setattr("TeeBotus.instructions.PROJECT_ROOT", tmp_path)
+    calls: list[str] = []
+
+    class FakeQdrantMemoryIndex:
+        def __init__(self, *, url=None, collection, embedding_provider, **_kwargs) -> None:
+            self.url = str(url)
+
+        def rebuild(self, *, account_store, instance_name: str, account_id: str, include_legacy_raw_account_id_cleanup: bool = False):
+            calls.append(self.url)
+            return tuple(f"point:{entry['id']}" for entry in account_store.read_memory_entries(account_id))
+
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        """
+        ## Memory Search
+        - semantic_enabled: true
+        - semantic_backend: qdrant
+        - qdrant_url: http://localhost:6334
+        - embedding_provider: hash
+        - embedding_model: instance-memory-model
+        - embedding_dimensions: 48
+        """,
+        encoding="utf-8",
+    )
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_sleep", "user_text": "Schlaf"})
+
+    results = rebuild_qdrant_memory_indexes(
+        instances_dir=instances_dir,
+        qdrant_url=" ",
+        secret_provider=StaticSecretProvider(b"a" * 32),
+        qdrant_index_factory=FakeQdrantMemoryIndex,
+    )
+
+    assert calls == ["http://localhost:6334"]
+    assert results[0].qdrant_url == "http://localhost:6334"
+
+
 def test_rebuild_qdrant_memory_indexes_dry_run_avoids_qdrant_writes(tmp_path):
     class UnexpectedQdrantMemoryIndex:
         def __init__(self, **_kwargs) -> None:
@@ -1294,6 +1336,37 @@ def test_ensure_qdrant_collections_for_instances_uses_instance_memory_search_con
     assert all(result.ok for result in results)
     assert results[0].vector_size == 48
     assert results[0].embedding_model == "instance-memory-model"
+
+
+def test_ensure_qdrant_collections_for_instances_ignores_blank_qdrant_url_override(monkeypatch, tmp_path):
+    monkeypatch.setattr("TeeBotus.instructions.PROJECT_ROOT", tmp_path)
+    calls: list[str] = []
+
+    def fake_ensure(**kwargs):
+        calls.append(kwargs["url"])
+        return tuple(QdrantCollectionResult(spec.name, kwargs["url"], "ready", True) for spec in kwargs["specs"])
+
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    instance_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        """
+        ## Memory Search
+        - qdrant_url: http://localhost:6334
+        - embedding_model: instance-memory-model
+        - embedding_dimensions: 48
+        """,
+        encoding="utf-8",
+    )
+
+    results = ensure_qdrant_collections_for_instances(
+        instances_dir=instances_dir,
+        qdrant_url=" ",
+        qdrant_ensure_factory=fake_ensure,
+    )
+
+    assert calls == ["http://localhost:6334"]
+    assert results[0].qdrant_url == "http://localhost:6334"
 
 
 def test_ensure_qdrant_collections_for_instances_preserves_actual_vector_size(monkeypatch, tmp_path):

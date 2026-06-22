@@ -124,7 +124,7 @@ def rebuild_qdrant_memory_indexes(
     results: list[QdrantMemoryRebuildResult] = []
     for instance_name in selected_instances:
         instructions = _load_instance_memory_instructions(root, instance_name)
-        effective_qdrant_url = qdrant_url or instructions.memory_search_qdrant_url
+        effective_qdrant_url = _optional_override(qdrant_url, default=instructions.memory_search_qdrant_url)
         effective_embedding_config = _resolve_memory_embedding_config(
             instructions,
             embedding_config=embedding_config,
@@ -234,7 +234,7 @@ def rebuild_qdrant_bibliothekar_indexes(
     results: list[QdrantBibliothekarRebuildResult] = []
     for instance_name in selected_instances:
         instructions = _load_instance_memory_instructions(root, instance_name)
-        effective_qdrant_url = qdrant_url or instructions.bibliothekar_qdrant_url
+        effective_qdrant_url = _optional_override(qdrant_url, default=instructions.bibliothekar_qdrant_url)
         effective_embedding_config = _resolve_bibliothekar_embedding_config(
             embedding_config=embedding_config,
             overrides=embedding_overrides,
@@ -319,7 +319,7 @@ def rebuild_qdrant_codex_history_indexes(
     results: list[QdrantCodexHistoryRebuildResult] = []
     for instance_name in selected_instances:
         instructions = _load_instance_memory_instructions(root, instance_name)
-        effective_qdrant_url = qdrant_url or instructions.bibliothekar_qdrant_url
+        effective_qdrant_url = _optional_override(qdrant_url, default=instructions.bibliothekar_qdrant_url)
         effective_embedding_config = _resolve_bibliothekar_embedding_config(
             embedding_config=embedding_config,
             overrides=embedding_overrides,
@@ -582,8 +582,9 @@ def _load_instance_memory_instructions(instances_dir: Path, instance_name: str) 
 
 
 def _resolve_collection_qdrant_url(instructions_by_instance: Mapping[str, BotInstructions], *, override: str | None = None) -> tuple[str, str]:
-    if override:
-        return override, ""
+    resolved_override = _optional_override(override)
+    if resolved_override:
+        return resolved_override, ""
     if not instructions_by_instance:
         return BotInstructions().memory_search_qdrant_url, ""
     urls = {
@@ -595,6 +596,11 @@ def _resolve_collection_qdrant_url(instructions_by_instance: Mapping[str, BotIns
         return next(iter(unique_urls)), ""
     conflicts = ", ".join(f"{instance}:{url}" for instance, url in sorted(urls.items()))
     return BotInstructions().memory_search_qdrant_url, f"conflicting qdrant urls: {conflicts}"
+
+
+def _optional_override(value: object | None, *, default: str = "") -> str:
+    text = str(value or "").strip()
+    return text or str(default or "").strip()
 
 
 def _resolve_collection_memory_embedding_config(
