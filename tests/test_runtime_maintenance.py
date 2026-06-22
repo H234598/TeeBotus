@@ -1492,6 +1492,28 @@ def test_runtime_maintenance_keeps_sources_when_archive_fdopen_fails(tmp_path, m
     assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
 
 
+def test_runtime_maintenance_keeps_sources_when_archive_fdopen_raises_runtime_error(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    real_fdopen = os.fdopen
+
+    def fail_archive_fdopen(fd, mode="r", *args, **kwargs):
+        if mode == "wb":
+            raise RuntimeError("archive fdopen failed")
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    monkeypatch.setattr(os, "fdopen", fail_archive_fdopen)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert path.read_bytes() == b"compressed-ish"
+    assert not list((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
+
+
 def test_runtime_maintenance_refuses_archive_when_runtime_root_becomes_symlink(tmp_path, monkeypatch):
     runtime_dir = tmp_path / "runtime"
     runtime_dir.mkdir()

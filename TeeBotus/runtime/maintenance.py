@@ -549,7 +549,7 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
                 _unlink_if_same_file(temporary, temporary_stat)
                 continue
             _publish_temporary_file(temporary, archive_path, expected_stat=temporary_stat)
-        except (OSError, ValueError, tarfile.TarError):
+        except (OSError, ValueError, RuntimeError, tarfile.TarError):
             if temporary_fd is not None:
                 _close_fd_quietly(temporary_fd)
             if temporary is not None and temporary_stat is not None:
