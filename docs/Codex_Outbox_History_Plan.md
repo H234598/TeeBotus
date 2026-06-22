@@ -14,6 +14,9 @@ Umgesetzt:
 - Summary-Nummern laufen pro Repo und verwenden `v<semver> #0001` als Praefix.
 - Repo-Metadaten enthalten `repo_id`, Name, Root, Remote, Provider, Branch, Head-Commit und Dirty-Status.
 - Vor dem Speichern wird die redigierte Summary erstellt; OpenAI-/Telegram-/generische Secret-Muster werden ersetzt.
+- Watcher-Summaries enthalten im Markdown-Header den extrahierten aktiven Goal-Text und den sichtbaren User-Auftrag, wenn diese Informationen in der Codex-Session vorhanden sind.
+- Assistant-Zwischenantworten aus `phase=commentary` werden pro Turn als Arbeitsverlauf gespeichert und kurz im Summary-Markdown angezeigt; sie erzeugen bewusst keine eigenen History-Items.
+- Run-Summaries werden repo-lokal miteinander verlinkt und enthalten einen kleinen deterministischen Mermaid-Kontextgraphen. `codex-history index` zieht diese Kontextbloecke fuer Altbestand nach.
 - CLI Phase 2: `python3 -m TeeBotus.admin codex-history append` und `report` funktionieren.
 - Phase 4 Dispatcher: `codex-history dispatch` versendet queued Summaries als Markdown-Anhang an routbare Admin-Accounts, schreibt Dispatch-Results und setzt `dispatching`/`accepted`/`failed`/`skipped` ohne Loeschung.
 - Phase 4 Ack-Basis: `codex-history acknowledge` markiert Summaries append-only als `acknowledged`, setzt `delivery.acknowledged_at` und schreibt ein Dispatch-Result.
@@ -313,6 +316,8 @@ Der Watcher:
 - dedupliziert ueber `session_id + turn_id + final_message_hash`
 - erkennt `cwd`/Repo aus Session-Metadaten oder Toolcalls
 - erzeugt eine kompakte Summary
+- speichert `Goal`, `Auftrag`, `Bearbeiteter Auftrag` und eine kurze Zwischenantworten-Timeline, wenn die Codex-Session diese Daten liefert
+- verlinkt Summaries repo-lokal mit vorherigem/naechstem Eintrag und haengt einen kleinen Mermaid-Kontext an
 - schreibt append-only in `codex_history_outbox`
 
 Vorteile:
@@ -514,6 +519,7 @@ Stand 2026-06-19:
 - `codex-history report` liefert `repo_history` mit pro-Repo Status-/Dispatch-Zaehlern, letzten Summaries und `--repo`/`--summary-limit`.
 - `codex-history bibliothekar-export` schreibt redigierte Projekthistory-Markdowns in `data/Codex_History_Bibliothek`, absichtlich getrennt von der normalen Nutzerbibliothek `data/Bibliothek`.
 - `codex-history index` fuehrt Export und optionalen Qdrant-Rebuild in einem Admin-Lauf zusammen.
+- `codex-history index` aktualisiert vor dem Export die Summary-Kontextbloecke fuer Altbestand: repo-lokale Vorher/Nachher-Links und eingebetteten Mermaid-Kontext.
 - `codex-history watch --post-index` aktualisiert den admin-only Bibliothekar-Export nach Watcher-Scans; `--post-index-qdrant` haengt optional den separaten Qdrant-Rebuild an.
 - `teebotus-codex-history-collector` rendert standardmaessig `--post-index`, kann den Export mit `--no-post-index` abschalten und Qdrant explizit mit `--post-index-qdrant` aktivieren.
 - `teebotus-codex-history-collector --index-timer` rendert/installiert zusaetzlich einen low-priority Oneshot-Service plus Timer fuer `codex-history index --qdrant --qdrant-ensure`; Default-Rhythmus: `24h`.
@@ -561,6 +567,9 @@ Stand 2026-06-19:
 	* Ziel: `instances/<Instanz>/data/Codex_History_Bibliothek/graphs/codex_history_graph.md`
 	* `codex-history index --graph` erzeugt den Graph im kombinierten Low-Priority-Indexlauf.
 	* `teebotus-codex-history-collector --index-timer --index-graph` haengt den Graph-Export an den Timer.
+* Erledigt: Jede Run-Summary kann zusaetzlich einen kleinen eingebetteten Mermaid-Kontext enthalten.
+	* Der eingebettete Kontext bleibt repo-lokal, damit repo-gefilterte Exporte keine fremden Projekttitel leaken.
+	* Der groessere projektuebergreifende Graph bleibt der separate admin-only Graph-Export.
 * Erledigt: `--svg`/`--graph-svg` erzeugt zusaetzlich ein SVG-Bild im selben Ordner.
 	* Default: `--svg-engine builtin`, dependency-frei.
 	* Optional: `--svg-engine auto` nutzt Mermaid CLI `mmdc`, wenn lokal installiert, und faellt sonst mit Report-Warnung auf builtin zurueck.

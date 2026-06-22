@@ -897,6 +897,9 @@ def test_codex_history_index_can_categorize_before_export_without_provider_call(
     repo = make_git_repo(tmp_path, "categorize-index-demo", version="1.9.2")
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
     append_codex_history_summary(store, repo_root=repo, title="Benchmark gebaut", bullets=["Neue Latenzbenchmarks."])
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    rows[0]["summary"]["markdown"] = rows[0]["summary"]["markdown"].split("## Verknuepfte Summaries", 1)[0].rstrip() + "\n"
+    store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
 
     result = run_codex_history_index(
         store,
@@ -913,6 +916,7 @@ def test_codex_history_index_can_categorize_before_export_without_provider_call(
 
     assert result["ok"] is True
     assert result["categorize"]["categorized"] == 1
+    assert result["summary_context"]["changed_items"] == 1
     assert result["strategic_analysis"]["analyzed"] == 1
     assert result["export"]["exported"] == 2
     assert result["graph"]["exported"] == 1
@@ -923,6 +927,8 @@ def test_codex_history_index_can_categorize_before_export_without_provider_call(
     exported_texts = [Path(file["path"]).read_text(encoding="utf-8") for file in result["export"]["files"]]
     assert any("work-benchmark" in text for text in exported_texts)
     assert any("change-performance" in text for text in exported_texts)
+    assert any("## Verknuepfte Summaries" in text for text in exported_texts)
+    assert any("## Mermaid-Kontext" in text for text in exported_texts)
     assert any("Strategische Codex-History-Analyse" in text for text in exported_texts)
     graph_text = Path(result["graph"]["path"]).read_text(encoding="utf-8")
     assert "work-benchmark" in graph_text
