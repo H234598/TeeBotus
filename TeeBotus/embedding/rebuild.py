@@ -175,6 +175,20 @@ def rebuild_qdrant_memory_indexes(
                 )
             )
             continue
+        embedding_config_error = _account_memory_embedding_config_error(effective_embedding_config)
+        if not target_accounts and embedding_config_error:
+            results.append(
+                _rebuild_result(
+                    instance_name,
+                    "",
+                    "error",
+                    qdrant_url=effective_qdrant_url,
+                    collection_name=target_collection,
+                    embedding_config=effective_embedding_config,
+                    error=embedding_config_error,
+                )
+            )
+            continue
         if not target_accounts:
             results.append(
                 _rebuild_result(
