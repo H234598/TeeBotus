@@ -77,6 +77,33 @@ def test_source_harvester_promotes_accepted_source_before_indexing(tmp_path):
     assert rows[-1]["stored_path"] == str(promoted.promoted_path)
 
 
+@pytest.mark.parametrize("destination_dir", ("books", "books/thema"))
+def test_source_harvester_refuses_symlink_promote_destination_dir(tmp_path, destination_dir):
+    instances_dir = tmp_path / "instances"
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    outside_dir = tmp_path / "outside-books"
+    outside_dir.mkdir()
+    store = BibliothekarStore("Depressionsbot", instances_dir)
+    harvester = SourceHarvester(
+        store.library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+    harvest = harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+    (store.library_dir / "books").symlink_to(outside_dir, target_is_directory=True)
+
+    with pytest.raises(ValueError, match="symlink promote destination directory"):
+        harvester.promote_accepted(harvest.stored_path, destination_dir=destination_dir)
+
+    assert list(outside_dir.iterdir()) == []
+
+
 def test_source_harvester_preserves_suffix_for_symbolic_source_names(tmp_path):
     instances_dir = tmp_path / "instances"
     source = tmp_path / "download" / "###.txt"

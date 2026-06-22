@@ -125,8 +125,7 @@ class SourceHarvester:
         candidate_path = target_dir / staged.name
         if not _is_allowed_library_source_path(candidate_path, self.library_root):
             raise ValueError("destination_dir must resolve to an indexed Bibliothek source path")
-        target_dir.mkdir(parents=True, exist_ok=True)
-        _chmod_private_dir(target_dir)
+        _ensure_private_dir(target_dir, label="promote destination directory", root=self.library_root)
         promoted_path = _unique_destination(candidate_path, sha256=sha256)
         if copy:
             shutil.copy2(staged, promoted_path)
@@ -322,7 +321,20 @@ def _file_matches_sha256(path: Path, sha256: str) -> bool:
         return False
 
 
-def _ensure_private_dir(path: Path, *, label: str) -> None:
+def _ensure_private_dir(path: Path, *, label: str, root: Path | None = None) -> None:
+    if root is not None:
+        try:
+            relative_path = path.relative_to(root)
+        except ValueError as exc:
+            raise ValueError(f"SourceHarvester requires {label} under library root: {path}") from exc
+        _ensure_private_dir(root, label="library root")
+        cursor = root
+        for part in relative_path.parts:
+            if not part or part == ".":
+                continue
+            cursor /= part
+            _ensure_private_dir(cursor, label=label)
+        return
     if path.is_symlink():
         raise ValueError(f"SourceHarvester refuses symlink {label}: {path}")
     path.mkdir(parents=True, exist_ok=True)
