@@ -791,13 +791,7 @@ def _default_collector_session_roots(repo_root: Path, *, run_user: str) -> tuple
     roots = [owner_home / ".codex" / "sessions"]
     agents_root = owner_home / ".codex-agents"
     if agents_root.is_dir():
-        roots.extend(
-            sessions_dir
-            for path in sorted(agents_root.iterdir())
-            if path.is_dir()
-            for sessions_dir in (path / "sessions",)
-            if sessions_dir.is_dir()
-        )
+        roots.append(agents_root)
     return tuple(roots)
 
 

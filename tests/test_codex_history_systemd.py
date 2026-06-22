@@ -56,7 +56,7 @@ def test_render_codex_history_systemd_unit_matches_plan_shape(tmp_path: Path) ->
     assert "WantedBy=multi-user.target" in unit.service_text
 
 
-def test_render_codex_history_systemd_unit_root_collector_uses_direct_agent_session_roots(
+def test_render_codex_history_systemd_unit_root_collector_uses_dynamic_agent_root(
     tmp_path: Path, monkeypatch
 ) -> None:
     owner_home = tmp_path / "owner"
@@ -72,11 +72,8 @@ def test_render_codex_history_systemd_unit_root_collector_uses_direct_agent_sess
 
     assert roots == [
         str(owner_home / ".codex" / "sessions"),
-        str(owner_home / ".codex-agents" / "a1" / "sessions"),
-        str(owner_home / ".codex-agents" / "a2" / "sessions"),
-        str(owner_home / ".codex-agents" / "b90" / "sessions"),
+        str(owner_home / ".codex-agents"),
     ]
-    assert str(owner_home / ".codex-agents") not in roots
 
 
 def test_render_codex_history_systemd_unit_can_target_instance_and_session_roots(tmp_path: Path) -> None:
