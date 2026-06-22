@@ -339,7 +339,13 @@ class RuntimeTimedRotatingFileHandler(TimedRotatingFileHandler):
             return
         rotated = _link_file_to_unique_path(source_path, Path(dest), expected_stat=source_stat)
         if rotated is not None:
-            _unlink_if_same_file(source_path, source_stat)
+            if not _unlink_if_same_file(source_path, source_stat, require_unchanged=True):
+                try:
+                    current_source_stat = os.stat(source_path, follow_symlinks=False)
+                except (OSError, ValueError):
+                    current_source_stat = None
+                if current_source_stat is not None and _same_file_stat(current_source_stat, source_stat):
+                    _unlink_if_same_file(rotated, source_stat)
 
     def doRollover(self) -> None:  # noqa: N802 - stdlib override name
         super().doRollover()
