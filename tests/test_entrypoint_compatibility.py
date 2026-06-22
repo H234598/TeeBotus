@@ -895,6 +895,23 @@ def test_runtime_status_text_redacts_structured_secret_assignments() -> None:
     assert "tokens=provider_usage_response" in text
 
 
+def test_runtime_status_text_redacts_quoted_authorization_values() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    text = bot._sanitize_status_text(
+        "authorization=\"Bearer bearer-secret-token\" "
+        "Authorization: 'Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==' "
+        "proxy-authorization=\"ApiKey proxy-secret-token\""
+    )
+
+    assert "bearer-secret-token" not in text
+    assert "QWxhZGRpbjpvcGVuIHNlc2FtZQ==" not in text
+    assert "proxy-secret-token" not in text
+    assert 'authorization="Bearer <redacted-secret>"' in text
+    assert "Authorization: 'Basic <redacted-secret>'" in text
+    assert 'proxy-authorization="ApiKey <redacted-secret>"' in text
+
+
 def test_runtime_status_text_redacts_multiline_private_key_blocks() -> None:
     bot = importlib.import_module("TeeBotus.bot")
 

@@ -1845,6 +1845,7 @@ def _sanitize_status_text(value: object) -> str:
     text = re.sub(r"\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}\b", "<redacted-jwt>", text)
     text = _sanitize_status_url_credentials(text)
     text = _status_authorization_token_pattern.sub(r"\1\2 <redacted-secret>", text)
+    text = _status_quoted_authorization_value_pattern.sub(_status_quoted_authorization_value_replacement, text)
     text = _status_bare_authorization_token_pattern.sub(r"\1 <redacted-secret>", text)
     text = _status_quoted_authorization_token_pattern.sub(_status_quoted_authorization_token_replacement, text)
     text = _status_quoted_secret_assignment_pattern.sub(_status_quoted_secret_assignment_replacement, text)
@@ -1886,6 +1887,10 @@ _status_quoted_secret_assignment_pattern = re.compile(
 )
 _status_authorization_token_pattern = re.compile(
     r"\b((?:proxy-)?authorization\s*[:=]\s*)(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])",
+    re.IGNORECASE,
+)
+_status_quoted_authorization_value_pattern = re.compile(
+    r"\b((?:proxy-)?authorization\s*[:=]\s*)([\"'])(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(\2)(?=$|[\s,;&)\]}>])",
     re.IGNORECASE,
 )
 _status_bare_authorization_token_pattern = re.compile(
@@ -2039,6 +2044,14 @@ def _status_quoted_secret_assignment_replacement(match: re.Match[str]) -> str:
     value_quote = raw_value[:1] if raw_value[:1] in {"'", '"', "`"} and raw_value[-1:] == raw_value[:1] else ""
     rendered_value = f"{value_quote}<redacted>{value_quote}" if value_quote else "<redacted>"
     return f"{prefix}{key_quote}{key}{key_quote}{separator}{rendered_value}"
+
+
+def _status_quoted_authorization_value_replacement(match: re.Match[str]) -> str:
+    prefix = str(match.group(1) or "")
+    quote = str(match.group(2) or '"')
+    scheme = str(match.group(3) or "Bearer")
+    closing_quote = str(match.group(5) or quote)
+    return f"{prefix}{quote}{scheme} <redacted-secret>{closing_quote}"
 
 
 def _status_quoted_authorization_token_replacement(match: re.Match[str]) -> str:
