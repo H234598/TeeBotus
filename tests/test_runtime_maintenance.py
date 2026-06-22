@@ -846,6 +846,44 @@ def test_gzip_file_closes_source_fd_when_temporary_open_fails(tmp_path, monkeypa
     assert not list(tmp_path.glob(".*.tmp"))
 
 
+def test_gzip_file_closes_temporary_fd_when_temporary_stat_fails(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    real_open = os.open
+    real_fstat = os.fstat
+    real_close = os.close
+    temporary_fd: int | None = None
+    closed_fds: list[int] = []
+
+    def recording_open(file, flags, *args, **kwargs):
+        nonlocal temporary_fd
+        fd = real_open(file, flags, *args, **kwargs)
+        if Path(file).name.startswith(f".{path.name}.gz.tmp") and flags & os.O_CREAT:
+            temporary_fd = fd
+        return fd
+
+    def fail_temporary_fstat(fd):
+        if fd == temporary_fd:
+            raise ValueError("temporary stat failed")
+        return real_fstat(fd)
+
+    def counting_close(fd):
+        closed_fds.append(fd)
+        return real_close(fd)
+
+    monkeypatch.setattr(os, "open", recording_open)
+    monkeypatch.setattr(os, "fstat", fail_temporary_fstat)
+    monkeypatch.setattr(os, "close", counting_close)
+
+    with pytest.raises(ValueError, match="temporary stat failed"):
+        gzip_file(path)
+
+    assert temporary_fd in closed_fds
+    assert path.read_text(encoding="utf-8") == "old log\n"
+    assert not (tmp_path / f"{path.name}.gz").exists()
+    assert len(list(tmp_path.glob(".*.tmp"))) == 1
+
+
 def test_gzip_file_preserves_primary_error_when_fd_close_cleanup_fails(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")

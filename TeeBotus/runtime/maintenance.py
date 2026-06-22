@@ -595,7 +595,7 @@ def _create_unique_file(path: Path) -> tuple[Path, int, os.stat_result]:
             raise
         try:
             return candidate, fd, os.fstat(fd)
-        except OSError:
+        except (OSError, ValueError):
             _close_fd_quietly(fd)
             raise
 
