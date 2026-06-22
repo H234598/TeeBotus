@@ -1231,6 +1231,76 @@ def test_codex_history_dispatch_requeues_transient_sender_errors(tmp_path: Path)
     assert dispatch["reason"].startswith("send_error:RuntimeError")
 
 
+def test_codex_history_dispatch_ignores_fresh_in_flight_item(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "fresh-in-flight-demo", version="1.0.4")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(10), display_label="Admin")
+    store.update_identity_route(telegram_identity_key(10), channel="telegram", chat_id="10", chat_type="private", adapter_slot=1)
+    item = append_codex_history_summary(store, repo_root=repo, title="Fresh In Flight", bullets=["Laeuft gerade."])
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    rows[0]["status"] = "dispatching"
+    rows[0]["updated_at"] = "2026-06-19T12:10:00+00:00"
+    rows[0]["delivery"]["last_attempt_at"] = "2026-06-19T12:10:00+00:00"
+    store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
+
+    sent: list[str] = []
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="Depressionsbot",
+            account_ids=(admin_id,),
+            senders={"telegram": lambda _route, _action, _metadata: sent.append("sent") or "msg"},
+            now=datetime(2026, 6, 19, 12, 16, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["items"] == []
+    assert sent == []
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["id"] == item["id"]
+    assert persisted["status"] == "dispatching"
+
+
+def test_codex_history_dispatch_reclaims_stale_in_flight_item_before_newer_queued(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "stale-in-flight-demo", version="1.0.5")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(11), display_label="Admin")
+    store.update_identity_route(telegram_identity_key(11), channel="telegram", chat_id="11", chat_type="private", adapter_slot=1)
+    stale = append_codex_history_summary(store, repo_root=repo, title="Stale In Flight", bullets=["Claim hing fest."])
+    newer = append_codex_history_summary(store, repo_root=repo, title="Newer Queued", bullets=["Normale Queue."])
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    rows[0]["status"] = "dispatching"
+    rows[0]["created_at"] = "2026-06-19T12:00:00+00:00"
+    rows[0]["updated_at"] = "2026-06-19T12:00:00+00:00"
+    rows[0]["delivery"]["last_attempt_at"] = "2026-06-19T12:00:00+00:00"
+    rows[1]["created_at"] = "2026-06-19T12:20:00+00:00"
+    rows[1]["updated_at"] = "2026-06-19T12:20:00+00:00"
+    store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
+
+    sent_ids: list[str] = []
+
+    def sender(_route: dict[str, object], _action: SendAttachment, metadata: dict[str, object]) -> str:
+        sent_ids.append(str(metadata["codex_history_item_id"]))
+        return f"msg-{len(sent_ids)}"
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="Depressionsbot",
+            account_ids=(admin_id,),
+            senders={"telegram": sender},
+            now=datetime(2026, 6, 19, 12, 16, tzinfo=timezone.utc),
+            limit=1,
+        )
+    )
+
+    assert result["status_counts"] == {"accepted": 1}
+    assert sent_ids == [stale["id"]]
+    persisted = {row["id"]: row for row in store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)}
+    assert persisted[stale["id"]]["status"] == "accepted"
+    assert persisted[newer["id"]]["status"] == "queued"
+
+
 def test_import_codex_session_file_creates_redacted_deduped_history_item(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "watch-demo", version="2.1.0")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())

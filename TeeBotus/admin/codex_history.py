@@ -18,7 +18,7 @@ import uuid
 from collections import Counter
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict, dataclass, is_dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from inspect import isawaitable
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -55,6 +55,7 @@ CODEX_HISTORY_DISPATCH_OBSIDIAN_DIRNAME = "Codex_History_Dispatches"
 CODEX_HISTORY_GRAPH_DIRNAME = "graphs"
 CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE = "local_ollama"
 CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE = "local_ollama"
+CODEX_HISTORY_DISPATCHING_STALE_AFTER_SECONDS = 15 * 60
 CODEX_HISTORY_GRAPH_SVG_ENGINES = frozenset({"builtin", "auto", "mmdc"})
 CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
 CODEX_HISTORY_STRATEGY_PURPOSE = "codex_history_strategic_analysis"
@@ -323,12 +324,13 @@ async def dispatch_codex_history_outbox(
     dry_run: bool = False,
     limit: int = 100,
 ) -> dict[str, Any]:
-    timestamp = _iso_timestamp(now)
+    dispatch_now = now or datetime.now(timezone.utc)
+    timestamp = _iso_timestamp(dispatch_now)
     resolved_senders = senders or {}
     candidate_account_ids = _codex_history_dispatch_account_ids(store, instance_name=instance_name, account_ids=account_ids, env=env)
     rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
-    items = [row for row in rows if _codex_history_item_dispatchable(row)]
-    items.sort(key=_codex_history_dispatch_sort_key, reverse=True)
+    items = [row for row in rows if _codex_history_item_dispatchable(row, now=dispatch_now)]
+    items.sort(key=lambda item: _codex_history_dispatch_sort_key(item, now=dispatch_now), reverse=True)
     if limit > 0:
         items = items[:limit]
     result_rows: list[dict[str, Any]] = []
@@ -1641,19 +1643,58 @@ def _codex_history_dispatch_account_ids(
     return tuple(result)
 
 
-def _codex_history_item_dispatchable(item: Mapping[str, Any]) -> bool:
+def _codex_history_item_dispatchable(item: Mapping[str, Any], *, now: datetime | None = None) -> bool:
     if not isinstance(item, Mapping):
         return False
     if str(item.get("kind") or "").strip() not in CODEX_HISTORY_DISPATCHABLE_KINDS:
         return False
     status = str(item.get("status") or "queued").strip().casefold()
-    return status in CODEX_HISTORY_DISPATCHABLE_STATUSES
+    if status in CODEX_HISTORY_DISPATCHABLE_STATUSES:
+        return True
+    if status == "dispatching":
+        return _codex_history_item_dispatching_stale(item, now=now)
+    return False
 
 
-def _codex_history_dispatch_sort_key(item: Mapping[str, Any]) -> tuple[str, str, str]:
+def _codex_history_item_dispatching_stale(item: Mapping[str, Any], *, now: datetime | None = None) -> bool:
+    if str(item.get("status") or "").strip().casefold() != "dispatching":
+        return False
+    delivery = item.get("delivery", {})
+    if not isinstance(delivery, Mapping):
+        delivery = {}
+    marker = (
+        str(delivery.get("last_attempt_at") or "").strip()
+        or str(item.get("updated_at") or "").strip()
+        or str(item.get("created_at") or "").strip()
+    )
+    if not marker:
+        return True
+    claimed_at = _parse_codex_history_timestamp(marker)
+    if claimed_at is None:
+        return True
+    reference = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
+    return reference - claimed_at >= timedelta(seconds=CODEX_HISTORY_DISPATCHING_STALE_AFTER_SECONDS)
+
+
+def _parse_codex_history_timestamp(value: object) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _codex_history_dispatch_sort_key(item: Mapping[str, Any], *, now: datetime | None = None) -> tuple[int, str, str, str]:
+    dispatching_priority = 1 if _codex_history_item_dispatching_stale(item, now=now) else 0
     return (
+        dispatching_priority,
+        str(item.get("updated_at") or item.get("created_at") or "").strip(),
         str(item.get("created_at") or "").strip(),
-        str(item.get("updated_at") or "").strip(),
         str(item.get("id") or "").strip(),
     )
 
