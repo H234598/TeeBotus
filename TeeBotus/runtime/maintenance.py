@@ -305,9 +305,13 @@ def _runtime_text_files(runtime_path: Path) -> list[Path]:
     result: list[Path] = []
     for pattern in ("*.log", "*.log.*", "*.jsonl", "*.jsonl.*"):
         for path in runtime_path.glob(pattern):
-            if path.is_symlink() or not path.is_file() or _is_compressed_runtime_file(path):
+            if _is_compressed_runtime_file(path) or _is_temporary_runtime_file(path):
                 continue
-            if _is_temporary_runtime_file(path):
+            try:
+                path_stat = path.stat(follow_symlinks=False)
+            except OSError:
+                continue
+            if not stat_module.S_ISREG(path_stat.st_mode):
                 continue
             if path.name in ACTIVE_RUNTIME_TEXT_FILENAMES:
                 continue

@@ -287,6 +287,36 @@ def test_runtime_maintenance_preserves_symlinked_runtime_text_files(tmp_path):
     assert (tmp_path / f"{rotated.name}.gz").exists()
 
 
+def test_runtime_maintenance_skips_text_files_that_disappear_during_scan(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 8 * 24 * 60 * 60
+    disappearing = tmp_path / "Security_Events.jsonl"
+    disappearing.write_text("gone\n", encoding="utf-8")
+    os.utime(disappearing, (old_mtime, old_mtime))
+    rotated = tmp_path / "teebotus-production.log.2026-06-01"
+    rotated.write_text("rotated log\n", encoding="utf-8")
+    os.utime(rotated, (old_mtime, old_mtime))
+    real_stat = Path.stat
+    raced = False
+
+    def disappearing_stat(self, *args, **kwargs):
+        nonlocal raced
+        if self == disappearing and kwargs.get("follow_symlinks") is False and not raced:
+            raced = True
+            disappearing.unlink()
+            raise FileNotFoundError(self)
+        return real_stat(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", disappearing_stat)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert raced is True
+    assert not disappearing.exists()
+    assert not rotated.exists()
+    assert (tmp_path / f"{rotated.name}.gz").exists()
+
+
 def test_gzip_file_preserves_symlinked_runtime_file(tmp_path):
     target = tmp_path / "external-target.txt"
     target.write_text("do not copy\n", encoding="utf-8")
