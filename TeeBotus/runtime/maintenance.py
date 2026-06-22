@@ -9,6 +9,7 @@ import sys
 import tarfile
 import time
 import stat as stat_module
+from contextlib import ExitStack
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
@@ -275,16 +276,22 @@ def gzip_file(path: Path, *, expected_stat: os.stat_result | None = None) -> Pat
         os.close(fd)
         return path
     target = _unique_path(path.with_name(f"{path.name}.gz"))
+    source_fd: int | None = fd
     temporary_fd: int | None = None
     temporary, temporary_fd = _create_unique_file(path.with_name(f".{target.name}.tmp"))
     try:
-        with os.fdopen(fd, "rb") as source, os.fdopen(temporary_fd, "wb") as raw_sink:
+        with ExitStack() as stack:
+            source = stack.enter_context(os.fdopen(source_fd, "rb"))
+            source_fd = None
+            raw_sink = stack.enter_context(os.fdopen(temporary_fd, "wb"))
             temporary_fd = None
             with gzip.GzipFile(fileobj=raw_sink, mode="wb") as sink:
                 shutil.copyfileobj(source, sink)
         os.utime(temporary, (source_stat.st_atime, source_stat.st_mtime))
         published = _publish_temporary_file(temporary, target)
     except Exception:
+        if source_fd is not None:
+            os.close(source_fd)
         if temporary_fd is not None:
             os.close(temporary_fd)
         _unlink_quietly(temporary)
