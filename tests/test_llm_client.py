@@ -432,12 +432,13 @@ def test_litellm_text_client_does_not_use_gemini_ring_for_explicit_openai_fallba
 
 
 def test_litellm_text_client_normalizes_fallback_api_key_model_names(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[tuple[str, str]] = []
+    calls: list[tuple[str, str, str]] = []
 
     def completion(**kwargs):
         model = str(kwargs["model"])
         api_key = str(kwargs.get("api_key") or "")
-        calls.append((model, api_key))
+        api_base = str(kwargs.get("api_base") or "")
+        calls.append((model, api_key, api_base))
         if model == "groq/primary-down":
             raise RuntimeError("primary unavailable")
         return {"choices": [{"message": {"content": f"ok:{api_key}"}}]}
@@ -451,14 +452,15 @@ def test_litellm_text_client_normalizes_fallback_api_key_model_names(monkeypatch
             api_key="primary-key",
             fallback_models=("fallback-ok",),
             fallback_api_keys={"fallback-ok": "fallback-key"},
+            fallback_api_bases={"fallback-ok": "https://groq.example/v1"},
         )
     ).create_reply("Ping", BotInstructions(), None)
 
     assert response.text == "ok:fallback-key"
     assert response.model == "groq/fallback-ok"
     assert calls == [
-        ("groq/primary-down", "primary-key"),
-        ("groq/fallback-ok", "fallback-key"),
+        ("groq/primary-down", "primary-key", ""),
+        ("groq/fallback-ok", "fallback-key", "https://groq.example/v1"),
     ]
 
 
