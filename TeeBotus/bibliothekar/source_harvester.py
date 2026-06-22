@@ -264,6 +264,8 @@ def _safe_destination_dir(value: str) -> str:
     parts = tuple(part for part in text.split("/") if part and part != ".")
     if not parts or any(part == ".." for part in parts):
         raise ValueError("destination_dir must be a relative library subdirectory")
+    if any(not any(char.isalnum() for char in part) for part in parts):
+        raise ValueError("destination_dir contains a path segment without a usable name")
     if parts[0].casefold() in set(HARVEST_DIRS):
         raise ValueError("destination_dir must not be a harvest staging directory")
     return "/".join(_safe_filename(part) for part in parts)
