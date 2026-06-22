@@ -1886,18 +1886,18 @@ _status_quoted_secret_assignment_pattern = re.compile(
     re.IGNORECASE,
 )
 _status_authorization_token_pattern = re.compile(
-    r"\b((?:proxy-)?authorization\s*[:=]\s*)(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])",
+    r"\b((?:proxy[-_])?authorization\s*[:=]\s*)(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])",
     re.IGNORECASE,
 )
 _status_quoted_authorization_value_pattern = re.compile(
-    r"\b((?:proxy-)?authorization\s*[:=]\s*)([\"'])(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(\2)(?=$|[\s,;&)\]}>])",
+    r"\b((?:proxy[-_])?authorization\s*[:=]\s*)([\"'`])(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(\2)(?=$|[\s,;&)\]}>])",
     re.IGNORECASE,
 )
 _status_bare_authorization_token_pattern = re.compile(
     r"(?<![A-Za-z0-9_-])((?i:Bearer|Basic|ApiKey)|Token)\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])"
 )
 _status_quoted_authorization_token_pattern = re.compile(
-    r"(^|[\s=;,&?(\[<{])([\"'])((?:proxy-)?authorization)\2(\s*[=:]\s*)([\"'])"
+    r"(^|[\s=;,&?(\[<{])([\"'`])((?:proxy[-_])?authorization)\2(\s*[=:]\s*)([\"'`])"
     r"(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(\5)",
     re.IGNORECASE,
 )

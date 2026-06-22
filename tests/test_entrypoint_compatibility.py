@@ -901,15 +901,35 @@ def test_runtime_status_text_redacts_quoted_authorization_values() -> None:
     text = bot._sanitize_status_text(
         "authorization=\"Bearer bearer-secret-token\" "
         "Authorization: 'Basic QWxhZGRpbjpvcGVuIHNlc2FtZQ==' "
-        "proxy-authorization=\"ApiKey proxy-secret-token\""
+        "proxy-authorization=\"ApiKey proxy-secret-token\" "
+        "proxy_authorization=`Token proxy-underscore-secret` "
+        "`authorization`:`Bearer backtick-key-secret`"
     )
 
     assert "bearer-secret-token" not in text
     assert "QWxhZGRpbjpvcGVuIHNlc2FtZQ==" not in text
     assert "proxy-secret-token" not in text
+    assert "proxy-underscore-secret" not in text
+    assert "backtick-key-secret" not in text
     assert 'authorization="Bearer <redacted-secret>"' in text
     assert "Authorization: 'Basic <redacted-secret>'" in text
     assert 'proxy-authorization="ApiKey <redacted-secret>"' in text
+    assert "proxy_authorization=`Token <redacted-secret>`" in text
+    assert "`authorization`:`Bearer <redacted-secret>`" in text
+
+
+def test_runtime_status_text_redacts_proxy_authorization_with_underscore() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    text = bot._sanitize_status_text(
+        "proxy_authorization=Bearer proxy-underscore-secret "
+        "PROXY_AUTHORIZATION='ApiKey quoted-proxy-underscore-secret'"
+    )
+
+    assert "proxy-underscore-secret" not in text
+    assert "quoted-proxy-underscore-secret" not in text
+    assert "proxy_authorization=Bearer <redacted-secret>" in text
+    assert "PROXY_AUTHORIZATION='ApiKey <redacted-secret>'" in text
 
 
 def test_runtime_status_text_redacts_multiline_private_key_blocks() -> None:
