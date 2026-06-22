@@ -214,9 +214,7 @@ class SourceHarvester:
                 for item in result.report.nli_results
             ],
         }
-        with self.manifest_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
-        _chmod_private_file(self.manifest_path)
+        _append_manifest_row(self.manifest_path, row)
 
     def _append_promote_manifest(self, result: SourcePromoteResult) -> None:
         row = {
@@ -229,9 +227,7 @@ class SourceHarvester:
             "accepted_for_ingest": False,
             "copied": result.copied,
         }
-        with self.manifest_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
-        _chmod_private_file(self.manifest_path)
+        _append_manifest_row(self.manifest_path, row)
 
 
 def _route_dir(route: SourceRoute) -> str:
@@ -309,6 +305,13 @@ def _refuse_symlink_destination_file(path: Path) -> None:
 def _refuse_symlink_manifest_file(path: Path) -> None:
     if path.is_symlink():
         raise ValueError(f"SourceHarvester refuses symlink manifest file: {path}")
+
+
+def _append_manifest_row(path: Path, row: Mapping[str, Any]) -> None:
+    _refuse_symlink_manifest_file(path)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
+    _chmod_private_file(path)
 
 
 def _same_path(left: object, right: Path) -> bool:
