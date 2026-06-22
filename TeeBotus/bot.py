@@ -1840,7 +1840,12 @@ def _sanitize_status_text(value: object) -> str:
     text = re.sub(r"\bhf_[A-Za-z0-9]{8,}\b", "hf_<redacted>", text)
     text = re.sub(r"\bgsk_[A-Za-z0-9]{8,}\b", "gsk_<redacted>", text)
     text = re.sub(r"\bAIza[0-9A-Za-z_-]{16,}\b", "AIza<redacted>", text)
+    text = re.sub(r"\bya29\.[A-Za-z0-9._-]{16,}\b", "ya29.<redacted>", text)
+    text = re.sub(r"\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}\b", "<redacted-jwt>", text)
     text = _sanitize_status_url_credentials(text)
+    text = _status_authorization_token_pattern.sub(r"\1\2 <redacted-secret>", text)
+    text = _status_bare_authorization_token_pattern.sub(r"\1 <redacted-secret>", text)
+    text = _status_quoted_authorization_token_pattern.sub(_status_quoted_authorization_token_replacement, text)
     text = _status_quoted_secret_assignment_pattern.sub(_status_quoted_secret_assignment_replacement, text)
     text = _status_secret_assignment_pattern.sub(_status_secret_assignment_replacement, text)
     text = _status_secret_assignment_fragment_pattern.sub(_status_secret_assignment_fragment_replacement, text)
@@ -1872,6 +1877,18 @@ _status_secret_assignment_fragment_pattern = re.compile(
 _status_quoted_secret_assignment_pattern = re.compile(
     rf"(^|[\s=;,&?#(\[<{{])([\"'])([A-Za-z0-9._-]{{0,120}}{_status_sensitive_assignment_key_pattern}[A-Za-z0-9._-]{{0,120}})\2(\s*[=:]\s*)"
     rf"({_status_secret_assignment_fragment_value_pattern})",
+    re.IGNORECASE,
+)
+_status_authorization_token_pattern = re.compile(
+    r"\b((?:proxy-)?authorization\s*[:=]\s*)(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])",
+    re.IGNORECASE,
+)
+_status_bare_authorization_token_pattern = re.compile(
+    r"(?<![A-Za-z0-9_-])((?i:Bearer|Basic|ApiKey)|Token)\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])"
+)
+_status_quoted_authorization_token_pattern = re.compile(
+    r"(^|[\s=;,&?(\[<{])([\"'])((?:proxy-)?authorization)\2(\s*[=:]\s*)([\"'])"
+    r"(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(\5)",
     re.IGNORECASE,
 )
 
@@ -1964,6 +1981,17 @@ def _status_quoted_secret_assignment_replacement(match: re.Match[str]) -> str:
     value_quote = raw_value[:1] if raw_value[:1] in {"'", '"', "`"} and raw_value[-1:] == raw_value[:1] else ""
     rendered_value = f"{value_quote}<redacted>{value_quote}" if value_quote else "<redacted>"
     return f"{prefix}{key_quote}{key}{key_quote}{separator}{rendered_value}"
+
+
+def _status_quoted_authorization_token_replacement(match: re.Match[str]) -> str:
+    prefix = str(match.group(1) or "")
+    key_quote = str(match.group(2) or '"')
+    key = str(match.group(3) or "authorization")
+    separator = str(match.group(4) or ":")
+    value_quote = str(match.group(5) or '"')
+    scheme = str(match.group(6) or "Bearer")
+    closing_quote = str(match.group(8) or value_quote)
+    return f"{prefix}{key_quote}{key}{key_quote}{separator}{value_quote}{scheme} <redacted-secret>{closing_quote}"
 
 
 def _status_secret_assignment_text(key: str, separator: str, value: str, *, original: str) -> str:

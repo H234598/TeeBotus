@@ -813,6 +813,30 @@ def test_runtime_status_text_redacts_structured_secret_assignments() -> None:
     assert "tokens=provider_usage_response" in text
 
 
+def test_runtime_status_text_redacts_oauth_jwt_and_authorization_tokens() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    google_oauth_token = "ya29.a0AfH6SMabcdefghijklmnopqrstuvwxyz1234567890"
+    jwt_like_token = "abcdefghijklmnopqrstuvwx.ABCDEF.abcdefghijklmnopqrstuvwxyz1234567890"
+    bearer_token = "abcdefghijklmnopqrstuvwxyz1234567890"
+    api_key_header_token = "apikeyheaderabcdefghijklmnopqrstuvwxyz123456"
+    text = bot._sanitize_status_text(
+        f"google_oauth={google_oauth_token} jwt={jwt_like_token} "
+        f"error=Authorization: Bearer {bearer_token}; bare=Bearer {bearer_token}; "
+        f"header=Authorization: ApiKey {api_key_header_token}; "
+        f"diagnostic_headers={{\"authorization\":\"Bearer {bearer_token}\"}}"
+    )
+
+    for leaked in (google_oauth_token, jwt_like_token, bearer_token, api_key_header_token):
+        assert leaked not in text
+    assert "google_oauth=ya29.<redacted>" in text
+    assert "jwt=<redacted-jwt>" in text
+    assert "Authorization: Bearer <redacted-secret>" in text
+    assert "Bearer <redacted-secret>" in text
+    assert "Authorization: ApiKey <redacted-secret>" in text
+    assert '"authorization":"Bearer <redacted-secret>"' in text
+
+
 def test_runtime_status_admin_notify_sanitizes_report_lines() -> None:
     bot = importlib.import_module("TeeBotus.bot")
 
