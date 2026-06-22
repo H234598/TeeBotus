@@ -185,6 +185,9 @@ class TeeStream:
         self.encoding = getattr(primary, "encoding", "utf-8")
         self.errors = getattr(primary, "errors", "strict")
 
+    def __getattr__(self, name: str) -> object:
+        return getattr(self.primary, name)
+
     def write(self, text: str) -> int:
         primary_write = getattr(self.primary, "write")
         secondary_write = getattr(self.secondary, "write")

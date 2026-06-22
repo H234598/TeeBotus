@@ -2161,6 +2161,15 @@ def test_tee_stream_returns_primary_write_result():
     assert secondary.getvalue() == "probe"
 
 
+def test_tee_stream_delegates_unknown_attributes_to_primary():
+    primary = io.StringIO()
+    tee = TeeStream(primary, io.StringIO(), Path("secondary.log"))
+
+    assert tee.closed is False
+    primary.close()
+    assert tee.closed is True
+
+
 def test_tee_stream_keeps_primary_stream_working_when_secondary_is_closed():
     primary = io.StringIO()
     secondary = io.StringIO()
