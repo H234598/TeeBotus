@@ -335,7 +335,7 @@ def _publish_temporary_file(temporary: Path, target: Path) -> Path:
         except FileExistsError:
             published = _unique_path(target)
             continue
-        temporary.unlink()
+        _unlink_quietly(temporary)
         return published
 
 

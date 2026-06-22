@@ -192,6 +192,28 @@ def test_gzip_file_does_not_overwrite_target_created_during_publish(tmp_path, mo
         assert handle.read() == "old log\n"
 
 
+def test_gzip_file_keeps_published_target_when_temporary_cleanup_fails(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    original_unlink = Path.unlink
+
+    def fail_temporary_unlink(self, *_args, **_kwargs):
+        if self.name.startswith(".") and ".gz.tmp" in self.name:
+            raise PermissionError("cleanup failed")
+        return original_unlink(self)
+
+    monkeypatch.setattr(Path, "unlink", fail_temporary_unlink)
+
+    published = gzip_file(path)
+
+    assert published.exists()
+    assert not path.exists()
+    with gzip.open(published, "rt", encoding="utf-8") as handle:
+        assert handle.read() == "old log\n"
+    temporary_files = list(tmp_path.glob(".*.tmp"))
+    assert len(temporary_files) == 1
+
+
 def test_gzip_file_removes_partial_temporary_file_on_copy_failure(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")
