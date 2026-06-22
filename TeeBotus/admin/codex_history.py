@@ -2078,37 +2078,161 @@ def _codex_history_mermaid_section(
     project = item.get("project", {})
     if not isinstance(project, Mapping):
         project = {}
+    summary = item.get("summary", {})
+    if not isinstance(summary, Mapping):
+        summary = {}
     repo_name = _mermaid_label(str(project.get("repo_name") or "Repo"), max_length=48)
     current_label = _mermaid_label(_codex_history_item_label(item), max_length=72)
+    direction = _codex_history_mermaid_direction(item)
+    changed_count = len(_sequence_values(summary.get("changed_files", [])))
+    test_count = len(_sequence_values(summary.get("tests", [])))
+    bullet_count = len(_sequence_values(summary.get("bullets", [])))
+    status = _mermaid_label(str(item.get("status") or "unknown"), max_length=32)
+    version = item.get("version", {})
+    if not isinstance(version, Mapping):
+        version = {}
+    summary_prefix = str(item.get("summary_prefix") or "").strip()
+    version_value = summary_prefix or str(version.get("tag") or version.get("semver") or "untagged").strip()
+    version_label = _mermaid_label(version_value, max_length=48)
+    delivery_label = _mermaid_label(_codex_history_mermaid_delivery_label(item), max_length=48)
+    status_history_count = _codex_history_status_history_count(item)
+    categories = _codex_history_mermaid_categories(item)
     lines = [
         CODEX_HISTORY_MERMAID_SECTION_TITLE,
         "```mermaid",
-        "flowchart LR",
-        f'  repo["{repo_name}"]:::repo',
-        f'  current["{current_label}"]:::current',
-        "  repo --> current",
+        f"flowchart {direction}",
+        '  subgraph timeline["Repo-Kontext"]',
+        "    direction LR",
+        f'    repo["{repo_name}"]:::repo',
+        f'    current(["{current_label}"]):::current',
+        "    repo -->|enthaelt| current",
     ]
     if previous_repo:
         previous_label = _mermaid_label(_codex_history_item_label(previous_repo), max_length=72)
-        lines.append(f'  previous["{previous_label}"]:::summary')
-        lines.append("  previous --> current")
+        lines.append(f'    previous["{previous_label}"]:::summary')
+        lines.append("    previous -->|vorher| current")
     if next_repo:
         next_label = _mermaid_label(_codex_history_item_label(next_repo), max_length=72)
-        lines.append(f'  next["{next_label}"]:::summary')
-        lines.append("  current --> next")
-    status = _mermaid_label(str(item.get("status") or "unknown"), max_length=32)
-    lines.append(f'  status["status: {status}"]:::status')
-    lines.append("  current --> status")
+        lines.append(f'    next["{next_label}"]:::summary')
+        lines.append("    current -->|naechste| next")
+    lines.extend(
+        [
+            "  end",
+            '  subgraph signals["Signale"]',
+            "    direction TB",
+            f'    status{{"Status: {status}"}}:::status',
+            f'    delivery["Dispatch: {delivery_label}"]:::dispatch',
+            f'    history["Status-Historie: {status_history_count}"]:::metric',
+            "  end",
+            '  subgraph scope["Umfang"]',
+            "    direction TB",
+            f'    version["Version: {version_label or "unknown"}"]:::version',
+            f'    files["Dateien: {changed_count}"]:::metric',
+            f'    checks["Checks: {test_count}"]:::metric',
+            f'    bullets["Punkte: {bullet_count}"]:::metric',
+            "  end",
+            "  current -->|Stand| status",
+            "  current -->|Versand| delivery",
+            "  status -->|Aenderungen| history",
+            "  current -->|Release| version",
+            "  current -->|Scope| files",
+            "  current -->|Verifikation| checks",
+            "  current -->|Inhalt| bullets",
+        ]
+    )
+    if categories:
+        lines.extend(['  subgraph categories["Kategorien"]', "    direction TB"])
+        for index, category in enumerate(categories):
+            category_label = _mermaid_label(category, max_length=42)
+            lines.append(f'    category_{index}["{category_label}"]:::category')
+            lines.append(f"    current -->|tag| category_{index}")
+        lines.append("  end")
     lines.extend(
         [
             "  classDef repo fill:#dbeafe,stroke:#2563eb,color:#111827",
             "  classDef current fill:#dcfce7,stroke:#16a34a,color:#111827,stroke-width:2px",
             "  classDef summary fill:#f3f4f6,stroke:#6b7280,color:#111827",
             "  classDef status fill:#fef3c7,stroke:#d97706,color:#111827",
+            "  classDef dispatch fill:#fee2e2,stroke:#dc2626,color:#111827",
+            "  classDef version fill:#e0f2fe,stroke:#0284c7,color:#111827",
+            "  classDef metric fill:#f8fafc,stroke:#64748b,color:#111827",
+            "  classDef category fill:#f3e8ff,stroke:#7c3aed,color:#111827",
             "```",
         ]
     )
     return "\n".join(lines)
+
+
+def _codex_history_mermaid_direction(item: Mapping[str, Any]) -> str:
+    summary = item.get("summary", {})
+    if not isinstance(summary, Mapping):
+        summary = {}
+    categories = set(_codex_history_bibliothekar_categories(item))
+    if _sequence_values(summary.get("tests", [])) or "change-test" in categories:
+        return "TD"
+    if any(category.startswith("risk-") for category in categories) or "change-security" in categories:
+        return "BT"
+    if "change-docs" in categories or "change-bibliothekar" in categories:
+        return "RL"
+    signature = "|".join(
+        [
+            str(item.get("id") or ""),
+            str(item.get("summary_prefix") or ""),
+            str(summary.get("title") or ""),
+            ",".join(sorted(categories)),
+        ]
+    )
+    directions = ("LR", "TD", "RL")
+    digest = hashlib.sha256(signature.encode("utf-8")).hexdigest()
+    return directions[int(digest[:2], 16) % len(directions)]
+
+
+def _codex_history_mermaid_categories(item: Mapping[str, Any]) -> list[str]:
+    ignored = {"admin-only", "codex-history", "project-history"}
+    priority_prefixes = ("risk-", "impact-", "change-", "work-")
+    categories = []
+    for category in _codex_history_bibliothekar_categories(item):
+        value = str(category or "").strip()
+        if not value or value in ignored or value.startswith(("repo-", "status-")):
+            continue
+        categories.append(value)
+    categories.sort(
+        key=lambda value: (
+            next((index for index, prefix in enumerate(priority_prefixes) if value.startswith(prefix)), len(priority_prefixes)),
+            value,
+        )
+    )
+    return categories[:5]
+
+
+def _codex_history_mermaid_delivery_label(item: Mapping[str, Any]) -> str:
+    delivery = item.get("delivery", {})
+    if not isinstance(delivery, Mapping):
+        delivery = {}
+    stages = (
+        ("acknowledged", "acknowledged_at"),
+        ("delivered", "delivered_at"),
+        ("accepted", "accepted_at"),
+        ("sent", "sent_at"),
+    )
+    for label, field in stages:
+        if str(delivery.get(field) or "").strip():
+            return label
+    attempts = delivery.get("attempts", 0)
+    try:
+        attempt_count = int(attempts or 0)
+    except (TypeError, ValueError):
+        attempt_count = 0
+    if attempt_count > 0:
+        return f"attempts: {attempt_count}"
+    return "not sent"
+
+
+def _codex_history_status_history_count(item: Mapping[str, Any]) -> int:
+    status_history = item.get("status_history", [])
+    if isinstance(status_history, Sequence) and not isinstance(status_history, (str, bytes, bytearray)):
+        return len(status_history)
+    return 0
 
 
 _CODEX_HISTORY_MARKDOWN_TIMESTAMP_RE = re.compile(
@@ -5095,6 +5219,12 @@ def _codex_history_graph_markdown(items: Sequence[Mapping[str, Any]], *, instanc
             },
         )
         repo_entry["items"].append(item)
+    graph_direction = "TD" if len(repos) > 2 else "LR"
+    status_counts = Counter(str(item.get("status") or "unknown").strip().casefold() or "unknown" for item in items if isinstance(item, Mapping))
+    category_counts: Counter[str] = Counter()
+    for item in items:
+        if isinstance(item, Mapping):
+            category_counts.update(_codex_history_mermaid_categories(item))
     lines = [
         f"# Codex History Graph: {redact_codex_history_text(instance_name).strip()}",
         "",
@@ -5107,8 +5237,14 @@ def _codex_history_graph_markdown(items: Sequence[Mapping[str, Any]], *, instanc
         f"- Erstellt: `{_display_codex_history_timestamp(utc_now())}`",
         "",
         "```mermaid",
-        "flowchart LR",
+        f"flowchart {graph_direction}",
         '  scope["Admin Codex-History"]:::scope',
+        f'  totals["{len(items)} Summaries / {len(repos)} Repos"]:::metric',
+        f'  status_overview["Status: {_mermaid_label(_codex_history_counter_label(status_counts), max_length=72)}"]:::status',
+        f'  category_overview["Top-Kategorien: {_mermaid_label(_codex_history_counter_label(category_counts), max_length=72)}"]:::category',
+        "  scope --> totals",
+        "  scope --> status_overview",
+        "  scope --> category_overview",
     ]
     if not repos:
         lines.append('  empty["Keine indexierbaren Codex-History-Eintraege"]:::empty')
@@ -5116,10 +5252,14 @@ def _codex_history_graph_markdown(items: Sequence[Mapping[str, Any]], *, instanc
     for repo_index, (_repo_id, repo_entry) in enumerate(sorted(repos.items(), key=lambda entry: str(entry[1].get("name", "")).casefold())):
         repo_node = f"repo_{repo_index}"
         repo_name = _mermaid_label(str(repo_entry.get("name") or "project"), max_length=48)
-        lines.append(f'  {repo_node}["{repo_name}"]:::repo')
-        lines.append(f"  scope --> {repo_node}")
         repo_items = list(repo_entry.get("items") or [])
         repo_items = sorted((item for item in repo_items if isinstance(item, Mapping)), key=_summary_sort_key)
+        repo_status_counts = Counter(str(item.get("status") or "unknown").strip().casefold() or "unknown" for item in repo_items)
+        repo_stats_node = f"repo_{repo_index}_stats"
+        lines.append(f'  {repo_node}["{repo_name}"]:::repo')
+        lines.append(f"  scope --> {repo_node}")
+        lines.append(f'  {repo_stats_node}["{len(repo_items)} Summaries / {_mermaid_label(_codex_history_counter_label(repo_status_counts), max_length=48)}"]:::metric')
+        lines.append(f"  {repo_node} --> {repo_stats_node}")
         previous_node = ""
         for item_index, item in enumerate(repo_items[-20:]):
             item_node = f"item_{repo_index}_{item_index}"
@@ -5149,12 +5289,23 @@ def _codex_history_graph_markdown(items: Sequence[Mapping[str, Any]], *, instanc
             "  classDef summary fill:#ecfdf5,stroke:#059669,color:#111827",
             "  classDef status fill:#fef3c7,stroke:#d97706,color:#111827",
             "  classDef category fill:#f3e8ff,stroke:#7c3aed,color:#111827",
+            "  classDef metric fill:#f8fafc,stroke:#64748b,color:#111827",
             "  classDef empty fill:#fee2e2,stroke:#dc2626,color:#111827",
             "```",
             "",
         ]
     )
     return "\n".join(lines)
+
+
+def _codex_history_counter_label(counter: Counter[str], *, max_items: int = 4) -> str:
+    if not counter:
+        return "none"
+    parts = [f"{name}={count}" for name, count in counter.most_common(max_items)]
+    remaining = sum(counter.values()) - sum(count for _name, count in counter.most_common(max_items))
+    if remaining > 0:
+        parts.append(f"other={remaining}")
+    return ", ".join(parts)
 
 
 def _codex_history_graph_project(instance_name: str, *, repo: str = "") -> dict[str, Any]:

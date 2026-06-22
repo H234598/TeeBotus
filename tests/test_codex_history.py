@@ -757,6 +757,10 @@ def test_codex_history_graph_export_writes_admin_only_mermaid_doc(tmp_path: Path
     assert "flowchart LR" in graph_text
     assert "Admin-only TeeBotus Codex-History-Graph" in graph_text
     assert "Graph Export" in graph_text
+    assert 'totals["1 Summaries / 1 Repos"]:::metric' in graph_text
+    assert 'status_overview["Status: queued=1"]:::status' in graph_text
+    assert "Top-Kategorien:" in graph_text
+    assert 'repo_0_stats["1 Summaries / queued=1"]:::metric' in graph_text
     assert result["svg_exported"] == 1
     svg_path = Path(result["svg_path"])
     assert svg_path.suffix == ".svg"
@@ -1925,7 +1929,42 @@ def test_import_codex_session_file_imports_each_final_turn_from_explicit_file(tm
     assert "Vorherige im Repo" in persisted[1]["summary"]["markdown"]
     assert persisted[0]["id"] in persisted[1]["summary"]["markdown"]
     assert "## Mermaid-Kontext" in persisted[0]["summary"]["markdown"]
-    assert "flowchart LR" in persisted[0]["summary"]["markdown"]
+    assert "flowchart " in persisted[0]["summary"]["markdown"]
+    assert 'subgraph signals["Signale"]' in persisted[0]["summary"]["markdown"]
+    assert 'subgraph scope["Umfang"]' in persisted[0]["summary"]["markdown"]
+    assert "Status-Historie:" in persisted[0]["summary"]["markdown"]
+
+
+def test_codex_history_mermaid_context_varies_layout_and_shows_summary_signals(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "mermaid-context-demo", version="1.9.5")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    security = append_codex_history_summary(
+        store,
+        repo_root=repo,
+        title="Secret Guard",
+        bullets=["Admin Secret Guard repariert."],
+        changed_files=["TeeBotus/runtime/config.py", "TeeBotus/runtime/engine.py"],
+    )
+    tested = append_codex_history_summary(
+        store,
+        repo_root=repo,
+        title="Dependency Test",
+        bullets=["pytest und Dependency-Checks gepinnt."],
+        changed_files=["pyproject.toml"],
+        tests=["pytest tests/test_codex_history.py"],
+    )
+
+    rows = {row["id"]: row for row in store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)}
+    security_markdown = rows[security["id"]]["summary"]["markdown"]
+    tested_markdown = rows[tested["id"]]["summary"]["markdown"]
+
+    assert "flowchart BT" in security_markdown
+    assert "flowchart TD" in tested_markdown
+    assert 'files["Dateien: 2"]:::metric' in security_markdown
+    assert 'checks["Checks: 1"]:::metric' in tested_markdown
+    assert 'delivery["Dispatch: not sent"]:::dispatch' in tested_markdown
+    assert "change-security" in security_markdown
+    assert "change-test" in tested_markdown
 
 
 def test_import_codex_session_roots_directory_scan_imports_latest_final_turn_only(tmp_path: Path) -> None:
