@@ -498,10 +498,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         return False, "llm profiles plan2 contract failed: " + "; ".join(errors)
     return True, (
         "llm profiles plan2 contract=ok "
-        "profiles=local_ollama,hf_pool_structured,hf_mistral,hf_qwen,groq_fast,"
-        "gemini_flash_stateless,gemini_flash_stateful,gemini_flash_paid_stateless,gemini_flash_paid_stateful,"
-        "gemini_2_5_flash_stateless,gemini_2_5_flash_stateful,gemini_2_5_flash_paid_stateless,"
-        "gemini_2_5_flash_paid_stateful,vertex_gemini_flash,vertex_gemini_2_5_flash,openai_premium"
+        f"profiles={','.join(expected_profiles)}"
     )
 
 
