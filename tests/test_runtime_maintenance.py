@@ -164,6 +164,34 @@ def test_rotate_runtime_text_file_preserves_source_replaced_before_cleanup(tmp_p
         assert handle.read() == "0123456789\n"
 
 
+def test_rotate_runtime_text_file_removes_rotated_duplicate_when_source_modified_in_place(tmp_path, monkeypatch):
+    path = tmp_path / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+    rotated = tmp_path / "Security_Events.jsonl.2026-06-22-181200"
+    real_link = os.link
+    raced = False
+    monkeypatch.setattr("TeeBotus.runtime.maintenance._next_rotated_path", lambda _path: rotated)
+
+    def racing_link(source, destination, *args, **kwargs):
+        nonlocal raced
+        result = real_link(source, destination, *args, **kwargs)
+        if Path(destination) == rotated and not raced:
+            raced = True
+            with path.open("a", encoding="utf-8") as handle:
+                handle.write("new log\n")
+        return result
+
+    monkeypatch.setattr(os, "link", racing_link)
+
+    result = rotate_runtime_text_file_if_needed(path, max_bytes=4)
+
+    assert raced is True
+    assert result is None
+    assert path.read_text(encoding="utf-8") == "0123456789\nnew log\n"
+    assert not rotated.exists()
+    assert not (tmp_path / f"{rotated.name}.gz").exists()
+
+
 def test_rotate_runtime_text_file_skips_source_replaced_before_link(tmp_path, monkeypatch):
     path = tmp_path / "Security_Events.jsonl"
     path.write_text("0123456789\n", encoding="utf-8")

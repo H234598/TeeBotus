@@ -376,7 +376,14 @@ def rotate_runtime_text_file_if_needed(path: Path | str, *, max_bytes: int = MAX
     rotated = _link_file_to_unique_path(path, _next_rotated_path(path), expected_stat=source_stat)
     if rotated is None:
         return None
-    _unlink_if_same_file(path, source_stat, require_unchanged=True)
+    if not _unlink_if_same_file(path, source_stat, require_unchanged=True):
+        try:
+            current_source_stat = os.stat(path, follow_symlinks=False)
+        except (OSError, ValueError):
+            current_source_stat = None
+        if current_source_stat is not None and _same_file_stat(current_source_stat, source_stat):
+            _unlink_if_same_file(rotated, source_stat)
+            return None
     try:
         return gzip_file(rotated, expected_stat=source_stat)
     except (OSError, ValueError, RuntimeError):
@@ -599,16 +606,16 @@ def _add_regular_file_to_archive(
     return archived_stat
 
 
-def _unlink_if_same_file(path: Path, expected_stat: os.stat_result, *, require_unchanged: bool = False) -> None:
+def _unlink_if_same_file(path: Path, expected_stat: os.stat_result, *, require_unchanged: bool = False) -> bool:
     try:
         current_stat = os.stat(path, follow_symlinks=False)
     except (OSError, ValueError):
-        return
+        return False
     if not _same_file_stat(current_stat, expected_stat):
-        return
+        return False
     if require_unchanged and not _same_file_snapshot(current_stat, expected_stat):
-        return
-    _unlink_quietly(path)
+        return False
+    return _unlink_quietly(path)
 
 
 def _same_file_stat(left: os.stat_result, right: os.stat_result) -> bool:
@@ -715,11 +722,12 @@ def _publish_temporary_file(temporary: Path, target: Path, *, expected_stat: os.
         return published
 
 
-def _unlink_quietly(path: Path) -> None:
+def _unlink_quietly(path: Path) -> bool:
     try:
         path.unlink()
     except (OSError, ValueError):
-        pass
+        return False
+    return True
 
 
 def _close_fd_quietly(fd: int) -> None:
