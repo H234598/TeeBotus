@@ -153,6 +153,8 @@ class SourceHarvester:
                 continue
             if not isinstance(row, dict) or row.get("sha256") != sha256 or row.get("route") != route:
                 continue
+            if route == "accepted" and not _coerce_bool(row.get("accepted_for_ingest")):
+                continue
             stored = Path(str(row.get("stored_path") or ""))
             if stored.exists():
                 return stored

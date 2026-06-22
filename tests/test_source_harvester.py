@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 
 import pytest
@@ -102,6 +103,50 @@ def test_source_harvester_promotes_manifest_string_true_acceptance(tmp_path):
 
     assert promoted.promoted_path.exists()
     assert promoted.promoted_path.parent == store.library_dir / "books"
+
+
+def test_source_harvester_ignores_non_ingestable_accepted_duplicate_rows(tmp_path):
+    instances_dir = tmp_path / "instances"
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", instances_dir)
+    harvester = SourceHarvester(
+        store.library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+    harvester.prepare()
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    stale_path = store.library_dir / "accepted" / f"{sha256[:16]}-{source.name}"
+    stale_path.write_text("alter nicht ingestbarer Stand", encoding="utf-8")
+    harvester.manifest_path.write_text(
+        json.dumps(
+            {
+                "accepted_for_ingest": False,
+                "route": "accepted",
+                "sha256": sha256,
+                "source_path": str(source),
+                "stored_path": str(stale_path),
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+    rows = [json.loads(line) for line in harvester.manifest_path.read_text(encoding="utf-8").splitlines()]
+
+    assert result.duplicate_of is None
+    assert result.accepted_for_ingest is True
+    assert result.stored_path == stale_path
+    assert rows[-1]["accepted_for_ingest"] is True
 
 
 def test_source_harvester_rejects_absolute_promote_destination_dir(tmp_path):
