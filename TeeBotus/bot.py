@@ -1952,10 +1952,7 @@ def _sanitize_status_url_value(value: str, *, value_prefix: str = "") -> str:
         except ValueError:
             return f"{value_prefix}{value}"
         if parsed_schemeless.hostname and (parsed_schemeless.username is not None or parsed_schemeless.password is not None):
-            host = parsed_schemeless.hostname or ""
-            netloc = f"<redacted>@{host}"
-            if parsed_schemeless.port is not None:
-                netloc = f"{netloc}:{parsed_schemeless.port}"
+            netloc = _status_redacted_url_netloc(parsed_schemeless)
             query = _sanitize_status_url_param_secrets(parsed_schemeless.query)
             fragment = _sanitize_status_url_param_secrets(parsed_schemeless.fragment)
             rendered = urlunsplit(("", netloc, parsed_schemeless.path, query, fragment)).removeprefix("//")
@@ -1972,12 +1969,22 @@ def _sanitize_status_url_value(value: str, *, value_prefix: str = "") -> str:
     host = parsed.hostname or ""
     if not host:
         return f"{value_prefix}{value}"
-    netloc = f"<redacted>@{host}"
-    if parsed.port is not None:
-        netloc = f"{netloc}:{parsed.port}"
+    netloc = _status_redacted_url_netloc(parsed)
     query = _sanitize_status_url_param_secrets(parsed.query)
     fragment = _sanitize_status_url_param_secrets(parsed.fragment)
     return f"{value_prefix}{urlunsplit((parsed.scheme, netloc, parsed.path, query, fragment))}"
+
+
+def _status_redacted_url_netloc(parsed: Any) -> str:
+    host = parsed.hostname or ""
+    netloc = f"<redacted>@{host}"
+    try:
+        port = parsed.port
+    except ValueError:
+        port = None
+    if port is not None:
+        netloc = f"{netloc}:{port}"
+    return netloc
 
 
 def _status_secret_assignment_replacement(match: re.Match[str]) -> str:
