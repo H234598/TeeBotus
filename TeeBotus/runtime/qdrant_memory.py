@@ -169,7 +169,7 @@ class QdrantMemoryIndex:
         self._request_json(
             "POST",
             f"/collections/{quote(_validate_collection(self.collection), safe='')}/points/delete?wait=true",
-            {"filter": _qdrant_scope_filter(instance_name=instance, account_id=account)},
+            {"filter": _qdrant_scope_filter(instance_name=instance, account_id=account, schema=None)},
         )
         if not include_legacy_raw_account_id_cleanup:
             return
@@ -293,7 +293,7 @@ def _qdrant_scope_filter(
     *,
     instance_name: str,
     account_id: str,
-    schema: str = QDRANT_MEMORY_PAYLOAD_SCHEMA,
+    schema: str | None = QDRANT_MEMORY_PAYLOAD_SCHEMA,
     schema_version: int | None = None,
     embedding_model: str = "",
     embedding_dimensions: int | None = None,
@@ -301,14 +301,18 @@ def _qdrant_scope_filter(
     must = [
         {"key": "instance_name", "match": {"value": instance_name}},
         {
-            "key": "schema",
-            "match": {"value": str(schema or QDRANT_MEMORY_PAYLOAD_SCHEMA).strip() or QDRANT_MEMORY_PAYLOAD_SCHEMA},
-        },
-        {
             "key": "account_scope",
             "match": {"value": _account_scope(instance_name=instance_name, account_id=account_id)},
         },
     ]
+    if schema is not None:
+        must.insert(
+            1,
+            {
+                "key": "schema",
+                "match": {"value": str(schema or QDRANT_MEMORY_PAYLOAD_SCHEMA).strip() or QDRANT_MEMORY_PAYLOAD_SCHEMA},
+            },
+        )
     if schema_version is not None:
         try:
             version = int(schema_version)

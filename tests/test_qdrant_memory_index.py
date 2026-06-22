@@ -342,6 +342,7 @@ def test_qdrant_memory_delete_account_removes_only_matching_scope() -> None:
     index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
     point_a = index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "mem_a", "user_text": "Schlaf"})
     point_b = index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_B, entry={"id": "mem_b", "user_text": "Schlaf"})
+    point_other_instance = index.index_memory(instance_name="Bote_der_Wahrheit", account_id=ACCOUNT_A, entry={"id": "mem_other", "user_text": "Schlaf"})
     point_other_schema = index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "mem_other_schema", "user_text": "Schlaf"})
     fake_qdrant.points[point_other_schema]["payload"]["schema"] = "other_payload_schema"
     scope_a = fake_qdrant.points[point_a]["payload"]["account_scope"]
@@ -350,10 +351,11 @@ def test_qdrant_memory_delete_account_removes_only_matching_scope() -> None:
     index.delete_account(instance_name="Depressionsbot", account_id=ACCOUNT_A)
 
     remaining_payloads = [point["payload"] for point in fake_qdrant.points.values()]
-    assert [payload["memory_id"] for payload in remaining_payloads] == ["mem_b", "mem_other_schema"]
+    assert [payload["memory_id"] for payload in remaining_payloads] == ["mem_b", "mem_other"]
+    assert point_other_instance in fake_qdrant.points
     current_delete_body = fake_qdrant.calls[-1]["body"]
     assert ACCOUNT_A not in json.dumps(current_delete_body, ensure_ascii=False)
-    assert {"key": "schema", "match": {"value": QDRANT_MEMORY_PAYLOAD_SCHEMA}} in current_delete_body["filter"]["must"]
+    assert {"key": "schema", "match": {"value": QDRANT_MEMORY_PAYLOAD_SCHEMA}} not in current_delete_body["filter"]["must"]
     assert {"key": "account_scope", "match": {"value": scope_a}} in current_delete_body["filter"]["must"]
     assert {"key": "account_scope", "match": {"value": scope_b}} not in current_delete_body["filter"]["must"]
 
@@ -437,6 +439,21 @@ def test_qdrant_memory_rebuild_uses_account_store_as_truth(tmp_path) -> None:
     assert {point["payload"]["memory_id"] for point in fake_qdrant.points.values()} == {first_id, second_id}
     upsert_calls = [call for call in fake_qdrant.calls if call["method"] == "PUT" and call["path"] == "/collections/teebotus_user_memory/points"]
     assert len(upsert_calls[-1]["body"]["points"]) == 2
+
+
+def test_qdrant_memory_rebuild_clears_empty_account_cache(tmp_path) -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    account_id = store.resolve_or_create_account(telegram_identity_key(1234), display_label="Test")
+    old_point_id = index.index_memory(instance_name="Depressionsbot", account_id=account_id, entry={"id": "old", "user_text": "Alt"})
+
+    rebuilt = index.rebuild(account_store=store, instance_name="Depressionsbot", account_id=account_id)
+
+    assert rebuilt == ()
+    assert old_point_id not in fake_qdrant.points
+    upsert_calls = [call for call in fake_qdrant.calls if call["method"] == "PUT" and call["path"] == "/collections/teebotus_user_memory/points"]
+    assert len(upsert_calls) == 1
 
 
 def test_qdrant_memory_rebuild_preserves_cache_when_account_store_is_unreadable() -> None:
