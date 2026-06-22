@@ -198,6 +198,10 @@ class TeeStream:
             pass
         return len(text) if written is None else int(written)
 
+    def writelines(self, lines) -> None:
+        for line in lines:
+            self.write(line)
+
     def flush(self) -> None:
         primary_flush = getattr(self.primary, "flush", None)
         primary_exception: Exception | None = None

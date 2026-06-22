@@ -3273,6 +3273,30 @@ def test_tee_stream_returns_primary_write_result():
     assert secondary.getvalue() == "probe"
 
 
+def test_tee_stream_writelines_writes_to_primary_and_secondary():
+    primary = io.StringIO()
+    secondary = io.StringIO()
+    tee = TeeStream(primary, secondary, Path("secondary.log"))
+
+    assert tee.writelines(["one\n", "two\n"]) is None
+
+    assert primary.getvalue() == "one\ntwo\n"
+    assert secondary.getvalue() == "one\ntwo\n"
+
+
+def test_tee_stream_writelines_keeps_primary_when_secondary_fails():
+    class RuntimeFailingSecondary(io.StringIO):
+        def write(self, _text):
+            raise RuntimeError("secondary write failed")
+
+    primary = io.StringIO()
+    tee = TeeStream(primary, RuntimeFailingSecondary(), Path("secondary.log"))
+
+    tee.writelines(["one\n", "two\n"])
+
+    assert primary.getvalue() == "one\ntwo\n"
+
+
 def test_tee_stream_delegates_unknown_attributes_to_primary():
     primary = io.StringIO()
     tee = TeeStream(primary, io.StringIO(), Path("secondary.log"))
