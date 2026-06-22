@@ -40,6 +40,86 @@ def test_rotate_runtime_text_file_compresses_oversized_active_file(tmp_path):
         assert handle.read() == "0123456789\n"
 
 
+def test_rotate_runtime_text_file_does_not_overwrite_target_created_during_rotation(tmp_path, monkeypatch):
+    path = tmp_path / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+    real_link = os.link
+    raced_target: Path | None = None
+
+    def racing_link(source, destination, *args, **kwargs):
+        nonlocal raced_target
+        destination_path = Path(destination)
+        if destination_path.suffix != ".gz" and destination_path.name.startswith(f"{path.name}.") and raced_target is None:
+            raced_target = destination_path
+            destination_path.write_text("existing target\n", encoding="utf-8")
+            raise FileExistsError(destination)
+        return real_link(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(os, "link", racing_link)
+
+    compressed = rotate_runtime_text_file_if_needed(path, max_bytes=4)
+
+    assert raced_target is not None
+    assert raced_target.read_text(encoding="utf-8") == "existing target\n"
+    assert compressed is not None
+    assert compressed.exists()
+    assert compressed != raced_target.with_name(f"{raced_target.name}.gz")
+    assert not path.exists()
+    with gzip.open(compressed, "rt", encoding="utf-8") as handle:
+        assert handle.read() == "0123456789\n"
+
+
+def test_rotate_runtime_text_file_preserves_source_replaced_before_cleanup(tmp_path, monkeypatch):
+    path = tmp_path / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+    real_link = os.link
+    raced = False
+
+    def racing_link(source, destination, *args, **kwargs):
+        nonlocal raced
+        result = real_link(source, destination, *args, **kwargs)
+        destination_path = Path(destination)
+        if destination_path.suffix != ".gz" and destination_path.name.startswith(f"{path.name}.") and not raced:
+            raced = True
+            path.unlink()
+            path.write_text("replacement\n", encoding="utf-8")
+        return result
+
+    monkeypatch.setattr(os, "link", racing_link)
+
+    compressed = rotate_runtime_text_file_if_needed(path, max_bytes=4)
+
+    assert raced is True
+    assert path.read_text(encoding="utf-8") == "replacement\n"
+    assert compressed is not None
+    with gzip.open(compressed, "rt", encoding="utf-8") as handle:
+        assert handle.read() == "0123456789\n"
+
+
+def test_rotate_runtime_text_file_skips_source_replaced_before_link(tmp_path, monkeypatch):
+    path = tmp_path / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+    real_link = os.link
+    raced = False
+
+    def racing_link(source, destination, *args, **kwargs):
+        nonlocal raced
+        destination_path = Path(destination)
+        if destination_path.suffix != ".gz" and destination_path.name.startswith(f"{path.name}.") and not raced:
+            raced = True
+            path.unlink()
+            path.write_text("replacement\n", encoding="utf-8")
+        return real_link(source, destination, *args, **kwargs)
+
+    monkeypatch.setattr(os, "link", racing_link)
+
+    assert rotate_runtime_text_file_if_needed(path, max_bytes=4) is None
+
+    assert raced is True
+    assert path.read_text(encoding="utf-8") == "replacement\n"
+    assert not list(tmp_path.glob(f"{path.name}.*.gz"))
+
+
 def test_rotate_runtime_text_file_preserves_active_runtime_log_names(tmp_path):
     for filename in ACTIVE_RUNTIME_TEXT_FILENAMES:
         path = tmp_path / filename

@@ -217,11 +217,17 @@ def rotate_runtime_text_file_if_needed(path: Path, *, max_bytes: int = MAX_RUNTI
         return None
     if path.is_symlink() or not path.is_file():
         return None
-    if path.stat().st_size <= max_bytes:
+    try:
+        source_stat = os.stat(path, follow_symlinks=False)
+    except OSError:
         return None
-    rotated = _next_rotated_path(path)
-    path.rename(rotated)
-    return gzip_file(rotated)
+    if not stat_module.S_ISREG(source_stat.st_mode) or source_stat.st_size <= max_bytes:
+        return None
+    rotated = _link_file_to_unique_path(path, _next_rotated_path(path), expected_stat=source_stat)
+    if rotated is None:
+        return None
+    _unlink_if_same_file(path, source_stat)
+    return gzip_file(rotated, expected_stat=source_stat)
 
 
 def maintain_runtime_directory(
@@ -377,6 +383,26 @@ def _unlink_if_same_file(path: Path, expected_stat: os.stat_result) -> None:
 
 def _same_file_stat(left: os.stat_result, right: os.stat_result) -> bool:
     return (left.st_dev, left.st_ino) == (right.st_dev, right.st_ino)
+
+
+def _link_file_to_unique_path(source: Path, target: Path, *, expected_stat: os.stat_result) -> Path | None:
+    linked = target
+    while True:
+        try:
+            os.link(source, linked, follow_symlinks=False)
+        except FileExistsError:
+            linked = _unique_path(target)
+            continue
+        except OSError:
+            return None
+        try:
+            linked_stat = os.stat(linked, follow_symlinks=False)
+        except OSError:
+            return None
+        if _same_file_stat(linked_stat, expected_stat):
+            return linked
+        _unlink_quietly(linked)
+        return None
 
 
 def _next_rotated_path(path: Path) -> Path:
