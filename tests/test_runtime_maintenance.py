@@ -96,6 +96,19 @@ def test_configure_runtime_logging_uses_file_handler_when_stdout_is_not_runtime_
     assert any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
 
 
+def test_configure_runtime_logging_caps_provider_sdk_logs_during_debug_all(tmp_path):
+    for logger_name in ("litellm", "LiteLLM", "openai", "openai._base_client"):
+        logging.getLogger(logger_name).setLevel(logging.NOTSET)
+
+    configure_runtime_logging(level="debug_all", base_dir=tmp_path)
+
+    assert logging.getLogger().level == 1
+    assert logging.getLogger("litellm").level == logging.INFO
+    assert logging.getLogger("LiteLLM").level == logging.INFO
+    assert logging.getLogger("openai").level == logging.INFO
+    assert logging.getLogger("openai._base_client").level == logging.WARNING
+
+
 def test_configure_runtime_logging_can_tee_stdio_to_runtime_log(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdout", io.StringIO())
     monkeypatch.setattr(sys, "stderr", io.StringIO())

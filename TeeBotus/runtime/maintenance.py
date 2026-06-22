@@ -41,6 +41,8 @@ THIRD_PARTY_LOG_LEVELS = {
     "urllib3": logging.INFO,
     "LiteLLM": logging.INFO,
     "litellm": logging.INFO,
+    "openai": logging.INFO,
+    "openai._base_client": logging.WARNING,
     "asyncio": logging.WARNING,
     "apscheduler": logging.INFO,
     "tzlocal": logging.WARNING,
@@ -109,8 +111,6 @@ class TeeBotusLogContextFilter(logging.Filter):
 
 
 def _configure_third_party_loggers(level: int) -> None:
-    if level <= DEBUG_ALL:
-        return
     for logger_name, logger_level in THIRD_PARTY_LOG_LEVELS.items():
         logging.getLogger(logger_name).setLevel(logger_level)
 
