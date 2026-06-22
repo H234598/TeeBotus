@@ -12,6 +12,7 @@ import time
 import pytest
 
 from TeeBotus.runtime.maintenance import (
+    ACTIVE_RUNTIME_TEXT_FILENAMES,
     DEBUG_ALL,
     RuntimeTimedRotatingFileHandler,
     STDIO_LOG_FILENAME,
@@ -47,6 +48,27 @@ def test_runtime_maintenance_compresses_old_logs(tmp_path):
     compressed = tmp_path / f"{path.name}.gz"
     assert compressed.exists()
     assert not path.exists()
+
+
+def test_runtime_maintenance_preserves_active_runtime_logs(tmp_path):
+    now = time.time()
+    old_mtime = now - 8 * 24 * 60 * 60
+    for filename in ACTIVE_RUNTIME_TEXT_FILENAMES:
+        path = tmp_path / filename
+        path.write_text("active log\n", encoding="utf-8")
+        os.utime(path, (old_mtime, old_mtime))
+
+    rotated = tmp_path / "teebotus-production.log.2026-06-01"
+    rotated.write_text("rotated log\n", encoding="utf-8")
+    os.utime(rotated, (old_mtime, old_mtime))
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    for filename in ACTIVE_RUNTIME_TEXT_FILENAMES:
+        assert (tmp_path / filename).read_text(encoding="utf-8") == "active log\n"
+        assert not (tmp_path / f"{filename}.gz").exists()
+    assert not rotated.exists()
+    assert (tmp_path / f"{rotated.name}.gz").exists()
 
 
 def test_gzip_file_removes_partial_temporary_file_on_copy_failure(tmp_path, monkeypatch):

@@ -16,6 +16,7 @@ from TeeBotus.runtime.log_context import format_log_context
 RUNTIME_DIR = Path("data/runtime")
 PRODUCTION_LOG_FILENAME = "teebotus-production.log"
 STDIO_LOG_FILENAME = "teebotus-stdio.log"
+ACTIVE_RUNTIME_TEXT_FILENAMES = frozenset({PRODUCTION_LOG_FILENAME, STDIO_LOG_FILENAME})
 MAX_RUNTIME_TEXT_FILE_BYTES = 2 * 1024 * 1024
 COMPRESS_AFTER_SECONDS = 7 * 24 * 60 * 60
 MONTHLY_ARCHIVE_AFTER_SECONDS = 60 * 24 * 60 * 60
@@ -247,6 +248,8 @@ def _runtime_text_files(runtime_path: Path) -> list[Path]:
     for pattern in ("*.log", "*.log.*", "*.jsonl", "*.jsonl.*"):
         for path in runtime_path.glob(pattern):
             if not path.is_file() or path.suffix == ".gz":
+                continue
+            if path.name in ACTIVE_RUNTIME_TEXT_FILENAMES:
                 continue
             if archive_dir in path.parents:
                 continue
