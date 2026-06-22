@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import errno
 import gzip
 import logging
 import os
@@ -7,6 +8,7 @@ import shutil
 import sys
 import tarfile
 import time
+import stat as stat_module
 from datetime import datetime
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
@@ -245,21 +247,34 @@ def maintain_runtime_directory(
 def gzip_file(path: Path) -> Path:
     if path.is_symlink() or path.suffix == ".gz" or not path.is_file():
         return path
-    stat = path.stat()
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags)
+    except FileNotFoundError:
+        return path
+    except OSError as exc:
+        if exc.errno in {errno.EISDIR, errno.ELOOP, errno.ENOTDIR}:
+            return path
+        raise
+    try:
+        source_stat = os.fstat(fd)
+    except OSError:
+        os.close(fd)
+        raise
+    if not stat_module.S_ISREG(source_stat.st_mode):
+        os.close(fd)
+        return path
     target = _unique_path(path.with_name(f"{path.name}.gz"))
     temporary = _unique_path(path.with_name(f".{target.name}.tmp"))
     try:
-        with path.open("rb") as source, gzip.open(temporary, "wb") as sink:
+        with os.fdopen(fd, "rb") as source, gzip.open(temporary, "wb") as sink:
             shutil.copyfileobj(source, sink)
-        os.utime(temporary, (stat.st_atime, stat.st_mtime))
+        os.utime(temporary, (source_stat.st_atime, source_stat.st_mtime))
         published = _publish_temporary_file(temporary, target)
     except Exception:
         _unlink_quietly(temporary)
         raise
-    try:
-        path.unlink()
-    except FileNotFoundError:
-        pass
+    _unlink_if_same_file(path, source_stat)
     return published
 
 
@@ -302,13 +317,14 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
         archive_dir.mkdir(parents=True, exist_ok=True)
         archive_path = _unique_path(archive_dir / f"teebotus-runtime-{month}.tar.gz")
         temporary = _unique_path(archive_dir / f".{archive_path.name}.tmp")
-        added_paths: list[Path] = []
+        added_paths: list[tuple[Path, os.stat_result]] = []
         try:
             with tarfile.open(temporary, "w:gz") as archive:
                 for path in paths:
-                    if not _add_regular_file_to_archive(archive, path):
+                    archived_stat = _add_regular_file_to_archive(archive, path)
+                    if archived_stat is None:
                         continue
-                    added_paths.append(path)
+                    added_paths.append((path, archived_stat))
             if not added_paths:
                 _unlink_quietly(temporary)
                 continue
@@ -316,28 +332,43 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
         except Exception:
             _unlink_quietly(temporary)
             raise
-        for path in added_paths:
-            try:
-                path.unlink()
-            except FileNotFoundError:
-                pass
+        for path, archived_stat in added_paths:
+            _unlink_if_same_file(path, archived_stat)
 
 
-def _add_regular_file_to_archive(archive: tarfile.TarFile, path: Path) -> bool:
+def _add_regular_file_to_archive(archive: tarfile.TarFile, path: Path) -> os.stat_result | None:
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(path, flags)
     except OSError:
-        return False
+        return None
+    try:
+        archived_stat = os.fstat(fd)
+    except OSError:
+        os.close(fd)
+        return None
+    if not stat_module.S_ISREG(archived_stat.st_mode):
+        os.close(fd)
+        return None
     with os.fdopen(fd, "rb") as source:
         try:
             tarinfo = archive.gettarinfo(arcname=path.name, fileobj=source)
         except OSError:
-            return False
+            return None
         if tarinfo is None or not tarinfo.isreg():
-            return False
+            return None
         archive.addfile(tarinfo, source)
-    return True
+    return archived_stat
+
+
+def _unlink_if_same_file(path: Path, expected_stat: os.stat_result) -> None:
+    try:
+        current_stat = os.stat(path, follow_symlinks=False)
+    except OSError:
+        return
+    if (current_stat.st_dev, current_stat.st_ino) != (expected_stat.st_dev, expected_stat.st_ino):
+        return
+    _unlink_quietly(path)
 
 
 def _next_rotated_path(path: Path) -> Path:

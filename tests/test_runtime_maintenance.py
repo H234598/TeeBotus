@@ -163,6 +163,34 @@ def test_gzip_file_preserves_symlinked_runtime_file(tmp_path):
     assert not (tmp_path / f"{symlink.name}.gz").exists()
 
 
+def test_gzip_file_preserves_path_replaced_by_symlink_before_open(tmp_path, monkeypatch):
+    if not hasattr(os, "O_NOFOLLOW"):
+        pytest.skip("O_NOFOLLOW is required to reject symlink open races")
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    external = tmp_path / "external-target.txt"
+    external.write_text("do not copy\n", encoding="utf-8")
+    real_open = os.open
+    raced = False
+
+    def racing_open(file, flags, *args, **kwargs):
+        nonlocal raced
+        if Path(file) == path and not raced:
+            raced = True
+            path.unlink()
+            path.symlink_to(external)
+        return real_open(file, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", racing_open)
+
+    assert gzip_file(path) == path
+
+    assert raced is True
+    assert path.is_symlink()
+    assert external.read_text(encoding="utf-8") == "do not copy\n"
+    assert not (tmp_path / f"{path.name}.gz").exists()
+
+
 def test_gzip_file_does_not_overwrite_target_created_during_publish(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")
@@ -188,6 +216,32 @@ def test_gzip_file_does_not_overwrite_target_created_during_publish(tmp_path, mo
     assert published != target
     assert published.exists()
     assert not path.exists()
+    with gzip.open(published, "rt", encoding="utf-8") as handle:
+        assert handle.read() == "old log\n"
+
+
+def test_gzip_file_preserves_source_replaced_before_cleanup(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    target = tmp_path / f"{path.name}.gz"
+    real_link = os.link
+    raced = False
+
+    def racing_link(source, destination, *args, **kwargs):
+        nonlocal raced
+        real_link(source, destination, *args, **kwargs)
+        if Path(destination) == target and not raced:
+            raced = True
+            path.unlink()
+            path.write_text("new log\n", encoding="utf-8")
+
+    monkeypatch.setattr(os, "link", racing_link)
+
+    published = gzip_file(path)
+
+    assert raced is True
+    assert published == target
+    assert path.read_text(encoding="utf-8") == "new log\n"
     with gzip.open(published, "rt", encoding="utf-8") as handle:
         assert handle.read() == "old log\n"
 
@@ -376,6 +430,38 @@ def test_runtime_maintenance_does_not_overwrite_archive_created_during_publish(t
     assert not path.exists()
     with tarfile.open(published_archives[0], "r:gz") as archive:
         assert path.name in archive.getnames()
+
+
+def test_runtime_maintenance_preserves_archived_path_replaced_before_cleanup(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    real_link = os.link
+    raced = False
+
+    def racing_link(source, destination, *args, **kwargs):
+        nonlocal raced
+        real_link(source, destination, *args, **kwargs)
+        destination_path = Path(destination)
+        if destination_path.parent.name == "monthly_archives" and not raced:
+            raced = True
+            path.unlink()
+            path.write_bytes(b"replacement")
+
+    monkeypatch.setattr(os, "link", racing_link)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert raced is True
+    assert path.read_bytes() == b"replacement"
+    archives = sorted((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert len(archives) == 1
+    with tarfile.open(archives[0], "r:gz") as archive:
+        member = archive.extractfile(path.name)
+        assert member is not None
+        assert member.read() == b"compressed-ish"
 
 
 def test_runtime_maintenance_preserves_symlinked_compressed_runtime_files(tmp_path):
