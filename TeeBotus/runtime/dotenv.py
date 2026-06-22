@@ -48,9 +48,7 @@ def load_project_dotenv_for_instances(
 
 def project_root_for_instances_dir(instances_dir: str | Path) -> Path:
     path = Path(instances_dir).expanduser()
-    if path.name == "instances":
-        return path.parent if str(path.parent) else Path(".")
-    return path.parent
+    return _project_root_candidates(path)[0]
 
 
 def _read_dotenv_values(path: Path) -> dict[str, str]:
@@ -85,7 +83,55 @@ def _read_dotenv_values_fallback(path: Path) -> dict[str, str]:
 
 
 def _clean_dotenv_value(value: str) -> str:
-    cleaned = str(value or "").strip()
+    cleaned = _strip_unquoted_inline_comment(str(value or "").strip()).strip()
     if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {"'", '"'}:
         return cleaned[1:-1]
     return cleaned
+
+
+def _project_root_candidates(path: Path) -> tuple[Path, ...]:
+    candidates: list[Path] = []
+    seen: set[str] = set()
+
+    def add(candidate: Path) -> None:
+        key = str(candidate)
+        if key not in seen:
+            seen.add(key)
+            candidates.append(candidate)
+
+    for candidate in (path, *path.parents):
+        if candidate.name == "instances":
+            add(candidate.parent if str(candidate.parent) else Path("."))
+    if _looks_like_project_root(path):
+        add(path)
+    add(path.parent if str(path.parent) else Path("."))
+    for candidate in (path, *path.parents):
+        if _looks_like_project_root(candidate):
+            add(candidate)
+    return tuple(candidates) or (Path("."),)
+
+
+def _looks_like_project_root(path: Path) -> bool:
+    return (path / ".env").exists() or (path / "pyproject.toml").exists() or (path / ".git").exists()
+
+
+def _strip_unquoted_inline_comment(value: str) -> str:
+    in_single = False
+    in_double = False
+    escaped = False
+    for index, char in enumerate(value):
+        if escaped:
+            escaped = False
+            continue
+        if char == "\\" and in_double:
+            escaped = True
+            continue
+        if char == "'" and not in_double:
+            in_single = not in_single
+            continue
+        if char == '"' and not in_single:
+            in_double = not in_double
+            continue
+        if char == "#" and not in_single and not in_double and (index == 0 or value[index - 1].isspace()):
+            return value[:index].rstrip()
+    return value
