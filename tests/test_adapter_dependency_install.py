@@ -332,6 +332,10 @@ def test_llm_profiles_plan2_contract_accepts_current_profiles() -> None:
         "gemini_2_5_flash_paid_stateless,gemini_2_5_flash_paid_stateful,"
         "vertex_gemini_flash,vertex_gemini_2_5_flash,openai_premium"
     ) in message
+    assert (
+        "routes=normal_chat,hard_reasoning,cheap_fast,private,bibliothekar_answer,"
+        "structured_decision,codex_history_categorization,codex_history_strategic_analysis"
+    ) in message
 
 
 def test_llm_profiles_plan2_contract_rejects_wrong_api_key_env(monkeypatch) -> None:

@@ -492,7 +492,8 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         return False, "llm profiles plan2 contract failed: " + "; ".join(errors)
     return True, (
         "llm profiles plan2 contract=ok "
-        f"profiles={','.join(expected_profiles)}"
+        f"profiles={','.join(expected_profiles)} "
+        f"routes={','.join(expected_routes)}"
     )
 
 
