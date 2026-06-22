@@ -418,8 +418,8 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     try:
         raw_profile_config = _load_yaml_mapping(DEFAULT_PROFILE_PATH)
         raw_routing_config = _load_yaml_mapping(DEFAULT_ROUTING_PATH)
-        raw_profile_payload = raw_profile_config.get("profiles")
-        raw_routing_payload = raw_routing_config.get("purposes")
+        raw_profile_payload = raw_profile_config.get("profiles") if isinstance(raw_profile_config, dict) else None
+        raw_routing_payload = raw_routing_config.get("purposes") if isinstance(raw_routing_config, dict) else None
         profiles = load_llm_profiles()
         default_profile, routing = load_llm_routing()
     except Exception as exc:

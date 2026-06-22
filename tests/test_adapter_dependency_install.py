@@ -553,6 +553,34 @@ def test_llm_profiles_plan2_contract_rejects_raw_config_non_string_top_level_key
     assert "raw routing config key(s) must be string: 456" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_raw_config_non_mapping_without_unreadable(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+    profiles = llm_profiles.load_llm_profiles()
+    default_profile, routing = llm_profiles.load_llm_routing()
+
+    def fake_loader(path):
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            return ["profiles"]
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            return ["routing"]
+        return deepcopy(original_loader(path))
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+    monkeypatch.setattr(llm_profiles, "load_llm_profiles", lambda: profiles)
+    monkeypatch.setattr(llm_profiles, "load_llm_routing", lambda: (default_profile, routing))
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "unreadable" not in message
+    assert "raw profile config must be mapping" in message
+    assert "raw routing config must be mapping" in message
+
+
 def test_llm_profiles_plan2_contract_rejects_raw_profile_unknown_keys(monkeypatch) -> None:
     from copy import deepcopy
 
