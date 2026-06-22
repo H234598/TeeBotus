@@ -126,14 +126,14 @@ class LiteLLMTextClient:
         self.model = resolved.model.strip()
         self.fallback_models = tuple(item.strip() for item in resolved.fallback_models if item.strip())
         self.fallback_api_keys = {
-            str(model or "").strip(): str(api_key or "").strip()
+            _litellm_model_name(self.provider, str(model or "").strip()): str(api_key or "").strip()
             for model, api_key in dict(resolved.fallback_api_keys or {}).items()
-            if str(model or "").strip() and str(api_key or "").strip()
+            if _litellm_model_name(self.provider, str(model or "").strip()) and str(api_key or "").strip()
         }
         self.fallback_api_bases = {
-            str(model or "").strip(): str(api_base or "").strip()
+            _litellm_model_name(self.provider, str(model or "").strip()): str(api_base or "").strip()
             for model, api_base in dict(resolved.fallback_api_bases or {}).items()
-            if str(model or "").strip() and str(api_base or "").strip()
+            if _litellm_model_name(self.provider, str(model or "").strip()) and str(api_base or "").strip()
         }
         self.use_instruction_fallback_models = bool(resolved.use_instruction_fallback_models)
         self.api_key = resolved.api_key.strip()

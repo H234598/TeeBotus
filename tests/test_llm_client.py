@@ -431,6 +431,37 @@ def test_litellm_text_client_does_not_use_gemini_ring_for_explicit_openai_fallba
     ]
 
 
+def test_litellm_text_client_normalizes_fallback_api_key_model_names(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    def completion(**kwargs):
+        model = str(kwargs["model"])
+        api_key = str(kwargs.get("api_key") or "")
+        calls.append((model, api_key))
+        if model == "groq/primary-down":
+            raise RuntimeError("primary unavailable")
+        return {"choices": [{"message": {"content": f"ok:{api_key}"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="groq",
+            model="primary-down",
+            api_key="primary-key",
+            fallback_models=("fallback-ok",),
+            fallback_api_keys={"fallback-ok": "fallback-key"},
+        )
+    ).create_reply("Ping", BotInstructions(), None)
+
+    assert response.text == "ok:fallback-key"
+    assert response.model == "groq/fallback-ok"
+    assert calls == [
+        ("groq/primary-down", "primary-key"),
+        ("groq/fallback-ok", "fallback-key"),
+    ]
+
+
 def test_litellm_model_gemini_detection_prefers_explicit_model_prefix() -> None:
     assert litellm_provider._model_uses_gemini_api(
         provider="litellm_gemini_stateless",
