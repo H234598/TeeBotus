@@ -11,6 +11,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from TeeBotus.embedding import EmbeddingProvider, FakeEmbeddingProvider, HFEmbeddingProvider
+from TeeBotus.runtime.bibliothekar import _coerce_bool
 from TeeBotus.runtime.qdrant import (
     BIBLIOTHEKAR_QDRANT_EMBEDDING_DIMENSIONS,
     BIBLIOTHEKAR_QDRANT_EMBEDDING_MODEL,
@@ -204,7 +205,7 @@ def _chunk_payload(
         "source_quality": str(chunk.get("source_quality") or "unreviewed"),
         "citation_quality": str(chunk.get("citation_quality") or "unreviewed"),
         "source_quality_reason": str(chunk.get("source_quality_reason") or ""),
-        "source_requires_human_review": bool(chunk.get("source_requires_human_review")),
+        "source_requires_human_review": _coerce_bool(chunk.get("source_requires_human_review")),
         "source_harvest_route": str(chunk.get("source_harvest_route") or "manual"),
         "ingested_at": str(chunk.get("ingested_at") or ""),
         "chunk_index": chunk.get("chunk_index"),

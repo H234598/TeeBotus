@@ -90,6 +90,22 @@ def test_qdrant_bibliothekar_index_indexes_test_chunks_without_chunk_text() -> N
     assert payload["source_harvest_route"] == "manual"
 
 
+def test_qdrant_bibliothekar_payload_coerces_string_false_review_flag() -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantBibliothekarIndex(
+        url="http://127.0.0.1:6333",
+        opener=fake_qdrant,
+        embedding_provider=FakeEmbeddingProvider(dimensions=16),
+    )
+    chunk = _chunk("chunk_sleep", text="Schlafhygiene und Tagesstruktur.")
+    chunk["source_requires_human_review"] = "false"
+
+    point_ids = index.index_chunks(instance_name="Depressionsbot", chunks=[chunk])
+    payload = fake_qdrant.points[point_ids[0]]["payload"]
+
+    assert payload["source_requires_human_review"] is False
+
+
 def test_qdrant_bibliothekar_search_is_scoped_by_instance() -> None:
     fake_qdrant = _FakeQdrant()
     index = QdrantBibliothekarIndex(url="http://127.0.0.1:6333", opener=fake_qdrant, embedding_provider=FakeEmbeddingProvider(dimensions=16))

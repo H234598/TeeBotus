@@ -400,7 +400,7 @@ def _source_metadata_from_harvest_row(row: dict[str, Any]) -> dict[str, Any]:
         "source_quality": status or "unreviewed",
         "citation_quality": _citation_quality_from_source_status(status),
         "source_quality_reason": str(decision.get("reason") or "").strip(),
-        "source_requires_human_review": bool(decision.get("requires_human_review")),
+        "source_requires_human_review": _coerce_bool(decision.get("requires_human_review")),
         "source_harvest_route": str(row.get("route") or "accepted").strip() or "accepted",
     }
 
@@ -412,6 +412,21 @@ def _citation_quality_from_source_status(status: str) -> str:
     if normalized in {"reject", "rejected"}:
         return "rejected"
     return "unreviewed"
+
+
+def _coerce_bool(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return value != 0
+    text = str(value).strip().casefold()
+    if text in {"", "0", "false", "falsch", "no", "nein", "n", "off"}:
+        return False
+    if text in {"1", "true", "wahr", "yes", "ja", "j", "y", "on"}:
+        return True
+    return bool(value)
 
 
 def _index_document(
@@ -434,7 +449,7 @@ def _index_document(
     source_quality = str(source_meta.get("source_quality") or "unreviewed").strip() or "unreviewed"
     citation_quality = str(source_meta.get("citation_quality") or _citation_quality_from_source_status(source_quality)).strip() or "unreviewed"
     source_quality_reason = str(source_meta.get("source_quality_reason") or "").strip()
-    source_requires_human_review = bool(source_meta.get("source_requires_human_review"))
+    source_requires_human_review = _coerce_bool(source_meta.get("source_requires_human_review"))
     source_harvest_route = str(source_meta.get("source_harvest_route") or "manual").strip() or "manual"
     error = ""
     sections: list[tuple[str, str]] = []
@@ -652,7 +667,7 @@ def _chunk_prompt_item(chunk: dict[str, Any], *, max_quote_chars: int) -> dict[s
         "source_quality": str(chunk.get("source_quality", "") or "unreviewed"),
         "citation_quality": str(chunk.get("citation_quality", "") or "unreviewed"),
         "source_quality_reason": str(chunk.get("source_quality_reason", "")),
-        "source_requires_human_review": bool(chunk.get("source_requires_human_review")),
+        "source_requires_human_review": _coerce_bool(chunk.get("source_requires_human_review")),
         "source_harvest_route": str(chunk.get("source_harvest_route", "") or "manual"),
         "ingested_at": str(chunk.get("ingested_at", "")),
         "chunk_index": chunk.get("chunk_index"),
