@@ -1396,6 +1396,28 @@ def test_configure_runtime_logging_refuses_symlinked_runtime_log_path(tmp_path, 
     assert external.read_text(encoding="utf-8") == ""
 
 
+def test_configure_runtime_logging_continues_when_file_handler_fdopen_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    real_fdopen = os.fdopen
+
+    def fail_runtime_log_fdopen(fd, mode="r", *args, **kwargs):
+        if mode == "a":
+            raise ValueError("runtime log fdopen failed")
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    monkeypatch.setattr(os, "fdopen", fail_runtime_log_fdopen)
+
+    configure_runtime_logging(base_dir=tmp_path)
+    logging.getLogger("TeeBotus.test").warning("stream only")
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    handlers = logging.getLogger().handlers
+    assert len(handlers) == 1
+    assert not any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
+    assert "stream only" in sys.stdout.getvalue()
+
+
 def test_configure_runtime_logging_refuses_symlinked_runtime_directory(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdout", io.StringIO())
     external_runtime_dir = tmp_path / "external-runtime"

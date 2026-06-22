@@ -92,7 +92,7 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | Non
     if runtime_directory_ready and not stdout_targets_log:
         try:
             file_handler = RuntimeTimedRotatingFileHandler(log_path)
-        except OSError:
+        except (OSError, ValueError):
             file_handler = None
         if file_handler is not None:
             file_handler.setFormatter(formatter)
