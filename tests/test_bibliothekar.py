@@ -335,6 +335,50 @@ def test_bibliothekar_harvest_manifest_string_bool_flags(tmp_path):
     assert payload["selected_library_chunks"][0]["source_requires_human_review"] is False
 
 
+def test_bibliothekar_harvest_manifest_normalizes_source_quality_status(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    book_dir = library_dir / "books"
+    book_dir.mkdir(parents=True)
+    source = book_dir / "therapie.txt"
+    source.write_text("Depression Therapie Aktivierung.", encoding="utf-8")
+    accepted_path = library_dir / "accepted" / "therapie.txt"
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    manifest_path = library_dir / "harvest_manifest.jsonl"
+    rows = [
+        {
+            "accepted_for_ingest": True,
+            "decision": {
+                "confidence": 0.8,
+                "reason": "imported uppercase source status",
+                "requires_human_review": False,
+                "status": "USABLE",
+            },
+            "route": "accepted",
+            "sha256": sha256,
+            "source": {"metadata": {"license": "private", "title": "Therapiequelle"}},
+            "source_path": "/tmp/original-therapie.txt",
+            "stored_path": str(accepted_path),
+        },
+        {
+            "accepted_for_ingest": False,
+            "event": "promoted",
+            "route": "promoted",
+            "sha256": sha256,
+            "source_path": str(accepted_path),
+            "stored_path": str(source),
+        },
+    ]
+    manifest_path.write_text("\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in rows) + "\n", encoding="utf-8")
+
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+    payload = json.loads(store.select("Therapie", max_chunks=1).prompt_text)
+    chunk = payload["selected_library_chunks"][0]
+
+    assert chunk["source_quality"] == "usable"
+    assert chunk["citation_quality"] == "usable"
+
+
 def test_bibliothekar_harvest_manifest_relative_paths_survive_cwd_change(tmp_path, monkeypatch):
     workspace = tmp_path / "workspace"
     workspace.mkdir()

@@ -405,12 +405,21 @@ def _source_metadata_from_harvest_row(row: dict[str, Any]) -> dict[str, Any]:
     return {
         "title": str(source_metadata.get("title") or "").strip(),
         "license": str(source_metadata.get("license") or "").strip(),
-        "source_quality": status or "unreviewed",
+        "source_quality": _source_quality_from_source_status(status),
         "citation_quality": _citation_quality_from_source_status(status),
         "source_quality_reason": str(decision.get("reason") or "").strip(),
         "source_requires_human_review": _coerce_bool(decision.get("requires_human_review")),
         "source_harvest_route": str(row.get("route") or "accepted").strip() or "accepted",
     }
+
+
+def _source_quality_from_source_status(status: str) -> str:
+    normalized = str(status or "").strip().casefold()
+    if normalized in {"trusted", "usable", "weak", "unreviewed"}:
+        return normalized
+    if normalized in {"reject", "rejected"}:
+        return "rejected"
+    return "unreviewed"
 
 
 def _citation_quality_from_source_status(status: str) -> str:
