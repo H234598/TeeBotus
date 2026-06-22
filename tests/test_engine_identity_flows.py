@@ -911,6 +911,25 @@ def test_status_warns_for_stateful_gemini_free_tier_interaction_retention(tmp_pa
     assert "Free-Tier-Interaction-Retention" in text
 
 
+def test_status_normalizes_gemini_interactions_alias_to_litellm_stateful(tmp_path):
+    class AliasGeminiClient:
+        provider_name = "gemini_stateful"
+        model = "gemini/gemini-3.5-flash"
+
+    text = build_status_reply(
+        sender_id="1",
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        llm_enabled=True,
+        llm_client=AliasGeminiClient(),
+        bibliothekar_enabled=False,
+        env={},
+    )
+
+    assert "- Chat/Text: litellm_gemini_stateful / gemini/gemini-3.5-flash" in text
+    assert "gemini_interactions / gemini/gemini-3.5-flash" not in text
+
+
 def test_status_api_budget_accepts_gemini_key_ring_without_single_key(tmp_path):
     class StatefulGeminiClient:
         provider_name = "litellm_gemini_stateful"
