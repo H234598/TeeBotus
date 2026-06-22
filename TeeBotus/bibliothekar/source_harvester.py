@@ -283,6 +283,8 @@ def _looks_like_uri_destination(value: str) -> bool:
 
 
 def _unique_destination(candidate: Path, *, sha256: str) -> Path:
+    if candidate.is_symlink():
+        raise ValueError(f"SourceHarvester refuses symlink destination file: {candidate}")
     if not candidate.exists():
         return candidate
     try:
@@ -294,6 +296,8 @@ def _unique_destination(candidate: Path, *, sha256: str) -> Path:
     suffix = candidate.suffix
     for index in range(2, 10_000):
         versioned = candidate.with_name(f"{stem}-{index}{suffix}")
+        if versioned.is_symlink():
+            raise ValueError(f"SourceHarvester refuses symlink destination file: {versioned}")
         if not versioned.exists():
             return versioned
     raise FileExistsError(candidate)
