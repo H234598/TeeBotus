@@ -263,7 +263,7 @@ def test_render_codex_history_index_systemd_units_can_enable_local_categorizatio
     assert "--dry-run" in units.service_text
 
 
-def test_render_codex_history_index_systemd_units_uses_default_dispatch_limit(tmp_path: Path) -> None:
+def test_render_codex_history_index_systemd_units_uses_unlimited_default_dispatch_limit(tmp_path: Path) -> None:
     units = render_codex_history_index_systemd_units(
         repo_root=tmp_path,
         python_executable="/usr/bin/python3",
@@ -271,7 +271,7 @@ def test_render_codex_history_index_systemd_units_uses_default_dispatch_limit(tm
     )
 
     assert "codex-history dispatch" in units.service_text
-    assert "--limit 50" in units.service_text
+    assert "--limit 0" in units.service_text
 
 
 def test_render_codex_history_index_systemd_units_rejects_unsafe_timer_name(tmp_path: Path) -> None:

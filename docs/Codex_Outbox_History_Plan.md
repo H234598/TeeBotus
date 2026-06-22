@@ -532,7 +532,7 @@ Stand 2026-06-19:
 - `codex-history graph-export --queue-svg` queued das SVG als `kind=codex_graph_artifact` mit `image/svg+xml` Attachment fuer den bestehenden Admin-Dispatcher.
 - `codex-history strategic-analysis` erzeugt aus den letzten Codex-History-Summaries einen admin-only Strategie-/Risiko-Bericht als queuebares Outbox-Markdown; `codex-history index --strategic-analysis` kann den Bericht vor Export/Qdrant erzeugen.
 - Strategische Analysen nutzen einen Quellen-Fingerprint als Cache: gleicher Repo-Filter, gleiches Profil und unveraenderte Summaries erzeugen keinen neuen LLM-Lauf; `--force` bzw. `--strategic-analysis-force` erzwingt einen neuen Bericht.
-- `teebotus-codex-history-collector --index-timer --index-dispatch` fuegt dem Low-Priority-Index-Service ein `ExecStartPost` fuer `codex-history dispatch` hinzu.
+- `teebotus-codex-history-collector --index-timer --index-dispatch` fuegt dem Low-Priority-Index-Service ein `ExecStartPost` fuer `codex-history dispatch --limit 0` hinzu (`0` = alle wartenden Outbox-Eintraege).
 - Das Cinnamon-Applet bietet Terminal-Aktionen fuer Codex-History-Report, manuellen Indexlauf, manuelle Strategieanalyse und explizite Timer-Aktivierung mit Graph/SVG/Strategie/Dispatch.
 - Der Export vergibt deterministische Kategorien wie `codex-history`, `project-history`, `repo-*`, `status-*`, `change-feature`, `change-bugfix`, `change-test`, `change-docs`, `change-security`, `change-dependency`, `change-runtime`, `change-memory`, `change-bibliothekar` und `change-llm`, damit ein separater Qdrant-/Bibliothekar-Index sie als Filter/Tags nutzen kann.
 - Erledigt: tieferer Applet-Drilldown als Repo-Untermenues im Projekt-Menue; separate grosse Detailansicht bleibt optional, falls das Applet spaeter mehr Platz bekommt.

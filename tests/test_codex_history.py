@@ -1477,7 +1477,7 @@ def test_render_dispatch_report_formats_empty_status_counts_as_none() -> None:
     assert "statuses: none" in rendered
 
 
-def test_codex_history_dispatch_cli_defaults_to_limit_50(
+def test_codex_history_dispatch_cli_defaults_to_unlimited(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     make_instance(tmp_path)
@@ -1503,7 +1503,7 @@ def test_codex_history_dispatch_cli_defaults_to_limit_50(
     )
 
     assert result == 0
-    assert limits == [50]
+    assert limits == [0]
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
 
@@ -2428,7 +2428,7 @@ def test_codex_history_watch_cli_can_run_bounded_poll_loop(tmp_path: Path, capsy
     assert payload["instances"][0]["status_counts"] == {"imported": 1}
 
 
-def test_codex_history_watch_dispatch_cli_defaults_to_limit_50(
+def test_codex_history_watch_dispatch_cli_defaults_to_unlimited(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     make_instance(tmp_path)
@@ -2460,7 +2460,7 @@ def test_codex_history_watch_dispatch_cli_defaults_to_limit_50(
     )
 
     assert result == 0
-    assert limits == [50]
+    assert limits == [0]
     payload = json.loads(capsys.readouterr().out)
     assert payload["instances"][0]["dispatch"]["instances"][0]["status_counts"] == {}
 
