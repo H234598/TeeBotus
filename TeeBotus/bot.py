@@ -1950,7 +1950,7 @@ def _sanitize_status_url_value(value: str, *, value_prefix: str = "") -> str:
         try:
             parsed_schemeless = urlsplit(f"//{value}")
         except ValueError:
-            return f"{value_prefix}{value}"
+            return f"{value_prefix}{_status_redact_malformed_url_credentials(value)}"
         if parsed_schemeless.hostname and (parsed_schemeless.username is not None or parsed_schemeless.password is not None):
             netloc = _status_redacted_url_netloc(parsed_schemeless)
             query = _sanitize_status_url_param_secrets(parsed_schemeless.query)
@@ -1961,7 +1961,7 @@ def _sanitize_status_url_value(value: str, *, value_prefix: str = "") -> str:
     try:
         parsed = urlsplit(value)
     except ValueError:
-        return f"{value_prefix}{value}"
+        return f"{value_prefix}{_status_redact_malformed_url_credentials(value)}"
     if parsed.username is None or parsed.password is None:
         query = _sanitize_status_url_param_secrets(parsed.query)
         fragment = _sanitize_status_url_param_secrets(parsed.fragment)
@@ -1973,6 +1973,17 @@ def _sanitize_status_url_value(value: str, *, value_prefix: str = "") -> str:
     query = _sanitize_status_url_param_secrets(parsed.query)
     fragment = _sanitize_status_url_param_secrets(parsed.fragment)
     return f"{value_prefix}{urlunsplit((parsed.scheme, netloc, parsed.path, query, fragment))}"
+
+
+def _status_redact_malformed_url_credentials(value: str) -> str:
+    text = str(value or "")
+    if "://" in text:
+        return re.sub(
+            r"^([A-Za-z][A-Za-z0-9+.-]*://)(?:[^/\s:@]+:[^/\s@]*|:[^/\s@]+)@",
+            r"\1<redacted>@",
+            text,
+        )
+    return re.sub(r"^(?:[^/\s:@]+:[^/\s@]*|:[^/\s@]+)@", "<redacted>@", text)
 
 
 def _status_redacted_url_netloc(parsed: Any) -> str:

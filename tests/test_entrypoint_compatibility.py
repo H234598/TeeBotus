@@ -813,6 +813,21 @@ def test_runtime_status_text_redacts_url_credentials_with_invalid_port() -> None
     assert "error=<redacted>@matrix.example/_matrix" in text
 
 
+def test_runtime_status_text_redacts_malformed_url_credentials() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    text = bot._sanitize_status_text(
+        "target=https://user:plain-password@[bad/path?token=plain-token "
+        "error=user:raw-password@[bad/path"
+    )
+
+    assert "plain-password" not in text
+    assert "raw-password" not in text
+    assert "plain-token" not in text
+    assert "target=https://<redacted>@[bad/path?token=<redacted>" in text
+    assert "error=<redacted>@[bad/path" in text
+
+
 def test_runtime_status_text_redacts_structured_secret_assignments() -> None:
     bot = importlib.import_module("TeeBotus.bot")
 
