@@ -349,7 +349,7 @@ def maintain_runtime_directory(
 
 
 def gzip_file(path: Path, *, expected_stat: os.stat_result | None = None) -> Path:
-    if path.is_symlink() or _is_compressed_runtime_file(path) or not path.is_file():
+    if path.is_symlink() or _is_compressed_runtime_file(path) or _is_temporary_runtime_file(path) or not path.is_file():
         return path
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:

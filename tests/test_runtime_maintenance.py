@@ -464,6 +464,16 @@ def test_gzip_file_preserves_symlinked_runtime_file(tmp_path):
     assert not (tmp_path / f"{symlink.name}.gz").exists()
 
 
+def test_gzip_file_preserves_temporary_runtime_file(tmp_path):
+    path = tmp_path / ".teebotus-production.log.2026-06-01.gz.tmp"
+    path.write_text("temporary\n", encoding="utf-8")
+
+    assert gzip_file(path) == path
+
+    assert path.read_text(encoding="utf-8") == "temporary\n"
+    assert not (tmp_path / f"{path.name}.gz").exists()
+
+
 def test_gzip_file_preserves_path_replaced_by_symlink_before_open(tmp_path, monkeypatch):
     if not hasattr(os, "O_NOFOLLOW"):
         pytest.skip("O_NOFOLLOW is required to reject symlink open races")
