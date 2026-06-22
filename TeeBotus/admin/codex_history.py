@@ -1832,7 +1832,7 @@ def build_repo_metadata(repo_root: str | Path) -> dict[str, Any]:
 
 def resolve_repo_version(repo_root: str | Path) -> dict[str, str]:
     root = _safe_repo_root(Path(repo_root), operation="repository root")
-    semver = _pyproject_version(root) or _version_file(root) or _git_latest_semver_tag(root) or _teebotus_version(root) or "untagged"
+    semver = _pyproject_version(root) or _version_file(root) or _teebotus_version(root) or _git_latest_semver_tag(root) or "untagged"
     tag = semver if semver.startswith("v") or semver == "untagged" else f"v{semver}"
     return {"semver": semver.removeprefix("v") if semver != "untagged" else semver, "tag": tag}
 
@@ -2462,6 +2462,334 @@ def rewrite_codex_history_display_times_for_instances(
         "instances": reports,
         "totals": totals,
     }
+
+
+def repair_codex_history_repo_versions(
+    store: AccountStore,
+    *,
+    instance_name: str,
+    repo: str,
+    semver: str,
+    dry_run: bool = True,
+) -> dict[str, Any]:
+    safe_instance_name = _safe_instance_name(instance_name)
+    repo_filter = str(repo or "").strip()
+    target_semver = _normalize_codex_history_semver(semver)
+    target_tag = target_semver if target_semver.startswith("v") or target_semver == "untagged" else f"v{target_semver}"
+    report: dict[str, Any] = {
+        "ok": True,
+        "instance": safe_instance_name,
+        "repo": repo_filter,
+        "semver": target_semver,
+        "tag": target_tag,
+        "dry_run": bool(dry_run),
+        "scanned_items": 0,
+        "changed_items": 0,
+        "dispatch_results_changed": 0,
+        "projects_changed": 0,
+        "changed_item_ids": [],
+        "errors": [],
+    }
+    if not repo_filter:
+        report["ok"] = False
+        report["errors"].append("repo filter is required")
+        return report
+    with store.codex_history_outbox_lock(INSTANCE_STATE_ACCOUNT_ID):
+        rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+        rewritten_rows: list[dict[str, Any]] = []
+        prefix_by_item_id: dict[str, str] = {}
+        for row in rows:
+            if not isinstance(row, Mapping):
+                rewritten_rows.append(dict(row) if isinstance(row, dict) else {"value": row})
+                continue
+            item = copy.deepcopy(dict(row))
+            if not _codex_history_item_matches_repo(item, repo_filter):
+                rewritten_rows.append(item)
+                continue
+            report["scanned_items"] += 1
+            item_id = str(item.get("id") or "").strip()
+            summary_number = _codex_history_summary_number(item)
+            if summary_number <= 0:
+                if item_id:
+                    report["errors"].append(f"{item_id}: missing summary number")
+                rewritten_rows.append(item)
+                continue
+            new_prefix = _summary_prefix(target_semver, summary_number)
+            if _repair_codex_history_item_version(item, semver=target_semver, tag=target_tag, summary_prefix=new_prefix):
+                report["changed_items"] += 1
+                if item_id:
+                    report["changed_item_ids"].append(item_id)
+            if item_id:
+                prefix_by_item_id[item_id] = new_prefix
+            rewritten_rows.append(item)
+        if report["changed_items"]:
+            _refresh_codex_history_summary_context_rows(rewritten_rows, repo_filter=repo_filter)
+        latest_by_repo_id = _latest_codex_history_items_by_repo(rewritten_rows, repo_filter)
+        dispatch_rows = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+        rewritten_dispatch_rows, dispatch_changed = _repair_codex_history_dispatch_prefixes(dispatch_rows, prefix_by_item_id)
+        projects = store.read_codex_history_projects(INSTANCE_STATE_ACCOUNT_ID)
+        rewritten_projects, projects_changed = _repair_codex_history_project_prefixes(projects, repo_filter, latest_by_repo_id)
+        report["dispatch_results_changed"] = dispatch_changed
+        report["projects_changed"] = projects_changed
+        if not dry_run:
+            if report["changed_items"]:
+                store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rewritten_rows)
+            if dispatch_changed:
+                store.write_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID, rewritten_dispatch_rows)
+            if projects_changed:
+                store.write_codex_history_projects(INSTANCE_STATE_ACCOUNT_ID, rewritten_projects)
+    return report
+
+
+def repair_codex_history_repo_versions_for_instances(
+    *,
+    instances_dir: str | Path = DEFAULT_INSTANCES_DIR,
+    instances: Sequence[str] = (),
+    repo: str,
+    semver: str,
+    dry_run: bool = True,
+    provider: InstanceSecretProvider | None = None,
+) -> dict[str, Any]:
+    safe_instances_dir = _safe_repo_root(Path(instances_dir), operation="instances directory")
+    selected_instances = tuple(instances)
+    _ensure_explicit_instances_exist(safe_instances_dir, selected_instances)
+    reports: list[dict[str, Any]] = []
+    for instance_name in discover_instances(safe_instances_dir, selected_instances):
+        try:
+            store = _store_for_instance(safe_instances_dir, instance_name, provider)
+            reports.append(
+                repair_codex_history_repo_versions(
+                    store,
+                    instance_name=instance_name,
+                    repo=repo,
+                    semver=semver,
+                    dry_run=dry_run,
+                )
+            )
+        except (AccountStoreError, OSError, ValueError) as exc:
+            reports.append(
+                {
+                    "ok": False,
+                    "instance": str(instance_name or ""),
+                    "error": f"{type(exc).__name__}:{exc}",
+                    "dry_run": bool(dry_run),
+                }
+            )
+    totals = {
+        "instances": len(reports),
+        "scanned_items": sum(int(report.get("scanned_items") or 0) for report in reports),
+        "changed_items": sum(int(report.get("changed_items") or 0) for report in reports),
+        "dispatch_results_changed": sum(int(report.get("dispatch_results_changed") or 0) for report in reports),
+        "projects_changed": sum(int(report.get("projects_changed") or 0) for report in reports),
+        "errors": sum(1 for report in reports if not bool(report.get("ok", True))),
+    }
+    return {
+        "ok": not any(not bool(report.get("ok", True)) for report in reports),
+        "schema_version": CODEX_HISTORY_SCHEMA_VERSION,
+        "scope": "codex_history_version_repair",
+        "generated_at": utc_now(),
+        "instances_dir": str(safe_instances_dir),
+        "repo": str(repo or "").strip(),
+        "semver": _normalize_codex_history_semver(semver),
+        "dry_run": bool(dry_run),
+        "instances": reports,
+        "totals": totals,
+    }
+
+
+def _normalize_codex_history_semver(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return "untagged"
+    if text == "untagged":
+        return text
+    normalized = text.removeprefix("v")
+    if re.match(r"^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9_.-]+)?$", normalized):
+        return normalized
+    raise ValueError(f"invalid semver for Codex history repair: {text}")
+
+
+def _codex_history_summary_number(item: Mapping[str, Any]) -> int:
+    version = item.get("version", {})
+    if not isinstance(version, Mapping):
+        version = {}
+    for value in (item.get("summary_number"), version.get("summary_number")):
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            continue
+        if number > 0:
+            return number
+    prefix = str(item.get("summary_prefix") or version.get("summary_prefix") or "").strip()
+    match = re.search(r"#(\d+)\b", prefix)
+    if not match:
+        return 0
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return 0
+
+
+def _repair_codex_history_item_version(item: dict[str, Any], *, semver: str, tag: str, summary_prefix: str) -> bool:
+    changed = False
+    version = item.get("version", {})
+    if not isinstance(version, dict):
+        version = {}
+        item["version"] = version
+        changed = True
+    old_prefix = str(item.get("summary_prefix") or version.get("summary_prefix") or "").strip()
+    old_semver = str(version.get("semver") or "").strip()
+    old_tag = str(version.get("tag") or "").strip()
+    summary_number = _codex_history_summary_number(item)
+    for key, value in (
+        ("summary_prefix", summary_prefix),
+        ("summary_number", summary_number),
+    ):
+        if item.get(key) != value:
+            item[key] = value
+            changed = True
+    for key, value in (
+        ("semver", semver),
+        ("tag", tag),
+        ("summary_prefix", summary_prefix),
+        ("summary_number", summary_number),
+    ):
+        if version.get(key) != value:
+            version[key] = value
+            changed = True
+    summary = item.get("summary", {})
+    if isinstance(summary, Mapping):
+        markdown = summary.get("markdown")
+        if isinstance(markdown, str) and markdown:
+            rewritten = _rewrite_codex_history_version_markdown(
+                markdown,
+                old_prefix=old_prefix,
+                new_prefix=summary_prefix,
+                old_semver=old_semver,
+                new_semver=semver,
+                old_tag=old_tag,
+                new_tag=tag,
+            )
+            if rewritten != markdown:
+                new_summary = dict(summary)
+                new_summary["markdown"] = rewritten
+                item["summary"] = new_summary
+                changed = True
+    repaired_indexing = _repair_codex_history_indexing_keywords(item)
+    if item.get("indexing") != repaired_indexing:
+        item["indexing"] = repaired_indexing
+        changed = True
+    return changed
+
+
+def _rewrite_codex_history_version_markdown(
+    markdown: str,
+    *,
+    old_prefix: str,
+    new_prefix: str,
+    old_semver: str,
+    new_semver: str,
+    old_tag: str,
+    new_tag: str,
+) -> str:
+    text = str(markdown or "")
+    if old_prefix and old_prefix != new_prefix:
+        text = text.replace(old_prefix, new_prefix)
+    for old_value, new_value in ((old_tag, new_tag), (old_semver, new_semver), (f"v{old_semver.removeprefix('v')}", new_tag)):
+        if old_value and old_value != new_value:
+            text = text.replace(f"`{old_value}`", f"`{new_value}`")
+            text = text.replace(f"version={old_value}", f"version={new_value}")
+    return text
+
+
+def _repair_codex_history_indexing_keywords(item: Mapping[str, Any]) -> dict[str, Any]:
+    indexing = item.get("indexing", {})
+    if not isinstance(indexing, Mapping):
+        indexing = {}
+    project = item.get("project", {})
+    version = item.get("version", {})
+    summary = item.get("summary", {})
+    if not isinstance(project, Mapping):
+        project = {}
+    if not isinstance(version, Mapping):
+        version = {}
+    if not isinstance(summary, Mapping):
+        summary = {}
+    repaired = dict(indexing)
+    repaired["keywords"] = _history_keywords(
+        project,
+        version,
+        str(summary.get("title") or ""),
+        _sequence_values(summary.get("bullets", [])),
+        _sequence_values(summary.get("changed_files", [])),
+        _sequence_values(summary.get("tests", [])),
+    )
+    return repaired
+
+
+def _repair_codex_history_dispatch_prefixes(
+    rows: Sequence[Mapping[str, Any]],
+    prefix_by_item_id: Mapping[str, str],
+) -> tuple[list[dict[str, Any]], int]:
+    rewritten: list[dict[str, Any]] = []
+    changed = 0
+    for row in rows:
+        copied = dict(row) if isinstance(row, Mapping) else {"value": row}
+        item_id = str(copied.get("codex_history_item_id") or "").strip()
+        new_prefix = prefix_by_item_id.get(item_id)
+        if new_prefix and copied.get("summary_prefix") != new_prefix:
+            copied["summary_prefix"] = new_prefix
+            changed += 1
+        rewritten.append(copied)
+    return rewritten, changed
+
+
+def _latest_codex_history_items_by_repo(rows: Sequence[Mapping[str, Any]], repo: str) -> dict[str, dict[str, Any]]:
+    latest: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        if not isinstance(row, Mapping) or not _codex_history_item_matches_repo(row, repo):
+            continue
+        project = row.get("project", {})
+        if not isinstance(project, Mapping):
+            continue
+        repo_id = str(project.get("repo_id") or "").strip()
+        if not repo_id:
+            continue
+        item = dict(row)
+        if repo_id not in latest or _summary_sort_key(item) >= _summary_sort_key(latest[repo_id]):
+            latest[repo_id] = item
+    return latest
+
+
+def _repair_codex_history_project_prefixes(
+    projects: Sequence[Mapping[str, Any]],
+    repo: str,
+    latest_by_repo_id: Mapping[str, Mapping[str, Any]],
+) -> tuple[list[dict[str, Any]], int]:
+    rewritten: list[dict[str, Any]] = []
+    changed = 0
+    for project in projects:
+        copied = dict(project) if isinstance(project, Mapping) else {"value": project}
+        if not _project_matches_repo(copied, repo):
+            rewritten.append(copied)
+            continue
+        repo_id = str(copied.get("repo_id") or "").strip()
+        latest = latest_by_repo_id.get(repo_id)
+        if latest is None:
+            rewritten.append(copied)
+            continue
+        updates = {
+            "last_summary_id": latest.get("id", ""),
+            "last_summary_prefix": latest.get("summary_prefix", ""),
+            "last_summary_at": latest.get("created_at") or latest.get("updated_at") or copied.get("last_summary_at", ""),
+            "updated_at": latest.get("updated_at") or latest.get("created_at") or copied.get("updated_at", ""),
+        }
+        for key, value in updates.items():
+            if copied.get(key) != value:
+                copied[key] = value
+                changed += 1
+        rewritten.append(copied)
+    return rewritten, changed
 
 
 def _codex_history_item_matches_repo(item: Mapping[str, Any], repo: str) -> bool:
@@ -3732,6 +4060,16 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     rewrite_times_parser.add_argument("--format", choices=("text", "json"), default="text")
     rewrite_times_parser.add_argument("--output", default="")
 
+    repair_versions_parser = subparsers.add_parser("repair-versions")
+    repair_versions_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
+    repair_versions_parser.add_argument("--instances", default="")
+    repair_versions_parser.add_argument("--instance", default="")
+    repair_versions_parser.add_argument("--repo", required=True)
+    repair_versions_parser.add_argument("--semver", default=__version__)
+    repair_versions_parser.add_argument("--apply", action="store_true", help="Rewrite persisted rows instead of only reporting changes.")
+    repair_versions_parser.add_argument("--format", choices=("text", "json"), default="text")
+    repair_versions_parser.add_argument("--output", default="")
+
     bibliothekar_export_parser = subparsers.add_parser("bibliothekar-export")
     bibliothekar_export_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
     bibliothekar_export_parser.add_argument("--instances", default="")
@@ -3927,6 +4265,29 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             return 0 if payload["ok"] else 1
         except (OSError, ValueError) as exc:
             print(f"rewrite-times failed: {exc}", file=sys.stderr)
+            return 2
+    if args.command == "repair-versions":
+        try:
+            selected_instances = parse_csv(getattr(args, "instances", None))
+            if args.instance:
+                selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
+            payload = repair_codex_history_repo_versions_for_instances(
+                instances_dir=args.instances_dir,
+                instances=selected_instances,
+                repo=args.repo,
+                semver=args.semver,
+                dry_run=not bool(args.apply),
+                provider=provider,
+            )
+            output = (
+                json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else _render_repair_versions_report(payload)
+            )
+            _write_or_print(output, args.output)
+            return 0 if payload.get("ok", True) else 1
+        except (OSError, ValueError) as exc:
+            print(f"repair-versions failed: {exc}", file=sys.stderr)
             return 2
     if args.command == "bibliothekar-export":
         try:
@@ -4693,6 +5054,43 @@ def _render_rewrite_times_report(payload: Mapping[str, Any]) -> str:
                 f"unsafe={dispatch_files.get('unsafe', 0)} "
                 f"errors={len(dispatch_files.get('errors', []) or [])}"
             )
+    return "\n".join(lines) + "\n"
+
+
+def _render_repair_versions_report(payload: Mapping[str, Any]) -> str:
+    lines = [
+        "TeeBotus Codex-History Version Repair",
+        "",
+        f"dry_run: {payload.get('dry_run', True)}",
+        f"repo: {payload.get('repo', '')}",
+        f"semver: {payload.get('semver', '')}",
+    ]
+    totals = payload.get("totals", {})
+    if isinstance(totals, Mapping):
+        lines.extend(
+            [
+                f"scanned_items: {totals.get('scanned_items', 0)}",
+                f"changed_items: {totals.get('changed_items', 0)}",
+                f"dispatch_results_changed: {totals.get('dispatch_results_changed', 0)}",
+                f"projects_changed: {totals.get('projects_changed', 0)}",
+                f"errors: {totals.get('errors', 0)}",
+            ]
+        )
+    for instance in payload.get("instances", []):
+        if not isinstance(instance, Mapping):
+            continue
+        lines.append("")
+        lines.append(f"Instance: {instance.get('instance', '')}")
+        if not bool(instance.get("ok", True)):
+            lines.append(f"  error: {instance.get('error', '')}")
+            continue
+        lines.append(f"  scanned_items: {instance.get('scanned_items', 0)}")
+        lines.append(f"  changed_items: {instance.get('changed_items', 0)}")
+        lines.append(f"  dispatch_results_changed: {instance.get('dispatch_results_changed', 0)}")
+        lines.append(f"  projects_changed: {instance.get('projects_changed', 0)}")
+        errors = instance.get("errors", [])
+        if isinstance(errors, Sequence) and not isinstance(errors, (str, bytes, bytearray)) and errors:
+            lines.append(f"  errors: {len(errors)}")
     return "\n".join(lines) + "\n"
 
 

@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from TeeBotus import __version__
 import TeeBotus.admin.codex_history as codex_history_module
 from TeeBotus.admin.codex_history import (
     _codex_history_graph_mermaid_source,
@@ -37,6 +38,8 @@ from TeeBotus.admin.codex_history import (
     main as codex_history_main,
     record_codex_history_delivery_receipt,
     record_codex_history_reply,
+    repair_codex_history_repo_versions,
+    resolve_repo_version,
     rewrite_codex_history_display_times,
     rewrite_codex_history_markdown_display_times,
     run_codex_history_index,
@@ -104,6 +107,71 @@ def make_git_repo(tmp_path: Path, name: str, version: str = "1.2.3") -> Path:
     subprocess.run(["git", "commit", "-q", "-m", "initial"], cwd=repo, check=True)
     subprocess.run(["git", "remote", "add", "origin", f"git@example.invalid:{name}.git"], cwd=repo, check=True)
     return repo
+
+
+def test_resolve_repo_version_prefers_teebotus_runtime_version_over_stale_git_tag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("TeeBotus.admin.codex_history._pyproject_version", lambda _root: "")
+    monkeypatch.setattr("TeeBotus.admin.codex_history._version_file", lambda _root: "")
+    monkeypatch.setattr("TeeBotus.admin.codex_history._teebotus_version", lambda _root: "1.8.2")
+    monkeypatch.setattr("TeeBotus.admin.codex_history._git_latest_semver_tag", lambda _root: "v1.7.1")
+
+    version = resolve_repo_version(tmp_path)
+
+    assert version == {"semver": "1.8.2", "tag": "v1.8.2"}
+
+
+def test_repair_codex_history_repo_versions_rewrites_stale_prefixes(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "TeeBotus", version="1.8.2")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    item = append_codex_history_summary(store, repo_root=repo, title="Version repair", bullets=["Falscher Tag war sichtbar."])
+    stale_prefix = "v1.7.1 #0001"
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    rows[0]["summary_prefix"] = stale_prefix
+    rows[0]["version"]["semver"] = "1.7.1"
+    rows[0]["version"]["tag"] = "v1.7.1"
+    rows[0]["version"]["summary_prefix"] = stale_prefix
+    rows[0]["summary"]["markdown"] = rows[0]["summary"]["markdown"].replace("v1.8.2 #0001", stale_prefix).replace("`v1.8.2`", "`v1.7.1`")
+    store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {"codex_history_item_id": item["id"], "status": "accepted", "summary_prefix": stale_prefix},
+    )
+    projects = store.read_codex_history_projects(INSTANCE_STATE_ACCOUNT_ID)
+    projects[0]["last_summary_prefix"] = stale_prefix
+    store.write_codex_history_projects(INSTANCE_STATE_ACCOUNT_ID, projects)
+
+    report = repair_codex_history_repo_versions(
+        store,
+        instance_name="TeeBotus_Logger",
+        repo="TeeBotus",
+        semver="1.8.2",
+        dry_run=False,
+    )
+
+    assert report["changed_items"] == 1
+    assert report["dispatch_results_changed"] == 1
+    assert report["projects_changed"] == 1
+    repaired = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert repaired["summary_prefix"] == "v1.8.2 #0001"
+    assert repaired["version"]["semver"] == "1.8.2"
+    assert repaired["version"]["tag"] == "v1.8.2"
+    assert "# v1.8.2 #0001 Version repair" in repaired["summary"]["markdown"]
+    assert "- Version: `v1.8.2`" in repaired["summary"]["markdown"]
+    assert store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[0]["summary_prefix"] == "v1.8.2 #0001"
+    assert store.read_codex_history_projects(INSTANCE_STATE_ACCOUNT_ID)[0]["last_summary_prefix"] == "v1.8.2 #0001"
+    second_report = repair_codex_history_repo_versions(
+        store,
+        instance_name="TeeBotus_Logger",
+        repo="TeeBotus",
+        semver="1.8.2",
+        dry_run=True,
+    )
+    assert second_report["changed_items"] == 0
+    assert second_report["dispatch_results_changed"] == 0
+    assert second_report["projects_changed"] == 0
 
 
 def write_codex_session(path: Path, *, repo: Path, session_id: str = "sess-1", turn_id: str = "turn-1", final_text: str = "") -> Path:
@@ -936,7 +1004,7 @@ def test_codex_history_strategic_analysis_queues_admin_dispatchable_report(tmp_p
     persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
     assert [row["kind"] for row in persisted] == ["codex_run_summary", "codex_run_summary", "codex_strategy_analysis"]
     strategy = persisted[-1]
-    assert strategy["summary_prefix"] == "v1.8.0 #0001"
+    assert strategy["summary_prefix"] == f"v{__version__} #0001"
     assert strategy["codex"]["strategy_profile"] == "local_ollama"
     assert strategy["codex"]["source_fingerprint"]
     assert strategy["delivery"]["target_group"] == "status_admins"
@@ -961,8 +1029,8 @@ def test_codex_history_strategic_analysis_queues_admin_dispatchable_report(tmp_p
     )
 
     assert dispatch["status_counts"] == {"accepted": 3}
-    assert sent[-1].caption == "Release Codex-History-Strategie 1.8.0"
-    assert sent[-1].filename == "Codex-History-Strategie_release_1.8.0_0001.md"
+    assert sent[-1].caption == f"Release Codex-History-Strategie {__version__}"
+    assert sent[-1].filename == f"Codex-History-Strategie_release_{__version__}_0001.md"
     assert b"Strategische Codex-History-Analyse" in sent[-1].data
 
 
