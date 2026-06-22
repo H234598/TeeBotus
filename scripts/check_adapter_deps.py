@@ -474,10 +474,21 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
             errors.append(f"raw profile name(s) must be string: {','.join(non_string_profile_names)}")
         raw_profile_names = {str(name) for name in raw_profile_payload}
         canonical_profile_names = {name.strip().casefold().replace("-", "_"): name for name in expected_profiles}
+        normalized_raw_profiles: dict[str, str] = {}
+        duplicate_normalized_profiles: dict[str, list[str]] = {}
         for raw_name in sorted(name for name in raw_profile_payload if isinstance(name, str)):
-            canonical_name = canonical_profile_names.get(raw_name.strip().casefold().replace("-", "_"))
+            normalized_name = raw_name.strip().casefold().replace("-", "_")
+            if normalized_name in normalized_raw_profiles:
+                duplicate_normalized_profiles.setdefault(
+                    normalized_name,
+                    [normalized_raw_profiles[normalized_name]],
+                ).append(raw_name)
+            normalized_raw_profiles[normalized_name] = raw_name
+            canonical_name = canonical_profile_names.get(normalized_name)
             if canonical_name and raw_name != canonical_name:
                 errors.append(f"raw profile {raw_name} must use canonical key {canonical_name}")
+        for normalized_name, raw_names in sorted(duplicate_normalized_profiles.items()):
+            errors.append(f"duplicate raw profile {normalized_name}: {','.join(raw_names)}")
         allowed_raw_profile_keys = {"provider", "model", "base_url", "api_key_env", "service_tier"}
         unexpected_raw_profiles = sorted(raw_profile_names - set(expected_profiles))
         missing_raw_profiles = sorted(set(expected_profiles) - raw_profile_names)

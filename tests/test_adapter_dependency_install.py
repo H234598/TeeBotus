@@ -551,6 +551,27 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_alias_key(monkeypatch) 
     assert "raw profile local-ollama must use canonical key local_ollama" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_duplicate_raw_profile_aliases(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            payload["profiles"]["local-ollama"] = deepcopy(payload["profiles"]["local_ollama"])
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "duplicate raw profile local_ollama: local-ollama,local_ollama" in message
+
+
 def test_llm_profiles_plan2_contract_rejects_raw_config_non_string_top_level_keys(monkeypatch) -> None:
     from copy import deepcopy
 
