@@ -529,6 +529,27 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_unknown_keys(monkeypatc
     assert "raw profile local_ollama unexpected key(s): api_base" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_raw_profile_missing_required_keys(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            del payload["profiles"]["local_ollama"]["api_key_env"]
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw profile local_ollama missing key(s): api_key_env" in message
+
+
 def test_llm_profiles_plan2_contract_rejects_raw_routing_alias_key(monkeypatch) -> None:
     from copy import deepcopy
 
@@ -591,6 +612,27 @@ def test_llm_profiles_plan2_contract_rejects_raw_routing_unknown_keys(monkeypatc
 
     assert not ok
     assert "raw routing purpose hard_reasoning unexpected key(s): fallback_profile" in message
+
+
+def test_llm_profiles_plan2_contract_rejects_raw_routing_missing_required_keys(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            del payload["purposes"]["normal_chat"]["fallback"]
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw routing purpose normal_chat missing key(s): fallback" in message
 
 
 def test_local_secret_file_permission_check_accepts_missing_or_private_env(tmp_path: Path) -> None:
