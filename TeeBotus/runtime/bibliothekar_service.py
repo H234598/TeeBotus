@@ -411,7 +411,7 @@ class LlamaIndexBibliothekarBackend:
         self.fallback_store = BibliothekarStore(instance_name, instances_dir)
         self._query_engine_factory = query_engine_factory
         self._query_engine_cache: Any | None = None
-        self._query_engine_cache_signature: tuple[int, int, int] | None = None
+        self._query_engine_cache_signature: tuple[int, int, int, int] | None = None
 
     @property
     def available(self) -> bool:
@@ -436,17 +436,18 @@ class LlamaIndexBibliothekarBackend:
         self._query_engine_cache_signature = None
         return index
 
-    def _query_engine(self) -> Any:
+    def _query_engine(self, max_chunks: int = DEFAULT_MAX_CHUNKS) -> Any:
         self.fallback_store.ensure_current()
-        signature = self._chunk_store_signature()
+        top_k = max(1, int(max_chunks or DEFAULT_MAX_CHUNKS))
+        signature = (*self._chunk_store_signature(), 0 if self._query_engine_factory is not None else top_k)
         if self._query_engine_cache is not None and self._query_engine_cache_signature == signature:
             return self._query_engine_cache
         if self._query_engine_factory is not None:
             self._query_engine_cache = self._query_engine_factory(self.fallback_store)
-            self._query_engine_cache_signature = self._chunk_store_signature()
+            self._query_engine_cache_signature = signature
             return self._query_engine_cache
-        self._query_engine_cache = self._build_default_query_engine()
-        self._query_engine_cache_signature = self._chunk_store_signature()
+        self._query_engine_cache = self._build_default_query_engine(top_k)
+        self._query_engine_cache_signature = signature
         return self._query_engine_cache
 
     def _chunk_store_signature(self) -> tuple[int, int, int]:
@@ -456,7 +457,7 @@ class LlamaIndexBibliothekarBackend:
             return (-1, -1, -1)
         return (int(stat.st_size), int(stat.st_mtime_ns), int(stat.st_ino))
 
-    def _build_default_query_engine(self) -> Any:
+    def _build_default_query_engine(self, max_chunks: int = DEFAULT_MAX_CHUNKS) -> Any:
         self.fallback_store.ensure_current()
         chunks = _read_chunks(self.fallback_store.chunks_path)
         documents = [_llamaindex_document_from_chunk(chunk) for chunk in chunks if _chunk_has_required_citation_metadata(chunk)]
@@ -469,11 +470,11 @@ class LlamaIndexBibliothekarBackend:
 
         embed_model = _llamaindex_mock_embedding()
         index = _llamaindex_vector_index_from_documents(VectorStoreIndex, documents, embed_model)
-        retriever = index.as_retriever(similarity_top_k=DEFAULT_MAX_CHUNKS)
+        retriever = index.as_retriever(similarity_top_k=max(1, int(max_chunks or DEFAULT_MAX_CHUNKS)))
         return _LlamaIndexRetrieverAdapter(retriever)
 
     def _chunks_from_query_engine(self, query: BibliothekarQuery) -> list[dict[str, Any]]:
-        engine = self._query_engine()
+        engine = self._query_engine(query.max_chunks)
         for method_name in ("query", "chat", "search", "retrieve"):
             method = getattr(engine, method_name, None)
             if not callable(method):

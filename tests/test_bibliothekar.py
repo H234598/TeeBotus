@@ -1602,8 +1602,9 @@ def test_llamaindex_backend_without_query_engine_factory_builds_default_local_re
     created = []
 
     class FakeDefaultRetriever:
-        def __init__(self, store):
+        def __init__(self, store, max_chunks):
             store.rebuild()
+            self.max_chunks = max_chunks
             self.chunks = [json.loads(line) for line in store.chunks_path.read_text(encoding="utf-8").splitlines()]
             self.queries = []
 
@@ -1611,8 +1612,8 @@ def test_llamaindex_backend_without_query_engine_factory_builds_default_local_re
             self.queries.append(query_text)
             return self.chunks
 
-    def fake_build_default(self):
-        engine = FakeDefaultRetriever(self.fallback_store)
+    def fake_build_default(self, max_chunks=bibliothekar_service_module.DEFAULT_MAX_CHUNKS):
+        engine = FakeDefaultRetriever(self.fallback_store, max_chunks)
         created.append(engine)
         return engine
 
@@ -1626,6 +1627,41 @@ def test_llamaindex_backend_without_query_engine_factory_builds_default_local_re
     assert selection.selected_ids
     assert payload["selected_library_chunks"][0]["file"] == "therapie.txt"
     assert created[0].queries == ["Therapie"]
+    assert created[0].max_chunks == 1
+
+
+def test_llamaindex_backend_default_retriever_uses_query_max_chunks(tmp_path, monkeypatch):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    for index in range(9):
+        (library_dir / f"therapie-{index}.txt").write_text(
+            f"Depression Therapie Aktivierung Schlaf Nummer {index}.",
+            encoding="utf-8",
+        )
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda name: name == "llama_index.core")
+    created_max_chunks = []
+
+    class FakeDefaultRetriever:
+        def __init__(self, store, max_chunks):
+            store.rebuild()
+            created_max_chunks.append(max_chunks)
+            self.chunks = [json.loads(line) for line in store.chunks_path.read_text(encoding="utf-8").splitlines()]
+
+        def retrieve(self, _query_text):
+            return self.chunks
+
+    def fake_build_default(self, max_chunks=bibliothekar_service_module.DEFAULT_MAX_CHUNKS):
+        return FakeDefaultRetriever(self.fallback_store, max_chunks)
+
+    monkeypatch.setattr(LlamaIndexBibliothekarBackend, "_build_default_query_engine", fake_build_default)
+    backend = LlamaIndexBibliothekarBackend(instance_name="Depressionsbot", instances_dir=tmp_path / "instances")
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=9, max_prompt_chars=20000))
+    payload = json.loads(selection.prompt_text)
+
+    assert created_max_chunks == [9]
+    assert len(payload["selected_library_chunks"]) == 9
+    assert len(selection.selected_ids) == 9
 
 
 def test_llamaindex_health_reports_missing_dependency_as_unavailable_without_crashing(tmp_path, monkeypatch):
@@ -1653,7 +1689,7 @@ def test_llamaindex_health_reports_default_local_retriever_as_ready(tmp_path, mo
     library_dir.mkdir(parents=True)
     (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
     monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda name: name == "llama_index.core")
-    monkeypatch.setattr(LlamaIndexBibliothekarBackend, "_build_default_query_engine", lambda self: object())
+    monkeypatch.setattr(LlamaIndexBibliothekarBackend, "_build_default_query_engine", lambda self, max_chunks=bibliothekar_service_module.DEFAULT_MAX_CHUNKS: object())
 
     health = check_bibliothekar_service(
         "Depressionsbot",
@@ -2372,7 +2408,11 @@ def test_bibliothekar_cli_status_reports_llamaindex_ready_in_text_and_json(tmp_p
     )
     (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
     monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda name: name == "llama_index.core")
-    monkeypatch.setattr(LlamaIndexBibliothekarBackend, "_build_default_query_engine", lambda self: object())
+    monkeypatch.setattr(
+        LlamaIndexBibliothekarBackend,
+        "_build_default_query_engine",
+        lambda self, max_chunks=bibliothekar_service_module.DEFAULT_MAX_CHUNKS: object(),
+    )
 
     assert bibliothekar_cli_main(["--instances-dir", str(instances_dir), "--instance", "Depressionsbot", "status"]) == 0
     text_output = capsys.readouterr().out
