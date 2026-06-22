@@ -444,7 +444,7 @@ class LlamaIndexBibliothekarBackend:
             return self._query_engine_cache
         if self._query_engine_factory is not None:
             self._query_engine_cache = self._query_engine_factory(self.fallback_store)
-            self._query_engine_cache_signature = signature
+            self._query_engine_cache_signature = (*self._chunk_store_signature(), 0)
             return self._query_engine_cache
         self._query_engine_cache = self._build_default_query_engine(top_k)
         self._query_engine_cache_signature = signature

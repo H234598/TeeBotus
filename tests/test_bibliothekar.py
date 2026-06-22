@@ -1438,6 +1438,43 @@ def test_llamaindex_backend_uses_fake_query_engine_chunks(tmp_path):
     assert created[0].queries == ["Therapie"]
 
 
+def test_llamaindex_backend_caches_factory_engine_after_factory_rebuild(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+
+    class FakeQueryEngine:
+        def __init__(self, store):
+            store.rebuild()
+            self.chunks = [json.loads(line) for line in store.chunks_path.read_text(encoding="utf-8").splitlines()]
+            self.queries = []
+
+        def search(self, query_text):
+            self.queries.append(query_text)
+            return self.chunks
+
+    created = []
+
+    def factory(store):
+        engine = FakeQueryEngine(store)
+        created.append(engine)
+        return engine
+
+    backend = LlamaIndexBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        query_engine_factory=factory,
+    )
+
+    first = backend.search(BibliothekarQuery(text="Therapie", max_chunks=1))
+    second = backend.search(BibliothekarQuery(text="Schlaf", max_chunks=1))
+
+    assert first.selected_ids
+    assert second.selected_ids
+    assert len(created) == 1
+    assert created[0].queries == ["Therapie", "Schlaf"]
+
+
 def test_llamaindex_backend_filters_foreign_instance_chunks(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
