@@ -364,6 +364,22 @@ def test_runtime_maintenance_skips_text_files_that_disappear_during_scan(tmp_pat
     assert (tmp_path / f"{rotated.name}.gz").exists()
 
 
+def test_runtime_maintenance_skips_text_scan_when_runtime_glob_fails(tmp_path, monkeypatch):
+    now = time.time()
+    real_glob = Path.glob
+
+    def fail_runtime_glob(self, pattern):
+        if self == tmp_path:
+            raise PermissionError(f"glob failed for {pattern}")
+        return real_glob(self, pattern)
+
+    monkeypatch.setattr(Path, "glob", fail_runtime_glob)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert not (tmp_path / "monthly_archives").exists()
+
+
 def test_runtime_maintenance_skips_text_file_replaced_by_symlink_after_scan(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 8 * 24 * 60 * 60

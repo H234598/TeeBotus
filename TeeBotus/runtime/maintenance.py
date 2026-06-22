@@ -353,7 +353,11 @@ def _runtime_text_files(runtime_path: Path) -> list[Path]:
     archive_dir = runtime_path / "monthly_archives"
     result: list[Path] = []
     for pattern in ("*.log", "*.log.*", "*.jsonl", "*.jsonl.*"):
-        for path in runtime_path.glob(pattern):
+        try:
+            candidates = list(runtime_path.glob(pattern))
+        except OSError:
+            continue
+        for path in candidates:
             if _is_compressed_runtime_file(path) or _is_temporary_runtime_file(path):
                 continue
             try:
