@@ -236,6 +236,7 @@ def rebuild_qdrant_bibliothekar_indexes(
     for instance_name in selected_instances:
         instructions = _load_instance_memory_instructions(root, instance_name)
         effective_qdrant_url = _optional_override(qdrant_url, default=instructions.bibliothekar_qdrant_url)
+        effective_collection = _optional_override(instructions.bibliothekar_collection, default=QDRANT_BIBLIOTHEKAR_COLLECTION)
         effective_embedding_config = _resolve_bibliothekar_embedding_config(
             embedding_config=embedding_config,
             overrides=embedding_overrides,
@@ -252,14 +253,14 @@ def rebuild_qdrant_bibliothekar_indexes(
                         chunk_count=len(chunks),
                         point_count=len(chunks),
                         qdrant_url=effective_qdrant_url,
-                        collection_name=instructions.bibliothekar_collection or QDRANT_BIBLIOTHEKAR_COLLECTION,
+                        collection_name=effective_collection,
                         embedding_config=effective_embedding_config,
                     )
                 )
                 continue
             index = qdrant_index_factory(
                 url=effective_qdrant_url,
-                collection=instructions.bibliothekar_collection or QDRANT_BIBLIOTHEKAR_COLLECTION,
+                collection=effective_collection,
                 embedding_provider=embedding_provider,
             )
             if not chunks:
@@ -269,7 +270,7 @@ def rebuild_qdrant_bibliothekar_indexes(
                         instance_name,
                         "cleared",
                         qdrant_url=effective_qdrant_url,
-                        collection_name=instructions.bibliothekar_collection or QDRANT_BIBLIOTHEKAR_COLLECTION,
+                        collection_name=effective_collection,
                         embedding_config=effective_embedding_config,
                     )
                 )
@@ -284,7 +285,7 @@ def rebuild_qdrant_bibliothekar_indexes(
                     point_count=len(point_ids),
                     point_ids=tuple(point_ids),
                     qdrant_url=effective_qdrant_url,
-                    collection_name=instructions.bibliothekar_collection or QDRANT_BIBLIOTHEKAR_COLLECTION,
+                    collection_name=effective_collection,
                     embedding_config=effective_embedding_config,
                 )
             )
@@ -294,6 +295,7 @@ def rebuild_qdrant_bibliothekar_indexes(
                     instance_name,
                     "error",
                     qdrant_url=effective_qdrant_url,
+                    collection_name=effective_collection,
                     embedding_config=effective_embedding_config,
                     error=f"{type(exc).__name__}: {exc}",
                 )

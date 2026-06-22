@@ -315,6 +315,38 @@ def test_rebuild_qdrant_bibliothekar_indexes_dry_run_avoids_qdrant_writes(tmp_pa
     assert results[0].embedding_model == "teebotus-fake-bibliothekar-embedding-v1"
 
 
+def test_rebuild_qdrant_bibliothekar_indexes_error_reports_effective_collection(tmp_path):
+    class FailingQdrantBibliothekarIndex:
+        def __init__(self, *, url=None, collection, embedding_provider, **_kwargs) -> None:
+            raise RuntimeError(f"cannot open collection {collection}")
+
+    instances_dir = tmp_path / "instances"
+    instance_dir = instances_dir / "Depressionsbot"
+    library_dir = instance_dir / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (instance_dir / "Bot_Verhalten.md").write_text(
+        """
+        ## Bibliothekar
+        - backend: qdrant
+        - collection: therapy_books
+        - qdrant_url: http://localhost:6334
+        """,
+        encoding="utf-8",
+    )
+    (library_dir / "therapie.txt").write_text("Aktivierung und Schlaf.", encoding="utf-8")
+
+    results = rebuild_qdrant_bibliothekar_indexes(
+        instances_dir=instances_dir,
+        instance_names=("Depressionsbot",),
+        qdrant_index_factory=FailingQdrantBibliothekarIndex,
+    )
+
+    assert len(results) == 1
+    assert results[0].status == "error"
+    assert results[0].collection_name == "therapy_books"
+    assert "therapy_books" in results[0].error
+
+
 def test_rebuild_qdrant_bibliothekar_indexes_clears_instance_when_library_is_empty(tmp_path):
     deleted_instances: list[str] = []
 
