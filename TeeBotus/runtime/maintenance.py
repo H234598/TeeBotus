@@ -238,6 +238,18 @@ class RuntimeTimedRotatingFileHandler(TimedRotatingFileHandler):
     def rotation_filename(self, default_name: str) -> str:
         return str(_unique_path(Path(default_name)))
 
+    def rotate(self, source: str, dest: str) -> None:
+        source_path = Path(source)
+        try:
+            source_stat = os.stat(source_path, follow_symlinks=False)
+        except OSError:
+            return
+        if not stat_module.S_ISREG(source_stat.st_mode):
+            return
+        rotated = _link_file_to_unique_path(source_path, Path(dest), expected_stat=source_stat)
+        if rotated is not None:
+            _unlink_if_same_file(source_path, source_stat)
+
     def doRollover(self) -> None:  # noqa: N802 - stdlib override name
         super().doRollover()
         maintain_runtime_directory(Path(self.baseFilename).parent)

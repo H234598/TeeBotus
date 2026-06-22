@@ -1311,6 +1311,38 @@ def test_runtime_file_handler_rollover_preserves_existing_rotated_log(tmp_path):
         handler.close()
 
 
+def test_runtime_file_handler_rollover_preserves_rotated_log_created_during_rotate(tmp_path, monkeypatch):
+    log_path = tmp_path / "teebotus-production.log"
+    handler = RuntimeTimedRotatingFileHandler(log_path)
+    try:
+        date_suffix = time.strftime(handler.suffix, time.localtime(handler.rolloverAt - handler.interval))
+        raced_rotated = log_path.with_name(f"{log_path.name}.{date_suffix}")
+        real_link = os.link
+        raced = False
+
+        def racing_link(source, destination, *args, **kwargs):
+            nonlocal raced
+            destination_path = Path(destination)
+            if destination_path == raced_rotated and not raced:
+                raced = True
+                raced_rotated.write_text("raced rotated\n", encoding="utf-8")
+                raise FileExistsError(destination)
+            return real_link(source, destination, *args, **kwargs)
+
+        monkeypatch.setattr(os, "link", racing_link)
+        handler.stream.write("current log\n")
+        handler.stream.flush()
+
+        handler.doRollover()
+
+        numbered_rotated = raced_rotated.with_name(f"{raced_rotated.name}.1")
+        assert raced is True
+        assert raced_rotated.read_text(encoding="utf-8") == "raced rotated\n"
+        assert numbered_rotated.read_text(encoding="utf-8") == "current log\n"
+    finally:
+        handler.close()
+
+
 def test_configure_runtime_logging_caps_provider_sdk_logs_during_debug_all(tmp_path):
     for logger_name in ("litellm", "LiteLLM", "openai", "openai._base_client"):
         logging.getLogger(logger_name).setLevel(logging.NOTSET)
