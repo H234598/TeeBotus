@@ -228,6 +228,24 @@ def test_runtime_maintenance_compresses_old_logs(tmp_path):
     assert not path.exists()
 
 
+def test_runtime_maintenance_refuses_symlinked_runtime_root(tmp_path):
+    now = time.time()
+    old_mtime = now - 8 * 24 * 60 * 60
+    external_runtime_dir = tmp_path / "external-runtime"
+    external_runtime_dir.mkdir()
+    path = external_runtime_dir / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    os.utime(path, (old_mtime, old_mtime))
+    runtime_link = tmp_path / "runtime-link"
+    runtime_link.symlink_to(external_runtime_dir, target_is_directory=True)
+
+    maintain_runtime_directory(runtime_link, now=now)
+
+    assert runtime_link.is_symlink()
+    assert path.read_text(encoding="utf-8") == "old log\n"
+    assert not (external_runtime_dir / f"{path.name}.gz").exists()
+
+
 def test_runtime_maintenance_does_not_compress_replacement_after_age_check(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 8 * 24 * 60 * 60

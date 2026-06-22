@@ -304,7 +304,13 @@ def maintain_runtime_directory(
     compress_after_seconds: int = COMPRESS_AFTER_SECONDS,
     monthly_archive_after_seconds: int = MONTHLY_ARCHIVE_AFTER_SECONDS,
 ) -> None:
-    runtime_path.mkdir(parents=True, exist_ok=True)
+    try:
+        runtime_path.mkdir(parents=True, exist_ok=True)
+        runtime_stat = runtime_path.stat(follow_symlinks=False)
+    except OSError:
+        return
+    if not stat_module.S_ISDIR(runtime_stat.st_mode):
+        return
     resolved_now = time.time() if now is None else now
     for path in list(_runtime_text_files(runtime_path)):
         try:
