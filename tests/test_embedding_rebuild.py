@@ -838,6 +838,22 @@ def test_embedding_cli_memory_rebuild_rejects_non_positive_side_index_dimensions
     assert "--side-index-dimensions must be a positive integer" in capsys.readouterr().err
 
 
+def test_embedding_cli_memory_rebuild_rejects_non_positive_embedding_dimensions(capsys, tmp_path):
+    with pytest.raises(SystemExit) as exc_info:
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "memory-rebuild",
+                "--embedding-dimensions",
+                "0",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "--embedding-dimensions must be a positive integer" in capsys.readouterr().err
+
+
 def test_embedding_cli_memory_rebuild_loads_local_dotenv_without_overriding_env(monkeypatch, tmp_path):
     instances_dir = tmp_path / "instances"
     instances_dir.mkdir()
@@ -1095,6 +1111,22 @@ def test_embedding_cli_codex_history_rebuild_rejects_unsafe_collection_name(caps
 
     assert exc_info.value.code == 2
     assert "letters, numbers, underscore, dot or dash" in capsys.readouterr().err
+
+
+def test_embedding_cli_bibliothekar_rebuild_rejects_non_positive_embedding_dimensions(capsys, tmp_path):
+    with pytest.raises(SystemExit) as exc_info:
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "bibliothekar-rebuild",
+                "--embedding-dimensions",
+                "0",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "--embedding-dimensions must be a positive integer" in capsys.readouterr().err
 
 
 def test_ensure_qdrant_collections_for_instances_uses_instance_memory_search_config(monkeypatch, tmp_path):

@@ -30,6 +30,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     with _dotenv_defaults_for_instances_dir(args.instances_dir):
         if args.command == "memory-rebuild":
+            _validate_embedding_override_args(parser, args)
             _validate_memory_rebuild_args(parser, args)
             results = rebuild_qdrant_memory_indexes(
                 instances_dir=args.instances_dir,
@@ -48,6 +49,7 @@ def main(argv: list[str] | None = None) -> int:
                     print(_format_memory_rebuild_result(result))
             return _status_exit_code(results, ok_statuses={"dry_run", "rebuilt"})
         if args.command == "collections-ensure":
+            _validate_embedding_override_args(parser, args)
             _validate_collections_ensure_args(parser, args)
             results = ensure_qdrant_collections_for_instances(
                 instances_dir=args.instances_dir,
@@ -64,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
                     print(_format_collection_ensure_result(result))
             return 1 if any(not result.ok for result in results) else 0
         if args.command == "bibliothekar-rebuild":
+            _validate_embedding_override_args(parser, args)
             results = rebuild_qdrant_bibliothekar_indexes(
                 instances_dir=args.instances_dir,
                 instance_names=args.instance,
@@ -78,6 +81,7 @@ def main(argv: list[str] | None = None) -> int:
                     print(_format_bibliothekar_rebuild_result(result))
             return _status_exit_code(results, ok_statuses={"cleared", "dry_run", "rebuilt"})
         if args.command == "codex-history-rebuild":
+            _validate_embedding_override_args(parser, args)
             _validate_codex_history_rebuild_args(parser, args)
             results = rebuild_qdrant_codex_history_indexes(
                 instances_dir=args.instances_dir,
@@ -209,6 +213,11 @@ def _validate_memory_rebuild_args(parser: argparse.ArgumentParser, args: argpars
         parser.error("--collection cannot be combined with --side-index-dimensions.")
     if args.embedding_dimensions is not None and int(args.embedding_dimensions) != side_dimensions:
         parser.error("--embedding-dimensions must match --side-index-dimensions for memory side-index rebuilds.")
+
+
+def _validate_embedding_override_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    if getattr(args, "embedding_dimensions", None) is not None:
+        _positive_cli_int(parser, args.embedding_dimensions, "--embedding-dimensions")
 
 
 def _validate_collections_ensure_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
