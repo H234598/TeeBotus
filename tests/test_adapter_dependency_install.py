@@ -596,6 +596,51 @@ def test_llm_profiles_plan2_contract_rejects_raw_config_non_string_top_level_key
     assert "raw routing config key(s) must be string: 456" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_raw_config_top_level_alias_keys(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            payload["Profiles"] = payload.pop("profiles")
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            payload["default-profile"] = payload.pop("default_profile")
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw profile config key Profiles must use canonical key profiles" in message
+    assert "raw routing config key default-profile must use canonical key default_profile" in message
+
+
+def test_llm_profiles_plan2_contract_rejects_duplicate_raw_config_top_level_aliases(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            payload["default-profile"] = payload["default_profile"]
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "duplicate raw routing config key default_profile: default-profile,default_profile" in message
+
+
 def test_llm_profiles_plan2_contract_rejects_raw_config_non_mapping_without_unreadable(monkeypatch) -> None:
     from copy import deepcopy
 

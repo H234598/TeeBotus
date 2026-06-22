@@ -461,6 +461,22 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         non_string_profile_top_keys = sorted(repr(key) for key in raw_profile_config if not isinstance(key, str))
         if non_string_profile_top_keys:
             errors.append(f"raw profile config key(s) must be string: {','.join(non_string_profile_top_keys)}")
+        normalized_profile_top_keys: dict[str, str] = {}
+        duplicate_profile_top_keys: dict[str, list[str]] = {}
+        canonical_profile_top_keys = {"profiles": "profiles"}
+        for raw_key in sorted(key for key in raw_profile_config if isinstance(key, str)):
+            normalized_key = raw_key.strip().casefold().replace("-", "_")
+            if normalized_key in normalized_profile_top_keys:
+                duplicate_profile_top_keys.setdefault(
+                    normalized_key,
+                    [normalized_profile_top_keys[normalized_key]],
+                ).append(raw_key)
+            normalized_profile_top_keys[normalized_key] = raw_key
+            canonical_key = canonical_profile_top_keys.get(normalized_key)
+            if canonical_key and raw_key != canonical_key:
+                errors.append(f"raw profile config key {raw_key} must use canonical key {canonical_key}")
+        for normalized_key, raw_keys in sorted(duplicate_profile_top_keys.items()):
+            errors.append(f"duplicate raw profile config key {normalized_key}: {','.join(raw_keys)}")
         unexpected_profile_top_keys = sorted(str(key) for key in raw_profile_config if str(key) != "profiles")
         if unexpected_profile_top_keys:
             errors.append(f"raw profile config unexpected key(s): {','.join(unexpected_profile_top_keys)}")
@@ -628,6 +644,22 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         non_string_routing_top_keys = sorted(repr(key) for key in raw_routing_config if not isinstance(key, str))
         if non_string_routing_top_keys:
             errors.append(f"raw routing config key(s) must be string: {','.join(non_string_routing_top_keys)}")
+        normalized_routing_top_keys: dict[str, str] = {}
+        duplicate_routing_top_keys: dict[str, list[str]] = {}
+        canonical_routing_top_keys = {key.strip().casefold().replace("-", "_"): key for key in expected_routing_top_keys}
+        for raw_key in sorted(key for key in raw_routing_config if isinstance(key, str)):
+            normalized_key = raw_key.strip().casefold().replace("-", "_")
+            if normalized_key in normalized_routing_top_keys:
+                duplicate_routing_top_keys.setdefault(
+                    normalized_key,
+                    [normalized_routing_top_keys[normalized_key]],
+                ).append(raw_key)
+            normalized_routing_top_keys[normalized_key] = raw_key
+            canonical_key = canonical_routing_top_keys.get(normalized_key)
+            if canonical_key and raw_key != canonical_key:
+                errors.append(f"raw routing config key {raw_key} must use canonical key {canonical_key}")
+        for normalized_key, raw_keys in sorted(duplicate_routing_top_keys.items()):
+            errors.append(f"duplicate raw routing config key {normalized_key}: {','.join(raw_keys)}")
         unexpected_routing_top_keys = sorted(
             str(key) for key in raw_routing_config if str(key) not in expected_routing_top_keys
         )
