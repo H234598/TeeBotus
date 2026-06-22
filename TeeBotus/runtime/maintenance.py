@@ -585,7 +585,7 @@ def _add_regular_file_to_archive(
         return None
     try:
         source_handle = os.fdopen(fd, "rb")
-    except (OSError, ValueError):
+    except (OSError, ValueError, RuntimeError):
         _close_fd_quietly(fd)
         return None
     with source_handle as source:

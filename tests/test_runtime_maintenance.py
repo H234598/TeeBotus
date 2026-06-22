@@ -1740,6 +1740,45 @@ def test_runtime_maintenance_preserves_temporary_compressed_runtime_files(tmp_pa
     assert all(path.name not in names for path in temporary_files)
 
 
+def test_runtime_maintenance_skips_archive_source_fdopen_runtime_error_and_keeps_archiving(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    broken = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    broken.write_bytes(b"broken")
+    os.utime(broken, (old_mtime, old_mtime))
+    archiveable = tmp_path / "Security_Events.jsonl.2026-03-01.gz"
+    archiveable.write_bytes(b"archive me")
+    os.utime(archiveable, (old_mtime, old_mtime))
+    real_open = os.open
+    real_fdopen = os.fdopen
+    broken_fds: set[int] = set()
+
+    def recording_open(file, flags, *args, **kwargs):
+        fd = real_open(file, flags, *args, **kwargs)
+        if Path(file) == broken:
+            broken_fds.add(fd)
+        return fd
+
+    def fail_broken_fdopen(fd, mode="r", *args, **kwargs):
+        if fd in broken_fds and mode == "rb":
+            raise RuntimeError("archive source fdopen failed")
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", recording_open)
+    monkeypatch.setattr(os, "fdopen", fail_broken_fdopen)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert broken.read_bytes() == b"broken"
+    assert not archiveable.exists()
+    archives = sorted((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert len(archives) == 1
+    with tarfile.open(archives[0], "r:gz") as archive:
+        names = archive.getnames()
+    assert broken.name not in names
+    assert archiveable.name in names
+
+
 def test_runtime_maintenance_does_not_overwrite_archive_created_during_publish(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60
