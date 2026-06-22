@@ -32,6 +32,7 @@ from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply, bui
 from TeeBotus.handlers import ADMIN_FORBIDDEN_TEXT, build_reply, is_admin_help_request
 from TeeBotus.instructions import BotInstructions, render_template
 from TeeBotus.llm.capabilities import LLMCapabilities
+from TeeBotus.llm.free_tier import provider_is_stateful_google_gemini
 from TeeBotus.llm_client import LLMAPIError, normalize_llm_provider
 from TeeBotus.openai_client import OpenAIAPIError
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, handle_proactive_command, proactive_agent_instance_enabled
@@ -2773,20 +2774,9 @@ def _persistable_previous_response_id(response: object) -> str | None:
     provider = normalize_llm_provider(str(getattr(response, "provider", "") or ""))
     if not provider:
         return response_id
-    stateful_providers = {
-        "openai",
-        "responses",
-        "openai_responses",
-        "gemini_interactions",
-        "google_interactions",
-        "gemini_stateful",
-        "gemini_statefull",
-        "litellm_gemini_stateful",
-        "litellm_gemini_statefull",
-        "litellm_gemini_paid_stateful",
-        "litellm_gemini_paid_statefull",
-    }
-    return response_id if provider in stateful_providers else None
+    if provider in {"openai", "responses", "openai_responses"}:
+        return response_id
+    return response_id if provider_is_stateful_google_gemini(provider) else None
 
 
 def _previous_response_id_for_client(client: object, state: RuntimeState, instance_name: str, account_id: str) -> str | None:

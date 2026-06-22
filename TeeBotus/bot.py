@@ -24,7 +24,12 @@ from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
 
 from TeeBotus import __version__
-from TeeBotus.llm.free_tier import provider_is_paid_google_gemini, route_uses_gemini_api, route_uses_google_gemini
+from TeeBotus.llm.free_tier import (
+    provider_is_paid_google_gemini,
+    provider_is_stateful_google_gemini,
+    route_uses_gemini_api,
+    route_uses_google_gemini,
+)
 
 _TELEGRAM_MODULE = "TeeBotus.adapters.telegram_runtime"
 ALLOW_BROKEN_ACCOUNT_MEMORY_START_ENV = "TEEBOTUS_ALLOW_BROKEN_ACCOUNT_MEMORY_START"
@@ -1659,8 +1664,7 @@ def _status_route_uses_google_gemini(*, provider: str, model: object) -> bool:
 
 
 def _status_google_mode(*, provider: str, model: object) -> str:
-    normalized_provider = _normalize_status_llm_provider(provider)
-    if normalized_provider in {"gemini_interactions", "litellm_gemini_stateful", "litellm_gemini_paid_stateful"}:
+    if provider_is_stateful_google_gemini(provider):
         return "stateful"
     return "stateless"
 

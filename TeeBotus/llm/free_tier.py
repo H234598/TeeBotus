@@ -26,6 +26,15 @@ PAID_GEMINI_PROVIDERS = frozenset(
         "litellm_gemini_paid_statefull",
     }
 )
+STATEFUL_GEMINI_PROVIDERS = frozenset(
+    {
+        "gemini_interactions",
+        "litellm_gemini_stateful",
+        "litellm_gemini_statefull",
+        "litellm_gemini_paid_stateful",
+        "litellm_gemini_paid_statefull",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -234,6 +243,10 @@ def provider_is_paid_google_gemini(provider: object) -> bool:
     return _normalize_gemini_provider(provider) in PAID_GEMINI_PROVIDERS
 
 
+def provider_is_stateful_google_gemini(provider: object) -> bool:
+    return _normalize_gemini_provider(provider) in STATEFUL_GEMINI_PROVIDERS
+
+
 def _normalize_gemini_provider(provider: object) -> str:
     try:
         from TeeBotus.llm.litellm_provider import normalize_llm_provider
@@ -362,6 +375,7 @@ __all__ = [
     "estimate_litellm_input_tokens",
     "quota_owner_id",
     "provider_is_paid_google_gemini",
+    "provider_is_stateful_google_gemini",
     "reset_gemini_free_tier_budget_state",
     "resolve_gemini_free_tier_limits",
     "route_uses_google_gemini",

@@ -7,6 +7,7 @@ from TeeBotus.llm.free_tier import (
     GeminiFreeTierGuard,
     GeminiFreeTierLimits,
     provider_is_paid_google_gemini,
+    provider_is_stateful_google_gemini,
     reset_gemini_free_tier_budget_state,
     resolve_gemini_free_tier_limits,
     route_uses_gemini_api,
@@ -164,6 +165,13 @@ def test_gemini_api_route_helper_keeps_vertex_out_of_key_ring_scope() -> None:
     assert route_uses_gemini_api(provider="litellm", model="gemini/gemini-3.5-flash") is True
     assert route_uses_google_gemini(provider="vertex_ai", model="vertex_ai/gemini-3.5-flash") is True
     assert route_uses_gemini_api(provider="vertex_ai", model="vertex_ai/gemini-3.5-flash") is False
+
+
+def test_stateful_gemini_aliases_use_central_provider_scope() -> None:
+    assert provider_is_stateful_google_gemini("gemini_statefull") is True
+    assert provider_is_stateful_google_gemini("gemini_paid_interactions") is True
+    assert provider_is_stateful_google_gemini("litellm_gemini_paid_stateless") is False
+    assert provider_is_stateful_google_gemini("vertex_ai") is False
 
 
 def test_parse_gemini_free_tier_limits_from_json_payload() -> None:

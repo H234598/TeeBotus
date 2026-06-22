@@ -14,7 +14,11 @@ from TeeBotus import __version__
 from TeeBotus.artifact_outputs import legacy_import_preflight_path
 from TeeBotus.core.rich_text import html_with_single_link
 from TeeBotus.core.version_notifications import DEFAULT_REPO_URL, github_repo_url
-from TeeBotus.llm.free_tier import provider_is_paid_google_gemini, route_uses_google_gemini
+from TeeBotus.llm.free_tier import (
+    provider_is_paid_google_gemini,
+    provider_is_stateful_google_gemini,
+    route_uses_google_gemini,
+)
 from TeeBotus.llm_client import normalize_llm_provider
 from TeeBotus.mcp_tools import DEFAULT_MCP_TOOL_POLICIES, MCPToolPolicy, resolve_mcp_tool_policies
 from TeeBotus.runtime.accounts import (
@@ -534,7 +538,7 @@ def _model_uses_google(provider: str, model: str) -> bool:
 
 
 def _provider_is_stateful_gemini(provider: str) -> bool:
-    return provider in {"gemini_interactions", "litellm_gemini_stateful", "litellm_gemini_paid_stateful"}
+    return provider_is_stateful_google_gemini(provider)
 
 
 def _provider_is_paid_gemini(provider: str) -> bool:
