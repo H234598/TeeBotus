@@ -94,9 +94,16 @@ class SourceHarvester:
 
         stored_path = self._stored_path(source, sha256, report.route)
         _refuse_symlink_destination_file(stored_path)
+        stored_existed = stored_path.exists()
         source_stat = _copy_file_private(source, stored_path)
+        stored_stat = _stat_regular_file(stored_path)
         result = SourceHarvestResult(source, report.route, stored_path, sha256, report)
-        self._append_manifest(result)
+        try:
+            self._append_manifest(result)
+        except Exception:
+            if not stored_existed and stored_stat is not None:
+                _unlink_new_destination_if_same(stored_path, stored_stat)
+            raise
         if not copy:
             _unlink_if_same_file(source, source_stat)
         return result
@@ -130,9 +137,16 @@ class SourceHarvester:
             raise ValueError("destination_dir must resolve to an indexed Bibliothek source path")
         _ensure_private_dir(target_dir, label="promote destination directory", root=self.library_root)
         promoted_path = _unique_destination(candidate_path, sha256=sha256)
+        promoted_existed = promoted_path.exists()
         source_stat = _copy_file_private(staged, promoted_path)
+        promoted_stat = _stat_regular_file(promoted_path)
         result = SourcePromoteResult(staged, promoted_path, sha256, copied=copy)
-        self._append_promote_manifest(result)
+        try:
+            self._append_promote_manifest(result)
+        except Exception:
+            if not promoted_existed and promoted_stat is not None:
+                _unlink_new_destination_if_same(promoted_path, promoted_stat)
+            raise
         if not copy:
             _unlink_if_same_file(staged, source_stat)
         return result
@@ -351,6 +365,25 @@ def _unlink_if_same_file(path: Path, expected_stat: os.stat_result) -> None:
     if not stat.S_ISREG(current.st_mode) or current.st_dev != expected_stat.st_dev or current.st_ino != expected_stat.st_ino:
         raise ValueError(f"SourceHarvester source changed before unlink: {path}")
     path.unlink()
+
+
+def _unlink_new_destination_if_same(path: Path, expected_stat: os.stat_result) -> None:
+    try:
+        current = os.stat(path, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    if stat.S_ISREG(current.st_mode) and current.st_dev == expected_stat.st_dev and current.st_ino == expected_stat.st_ino:
+        path.unlink()
+
+
+def _stat_regular_file(path: Path) -> os.stat_result | None:
+    try:
+        current = os.stat(path, follow_symlinks=False)
+    except FileNotFoundError:
+        return None
+    if not stat.S_ISREG(current.st_mode):
+        return None
+    return current
 
 
 def _open_existing_file_nofollow(path: Path) -> int:
