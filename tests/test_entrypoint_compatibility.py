@@ -811,6 +811,22 @@ def test_runtime_status_text_redacts_username_only_url_userinfo() -> None:
     assert "error=<redacted>@matrix.example/_matrix" in text
 
 
+def test_runtime_status_text_redacts_embedded_url_credentials() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    text = bot._sanitize_status_text(
+        "error=(target=https://user:paren-secret@example.test/path) "
+        'json={"target":"https://json-user:json-secret@example.test/path?token=json-token"} '
+        "nested=(target=user:schemeless-secret@matrix.example/_matrix)"
+    )
+
+    for leaked in ("paren-secret", "json-secret", "json-token", "schemeless-secret"):
+        assert leaked not in text
+    assert "error=(target=https://<redacted>@example.test/path)" in text
+    assert 'json={"target":"https://<redacted>@example.test/path?token=<redacted>"}' in text
+    assert "nested=(target=<redacted>@matrix.example/_matrix)" in text
+
+
 def test_runtime_status_text_redacts_url_credentials_with_invalid_port() -> None:
     bot = importlib.import_module("TeeBotus.bot")
 
@@ -849,7 +865,8 @@ def test_runtime_status_text_redacts_structured_secret_assignments() -> None:
         "api_key=\"plain secret value\" password='another secret phrase' bearer_token=`third secret value` "
         "refresh_tokens=multi word token max_output_tokens=700 tokens=provider_usage_response "
         "message=(client_secret=structured-secret) details=[api_key=\"bracket secret value\"] "
-        "meta={password=curly-secret} diagnostic_json={\"api_key\":\"json-secret-value\",\"api_key_env\":\"GEMINI_API_KEY\"}"
+        "meta={password=curly-secret} diagnostic_json={\"api_key\":\"json-secret-value\",\"api_key_env\":\"GEMINI_API_KEY\"} "
+        "quoted=\"api_key=quoted-inner-secret\""
     )
 
     for leaked in (
@@ -861,6 +878,7 @@ def test_runtime_status_text_redacts_structured_secret_assignments() -> None:
         "bracket secret value",
         "curly-secret",
         "json-secret-value",
+        "quoted-inner-secret",
     ):
         assert leaked not in text
     assert "api_key=<redacted>" in text
@@ -872,6 +890,7 @@ def test_runtime_status_text_redacts_structured_secret_assignments() -> None:
     assert "meta={password=<redacted>}" in text
     assert '"api_key":"<redacted>"' in text
     assert '"api_key_env":"GEMINI_API_KEY"' in text
+    assert 'quoted="api_key=<redacted>"' in text
     assert "max_output_tokens=700" in text
     assert "tokens=provider_usage_response" in text
 

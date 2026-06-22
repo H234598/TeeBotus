@@ -1867,7 +1867,7 @@ _status_secret_assignment_value_pattern = (
 )
 _status_secret_assignment_fragment_value_pattern = (
     r"<redacted(?:-secret)?>|\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|"
-    r"(?:(?!\s+[A-Za-z_][A-Za-z0-9._-]*\s*[=:])[^,;\r\n)&#\]}>])+"
+    r"(?:(?!\s+[A-Za-z_][A-Za-z0-9._-]*\s*[=:])[^,;\"'`\r\n)&#\]}>])+"
 )
 _status_secret_assignment_pattern = re.compile(
     rf"(?<!\S)([A-Za-z0-9._-]{{0,120}}{_status_sensitive_assignment_key_pattern}[A-Za-z0-9._-]{{0,120}})\s*([:=])\s*"
@@ -1875,7 +1875,7 @@ _status_secret_assignment_pattern = re.compile(
     re.IGNORECASE,
 )
 _status_secret_assignment_fragment_pattern = re.compile(
-    rf"([\s=;,&?#(\[<{{])([A-Za-z0-9._-]{{0,120}}{_status_sensitive_assignment_key_pattern}[A-Za-z0-9._-]{{0,120}})\s*([:=])\s*"
+    rf"([\s=;,&?#(\[<{{\"'`])([A-Za-z0-9._-]{{0,120}}{_status_sensitive_assignment_key_pattern}[A-Za-z0-9._-]{{0,120}})\s*([:=])\s*"
     rf"({_status_secret_assignment_fragment_value_pattern})",
     re.IGNORECASE,
 )
@@ -1940,9 +1940,20 @@ def _sanitize_status_url_credentials_segment(segment: str) -> str:
     if assignment := re.match(r"([A-Za-z_][A-Za-z0-9._-]*=)(.+)", segment):
         prefix = assignment.group(1)
         remainder = assignment.group(2)
+        if "://" in remainder or _status_embedded_schemeless_credential_pattern.search(remainder):
+            return f"{prefix}{_sanitize_status_embedded_url_credentials(remainder)}"
         if _status_schemeless_credential_pattern.search(remainder):
             return _sanitize_status_url_value(remainder, value_prefix=prefix)
+    if "://" in segment or _status_embedded_schemeless_credential_pattern.search(segment):
+        sanitized = _sanitize_status_embedded_url_credentials(segment)
+        if sanitized != segment:
+            return sanitized
     return _sanitize_status_url_value(segment)
+
+
+def _sanitize_status_embedded_url_credentials(value: str) -> str:
+    text = _status_embedded_url_pattern.sub(lambda match: _sanitize_status_url_value(match.group(0)), value)
+    return _status_embedded_schemeless_credential_pattern.sub(lambda match: _sanitize_status_url_value(match.group(0)), text)
 
 
 def _sanitize_status_url_value(value: str, *, value_prefix: str = "") -> str:
@@ -2067,6 +2078,11 @@ _status_url_secret_param_pattern = re.compile(
 )
 _status_schemeless_credential_pattern = re.compile(
     r"(?:(?<!\S)|(?<==))(?:(?:[^/\s:@]+:[^/\s@]*|:[^/\s@]+)|(?:[^/\s:@]+(?=@[^\s@]*(?:[/:?#]))))@(?=[^\s]+)"
+)
+_status_embedded_url_pattern = re.compile(r"[A-Za-z][A-Za-z0-9+.-]*://[^\s\"'`,)>\]}]+")
+_status_embedded_schemeless_credential_pattern = re.compile(
+    r"(?:(?:[^=/\s:@\"'`,(){}\[\]<>]+:[^=/\s@\"'`,(){}\[\]<>]*|:[^=/\s@\"'`,(){}\[\]<>]+)|"
+    r"(?:[^=/\s:@\"'`,(){}\[\]<>]+(?=@[^\s@\"'`,)>\]}]*(?:[/:?#]))))@[^\s\"'`,)>\]}]+"
 )
 
 
