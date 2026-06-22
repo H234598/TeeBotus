@@ -416,8 +416,10 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     except Exception as exc:
         return False, f"llm profiles plan2 contract import_error={type(exc).__name__}: {exc}"
     try:
-        raw_profile_payload = _load_yaml_mapping(DEFAULT_PROFILE_PATH).get("profiles")
-        raw_routing_payload = _load_yaml_mapping(DEFAULT_ROUTING_PATH).get("purposes")
+        raw_profile_config = _load_yaml_mapping(DEFAULT_PROFILE_PATH)
+        raw_routing_config = _load_yaml_mapping(DEFAULT_ROUTING_PATH)
+        raw_profile_payload = raw_profile_config.get("profiles")
+        raw_routing_payload = raw_routing_config.get("purposes")
         profiles = load_llm_profiles()
         default_profile, routing = load_llm_routing()
     except Exception as exc:
@@ -453,6 +455,14 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     expected_profile_base_urls = {name: "" for name in expected_profiles}
     expected_profile_base_urls["local_ollama"] = "http://127.0.0.1:11434"
     expected_profile_service_tiers = {name: "" for name in expected_profiles}
+    if not isinstance(raw_profile_config, dict):
+        errors.append("raw profile config must be mapping")
+    else:
+        unexpected_profile_top_keys = sorted(str(key) for key in raw_profile_config if str(key) != "profiles")
+        if unexpected_profile_top_keys:
+            errors.append(f"raw profile config unexpected key(s): {','.join(unexpected_profile_top_keys)}")
+        if "profiles" not in raw_profile_config:
+            errors.append("raw profile config missing key(s): profiles")
     if not isinstance(raw_profile_payload, dict):
         errors.append("raw profile payload must be mapping")
     else:
@@ -566,6 +576,25 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         "codex_history_categorization": ("local_ollama", ""),
         "codex_history_strategic_analysis": ("local_ollama", ""),
     }
+    if not isinstance(raw_routing_config, dict):
+        errors.append("raw routing config must be mapping")
+    else:
+        expected_routing_top_keys = {"default_profile", "purposes"}
+        unexpected_routing_top_keys = sorted(
+            str(key) for key in raw_routing_config if str(key) not in expected_routing_top_keys
+        )
+        if unexpected_routing_top_keys:
+            errors.append(f"raw routing config unexpected key(s): {','.join(unexpected_routing_top_keys)}")
+        missing_routing_top_keys = sorted(key for key in expected_routing_top_keys if key not in raw_routing_config)
+        if missing_routing_top_keys:
+            errors.append(f"raw routing config missing key(s): {','.join(missing_routing_top_keys)}")
+        raw_default_profile = raw_routing_config.get("default_profile")
+        if "default_profile" in raw_routing_config and not isinstance(raw_default_profile, str):
+            errors.append("raw routing default_profile must be string")
+        elif isinstance(raw_default_profile, str) and raw_default_profile != "local_ollama":
+            errors.append(
+                f"raw routing default_profile={raw_default_profile or '<empty>'} expected=local_ollama"
+            )
     if not isinstance(raw_routing_payload, dict):
         errors.append("raw routing purposes must be mapping")
     else:

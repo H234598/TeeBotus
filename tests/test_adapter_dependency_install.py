@@ -761,6 +761,48 @@ def test_llm_profiles_plan2_contract_rejects_raw_routing_empty_string_fallback(m
     assert "raw routing purpose normal_chat fallback=<empty> expected=<null>" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_raw_routing_trimmed_default_profile(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            payload["default_profile"] = " local_ollama"
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw routing default_profile= local_ollama expected=local_ollama" in message
+
+
+def test_llm_profiles_plan2_contract_rejects_raw_routing_top_level_drift(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            payload["default"] = "local_ollama"
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw routing config unexpected key(s): default" in message
+
+
 def test_local_secret_file_permission_check_accepts_missing_or_private_env(tmp_path: Path) -> None:
     ok, message = check_adapter_deps._check_local_secret_file_permissions(tmp_path)
 
