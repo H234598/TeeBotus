@@ -458,6 +458,9 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     if not isinstance(raw_profile_config, dict):
         errors.append("raw profile config must be mapping")
     else:
+        non_string_profile_top_keys = sorted(repr(key) for key in raw_profile_config if not isinstance(key, str))
+        if non_string_profile_top_keys:
+            errors.append(f"raw profile config key(s) must be string: {','.join(non_string_profile_top_keys)}")
         unexpected_profile_top_keys = sorted(str(key) for key in raw_profile_config if str(key) != "profiles")
         if unexpected_profile_top_keys:
             errors.append(f"raw profile config unexpected key(s): {','.join(unexpected_profile_top_keys)}")
@@ -482,6 +485,11 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
             if not isinstance(raw_profile, dict):
                 errors.append(f"raw profile {name} must be mapping")
                 continue
+            non_string_profile_field_keys = sorted(repr(key) for key in raw_profile if not isinstance(key, str))
+            if non_string_profile_field_keys:
+                errors.append(
+                    f"raw profile {name} key(s) must be string: {','.join(non_string_profile_field_keys)}"
+                )
             unexpected_keys = sorted(str(key) for key in raw_profile if str(key) not in allowed_raw_profile_keys)
             if unexpected_keys:
                 errors.append(f"raw profile {name} unexpected key(s): {','.join(unexpected_keys)}")
@@ -583,6 +591,9 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         errors.append("raw routing config must be mapping")
     else:
         expected_routing_top_keys = {"default_profile", "purposes"}
+        non_string_routing_top_keys = sorted(repr(key) for key in raw_routing_config if not isinstance(key, str))
+        if non_string_routing_top_keys:
+            errors.append(f"raw routing config key(s) must be string: {','.join(non_string_routing_top_keys)}")
         unexpected_routing_top_keys = sorted(
             str(key) for key in raw_routing_config if str(key) not in expected_routing_top_keys
         )
@@ -631,6 +642,12 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
                 errors.append(f"raw routing purpose {raw_name} must be mapping")
                 continue
             if normalized_name in expected_routes and isinstance(raw_route, dict):
+                non_string_route_field_keys = sorted(repr(key) for key in raw_route if not isinstance(key, str))
+                if non_string_route_field_keys:
+                    errors.append(
+                        f"raw routing purpose {raw_name} key(s) must be string: "
+                        f"{','.join(non_string_route_field_keys)}"
+                    )
                 unexpected_keys = sorted(str(key) for key in raw_route if str(key) not in {"profile", "fallback"})
                 if unexpected_keys:
                     errors.append(f"raw routing purpose {raw_name} unexpected key(s): {','.join(unexpected_keys)}")

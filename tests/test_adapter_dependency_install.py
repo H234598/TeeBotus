@@ -529,6 +529,30 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_non_string_name(monkeyp
     assert "raw profile name(s) must be string: 123" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_raw_config_non_string_top_level_keys(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            payload[123] = {}
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            payload[456] = {}
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw profile config key(s) must be string: 123" in message
+    assert "raw routing config key(s) must be string: 456" in message
+
+
 def test_llm_profiles_plan2_contract_rejects_raw_profile_unknown_keys(monkeypatch) -> None:
     from copy import deepcopy
 
@@ -656,6 +680,30 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_wrong_static_model_valu
         "raw profile hf_mistral model=huggingface/mistralai/Other-Instruct "
         "expected=huggingface/mistralai/Mistral-7B-Instruct-v0.3"
     ) in message
+
+
+def test_llm_profiles_plan2_contract_rejects_raw_profile_and_route_non_string_field_keys(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            payload["profiles"]["local_ollama"][123] = "ignored"
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            payload["purposes"]["normal_chat"][456] = "ignored"
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw profile local_ollama key(s) must be string: 123" in message
+    assert "raw routing purpose normal_chat key(s) must be string: 456" in message
 
 
 def test_llm_profiles_plan2_contract_rejects_raw_routing_alias_key(monkeypatch) -> None:
