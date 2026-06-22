@@ -481,14 +481,30 @@ def _ensure_private_dir(path: Path, *, label: str, root: Path | None = None) -> 
         raise ValueError(f"SourceHarvester refuses symlink {label}: {path}")
     if not path.is_dir():
         raise ValueError(f"SourceHarvester requires directory {label}: {path}")
-    _chmod_private_dir(path)
+    _chmod_private_dir(path, label=label)
 
 
-def _chmod_private_dir(path: Path) -> None:
+def _chmod_private_dir(path: Path, *, label: str) -> None:
+    fd = -1
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0)
     try:
-        path.chmod(0o700)
+        fd = os.open(path, flags)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise ValueError(f"SourceHarvester refuses symlink {label}: {path}") from exc
+        if exc.errno == errno.ENOTDIR and path.is_symlink():
+            raise ValueError(f"SourceHarvester refuses symlink {label}: {path}") from exc
+        if exc.errno == errno.ENOTDIR:
+            raise ValueError(f"SourceHarvester requires directory {label}: {path}") from exc
+        return
+    try:
+        if not stat.S_ISDIR(os.fstat(fd).st_mode):
+            raise ValueError(f"SourceHarvester requires directory {label}: {path}")
+        os.fchmod(fd, 0o700)
     except OSError:
         return
+    finally:
+        _close_fd_if_open(fd)
 
 
 def _chmod_private_fd(fd: int) -> None:

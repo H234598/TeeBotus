@@ -884,6 +884,47 @@ def test_source_harvester_refuses_symlink_harvest_staging_dir(tmp_path):
     assert list(outside_dir.iterdir()) == []
 
 
+@pytest.mark.skipif(
+    not hasattr(os, "O_NOFOLLOW") or not hasattr(os, "O_DIRECTORY"),
+    reason="requires atomic no-follow directory open",
+)
+def test_source_harvester_refuses_staging_dir_symlink_swapped_before_chmod(tmp_path, monkeypatch):
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    library_dir = tmp_path / "library"
+    accepted_dir = library_dir / "accepted"
+    outside_dir = tmp_path / "outside-accepted"
+    outside_dir.mkdir()
+    original_open = os.open
+    swapped = False
+
+    def open_and_swap_dir(path, flags, *args, **kwargs):
+        nonlocal swapped
+        if Path(path) == accepted_dir and flags & os.O_DIRECTORY and not swapped:
+            accepted_dir.rmdir()
+            accepted_dir.symlink_to(outside_dir, target_is_directory=True)
+            swapped = True
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(source_harvester_module.os, "open", open_and_swap_dir)
+    harvester = SourceHarvester(
+        library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+
+    with pytest.raises(ValueError, match="symlink harvest staging directory"):
+        harvester.harvest_path(
+            source,
+            metadata={"title": "Therapie", "license": "private"},
+            claims=("Schlafhygiene ist relevant.",),
+            evidence=("Schlafhygiene und Aktivierung.",),
+        )
+
+    assert swapped is True
+    assert list(outside_dir.iterdir()) == []
+
+
 def test_source_harvester_resolves_relative_manifest_paths_after_cwd_change(tmp_path, monkeypatch):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
