@@ -69,8 +69,6 @@ CODEX_HISTORY_MANAGED_SUMMARY_SECTIONS = (
     CODEX_HISTORY_LINKS_SECTION_TITLE,
     CODEX_HISTORY_MERMAID_SECTION_TITLE,
 )
-CODEX_SESSION_ACTIVE_GRACE_SECONDS = 5 * 60
-CODEX_SESSION_ACTIVE_GRACE_MIN_SIZE_BYTES = 8 * 1024 * 1024
 CODEX_SESSION_LARGE_FILE_THRESHOLD_BYTES = 16 * 1024 * 1024
 CODEX_SESSION_LARGE_FILE_HEAD_BYTES = 512 * 1024
 CODEX_SESSION_LARGE_FILE_TAIL_BYTES = 1024 * 1024
@@ -681,7 +679,6 @@ def import_codex_session_roots(store: AccountStore, roots: Sequence[str | Path],
                     rows,
                     session_file,
                     final_message_limit=0 if session_file in explicit_session_files else 1,
-                    skip_active_large=session_file not in explicit_session_files,
                 )
             except (OSError, ValueError, AccountStoreError) as exc:
                 file_results = [
@@ -737,11 +734,9 @@ def _aggregate_codex_session_import_results(results: Sequence[Mapping[str, Any]]
 
 
 def _build_codex_session_import_results(
-    rows: list[dict[str, Any]], session_file: str | Path, *, final_message_limit: int = 0, skip_active_large: bool = False
+    rows: list[dict[str, Any]], session_file: str | Path, *, final_message_limit: int = 0
 ) -> list[dict[str, Any]]:
     path = _safe_repo_root(Path(session_file), operation="session file", allow_hidden_segments=True)
-    if skip_active_large and _codex_session_file_is_active_large(path):
-        return [{"status": "skipped", "reason": "active_large_session", "path": str(path)}]
     parsed = _parse_codex_session_file(path)
     final_messages = parsed.get("final_messages", ())
     if not isinstance(final_messages, Sequence) or isinstance(final_messages, (str, bytes, bytearray)):
@@ -2972,17 +2967,6 @@ def _parse_codex_session_file(path: Path) -> dict[str, Any]:
         "goal": latest_goal,
         "auftrag": latest_auftrag,
     }
-
-
-def _codex_session_file_is_active_large(path: Path) -> bool:
-    try:
-        stat = path.stat()
-    except OSError:
-        return False
-    if stat.st_size < CODEX_SESSION_ACTIVE_GRACE_MIN_SIZE_BYTES:
-        return False
-    age_seconds = max(0.0, time.time() - float(stat.st_mtime))
-    return age_seconds < CODEX_SESSION_ACTIVE_GRACE_SECONDS
 
 
 def _iter_codex_session_text_lines(path: Path) -> Iterator[str]:

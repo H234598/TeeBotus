@@ -1683,31 +1683,43 @@ def test_import_codex_session_file_skips_when_no_assistant_final_text(tmp_path: 
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID) == []
 
 
-def test_import_codex_session_roots_skips_recent_large_directory_session_but_explicit_import_can_read_it(
+def test_import_codex_session_roots_imports_recent_large_directory_session_from_tail(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     repo = make_git_repo(tmp_path, "active-large-session-demo", version="1.0.0")
     store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
-    session_file = write_codex_session(
-        tmp_path / "sessions" / "active-large.jsonl",
-        repo=repo,
-        final_text="Aktive grosse Summary soll explizit importierbar bleiben.",
-    )
-    monkeypatch.setattr(codex_history_module, "CODEX_SESSION_ACTIVE_GRACE_MIN_SIZE_BYTES", 1)
-    monkeypatch.setattr(codex_history_module, "CODEX_SESSION_ACTIVE_GRACE_SECONDS", 3600)
+    session_file = tmp_path / "sessions" / "active-large.jsonl"
+    rows = [
+        {"type": "session_meta", "payload": {"id": "sess-active-large", "cwd": str(repo)}},
+        {"type": "response_item", "payload": {"type": "function_call_output", "call_id": "call-1", "output": "x" * 2048}},
+        {"type": "turn_context", "payload": {"turn_id": "turn-active-large"}},
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
+                "role": "assistant",
+                "phase": "final_answer",
+                "content": [{"type": "output_text", "text": "Aktive grosse Summary wird aus dem Tail importiert."}],
+            },
+        },
+    ]
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+    monkeypatch.setattr(codex_history_module, "CODEX_SESSION_LARGE_FILE_THRESHOLD_BYTES", 128)
+    monkeypatch.setattr(codex_history_module, "CODEX_SESSION_LARGE_FILE_HEAD_BYTES", 256)
+    monkeypatch.setattr(codex_history_module, "CODEX_SESSION_LARGE_FILE_TAIL_BYTES", 1024)
 
     directory_result = import_codex_session_roots(store, (session_file.parent,), limit=10)
 
-    assert directory_result["status_counts"] == {"skipped": 1}
-    assert directory_result["items"][0]["reason"] == "active_large_session"
-    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID) == []
+    assert directory_result["status_counts"] == {"imported": 1}
+    item = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert item["codex"]["session_id"] == "sess-active-large"
+    assert item["codex"]["turn_id"] == "turn-active-large"
+    assert item["summary"]["title"] == "Aktive grosse Summary wird aus dem Tail importiert."
 
     explicit_result = import_codex_session_file(store, session_file)
 
-    assert explicit_result["status"] == "imported"
-    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["summary"]["title"] == (
-        "Aktive grosse Summary soll explizit importierbar bleiben."
-    )
+    assert explicit_result["status"] == "duplicate"
 
 
 def test_import_codex_session_file_reads_large_logs_from_head_and_tail(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
