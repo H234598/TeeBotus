@@ -243,8 +243,10 @@ class RuntimeTimedRotatingFileHandler(TimedRotatingFileHandler):
 def _stdout_targets_path(path: Path) -> bool:
     try:
         stdout_stat = os.fstat(sys.stdout.fileno())
-        path_stat = path.stat()
+        path_stat = os.stat(path, follow_symlinks=False)
     except (AttributeError, FileNotFoundError, OSError, ValueError):
+        return False
+    if not stat_module.S_ISREG(path_stat.st_mode):
         return False
     return stdout_stat.st_dev == path_stat.st_dev and stdout_stat.st_ino == path_stat.st_ino
 

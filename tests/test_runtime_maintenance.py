@@ -18,6 +18,7 @@ from TeeBotus.runtime.maintenance import (
     RuntimeTimedRotatingFileHandler,
     STDIO_LOG_FILENAME,
     TeeStream,
+    _stdout_targets_path,
     configure_runtime_logging,
     gzip_file,
     install_stdio_tee,
@@ -1203,6 +1204,18 @@ def test_configure_runtime_logging_skips_file_handler_when_stdout_already_target
         handlers = logging.getLogger().handlers
         assert len(handlers) == 1
         assert not any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
+
+
+def test_stdout_targets_path_does_not_follow_runtime_log_symlink(tmp_path, monkeypatch):
+    external = tmp_path / "external.log"
+    external.touch()
+    log_path = tmp_path / "teebotus-production.log"
+    log_path.symlink_to(external)
+
+    with external.open("a", encoding="utf-8") as redirected_stdout:
+        monkeypatch.setattr(sys, "stdout", redirected_stdout)
+
+        assert _stdout_targets_path(log_path) is False
 
 
 def test_configure_runtime_logging_uses_file_handler_when_stdout_is_not_runtime_log(tmp_path):
