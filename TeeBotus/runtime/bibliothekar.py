@@ -365,7 +365,7 @@ def _read_harvest_source_metadata(library_dir: Path) -> dict[str, dict[str, Any]
     for row in rows:
         if _manifest_token(row.get("event")) == "promoted" or _manifest_token(row.get("route")) != "accepted":
             continue
-        sha256 = str(row.get("sha256") or "").strip()
+        sha256 = _manifest_sha256(row.get("sha256"))
         stored_path = str(row.get("stored_path") or "").strip()
         if not sha256 or not stored_path or not _coerce_bool(row.get("accepted_for_ingest")):
             continue
@@ -378,7 +378,7 @@ def _read_harvest_source_metadata(library_dir: Path) -> dict[str, dict[str, Any]
     for row in rows:
         if _manifest_token(row.get("event")) != "promoted":
             continue
-        sha256 = str(row.get("sha256") or "").strip()
+        sha256 = _manifest_sha256(row.get("sha256"))
         promoted_text = str(row.get("stored_path") or "").strip()
         if not sha256 or not promoted_text:
             continue
@@ -418,6 +418,10 @@ def _source_metadata_from_harvest_row(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def _manifest_token(value: object) -> str:
+    return str(value or "").strip().casefold()
+
+
+def _manifest_sha256(value: object) -> str:
     return str(value or "").strip().casefold()
 
 
