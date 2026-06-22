@@ -714,7 +714,7 @@ def _unique_positive_ints(values: Iterable[int]) -> tuple[int, ...]:
 
 
 def _resolve_instance_names(instances_dir: Path, requested: Iterable[str]) -> tuple[str, ...]:
-    explicit = tuple(dict.fromkeys(str(value or "").strip() for value in requested if str(value or "").strip()))
+    explicit = _normalize_requested_instance_names(requested)
     if explicit:
         return explicit
     if not instances_dir.exists():
@@ -747,7 +747,7 @@ def _looks_like_account_store_instance(instance_dir: Path) -> bool:
 
 
 def _resolve_instruction_instance_names(instances_dir: Path, requested: Iterable[str]) -> tuple[str, ...]:
-    explicit = tuple(dict.fromkeys(str(value or "").strip() for value in requested if str(value or "").strip()))
+    explicit = _normalize_requested_instance_names(requested)
     if explicit:
         return explicit
     if not instances_dir.exists():
@@ -756,6 +756,27 @@ def _resolve_instruction_instance_names(instances_dir: Path, requested: Iterable
     for path in sorted(instances_dir.iterdir()):
         if path.is_dir() and (path / "Bot_Verhalten.md").exists():
             names.append(path.name)
+    return tuple(names)
+
+
+def validate_embedding_instance_name(value: object) -> str:
+    name = str(value or "").strip()
+    if not name:
+        return ""
+    if name in {".", ".."} or "/" in name or "\\" in name:
+        raise ValueError("Instance name must be a single path segment.")
+    return name
+
+
+def _normalize_requested_instance_names(requested: Iterable[str]) -> tuple[str, ...]:
+    names: list[str] = []
+    seen: set[str] = set()
+    for value in requested:
+        name = validate_embedding_instance_name(value)
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        names.append(name)
     return tuple(names)
 
 
@@ -789,4 +810,5 @@ __all__ = [
     "rebuild_qdrant_codex_history_indexes",
     "rebuild_qdrant_memory_index",
     "rebuild_qdrant_memory_indexes",
+    "validate_embedding_instance_name",
 ]

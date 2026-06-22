@@ -12,6 +12,7 @@ from TeeBotus.embedding.rebuild import (
     rebuild_qdrant_bibliothekar_indexes,
     rebuild_qdrant_codex_history_indexes,
     rebuild_qdrant_memory_indexes,
+    validate_embedding_instance_name,
 )
 from TeeBotus.admin.codex_history import append_codex_history_summary
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, telegram_identity_key
@@ -653,6 +654,28 @@ def test_embedding_cli_memory_rebuild_returns_failure_when_no_accounts(monkeypat
 
     assert embedding_cli_main(["--instances-dir", str(tmp_path / "instances"), "memory-rebuild"]) == 1
     assert "status=skipped" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("instance_name", ("../outside", "nested/instance", "nested\\instance", ".", ".."))
+def test_embedding_instance_name_rejects_path_segments(instance_name):
+    with pytest.raises(ValueError, match="single path segment"):
+        validate_embedding_instance_name(instance_name)
+
+
+def test_embedding_cli_rejects_path_segment_instance_names(capsys, tmp_path):
+    with pytest.raises(SystemExit) as exc_info:
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "--instance",
+                "../outside",
+                "memory-rebuild",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "--instance Instance name must be a single path segment" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

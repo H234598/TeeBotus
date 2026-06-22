@@ -14,6 +14,7 @@ from TeeBotus.embedding.rebuild import (
     rebuild_qdrant_bibliothekar_indexes,
     rebuild_qdrant_codex_history_indexes,
     rebuild_qdrant_memory_indexes,
+    validate_embedding_instance_name,
 )
 from TeeBotus.runtime.dotenv import load_project_dotenv_for_instances
 from TeeBotus.runtime.qdrant import (
@@ -28,6 +29,7 @@ from TeeBotus.runtime.qdrant import (
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
+    _validate_instance_args(parser, args)
     with _dotenv_defaults_for_instances_dir(args.instances_dir):
         if args.command == "memory-rebuild":
             _validate_embedding_override_args(parser, args)
@@ -213,6 +215,14 @@ def _validate_memory_rebuild_args(parser: argparse.ArgumentParser, args: argpars
         parser.error("--collection cannot be combined with --side-index-dimensions.")
     if args.embedding_dimensions is not None and int(args.embedding_dimensions) != side_dimensions:
         parser.error("--embedding-dimensions must match --side-index-dimensions for memory side-index rebuilds.")
+
+
+def _validate_instance_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    for value in getattr(args, "instance", ()) or ():
+        try:
+            validate_embedding_instance_name(value)
+        except ValueError as exc:
+            parser.error(f"--instance {exc}")
 
 
 def _validate_embedding_override_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
