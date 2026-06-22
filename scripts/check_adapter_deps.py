@@ -483,7 +483,9 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
                 errors.append(f"raw profile config key {raw_key} must use canonical key {canonical_key}")
         for normalized_key, raw_keys in sorted(duplicate_profile_top_keys.items()):
             errors.append(f"duplicate raw profile config key {normalized_key}: {','.join(raw_keys)}")
-        unexpected_profile_top_keys = sorted(str(key) for key in raw_profile_config if str(key) != "profiles")
+        unexpected_profile_top_keys = sorted(
+            key for key in raw_profile_config if isinstance(key, str) and key != "profiles"
+        )
         if unexpected_profile_top_keys:
             errors.append(f"raw profile config unexpected key(s): {','.join(unexpected_profile_top_keys)}")
         if "profiles" not in raw_profile_config:
@@ -494,7 +496,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         non_string_profile_names = sorted(repr(name) for name in raw_profile_payload if not isinstance(name, str))
         if non_string_profile_names:
             errors.append(f"raw profile name(s) must be string: {','.join(non_string_profile_names)}")
-        raw_profile_names = {str(name) for name in raw_profile_payload}
+        raw_profile_names = {name for name in raw_profile_payload if isinstance(name, str)}
         canonical_profile_names = {_normalize_raw_llm_config_key(name): name for name in expected_profiles}
         normalized_raw_profiles: dict[str, str] = {}
         duplicate_normalized_profiles: dict[str, list[str]] = {}
@@ -546,7 +548,9 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
                     errors.append(f"raw profile {name} key {raw_key} must use canonical key {canonical_key}")
             for normalized_key, raw_keys in sorted(duplicate_profile_field_keys.items()):
                 errors.append(f"duplicate raw profile {name} key {normalized_key}: {','.join(raw_keys)}")
-            unexpected_keys = sorted(str(key) for key in raw_profile if str(key) not in allowed_raw_profile_keys)
+            unexpected_keys = sorted(
+                key for key in raw_profile if isinstance(key, str) and key not in allowed_raw_profile_keys
+            )
             if unexpected_keys:
                 errors.append(f"raw profile {name} unexpected key(s): {','.join(unexpected_keys)}")
             required_keys = {"provider", "model", "api_key_env"}
@@ -667,7 +671,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         for normalized_key, raw_keys in sorted(duplicate_routing_top_keys.items()):
             errors.append(f"duplicate raw routing config key {normalized_key}: {','.join(raw_keys)}")
         unexpected_routing_top_keys = sorted(
-            str(key) for key in raw_routing_config if str(key) not in expected_routing_top_keys
+            key for key in raw_routing_config if isinstance(key, str) and key not in expected_routing_top_keys
         )
         if unexpected_routing_top_keys:
             errors.append(f"raw routing config unexpected key(s): {','.join(unexpected_routing_top_keys)}")
@@ -687,7 +691,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         non_string_route_names = sorted(repr(name) for name in raw_routing_payload if not isinstance(name, str))
         if non_string_route_names:
             errors.append(f"raw routing purpose name(s) must be string: {','.join(non_string_route_names)}")
-        raw_route_names = {str(name) for name in raw_routing_payload}
+        raw_route_names = {name for name in raw_routing_payload if isinstance(name, str)}
         normalized_raw_routes: dict[str, str] = {}
         duplicate_normalized_routes: dict[str, list[str]] = {}
         for raw_name in sorted(raw_route_names):
@@ -744,7 +748,9 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
                     errors.append(
                         f"duplicate raw routing purpose {raw_name} key {normalized_key}: {','.join(raw_keys)}"
                     )
-                unexpected_keys = sorted(str(key) for key in raw_route if str(key) not in {"profile", "fallback"})
+                unexpected_keys = sorted(
+                    key for key in raw_route if isinstance(key, str) and key not in {"profile", "fallback"}
+                )
                 if unexpected_keys:
                     errors.append(f"raw routing purpose {raw_name} unexpected key(s): {','.join(unexpected_keys)}")
                 missing_keys = sorted(key for key in {"profile", "fallback"} if key not in raw_route)

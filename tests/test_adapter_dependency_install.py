@@ -533,6 +533,7 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_non_string_name(monkeyp
 
     assert not ok
     assert "raw profile name(s) must be string: 123" in message
+    assert "unexpected raw profile(s): 123" not in message
     assert "unexpected profile(s): 123" not in message
 
 
@@ -601,6 +602,8 @@ def test_llm_profiles_plan2_contract_rejects_raw_config_non_string_top_level_key
     assert not ok
     assert "raw profile config key(s) must be string: 123" in message
     assert "raw routing config key(s) must be string: 456" in message
+    assert "raw profile config unexpected key(s): 123" not in message
+    assert "raw routing config unexpected key(s): 456" not in message
 
 
 def test_llm_profiles_plan2_contract_rejects_raw_config_top_level_alias_keys(monkeypatch) -> None:
@@ -872,6 +875,8 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_and_route_non_string_fi
     assert not ok
     assert "raw profile local_ollama key(s) must be string: 123" in message
     assert "raw routing purpose normal_chat key(s) must be string: 456" in message
+    assert "raw profile local_ollama unexpected key(s): 123" not in message
+    assert "raw routing purpose normal_chat unexpected key(s): 456" not in message
 
 
 def test_llm_profiles_plan2_contract_rejects_raw_routing_alias_key(monkeypatch) -> None:
@@ -1105,6 +1110,7 @@ def test_llm_profiles_plan2_contract_rejects_raw_routing_non_string_purpose_name
 
     assert not ok
     assert "raw routing purpose name(s) must be string: 123" in message
+    assert "unexpected raw routing purpose(s): 123" not in message
     assert "unexpected routing purpose(s): 123" not in message
 
 
