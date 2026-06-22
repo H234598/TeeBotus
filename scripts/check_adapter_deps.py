@@ -404,10 +404,20 @@ def _optional_dependency_name_version(dependency: str) -> tuple[str, str]:
 
 def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     try:
-        from TeeBotus.llm.profiles import load_llm_profiles, load_llm_routing, select_llm_route
+        from TeeBotus.llm.profiles import (
+            DEFAULT_PROFILE_PATH,
+            DEFAULT_ROUTING_PATH,
+            _load_yaml_mapping,
+            load_llm_profiles,
+            load_llm_routing,
+            normalize_llm_purpose,
+            select_llm_route,
+        )
     except Exception as exc:
         return False, f"llm profiles plan2 contract import_error={type(exc).__name__}: {exc}"
     try:
+        raw_profile_payload = _load_yaml_mapping(DEFAULT_PROFILE_PATH).get("profiles")
+        raw_routing_payload = _load_yaml_mapping(DEFAULT_ROUTING_PATH).get("purposes")
         profiles = load_llm_profiles()
         default_profile, routing = load_llm_routing()
     except Exception as exc:
@@ -434,6 +444,19 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         "vertex_gemini_2_5_flash": ("litellm", "vertex_ai/", "vertex_ai/gemini-2.5-flash", "GOOGLE_APPLICATION_CREDENTIALS"),
         "openai_premium": ("litellm", "openai/", "openai/gpt-5.5", "OPENAI_API_KEY"),
     }
+    if not isinstance(raw_profile_payload, dict):
+        errors.append("raw profile payload must be mapping")
+    else:
+        raw_profile_names = {str(name) for name in raw_profile_payload}
+        unexpected_raw_profiles = sorted(raw_profile_names - set(expected_profiles))
+        missing_raw_profiles = sorted(set(expected_profiles) - raw_profile_names)
+        if unexpected_raw_profiles:
+            errors.append(f"unexpected raw profile(s): {','.join(unexpected_raw_profiles)}")
+        if missing_raw_profiles:
+            errors.append(f"missing raw profile(s): {','.join(missing_raw_profiles)}")
+        for name in sorted(raw_profile_names & set(expected_profiles)):
+            if not isinstance(raw_profile_payload.get(name), dict):
+                errors.append(f"raw profile {name} must be mapping")
     if default_profile != "local_ollama":
         errors.append("default_profile must be local_ollama")
     if default_profile not in profiles:
@@ -495,6 +518,33 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         "codex_history_categorization": ("local_ollama", ""),
         "codex_history_strategic_analysis": ("local_ollama", ""),
     }
+    if not isinstance(raw_routing_payload, dict):
+        errors.append("raw routing purposes must be mapping")
+    else:
+        raw_route_names = {str(name) for name in raw_routing_payload}
+        normalized_raw_routes: dict[str, str] = {}
+        duplicate_normalized_routes: dict[str, list[str]] = {}
+        for raw_name in sorted(raw_route_names):
+            normalized_name = normalize_llm_purpose(raw_name)
+            if normalized_name in normalized_raw_routes:
+                duplicate_normalized_routes.setdefault(
+                    normalized_name,
+                    [normalized_raw_routes[normalized_name]],
+                ).append(raw_name)
+            normalized_raw_routes[normalized_name] = raw_name
+        for normalized_name, raw_names in sorted(duplicate_normalized_routes.items()):
+            errors.append(f"duplicate raw routing purpose {normalized_name}: {','.join(raw_names)}")
+        unexpected_raw_routes = sorted(set(normalized_raw_routes) - set(expected_routes))
+        missing_raw_routes = sorted(set(expected_routes) - set(normalized_raw_routes))
+        if unexpected_raw_routes:
+            errors.append(f"unexpected raw routing purpose(s): {','.join(unexpected_raw_routes)}")
+        if missing_raw_routes:
+            errors.append(f"missing raw routing purpose(s): {','.join(missing_raw_routes)}")
+        for normalized_name, raw_name in sorted(normalized_raw_routes.items()):
+            if normalized_name in expected_routes and raw_name != normalized_name:
+                errors.append(f"raw routing purpose {raw_name} must use canonical key {normalized_name}")
+            if normalized_name in expected_routes and not isinstance(raw_routing_payload.get(raw_name), dict):
+                errors.append(f"raw routing purpose {raw_name} must be mapping")
     unexpected_routes = sorted(set(routing) - set(expected_routes))
     if unexpected_routes:
         errors.append(f"unexpected routing purpose(s): {','.join(unexpected_routes)}")

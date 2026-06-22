@@ -487,6 +487,70 @@ def test_llm_profiles_plan2_contract_rejects_unexpected_profiles_and_routes(monk
     assert "unexpected routing purpose(s): legacy_bibliothekar" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_raw_profile_hidden_from_loader(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            payload.setdefault("profiles", {})["gemini_flash"] = {"provider": "", "model": ""}
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "unexpected raw profile(s): gemini_flash" in message
+
+
+def test_llm_profiles_plan2_contract_rejects_raw_routing_alias_key(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            purposes = payload["purposes"]
+            purposes["structured-decision"] = purposes.pop("structured_decision")
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw routing purpose structured-decision must use canonical key structured_decision" in message
+
+
+def test_llm_profiles_plan2_contract_rejects_duplicate_raw_routing_aliases(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            payload["purposes"]["structured-decision"] = deepcopy(payload["purposes"]["structured_decision"])
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "duplicate raw routing purpose structured_decision: structured-decision,structured_decision" in message
+
+
 def test_local_secret_file_permission_check_accepts_missing_or_private_env(tmp_path: Path) -> None:
     ok, message = check_adapter_deps._check_local_secret_file_permissions(tmp_path)
 
