@@ -246,7 +246,9 @@ def maintain_runtime_directory(
     resolved_now = time.time() if now is None else now
     for path in list(_runtime_text_files(runtime_path)):
         try:
-            file_stat = path.stat()
+            file_stat = path.stat(follow_symlinks=False)
+            if not stat_module.S_ISREG(file_stat.st_mode):
+                continue
             age = max(0.0, resolved_now - file_stat.st_mtime)
             if file_stat.st_size > max_bytes or age >= compress_after_seconds:
                 gzip_file(path, expected_stat=file_stat)
