@@ -692,7 +692,7 @@ def _publish_temporary_file(temporary: Path, target: Path, *, expected_stat: os.
         if not _same_file_stat(linked_stat, expected_stat):
             try:
                 current_temp_stat = os.stat(temporary, follow_symlinks=False)
-            except OSError:
+            except (OSError, ValueError):
                 current_temp_stat = None
             if current_temp_stat is not None and _same_file_stat(linked_stat, current_temp_stat):
                 _unlink_if_same_file(published, linked_stat)

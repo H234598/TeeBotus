@@ -19,6 +19,7 @@ from TeeBotus.runtime.maintenance import (
     RuntimeTimedRotatingFileHandler,
     STDIO_LOG_FILENAME,
     TeeStream,
+    _publish_temporary_file,
     _stdout_targets_path,
     configure_runtime_logging,
     gzip_file,
@@ -1051,6 +1052,31 @@ def test_gzip_file_does_not_publish_temporary_path_replaced_before_publish(tmp_p
     assert temporary.is_symlink()
     assert external.read_text(encoding="utf-8") == "do not publish\n"
     assert not os.path.lexists(target)
+
+
+def test_runtime_publish_preserves_changed_file_error_when_temporary_stat_raises_value_error(tmp_path, monkeypatch):
+    temporary = tmp_path / ".teebotus-production.log.2026-06-01.gz.tmp"
+    temporary.write_text("temporary\n", encoding="utf-8")
+    expected_stat = temporary.stat()
+    target = tmp_path / "teebotus-production.log.2026-06-01.gz"
+    real_stat = os.stat
+
+    def link_different_file(_source, destination, *args, **kwargs):
+        Path(destination).write_text("different target\n", encoding="utf-8")
+
+    def fail_temporary_stat(file, *args, **kwargs):
+        if Path(file) == temporary and kwargs.get("follow_symlinks") is False:
+            raise ValueError("temporary stat failed")
+        return real_stat(file, *args, **kwargs)
+
+    monkeypatch.setattr(os, "link", link_different_file)
+    monkeypatch.setattr(os, "stat", fail_temporary_stat)
+
+    with pytest.raises(OSError, match="runtime temporary file changed before publish"):
+        _publish_temporary_file(temporary, target, expected_stat=expected_stat)
+
+    assert temporary.read_text(encoding="utf-8") == "temporary\n"
+    assert target.read_text(encoding="utf-8") == "different target\n"
 
 
 def test_gzip_file_does_not_utime_temporary_symlink_replacement(tmp_path, monkeypatch):
