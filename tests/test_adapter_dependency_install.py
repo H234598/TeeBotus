@@ -508,6 +508,27 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_hidden_from_loader(monk
     assert "unexpected raw profile(s): gemini_flash" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_raw_profile_non_string_name(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            payload["profiles"][123] = {"provider": "litellm", "model": "ollama_chat/llama3.2:3b"}
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw profile name(s) must be string: 123" in message
+
+
 def test_llm_profiles_plan2_contract_rejects_raw_profile_unknown_keys(monkeypatch) -> None:
     from copy import deepcopy
 
@@ -825,6 +846,27 @@ def test_llm_profiles_plan2_contract_rejects_raw_routing_top_level_drift(monkeyp
 
     assert not ok
     assert "raw routing config unexpected key(s): default" in message
+
+
+def test_llm_profiles_plan2_contract_rejects_raw_routing_non_string_purpose_name(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            payload["purposes"][123] = {"profile": "local_ollama", "fallback": None}
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw routing purpose name(s) must be string: 123" in message
 
 
 def test_local_secret_file_permission_check_accepts_missing_or_private_env(tmp_path: Path) -> None:

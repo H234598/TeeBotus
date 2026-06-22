@@ -466,6 +466,9 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     if not isinstance(raw_profile_payload, dict):
         errors.append("raw profile payload must be mapping")
     else:
+        non_string_profile_names = sorted(repr(name) for name in raw_profile_payload if not isinstance(name, str))
+        if non_string_profile_names:
+            errors.append(f"raw profile name(s) must be string: {','.join(non_string_profile_names)}")
         raw_profile_names = {str(name) for name in raw_profile_payload}
         allowed_raw_profile_keys = {"provider", "model", "base_url", "api_key_env", "service_tier"}
         unexpected_raw_profiles = sorted(raw_profile_names - set(expected_profiles))
@@ -598,6 +601,9 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     if not isinstance(raw_routing_payload, dict):
         errors.append("raw routing purposes must be mapping")
     else:
+        non_string_route_names = sorted(repr(name) for name in raw_routing_payload if not isinstance(name, str))
+        if non_string_route_names:
+            errors.append(f"raw routing purpose name(s) must be string: {','.join(non_string_route_names)}")
         raw_route_names = {str(name) for name in raw_routing_payload}
         normalized_raw_routes: dict[str, str] = {}
         duplicate_normalized_routes: dict[str, list[str]] = {}
