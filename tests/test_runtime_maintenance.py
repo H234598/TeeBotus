@@ -1477,6 +1477,14 @@ def test_configure_runtime_logging_uses_file_handler_when_stdout_is_not_runtime_
     assert any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
 
 
+def test_configure_runtime_logging_accepts_string_base_dir(tmp_path):
+    configure_runtime_logging(base_dir=str(tmp_path))
+
+    handlers = logging.getLogger().handlers
+    assert any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
+    assert (tmp_path / "teebotus-production.log").exists()
+
+
 def test_configure_runtime_logging_continues_when_runtime_directory_is_blocked(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdout", io.StringIO())
     blocked_runtime_dir = tmp_path / "runtime-as-file"
