@@ -225,9 +225,18 @@ def gzip_file(path: Path) -> Path:
         return path
     stat = path.stat()
     target = _unique_path(path.with_name(f"{path.name}.gz"))
-    with path.open("rb") as source, gzip.open(target, "wb") as sink:
-        shutil.copyfileobj(source, sink)
-    os.utime(target, (stat.st_atime, stat.st_mtime))
+    temporary = _unique_path(path.with_name(f".{target.name}.tmp"))
+    try:
+        with path.open("rb") as source, gzip.open(temporary, "wb") as sink:
+            shutil.copyfileobj(source, sink)
+        os.utime(temporary, (stat.st_atime, stat.st_mtime))
+        temporary.replace(target)
+    except Exception:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+        raise
     path.unlink()
     return target
 

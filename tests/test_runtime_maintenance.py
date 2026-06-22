@@ -4,15 +4,19 @@ import gzip
 import io
 import logging
 import os
+import shutil
 import sys
 import tarfile
 import time
+
+import pytest
 
 from TeeBotus.runtime.maintenance import (
     DEBUG_ALL,
     RuntimeTimedRotatingFileHandler,
     STDIO_LOG_FILENAME,
     configure_runtime_logging,
+    gzip_file,
     maintain_runtime_directory,
     normalize_log_level,
     rotate_runtime_text_file_if_needed,
@@ -43,6 +47,23 @@ def test_runtime_maintenance_compresses_old_logs(tmp_path):
     compressed = tmp_path / f"{path.name}.gz"
     assert compressed.exists()
     assert not path.exists()
+
+
+def test_gzip_file_removes_partial_temporary_file_on_copy_failure(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+
+    def fail_copy(*_args, **_kwargs):
+        raise OSError("copy failed")
+
+    monkeypatch.setattr(shutil, "copyfileobj", fail_copy)
+
+    with pytest.raises(OSError, match="copy failed"):
+        gzip_file(path)
+
+    assert path.read_text(encoding="utf-8") == "old log\n"
+    assert not (tmp_path / f"{path.name}.gz").exists()
+    assert not list(tmp_path.glob("*.tmp"))
 
 
 def test_runtime_maintenance_archives_compressed_logs_older_than_two_months(tmp_path):
