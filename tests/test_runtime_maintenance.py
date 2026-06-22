@@ -308,6 +308,26 @@ def test_rotate_runtime_text_file_keeps_rotated_file_when_compression_value_erro
     assert not list(tmp_path.glob(".*.tmp"))
 
 
+def test_rotate_runtime_text_file_keeps_rotated_file_when_compression_runtime_error_fails(tmp_path, monkeypatch):
+    path = tmp_path / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+    rotated = tmp_path / "Security_Events.jsonl.2026-06-22-181200"
+    monkeypatch.setattr("TeeBotus.runtime.maintenance._next_rotated_path", lambda _path: rotated)
+
+    def fail_copy(*_args, **_kwargs):
+        raise RuntimeError("copy failed")
+
+    monkeypatch.setattr(shutil, "copyfileobj", fail_copy)
+
+    result = rotate_runtime_text_file_if_needed(path, max_bytes=4)
+
+    assert result == rotated
+    assert rotated.read_text(encoding="utf-8") == "0123456789\n"
+    assert not path.exists()
+    assert not (tmp_path / f"{rotated.name}.gz").exists()
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
 def test_rotate_runtime_text_file_preserves_active_runtime_log_names(tmp_path):
     for filename in ACTIVE_RUNTIME_TEXT_FILENAMES:
         path = tmp_path / filename
@@ -505,6 +525,41 @@ def test_runtime_maintenance_continues_when_gzip_fdopen_fails(tmp_path, monkeypa
     def fail_broken_fdopen(fd, mode="r", *args, **kwargs):
         if fd in broken_fds and mode == "rb":
             raise ValueError("broken gzip source fdopen")
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", recording_open)
+    monkeypatch.setattr(os, "fdopen", fail_broken_fdopen)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert broken.read_text(encoding="utf-8") == "broken log\n"
+    assert not (tmp_path / f"{broken.name}.gz").exists()
+    assert not compressible.exists()
+    assert (tmp_path / f"{compressible.name}.gz").exists()
+
+
+def test_runtime_maintenance_continues_when_gzip_fdopen_raises_runtime_error(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 8 * 24 * 60 * 60
+    broken = tmp_path / "teebotus-production.log.2026-06-01"
+    broken.write_text("broken log\n", encoding="utf-8")
+    os.utime(broken, (old_mtime, old_mtime))
+    compressible = tmp_path / "Security_Events.jsonl.2026-06-01"
+    compressible.write_text("compress me\n", encoding="utf-8")
+    os.utime(compressible, (old_mtime, old_mtime))
+    real_open = os.open
+    real_fdopen = os.fdopen
+    broken_fds: set[int] = set()
+
+    def recording_open(file, flags, *args, **kwargs):
+        fd = real_open(file, flags, *args, **kwargs)
+        if Path(file) == broken:
+            broken_fds.add(fd)
+        return fd
+
+    def fail_broken_fdopen(fd, mode="r", *args, **kwargs):
+        if fd in broken_fds and mode == "rb":
+            raise RuntimeError("broken gzip source fdopen")
         return real_fdopen(fd, mode, *args, **kwargs)
 
     monkeypatch.setattr(os, "open", recording_open)
