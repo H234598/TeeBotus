@@ -1242,6 +1242,25 @@ def test_configure_runtime_logging_refuses_symlinked_runtime_log_path(tmp_path, 
     assert external.read_text(encoding="utf-8") == ""
 
 
+def test_runtime_file_handler_rollover_preserves_existing_rotated_log(tmp_path):
+    log_path = tmp_path / "teebotus-production.log"
+    handler = RuntimeTimedRotatingFileHandler(log_path)
+    try:
+        date_suffix = time.strftime(handler.suffix, time.localtime(handler.rolloverAt - handler.interval))
+        existing_rotated = log_path.with_name(f"{log_path.name}.{date_suffix}")
+        existing_rotated.write_text("existing rotated\n", encoding="utf-8")
+        handler.stream.write("current log\n")
+        handler.stream.flush()
+
+        handler.doRollover()
+
+        numbered_rotated = existing_rotated.with_name(f"{existing_rotated.name}.1")
+        assert existing_rotated.read_text(encoding="utf-8") == "existing rotated\n"
+        assert numbered_rotated.read_text(encoding="utf-8") == "current log\n"
+    finally:
+        handler.close()
+
+
 def test_configure_runtime_logging_caps_provider_sdk_logs_during_debug_all(tmp_path):
     for logger_name in ("litellm", "LiteLLM", "openai", "openai._base_client"):
         logging.getLogger(logger_name).setLevel(logging.NOTSET)

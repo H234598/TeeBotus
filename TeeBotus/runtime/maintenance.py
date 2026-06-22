@@ -235,6 +235,9 @@ class RuntimeTimedRotatingFileHandler(TimedRotatingFileHandler):
             raise OSError(f"refusing unsafe runtime log path: {self.baseFilename}")
         return stream
 
+    def rotation_filename(self, default_name: str) -> str:
+        return str(_unique_path(Path(default_name)))
+
     def doRollover(self) -> None:  # noqa: N802 - stdlib override name
         super().doRollover()
         maintain_runtime_directory(Path(self.baseFilename).parent)
