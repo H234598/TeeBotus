@@ -68,12 +68,13 @@ def runtime_log_path(base_dir: Path | None = None) -> Path:
 def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | None = None, tee_stdio: bool = False) -> None:
     resolved_level = normalize_log_level(level)
     directory = base_dir or runtime_dir()
-    runtime_directory_ready = True
-    try:
-        directory.mkdir(parents=True, exist_ok=True)
-        maintain_runtime_directory(directory)
-    except OSError:
-        runtime_directory_ready = False
+    runtime_directory_ready = not _has_symlink_parent(directory)
+    if runtime_directory_ready:
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            maintain_runtime_directory(directory)
+        except OSError:
+            runtime_directory_ready = False
     log_path = runtime_log_path(directory)
     stdout_targets_log = _stdout_targets_path(log_path) if runtime_directory_ready else False
     if tee_stdio and runtime_directory_ready:
@@ -208,7 +209,7 @@ def _install_stream_tee(stream: object, secondary: object, target: Path) -> obje
 
 
 def _open_append_text_no_follow(path: Path) -> object | None:
-    if path.parent.is_symlink():
+    if _has_symlink_parent(path):
         return None
     flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     try:
@@ -230,6 +231,11 @@ def _open_append_text_no_follow(path: Path) -> object | None:
 
 def _absolute_without_symlink_resolution(path: Path) -> Path:
     return Path(os.path.abspath(path))
+
+
+def _has_symlink_parent(path: Path) -> bool:
+    absolute = _absolute_without_symlink_resolution(path)
+    return any(parent.is_symlink() for parent in absolute.parents)
 
 
 class RuntimeTimedRotatingFileHandler(TimedRotatingFileHandler):
@@ -304,6 +310,8 @@ def maintain_runtime_directory(
     compress_after_seconds: int = COMPRESS_AFTER_SECONDS,
     monthly_archive_after_seconds: int = MONTHLY_ARCHIVE_AFTER_SECONDS,
 ) -> None:
+    if _has_symlink_parent(runtime_path):
+        return
     try:
         runtime_path.mkdir(parents=True, exist_ok=True)
         runtime_stat = runtime_path.stat(follow_symlinks=False)

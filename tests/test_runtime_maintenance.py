@@ -246,6 +246,19 @@ def test_runtime_maintenance_refuses_symlinked_runtime_root(tmp_path):
     assert not (external_runtime_dir / f"{path.name}.gz").exists()
 
 
+def test_runtime_maintenance_refuses_symlinked_runtime_parent(tmp_path):
+    now = time.time()
+    external_parent = tmp_path / "external-parent"
+    external_parent.mkdir()
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.symlink_to(external_parent, target_is_directory=True)
+
+    maintain_runtime_directory(linked_parent / "runtime", now=now)
+
+    assert linked_parent.is_symlink()
+    assert not (external_parent / "runtime").exists()
+
+
 def test_runtime_maintenance_does_not_compress_replacement_after_age_check(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 8 * 24 * 60 * 60
@@ -1342,6 +1355,23 @@ def test_configure_runtime_logging_refuses_symlinked_runtime_directory(tmp_path,
     handlers = logging.getLogger().handlers
     assert not any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
     assert not (external_runtime_dir / "teebotus-production.log").exists()
+
+
+def test_configure_runtime_logging_refuses_symlinked_runtime_ancestor(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    external_parent = tmp_path / "external-parent"
+    external_parent.mkdir()
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.symlink_to(external_parent, target_is_directory=True)
+
+    configure_runtime_logging(base_dir=linked_parent / "runtime")
+    logging.getLogger("TeeBotus.test").warning("probe")
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    handlers = logging.getLogger().handlers
+    assert not any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
+    assert not (external_parent / "runtime").exists()
 
 
 def test_runtime_file_handler_rollover_preserves_existing_rotated_log(tmp_path):
