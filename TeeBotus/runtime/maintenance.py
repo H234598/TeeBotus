@@ -76,7 +76,7 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | str
             runtime_directory_ready = stat_module.S_ISDIR(directory_stat.st_mode)
             if runtime_directory_ready:
                 maintain_runtime_directory(directory)
-        except OSError:
+        except (OSError, ValueError):
             runtime_directory_ready = False
     log_path = runtime_log_path(directory)
     stdout_targets_log = _stdout_targets_path(log_path) if runtime_directory_ready else False
@@ -157,7 +157,7 @@ def install_stdio_tee(path: Path | str) -> None:
         return
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-    except OSError:
+    except (OSError, ValueError):
         return
     target_path = _absolute_without_symlink_resolution(path)
     if _stream_tee_target(sys.stdout) == target_path and _stream_tee_target(sys.stderr) == target_path:
@@ -397,7 +397,7 @@ def maintain_runtime_directory(
     try:
         runtime_path.mkdir(parents=True, exist_ok=True)
         runtime_stat = runtime_path.stat(follow_symlinks=False)
-    except OSError:
+    except (OSError, ValueError):
         return
     if not stat_module.S_ISDIR(runtime_stat.st_mode):
         return

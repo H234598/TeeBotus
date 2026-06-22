@@ -422,6 +422,22 @@ def test_runtime_maintenance_refuses_symlinked_runtime_parent(tmp_path):
     assert not (external_parent / "runtime").exists()
 
 
+def test_runtime_maintenance_skips_when_runtime_directory_mkdir_raises_value_error(tmp_path, monkeypatch):
+    runtime_path = tmp_path / "runtime"
+    real_mkdir = Path.mkdir
+
+    def fail_runtime_mkdir(self, *args, **kwargs):
+        if self == runtime_path:
+            raise ValueError("runtime mkdir failed")
+        return real_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", fail_runtime_mkdir)
+
+    maintain_runtime_directory(runtime_path)
+
+    assert not runtime_path.exists()
+
+
 def test_runtime_maintenance_does_not_compress_replacement_after_age_check(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 8 * 24 * 60 * 60
@@ -1908,6 +1924,30 @@ def test_configure_runtime_logging_continues_when_runtime_directory_is_blocked(t
     assert blocked_runtime_dir.read_text(encoding="utf-8") == "not a directory\n"
 
 
+def test_configure_runtime_logging_continues_when_runtime_directory_mkdir_raises_value_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    runtime_path = tmp_path / "runtime"
+    real_mkdir = Path.mkdir
+
+    def fail_runtime_mkdir(self, *args, **kwargs):
+        if self == runtime_path:
+            raise ValueError("runtime mkdir failed")
+        return real_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", fail_runtime_mkdir)
+
+    configure_runtime_logging(base_dir=runtime_path, tee_stdio=True)
+    logging.getLogger("TeeBotus.test").warning("stream only")
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    handlers = logging.getLogger().handlers
+    assert len(handlers) == 1
+    assert not any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
+    assert "stream only" in sys.stdout.getvalue()
+    assert not runtime_path.exists()
+
+
 def test_configure_runtime_logging_refuses_symlinked_runtime_log_path(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdout", io.StringIO())
     external = tmp_path / "external.log"
@@ -2299,6 +2339,31 @@ def test_install_stdio_tee_skips_when_target_directory_cannot_be_created(tmp_pat
     def fail_target_mkdir(self, *args, **kwargs):
         if self == path.parent:
             raise PermissionError("blocked target directory")
+        return real_mkdir(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "mkdir", fail_target_mkdir)
+
+    install_stdio_tee(path)
+    print("stdout only")
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    assert not isinstance(sys.stdout, TeeStream)
+    assert not isinstance(sys.stderr, TeeStream)
+    assert not path.parent.exists()
+
+
+def test_install_stdio_tee_skips_when_target_directory_mkdir_raises_value_error(tmp_path, monkeypatch):
+    primary_stdout = io.StringIO()
+    primary_stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", primary_stdout)
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    path = tmp_path / "blocked" / STDIO_LOG_FILENAME
+    real_mkdir = Path.mkdir
+
+    def fail_target_mkdir(self, *args, **kwargs):
+        if self == path.parent:
+            raise ValueError("blocked target directory")
         return real_mkdir(self, *args, **kwargs)
 
     monkeypatch.setattr(Path, "mkdir", fail_target_mkdir)
