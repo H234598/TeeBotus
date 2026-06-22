@@ -1196,6 +1196,37 @@ def test_codex_history_dispatch_dry_run_does_not_mutate_outbox(tmp_path: Path) -
     assert store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID) == []
 
 
+def test_codex_history_dispatch_cli_defaults_to_limit_50(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    make_instance(tmp_path)
+    limits: list[int] = []
+
+    async def fake_dispatch(_store, **kwargs):
+        limits.append(int(kwargs["limit"]))
+        return {"ok": True, "dry_run": True, "status_counts": {}, "items": []}
+
+    monkeypatch.setattr(codex_history_module, "dispatch_codex_history_outbox", fake_dispatch)
+
+    result = codex_history_main(
+        [
+            "dispatch",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "Depressionsbot",
+            "--dry-run",
+            "--format",
+            "json",
+        ]
+    )
+
+    assert result == 0
+    assert limits == [50]
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is True
+
+
 def test_codex_history_dispatch_marks_missing_sender_failed_without_deleting_item(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "missing-sender-demo", version="1.0.2")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
@@ -1960,6 +1991,43 @@ def test_codex_history_watch_cli_can_run_bounded_poll_loop(tmp_path: Path, capsy
     assert payload["instances"][0]["iterations"] == 1
     assert payload["instances"][0]["event_mode"] == "snapshot"
     assert payload["instances"][0]["status_counts"] == {"imported": 1}
+
+
+def test_codex_history_watch_dispatch_cli_defaults_to_limit_50(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    make_instance(tmp_path)
+    sessions_root = tmp_path / "sessions"
+    sessions_root.mkdir()
+    limits: list[int] = []
+
+    async def fake_dispatch(_store, **kwargs):
+        limits.append(int(kwargs["limit"]))
+        return {"ok": True, "dry_run": True, "status_counts": {}, "items": []}
+
+    monkeypatch.setattr(codex_history_module, "dispatch_codex_history_outbox", fake_dispatch)
+
+    result = codex_history_main(
+        [
+            "watch",
+            "--once",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "Depressionsbot",
+            "--sessions-root",
+            str(sessions_root),
+            "--dispatch",
+            "--dispatch-dry-run",
+            "--format",
+            "json",
+        ]
+    )
+
+    assert result == 0
+    assert limits == [50]
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["instances"][0]["dispatch"]["instances"][0]["status_counts"] == {}
 
 
 def test_watch_codex_session_roots_normalizes_iteration_options(tmp_path: Path) -> None:

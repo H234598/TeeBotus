@@ -55,6 +55,7 @@ CODEX_HISTORY_DISPATCH_OBSIDIAN_DIRNAME = "Codex_History_Dispatches"
 CODEX_HISTORY_GRAPH_DIRNAME = "graphs"
 CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE = "local_ollama"
 CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE = "local_ollama"
+CODEX_HISTORY_DEFAULT_DISPATCH_LIMIT = 50
 CODEX_HISTORY_DISPATCHING_STALE_AFTER_SECONDS = 15 * 60
 CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT = 250
 CODEX_HISTORY_GRAPH_SVG_ENGINES = frozenset({"builtin", "auto", "mmdc"})
@@ -2772,7 +2773,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     dispatch_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
     dispatch_parser.add_argument("--instances", default="")
     dispatch_parser.add_argument("--instance", default="")
-    dispatch_parser.add_argument("--limit", type=int, default=100)
+    dispatch_parser.add_argument("--limit", type=int, default=CODEX_HISTORY_DEFAULT_DISPATCH_LIMIT)
     dispatch_parser.add_argument("--format", choices=("text", "json"), default="text")
     dispatch_parser.add_argument("--dry-run", action="store_true")
 
@@ -2814,7 +2815,12 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     watch_parser.add_argument("--post-index-qdrant-dry-run", action="store_true", help="Count post-index Qdrant chunks without writing Qdrant.")
     watch_parser.add_argument("--post-index-qdrant-ensure", action="store_true", help="Ensure Qdrant collections before post-index rebuild.")
     watch_parser.add_argument("--dispatch", action="store_true", help="After each scan, dispatch queued Codex-History summaries to status admins.")
-    watch_parser.add_argument("--dispatch-limit", type=int, default=100, help="Limit post-scan dispatch to latest N queued summaries.")
+    watch_parser.add_argument(
+        "--dispatch-limit",
+        type=int,
+        default=CODEX_HISTORY_DEFAULT_DISPATCH_LIMIT,
+        help="Limit post-scan dispatch to latest N queued summaries.",
+    )
     watch_parser.add_argument("--dispatch-dry-run", action="store_true", help="Resolve post-scan dispatch targets without sending messages.")
 
     args = parser.parse_args(list(argv) if argv is not None else None)

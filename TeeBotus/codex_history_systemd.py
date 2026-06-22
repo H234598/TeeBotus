@@ -24,6 +24,7 @@ DEFAULT_RUN_USER = "root"
 DEFAULT_RESTART_SEC = "5s"
 DEFAULT_POLL_INTERVAL_SECONDS = 300.0
 DEFAULT_LIMIT = 1000
+DEFAULT_DISPATCH_LIMIT = 50
 DEFAULT_MAX_ITERATIONS = 1
 DEFAULT_COLLECTOR_INTERVAL = "5min"
 DEFAULT_COLLECTOR_RANDOMIZED_DELAY = "0"
@@ -79,7 +80,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-post-index", dest="post_index", action="store_false", help="Disable post-scan Codex-History index export.")
     parser.add_argument("--collector-dispatch", dest="collector_dispatch", action="store_true", default=True, help="Dispatch queued Codex-History summaries after collector scans.")
     parser.add_argument("--no-collector-dispatch", dest="collector_dispatch", action="store_false", help="Disable post-scan Codex-History dispatch.")
-    parser.add_argument("--collector-dispatch-limit", type=int, default=100, help="Limit collector post-scan dispatch to latest N queued summaries.")
+    parser.add_argument(
+        "--collector-dispatch-limit",
+        type=int,
+        default=DEFAULT_DISPATCH_LIMIT,
+        help="Limit collector post-scan dispatch to latest N queued summaries.",
+    )
     parser.add_argument("--collector-dispatch-dry-run", action="store_true", help="Resolve collector dispatch targets without sending messages.")
     parser.add_argument("--post-index-qdrant", action="store_true", help="Also rebuild the admin-only Codex-History Qdrant collection after scans.")
     parser.add_argument("--post-index-qdrant-url", default="", help="Override Qdrant URL for post-index rebuild.")
@@ -124,7 +130,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--index-strategic-analysis-force", action="store_true", help="Bypass strategic-analysis source cache.")
     parser.add_argument("--index-strategic-analysis-dry-run", action="store_true", help="Run periodic strategic analysis without writing the outbox item.")
     parser.add_argument("--index-dispatch", action="store_true", help="Dispatch queued Codex-History items after the periodic index job.")
-    parser.add_argument("--index-dispatch-limit", type=int, default=100, help="Max queued Codex-History items to dispatch after periodic indexing; 0 means all.")
+    parser.add_argument(
+        "--index-dispatch-limit",
+        type=int,
+        default=DEFAULT_DISPATCH_LIMIT,
+        help="Max queued Codex-History items to dispatch after periodic indexing; 0 means all.",
+    )
     parser.add_argument("--index-dispatch-dry-run", action="store_true", help="Dry-run the post-index dispatch step.")
     parser.add_argument(
         "--max-iterations",
@@ -304,7 +315,7 @@ def render_codex_history_systemd_unit(
     follow: bool = True,
     post_index: bool = True,
     collector_dispatch: bool = True,
-    collector_dispatch_limit: int = 100,
+    collector_dispatch_limit: int = DEFAULT_DISPATCH_LIMIT,
     collector_dispatch_dry_run: bool = False,
     post_index_qdrant: bool = False,
     post_index_qdrant_url: str = "",
@@ -397,7 +408,7 @@ def render_codex_history_collector_timer_units(
     poll_interval_seconds: float = 0,
     post_index: bool = True,
     collector_dispatch: bool = True,
-    collector_dispatch_limit: int = 100,
+    collector_dispatch_limit: int = DEFAULT_DISPATCH_LIMIT,
     collector_dispatch_dry_run: bool = False,
     post_index_qdrant: bool = False,
     post_index_qdrant_url: str = "",
@@ -525,7 +536,7 @@ def render_codex_history_index_systemd_units(
     strategic_analysis_force: bool = False,
     strategic_analysis_dry_run: bool = False,
     dispatch: bool = False,
-    dispatch_limit: int = 100,
+    dispatch_limit: int = DEFAULT_DISPATCH_LIMIT,
     dispatch_dry_run: bool = False,
 ) -> CodexHistoryIndexSystemdUnits:
     service_name = _service_name(service_name)
