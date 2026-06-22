@@ -7,6 +7,7 @@ import importlib
 import inspect
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -402,6 +403,11 @@ def _optional_dependency_name_version(dependency: str) -> tuple[str, str]:
     return requirement.name.replace("_", "-"), version
 
 
+def _normalize_raw_llm_config_key(value: str) -> str:
+    normalized = re.sub(r"[\s-]+", "_", value.strip().casefold())
+    return re.sub(r"_+", "_", normalized).strip("_")
+
+
 def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     try:
         from TeeBotus.llm.profiles import (
@@ -465,7 +471,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         duplicate_profile_top_keys: dict[str, list[str]] = {}
         canonical_profile_top_keys = {"profiles": "profiles"}
         for raw_key in sorted(key for key in raw_profile_config if isinstance(key, str)):
-            normalized_key = raw_key.strip().casefold().replace("-", "_")
+            normalized_key = _normalize_raw_llm_config_key(raw_key)
             if normalized_key in normalized_profile_top_keys:
                 duplicate_profile_top_keys.setdefault(
                     normalized_key,
@@ -489,11 +495,11 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         if non_string_profile_names:
             errors.append(f"raw profile name(s) must be string: {','.join(non_string_profile_names)}")
         raw_profile_names = {str(name) for name in raw_profile_payload}
-        canonical_profile_names = {name.strip().casefold().replace("-", "_"): name for name in expected_profiles}
+        canonical_profile_names = {_normalize_raw_llm_config_key(name): name for name in expected_profiles}
         normalized_raw_profiles: dict[str, str] = {}
         duplicate_normalized_profiles: dict[str, list[str]] = {}
         for raw_name in sorted(name for name in raw_profile_payload if isinstance(name, str)):
-            normalized_name = raw_name.strip().casefold().replace("-", "_")
+            normalized_name = _normalize_raw_llm_config_key(raw_name)
             if normalized_name in normalized_raw_profiles:
                 duplicate_normalized_profiles.setdefault(
                     normalized_name,
@@ -507,7 +513,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
             errors.append(f"duplicate raw profile {normalized_name}: {','.join(raw_names)}")
         allowed_raw_profile_keys = {"provider", "model", "base_url", "api_key_env", "service_tier"}
         canonical_profile_field_keys = {
-            key.strip().casefold().replace("-", "_"): key for key in allowed_raw_profile_keys
+            _normalize_raw_llm_config_key(key): key for key in allowed_raw_profile_keys
         }
         unexpected_raw_profiles = sorted(raw_profile_names - set(expected_profiles))
         missing_raw_profiles = sorted(set(expected_profiles) - raw_profile_names)
@@ -528,8 +534,8 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
             normalized_profile_field_keys: dict[str, str] = {}
             duplicate_profile_field_keys: dict[str, list[str]] = {}
             for raw_key in sorted(key for key in raw_profile if isinstance(key, str)):
-                canonical_key = canonical_profile_field_keys.get(raw_key.strip().casefold().replace("-", "_"))
-                normalized_key = canonical_key or raw_key.strip().casefold().replace("-", "_")
+                canonical_key = canonical_profile_field_keys.get(_normalize_raw_llm_config_key(raw_key))
+                normalized_key = canonical_key or _normalize_raw_llm_config_key(raw_key)
                 if normalized_key in normalized_profile_field_keys:
                     duplicate_profile_field_keys.setdefault(
                         normalized_key,
@@ -646,9 +652,9 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
             errors.append(f"raw routing config key(s) must be string: {','.join(non_string_routing_top_keys)}")
         normalized_routing_top_keys: dict[str, str] = {}
         duplicate_routing_top_keys: dict[str, list[str]] = {}
-        canonical_routing_top_keys = {key.strip().casefold().replace("-", "_"): key for key in expected_routing_top_keys}
+        canonical_routing_top_keys = {_normalize_raw_llm_config_key(key): key for key in expected_routing_top_keys}
         for raw_key in sorted(key for key in raw_routing_config if isinstance(key, str)):
-            normalized_key = raw_key.strip().casefold().replace("-", "_")
+            normalized_key = _normalize_raw_llm_config_key(raw_key)
             if normalized_key in normalized_routing_top_keys:
                 duplicate_routing_top_keys.setdefault(
                     normalized_key,
@@ -722,8 +728,8 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
                 normalized_route_field_keys: dict[str, str] = {}
                 duplicate_route_field_keys: dict[str, list[str]] = {}
                 for raw_key in sorted(key for key in raw_route if isinstance(key, str)):
-                    canonical_key = canonical_route_field_keys.get(raw_key.strip().casefold().replace("-", "_"))
-                    normalized_key = canonical_key or raw_key.strip().casefold().replace("-", "_")
+                    canonical_key = canonical_route_field_keys.get(_normalize_raw_llm_config_key(raw_key))
+                    normalized_key = canonical_key or _normalize_raw_llm_config_key(raw_key)
                     if normalized_key in normalized_route_field_keys:
                         duplicate_route_field_keys.setdefault(
                             normalized_key,

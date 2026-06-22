@@ -540,7 +540,7 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_alias_key(monkeypatch) 
         payload = deepcopy(original_loader(path))
         if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
             profiles = payload["profiles"]
-            profiles["local-ollama"] = profiles.pop("local_ollama")
+            profiles["local ollama"] = profiles.pop("local_ollama")
         return payload
 
     monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
@@ -548,7 +548,7 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_alias_key(monkeypatch) 
     ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
 
     assert not ok
-    assert "raw profile local-ollama must use canonical key local_ollama" in message
+    assert "raw profile local ollama must use canonical key local_ollama" in message
 
 
 def test_llm_profiles_plan2_contract_rejects_duplicate_raw_profile_aliases(monkeypatch) -> None:
@@ -608,7 +608,7 @@ def test_llm_profiles_plan2_contract_rejects_raw_config_top_level_alias_keys(mon
         if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
             payload["Profiles"] = payload.pop("profiles")
         if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
-            payload["default-profile"] = payload.pop("default_profile")
+            payload["default profile"] = payload.pop("default_profile")
         return payload
 
     monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
@@ -617,7 +617,7 @@ def test_llm_profiles_plan2_contract_rejects_raw_config_top_level_alias_keys(mon
 
     assert not ok
     assert "raw profile config key Profiles must use canonical key profiles" in message
-    assert "raw routing config key default-profile must use canonical key default_profile" in message
+    assert "raw routing config key default profile must use canonical key default_profile" in message
 
 
 def test_llm_profiles_plan2_contract_rejects_duplicate_raw_config_top_level_aliases(monkeypatch) -> None:
@@ -700,7 +700,7 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_field_alias_key(monkeyp
     def fake_loader(path):
         payload = deepcopy(original_loader(path))
         if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
-            payload["profiles"]["openai_premium"]["api-key-env"] = "OPENAI_API_KEY"
+            payload["profiles"]["openai_premium"]["api key env"] = "OPENAI_API_KEY"
         return payload
 
     monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
@@ -708,7 +708,7 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_field_alias_key(monkeyp
     ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
 
     assert not ok
-    assert "raw profile openai_premium key api-key-env must use canonical key api_key_env" in message
+    assert "raw profile openai_premium key api key env must use canonical key api_key_env" in message
 
 
 def test_llm_profiles_plan2_contract_rejects_duplicate_raw_profile_field_aliases(monkeypatch) -> None:
