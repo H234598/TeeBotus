@@ -1685,6 +1685,34 @@ def test_configure_runtime_logging_can_tee_stdio_to_runtime_log(tmp_path, monkey
     assert "stderr probe" in stdio_log.read_text(encoding="utf-8")
 
 
+def test_configure_runtime_logging_disables_existing_stdio_tee(tmp_path, monkeypatch):
+    primary_stdout = io.StringIO()
+    primary_stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", primary_stdout)
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    stdio_log = tmp_path / STDIO_LOG_FILENAME
+
+    install_stdio_tee(stdio_log)
+    assert isinstance(sys.stdout, TeeStream)
+    assert isinstance(sys.stderr, TeeStream)
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+
+    configure_runtime_logging(base_dir=tmp_path, tee_stdio=False)
+    print("stdout after disable")
+    print("stderr after disable", file=sys.stderr)
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    assert sys.stdout is primary_stdout
+    assert sys.stderr is primary_stderr
+    assert old_stdout.secondary.closed
+    assert old_stderr.secondary.closed
+    assert "stdout after disable" in primary_stdout.getvalue()
+    assert "stderr after disable" in primary_stderr.getvalue()
+    assert "stdout after disable" not in stdio_log.read_text(encoding="utf-8")
+
+
 def test_install_stdio_tee_repairs_half_installed_state_without_double_stdout_writes(tmp_path, monkeypatch):
     primary_stdout = io.StringIO()
     primary_stderr = io.StringIO()

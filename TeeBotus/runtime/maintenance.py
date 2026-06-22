@@ -82,6 +82,8 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | str
     stdout_targets_log = _stdout_targets_path(log_path) if runtime_directory_ready else False
     if tee_stdio and runtime_directory_ready:
         install_stdio_tee(directory / STDIO_LOG_FILENAME)
+    else:
+        uninstall_stdio_tee()
 
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s%(teebotus_context)s")
     context_filter = TeeBotusLogContextFilter()
@@ -168,6 +170,11 @@ def install_stdio_tee(path: Path) -> None:
     sys.stderr = _install_stream_tee(sys.stderr, handle, target_path)  # type: ignore[assignment]
 
 
+def uninstall_stdio_tee() -> None:
+    sys.stdout = _remove_stream_tee(sys.stdout)  # type: ignore[assignment]
+    sys.stderr = _remove_stream_tee(sys.stderr)  # type: ignore[assignment]
+
+
 class TeeStream:
     def __init__(self, primary: object, secondary: object, target: Path) -> None:
         self.primary = primary
@@ -225,6 +232,13 @@ def _install_stream_tee(stream: object, secondary: object, target: Path) -> obje
         _close_quietly(stream.secondary)
         stream = stream.primary
     return TeeStream(stream, secondary, target)
+
+
+def _remove_stream_tee(stream: object) -> object:
+    if isinstance(stream, TeeStream):
+        _close_quietly(stream.secondary)
+        return stream.primary
+    return stream
 
 
 def _open_append_text_no_follow(path: Path) -> object | None:
