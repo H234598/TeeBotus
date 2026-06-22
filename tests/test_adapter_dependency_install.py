@@ -550,6 +550,27 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_missing_required_keys(m
     assert "raw profile local_ollama missing key(s): api_key_env" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_raw_profile_non_string_values(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            payload["profiles"]["local_ollama"]["provider"] = ["litellm"]
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw profile local_ollama provider must be string" in message
+
+
 def test_llm_profiles_plan2_contract_rejects_raw_routing_alias_key(monkeypatch) -> None:
     from copy import deepcopy
 
@@ -633,6 +654,27 @@ def test_llm_profiles_plan2_contract_rejects_raw_routing_missing_required_keys(m
 
     assert not ok
     assert "raw routing purpose normal_chat missing key(s): fallback" in message
+
+
+def test_llm_profiles_plan2_contract_rejects_raw_routing_non_scalar_fallback(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            payload["purposes"]["hard_reasoning"]["fallback"] = ["gemini_flash_stateful"]
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "raw routing purpose hard_reasoning fallback must be string or null" in message
 
 
 def test_local_secret_file_permission_check_accepts_missing_or_private_env(tmp_path: Path) -> None:

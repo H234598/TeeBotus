@@ -469,6 +469,9 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
             missing_keys = sorted(key for key in required_keys if key not in raw_profile)
             if missing_keys:
                 errors.append(f"raw profile {name} missing key(s): {','.join(missing_keys)}")
+            for key in sorted(set(raw_profile) & allowed_raw_profile_keys):
+                if not isinstance(raw_profile[key], str):
+                    errors.append(f"raw profile {name} {key} must be string")
     if default_profile != "local_ollama":
         errors.append("default_profile must be local_ollama")
     if default_profile not in profiles:
@@ -566,6 +569,14 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
                 missing_keys = sorted(key for key in {"profile", "fallback"} if key not in raw_route)
                 if missing_keys:
                     errors.append(f"raw routing purpose {raw_name} missing key(s): {','.join(missing_keys)}")
+                if "profile" in raw_route and not isinstance(raw_route["profile"], str):
+                    errors.append(f"raw routing purpose {raw_name} profile must be string")
+                if (
+                    "fallback" in raw_route
+                    and raw_route["fallback"] is not None
+                    and not isinstance(raw_route["fallback"], str)
+                ):
+                    errors.append(f"raw routing purpose {raw_name} fallback must be string or null")
     unexpected_routes = sorted(set(routing) - set(expected_routes))
     if unexpected_routes:
         errors.append(f"unexpected routing purpose(s): {','.join(unexpected_routes)}")
