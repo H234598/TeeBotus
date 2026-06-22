@@ -137,6 +137,32 @@ def test_rotate_runtime_text_file_skips_source_replaced_before_link(tmp_path, mo
     assert not list(tmp_path.glob(f"{path.name}.*.gz"))
 
 
+def test_rotate_runtime_text_file_preserves_rotated_path_replaced_before_link_stat(tmp_path, monkeypatch):
+    path = tmp_path / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+    rotated = tmp_path / "Security_Events.jsonl.2026-06-22-181200"
+    monkeypatch.setattr("TeeBotus.runtime.maintenance._next_rotated_path", lambda _path: rotated)
+    real_stat = os.stat
+    raced = False
+
+    def racing_stat(file, *args, **kwargs):
+        nonlocal raced
+        if Path(file) == rotated and not raced:
+            raced = True
+            rotated.unlink()
+            rotated.write_text("raced target\n", encoding="utf-8")
+        return real_stat(file, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", racing_stat)
+
+    assert rotate_runtime_text_file_if_needed(path, max_bytes=4) is None
+
+    assert raced is True
+    assert path.read_text(encoding="utf-8") == "0123456789\n"
+    assert rotated.read_text(encoding="utf-8") == "raced target\n"
+    assert not (tmp_path / f"{rotated.name}.gz").exists()
+
+
 def test_rotate_runtime_text_file_keeps_rotated_file_when_compression_fails(tmp_path, monkeypatch):
     path = tmp_path / "Security_Events.jsonl"
     path.write_text("0123456789\n", encoding="utf-8")

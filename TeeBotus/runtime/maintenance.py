@@ -443,7 +443,12 @@ def _link_file_to_unique_path(source: Path, target: Path, *, expected_stat: os.s
             return None
         if _same_file_stat(linked_stat, expected_stat):
             return linked
-        _unlink_quietly(linked)
+        try:
+            current_source_stat = os.stat(source, follow_symlinks=False)
+        except OSError:
+            current_source_stat = None
+        if current_source_stat is not None and _same_file_stat(linked_stat, current_source_stat):
+            _unlink_if_same_file(linked, linked_stat)
         return None
 
 
