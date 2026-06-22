@@ -366,6 +366,56 @@ def test_load_llm_routing_normalizes_purpose_keys(tmp_path: Path) -> None:
     assert routing["structured_decision"].purpose == "structured_decision"
 
 
+def test_llm_loaders_skip_non_string_names_and_references(monkeypatch, tmp_path: Path) -> None:
+    profiles_path = tmp_path / "profiles.yaml"
+    routing_path = tmp_path / "routing.yaml"
+    profiles_path.write_text("profiles: {}\n", encoding="utf-8")
+    routing_path.write_text("default_profile: local_ollama\npurposes: {}\n", encoding="utf-8")
+
+    import TeeBotus.llm.profiles as profile_module
+
+    def fake_loader(path):
+        if Path(path) == profiles_path:
+            return {
+                "profiles": {
+                    "local_ollama": {
+                        "provider": "litellm",
+                        "model": "ollama_chat/llama3.2:3b",
+                        "base_url": "http://127.0.0.1:11434",
+                    },
+                    123: {
+                        "provider": "litellm",
+                        "model": "ollama_chat/ignored:latest",
+                    },
+                    "bad_model_type": {
+                        "provider": "litellm",
+                        "model": 123,
+                    },
+                }
+            }
+        if Path(path) == routing_path:
+            return {
+                "default_profile": 123,
+                "purposes": {
+                    "normal_chat": {"profile": "local_ollama"},
+                    "bad_profile_type": {"profile": 456},
+                    "bad_fallback_type": {"profile": "local_ollama", "fallback": ["local_ollama"]},
+                    456: {"profile": "local_ollama"},
+                },
+            }
+        return {}
+
+    monkeypatch.setattr(profile_module, "_load_yaml_mapping", fake_loader)
+
+    profiles = load_llm_profiles(profiles_path)
+    default_profile, routing = load_llm_routing(routing_path)
+
+    assert default_profile == ""
+    assert set(profiles) == {"local_ollama"}
+    assert set(routing) == {"normal_chat", "bad_fallback_type"}
+    assert routing["bad_fallback_type"].fallback == ""
+
+
 def test_profiled_text_client_builds_litellm_client_from_route(monkeypatch) -> None:
     profiles = {
         "hf_mistral": LLMProfile("hf_mistral", "litellm", "huggingface/mistralai/Mistral-7B-Instruct-v0.3", api_key_env="HF_TOKEN"),

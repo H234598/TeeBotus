@@ -533,6 +533,7 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_non_string_name(monkeyp
 
     assert not ok
     assert "raw profile name(s) must be string: 123" in message
+    assert "unexpected profile(s): 123" not in message
 
 
 def test_llm_profiles_plan2_contract_rejects_raw_profile_alias_key(monkeypatch) -> None:
@@ -1104,6 +1105,7 @@ def test_llm_profiles_plan2_contract_rejects_raw_routing_non_string_purpose_name
 
     assert not ok
     assert "raw routing purpose name(s) must be string: 123" in message
+    assert "unexpected routing purpose(s): 123" not in message
 
 
 def test_local_secret_file_permission_check_accepts_missing_or_private_env(tmp_path: Path) -> None:

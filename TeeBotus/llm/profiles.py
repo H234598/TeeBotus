@@ -89,15 +89,17 @@ def load_llm_profiles(path: str | Path = DEFAULT_PROFILE_PATH) -> dict[str, LLMP
         return {}
     profiles: dict[str, LLMProfile] = {}
     for name, raw_profile in raw_profiles.items():
+        if not isinstance(name, str):
+            continue
         if not isinstance(raw_profile, Mapping):
             continue
         profile = LLMProfile(
-            name=str(name),
-            provider=str(raw_profile.get("provider") or "").strip(),
-            model=str(raw_profile.get("model") or "").strip(),
-            base_url=str(raw_profile.get("base_url") or raw_profile.get("api_base") or "").strip(),
-            api_key_env=str(raw_profile.get("api_key_env") or "").strip(),
-            service_tier=str(raw_profile.get("service_tier") or "").strip(),
+            name=name,
+            provider=_config_string(raw_profile.get("provider")),
+            model=_config_string(raw_profile.get("model")),
+            base_url=_config_string(raw_profile.get("base_url") or raw_profile.get("api_base")),
+            api_key_env=_config_string(raw_profile.get("api_key_env")),
+            service_tier=_config_string(raw_profile.get("service_tier")),
         )
         if profile.provider and profile.model:
             profiles[profile.name] = profile
@@ -106,15 +108,17 @@ def load_llm_profiles(path: str | Path = DEFAULT_PROFILE_PATH) -> dict[str, LLMP
 
 def load_llm_routing(path: str | Path = DEFAULT_ROUTING_PATH) -> tuple[str, dict[str, LLMRoutingRule]]:
     payload = _load_yaml_mapping(Path(path))
-    default_profile = str(payload.get("default_profile") or "").strip()
+    default_profile = _config_string(payload.get("default_profile"))
     raw_purposes = payload.get("purposes")
     rules: dict[str, LLMRoutingRule] = {}
     if isinstance(raw_purposes, Mapping):
         for purpose, raw_rule in raw_purposes.items():
+            if not isinstance(purpose, str):
+                continue
             if not isinstance(raw_rule, Mapping):
                 continue
             name = normalize_llm_purpose(purpose)
-            profile = str(raw_rule.get("profile") or "").strip()
+            profile = _config_string(raw_rule.get("profile"))
             fallback = _optional_string(raw_rule.get("fallback"))
             if profile:
                 rules[name] = LLMRoutingRule(purpose=name, profile=profile, fallback=fallback)
@@ -235,8 +239,12 @@ def _require_profile(profiles: Mapping[str, LLMProfile], name: str) -> LLMProfil
 def _optional_string(value: object) -> str:
     if value is None:
         return ""
-    text = str(value).strip()
+    text = _config_string(value)
     return "" if text.casefold() in {"", "none", "null"} else text
+
+
+def _config_string(value: object) -> str:
+    return value.strip() if isinstance(value, str) else ""
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any]:
