@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import copy
 import hashlib
 import html
 import json
@@ -1810,6 +1811,255 @@ def build_codex_history_markdown(
     return "\n".join(lines)
 
 
+_CODEX_HISTORY_MARKDOWN_TIMESTAMP_RE = re.compile(
+    r"^(?P<prefix>[ \t]*-[ \t]*(?:Erstellt|Aktualisiert|Sent|Accepted|Delivered|Acknowledged):[ \t]*`)"
+    r"(?P<timestamp>[^`\n]+)"
+    r"(?P<suffix>`[ \t]*)$",
+    re.MULTILINE,
+)
+
+
+def rewrite_codex_history_markdown_display_times(markdown: object) -> tuple[str, int]:
+    text = str(markdown or "")
+    rewritten = 0
+
+    def _replace(match: re.Match[str]) -> str:
+        nonlocal rewritten
+        original = match.group("timestamp").strip()
+        displayed = _display_codex_history_timestamp(original)
+        if not displayed or displayed == original:
+            return match.group(0)
+        rewritten += 1
+        return f"{match.group('prefix')}{displayed}{match.group('suffix')}"
+
+    return _CODEX_HISTORY_MARKDOWN_TIMESTAMP_RE.sub(_replace, text), rewritten
+
+
+def rewrite_codex_history_display_times(
+    store: AccountStore,
+    *,
+    instance_name: str,
+    repo: str = "",
+    dry_run: bool = True,
+    include_dispatch_files: bool = False,
+) -> dict[str, Any]:
+    safe_instance_name = _safe_instance_name(instance_name)
+    report: dict[str, Any] = {
+        "ok": True,
+        "instance": safe_instance_name,
+        "repo": str(repo or "").strip(),
+        "dry_run": bool(dry_run),
+        "include_dispatch_files": bool(include_dispatch_files),
+        "scanned_items": 0,
+        "changed_items": 0,
+        "timestamp_rewrites": 0,
+        "changed_item_ids": [],
+        "dispatch_files": {
+            "scanned": 0,
+            "changed": 0,
+            "renamed": 0,
+            "missing": 0,
+            "unsafe": 0,
+            "errors": [],
+        },
+    }
+    with store.codex_history_outbox_lock(INSTANCE_STATE_ACCOUNT_ID):
+        rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+        rewritten_rows: list[dict[str, Any]] = []
+        item_by_id: dict[str, Mapping[str, Any]] = {}
+        for row in rows:
+            if not isinstance(row, Mapping):
+                rewritten_rows.append(dict(row) if isinstance(row, dict) else {"value": row})
+                continue
+            if not _codex_history_item_matches_repo(row, repo):
+                copied = dict(row)
+                rewritten_rows.append(copied)
+                item_id = str(copied.get("id") or "").strip()
+                if item_id:
+                    item_by_id[item_id] = copied
+                continue
+            report["scanned_items"] += 1
+            item = copy.deepcopy(dict(row))
+            item_id = str(item.get("id") or "").strip()
+            summary = item.get("summary", {})
+            item_rewrites = 0
+            if isinstance(summary, Mapping):
+                markdown = summary.get("markdown")
+                if isinstance(markdown, str) and markdown:
+                    rewritten_markdown, item_rewrites = rewrite_codex_history_markdown_display_times(markdown)
+                    if rewritten_markdown != markdown:
+                        new_summary = dict(summary)
+                        new_summary["markdown"] = rewritten_markdown
+                        item["summary"] = new_summary
+            if item_rewrites:
+                report["changed_items"] += 1
+                report["timestamp_rewrites"] += item_rewrites
+                if item_id:
+                    report["changed_item_ids"].append(item_id)
+            rewritten_rows.append(item)
+            if item_id:
+                item_by_id[item_id] = item
+        dispatch_rows: list[dict[str, Any]] = []
+        dispatch_rows_changed = False
+        if include_dispatch_files:
+            dispatch_rows = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+            dispatch_rows_changed = _rewrite_codex_history_dispatch_files(
+                dispatch_rows,
+                item_by_id=item_by_id,
+                repo=repo,
+                dry_run=bool(dry_run),
+                report=report["dispatch_files"],
+            )
+        if not dry_run:
+            if report["changed_items"]:
+                store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rewritten_rows)
+            if include_dispatch_files and dispatch_rows_changed:
+                store.write_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID, dispatch_rows)
+    return report
+
+
+def rewrite_codex_history_display_times_for_instances(
+    *,
+    instances_dir: str | Path = DEFAULT_INSTANCES_DIR,
+    instances: Sequence[str] = (),
+    repo: str = "",
+    dry_run: bool = True,
+    include_dispatch_files: bool = False,
+    provider: InstanceSecretProvider | None = None,
+) -> dict[str, Any]:
+    safe_instances_dir = _safe_repo_root(Path(instances_dir), operation="instances directory")
+    selected_instances = tuple(instances)
+    _ensure_explicit_instances_exist(safe_instances_dir, selected_instances)
+    reports: list[dict[str, Any]] = []
+    for instance_name in discover_instances(safe_instances_dir, selected_instances):
+        try:
+            store = _store_for_instance(safe_instances_dir, instance_name, provider)
+            reports.append(
+                rewrite_codex_history_display_times(
+                    store,
+                    instance_name=instance_name,
+                    repo=repo,
+                    dry_run=dry_run,
+                    include_dispatch_files=include_dispatch_files,
+                )
+            )
+        except (AccountStoreError, OSError, ValueError) as exc:
+            reports.append(
+                {
+                    "ok": False,
+                    "instance": str(instance_name or ""),
+                    "error": f"{type(exc).__name__}:{exc}",
+                    "dry_run": bool(dry_run),
+                }
+            )
+    totals = {
+        "instances": len(reports),
+        "scanned_items": sum(int(report.get("scanned_items") or 0) for report in reports),
+        "changed_items": sum(int(report.get("changed_items") or 0) for report in reports),
+        "timestamp_rewrites": sum(int(report.get("timestamp_rewrites") or 0) for report in reports),
+        "dispatch_files_changed": sum(int(report.get("dispatch_files", {}).get("changed") or 0) for report in reports if isinstance(report.get("dispatch_files"), Mapping)),
+        "dispatch_files_renamed": sum(int(report.get("dispatch_files", {}).get("renamed") or 0) for report in reports if isinstance(report.get("dispatch_files"), Mapping)),
+        "errors": sum(1 for report in reports if not bool(report.get("ok", True))),
+    }
+    return {
+        "ok": not any(not bool(report.get("ok", True)) for report in reports),
+        "schema_version": CODEX_HISTORY_SCHEMA_VERSION,
+        "scope": "codex_history_time_rewrite",
+        "generated_at": utc_now(),
+        "instances_dir": str(safe_instances_dir),
+        "repo": str(repo or "").strip(),
+        "dry_run": bool(dry_run),
+        "include_dispatch_files": bool(include_dispatch_files),
+        "instances": reports,
+        "totals": totals,
+    }
+
+
+def _codex_history_item_matches_repo(item: Mapping[str, Any], repo: str) -> bool:
+    project = item.get("project", {})
+    if not isinstance(project, Mapping):
+        project = {}
+    return _project_matches_repo(project, repo)
+
+
+def _rewrite_codex_history_dispatch_files(
+    dispatch_rows: list[dict[str, Any]],
+    *,
+    item_by_id: Mapping[str, Mapping[str, Any]],
+    repo: str,
+    dry_run: bool,
+    report: dict[str, Any],
+) -> bool:
+    changed_rows = False
+    for row in dispatch_rows:
+        if not isinstance(row, dict):
+            continue
+        item_id = str(row.get("codex_history_item_id") or "").strip()
+        item = item_by_id.get(item_id)
+        if not item or not _codex_history_item_matches_repo(item, repo):
+            continue
+        path_text = str(row.get("obsidian_path") or "").strip()
+        if not path_text:
+            continue
+        path = Path(path_text).expanduser()
+        report["scanned"] = int(report.get("scanned") or 0) + 1
+        if not _is_codex_history_dispatch_markdown_path(path):
+            report["unsafe"] = int(report.get("unsafe") or 0) + 1
+            continue
+        if not path.exists():
+            report["missing"] = int(report.get("missing") or 0) + 1
+            continue
+        try:
+            original_text = path.read_text(encoding="utf-8")
+            rewritten_text, rewrites = rewrite_codex_history_markdown_display_times(original_text)
+            target_path = _local_codex_history_dispatch_path(path, item)
+            changed_text = rewritten_text != original_text
+            renamed = target_path != path
+            if changed_text:
+                report["changed"] = int(report.get("changed") or 0) + 1
+            if renamed:
+                report["renamed"] = int(report.get("renamed") or 0) + 1
+            if dry_run:
+                continue
+            if changed_text:
+                path.write_text(rewritten_text, encoding="utf-8")
+            if renamed:
+                if target_path.exists():
+                    _append_dispatch_file_error(report, path, f"target exists: {target_path}")
+                    continue
+                path.rename(target_path)
+                row["obsidian_path"] = str(target_path)
+                changed_rows = True
+            if rewrites and not changed_rows:
+                changed_rows = True
+        except OSError as exc:
+            _append_dispatch_file_error(report, path, f"{type(exc).__name__}:{exc}")
+    return changed_rows
+
+
+def _is_codex_history_dispatch_markdown_path(path: Path) -> bool:
+    return path.suffix.casefold() == ".md" and CODEX_HISTORY_DISPATCH_OBSIDIAN_DIRNAME in path.parts
+
+
+def _local_codex_history_dispatch_path(path: Path, item: Mapping[str, Any]) -> Path:
+    local_prefix = _display_timestamp_filename_prefix(str(item.get("created_at") or ""))
+    if not local_prefix:
+        return path
+    name = path.name
+    if name.startswith(f"{local_prefix}_"):
+        return path
+    new_name = re.sub(r"^\d{8}T\d{6}_", f"{local_prefix}_", name, count=1)
+    if new_name == name:
+        return path
+    return path.with_name(new_name)
+
+
+def _append_dispatch_file_error(report: dict[str, Any], path: Path, message: str) -> None:
+    errors = report.setdefault("errors", [])
+    if isinstance(errors, list):
+        errors.append({"path": str(path), "error": message})
+
+
 def _codex_history_dispatch_account_ids(
     store: AccountStore,
     *,
@@ -2726,6 +2976,20 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     report_parser.add_argument("--format", choices=("text", "json"), default="text")
     report_parser.add_argument("--output", default="")
 
+    rewrite_times_parser = subparsers.add_parser("rewrite-times")
+    rewrite_times_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
+    rewrite_times_parser.add_argument("--instances", default="")
+    rewrite_times_parser.add_argument("--instance", default="")
+    rewrite_times_parser.add_argument("--repo", default="")
+    rewrite_times_parser.add_argument("--apply", action="store_true", help="Rewrite persisted rows instead of only reporting changes.")
+    rewrite_times_parser.add_argument(
+        "--include-dispatch-files",
+        action="store_true",
+        help="Also rewrite linked Codex_History_Dispatches Markdown files and rename their timestamp prefix.",
+    )
+    rewrite_times_parser.add_argument("--format", choices=("text", "json"), default="text")
+    rewrite_times_parser.add_argument("--output", default="")
+
     bibliothekar_export_parser = subparsers.add_parser("bibliothekar-export")
     bibliothekar_export_parser.add_argument("--instances-dir", default=DEFAULT_INSTANCES_DIR)
     bibliothekar_export_parser.add_argument("--instances", default="")
@@ -2892,6 +3156,29 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
             return 0
         except (OSError, ValueError) as exc:
             print(f"report failed: {exc}", file=sys.stderr)
+            return 2
+    if args.command == "rewrite-times":
+        try:
+            selected_instances = parse_csv(getattr(args, "instances", None))
+            if args.instance:
+                selected_instances = tuple(dict.fromkeys((*selected_instances, str(args.instance).strip())))
+            payload = rewrite_codex_history_display_times_for_instances(
+                instances_dir=args.instances_dir,
+                instances=selected_instances,
+                repo=args.repo,
+                dry_run=not bool(args.apply),
+                include_dispatch_files=bool(args.include_dispatch_files),
+                provider=provider,
+            )
+            output = (
+                json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+                if args.format == "json"
+                else _render_rewrite_times_report(payload)
+            )
+            _write_or_print(output, args.output)
+            return 0 if payload["ok"] else 1
+        except (OSError, ValueError) as exc:
+            print(f"rewrite-times failed: {exc}", file=sys.stderr)
             return 2
     if args.command == "bibliothekar-export":
         try:
@@ -3611,6 +3898,50 @@ def _jsonable_result(value: object) -> dict[str, Any]:
     if isinstance(value, Mapping):
         return dict(value)
     return {"value": str(value)}
+
+
+def _render_rewrite_times_report(payload: Mapping[str, Any]) -> str:
+    lines = [
+        "TeeBotus Codex-History Time Rewrite",
+        "",
+        f"dry_run: {payload.get('dry_run', True)}",
+        f"include_dispatch_files: {payload.get('include_dispatch_files', False)}",
+    ]
+    totals = payload.get("totals", {})
+    if isinstance(totals, Mapping):
+        lines.extend(
+            [
+                f"scanned_items: {totals.get('scanned_items', 0)}",
+                f"changed_items: {totals.get('changed_items', 0)}",
+                f"timestamp_rewrites: {totals.get('timestamp_rewrites', 0)}",
+                f"dispatch_files_changed: {totals.get('dispatch_files_changed', 0)}",
+                f"dispatch_files_renamed: {totals.get('dispatch_files_renamed', 0)}",
+                f"errors: {totals.get('errors', 0)}",
+            ]
+        )
+    for instance in payload.get("instances", []):
+        if not isinstance(instance, Mapping):
+            continue
+        lines.append("")
+        lines.append(f"Instance: {instance.get('instance', '')}")
+        if not bool(instance.get("ok", True)):
+            lines.append(f"  error: {instance.get('error', '')}")
+            continue
+        lines.append(f"  scanned_items: {instance.get('scanned_items', 0)}")
+        lines.append(f"  changed_items: {instance.get('changed_items', 0)}")
+        lines.append(f"  timestamp_rewrites: {instance.get('timestamp_rewrites', 0)}")
+        dispatch_files = instance.get("dispatch_files", {})
+        if isinstance(dispatch_files, Mapping):
+            lines.append(
+                "  dispatch_files: "
+                f"scanned={dispatch_files.get('scanned', 0)} "
+                f"changed={dispatch_files.get('changed', 0)} "
+                f"renamed={dispatch_files.get('renamed', 0)} "
+                f"missing={dispatch_files.get('missing', 0)} "
+                f"unsafe={dispatch_files.get('unsafe', 0)} "
+                f"errors={len(dispatch_files.get('errors', []) or [])}"
+            )
+    return "\n".join(lines) + "\n"
 
 
 def _render_dispatch_report(payload: Mapping[str, Any]) -> str:

@@ -37,6 +37,8 @@ from TeeBotus.admin.codex_history import (
     main as codex_history_main,
     record_codex_history_delivery_receipt,
     record_codex_history_reply,
+    rewrite_codex_history_display_times,
+    rewrite_codex_history_markdown_display_times,
     run_codex_history_index,
     _render_watch_report,
     _watch_payload_ok,
@@ -236,6 +238,130 @@ def test_codex_history_markdown_displays_berlin_time(monkeypatch: pytest.MonkeyP
 
     assert "- Erstellt: `2026-06-19T14:00:00+02:00`" in markdown
     assert "2026-06-19T12:00:00+00:00" not in markdown
+
+
+def test_codex_history_markdown_time_rewrite_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_CODEX_HISTORY_TIMEZONE", "Europe/Berlin")
+    old_markdown = "\n".join(
+        [
+            "# v1.2.3 #0001 Alt",
+            "",
+            "- Erstellt: `2026-06-19T12:00:00+00:00`",
+            "- Aktualisiert: `2026-06-19T12:30:00Z`",
+            "- KeinZeitfeld: `2026-06-19T12:30:00+00:00`",
+        ]
+    )
+
+    rewritten, changed = rewrite_codex_history_markdown_display_times(old_markdown)
+    rewritten_again, changed_again = rewrite_codex_history_markdown_display_times(rewritten)
+
+    assert changed == 2
+    assert changed_again == 0
+    assert rewritten_again == rewritten
+    assert "- Erstellt: `2026-06-19T14:00:00+02:00`" in rewritten
+    assert "- Aktualisiert: `2026-06-19T14:30:00+02:00`" in rewritten
+    assert "- KeinZeitfeld: `2026-06-19T12:30:00+00:00`" in rewritten
+
+
+def test_codex_history_rewrite_times_apply_updates_sql_and_dispatch_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TEEBOTUS_CODEX_HISTORY_TIMEZONE", "Europe/Berlin")
+    repo = make_git_repo(tmp_path, "rewrite-demo", version="1.9.1")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    item = append_codex_history_summary(
+        store,
+        repo_root=repo,
+        title="Alte Zeiten",
+        bullets=["Bestehende Summary wird migriert."],
+    )
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    rows[0]["created_at"] = "2026-06-19T12:00:00+00:00"
+    rows[0]["summary"]["markdown"] = "\n".join(
+        "- Erstellt: `2026-06-19T12:00:00+00:00`" if line.startswith("- Erstellt: ") else line
+        for line in rows[0]["summary"]["markdown"].splitlines()
+    )
+    store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
+    dispatch_dir = tmp_path / "Codex_History_Dispatches"
+    dispatch_dir.mkdir()
+    old_dispatch_path = dispatch_dir / f"20260619T120000_{item['id']}_rewrite-demo_release_1.9.1_0001.md"
+    old_dispatch_path.write_text("# Dispatch\n\n- Erstellt: `2026-06-19T12:00:00+00:00`\n", encoding="utf-8")
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item["id"],
+            "instance": "Depressionsbot",
+            "status": "accepted",
+            "channel": "telegram",
+            "chat_id": "42",
+            "message_ref": "msg-1",
+            "obsidian_path": str(old_dispatch_path),
+        },
+    )
+
+    dry_run = rewrite_codex_history_display_times(
+        store,
+        instance_name="Depressionsbot",
+        dry_run=True,
+        include_dispatch_files=True,
+    )
+    assert dry_run["changed_items"] == 1
+    assert dry_run["dispatch_files"]["changed"] == 1
+    assert dry_run["dispatch_files"]["renamed"] == 1
+    assert old_dispatch_path.exists()
+    assert "2026-06-19T12:00:00+00:00" in store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["summary"]["markdown"]
+
+    applied = rewrite_codex_history_display_times(
+        store,
+        instance_name="Depressionsbot",
+        dry_run=False,
+        include_dispatch_files=True,
+    )
+
+    assert applied["changed_items"] == 1
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert "- Erstellt: `2026-06-19T14:00:00+02:00`" in persisted["summary"]["markdown"]
+    new_dispatch_path = dispatch_dir / f"20260619T140000_{item['id']}_rewrite-demo_release_1.9.1_0001.md"
+    assert not old_dispatch_path.exists()
+    assert new_dispatch_path.exists()
+    assert "- Erstellt: `2026-06-19T14:00:00+02:00`" in new_dispatch_path.read_text(encoding="utf-8")
+    dispatch = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert dispatch["obsidian_path"] == str(new_dispatch_path)
+
+
+def test_codex_history_rewrite_times_cli_dry_run_json(
+    tmp_path: Path, capsys, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("TEEBOTUS_CODEX_HISTORY_TIMEZONE", "Europe/Berlin")
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "rewrite-cli-demo", version="1.9.2")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    append_codex_history_summary(store, repo_root=repo, title="CLI Zeiten", bullets=["Dry-run zaehlt."])
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    rows[0]["summary"]["markdown"] = "\n".join(
+        "- Erstellt: `2026-06-19T12:00:00+00:00`" if line.startswith("- Erstellt: ") else line
+        for line in rows[0]["summary"]["markdown"].splitlines()
+    )
+    store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
+
+    result = codex_history_main(
+        [
+            "rewrite-times",
+            "--instances-dir",
+            str(tmp_path),
+            "--instance",
+            "Depressionsbot",
+            "--format",
+            "json",
+        ],
+        provider=provider(),
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["dry_run"] is True
+    assert payload["totals"]["changed_items"] == 1
+    assert "2026-06-19T12:" in store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["summary"]["markdown"]
 
 
 def test_codex_history_cli_append_and_report_json(tmp_path: Path, capsys) -> None:
