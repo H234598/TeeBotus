@@ -591,7 +591,7 @@ def _add_regular_file_to_archive(
     with source_handle as source:
         try:
             tarinfo = archive.gettarinfo(arcname=path.name, fileobj=source)
-        except OSError:
+        except (OSError, ValueError, RuntimeError):
             return None
         if tarinfo is None or not tarinfo.isreg():
             return None

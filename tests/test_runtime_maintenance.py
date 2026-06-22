@@ -1779,6 +1779,36 @@ def test_runtime_maintenance_skips_archive_source_fdopen_runtime_error_and_keeps
     assert archiveable.name in names
 
 
+def test_runtime_maintenance_skips_archive_gettarinfo_runtime_error_and_keeps_archiving(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    broken = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    broken.write_bytes(b"broken")
+    os.utime(broken, (old_mtime, old_mtime))
+    archiveable = tmp_path / "Security_Events.jsonl.2026-03-01.gz"
+    archiveable.write_bytes(b"archive me")
+    os.utime(archiveable, (old_mtime, old_mtime))
+    real_gettarinfo = tarfile.TarFile.gettarinfo
+
+    def fail_broken_gettarinfo(self, name=None, arcname=None, fileobj=None):
+        if arcname == broken.name:
+            raise RuntimeError("gettarinfo failed")
+        return real_gettarinfo(self, name=name, arcname=arcname, fileobj=fileobj)
+
+    monkeypatch.setattr(tarfile.TarFile, "gettarinfo", fail_broken_gettarinfo)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert broken.read_bytes() == b"broken"
+    assert not archiveable.exists()
+    archives = sorted((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert len(archives) == 1
+    with tarfile.open(archives[0], "r:gz") as archive:
+        names = archive.getnames()
+    assert broken.name not in names
+    assert archiveable.name in names
+
+
 def test_runtime_maintenance_does_not_overwrite_archive_created_during_publish(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60
