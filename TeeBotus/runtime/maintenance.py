@@ -252,12 +252,12 @@ def gzip_file(path: Path) -> Path:
         with path.open("rb") as source, gzip.open(temporary, "wb") as sink:
             shutil.copyfileobj(source, sink)
         os.utime(temporary, (stat.st_atime, stat.st_mtime))
-        temporary.replace(target)
+        published = _publish_temporary_file(temporary, target)
     except Exception:
         _unlink_quietly(temporary)
         raise
     path.unlink()
-    return target
+    return published
 
 
 def _runtime_text_files(runtime_path: Path) -> list[Path]:
@@ -311,7 +311,7 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
             if not added_paths:
                 _unlink_quietly(temporary)
                 continue
-            temporary.replace(archive_path)
+            _publish_temporary_file(temporary, archive_path)
         except Exception:
             _unlink_quietly(temporary)
             raise
@@ -325,6 +325,18 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
 def _next_rotated_path(path: Path) -> Path:
     timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     return _unique_path(path.with_name(f"{path.name}.{timestamp}"))
+
+
+def _publish_temporary_file(temporary: Path, target: Path) -> Path:
+    published = target
+    while True:
+        try:
+            os.link(temporary, published)
+        except FileExistsError:
+            published = _unique_path(target)
+            continue
+        temporary.unlink()
+        return published
 
 
 def _unlink_quietly(path: Path) -> None:
