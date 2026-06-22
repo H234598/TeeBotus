@@ -188,12 +188,12 @@ class TeeStream:
     def write(self, text: str) -> int:
         primary_write = getattr(self.primary, "write")
         secondary_write = getattr(self.secondary, "write")
-        primary_write(text)
+        written = primary_write(text)
         try:
             secondary_write(text)
         except (OSError, ValueError):
             pass
-        return len(text)
+        return len(text) if written is None else int(written)
 
     def flush(self) -> None:
         primary_flush = getattr(self.primary, "flush", None)

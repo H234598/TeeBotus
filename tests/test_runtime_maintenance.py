@@ -2146,6 +2146,21 @@ def test_tee_stream_reports_primary_writable_status():
     assert tee.writable() is False
 
 
+def test_tee_stream_returns_primary_write_result():
+    class CountingPrimary(io.StringIO):
+        def write(self, text):
+            super().write(text)
+            return 2
+
+    primary = CountingPrimary()
+    secondary = io.StringIO()
+    tee = TeeStream(primary, secondary, Path("secondary.log"))
+
+    assert tee.write("probe") == 2
+    assert primary.getvalue() == "probe"
+    assert secondary.getvalue() == "probe"
+
+
 def test_tee_stream_keeps_primary_stream_working_when_secondary_is_closed():
     primary = io.StringIO()
     secondary = io.StringIO()
