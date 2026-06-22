@@ -1369,6 +1369,24 @@ def test_runtime_status_reports_paid_gemini_profile_billing(monkeypatch, capfd, 
     assert "llm=Demo/telegram:1" in captured.out and "google_billing=paid" in captured.out
 
 
+def test_runtime_status_google_helpers_delegate_to_central_gemini_route_logic(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setattr(
+        bot,
+        "route_uses_google_gemini",
+        lambda *, provider, model: provider == "future_google_alias" and model == "future-model",
+    )
+    monkeypatch.setattr(
+        bot,
+        "provider_is_paid_google_gemini",
+        lambda provider: provider == "future_paid_google_alias",
+    )
+
+    assert bot._status_route_uses_google_gemini(provider="future_google_alias", model="future-model") is True
+    assert bot._status_google_billing(provider="future_paid_google_alias") == "paid"
+    assert bot._status_route_uses_gemini_api(provider="vertex_ai", model="vertex_ai/gemini-3.5-flash") is False
+
+
 def test_runtime_status_route_uses_instance_scoped_gemini_key_ring(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"
@@ -2182,7 +2200,7 @@ def test_runtime_status_reports_llamaindex_bibliothekar_ready(monkeypatch, capsy
     monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service._module_available", lambda name: name == "llama_index.core")
-    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service.LlamaIndexBibliothekarBackend._build_default_query_engine", lambda self: object())
+    monkeypatch.setattr("TeeBotus.runtime.bibliothekar_service.LlamaIndexBibliothekarBackend._build_default_query_engine", lambda self, max_chunks=5: object())
 
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
 
