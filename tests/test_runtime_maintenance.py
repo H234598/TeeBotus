@@ -1303,6 +1303,25 @@ def test_install_stdio_tee_refuses_symlinked_target(tmp_path, monkeypatch):
     assert external.read_text(encoding="utf-8") == ""
 
 
+def test_install_stdio_tee_refuses_fifo_target_without_blocking(tmp_path, monkeypatch):
+    if not hasattr(os, "mkfifo"):
+        pytest.skip("mkfifo is not available on this platform")
+    primary_stdout = io.StringIO()
+    primary_stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", primary_stdout)
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    path = tmp_path / STDIO_LOG_FILENAME
+    os.mkfifo(path)
+
+    install_stdio_tee(path)
+    print("do not tee to fifo")
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    assert not isinstance(sys.stdout, TeeStream)
+    assert not isinstance(sys.stderr, TeeStream)
+
+
 def test_tee_stream_keeps_primary_stream_working_when_secondary_fails():
     class FailingSecondary(io.StringIO):
         def write(self, _text):

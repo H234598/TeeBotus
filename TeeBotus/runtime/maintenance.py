@@ -197,14 +197,18 @@ def _install_stream_tee(stream: object, secondary: object, target: Path) -> obje
 
 
 def _open_append_text_no_follow(path: Path) -> object | None:
-    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
     try:
         fd = os.open(path, flags, 0o600)
     except OSError as exc:
-        if exc.errno in {errno.EISDIR, errno.ELOOP, errno.ENOTDIR}:
+        if exc.errno in {errno.EISDIR, errno.ELOOP, errno.ENODEV, errno.ENOTDIR, errno.ENXIO}:
             return None
         raise
     try:
+        stat = os.fstat(fd)
+        if not stat_module.S_ISREG(stat.st_mode):
+            _close_fd_quietly(fd)
+            return None
         return os.fdopen(fd, "a", encoding="utf-8", buffering=1)
     except Exception:
         _close_fd_quietly(fd)
