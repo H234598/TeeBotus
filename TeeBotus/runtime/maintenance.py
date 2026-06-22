@@ -319,6 +319,8 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
             stat = path.stat()
         except OSError:
             continue
+        if not stat_module.S_ISREG(stat.st_mode):
+            continue
         age = now - stat.st_mtime
         if age < archive_after_seconds:
             continue

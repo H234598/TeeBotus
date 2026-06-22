@@ -516,6 +516,19 @@ def test_runtime_maintenance_archives_numbered_compressed_logs(tmp_path):
         assert path.name in archive.getnames()
 
 
+def test_runtime_maintenance_skips_compressed_directories_before_archive_setup(tmp_path):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    directory = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    directory.mkdir()
+    os.utime(directory, (old_mtime, old_mtime))
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert directory.is_dir()
+    assert not (tmp_path / "monthly_archives").exists()
+
+
 def test_runtime_maintenance_groups_compressed_logs_with_single_stat(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60
