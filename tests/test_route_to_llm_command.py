@@ -42,6 +42,12 @@ def test_resolve_route_to_target_uses_aliases_profiles_and_purposes() -> None:
     profiles = {
         "openai_premium": LLMProfile("openai_premium", "openai", "gpt-test", api_key_env="OPENAI_API_KEY"),
         "hf_pool_default": LLMProfile("hf_pool_default", "hf_pool", "pool:default#normal_chat"),
+        "gemini_2_5_flash_stateful": LLMProfile(
+            "gemini_2_5_flash_stateful",
+            "litellm_gemini_stateful",
+            "gemini/gemini-2.5-flash",
+            api_key_env="GEMINI_API_KEY",
+        ),
         "local_ollama": LLMProfile("local_ollama", "litellm", "ollama_chat/llama3.2:3b", "http://127.0.0.1:11434"),
     }
     routing = {
@@ -50,11 +56,15 @@ def test_resolve_route_to_target_uses_aliases_profiles_and_purposes() -> None:
 
     openai = resolve_route_to_target("OAI", profiles=profiles, routing=routing)
     hf = resolve_route_to_target("HF", profiles=profiles, routing=routing)
+    gemini25 = resolve_route_to_target("Gemini25", profiles=profiles, routing=routing)
     purpose = resolve_route_to_target("StructuredDecision", profiles=profiles, default_profile="local_ollama", routing=routing)
 
     assert openai.kind == "profile"
     assert openai.name == "openai_premium"
     assert hf.provider == "hf_pool"
+    assert gemini25.kind == "profile"
+    assert gemini25.name == "gemini_2_5_flash_stateful"
+    assert gemini25.model == "gemini/gemini-2.5-flash"
     assert purpose.kind == "purpose"
     assert purpose.name == "structured_decision"
     assert purpose.provider == "hf_pool"

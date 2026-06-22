@@ -46,7 +46,12 @@ def test_plan2_llm_config_module_loads_profiles_and_routes() -> None:
         "gemini_flash_stateful",
         "gemini_flash_paid_stateless",
         "gemini_flash_paid_stateful",
+        "gemini_2_5_flash_stateless",
+        "gemini_2_5_flash_stateful",
+        "gemini_2_5_flash_paid_stateless",
+        "gemini_2_5_flash_paid_stateful",
         "vertex_gemini_flash",
+        "vertex_gemini_2_5_flash",
         "openai_premium",
     } <= set(profiles)
     assert {"normal_chat", "structured_decision", "bibliothekar_answer"} <= set(routing)

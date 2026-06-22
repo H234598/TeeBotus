@@ -80,10 +80,40 @@ def test_default_profile_files_define_plan2_provider_profiles() -> None:
         model="gemini/gemini-3.5-flash",
         api_key_env="GEMINI_API_KEY",
     )
+    assert profiles["gemini_2_5_flash_stateless"] == LLMProfile(
+        name="gemini_2_5_flash_stateless",
+        provider="litellm_gemini_stateless",
+        model="gemini/gemini-2.5-flash",
+        api_key_env="GEMINI_API_KEY",
+    )
+    assert profiles["gemini_2_5_flash_stateful"] == LLMProfile(
+        name="gemini_2_5_flash_stateful",
+        provider="litellm_gemini_stateful",
+        model="gemini/gemini-2.5-flash",
+        api_key_env="GEMINI_API_KEY",
+    )
+    assert profiles["gemini_2_5_flash_paid_stateless"] == LLMProfile(
+        name="gemini_2_5_flash_paid_stateless",
+        provider="litellm_gemini_paid_stateless",
+        model="gemini/gemini-2.5-flash",
+        api_key_env="GEMINI_API_KEY",
+    )
+    assert profiles["gemini_2_5_flash_paid_stateful"] == LLMProfile(
+        name="gemini_2_5_flash_paid_stateful",
+        provider="litellm_gemini_paid_stateful",
+        model="gemini/gemini-2.5-flash",
+        api_key_env="GEMINI_API_KEY",
+    )
     assert profiles["vertex_gemini_flash"] == LLMProfile(
         name="vertex_gemini_flash",
         provider="litellm",
         model="vertex_ai/gemini-3.5-flash",
+        api_key_env="GOOGLE_APPLICATION_CREDENTIALS",
+    )
+    assert profiles["vertex_gemini_2_5_flash"] == LLMProfile(
+        name="vertex_gemini_2_5_flash",
+        provider="litellm",
+        model="vertex_ai/gemini-2.5-flash",
         api_key_env="GOOGLE_APPLICATION_CREDENTIALS",
     )
     assert profiles["openai_premium"].provider == "openai"

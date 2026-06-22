@@ -413,25 +413,30 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         return False, f"llm profiles plan2 contract unreadable: {type(exc).__name__}: {exc}"
     errors: list[str] = []
     expected_profiles = {
-        "local_ollama": ("litellm", "ollama_chat/"),
-        "hf_mistral": ("litellm", "huggingface/"),
-        "hf_pool_default": ("hf_pool", "pool:"),
-        "hf_pool_structured": ("hf_pool", "pool:"),
-        "hf_pool_quality": ("hf_pool", "pool:"),
-        "hf_pool_bibliothekar": ("hf_pool", "pool:"),
-        "groq_fast": ("litellm", "groq/"),
-        "gemini_flash_stateless": ("litellm_gemini_stateless", "gemini/"),
-        "gemini_flash_stateful": ("litellm_gemini_stateful", "gemini/"),
-        "gemini_flash_paid_stateless": ("litellm_gemini_paid_stateless", "gemini/"),
-        "gemini_flash_paid_stateful": ("litellm_gemini_paid_stateful", "gemini/"),
-        "vertex_gemini_flash": ("litellm", "vertex_ai/"),
-        "openai_premium": ("openai", ""),
+        "local_ollama": ("litellm", "ollama_chat/", ""),
+        "hf_mistral": ("litellm", "huggingface/", ""),
+        "hf_pool_default": ("hf_pool", "pool:", ""),
+        "hf_pool_structured": ("hf_pool", "pool:", ""),
+        "hf_pool_quality": ("hf_pool", "pool:", ""),
+        "hf_pool_bibliothekar": ("hf_pool", "pool:", ""),
+        "groq_fast": ("litellm", "groq/", ""),
+        "gemini_flash_stateless": ("litellm_gemini_stateless", "gemini/", "gemini/gemini-3.5-flash"),
+        "gemini_flash_stateful": ("litellm_gemini_stateful", "gemini/", "gemini/gemini-3.5-flash"),
+        "gemini_flash_paid_stateless": ("litellm_gemini_paid_stateless", "gemini/", "gemini/gemini-3.5-flash"),
+        "gemini_flash_paid_stateful": ("litellm_gemini_paid_stateful", "gemini/", "gemini/gemini-3.5-flash"),
+        "gemini_2_5_flash_stateless": ("litellm_gemini_stateless", "gemini/", "gemini/gemini-2.5-flash"),
+        "gemini_2_5_flash_stateful": ("litellm_gemini_stateful", "gemini/", "gemini/gemini-2.5-flash"),
+        "gemini_2_5_flash_paid_stateless": ("litellm_gemini_paid_stateless", "gemini/", "gemini/gemini-2.5-flash"),
+        "gemini_2_5_flash_paid_stateful": ("litellm_gemini_paid_stateful", "gemini/", "gemini/gemini-2.5-flash"),
+        "vertex_gemini_flash": ("litellm", "vertex_ai/", "vertex_ai/gemini-3.5-flash"),
+        "vertex_gemini_2_5_flash": ("litellm", "vertex_ai/", "vertex_ai/gemini-2.5-flash"),
+        "openai_premium": ("openai", "", ""),
     }
     if default_profile != "local_ollama":
         errors.append("default_profile must be local_ollama")
     if default_profile not in profiles:
         errors.append(f"default_profile missing {default_profile or '<empty>'}")
-    for name, (provider, model_prefix) in expected_profiles.items():
+    for name, (provider, model_prefix, exact_model) in expected_profiles.items():
         profile = profiles.get(name)
         if profile is None:
             errors.append(f"profile missing {name}")
@@ -440,6 +445,8 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
             errors.append(f"profile {name} provider={profile.provider or '<empty>'} expected={provider}")
         if model_prefix and not profile.model.startswith(model_prefix):
             errors.append(f"profile {name} model must start with {model_prefix}")
+        if exact_model and profile.model != exact_model:
+            errors.append(f"profile {name} model={profile.model or '<empty>'} expected={exact_model}")
     expected_hf_pool_selectors = {
         "hf_pool_default": "pool:default#normal_chat",
         "hf_pool_structured": "pool:default#structured_decision",
@@ -457,7 +464,12 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         "gemini_flash_stateful",
         "gemini_flash_paid_stateless",
         "gemini_flash_paid_stateful",
+        "gemini_2_5_flash_stateless",
+        "gemini_2_5_flash_stateful",
+        "gemini_2_5_flash_paid_stateless",
+        "gemini_2_5_flash_paid_stateful",
         "vertex_gemini_flash",
+        "vertex_gemini_2_5_flash",
         "openai_premium",
     ):
         profile = profiles.get(name)
@@ -484,7 +496,9 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     return True, (
         "llm profiles plan2 contract=ok "
         "profiles=local_ollama,hf_pool_structured,hf_mistral,groq_fast,"
-        "gemini_flash_stateless,gemini_flash_stateful,gemini_flash_paid_stateless,gemini_flash_paid_stateful,vertex_gemini_flash,openai_premium"
+        "gemini_flash_stateless,gemini_flash_stateful,gemini_flash_paid_stateless,gemini_flash_paid_stateful,"
+        "gemini_2_5_flash_stateless,gemini_2_5_flash_stateful,gemini_2_5_flash_paid_stateless,"
+        "gemini_2_5_flash_paid_stateful,vertex_gemini_flash,vertex_gemini_2_5_flash,openai_premium"
     )
 
 

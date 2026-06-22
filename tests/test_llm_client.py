@@ -26,6 +26,17 @@ def test_build_text_llm_client_uses_openai_client_by_default() -> None:
     assert build_text_llm_client(instructions=BotInstructions(), openai_client=openai_client) is openai_client
 
 
+def test_gemini_rest_is_not_supported_as_text_llm_provider() -> None:
+    with pytest.raises(LLMAPIError, match="Unsupported LLM provider: gemini_rest"):
+        build_text_llm_client(
+            instructions=BotInstructions(),
+            openai_client=None,
+            provider="gemini_rest",
+            model="gemini/gemini-2.5-flash",
+            api_key="gemini-key",
+        )
+
+
 def test_neutral_voice_and_image_payloads_are_plain_capability_types() -> None:
     voice = LLMVoice(audio=b"voice", filename="voice.ogg", content_type="audio/ogg")
     image = LLMImage(data=b"png", filename="bild.png", content_type="image/png")

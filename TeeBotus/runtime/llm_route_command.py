@@ -33,12 +33,22 @@ _PROFILE_ALIASES = {
     "geminipaid": "gemini_flash_paid_stateful",
     "geminipaidstateful": "gemini_flash_paid_stateful",
     "geminipaidstateless": "gemini_flash_paid_stateless",
+    "gemini25": "gemini_2_5_flash_stateful",
+    "gemini25flash": "gemini_2_5_flash_stateful",
+    "gemini25stateful": "gemini_2_5_flash_stateful",
+    "gemini25flashstateful": "gemini_2_5_flash_stateful",
+    "gemini25stateless": "gemini_2_5_flash_stateless",
+    "gemini25flashstateless": "gemini_2_5_flash_stateless",
+    "gemini25paid": "gemini_2_5_flash_paid_stateful",
+    "gemini25paidstateful": "gemini_2_5_flash_paid_stateful",
+    "gemini25paidstateless": "gemini_2_5_flash_paid_stateless",
     "local": "local_ollama",
     "ollama": "local_ollama",
     "localollama": "local_ollama",
     "groq": "groq_fast",
     "vertex": "vertex_gemini_flash",
     "vertexgemini": "vertex_gemini_flash",
+    "vertexgemini25": "vertex_gemini_2_5_flash",
 }
 
 _PURPOSE_ALIASES = {

@@ -1052,7 +1052,7 @@ def test_runtime_status_reports_missing_key_for_remote_profile(monkeypatch, caps
     ) in captured.out
 
 
-def test_runtime_status_reports_vertex_profile_credentials_without_leaking_value(monkeypatch, capsys, tmp_path) -> None:
+def test_runtime_status_reports_vertex_profile_credentials_without_leaking_value(monkeypatch, capfd, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"
     demo_dir = instances_dir / "Demo"
@@ -1067,10 +1067,10 @@ def test_runtime_status_reports_vertex_profile_credentials_without_leaking_value
 
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
 
-    captured = capsys.readouterr()
+    captured = capfd.readouterr()
     assert (
         "llm=Demo/telegram:1 provider=litellm model=vertex_ai/gemini-3.5-flash "
-        "status=configured profile=vertex_gemini_flash api_key=configured"
+        "status=configured profile=vertex_gemini_flash api_key=<redacted>"
     ) in captured.out
     assert "/private/vertex-service-account.json" not in captured.out
 
@@ -1103,7 +1103,7 @@ def test_runtime_status_accepts_gemini_key_ring_without_single_key(monkeypatch, 
     assert "a1" not in captured.out
 
 
-def test_runtime_status_reports_stateless_gemini_profile_mode(monkeypatch, capsys, tmp_path) -> None:
+def test_runtime_status_reports_stateless_gemini_profile_mode(monkeypatch, capfd, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"
     demo_dir = instances_dir / "Demo"
@@ -1119,15 +1119,15 @@ def test_runtime_status_reports_stateless_gemini_profile_mode(monkeypatch, capsy
 
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
 
-    captured = capsys.readouterr()
+    captured = capfd.readouterr()
     assert (
         "llm=Demo/telegram:1 provider=litellm_gemini_stateless model=gemini/gemini-3.5-flash "
-        "status=configured profile=gemini_flash_stateless api_key=configured "
+        "status=configured profile=gemini_flash_stateless api_key=<redacted> "
         "google_mode=stateless service_tier=flex"
     ) in captured.out
 
 
-def test_runtime_status_reports_paid_gemini_profile_billing(monkeypatch, capsys, tmp_path) -> None:
+def test_runtime_status_reports_paid_gemini_profile_billing(monkeypatch, capfd, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"
     demo_dir = instances_dir / "Demo"
@@ -1143,10 +1143,10 @@ def test_runtime_status_reports_paid_gemini_profile_billing(monkeypatch, capsys,
 
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
 
-    captured = capsys.readouterr()
+    captured = capfd.readouterr()
     assert (
         "llm=Demo/telegram:1 provider=litellm_gemini_paid_stateful model=gemini/gemini-3.5-flash "
-        "status=configured profile=gemini_flash_paid_stateful api_key=configured "
+        "status=configured profile=gemini_flash_paid_stateful api_key=<redacted> "
         "google_mode=stateful"
     ) in captured.out
     assert "llm=Demo/telegram:1" in captured.out and "free_tier_guard=off" in captured.out
