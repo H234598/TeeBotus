@@ -1283,6 +1283,26 @@ def test_install_stdio_tee_retargets_existing_tee_without_writing_old_target(tmp
     assert old_stderr.secondary.closed
 
 
+def test_install_stdio_tee_refuses_symlinked_target(tmp_path, monkeypatch):
+    primary_stdout = io.StringIO()
+    primary_stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", primary_stdout)
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    external = tmp_path / "external.log"
+    external.write_text("", encoding="utf-8")
+    path = tmp_path / STDIO_LOG_FILENAME
+    path.symlink_to(external)
+
+    install_stdio_tee(path)
+    print("do not tee")
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    assert not isinstance(sys.stdout, TeeStream)
+    assert not isinstance(sys.stderr, TeeStream)
+    assert external.read_text(encoding="utf-8") == ""
+
+
 def test_tee_stream_keeps_primary_stream_working_when_secondary_fails():
     class FailingSecondary(io.StringIO):
         def write(self, _text):

@@ -129,12 +129,14 @@ def _configure_third_party_loggers(level: int) -> None:
 
 def install_stdio_tee(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    resolved_path = path.resolve()
-    if _stream_tee_target(sys.stdout) == resolved_path and _stream_tee_target(sys.stderr) == resolved_path:
+    target_path = _absolute_without_symlink_resolution(path)
+    if _stream_tee_target(sys.stdout) == target_path and _stream_tee_target(sys.stderr) == target_path:
         return
-    handle = resolved_path.open("a", encoding="utf-8", buffering=1)
-    sys.stdout = _install_stream_tee(sys.stdout, handle, resolved_path)  # type: ignore[assignment]
-    sys.stderr = _install_stream_tee(sys.stderr, handle, resolved_path)  # type: ignore[assignment]
+    handle = _open_append_text_no_follow(target_path)
+    if handle is None:
+        return
+    sys.stdout = _install_stream_tee(sys.stdout, handle, target_path)  # type: ignore[assignment]
+    sys.stderr = _install_stream_tee(sys.stderr, handle, target_path)  # type: ignore[assignment]
 
 
 class TeeStream:
@@ -181,7 +183,7 @@ class TeeStream:
 def _stream_tee_target(stream: object) -> Path | None:
     target = getattr(stream, "_teebotus_tee_target", None)
     if isinstance(target, Path):
-        return target.resolve()
+        return _absolute_without_symlink_resolution(target)
     return None
 
 
@@ -192,6 +194,25 @@ def _install_stream_tee(stream: object, secondary: object, target: Path) -> obje
         _close_quietly(stream.secondary)
         stream = stream.primary
     return TeeStream(stream, secondary, target)
+
+
+def _open_append_text_no_follow(path: Path) -> object | None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_APPEND | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        fd = os.open(path, flags, 0o600)
+    except OSError as exc:
+        if exc.errno in {errno.EISDIR, errno.ELOOP, errno.ENOTDIR}:
+            return None
+        raise
+    try:
+        return os.fdopen(fd, "a", encoding="utf-8", buffering=1)
+    except Exception:
+        _close_fd_quietly(fd)
+        raise
+
+
+def _absolute_without_symlink_resolution(path: Path) -> Path:
+    return Path(os.path.abspath(path))
 
 
 class RuntimeTimedRotatingFileHandler(TimedRotatingFileHandler):
