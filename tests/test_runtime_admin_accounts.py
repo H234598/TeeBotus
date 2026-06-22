@@ -47,6 +47,21 @@ def test_admin_group_env_parses_ids_deduplicates_and_reports_invalid() -> None:
     assert group.source == ADMIN_ACCOUNT_IDS_ENV
 
 
+def test_admin_account_status_redacts_secret_like_invalid_ids(tmp_path) -> None:
+    account_store = store_for(tmp_path)
+
+    lines = admin_account_group_status_lines(
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        env={ADMIN_ACCOUNT_IDS_ENV: "sk-testsecret123456"},
+        store=account_store,
+    )
+
+    joined = "\n".join(lines)
+    assert "sk-testsecret123456" not in joined
+    assert "admin_account=Depressionsbot/sk-<redacted> status=broken reason=invalid_account_id" in lines
+
+
 def test_admin_group_instance_env_overrides_global_env() -> None:
     instance_env = "TEEBOTUS_ADMIN_ACCOUNT_IDS_DEPRESSIONSBOT"
     group = resolve_admin_account_group(

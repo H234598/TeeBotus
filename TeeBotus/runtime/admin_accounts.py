@@ -973,7 +973,8 @@ def _status_token(value: object) -> str:
     text = str(value if value is not None else "").strip()
     if not text:
         return "<none>"
-    return re.sub(r"\s+", "_", text.replace("\n", "_"))
+    redacted = _redact_runtime_status_line(text)
+    return re.sub(r"\s+", "_", redacted.replace("\n", "_")) or "<none>"
 
 
 def _redact_runtime_status_line(line: str) -> str:
