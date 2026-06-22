@@ -32,7 +32,7 @@ from TeeBotus.core.status import STATUS_COMMAND_ALIASES, build_status_reply, bui
 from TeeBotus.handlers import ADMIN_FORBIDDEN_TEXT, build_reply, is_admin_help_request
 from TeeBotus.instructions import BotInstructions, render_template
 from TeeBotus.llm.capabilities import LLMCapabilities
-from TeeBotus.llm_client import LLMAPIError
+from TeeBotus.llm_client import LLMAPIError, normalize_llm_provider
 from TeeBotus.openai_client import OpenAIAPIError
 from TeeBotus.runtime.proactive_agent import PROACTIVE_COMMANDS, handle_proactive_command, proactive_agent_instance_enabled
 from TeeBotus.runtime.activity_profile import record_account_activity
@@ -2770,7 +2770,7 @@ def _persistable_previous_response_id(response: object) -> str | None:
     response_id = getattr(response, "response_id", None)
     if not isinstance(response_id, str) or not response_id:
         return None
-    provider = str(getattr(response, "provider", "") or "").strip().casefold()
+    provider = normalize_llm_provider(str(getattr(response, "provider", "") or ""))
     if not provider:
         return response_id
     stateful_providers = {
