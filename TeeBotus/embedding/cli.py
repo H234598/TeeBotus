@@ -16,6 +16,7 @@ from TeeBotus.embedding.rebuild import (
     rebuild_qdrant_memory_indexes,
     validate_embedding_instance_name,
 )
+from TeeBotus.runtime.accounts import AccountStoreError, validate_sha512_token
 from TeeBotus.runtime.dotenv import load_project_dotenv_for_instances
 from TeeBotus.runtime.qdrant import (
     QDRANT_CODEX_HISTORY_COLLECTION,
@@ -205,6 +206,14 @@ def _memory_collection_from_args(args: argparse.Namespace) -> str:
 
 
 def _validate_memory_rebuild_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
+    for value in getattr(args, "account_id", ()) or ():
+        account_id = str(value or "").strip()
+        if not account_id:
+            continue
+        try:
+            validate_sha512_token(account_id, field_name="account_id")
+        except AccountStoreError as exc:
+            parser.error(f"--account-id {exc}")
     collection = str(getattr(args, "collection", "") or "").strip()
     if collection:
         _validate_cli_collection_name(parser, collection, "--collection")

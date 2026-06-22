@@ -682,6 +682,22 @@ def test_embedding_cli_rejects_path_segment_instance_names(capsys, tmp_path):
     assert "--instance Instance name must be a single path segment" in capsys.readouterr().err
 
 
+def test_embedding_cli_memory_rebuild_rejects_invalid_account_id(capsys, tmp_path):
+    with pytest.raises(SystemExit) as exc_info:
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "memory-rebuild",
+                "--account-id",
+                "not-a-sha512-token",
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "--account-id account_id must be a 128 character lowercase hex SHA-512 token" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize(
     ("argument", "value"),
     (
