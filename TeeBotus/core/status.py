@@ -14,6 +14,7 @@ from TeeBotus import __version__
 from TeeBotus.artifact_outputs import legacy_import_preflight_path
 from TeeBotus.core.rich_text import html_with_single_link
 from TeeBotus.core.version_notifications import DEFAULT_REPO_URL, github_repo_url
+from TeeBotus.llm_client import normalize_llm_provider
 from TeeBotus.mcp_tools import DEFAULT_MCP_TOOL_POLICIES, MCPToolPolicy, resolve_mcp_tool_policies
 from TeeBotus.runtime.accounts import (
     ACCOUNTS_DIRNAME,
@@ -526,32 +527,7 @@ def _default_api_key_env(provider: str, model: str) -> str:
 
 
 def _normalize_status_provider(value: object) -> str:
-    text = str(value or "").strip().casefold().replace("-", "_")
-    aliases = {
-        "google": "gemini",
-        "google_ai": "gemini",
-        "google_interactions": "litellm_gemini_stateful",
-        "litellm_gemini_interactions": "litellm_gemini_stateful",
-        "gemini_interactions": "litellm_gemini_stateful",
-        "gemini_stateful": "litellm_gemini_stateful",
-        "gemini_statefull": "litellm_gemini_stateful",
-        "interactions": "litellm_gemini_stateful",
-        "litellm_gemini_text": "litellm_gemini_stateless",
-        "gemini_stateless_litellm": "litellm_gemini_stateless",
-        "litellm_gemini_statefull": "litellm_gemini_stateful",
-        "litellm_gemini_paid_state_less": "litellm_gemini_paid_stateless",
-        "litellm_gemini_paid_text": "litellm_gemini_paid_stateless",
-        "gemini_paid_stateless_litellm": "litellm_gemini_paid_stateless",
-        "litellm_gemini_paid_statefull": "litellm_gemini_paid_stateful",
-        "litellm_gemini_paid_interactions": "litellm_gemini_paid_stateful",
-        "gemini_paid_stateful": "litellm_gemini_paid_stateful",
-        "gemini_paid_statefull": "litellm_gemini_paid_stateful",
-        "gemini_paid_interactions": "litellm_gemini_paid_stateful",
-        "vertex": "vertex_ai",
-        "google_vertex": "vertex_ai",
-        "google_vertex_ai": "vertex_ai",
-    }
-    return aliases.get(text, text or "openai")
+    return normalize_llm_provider(str(value or ""))
 
 
 def _model_is_local(provider: str, model: str) -> bool:
@@ -581,7 +557,9 @@ def _provider_is_paid_gemini(provider: str) -> bool:
 
 
 def _llm_client_status_label(client: object | None, *, fallback_provider: str = "", fallback_model: str = "") -> str:
-    provider = _first_status_attr(client, "provider_name", "provider", "llm_provider") or fallback_provider or "openai"
+    provider = _normalize_status_provider(
+        _first_status_attr(client, "provider_name", "provider", "llm_provider") or fallback_provider or "openai"
+    )
     model = (
         _first_status_attr(client, "model", "model_name", "model_selector", "llm_model", "pydantic_ai_model_name")
         or fallback_model
@@ -597,7 +575,9 @@ def _llm_client_status_label(client: object | None, *, fallback_provider: str = 
 def _structured_decision_status_label(runner: object | None) -> str:
     if runner is None:
         return "aus"
-    provider = _first_status_attr(runner, "llm_provider", "pydantic_ai_provider", "provider_name", "provider") or "aktiv"
+    provider = _normalize_status_provider(
+        _first_status_attr(runner, "llm_provider", "pydantic_ai_provider", "provider_name", "provider") or "aktiv"
+    )
     model = _first_status_attr(runner, "model_name", "pydantic_ai_model_name", "hf_pool_request_model", "llm_model")
     label = f"aktiv - {provider}"
     if model:
@@ -616,7 +596,7 @@ def _route_status_label(purpose: str, *, enabled: bool | None, env: Mapping[str,
         from TeeBotus.llm.service_tier import resolve_gemini_service_tier
 
         route = select_llm_route(purpose)
-        label = f"aktiv - {route.provider} / {route.model}"
+        label = f"aktiv - {_normalize_status_provider(route.provider)} / {route.model}"
         service_tier = resolve_gemini_service_tier(
             env,
             provider=route.provider,

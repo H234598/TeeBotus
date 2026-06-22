@@ -1013,6 +1013,26 @@ def test_status_normalizes_paid_gemini_interactions_alias(tmp_path):
     assert "Gemini Stateful + Free-Tier" not in text
 
 
+def test_status_uses_central_llm_provider_aliases(tmp_path):
+    class HuggingFaceAliasClient:
+        provider_name = "hugging_face"
+        model = "huggingface/Qwen/Qwen2.5-7B-Instruct"
+
+    text = build_status_reply(
+        sender_id="1",
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        llm_enabled=True,
+        llm_client=HuggingFaceAliasClient(),
+        bibliothekar_enabled=False,
+        env={},
+    )
+
+    assert "- Chat/Text: huggingface / huggingface/Qwen/Qwen2.5-7B-Instruct" in text
+    assert "HUGGINGFACE_API_KEY fehlt" in text
+    assert "hugging_face / huggingface/Qwen" not in text
+
+
 def test_engine_help_carries_formatted_release_log_link(tmp_path):
     engine = TeeBotusEngine(account_store=store(tmp_path), project_root=tmp_path)
 
