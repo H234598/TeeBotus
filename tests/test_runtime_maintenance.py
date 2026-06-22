@@ -740,6 +740,37 @@ def test_gzip_file_does_not_overwrite_temporary_file_created_during_open(tmp_pat
         assert handle.read() == "old log\n"
 
 
+def test_gzip_file_refuses_temporary_file_when_parent_becomes_symlink(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    path = runtime_dir / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    moved_runtime_dir = tmp_path / "runtime-moved"
+    external_runtime_dir = tmp_path / "external-runtime"
+    external_runtime_dir.mkdir()
+    real_open = os.open
+    raced = False
+
+    def racing_open(file, flags, *args, **kwargs):
+        nonlocal raced
+        fd = real_open(file, flags, *args, **kwargs)
+        if Path(file) == path and not raced:
+            raced = True
+            runtime_dir.rename(moved_runtime_dir)
+            runtime_dir.symlink_to(external_runtime_dir, target_is_directory=True)
+        return fd
+
+    monkeypatch.setattr(os, "open", racing_open)
+
+    with pytest.raises(OSError, match="unsafe runtime temporary path"):
+        gzip_file(path)
+
+    assert raced is True
+    assert runtime_dir.is_symlink()
+    assert (moved_runtime_dir / path.name).read_text(encoding="utf-8") == "old log\n"
+    assert not list(external_runtime_dir.iterdir())
+
+
 def test_gzip_file_does_not_publish_temporary_path_replaced_before_publish(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")
@@ -1142,6 +1173,37 @@ def test_runtime_maintenance_keeps_sources_when_archive_fdopen_fails(tmp_path, m
     assert path.read_bytes() == b"compressed-ish"
     assert not list((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
     assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
+
+
+def test_runtime_maintenance_keeps_sources_when_archive_directory_becomes_symlink(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    archive_dir = tmp_path / "monthly_archives"
+    external_archive_dir = tmp_path / "external-archives"
+    external_archive_dir.mkdir()
+    real_stat = Path.stat
+    raced = False
+
+    def racing_archive_stat(self, *args, **kwargs):
+        nonlocal raced
+        result = real_stat(self, *args, **kwargs)
+        if self == archive_dir and kwargs.get("follow_symlinks") is False and not raced:
+            raced = True
+            archive_dir.rmdir()
+            archive_dir.symlink_to(external_archive_dir, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(Path, "stat", racing_archive_stat)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert raced is True
+    assert archive_dir.is_symlink()
+    assert path.read_bytes() == b"compressed-ish"
+    assert not list(external_archive_dir.iterdir())
 
 
 def test_runtime_maintenance_keeps_sources_when_archive_directory_is_blocked(tmp_path):

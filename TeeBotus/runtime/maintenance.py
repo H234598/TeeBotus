@@ -614,6 +614,8 @@ def _link_file_to_unique_path(source: Path, target: Path, *, expected_stat: os.s
 
 
 def _create_unique_file(path: Path) -> tuple[Path, int, os.stat_result]:
+    if _has_symlink_parent(path):
+        raise OSError(f"refusing unsafe runtime temporary path: {path}")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     candidate = _unique_path(path)
     while True:
