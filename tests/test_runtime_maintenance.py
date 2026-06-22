@@ -187,6 +187,24 @@ def test_rotate_runtime_text_file_skips_source_replaced_before_link(tmp_path, mo
     assert not list(tmp_path.glob(f"{path.name}.*.gz"))
 
 
+def test_rotate_runtime_text_file_skips_when_source_stat_raises_value_error(tmp_path, monkeypatch):
+    path = tmp_path / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+    real_stat = os.stat
+
+    def fail_source_stat(file, *args, **kwargs):
+        if Path(file) == path and kwargs.get("follow_symlinks") is False:
+            raise ValueError("source stat failed")
+        return real_stat(file, *args, **kwargs)
+
+    monkeypatch.setattr(os, "stat", fail_source_stat)
+
+    assert rotate_runtime_text_file_if_needed(path, max_bytes=4) is None
+
+    assert path.read_text(encoding="utf-8") == "0123456789\n"
+    assert not list(tmp_path.glob(f"{path.name}.*"))
+
+
 def test_rotate_runtime_text_file_preserves_rotated_path_replaced_before_link_stat(tmp_path, monkeypatch):
     path = tmp_path / "Security_Events.jsonl"
     path.write_text("0123456789\n", encoding="utf-8")
@@ -747,6 +765,24 @@ def test_gzip_file_preserves_path_replaced_by_symlink_before_open(tmp_path, monk
     assert raced is True
     assert path.is_symlink()
     assert external.read_text(encoding="utf-8") == "do not copy\n"
+    assert not (tmp_path / f"{path.name}.gz").exists()
+
+
+def test_gzip_file_skips_when_source_open_raises_value_error(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    real_open = os.open
+
+    def fail_source_open(file, flags, *args, **kwargs):
+        if Path(file) == path:
+            raise ValueError("source open failed")
+        return real_open(file, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", fail_source_open)
+
+    assert gzip_file(path) == path
+
+    assert path.read_text(encoding="utf-8") == "old log\n"
     assert not (tmp_path / f"{path.name}.gz").exists()
 
 

@@ -333,7 +333,7 @@ class RuntimeTimedRotatingFileHandler(TimedRotatingFileHandler):
         source_path = Path(source)
         try:
             source_stat = os.stat(source_path, follow_symlinks=False)
-        except OSError:
+        except (OSError, ValueError):
             return
         if not stat_module.S_ISREG(source_stat.st_mode):
             return
@@ -369,7 +369,7 @@ def rotate_runtime_text_file_if_needed(path: Path | str, *, max_bytes: int = MAX
         return None
     try:
         source_stat = os.stat(path, follow_symlinks=False)
-    except OSError:
+    except (OSError, ValueError):
         return None
     if not stat_module.S_ISREG(source_stat.st_mode) or source_stat.st_size <= max_bytes:
         return None
@@ -425,6 +425,8 @@ def gzip_file(path: Path | str, *, expected_stat: os.stat_result | None = None) 
     try:
         fd = os.open(path, flags)
     except FileNotFoundError:
+        return path
+    except ValueError:
         return path
     except OSError as exc:
         if exc.errno in {errno.EISDIR, errno.ELOOP, errno.ENOTDIR}:
