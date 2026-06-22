@@ -72,6 +72,30 @@ def test_runtime_maintenance_preserves_active_runtime_logs(tmp_path):
     assert (tmp_path / f"{rotated.name}.gz").exists()
 
 
+def test_runtime_maintenance_preserves_temporary_runtime_files(tmp_path):
+    now = time.time()
+    old_mtime = now - 8 * 24 * 60 * 60
+    temporary_files = (
+        tmp_path / "teebotus-production.log.tmp",
+        tmp_path / ".teebotus-production.log.2026-06-01.gz.tmp",
+        tmp_path / "Security_Events.jsonl.tmp",
+    )
+    for path in temporary_files:
+        path.write_text("temporary\n", encoding="utf-8")
+        os.utime(path, (old_mtime, old_mtime))
+    rotated = tmp_path / "teebotus-production.log.2026-06-01"
+    rotated.write_text("rotated log\n", encoding="utf-8")
+    os.utime(rotated, (old_mtime, old_mtime))
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    for path in temporary_files:
+        assert path.read_text(encoding="utf-8") == "temporary\n"
+        assert not (tmp_path / f"{path.name}.gz").exists()
+    assert not rotated.exists()
+    assert (tmp_path / f"{rotated.name}.gz").exists()
+
+
 def test_gzip_file_removes_partial_temporary_file_on_copy_failure(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")

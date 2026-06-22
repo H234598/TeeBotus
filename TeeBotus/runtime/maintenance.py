@@ -246,6 +246,8 @@ def _runtime_text_files(runtime_path: Path) -> list[Path]:
         for path in runtime_path.glob(pattern):
             if not path.is_file() or path.suffix == ".gz":
                 continue
+            if _is_temporary_runtime_file(path):
+                continue
             if path.name in ACTIVE_RUNTIME_TEXT_FILENAMES:
                 continue
             if archive_dir in path.parents:
@@ -304,6 +306,10 @@ def _unlink_quietly(path: Path) -> None:
         path.unlink()
     except OSError:
         pass
+
+
+def _is_temporary_runtime_file(path: Path) -> bool:
+    return path.name.startswith(".") or path.suffix == ".tmp"
 
 
 def _unique_path(path: Path) -> Path:
