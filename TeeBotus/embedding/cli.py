@@ -39,7 +39,7 @@ def main(argv: list[str] | None = None) -> int:
                 instances_dir=args.instances_dir,
                 instance_names=args.instance,
                 account_ids=_memory_account_ids_from_args(args),
-                qdrant_url=args.qdrant_url or None,
+                qdrant_url=_qdrant_url_from_args(args),
                 collection_name=_memory_collection_from_args(args),
                 embedding_overrides=_embedding_overrides_from_args(args),
                 dry_run=args.dry_run,
@@ -57,7 +57,7 @@ def main(argv: list[str] | None = None) -> int:
             results = ensure_qdrant_collections_for_instances(
                 instances_dir=args.instances_dir,
                 instance_names=args.instance,
-                qdrant_url=args.qdrant_url or None,
+                qdrant_url=_qdrant_url_from_args(args),
                 embedding_overrides=_embedding_overrides_from_args(args),
                 include_memory_side_dimensions=args.include_memory_side_index,
                 include_codex_history=bool(args.include_codex_history),
@@ -73,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
             results = rebuild_qdrant_bibliothekar_indexes(
                 instances_dir=args.instances_dir,
                 instance_names=args.instance,
-                qdrant_url=args.qdrant_url or None,
+                qdrant_url=_qdrant_url_from_args(args),
                 embedding_overrides=_embedding_overrides_from_args(args),
                 dry_run=args.dry_run,
             )
@@ -89,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
             results = rebuild_qdrant_codex_history_indexes(
                 instances_dir=args.instances_dir,
                 instance_names=args.instance,
-                qdrant_url=args.qdrant_url or None,
+                qdrant_url=_qdrant_url_from_args(args),
                 collection_name=args.collection or QDRANT_CODEX_HISTORY_COLLECTION,
                 repo=args.repo,
                 limit=int(args.limit or 0),
@@ -207,6 +207,11 @@ def _memory_collection_from_args(args: argparse.Namespace) -> str:
 
 def _memory_account_ids_from_args(args: argparse.Namespace) -> list[str]:
     return [str(value or "").strip().lower() for value in getattr(args, "account_id", ()) or () if str(value or "").strip()]
+
+
+def _qdrant_url_from_args(args: argparse.Namespace) -> str | None:
+    url = str(getattr(args, "qdrant_url", "") or "").strip()
+    return url or None
 
 
 def _validate_memory_rebuild_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:

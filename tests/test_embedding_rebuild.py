@@ -727,6 +727,34 @@ def test_embedding_cli_memory_rebuild_accepts_uppercase_account_id(monkeypatch, 
     assert captured_account_ids == [account_id.lower()]
 
 
+def test_embedding_cli_memory_rebuild_ignores_blank_qdrant_url_override(monkeypatch, tmp_path):
+    captured_qdrant_urls: list[str | None] = []
+
+    def fake_rebuild(**kwargs):
+        captured_qdrant_urls.append(kwargs["qdrant_url"])
+        from TeeBotus.embedding.rebuild import QdrantMemoryRebuildResult
+
+        return (QdrantMemoryRebuildResult("Depressionsbot", "a" * 128, "dry_run", point_count=1),)
+
+    monkeypatch.setattr("TeeBotus.embedding.cli.rebuild_qdrant_memory_indexes", fake_rebuild)
+
+    assert (
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "memory-rebuild",
+                "--qdrant-url",
+                " ",
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+
+    assert captured_qdrant_urls == [None]
+
+
 @pytest.mark.parametrize(
     ("argument", "value"),
     (
