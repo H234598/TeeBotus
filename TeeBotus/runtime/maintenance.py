@@ -660,6 +660,9 @@ def _link_file_to_unique_path(source: Path, target: Path, *, expected_stat: os.s
             _unlink_if_same_file(linked, expected_stat)
             return None
         if _same_file_stat(linked_stat, expected_stat):
+            if _has_symlink_parent(source) or _has_symlink_parent(linked):
+                _unlink_if_same_file(linked, linked_stat)
+                return None
             return linked
         try:
             current_source_stat = os.stat(source, follow_symlinks=False)
@@ -729,6 +732,9 @@ def _publish_temporary_file(temporary: Path, target: Path, *, expected_stat: os.
             if current_temp_stat is not None and _same_file_stat(linked_stat, current_temp_stat):
                 _unlink_if_same_file(published, linked_stat)
             raise OSError(f"runtime temporary file changed before publish: {temporary}")
+        if _has_symlink_parent(temporary) or _has_symlink_parent(published):
+            _unlink_if_same_file(published, linked_stat)
+            raise OSError(f"refusing unsafe runtime publish path: {published}")
         _unlink_if_same_file(temporary, expected_stat)
         return published
 

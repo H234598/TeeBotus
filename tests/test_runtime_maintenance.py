@@ -120,6 +120,36 @@ def test_rotate_runtime_text_file_refuses_link_retry_when_parent_becomes_symlink
     assert not list(external_runtime_dir.iterdir())
 
 
+def test_rotate_runtime_text_file_refuses_link_when_parent_becomes_symlink_after_link(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    path = runtime_dir / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+    rotated = runtime_dir / "Security_Events.jsonl.2026-06-22-181200"
+    moved_runtime_dir = tmp_path / "runtime-moved"
+    real_link = os.link
+    raced = False
+    monkeypatch.setattr("TeeBotus.runtime.maintenance._next_rotated_path", lambda _path: rotated)
+
+    def racing_link(source, destination, *args, **kwargs):
+        nonlocal raced
+        result = real_link(source, destination, *args, **kwargs)
+        if Path(destination) == rotated and not raced:
+            raced = True
+            runtime_dir.rename(moved_runtime_dir)
+            runtime_dir.symlink_to(moved_runtime_dir, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(os, "link", racing_link)
+
+    assert rotate_runtime_text_file_if_needed(path, max_bytes=4) is None
+
+    assert raced is True
+    assert runtime_dir.is_symlink()
+    assert (moved_runtime_dir / path.name).read_text(encoding="utf-8") == "0123456789\n"
+    assert not (moved_runtime_dir / rotated.name).exists()
+
+
 def test_rotate_runtime_text_file_skips_broken_symlink_rotation_target(tmp_path, monkeypatch):
     path = tmp_path / "Security_Events.jsonl"
     path.write_text("0123456789\n", encoding="utf-8")
@@ -1271,6 +1301,37 @@ def test_gzip_file_refuses_publish_retry_when_parent_becomes_symlink(tmp_path, m
     assert (moved_runtime_dir / path.name).read_text(encoding="utf-8") == "old log\n"
     assert (moved_runtime_dir / target.name).read_text(encoding="utf-8") == "existing target\n"
     assert not list(external_runtime_dir.iterdir())
+
+
+def test_gzip_file_refuses_publish_when_parent_becomes_symlink_after_link(tmp_path, monkeypatch):
+    runtime_dir = tmp_path / "runtime"
+    runtime_dir.mkdir()
+    path = runtime_dir / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    target = runtime_dir / f"{path.name}.gz"
+    moved_runtime_dir = tmp_path / "runtime-moved"
+    real_link = os.link
+    raced = False
+
+    def racing_link(source, destination, *args, **kwargs):
+        nonlocal raced
+        result = real_link(source, destination, *args, **kwargs)
+        if Path(destination) == target and not raced:
+            raced = True
+            runtime_dir.rename(moved_runtime_dir)
+            runtime_dir.symlink_to(moved_runtime_dir, target_is_directory=True)
+        return result
+
+    monkeypatch.setattr(os, "link", racing_link)
+
+    with pytest.raises(OSError, match="unsafe runtime publish path"):
+        gzip_file(path)
+
+    assert raced is True
+    assert runtime_dir.is_symlink()
+    assert (moved_runtime_dir / path.name).read_text(encoding="utf-8") == "old log\n"
+    assert not (moved_runtime_dir / target.name).exists()
+    assert not list(moved_runtime_dir.glob(".*.tmp"))
 
 
 def test_gzip_file_preserves_source_replaced_before_cleanup(tmp_path, monkeypatch):
