@@ -520,7 +520,12 @@ def _add_regular_file_to_archive(
     if expected_stat is not None and not _same_file_stat(archived_stat, expected_stat):
         _close_fd_quietly(fd)
         return None
-    with os.fdopen(fd, "rb") as source:
+    try:
+        source_handle = os.fdopen(fd, "rb")
+    except OSError:
+        _close_fd_quietly(fd)
+        return None
+    with source_handle as source:
         try:
             tarinfo = archive.gettarinfo(arcname=path.name, fileobj=source)
         except OSError:

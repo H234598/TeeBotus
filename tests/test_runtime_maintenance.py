@@ -1200,6 +1200,39 @@ def test_runtime_maintenance_skips_archive_files_that_disappear_before_open(tmp_
     assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
 
 
+def test_runtime_maintenance_closes_archive_source_fd_when_fdopen_fails(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    real_fdopen = os.fdopen
+    real_close = os.close
+    source_fd: int | None = None
+    closed_fds: set[int] = set()
+
+    def fail_archive_source_fdopen(fd, mode="r", *args, **kwargs):
+        nonlocal source_fd
+        if mode == "rb":
+            source_fd = fd
+            raise OSError("archive source fdopen failed")
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    def recording_close(fd):
+        closed_fds.add(fd)
+        return real_close(fd)
+
+    monkeypatch.setattr(os, "fdopen", fail_archive_source_fdopen)
+    monkeypatch.setattr(os, "close", recording_close)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert source_fd is not None
+    assert source_fd in closed_fds
+    assert path.read_bytes() == b"compressed-ish"
+    assert not list((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+
+
 def test_runtime_maintenance_skips_archive_files_replaced_before_open(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60
