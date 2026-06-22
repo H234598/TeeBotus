@@ -186,6 +186,7 @@ def _install_stream_tee(stream: object, secondary: object, target: Path) -> obje
     if _stream_tee_target(stream) == target:
         return stream
     if isinstance(stream, TeeStream):
+        _close_quietly(stream.secondary)
         stream = stream.primary
     return TeeStream(stream, secondary, target)
 
@@ -324,6 +325,15 @@ def _unlink_quietly(path: Path) -> None:
         path.unlink()
     except OSError:
         pass
+
+
+def _close_quietly(stream: object) -> None:
+    close = getattr(stream, "close", None)
+    if callable(close):
+        try:
+            close()
+        except (OSError, ValueError):
+            pass
 
 
 def _is_temporary_runtime_file(path: Path) -> bool:

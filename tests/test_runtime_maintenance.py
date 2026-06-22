@@ -294,6 +294,8 @@ def test_install_stdio_tee_retargets_existing_tee_without_writing_old_target(tmp
     new_path = tmp_path / "new-stdio.log"
 
     install_stdio_tee(old_path)
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
     install_stdio_tee(new_path)
     print("new target only")
     sys.stdout.flush()
@@ -301,6 +303,10 @@ def test_install_stdio_tee_retargets_existing_tee_without_writing_old_target(tmp
 
     assert old_path.read_text(encoding="utf-8") == ""
     assert "new target only" in new_path.read_text(encoding="utf-8")
+    assert isinstance(old_stdout, TeeStream)
+    assert isinstance(old_stderr, TeeStream)
+    assert old_stdout.secondary.closed
+    assert old_stderr.secondary.closed
 
 
 def test_tee_stream_keeps_primary_stream_working_when_secondary_fails():
