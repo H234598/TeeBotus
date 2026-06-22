@@ -515,7 +515,10 @@ def test_litellm_text_client_keeps_explicit_cross_provider_fallback_prefixes(mon
 
 def test_litellm_text_client_redacts_provider_errors_from_logs_and_exception(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     def completion(**_kwargs):
-        raise RuntimeError("provider rejected api_key=hf-test-secret and bearer sk-test-secret123456")
+        raise RuntimeError(
+            "provider rejected api_key=hf-test-secret bearer sk-test-secret123456 "
+            "api_key_env=GEMINI_API_KEY fallback_api_key_env=plain-secret"
+        )
 
     monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
     client = LiteLLMTextClient(
@@ -534,8 +537,11 @@ def test_litellm_text_client_redacts_provider_errors_from_logs_and_exception(mon
 
     assert "provider=huggingface" in combined
     assert "model=huggingface/meta-llama/Llama-3.1-8B-Instruct" in combined
+    assert "api_key_env=GEMINI_API_KEY" in combined
     assert "hf-test-secret" not in combined
     assert "sk-test-secret123456" not in combined
+    assert "plain-secret" not in combined
+    assert "fallback_api_key_env=<redacted>" in combined
     assert "<redacted>" in combined
 
 

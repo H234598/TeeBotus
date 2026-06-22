@@ -553,7 +553,7 @@ def _redact_litellm_error(exc: Exception, kwargs: dict[str, object]) -> str:
     if api_key:
         text = text.replace(api_key, "<redacted>")
     text = URL_CREDENTIAL_RE.sub(lambda match: _redact_url_credentials(match.group(0)), text)
-    text = SECRET_ASSIGNMENT_RE.sub(lambda match: f"{match.group(1)}=<redacted>", text)
+    text = SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, text)
     # Common provider-key shapes. Keep this conservative so normal diagnostics
     # remain readable while accidental secrets are removed.
     text = re.sub(r"\bsk-[A-Za-z0-9_-]{8,}\b", "sk-<redacted>", text)
@@ -571,6 +571,23 @@ def _redact_litellm_error(exc: Exception, kwargs: dict[str, object]) -> str:
 def _redact_url_credentials(value: str) -> str:
     text = str(value or "")
     return re.sub(r"(?<=://)[^\s/@:=]+:[^\s/@]+@", "<redacted>@", text)
+
+
+def _redact_secret_assignment(match: re.Match[str]) -> str:
+    key = match.group(1)
+    value = match.group(2)
+    if _secret_assignment_key_is_env_name(key) and _looks_like_env_var_name(value):
+        return match.group(0)
+    return f"{key}=<redacted>"
+
+
+def _secret_assignment_key_is_env_name(key: str) -> bool:
+    normalized = re.sub(r"[\s-]+", "_", str(key or "").strip().casefold())
+    return normalized.endswith("_env")
+
+
+def _looks_like_env_var_name(value: str) -> bool:
+    return bool(re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", str(value or "").strip().strip("\"'`")))
 
 
 def _extract_litellm_text(response: object) -> str:
