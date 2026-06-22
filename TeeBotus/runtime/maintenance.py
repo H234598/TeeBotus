@@ -366,7 +366,7 @@ def maintain_runtime_directory(
     compress_after_seconds: int = COMPRESS_AFTER_SECONDS,
     monthly_archive_after_seconds: int = MONTHLY_ARCHIVE_AFTER_SECONDS,
 ) -> None:
-    runtime_path = Path(runtime_path)
+    runtime_path = _runtime_base_dir(runtime_path)
     if _has_symlink_parent(runtime_path):
         return
     try:

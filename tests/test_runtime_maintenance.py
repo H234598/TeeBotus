@@ -284,6 +284,26 @@ def test_runtime_maintenance_accepts_string_path(tmp_path):
     assert not path.exists()
 
 
+def test_runtime_maintenance_empty_string_uses_default_runtime_dir(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    now = time.time()
+    cwd_log = tmp_path / "teebotus-production.log.2026-06-01"
+    cwd_log.write_text("do not touch\n", encoding="utf-8")
+    os.utime(cwd_log, (now - 8 * 24 * 60 * 60, now - 8 * 24 * 60 * 60))
+    runtime_path = runtime_dir()
+    runtime_path.mkdir(parents=True)
+    runtime_log = runtime_path / "teebotus-production.log.2026-06-01"
+    runtime_log.write_text("old log\n", encoding="utf-8")
+    os.utime(runtime_log, (now - 8 * 24 * 60 * 60, now - 8 * 24 * 60 * 60))
+
+    maintain_runtime_directory("", now=now)
+
+    assert cwd_log.read_text(encoding="utf-8") == "do not touch\n"
+    assert not (tmp_path / f"{cwd_log.name}.gz").exists()
+    assert not runtime_log.exists()
+    assert (runtime_path / f"{runtime_log.name}.gz").exists()
+
+
 def test_runtime_maintenance_refuses_symlinked_runtime_root(tmp_path):
     now = time.time()
     old_mtime = now - 8 * 24 * 60 * 60
