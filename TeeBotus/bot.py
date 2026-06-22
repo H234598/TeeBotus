@@ -1841,19 +1841,37 @@ def _sanitize_status_text(value: object) -> str:
     text = re.sub(r"\bgsk_[A-Za-z0-9]{8,}\b", "gsk_<redacted>", text)
     text = re.sub(r"\bAIza[0-9A-Za-z_-]{16,}\b", "AIza<redacted>", text)
     text = _sanitize_status_url_credentials(text)
+    text = _status_quoted_secret_assignment_pattern.sub(_status_quoted_secret_assignment_replacement, text)
     text = _status_secret_assignment_pattern.sub(_status_secret_assignment_replacement, text)
     text = _status_secret_assignment_fragment_pattern.sub(_status_secret_assignment_fragment_replacement, text)
     return text.replace("\r", " ").replace("\n", " ")
 
 
+_status_sensitive_assignment_key_pattern = (
+    r"(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|"
+    r"refresh[_-]?token|client[_-]?secret|token|secret|password)"
+)
+_status_secret_assignment_value_pattern = (
+    r"<redacted(?:-secret)?>|\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|"
+    r"(?:(?!\s+[A-Za-z_][A-Za-z0-9._-]*\s*[=:])[^,;\r\n)\]}>])+"
+)
+_status_secret_assignment_fragment_value_pattern = (
+    r"<redacted(?:-secret)?>|\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|"
+    r"(?:(?!\s+[A-Za-z_][A-Za-z0-9._-]*\s*[=:])[^,;\r\n)&#\]}>])+"
+)
 _status_secret_assignment_pattern = re.compile(
-    r"(?<!\S)([A-Za-z0-9._-]{0,120}(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
-    r"[A-Za-z0-9._-]{0,120})\s*([:=])\s*([^,\s)]{1,1024})",
+    rf"(?<!\S)([A-Za-z0-9._-]{{0,120}}{_status_sensitive_assignment_key_pattern}[A-Za-z0-9._-]{{0,120}})\s*([:=])\s*"
+    rf"({_status_secret_assignment_value_pattern})",
     re.IGNORECASE,
 )
 _status_secret_assignment_fragment_pattern = re.compile(
-    r"([\s=;,])([A-Za-z0-9._-]{0,120}(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
-    r"[A-Za-z0-9._-]{0,120})\s*([:=])\s*([^,\s)]{1,1024})",
+    rf"([\s=;,&?#(\[<{{])([A-Za-z0-9._-]{{0,120}}{_status_sensitive_assignment_key_pattern}[A-Za-z0-9._-]{{0,120}})\s*([:=])\s*"
+    rf"({_status_secret_assignment_fragment_value_pattern})",
+    re.IGNORECASE,
+)
+_status_quoted_secret_assignment_pattern = re.compile(
+    rf"(^|[\s=;,&?#(\[<{{])([\"'])([A-Za-z0-9._-]{{0,120}}{_status_sensitive_assignment_key_pattern}[A-Za-z0-9._-]{{0,120}})\2(\s*[=:]\s*)"
+    rf"({_status_secret_assignment_fragment_value_pattern})",
     re.IGNORECASE,
 )
 
@@ -1928,19 +1946,43 @@ def _status_secret_assignment_fragment_replacement(match: re.Match[str]) -> str:
     key = str(match.group(2) or "")
     separator = str(match.group(3) or "=")
     value = str(match.group(4) or "")
-    return prefix + _status_secret_assignment_text(key, separator, value, original=match.group(0))
+    original = match.group(0)[len(prefix) :]
+    return prefix + _status_secret_assignment_text(key, separator, value, original=original)
+
+
+def _status_quoted_secret_assignment_replacement(match: re.Match[str]) -> str:
+    prefix = str(match.group(1) or "")
+    key_quote = str(match.group(2) or '"')
+    key = str(match.group(3) or "")
+    separator = str(match.group(4) or ":")
+    value = str(match.group(5) or "")
+    original = match.group(0)[len(prefix) :]
+    redacted = _status_secret_assignment_text(key, separator, value, original=original)
+    if redacted == original:
+        return match.group(0)
+    raw_value = value.strip()
+    value_quote = raw_value[:1] if raw_value[:1] in {"'", '"', "`"} and raw_value[-1:] == raw_value[:1] else ""
+    rendered_value = f"{value_quote}<redacted>{value_quote}" if value_quote else "<redacted>"
+    return f"{prefix}{key_quote}{key}{key_quote}{separator}{rendered_value}"
 
 
 def _status_secret_assignment_text(key: str, separator: str, value: str, *, original: str) -> str:
-    _ = original
-    normalized_key = key.strip().casefold()
-    if normalized_key.endswith(("_env", "_ring", "_instances", "_tokens")):
-        return f"{key}{separator}{value}"
-    normalized_value = value.strip().strip("\"'`").casefold()
+    normalized_key = key.strip().casefold().replace("-", "_").replace(" ", "_")
+    raw_value = value.strip()
+    unquoted_value = raw_value.strip("\"'`")
+    normalized_value = unquoted_value.casefold()
     if normalized_value in {"configured", "none", "missing", "redacted", "<redacted>", "<redacted-secret>"}:
-        return f"{key}{separator}{value}"
+        return original
+    if normalized_key.endswith("_env") and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", unquoted_value):
+        return original
+    if normalized_key in {"api_key_ring", "gemini_api_key_ring", "api_key_instances", "max_output_tokens", "input_tokens", "output_tokens", "reasoning_tokens"} and (
+        unquoted_value.isdigit() or re.fullmatch(r"\d+/\d+", unquoted_value)
+    ):
+        return original
+    if normalized_key in {"tokens", "token_usage", "costs", "limits", "free_tier_guard"}:
+        return original
     if not value:
-        return f"{key}{separator}{value}"
+        return original
     return f"{key}{separator}<redacted>"
 
 
@@ -1955,7 +1997,8 @@ def _sanitize_status_url_param_secrets(value: str) -> str:
         prefix = str(match.group(1) or "")
         key = str(match.group(2) or "")
         secret_value = str(match.group(3) or "")
-        return prefix + _status_secret_assignment_text(key, "=", secret_value, original=match.group(0))
+        original = match.group(0)[len(prefix) :]
+        return prefix + _status_secret_assignment_text(key, "=", secret_value, original=original)
 
     return _status_url_secret_param_pattern.sub(replace, value)
 

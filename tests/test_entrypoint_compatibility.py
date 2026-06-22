@@ -779,6 +779,40 @@ def test_runtime_status_text_redacts_url_query_and_fragment_secrets() -> None:
     assert "target=https://<redacted>@example.test/path?api_key=<redacted>&ok=1&api_key_env=GEMINI_API_KEY#access_token=<redacted>;token=configured" in text
 
 
+def test_runtime_status_text_redacts_structured_secret_assignments() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    text = bot._sanitize_status_text(
+        "api_key=\"plain secret value\" password='another secret phrase' bearer_token=`third secret value` "
+        "refresh_tokens=multi word token max_output_tokens=700 tokens=provider_usage_response "
+        "message=(client_secret=structured-secret) details=[api_key=\"bracket secret value\"] "
+        "meta={password=curly-secret} diagnostic_json={\"api_key\":\"json-secret-value\",\"api_key_env\":\"GEMINI_API_KEY\"}"
+    )
+
+    for leaked in (
+        "plain secret value",
+        "another secret phrase",
+        "third secret value",
+        "multi word token",
+        "structured-secret",
+        "bracket secret value",
+        "curly-secret",
+        "json-secret-value",
+    ):
+        assert leaked not in text
+    assert "api_key=<redacted>" in text
+    assert "password=<redacted>" in text
+    assert "bearer_token=<redacted>" in text
+    assert "refresh_tokens=<redacted>" in text
+    assert "message=(client_secret=<redacted>)" in text
+    assert "details=[api_key=<redacted>]" in text
+    assert "meta={password=<redacted>}" in text
+    assert '"api_key":"<redacted>"' in text
+    assert '"api_key_env":"GEMINI_API_KEY"' in text
+    assert "max_output_tokens=700" in text
+    assert "tokens=provider_usage_response" in text
+
+
 def test_runtime_status_admin_notify_sanitizes_report_lines() -> None:
     bot = importlib.import_module("TeeBotus.bot")
 
