@@ -228,7 +228,10 @@ def rotate_runtime_text_file_if_needed(path: Path, *, max_bytes: int = MAX_RUNTI
     if rotated is None:
         return None
     _unlink_if_same_file(path, source_stat)
-    return gzip_file(rotated, expected_stat=source_stat)
+    try:
+        return gzip_file(rotated, expected_stat=source_stat)
+    except OSError:
+        return rotated
 
 
 def maintain_runtime_directory(
