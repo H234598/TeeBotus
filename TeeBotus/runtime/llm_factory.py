@@ -322,7 +322,10 @@ def _build_route_client(
             provider=route.provider,
             model=route.model,
             fallback_models=resolved_fallback_models,
-            explicit_service_tier=service_tier or route.service_tier or instructions.llm_service_tier,
+            explicit_service_tier=service_tier
+            or route.service_tier
+            or route.fallback_service_tier
+            or instructions.llm_service_tier,
         ),
         use_instruction_fallback_models=False,
         env=source,
@@ -464,6 +467,7 @@ def _offloaded_route(route: LLMRoute, *, env: Mapping[str, str], instance_name: 
         fallback_model=route.fallback_model,
         fallback_api_key_env=route.fallback_api_key_env,
         fallback_base_url=route.fallback_base_url,
+        fallback_service_tier=route.fallback_service_tier,
     )
 
 

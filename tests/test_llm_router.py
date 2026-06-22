@@ -192,6 +192,7 @@ def test_runtime_route_client_uses_gemini_key_ring_for_gemini_fallback(monkeypat
             fallback_profile_name="gemini_flash_stateful",
             fallback_model="gemini/gemini-3.5-flash",
             fallback_api_key_env="GEMINI_API_KEY",
+            fallback_service_tier="flex",
         ),
     )
 
@@ -205,7 +206,6 @@ def test_runtime_route_client_uses_gemini_key_ring_for_gemini_fallback(monkeypat
             "GEMINI_API_KEY": "single-gemini-key",
             "GEMINI_API_KEYS_ACCOUNT_1": "a1,a2",
             "GEMINI_API_KEYS_ACCOUNT_2": "b1",
-            "TEEBOTUS_GEMINI_SERVICE_TIER": "flex",
         },
     )
 
@@ -296,7 +296,13 @@ def test_route_selection_blocks_remote_fallback_by_default() -> None:
 def test_route_selection_can_enable_explicit_remote_fallback() -> None:
     profiles = {
         "local_ollama": LLMProfile("local_ollama", "litellm", "ollama_chat/llama3.1:8b", "http://127.0.0.1:11434"),
-        "groq_fast": LLMProfile("groq_fast", "litellm", "groq/llama-3.1-8b-instant", api_key_env="GROQ_API_KEY"),
+        "groq_fast": LLMProfile(
+            "groq_fast",
+            "litellm",
+            "groq/llama-3.1-8b-instant",
+            api_key_env="GROQ_API_KEY",
+            service_tier="flex",
+        ),
     }
     routing = {
         "structured_decision": LLMRoutingRule(
@@ -317,6 +323,7 @@ def test_route_selection_can_enable_explicit_remote_fallback() -> None:
     assert route.fallback_models == ("groq/llama-3.1-8b-instant",)
     assert route.fallback_api_key_env == "GROQ_API_KEY"
     assert route.fallback_base_url == ""
+    assert route.fallback_service_tier == "flex"
 
 
 def test_route_selection_keeps_local_fallback_base_url() -> None:
@@ -513,6 +520,7 @@ def test_profiled_text_client_uses_gemini_key_ring_for_gemini_fallback() -> None
             "litellm",
             "gemini/gemini-3.5-flash",
             api_key_env="GEMINI_API_KEY",
+            service_tier="flex",
         ),
     }
     routing = {"hard_reasoning": LLMRoutingRule("hard_reasoning", "openai_premium", "gemini_flash")}
@@ -529,7 +537,6 @@ def test_profiled_text_client_uses_gemini_key_ring_for_gemini_fallback() -> None
             "GEMINI_API_KEY": "single-gemini-key",
             "GEMINI_API_KEYS_ACCOUNT_1": "a1,a2",
             "GEMINI_API_KEYS_ACCOUNT_2": "b1",
-            "TEEBOTUS_GEMINI_SERVICE_TIER": "flex",
         },
     )
 
