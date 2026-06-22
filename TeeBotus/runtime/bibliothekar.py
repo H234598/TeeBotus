@@ -365,7 +365,7 @@ def _read_harvest_source_metadata(library_dir: Path) -> dict[str, dict[str, Any]
             continue
         sha256 = str(row.get("sha256") or "").strip()
         stored_path = str(row.get("stored_path") or "").strip()
-        if not sha256 or not stored_path or row.get("accepted_for_ingest") is not True:
+        if not sha256 or not stored_path or not _coerce_bool(row.get("accepted_for_ingest")):
             continue
         accepted_by_key[(sha256, stored_path)] = row
         accepted_by_hash[sha256] = row

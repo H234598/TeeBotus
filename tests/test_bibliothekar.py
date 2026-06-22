@@ -290,7 +290,7 @@ def test_bibliothekar_harvest_manifest_hash_fallback_uses_latest_accepted_review
     assert chunk["source_quality_reason"] == "newer weak review"
 
 
-def test_bibliothekar_harvest_manifest_string_false_review_flag(tmp_path):
+def test_bibliothekar_harvest_manifest_string_bool_flags(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     book_dir = library_dir / "books"
     book_dir.mkdir(parents=True)
@@ -301,7 +301,7 @@ def test_bibliothekar_harvest_manifest_string_false_review_flag(tmp_path):
     manifest_path = library_dir / "harvest_manifest.jsonl"
     rows = [
         {
-            "accepted_for_ingest": True,
+            "accepted_for_ingest": "true",
             "decision": {
                 "confidence": 0.8,
                 "reason": "usable source",
@@ -329,6 +329,7 @@ def test_bibliothekar_harvest_manifest_string_false_review_flag(tmp_path):
     store.rebuild()
     payload = json.loads(store.select("Therapie", max_chunks=1).prompt_text)
 
+    assert payload["selected_library_chunks"][0]["title"] == "Therapiequelle"
     assert payload["selected_library_chunks"][0]["source_requires_human_review"] is False
 
 

@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from TeeBotus.runtime.bibliothekar import _is_allowed_library_source_path
+from TeeBotus.runtime.bibliothekar import _coerce_bool, _is_allowed_library_source_path
 from TeeBotus.runtime.source_quality import SourceQualityInput, SourceQualityPipeline, SourceQualityReport, SourceRoute
 
 
@@ -170,7 +170,7 @@ class SourceHarvester:
                 continue
             if row.get("sha256") != sha256 or not _same_path(row.get("stored_path"), staged_path):
                 continue
-            if row.get("route") == "accepted" and row.get("accepted_for_ingest") is True:
+            if row.get("route") == "accepted" and _coerce_bool(row.get("accepted_for_ingest")):
                 return True
         return False
 

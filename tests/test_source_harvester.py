@@ -75,6 +75,35 @@ def test_source_harvester_promotes_accepted_source_before_indexing(tmp_path):
     assert rows[-1]["stored_path"] == str(promoted.promoted_path)
 
 
+def test_source_harvester_promotes_manifest_string_true_acceptance(tmp_path):
+    instances_dir = tmp_path / "instances"
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", instances_dir)
+    harvester = SourceHarvester(
+        store.library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+    harvest = harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+    rows = [json.loads(line) for line in harvester.manifest_path.read_text(encoding="utf-8").splitlines()]
+    rows[0]["accepted_for_ingest"] = "true"
+    harvester.manifest_path.write_text(
+        "\n".join(json.dumps(row, ensure_ascii=False, sort_keys=True) for row in rows) + "\n",
+        encoding="utf-8",
+    )
+
+    promoted = harvester.promote_accepted(harvest.stored_path)
+
+    assert promoted.promoted_path.exists()
+    assert promoted.promoted_path.parent == store.library_dir / "books"
+
+
 def test_source_harvester_rejects_absolute_promote_destination_dir(tmp_path):
     source = tmp_path / "download" / "therapie.txt"
     source.parent.mkdir()
