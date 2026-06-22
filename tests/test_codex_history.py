@@ -30,6 +30,7 @@ from TeeBotus.admin.codex_history import (
     generate_codex_history_strategic_analysis,
     _safe_output_path,
     _safe_repo_root,
+    _render_dispatch_report,
     import_codex_session_file,
     import_codex_session_roots,
     main as codex_history_main,
@@ -1197,6 +1198,23 @@ def test_codex_history_dispatch_dry_run_does_not_mutate_outbox(tmp_path: Path) -
     assert store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID) == []
 
 
+def test_render_dispatch_report_formats_empty_status_counts_as_none() -> None:
+    rendered = _render_dispatch_report(
+        {
+            "dry_run": False,
+            "instances": [
+                {
+                    "instance": "TeeBotus_Logger",
+                    "status_counts": {},
+                    "items": [],
+                }
+            ],
+        }
+    )
+
+    assert "statuses: none" in rendered
+
+
 def test_codex_history_dispatch_cli_defaults_to_limit_50(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -1992,6 +2010,33 @@ def test_render_watch_report_omits_duplicate_import_details_but_keeps_counts() -
     assert "import: status=duplicate" not in rendered
     assert "import: status=imported reason= summary=v1.0.0 #0002" in rendered
     assert "import: status=skipped reason=missing_final_text summary=" in rendered
+
+
+def test_render_watch_report_formats_empty_dispatch_status_counts_as_none() -> None:
+    rendered = _render_watch_report(
+        {
+            "mode": "once",
+            "instances": [
+                {
+                    "instance": "TeeBotus_Logger",
+                    "status_counts": {"duplicate": 1},
+                    "items": [],
+                    "dispatch": {
+                        "instances": [
+                            {
+                                "ok": True,
+                                "dry_run": False,
+                                "status_counts": {},
+                                "items": [],
+                            }
+                        ]
+                    },
+                }
+            ],
+        }
+    )
+
+    assert "dispatch: ok=True dry_run=False statuses=none" in rendered
 
 
 def test_codex_history_watch_cli_can_run_bounded_poll_loop(tmp_path: Path, capsys) -> None:

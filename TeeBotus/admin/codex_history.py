@@ -3598,8 +3598,7 @@ def _render_dispatch_report(payload: Mapping[str, Any]) -> str:
         lines.append("")
         lines.append(f"Instance: {instance.get('instance', '')}")
         status_counts = instance.get("status_counts", {})
-        if isinstance(status_counts, Mapping):
-            lines.append("  statuses: " + ", ".join(f"{key}={value}" for key, value in sorted(status_counts.items())))
+        lines.append("  statuses: " + _format_status_counts(status_counts))
         for item in instance.get("items", []):
             if not isinstance(item, Mapping):
                 continue
@@ -3897,7 +3896,7 @@ def _render_watch_report(payload: Mapping[str, Any]) -> str:
                         "  dispatch: "
                         f"ok={bool(dispatch_instance.get('ok', False))} "
                         f"dry_run={bool(dispatch_instance.get('dry_run', False))} "
-                        f"statuses={','.join(f'{key}={value}' for key, value in sorted(dispatch_counts.items()))}"
+                        f"statuses={_format_status_counts(dispatch_counts)}"
                     )
                     for item in dispatch_instance.get("items", []) or []:
                         if not isinstance(item, Mapping):
