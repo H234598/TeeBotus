@@ -146,14 +146,22 @@ class TeeStream:
         primary_write = getattr(self.primary, "write")
         secondary_write = getattr(self.secondary, "write")
         primary_write(text)
-        secondary_write(text)
+        try:
+            secondary_write(text)
+        except OSError:
+            pass
         return len(text)
 
     def flush(self) -> None:
-        for stream in (self.primary, self.secondary):
-            flush = getattr(stream, "flush", None)
-            if callable(flush):
-                flush()
+        primary_flush = getattr(self.primary, "flush", None)
+        if callable(primary_flush):
+            primary_flush()
+        secondary_flush = getattr(self.secondary, "flush", None)
+        if callable(secondary_flush):
+            try:
+                secondary_flush()
+            except OSError:
+                pass
 
     def fileno(self) -> int:
         fileno = getattr(self.primary, "fileno")

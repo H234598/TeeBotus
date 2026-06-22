@@ -17,6 +17,7 @@ from TeeBotus.runtime.maintenance import (
     DEBUG_ALL,
     RuntimeTimedRotatingFileHandler,
     STDIO_LOG_FILENAME,
+    TeeStream,
     configure_runtime_logging,
     gzip_file,
     maintain_runtime_directory,
@@ -262,3 +263,20 @@ def test_configure_runtime_logging_can_tee_stdio_to_runtime_log(tmp_path, monkey
     stdio_log = tmp_path / STDIO_LOG_FILENAME
     assert "stdout probe" in stdio_log.read_text(encoding="utf-8")
     assert "stderr probe" in stdio_log.read_text(encoding="utf-8")
+
+
+def test_tee_stream_keeps_primary_stream_working_when_secondary_fails():
+    class FailingSecondary(io.StringIO):
+        def write(self, _text):
+            raise OSError("secondary write failed")
+
+        def flush(self):
+            raise OSError("secondary flush failed")
+
+    primary = io.StringIO()
+    tee = TeeStream(primary, FailingSecondary(), Path("secondary.log"))
+
+    assert tee.write("probe") == 5
+    tee.flush()
+
+    assert primary.getvalue() == "probe"
