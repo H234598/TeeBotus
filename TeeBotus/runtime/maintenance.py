@@ -95,7 +95,7 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | str
     if runtime_directory_ready and not stdout_targets_log:
         try:
             file_handler = RuntimeTimedRotatingFileHandler(log_path)
-        except (OSError, ValueError):
+        except Exception:
             file_handler = None
         if file_handler is not None:
             file_handler.setFormatter(formatter)
@@ -164,7 +164,7 @@ def install_stdio_tee(path: Path | str) -> None:
         return
     try:
         handle = _open_append_text_no_follow(target_path)
-    except (OSError, ValueError):
+    except Exception:
         return
     if handle is None:
         return

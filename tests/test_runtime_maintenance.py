@@ -1925,6 +1925,28 @@ def test_configure_runtime_logging_continues_when_file_handler_fdopen_fails(tmp_
     assert "stream only" in sys.stdout.getvalue()
 
 
+def test_configure_runtime_logging_continues_when_file_handler_fdopen_raises_runtime_error(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    real_fdopen = os.fdopen
+
+    def fail_runtime_log_fdopen(fd, mode="r", *args, **kwargs):
+        if mode == "a":
+            raise RuntimeError("runtime log fdopen failed")
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    monkeypatch.setattr(os, "fdopen", fail_runtime_log_fdopen)
+
+    configure_runtime_logging(base_dir=tmp_path)
+    logging.getLogger("TeeBotus.test").warning("stream only")
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    handlers = logging.getLogger().handlers
+    assert len(handlers) == 1
+    assert not any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
+    assert "stream only" in sys.stdout.getvalue()
+
+
 def test_configure_runtime_logging_refuses_symlinked_runtime_directory(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdout", io.StringIO())
     external_runtime_dir = tmp_path / "external-runtime"
@@ -2280,6 +2302,30 @@ def test_install_stdio_tee_skips_when_target_fdopen_fails(tmp_path, monkeypatch)
     def fail_stdio_fdopen(fd, mode="r", *args, **kwargs):
         if mode == "a":
             raise OSError("stdio fdopen failed")
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    monkeypatch.setattr(os, "fdopen", fail_stdio_fdopen)
+
+    install_stdio_tee(path)
+    print("stdout only")
+    sys.stdout.flush()
+    sys.stderr.flush()
+
+    assert not isinstance(sys.stdout, TeeStream)
+    assert not isinstance(sys.stderr, TeeStream)
+
+
+def test_install_stdio_tee_skips_when_target_fdopen_raises_runtime_error(tmp_path, monkeypatch):
+    primary_stdout = io.StringIO()
+    primary_stderr = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", primary_stdout)
+    monkeypatch.setattr(sys, "stderr", primary_stderr)
+    path = tmp_path / "runtime" / STDIO_LOG_FILENAME
+    real_fdopen = os.fdopen
+
+    def fail_stdio_fdopen(fd, mode="r", *args, **kwargs):
+        if mode == "a":
+            raise RuntimeError("stdio fdopen failed")
         return real_fdopen(fd, mode, *args, **kwargs)
 
     monkeypatch.setattr(os, "fdopen", fail_stdio_fdopen)
