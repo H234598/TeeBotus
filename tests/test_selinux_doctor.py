@@ -182,3 +182,29 @@ def test_selinux_doctor_cli_json_outputs_report(monkeypatch, capsys) -> None:
 
     assert result == 0
     assert '"name": "my-systemd"' in capsys.readouterr().out
+
+
+def test_selinux_doctor_cli_writes_json_output_file(monkeypatch, tmp_path, capsys) -> None:
+    def fake_report(**_kwargs):
+        return collect_selinux_report(
+            runner=lambda command: completed(
+                command,
+                stdout=(
+                    "Enforcing\n"
+                    if tuple(command) == ("getenforce",)
+                    else ""
+                    if tuple(command) == ("semodule", "-l")
+                    else "LoadState=loaded\nActiveState=active\nSubState=running\n"
+                ),
+            )
+        )
+
+    monkeypatch.setattr("TeeBotus.selinux_doctor.collect_selinux_report", fake_report)
+    output_path = tmp_path / "selinux-report.json"
+
+    result = main(["--format", "json", "--output", str(output_path)])
+
+    assert result == 0
+    stdout = capsys.readouterr().out
+    assert '"enforcing": "Enforcing"' in stdout
+    assert '"enforcing": "Enforcing"' in output_path.read_text(encoding="utf-8")

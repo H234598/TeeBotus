@@ -21,6 +21,12 @@ Ohne Root ist die Ausgabe absichtlich defensiv: Der SELinux-Modulstore ist auf F
 sudo teebotus-selinux-doctor
 ```
 
+Wenn der Root-Lauf fuer eine spaetere Pruefung belegbar sein soll:
+
+```bash
+sudo teebotus-selinux-doctor --format json --output /home/teladi/Downloads/teebotus-selinux-doctor-root.json
+```
+
 Verdächtige Panikmodule werden nur gemeldet, nicht entfernt. Entfernen ist ein expliziter Schritt:
 
 ```bash

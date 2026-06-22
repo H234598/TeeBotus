@@ -6,6 +6,7 @@ import re
 import subprocess
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any
 
 
@@ -58,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--module", action="append", default=[], help="Exact SELinux module name to remove with --apply; repeatable.")
     parser.add_argument("--remove-suspect", action="store_true", help="With --apply, remove modules matching the narrow panic-systemd pattern.")
     parser.add_argument("--apply", action="store_true", help="Actually run semodule -r for selected modules. Default is dry-run.")
+    parser.add_argument("--output", help="Optional file path for writing the rendered report.")
     args = parser.parse_args(argv)
 
     try:
@@ -71,9 +73,12 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
     if args.format == "json":
-        print(json.dumps(asdict(report), ensure_ascii=False, indent=2))
+        output = json.dumps(asdict(report), ensure_ascii=False, indent=2)
     else:
-        print(render_selinux_report(report))
+        output = render_selinux_report(report)
+    print(output)
+    if args.output:
+        _write_output(Path(args.output), output)
     return 0 if report.ok else 1
 
 
@@ -292,6 +297,15 @@ def _validate_selinux_module_name(value: object) -> str:
     if not SELINUX_MODULE_NAME_RE.fullmatch(normalized):
         raise ValueError(f"invalid SELinux module name: {normalized!r}")
     return normalized
+
+
+def _write_output(path: Path, output: str) -> None:
+    target = path.expanduser()
+    if not target.parent.exists():
+        raise FileNotFoundError(f"output parent does not exist: {target.parent}")
+    if target.exists() and target.is_dir():
+        raise IsADirectoryError(f"output path is a directory: {target}")
+    target.write_text(output + "\n", encoding="utf-8")
 
 
 __all__ = [
