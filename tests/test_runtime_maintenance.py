@@ -251,6 +251,21 @@ def test_rotate_runtime_text_file_preserves_symlinked_file(tmp_path):
     assert not list(tmp_path.glob("Security_Events.jsonl.*.gz"))
 
 
+def test_rotate_runtime_text_file_refuses_symlinked_parent(tmp_path):
+    external_parent = tmp_path / "external-parent"
+    external_parent.mkdir()
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.symlink_to(external_parent, target_is_directory=True)
+    target = external_parent / "Security_Events.jsonl"
+    target.write_text("0123456789\n", encoding="utf-8")
+
+    assert rotate_runtime_text_file_if_needed(linked_parent / target.name, max_bytes=4) is None
+
+    assert linked_parent.is_symlink()
+    assert target.read_text(encoding="utf-8") == "0123456789\n"
+    assert not list(external_parent.glob("Security_Events.jsonl.*"))
+
+
 def test_rotate_runtime_text_file_ignores_non_file_paths(tmp_path):
     directory = tmp_path / "Security_Events.jsonl"
     directory.mkdir()
@@ -563,6 +578,22 @@ def test_gzip_file_preserves_symlinked_runtime_file(tmp_path):
     assert symlink.is_symlink()
     assert target.read_text(encoding="utf-8") == "do not copy\n"
     assert not (tmp_path / f"{symlink.name}.gz").exists()
+
+
+def test_gzip_file_refuses_symlinked_parent(tmp_path):
+    external_parent = tmp_path / "external-parent"
+    external_parent.mkdir()
+    linked_parent = tmp_path / "linked-parent"
+    linked_parent.symlink_to(external_parent, target_is_directory=True)
+    target = external_parent / "teebotus-production.log.2026-06-01"
+    target.write_text("old log\n", encoding="utf-8")
+    linked_target = linked_parent / target.name
+
+    assert gzip_file(linked_target) == linked_target
+
+    assert linked_parent.is_symlink()
+    assert target.read_text(encoding="utf-8") == "old log\n"
+    assert not (external_parent / f"{target.name}.gz").exists()
 
 
 def test_gzip_file_accepts_string_path(tmp_path):

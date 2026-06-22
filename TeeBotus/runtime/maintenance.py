@@ -337,6 +337,8 @@ def _stdout_targets_path(path: Path) -> bool:
 
 def rotate_runtime_text_file_if_needed(path: Path | str, *, max_bytes: int = MAX_RUNTIME_TEXT_FILE_BYTES) -> Path | None:
     path = Path(path)
+    if _has_symlink_parent(path):
+        return None
     if path.name in ACTIVE_RUNTIME_TEXT_FILENAMES:
         return None
     if _is_compressed_runtime_file(path) or _is_temporary_runtime_file(path):
@@ -393,6 +395,8 @@ def maintain_runtime_directory(
 
 def gzip_file(path: Path | str, *, expected_stat: os.stat_result | None = None) -> Path:
     path = Path(path)
+    if _has_symlink_parent(path):
+        return path
     if path.is_symlink() or _is_compressed_runtime_file(path) or _is_temporary_runtime_file(path) or not path.is_file():
         return path
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
