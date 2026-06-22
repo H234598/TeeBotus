@@ -10,6 +10,7 @@ from typing import Any
 
 
 DEFAULT_UNIT = "teebotus-codex-history-collector.service"
+SELINUX_MODULE_NAME_RE = re.compile(r"^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$")
 PANIC_SYSTEMD_MODULE_RE = re.compile(r"^(?:my|local)[-_].*systemd(?:[-_].*)?$|^mysystemd$", re.IGNORECASE)
 BENIGN_SYSTEMD_MODULES = frozenset({"systemd", "systemd_tmpfiles", "systemd_logind", "systemd_userdbd"})
 
@@ -59,13 +60,16 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--apply", action="store_true", help="Actually run semodule -r for selected modules. Default is dry-run.")
     args = parser.parse_args(argv)
 
-    report = collect_selinux_report(
-        unit=args.unit,
-        unit_scope=args.unit_scope,
-        explicit_modules=tuple(args.module or ()),
-        remove_suspect=bool(args.remove_suspect),
-        apply=bool(args.apply),
-    )
+    try:
+        report = collect_selinux_report(
+            unit=args.unit,
+            unit_scope=args.unit_scope,
+            explicit_modules=tuple(args.module or ()),
+            remove_suspect=bool(args.remove_suspect),
+            apply=bool(args.apply),
+        )
+    except ValueError as exc:
+        parser.error(str(exc))
     if args.format == "json":
         print(json.dumps(asdict(report), ensure_ascii=False, indent=2))
     else:
@@ -267,8 +271,8 @@ def _selected_modules(
     selected: list[str] = []
     seen: set[str] = set()
     for module_name in explicit_modules:
-        normalized = str(module_name or "").strip()
-        if not normalized or normalized in seen:
+        normalized = _validate_selinux_module_name(module_name)
+        if normalized in seen:
             continue
         selected.append(normalized)
         seen.add(normalized)
@@ -279,6 +283,15 @@ def _selected_modules(
             selected.append(module.name)
             seen.add(module.name)
     return tuple(selected)
+
+
+def _validate_selinux_module_name(value: object) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        raise ValueError("SELinux module name must not be empty")
+    if not SELINUX_MODULE_NAME_RE.fullmatch(normalized):
+        raise ValueError(f"invalid SELinux module name: {normalized!r}")
+    return normalized
 
 
 __all__ = [

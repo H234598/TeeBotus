@@ -3,6 +3,8 @@ from __future__ import annotations
 import subprocess
 from collections.abc import Sequence
 
+import pytest
+
 from TeeBotus.selinux_doctor import collect_selinux_report, main, render_selinux_report
 
 
@@ -76,6 +78,24 @@ def test_selinux_doctor_explicit_module_removal_requires_apply() -> None:
     assert report.removed_modules == ()
     assert ("semodule", "-r", "custom_policy") not in calls
     assert any("Dry-run only" in note for note in report.notes)
+
+
+def test_selinux_doctor_rejects_unsafe_explicit_module_names() -> None:
+    with pytest.raises(ValueError, match="invalid SELinux module name"):
+        collect_selinux_report(explicit_modules=("--bad",), runner=lambda command: completed(command))
+
+    with pytest.raises(ValueError, match="invalid SELinux module name"):
+        collect_selinux_report(explicit_modules=("../bad",), runner=lambda command: completed(command))
+
+
+def test_selinux_doctor_cli_reports_invalid_module_without_traceback(capsys) -> None:
+    with pytest.raises(SystemExit) as exc_info:
+        main(["--module=--bad"])
+
+    assert exc_info.value.code == 2
+    captured = capsys.readouterr()
+    assert "invalid SELinux module name" in captured.err
+    assert "Traceback" not in captured.err
 
 
 def test_selinux_doctor_reports_permission_denied_module_store() -> None:
