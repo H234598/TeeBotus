@@ -214,6 +214,31 @@ def test_gzip_file_keeps_published_target_when_temporary_cleanup_fails(tmp_path,
     assert len(temporary_files) == 1
 
 
+def test_gzip_file_keeps_published_target_when_source_disappears_after_publish(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    original_unlink = Path.unlink
+    raced = False
+
+    def disappear_source_unlink(self, *_args, **_kwargs):
+        nonlocal raced
+        if self == path and not raced:
+            raced = True
+            original_unlink(self)
+            raise FileNotFoundError(self)
+        return original_unlink(self)
+
+    monkeypatch.setattr(Path, "unlink", disappear_source_unlink)
+
+    published = gzip_file(path)
+
+    assert raced is True
+    assert published.exists()
+    assert not path.exists()
+    with gzip.open(published, "rt", encoding="utf-8") as handle:
+        assert handle.read() == "old log\n"
+
+
 def test_gzip_file_removes_partial_temporary_file_on_copy_failure(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")

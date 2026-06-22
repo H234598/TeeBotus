@@ -256,7 +256,10 @@ def gzip_file(path: Path) -> Path:
     except Exception:
         _unlink_quietly(temporary)
         raise
-    path.unlink()
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        pass
     return published
 
 
