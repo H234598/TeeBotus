@@ -492,7 +492,7 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
                 _unlink_if_same_file(temporary, temporary_stat)
                 continue
             _publish_temporary_file(temporary, archive_path, expected_stat=temporary_stat)
-        except (OSError, tarfile.TarError):
+        except (OSError, ValueError, tarfile.TarError):
             if temporary_fd is not None:
                 _close_fd_quietly(temporary_fd)
             if temporary is not None and temporary_stat is not None:
@@ -515,7 +515,7 @@ def _add_regular_file_to_archive(
         return None
     try:
         archived_stat = os.fstat(fd)
-    except OSError:
+    except (OSError, ValueError):
         _close_fd_quietly(fd)
         return None
     if not stat_module.S_ISREG(archived_stat.st_mode):
@@ -526,7 +526,7 @@ def _add_regular_file_to_archive(
         return None
     try:
         source_handle = os.fdopen(fd, "rb")
-    except OSError:
+    except (OSError, ValueError):
         _close_fd_quietly(fd)
         return None
     with source_handle as source:

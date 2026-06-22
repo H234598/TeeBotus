@@ -919,6 +919,28 @@ def test_runtime_maintenance_keeps_sources_when_archive_write_fails(tmp_path, mo
     assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
 
 
+def test_runtime_maintenance_keeps_sources_when_archive_fdopen_fails(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    real_fdopen = os.fdopen
+
+    def fail_archive_fdopen(fd, mode="r", *args, **kwargs):
+        if mode == "wb":
+            raise ValueError("archive fdopen failed")
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    monkeypatch.setattr(os, "fdopen", fail_archive_fdopen)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert path.read_bytes() == b"compressed-ish"
+    assert not list((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
+
+
 def test_runtime_maintenance_keeps_sources_when_archive_directory_is_blocked(tmp_path):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60
@@ -1215,7 +1237,7 @@ def test_runtime_maintenance_closes_archive_source_fd_when_fdopen_fails(tmp_path
         nonlocal source_fd
         if mode == "rb":
             source_fd = fd
-            raise OSError("archive source fdopen failed")
+            raise ValueError("archive source fdopen failed")
         return real_fdopen(fd, mode, *args, **kwargs)
 
     def recording_close(fd):
