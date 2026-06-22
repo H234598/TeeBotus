@@ -53,12 +53,10 @@ class SourceHarvester:
         self.manifest_path = self.library_root / HARVEST_MANIFEST
 
     def prepare(self) -> None:
-        self.library_root.mkdir(parents=True, exist_ok=True)
-        _chmod_private_dir(self.library_root)
+        _ensure_private_dir(self.library_root, label="library root")
         for dirname in HARVEST_DIRS:
             path = self.library_root / dirname
-            path.mkdir(parents=True, exist_ok=True)
-            _chmod_private_dir(path)
+            _ensure_private_dir(path, label="harvest staging directory")
 
     def harvest_path(
         self,
@@ -322,6 +320,17 @@ def _file_matches_sha256(path: Path, sha256: str) -> bool:
         return path.is_file() and not path.is_symlink() and _file_sha256(path).casefold() == expected
     except OSError:
         return False
+
+
+def _ensure_private_dir(path: Path, *, label: str) -> None:
+    if path.is_symlink():
+        raise ValueError(f"SourceHarvester refuses symlink {label}: {path}")
+    path.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink():
+        raise ValueError(f"SourceHarvester refuses symlink {label}: {path}")
+    if not path.is_dir():
+        raise ValueError(f"SourceHarvester requires directory {label}: {path}")
+    _chmod_private_dir(path)
 
 
 def _chmod_private_dir(path: Path) -> None:

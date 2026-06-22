@@ -409,6 +409,31 @@ def test_source_harvester_ignores_external_accepted_duplicate_paths(tmp_path):
     assert result.stored_path.parent == store.library_dir / "accepted"
 
 
+def test_source_harvester_refuses_symlink_harvest_staging_dir(tmp_path):
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    library_dir = tmp_path / "library"
+    outside_dir = tmp_path / "outside-accepted"
+    library_dir.mkdir()
+    outside_dir.mkdir()
+    (library_dir / "accepted").symlink_to(outside_dir, target_is_directory=True)
+    harvester = SourceHarvester(
+        library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+
+    with pytest.raises(ValueError, match="symlink harvest staging directory"):
+        harvester.harvest_path(
+            source,
+            metadata={"title": "Therapie", "license": "private"},
+            claims=("Schlafhygiene ist relevant.",),
+            evidence=("Schlafhygiene und Aktivierung.",),
+        )
+
+    assert list(outside_dir.iterdir()) == []
+
+
 def test_source_harvester_resolves_relative_manifest_paths_after_cwd_change(tmp_path, monkeypatch):
     workspace = tmp_path / "workspace"
     workspace.mkdir()
