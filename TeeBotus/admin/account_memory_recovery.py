@@ -43,6 +43,7 @@ from TeeBotus.runtime.accounts import (
     telegram_identity_key,
 )
 from TeeBotus.runtime.artifacts import safe_artifact_name
+from TeeBotus.runtime.dotenv import load_project_dotenv_for_instances
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
 RECOVERY_SCHEMA_VERSION = 2
@@ -669,6 +670,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--quarantine-dir", default="", help="Optional base directory for quarantine artifacts. Defaults below each accounts root.")
     parser.add_argument("--allow-running-bot", action="store_true", help="Allow quarantine apply while TeeBotus runtime processes are running.")
     args = parser.parse_args(list(argv) if argv is not None else None)
+    load_project_dotenv_for_instances(args.instances_dir)
     report = build_account_memory_recovery_report(
         instances_dir=args.instances_dir,
         instances=parse_csv(args.instances),

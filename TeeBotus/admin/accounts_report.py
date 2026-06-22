@@ -28,6 +28,7 @@ from TeeBotus.runtime.accounts import (
     TOKEN_HEX_RE,
 )
 from TeeBotus.runtime.config import RuntimeConfigError, build_account_run_configs
+from TeeBotus.runtime.dotenv import load_project_dotenv_for_instances, project_root_for_instances_dir
 
 BOT_INSTRUCTION_FILENAME = "Bot_Verhalten.md"
 DEFAULT_INSTANCES_DIR = "instances"
@@ -478,39 +479,12 @@ def render_text_report(report: Mapping[str, Any]) -> str:
 
 def runtime_report_env(instances_dir: str | Path, *, base_env: Mapping[str, str] | None = None) -> dict[str, str]:
     env = dict(os.environ if base_env is None else base_env)
-    for key, value in _read_dotenv_values(_project_root_for_instances_dir(instances_dir) / ".env").items():
-        env.setdefault(key, value)
+    load_project_dotenv_for_instances(instances_dir, environ=env)
     return env
 
 
 def _project_root_for_instances_dir(instances_dir: str | Path) -> Path:
-    path = Path(instances_dir).expanduser()
-    if path.name == DEFAULT_INSTANCES_DIR:
-        return path.parent if str(path.parent) else Path(".")
-    return path.parent
-
-
-def _read_dotenv_values(path: Path) -> dict[str, str]:
-    if not path.exists():
-        return {}
-    values: dict[str, str] = {}
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", maxsplit=1)
-        key = key.strip()
-        if not key:
-            continue
-        values[key] = _clean_dotenv_value(value)
-    return values
-
-
-def _clean_dotenv_value(value: str) -> str:
-    cleaned = str(value or "").strip()
-    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {"'", '"'}:
-        return cleaned[1:-1]
-    return cleaned
+    return project_root_for_instances_dir(instances_dir)
 
 
 def _format_counts(value: Any) -> str:

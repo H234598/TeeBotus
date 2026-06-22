@@ -44,6 +44,7 @@ from TeeBotus.runtime.accounts import (
     AccountStoreError,
     InstanceSecretProvider,
 )
+from TeeBotus.runtime.dotenv import load_project_dotenv_for_instances
 from TeeBotus.runtime.proactive_agent import ProactiveSender, select_proactive_route
 
 CODEX_HISTORY_SCHEMA_VERSION = 1
@@ -3603,6 +3604,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     watch_parser.add_argument("--dispatch-dry-run", action="store_true", help="Resolve post-scan dispatch targets without sending messages.")
 
     args = parser.parse_args(list(argv) if argv is not None else None)
+    load_project_dotenv_for_instances(getattr(args, "instances_dir", DEFAULT_INSTANCES_DIR))
     if args.command == "append":
         try:
             store = _store_for_instance(Path(args.instances_dir), args.instance, provider, create_dirs=True)

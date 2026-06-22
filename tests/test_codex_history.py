@@ -452,6 +452,45 @@ def test_codex_history_cli_append_and_report_json(tmp_path: Path, capsys) -> Non
     assert payload["instances"][0]["codex_history"]["projects"][0]["repo_name"] == "teebotus-demo"
 
 
+def test_codex_history_cli_report_loads_project_dotenv_for_sqlite_backend(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    instances_dir = tmp_path / "instances"
+    instance_dir = make_instance(instances_dir)
+    sqlite_path = tmp_path / "Account_Memory.sqlite3"
+    fallback_path = tmp_path / "Account_Memory.backup.sqlite3"
+    (tmp_path / ".env").write_text(
+        "\n".join(
+            [
+                "TEEBOTUS_ACCOUNT_MEMORY_BACKEND=sqlite",
+                f'TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH="{sqlite_path}"',
+                f'TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH="{fallback_path}"',
+                "",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    repo = make_git_repo(tmp_path, "dotenv-sqlite-history", version="1.8.1")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", str(fallback_path))
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    append_codex_history_summary(store, repo_root=repo, title="Aus dotenv SQLite", bullets=["Report muss .env laden."])
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", raising=False)
+
+    result = codex_history_main(
+        ["report", "--instances-dir", str(instances_dir), "--instances", "Depressionsbot", "--format", "json"],
+        provider=provider(),
+    )
+
+    assert result == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["totals"]["outbox_items"] == 1
+    assert payload["instances"][0]["codex_history"]["latest_by_repo"][0]["title"] == "Aus dotenv SQLite"
+
+
 def test_codex_history_report_builds_repo_history_and_filters_dispatch_results(tmp_path: Path, capsys) -> None:
     instance_dir = make_instance(tmp_path)
     repo_alpha = make_git_repo(tmp_path, "alpha-history", version="1.8.0")

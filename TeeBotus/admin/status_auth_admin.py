@@ -22,6 +22,7 @@ from TeeBotus.runtime.accounts import (
     InstanceSecretProvider,
     runtime_secret_provider,
 )
+from TeeBotus.runtime.dotenv import load_project_dotenv_for_instances
 from TeeBotus.runtime.proactive_agent import select_proactive_route
 from TeeBotus.runtime.status_auth import DEFAULT_STATUS_AUTH_INSTANCES
 
@@ -430,6 +431,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
     bootstrap_parser.add_argument("--output", default="")
 
     args = parser.parse_args(list(argv) if argv is not None else None)
+    load_project_dotenv_for_instances(args.instances_dir)
     instances = parse_csv(getattr(args, "instances", None))
     if args.command == "bootstrap":
         report = bootstrap_status_auth_secrets(
