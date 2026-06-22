@@ -64,6 +64,32 @@ def test_source_harvester_refuses_symlink_harvest_destination_file(tmp_path):
     assert not outside_target.exists()
 
 
+def test_source_harvester_refuses_symlink_manifest_file_before_copy(tmp_path):
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    library_dir = tmp_path / "library"
+    library_dir.mkdir()
+    outside_manifest = tmp_path / "outside_manifest.jsonl"
+    outside_manifest.write_text("outside-before\n", encoding="utf-8")
+    (library_dir / "harvest_manifest.jsonl").symlink_to(outside_manifest)
+    harvester = SourceHarvester(
+        library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+
+    with pytest.raises(ValueError, match="symlink manifest file"):
+        harvester.harvest_path(
+            source,
+            metadata={"title": "Therapie", "license": "private"},
+            claims=("Schlafhygiene ist relevant.",),
+            evidence=("Schlafhygiene und Aktivierung.",),
+        )
+
+    assert outside_manifest.read_text(encoding="utf-8") == "outside-before\n"
+    assert not (library_dir / "accepted").exists()
+
+
 def test_source_harvester_promotes_accepted_source_before_indexing(tmp_path):
     instances_dir = tmp_path / "instances"
     source = tmp_path / "download" / "therapie.txt"

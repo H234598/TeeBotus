@@ -54,6 +54,7 @@ class SourceHarvester:
 
     def prepare(self) -> None:
         _ensure_private_dir(self.library_root, label="library root")
+        _refuse_symlink_manifest_file(self.manifest_path)
         for dirname in HARVEST_DIRS:
             path = self.library_root / dirname
             _ensure_private_dir(path, label="harvest staging directory")
@@ -303,6 +304,11 @@ def _unique_destination(candidate: Path, *, sha256: str) -> Path:
 def _refuse_symlink_destination_file(path: Path) -> None:
     if path.is_symlink():
         raise ValueError(f"SourceHarvester refuses symlink destination file: {path}")
+
+
+def _refuse_symlink_manifest_file(path: Path) -> None:
+    if path.is_symlink():
+        raise ValueError(f"SourceHarvester refuses symlink manifest file: {path}")
 
 
 def _same_path(left: object, right: Path) -> bool:
