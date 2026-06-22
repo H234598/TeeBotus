@@ -67,6 +67,40 @@ def test_source_harvester_refuses_symlink_harvest_destination_file(tmp_path):
     assert not outside_target.exists()
 
 
+@pytest.mark.skipif(not hasattr(os, "O_NOFOLLOW"), reason="requires atomic no-follow file open")
+def test_source_harvester_refuses_harvest_destination_symlink_swapped_before_copy(tmp_path, monkeypatch):
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    outside_target = tmp_path / "outside-accepted.txt"
+    outside_target.write_text("outside-before\n", encoding="utf-8")
+    library_dir = tmp_path / "library"
+    sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
+    expected_destination = library_dir / "accepted" / f"{sha256[:16]}-{source.name}"
+    original_open = os.open
+
+    def open_with_destination_swap(path, flags, *args, **kwargs):
+        if Path(path) == expected_destination:
+            Path(path).symlink_to(outside_target)
+        return original_open(path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(source_harvester_module.os, "open", open_with_destination_swap)
+    harvester = SourceHarvester(
+        library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+
+    with pytest.raises(ValueError, match="symlink destination file"):
+        harvester.harvest_path(
+            source,
+            metadata={"title": "Therapie", "license": "private"},
+            claims=("Schlafhygiene ist relevant.",),
+            evidence=("Schlafhygiene und Aktivierung.",),
+        )
+
+    assert outside_target.read_text(encoding="utf-8") == "outside-before\n"
+
+
 def test_source_harvester_refuses_symlink_manifest_file_before_copy(tmp_path):
     source = tmp_path / "download" / "therapie.txt"
     source.parent.mkdir()
@@ -183,7 +217,11 @@ def test_source_harvester_manifest_append_does_not_chmod_swapped_symlink(tmp_pat
             return self.handle.write(text)
 
     def fdopen_and_swap(fd, *args, **kwargs):
-        return SwapManifestAfterWrite(original_fdopen(fd, *args, **kwargs))
+        mode = args[0] if args else kwargs.get("mode", "r")
+        handle = original_fdopen(fd, *args, **kwargs)
+        if "a" in str(mode):
+            return SwapManifestAfterWrite(handle)
+        return handle
 
     monkeypatch.setattr(source_harvester_module.os, "fdopen", fdopen_and_swap)
     harvester = SourceHarvester(

@@ -93,11 +93,7 @@ class SourceHarvester:
 
         stored_path = self._stored_path(source, sha256, report.route)
         _refuse_symlink_destination_file(stored_path)
-        if copy:
-            shutil.copy2(source, stored_path)
-        else:
-            shutil.move(source, stored_path)
-        _chmod_private_file(stored_path)
+        _copy_or_move_file_private(source, stored_path, copy=copy)
         result = SourceHarvestResult(source, report.route, stored_path, sha256, report)
         self._append_manifest(result)
         return result
@@ -131,11 +127,7 @@ class SourceHarvester:
             raise ValueError("destination_dir must resolve to an indexed Bibliothek source path")
         _ensure_private_dir(target_dir, label="promote destination directory", root=self.library_root)
         promoted_path = _unique_destination(candidate_path, sha256=sha256)
-        if copy:
-            shutil.copy2(staged, promoted_path)
-        else:
-            shutil.move(staged, promoted_path)
-        _chmod_private_file(promoted_path)
+        _copy_or_move_file_private(staged, promoted_path, copy=copy)
         result = SourcePromoteResult(staged, promoted_path, sha256, copied=copy)
         self._append_promote_manifest(result)
         return result
@@ -323,6 +315,57 @@ def _append_manifest_row(path: Path, row: Mapping[str, Any]) -> None:
         handle.write(json.dumps(row, ensure_ascii=False, sort_keys=True) + "\n")
 
 
+def _copy_or_move_file_private(source: Path, destination: Path, *, copy: bool) -> None:
+    _copy_file_private(source, destination)
+    if not copy:
+        source.unlink()
+
+
+def _copy_file_private(source: Path, destination: Path) -> None:
+    src_fd = _open_existing_file_nofollow(source)
+    dst_fd = -1
+    try:
+        dst_fd = _open_destination_file_nofollow(destination)
+        _chmod_private_fd(dst_fd)
+        with os.fdopen(src_fd, "rb") as source_handle:
+            src_fd = -1
+            with os.fdopen(dst_fd, "wb") as destination_handle:
+                dst_fd = -1
+                shutil.copyfileobj(source_handle, destination_handle, length=1024 * 1024)
+    finally:
+        _close_fd_if_open(src_fd)
+        _close_fd_if_open(dst_fd)
+
+
+def _open_existing_file_nofollow(path: Path) -> int:
+    flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        return os.open(path, flags)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise ValueError("SourceHarvester refuses symlink sources") from exc
+        raise
+
+
+def _open_destination_file_nofollow(path: Path) -> int:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        return os.open(path, flags, 0o600)
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise ValueError(f"SourceHarvester refuses symlink destination file: {path}") from exc
+        raise
+
+
+def _close_fd_if_open(fd: int) -> None:
+    if fd < 0:
+        return
+    try:
+        os.close(fd)
+    except OSError:
+        return
+
+
 def _same_path(left: object, right: Path) -> bool:
     left_text = str(left or "")
     if not left_text:
@@ -372,13 +415,6 @@ def _ensure_private_dir(path: Path, *, label: str, root: Path | None = None) -> 
 def _chmod_private_dir(path: Path) -> None:
     try:
         path.chmod(0o700)
-    except OSError:
-        return
-
-
-def _chmod_private_file(path: Path) -> None:
-    try:
-        path.chmod(0o600)
     except OSError:
         return
 
