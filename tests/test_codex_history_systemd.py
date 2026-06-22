@@ -173,7 +173,7 @@ def test_render_codex_history_index_systemd_units_builds_low_priority_timer(tmp_
     assert "WantedBy=timers.target" in units.timer_text
 
 
-def test_render_codex_history_collector_timer_units_builds_five_minute_oneshot(tmp_path: Path) -> None:
+def test_render_codex_history_collector_timer_units_builds_bounded_oneshot(tmp_path: Path) -> None:
     units = render_codex_history_collector_timer_units(
         repo_root=tmp_path,
         python_executable="/usr/bin/python3",
@@ -184,7 +184,7 @@ def test_render_codex_history_collector_timer_units_builds_five_minute_oneshot(t
         poll_interval_seconds=0,
     )
 
-    assert units.service_name == "teebotus-codex-history-collector.service"
+    assert units.service_name == "teebotus-codex-history-collector-scan.service"
     assert units.timer_name == "teebotus-codex-history-collector.timer"
     assert "Type=oneshot" in units.service_text
     assert "User=" not in units.service_text
@@ -194,7 +194,7 @@ def test_render_codex_history_collector_timer_units_builds_five_minute_oneshot(t
     assert "--max-iterations" not in units.service_text
     assert "--event-mode snapshot" in units.service_text
     assert "--poll-interval 0" in units.service_text
-    assert "--limit 10" in units.service_text
+    assert "--limit 1000" in units.service_text
     assert f"--sessions-root {tmp_path / 'sessions'}" in units.service_text
     assert "--dispatch" in units.service_text
     assert "--dispatch-limit 0" in units.service_text
@@ -202,7 +202,7 @@ def test_render_codex_history_collector_timer_units_builds_five_minute_oneshot(t
     assert "OnUnitActiveSec=5min" in units.timer_text
     assert "RandomizedDelaySec=0" in units.timer_text
     assert "Persistent=true" in units.timer_text
-    assert "Unit=teebotus-codex-history-collector.service" in units.timer_text
+    assert "Unit=teebotus-codex-history-collector-scan.service" in units.timer_text
 
 
 def test_render_codex_history_collector_timer_units_can_disable_dispatch(tmp_path: Path) -> None:
@@ -386,15 +386,15 @@ def test_codex_history_systemd_print_mode_can_output_collector_timer(tmp_path: P
 
     captured = capsys.readouterr()
     assert result == 0
-    assert "# teebotus-codex-history-collector.service" in captured.out
+    assert "# teebotus-codex-history-collector-scan.service" in captured.out
     assert "# teebotus-codex-history-collector.timer" in captured.out
     assert "Type=oneshot" in captured.out
     assert "--once" in captured.out
     assert captured.out.count("--sessions-root") == 1
     assert f"--sessions-root {tmp_path / 'sessions'}" in captured.out
-    assert "--limit 10" in captured.out
+    assert "--limit 1000" in captured.out
     assert "--dispatch-limit 0" in captured.out
-    assert "OnUnitActiveSec=1min" in captured.out
+    assert "OnUnitActiveSec=24h" in captured.out
 
 
 def test_codex_history_systemd_enable_runs_system_systemctl(monkeypatch, tmp_path: Path) -> None:

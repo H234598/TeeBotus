@@ -15,6 +15,7 @@ from TeeBotus.systemd import (
 
 
 DEFAULT_SERVICE_NAME = "teebotus-codex-history-collector.service"
+DEFAULT_COLLECTOR_TIMER_SERVICE_NAME = "teebotus-codex-history-collector-scan.service"
 DEFAULT_COLLECTOR_TIMER_NAME = "teebotus-codex-history-collector.timer"
 DEFAULT_INDEX_SERVICE_NAME = "teebotus-codex-history-index.service"
 DEFAULT_INDEX_TIMER_NAME = "teebotus-codex-history-index.timer"
@@ -24,11 +25,11 @@ DEFAULT_RUN_USER = "root"
 DEFAULT_RESTART_SEC = "5s"
 DEFAULT_POLL_INTERVAL_SECONDS = 300.0
 DEFAULT_LIMIT = 1000
-DEFAULT_COLLECTOR_TIMER_LIMIT = 10
+DEFAULT_COLLECTOR_TIMER_LIMIT = 1000
 DEFAULT_COLLECTOR_DISPATCH_LIMIT = 0
 DEFAULT_INDEX_DISPATCH_LIMIT = 0
 DEFAULT_MAX_ITERATIONS = 1
-DEFAULT_COLLECTOR_INTERVAL = "1min"
+DEFAULT_COLLECTOR_INTERVAL = "24h"
 DEFAULT_COLLECTOR_RANDOMIZED_DELAY = "0"
 DEFAULT_INDEX_INTERVAL = "24h"
 DEFAULT_INDEX_RANDOMIZED_DELAY = "15min"
@@ -64,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
         default="",
         help="Python executable. Defaults to .venv-py313/bin/python if present, then .venv/bin/python, else python3.",
     )
-    parser.add_argument("--service-name", default=DEFAULT_SERVICE_NAME, help="systemd service filename.")
+    parser.add_argument("--service-name", default="", help="systemd service filename.")
     parser.add_argument("--run-user", default=DEFAULT_RUN_USER, help="System service User value. Empty omits User=.")
     parser.add_argument("--system-dir", default=DEFAULT_SYSTEMD_SYSTEM_DIR, help="Systemd system unit directory used outside --user-unit.")
     parser.add_argument("--user-unit", action="store_true", help="Install as the invoking user's user-systemd unit instead of a system/root unit.")
@@ -160,12 +161,13 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         run_user = "" if args.user_unit else args.run_user
+        service_name = args.service_name or (DEFAULT_COLLECTOR_TIMER_SERVICE_NAME if args.collector_timer else DEFAULT_SERVICE_NAME)
         scan_limit = int(args.limit) if args.limit is not None else (DEFAULT_COLLECTOR_TIMER_LIMIT if args.collector_timer else DEFAULT_LIMIT)
         collector_timer_units = (
             render_codex_history_collector_timer_units(
                 repo_root=Path(args.repo_root),
                 python_executable=args.python,
-                service_name=args.service_name,
+                service_name=service_name,
                 timer_name=args.collector_timer_name,
                 run_user=run_user,
                 env_file=args.env_file,
@@ -193,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
         unit = None if collector_timer_units is not None else render_codex_history_systemd_unit(
             repo_root=Path(args.repo_root),
             python_executable=args.python,
-            service_name=args.service_name,
+            service_name=service_name,
             run_user=run_user,
             env_file=args.env_file,
             instances_dir=args.instances_dir,
@@ -406,7 +408,7 @@ def render_codex_history_collector_timer_units(
     *,
     repo_root: Path,
     python_executable: str = "",
-    service_name: str = DEFAULT_SERVICE_NAME,
+    service_name: str = DEFAULT_COLLECTOR_TIMER_SERVICE_NAME,
     timer_name: str = DEFAULT_COLLECTOR_TIMER_NAME,
     run_user: str = DEFAULT_RUN_USER,
     env_file: str = ".env",
