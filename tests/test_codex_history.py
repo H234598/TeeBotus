@@ -1627,6 +1627,19 @@ def test_import_codex_session_file_prefers_final_answer_over_commentary(tmp_path
             "type": "response_item",
             "payload": {
                 "type": "message",
+                "role": "user",
+                "content": [
+                    {
+                        "type": "input_text",
+                        "text": '<codex_internal_context source="goal"><objective>Repo-Logikfehler finden</objective></codex_internal_context>Bitte Summary-Import pruefen.',
+                    }
+                ],
+            },
+        },
+        {
+            "type": "response_item",
+            "payload": {
+                "type": "message",
                 "role": "assistant",
                 "phase": "commentary",
                 "content": [{"type": "output_text", "text": "Zwischenstand darf nicht Summary werden."}],
@@ -1651,7 +1664,14 @@ def test_import_codex_session_file_prefers_final_answer_over_commentary(tmp_path
     rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
     assert len(rows) == 1
     assert rows[0]["summary"]["title"] == "Finale Summary soll importiert werden."
-    assert "Zwischenstand" not in rows[0]["summary"]["markdown"]
+    assert rows[0]["summary"]["bullets"] == ["Finale Summary soll importiert werden."]
+    assert rows[0]["codex"]["goal"] == "Repo-Logikfehler finden"
+    assert rows[0]["codex"]["auftrag"] == "Bitte Summary-Import pruefen."
+    assert rows[0]["codex"]["intermediate_messages"][0]["text"] == "Zwischenstand darf nicht Summary werden."
+    assert "- Goal: `Repo-Logikfehler finden`" in rows[0]["summary"]["markdown"]
+    assert "- Auftrag: `Bitte Summary-Import pruefen.`" in rows[0]["summary"]["markdown"]
+    assert "## Arbeitsverlauf" in rows[0]["summary"]["markdown"]
+    assert "- Zwischenantworten: `1`" in rows[0]["summary"]["markdown"]
 
 
 def test_import_codex_session_file_imports_each_final_turn_from_explicit_file(tmp_path: Path) -> None:
@@ -1694,6 +1714,13 @@ def test_import_codex_session_file_imports_each_final_turn_from_explicit_file(tm
         ("turn-one", "Erste finale Summary.", "v1.0.3 #0001"),
         ("turn-two", "Zweite finale Summary.", "v1.0.3 #0002"),
     ]
+    assert "## Verknuepfte Summaries" in persisted[0]["summary"]["markdown"]
+    assert "Naechste im Repo" in persisted[0]["summary"]["markdown"]
+    assert persisted[1]["id"] in persisted[0]["summary"]["markdown"]
+    assert "Vorherige im Repo" in persisted[1]["summary"]["markdown"]
+    assert persisted[0]["id"] in persisted[1]["summary"]["markdown"]
+    assert "## Mermaid-Kontext" in persisted[0]["summary"]["markdown"]
+    assert "flowchart LR" in persisted[0]["summary"]["markdown"]
 
 
 def test_import_codex_session_roots_directory_scan_imports_latest_final_turn_only(tmp_path: Path) -> None:

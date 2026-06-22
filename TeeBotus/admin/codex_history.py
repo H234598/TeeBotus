@@ -63,6 +63,12 @@ CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT = 250
 CODEX_HISTORY_GRAPH_SVG_ENGINES = frozenset({"builtin", "auto", "mmdc"})
 CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
 CODEX_HISTORY_STRATEGY_PURPOSE = "codex_history_strategic_analysis"
+CODEX_HISTORY_LINKS_SECTION_TITLE = "## Verknuepfte Summaries"
+CODEX_HISTORY_MERMAID_SECTION_TITLE = "## Mermaid-Kontext"
+CODEX_HISTORY_MANAGED_SUMMARY_SECTIONS = (
+    CODEX_HISTORY_LINKS_SECTION_TITLE,
+    CODEX_HISTORY_MERMAID_SECTION_TITLE,
+)
 CODEX_HISTORY_LLM_CATEGORY_ALLOWLIST = frozenset(
     {
         "change-feature",
@@ -242,6 +248,10 @@ def _build_codex_history_summary_item(
     redacted_tests = [redact_codex_history_text(item).strip() for item in tests if str(item or "").strip()]
     summary_number = _next_summary_number_for_repo(rows, repo["repo_id"])
     summary_prefix = _summary_prefix(version["semver"], summary_number)
+    metadata = codex_metadata if isinstance(codex_metadata, Mapping) else {}
+    intermediate_metadata = metadata.get("intermediate_messages", ())
+    if isinstance(intermediate_metadata, (str, bytes, bytearray)) or not isinstance(intermediate_metadata, Sequence):
+        intermediate_metadata = ()
     markdown = build_codex_history_markdown(
         summary_prefix=summary_prefix,
         title=redacted_title,
@@ -251,6 +261,10 @@ def _build_codex_history_summary_item(
         changed_files=redacted_changed_files,
         tests=redacted_tests,
         created_at=created_at,
+        goal=str(metadata.get("goal") or ""),
+        auftrag=str(metadata.get("auftrag") or ""),
+        current_task=str(metadata.get("current_task") or ""),
+        intermediate_messages=intermediate_metadata,
     )
     codex_payload = {
         "session_id": redact_codex_history_text(session_id).strip(),
@@ -258,7 +272,7 @@ def _build_codex_history_summary_item(
         "finished_at": created_at,
     }
     if isinstance(codex_metadata, Mapping):
-        codex_payload.update({str(key): redact_codex_history_text(value).strip() for key, value in codex_metadata.items()})
+        codex_payload.update({str(key): _redact_codex_history_json(value) for key, value in codex_metadata.items()})
     return {
         "id": _unique_history_id(rows),
         "schema_version": CODEX_HISTORY_SCHEMA_VERSION,
@@ -341,6 +355,7 @@ def append_codex_history_summary(
             timestamp=timestamp,
         )
         rows.append(item)
+        _refresh_codex_history_summary_context_rows(rows)
         store.write_codex_history_outbox(account_id, rows)
         project = item.get("project", {})
         if isinstance(project, Mapping):
@@ -624,6 +639,7 @@ def import_codex_session_file(store: AccountStore, session_file: str | Path) -> 
             if item_result.get("status") == "imported" and isinstance(item_result.get("item"), Mapping):
                 imported.append(dict(item_result["item"]))
         if imported:
+            _refresh_codex_history_summary_context_rows(rows)
             store.write_codex_history_outbox(account_id, rows)
     for item in imported:
         project = item.get("project", {})
@@ -661,6 +677,7 @@ def import_codex_session_roots(store: AccountStore, roots: Sequence[str | Path],
                     imported_items.append(dict(result["item"]))
                 results.append(result)
         if imported_items:
+            _refresh_codex_history_summary_context_rows(rows)
             store.write_codex_history_outbox(account_id, rows)
     for item in imported_items:
         project = item.get("project", {})
@@ -721,6 +738,10 @@ def _build_codex_session_import_results(
             parsed=parsed,
             turn_id=str(message.get("turn_id") or parsed.get("turn_id") or "").strip(),
             final_text=str(message.get("final_text") or "").strip(),
+            goal=str(message.get("goal") or parsed.get("goal") or "").strip(),
+            auftrag=str(message.get("auftrag") or parsed.get("auftrag") or "").strip(),
+            current_task=str(message.get("current_task") or message.get("auftrag") or parsed.get("auftrag") or "").strip(),
+            intermediate_messages=message.get("intermediate_messages", ()),
         )
         results.append(result)
     if not results:
@@ -735,10 +756,16 @@ def _build_codex_session_import_result(
     parsed: Mapping[str, Any],
     turn_id: str,
     final_text: str,
+    goal: str = "",
+    auftrag: str = "",
+    current_task: str = "",
+    intermediate_messages: object = (),
 ) -> dict[str, Any]:
     if not final_text:
         return {"status": "skipped", "reason": "missing_final_text", "path": str(path)}
     repo_root = str(parsed["cwd"] or path.parent)
+    if isinstance(intermediate_messages, (str, bytes, bytearray)) or not isinstance(intermediate_messages, Sequence):
+        intermediate_messages = ()
     final_hash = "sha256:" + hashlib.sha256(final_text.encode("utf-8")).hexdigest()
     session_id = str(parsed["session_id"] or path.stem)
     dedupe_key = _codex_session_dedupe_key(session_id=session_id, turn_id=turn_id, final_message_hash=final_hash)
@@ -756,6 +783,10 @@ def _build_codex_session_import_result(
             source="codex_session_watcher",
             codex_metadata={
                 "turn_id": turn_id,
+                "goal": goal,
+                "auftrag": auftrag,
+                "current_task": current_task,
+                "intermediate_messages": intermediate_messages if isinstance(intermediate_messages, Sequence) else (),
                 "dedupe_key": dedupe_key,
                 "final_message_hash": final_hash,
                 "source_path_hash": "sha256:" + hashlib.sha256(str(path).encode("utf-8")).hexdigest(),
@@ -1660,6 +1691,7 @@ def run_codex_history_index(
             dry_run=strategic_analysis_dry_run,
             env=env,
         )
+    context_report = refresh_codex_history_summary_context(store, repo=repo)
     export_report = export_codex_history_bibliothekar_docs(
         store,
         instance_dir=safe_instance_dir,
@@ -1722,6 +1754,7 @@ def run_codex_history_index(
         and qdrant_ok,
         "instance": safe_instance_name,
         "categorize": category_report,
+        "summary_context": context_report,
         "export": export_report,
         "graph": graph_report,
         "strategic_analysis": strategy_report,
@@ -1768,6 +1801,14 @@ def redact_codex_history_text(value: object) -> str:
     return text
 
 
+def _redact_codex_history_json(value: object) -> object:
+    if isinstance(value, Mapping):
+        return {str(key): _redact_codex_history_json(item) for key, item in value.items()}
+    if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        return [_redact_codex_history_json(item) for item in value]
+    return redact_codex_history_text(value).strip()
+
+
 def build_codex_history_markdown(
     *,
     summary_prefix: str,
@@ -1778,6 +1819,10 @@ def build_codex_history_markdown(
     changed_files: Sequence[str],
     tests: Sequence[str],
     created_at: str,
+    goal: str = "",
+    auftrag: str = "",
+    current_task: str = "",
+    intermediate_messages: Sequence[Mapping[str, Any] | str] = (),
 ) -> str:
     lines = [
         f"# {summary_prefix} {title}",
@@ -1788,13 +1833,31 @@ def build_codex_history_markdown(
         f"- Commit: `{repo.get('head_commit', '') or '<none>'}`",
         f"- Branch: `{repo.get('branch', '') or '<none>'}`",
         f"- Erstellt: `{_display_codex_history_timestamp(created_at)}`",
-        "",
-        "## Zusammenfassung",
     ]
+    goal_text = _markdown_header_value(goal)
+    auftrag_text = _markdown_header_value(auftrag)
+    current_task_text = _markdown_header_value(current_task)
+    if goal_text:
+        lines.append(f"- Goal: `{goal_text}`")
+    if auftrag_text:
+        lines.append(f"- Auftrag: `{auftrag_text}`")
+    if current_task_text and current_task_text != auftrag_text:
+        lines.append(f"- Bearbeiteter Auftrag: `{current_task_text}`")
+    lines.extend(["", "## Zusammenfassung"])
     if bullets:
         lines.extend(f"- {bullet}" for bullet in bullets)
     else:
         lines.append("- Keine Detailpunkte angegeben.")
+    normalized_intermediate = _normalize_codex_intermediate_messages(intermediate_messages)
+    if normalized_intermediate:
+        lines.append("")
+        lines.append("## Arbeitsverlauf")
+        lines.append(f"- Zwischenantworten: `{len(normalized_intermediate)}`")
+        for message in normalized_intermediate[:5]:
+            phase = _markdown_header_value(message.get("phase", "")) or "commentary"
+            text = _truncate(str(message.get("text") or ""), 260)
+            if text:
+                lines.append(f"- `{phase}`: {text}")
     lines.append("")
     lines.append("## Geaenderte Dateien")
     if changed_files:
@@ -1808,6 +1871,225 @@ def build_codex_history_markdown(
     else:
         lines.append("- Keine Tests angegeben.")
     lines.append("")
+    return "\n".join(lines)
+
+
+def _markdown_header_value(value: object, *, max_length: int = 320) -> str:
+    text = redact_codex_history_text(value).strip()
+    text = re.sub(r"\s+", " ", text)
+    text = text.replace("`", "\\`")
+    return _truncate(text, max_length) if text else ""
+
+
+def _normalize_codex_intermediate_messages(messages: Sequence[Mapping[str, Any] | str]) -> list[dict[str, str]]:
+    normalized: list[dict[str, str]] = []
+    for entry in messages:
+        if isinstance(entry, Mapping):
+            phase = redact_codex_history_text(entry.get("phase") or "commentary").strip() or "commentary"
+            text = redact_codex_history_text(entry.get("text") or "").strip()
+            turn_id = redact_codex_history_text(entry.get("turn_id") or "").strip()
+        else:
+            phase = "commentary"
+            text = redact_codex_history_text(entry).strip()
+            turn_id = ""
+        if not text:
+            continue
+        item = {"phase": phase, "text": text}
+        if turn_id:
+            item["turn_id"] = turn_id
+        normalized.append(item)
+    return normalized
+
+
+def refresh_codex_history_summary_context(store: AccountStore, *, repo: str = "") -> dict[str, Any]:
+    account_id = INSTANCE_STATE_ACCOUNT_ID
+    with store.codex_history_outbox_lock(account_id):
+        rows = store.read_codex_history_outbox(account_id)
+        changed = _refresh_codex_history_summary_context_rows(rows, repo_filter=repo)
+        if changed:
+            store.write_codex_history_outbox(account_id, rows)
+    return {"ok": True, "changed_items": changed, "repo": str(repo or "").strip()}
+
+
+def _refresh_codex_history_summary_context_rows(rows: list[dict[str, Any]], *, repo_filter: str = "") -> int:
+    items = [row for row in rows if _codex_history_context_item(row)]
+    repo_filter_text = str(repo_filter or "").strip().casefold()
+    if repo_filter_text:
+        items = [
+            item
+            for item in items
+            if repo_filter_text in str(item.get("project", {}).get("repo_name", "") if isinstance(item.get("project"), Mapping) else "").casefold()
+            or repo_filter_text in str(item.get("project", {}).get("repo_root", "") if isinstance(item.get("project"), Mapping) else "").casefold()
+        ]
+    if not items:
+        return 0
+    all_items = [row for row in rows if _codex_history_context_item(row)]
+    global_sorted = sorted(all_items, key=_summary_sort_key)
+    repo_groups: dict[str, list[dict[str, Any]]] = {}
+    for item in all_items:
+        project = item.get("project", {})
+        if not isinstance(project, Mapping):
+            project = {}
+        repo_id = str(project.get("repo_id") or project.get("repo_name") or "repo").strip() or "repo"
+        repo_groups.setdefault(repo_id, []).append(item)
+    for repo_items in repo_groups.values():
+        repo_items.sort(key=_summary_sort_key)
+    changed = 0
+    timestamp = utc_now()
+    for item in items:
+        project = item.get("project", {})
+        if not isinstance(project, Mapping):
+            project = {}
+        repo_id = str(project.get("repo_id") or project.get("repo_name") or "repo").strip() or "repo"
+        repo_items = repo_groups.get(repo_id, [])
+        previous_repo, next_repo = _codex_history_neighbors(repo_items, item)
+        previous_global, next_global = _codex_history_neighbors(global_sorted, item)
+        summary = item.get("summary", {})
+        if not isinstance(summary, dict):
+            continue
+        markdown = str(summary.get("markdown") or "")
+        updated = _codex_history_markdown_with_context(
+            markdown,
+            item=item,
+            previous_repo=previous_repo,
+            next_repo=next_repo,
+            previous_global=previous_global,
+            next_global=next_global,
+        )
+        if updated != markdown:
+            summary["markdown"] = updated
+            item["updated_at"] = timestamp
+            changed += 1
+    return changed
+
+
+def _codex_history_context_item(item: object) -> bool:
+    if not isinstance(item, dict):
+        return False
+    if str(item.get("kind") or "").strip() != "codex_run_summary":
+        return False
+    summary = item.get("summary", {})
+    return isinstance(summary, dict)
+
+
+def _codex_history_neighbors(items: Sequence[Mapping[str, Any]], current: Mapping[str, Any]) -> tuple[Mapping[str, Any] | None, Mapping[str, Any] | None]:
+    current_id = str(current.get("id") or "").strip()
+    previous: Mapping[str, Any] | None = None
+    for index, item in enumerate(items):
+        if str(item.get("id") or "").strip() != current_id:
+            previous = item
+            continue
+        next_item = items[index + 1] if index + 1 < len(items) else None
+        return previous, next_item
+    return None, None
+
+
+def _codex_history_markdown_with_context(
+    markdown: str,
+    *,
+    item: Mapping[str, Any],
+    previous_repo: Mapping[str, Any] | None,
+    next_repo: Mapping[str, Any] | None,
+    previous_global: Mapping[str, Any] | None,
+    next_global: Mapping[str, Any] | None,
+) -> str:
+    base = _strip_codex_history_managed_sections(markdown).rstrip()
+    sections = [
+        _codex_history_links_section(
+            item,
+            previous_repo=previous_repo,
+            next_repo=next_repo,
+            previous_global=previous_global,
+            next_global=next_global,
+        ),
+        _codex_history_mermaid_section(item, previous_repo=previous_repo, next_repo=next_repo),
+    ]
+    return (base + "\n\n" + "\n\n".join(section for section in sections if section.strip()) + "\n").lstrip()
+
+
+def _strip_codex_history_managed_sections(markdown: str) -> str:
+    text = str(markdown or "")
+    for title in CODEX_HISTORY_MANAGED_SUMMARY_SECTIONS:
+        text = re.sub(rf"(?:\n{{0,2}}){re.escape(title)}\n.*?(?=\n## |\Z)", "", text, flags=re.DOTALL).rstrip()
+    return text
+
+
+def _codex_history_links_section(
+    item: Mapping[str, Any],
+    *,
+    previous_repo: Mapping[str, Any] | None,
+    next_repo: Mapping[str, Any] | None,
+    previous_global: Mapping[str, Any] | None,
+    next_global: Mapping[str, Any] | None,
+) -> str:
+    del previous_global, next_global
+    lines = [CODEX_HISTORY_LINKS_SECTION_TITLE]
+    lines.append(f"- Diese Summary: {_codex_history_item_reference(item)}")
+    lines.append(f"- Vorherige im Repo: {_codex_history_item_reference(previous_repo) if previous_repo else '`<none>`'}")
+    lines.append(f"- Naechste im Repo: {_codex_history_item_reference(next_repo) if next_repo else '`<none>`'}")
+    session_id = str(item.get("codex", {}).get("session_id", "") if isinstance(item.get("codex"), Mapping) else "").strip()
+    if session_id:
+        lines.append(f"- Session: `{redact_codex_history_text(session_id).strip()}`")
+    return "\n".join(lines)
+
+
+def _codex_history_item_reference(item: Mapping[str, Any] | None) -> str:
+    if not isinstance(item, Mapping):
+        return "`<none>`"
+    label = _codex_history_item_label(item)
+    item_id = redact_codex_history_text(item.get("id") or "").strip()
+    stem = Path(_codex_history_bibliothekar_filename(item)).stem
+    if item_id:
+        return f"[[{stem}|{label}]] (`{item_id}`)"
+    return f"[[{stem}|{label}]]"
+
+
+def _codex_history_item_label(item: Mapping[str, Any]) -> str:
+    summary = item.get("summary", {})
+    if not isinstance(summary, Mapping):
+        summary = {}
+    return _truncate(f"{item.get('summary_prefix', '')} {summary.get('title', 'Codex run summary')}", 90)
+
+
+def _codex_history_mermaid_section(
+    item: Mapping[str, Any],
+    *,
+    previous_repo: Mapping[str, Any] | None,
+    next_repo: Mapping[str, Any] | None,
+) -> str:
+    project = item.get("project", {})
+    if not isinstance(project, Mapping):
+        project = {}
+    repo_name = _mermaid_label(str(project.get("repo_name") or "Repo"), max_length=48)
+    current_label = _mermaid_label(_codex_history_item_label(item), max_length=72)
+    lines = [
+        CODEX_HISTORY_MERMAID_SECTION_TITLE,
+        "```mermaid",
+        "flowchart LR",
+        f'  repo["{repo_name}"]:::repo',
+        f'  current["{current_label}"]:::current',
+        "  repo --> current",
+    ]
+    if previous_repo:
+        previous_label = _mermaid_label(_codex_history_item_label(previous_repo), max_length=72)
+        lines.append(f'  previous["{previous_label}"]:::summary')
+        lines.append("  previous --> current")
+    if next_repo:
+        next_label = _mermaid_label(_codex_history_item_label(next_repo), max_length=72)
+        lines.append(f'  next["{next_label}"]:::summary')
+        lines.append("  current --> next")
+    status = _mermaid_label(str(item.get("status") or "unknown"), max_length=32)
+    lines.append(f'  status["status: {status}"]:::status')
+    lines.append("  current --> status")
+    lines.extend(
+        [
+            "  classDef repo fill:#dbeafe,stroke:#2563eb,color:#111827",
+            "  classDef current fill:#dcfce7,stroke:#16a34a,color:#111827,stroke-width:2px",
+            "  classDef summary fill:#f3f4f6,stroke:#6b7280,color:#111827",
+            "  classDef status fill:#fef3c7,stroke:#d97706,color:#111827",
+            "```",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -2510,7 +2792,12 @@ def _parse_codex_session_file(path: Path) -> dict[str, Any]:
     turn_id = ""
     cwd = ""
     final_text = ""
-    final_messages: list[dict[str, str]] = []
+    final_messages: list[dict[str, Any]] = []
+    user_messages_by_turn: dict[str, list[str]] = {}
+    goals_by_turn: dict[str, str] = {}
+    intermediate_by_turn: dict[str, list[dict[str, str]]] = {}
+    latest_goal = ""
+    latest_auftrag = ""
     try:
         source_mtime = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat(timespec="seconds")
     except OSError:
@@ -2518,7 +2805,16 @@ def _parse_codex_session_file(path: Path) -> dict[str, Any]:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except OSError:
-        return {"session_id": "", "turn_id": "", "cwd": "", "final_text": "", "final_messages": [], "source_mtime": source_mtime}
+        return {
+            "session_id": "",
+            "turn_id": "",
+            "cwd": "",
+            "final_text": "",
+            "final_messages": [],
+            "source_mtime": source_mtime,
+            "goal": "",
+            "auftrag": "",
+        }
     for raw_line in lines:
         if not raw_line.strip():
             continue
@@ -2539,10 +2835,42 @@ def _parse_codex_session_file(path: Path) -> dict[str, Any]:
             turn_id = str(payload.get("turn_id") or turn_id or "").strip()
         else:
             cwd = str(payload.get("cwd") or cwd or "").strip()
+        role = str(payload.get("role") or "").strip()
+        phase = str(payload.get("phase") or "").strip().casefold()
+        payload_text = _codex_payload_text(payload)
+        if role == "user" and payload_text:
+            extracted_goal = _extract_codex_goal(payload_text)
+            if extracted_goal:
+                latest_goal = extracted_goal
+                goals_by_turn[turn_id] = extracted_goal
+            visible_text = _visible_codex_user_text(payload_text)
+            if visible_text:
+                latest_auftrag = visible_text
+                user_messages_by_turn.setdefault(turn_id, []).append(visible_text)
+        elif role == "assistant" and payload_text and phase and phase not in {"final", "final_answer"}:
+            intermediate_by_turn.setdefault(turn_id, []).append(
+                {
+                    "turn_id": turn_id,
+                    "phase": phase,
+                    "text": _truncate(redact_codex_history_text(payload_text).strip(), 1000),
+                }
+            )
         text = _assistant_text_from_codex_payload(payload)
         if text:
             final_text = text
-            final_messages.append({"turn_id": turn_id, "final_text": text})
+            turn_user_messages = user_messages_by_turn.get(turn_id) or []
+            message_goal = goals_by_turn.get(turn_id) or latest_goal
+            message_auftrag = turn_user_messages[-1] if turn_user_messages else latest_auftrag
+            final_messages.append(
+                {
+                    "turn_id": turn_id,
+                    "final_text": text,
+                    "goal": message_goal,
+                    "auftrag": message_auftrag,
+                    "current_task": message_auftrag,
+                    "intermediate_messages": intermediate_by_turn.get(turn_id, []),
+                }
+            )
     return {
         "session_id": session_id,
         "turn_id": turn_id,
@@ -2550,6 +2878,8 @@ def _parse_codex_session_file(path: Path) -> dict[str, Any]:
         "final_text": final_text,
         "final_messages": final_messages,
         "source_mtime": source_mtime,
+        "goal": latest_goal,
+        "auftrag": latest_auftrag,
     }
 
 
@@ -2563,8 +2893,41 @@ def _assistant_text_from_codex_payload(payload: Mapping[str, Any]) -> str:
     phase = str(payload.get("phase") or "").strip().casefold()
     if role == "assistant" and phase and phase not in {"final", "final_answer"}:
         return ""
+    return _codex_payload_text(payload).strip()
+
+
+def _codex_payload_text(payload: Mapping[str, Any]) -> str:
     content = payload.get("content")
     return _text_from_codex_content(content).strip()
+
+
+def _extract_codex_goal(text: object) -> str:
+    raw = str(text or "")
+    match = re.search(
+        r"<codex_internal_context\b[^>]*\bsource=[\"']goal[\"'][^>]*>(?P<body>.*?)</codex_internal_context>",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if not match:
+        return ""
+    body = match.group("body")
+    objective_match = re.search(r"<objective>(?P<objective>.*?)</objective>", body, flags=re.IGNORECASE | re.DOTALL)
+    goal = objective_match.group("objective") if objective_match else body
+    return _truncate(redact_codex_history_text(goal).strip(), 500)
+
+
+def _visible_codex_user_text(text: object) -> str:
+    raw = str(text or "")
+    raw = re.sub(
+        r"<codex_internal_context\b[^>]*>.*?</codex_internal_context>",
+        " ",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    raw = re.sub(r"<environment_context>.*?</environment_context>", " ", raw, flags=re.IGNORECASE | re.DOTALL)
+    raw = re.sub(r"<turn_aborted>.*?</turn_aborted>", " ", raw, flags=re.IGNORECASE | re.DOTALL)
+    raw = re.sub(r"\s+", " ", raw).strip()
+    return _truncate(redact_codex_history_text(raw).strip(), 500)
 
 
 def _text_from_codex_content(content: object) -> str:
