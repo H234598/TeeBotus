@@ -77,6 +77,34 @@ def test_source_harvester_promotes_accepted_source_before_indexing(tmp_path):
     assert rows[-1]["stored_path"] == str(promoted.promoted_path)
 
 
+def test_source_harvester_preserves_suffix_for_symbolic_source_names(tmp_path):
+    instances_dir = tmp_path / "instances"
+    source = tmp_path / "download" / "###.txt"
+    source.parent.mkdir()
+    marker = "SYMBOLIC_SOURCE_MARKER_8751"
+    source.write_text(f"Schlafhygiene und Aktivierung {marker}.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", instances_dir)
+    harvester = SourceHarvester(
+        store.library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+
+    harvest = harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+    promoted = harvester.promote_accepted(harvest.stored_path)
+    index = store.rebuild()
+
+    assert harvest.stored_path is not None
+    assert harvest.stored_path.suffix == ".txt"
+    assert promoted.promoted_path.suffix == ".txt"
+    assert index["chunk_count"] == 1
+    assert marker in store.chunks_path.read_text(encoding="utf-8")
+
+
 def test_source_harvester_promotes_manifest_string_true_acceptance(tmp_path):
     instances_dir = tmp_path / "instances"
     source = tmp_path / "download" / "therapie.txt"

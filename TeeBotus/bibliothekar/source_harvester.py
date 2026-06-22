@@ -252,8 +252,12 @@ def _file_sha256(path: Path) -> str:
 
 
 def _safe_filename(value: str) -> str:
-    safe = "".join(char if char.isalnum() or char in {".", "-", "_"} else "_" for char in str(value or "").strip())
-    return safe.strip("._") or "source"
+    raw = str(value or "").strip()
+    suffix = Path(raw).suffix
+    stem = raw[: -len(suffix)] if suffix else raw
+    safe_stem = "".join(char if char.isalnum() or char in {".", "-", "_"} else "_" for char in stem)
+    safe_suffix = "".join(char if char.isalnum() or char in {"."} else "_" for char in suffix)
+    return f"{safe_stem.strip('._') or 'source'}{safe_suffix}"
 
 
 def _safe_destination_dir(value: str) -> str:
