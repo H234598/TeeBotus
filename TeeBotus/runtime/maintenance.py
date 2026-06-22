@@ -121,7 +121,8 @@ def normalize_log_level(level: str | int) -> int:
     text = str(level or "INFO").strip()
     if not text:
         return logging.INFO
-    if text.isdigit():
+    numeric_text = text[1:] if text[:1] in {"+", "-"} else text
+    if numeric_text.isdigit():
         return _normalize_numeric_log_level(int(text))
     normalized = text.casefold().replace("_", " ").replace("-", " ")
     return LOG_LEVEL_ALIASES.get(normalized, LOG_LEVEL_ALIASES.get(text.casefold(), logging.INFO))

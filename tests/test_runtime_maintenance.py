@@ -1443,7 +1443,9 @@ def test_normalize_log_level_rejects_undocumented_numeric_trace_levels():
     assert normalize_log_level(5) == logging.INFO
     assert normalize_log_level("9") == logging.INFO
     assert normalize_log_level(-5) == logging.INFO
+    assert normalize_log_level("-5") == logging.INFO
     assert normalize_log_level("10") == logging.DEBUG
+    assert normalize_log_level("+10") == logging.DEBUG
     assert normalize_log_level(60) == logging.CRITICAL
 
 
