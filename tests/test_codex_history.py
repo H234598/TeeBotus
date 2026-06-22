@@ -68,6 +68,10 @@ def make_instance(tmp_path: Path, name: str = "Depressionsbot") -> Path:
     return instance_dir
 
 
+def authorize_codex_admin(store: AccountStore, account_id: str) -> None:
+    store.write_status_auth_state(account_id, {"schema_version": 1, "authorized": True, "admin_opt_out": False})
+
+
 @pytest.fixture(autouse=True)
 def redirect_codex_history_obsidian(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     def fake_obsidian_incoming_path(*parts: str) -> Path:
@@ -189,6 +193,7 @@ def test_codex_history_dispatch_updates_sql_collections(tmp_path: Path, monkeypa
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     admin_id = store.resolve_or_create_account(telegram_identity_key(420), display_label="Admin")
     store.update_identity_route(telegram_identity_key(420), channel="telegram", chat_id="420", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, admin_id)
     item = append_codex_history_summary(store, repo_root=repo, title="SQL Dispatch", bullets=["Gezielter SQL-Pfad."])
     sent: list[SendAttachment] = []
 
@@ -199,7 +204,7 @@ def test_codex_history_dispatch_updates_sql_collections(tmp_path: Path, monkeypa
     result = asyncio.run(
         dispatch_codex_history_outbox(
             store,
-            instance_name="Depressionsbot",
+            instance_name="TeeBotus_Logger",
             account_ids=(admin_id,),
             senders={"telegram": sender},
             now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
@@ -765,6 +770,7 @@ def test_codex_history_graph_export_writes_admin_only_mermaid_doc(tmp_path: Path
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
     admin_id = store.resolve_or_create_account(telegram_identity_key(88), display_label="Admin")
     store.update_identity_route(telegram_identity_key(88), channel="telegram", chat_id="88", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, admin_id)
     append_codex_history_summary(
         store,
         repo_root=repo,
@@ -820,7 +826,7 @@ def test_codex_history_graph_export_writes_admin_only_mermaid_doc(tmp_path: Path
     dispatch = asyncio.run(
         dispatch_codex_history_outbox(
             store,
-            instance_name="Depressionsbot",
+            instance_name="TeeBotus_Logger",
             account_ids=(admin_id,),
             senders={"telegram": sender},
             now=datetime(2026, 6, 19, 15, 5, tzinfo=timezone.utc),
@@ -906,6 +912,7 @@ def test_codex_history_strategic_analysis_queues_admin_dispatchable_report(tmp_p
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
     admin_id = store.resolve_or_create_account(telegram_identity_key(77), display_label="Admin")
     store.update_identity_route(telegram_identity_key(77), channel="telegram", chat_id="77", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, admin_id)
     append_codex_history_summary(store, repo_root=repo, title="Feature A", bullets=["Neues Feature gebaut."])
     append_codex_history_summary(store, repo_root=repo, title="Bugfix B", bullets=["Runtime-Fehler repariert."])
 
@@ -946,7 +953,7 @@ def test_codex_history_strategic_analysis_queues_admin_dispatchable_report(tmp_p
     dispatch = asyncio.run(
         dispatch_codex_history_outbox(
             store,
-            instance_name="Depressionsbot",
+            instance_name="TeeBotus_Logger",
             account_ids=(admin_id,),
             senders={"telegram": sender},
             now=datetime(2026, 6, 19, 14, 5, tzinfo=timezone.utc),
@@ -1130,6 +1137,7 @@ def test_codex_history_dispatch_sends_markdown_attachment_and_marks_accepted(
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     admin_id = store.resolve_or_create_account(telegram_identity_key(42), display_label="Admin")
     store.update_identity_route(telegram_identity_key(42), channel="telegram", chat_id="42", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, admin_id)
     item = append_codex_history_summary(
         store,
         repo_root=repo,
@@ -1149,7 +1157,7 @@ def test_codex_history_dispatch_sends_markdown_attachment_and_marks_accepted(
     result = asyncio.run(
         dispatch_codex_history_outbox(
             store,
-            instance_name="Depressionsbot",
+            instance_name="TeeBotus_Logger",
             account_ids=(admin_id,),
             senders={"telegram": sender},
             now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
@@ -1192,6 +1200,7 @@ def test_codex_history_dispatch_uses_cross_instance_admin_route(tmp_path: Path) 
     identity = telegram_identity_key(123)
     admin_id = source_store.resolve_or_create_account(identity, display_label="Admin")
     source_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(source_store, admin_id)
     item = append_codex_history_summary(
         logger_store,
         repo_root=repo,
@@ -1232,6 +1241,34 @@ def test_codex_history_dispatch_uses_cross_instance_admin_route(tmp_path: Path) 
     assert dispatch["channel"] == "telegram"
     assert dispatch["chat_id"] == "123"
     assert dispatch["message_ref"] == "telegram-cross-1"
+
+
+def test_codex_history_dispatch_non_logger_instance_does_not_mutate_outbox(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "non-logger-dispatch-demo", version="1.9.2")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(124), display_label="Admin")
+    store.update_identity_route(telegram_identity_key(124), channel="telegram", chat_id="124", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, admin_id)
+    item = append_codex_history_summary(store, repo_root=repo, title="Nicht TBL", bullets=["Darf nicht senden."])
+    sent: list[str] = []
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="Depressionsbot",
+            account_ids=(admin_id,),
+            senders={"telegram": lambda _route, _action, _metadata: sent.append("sent") or "msg"},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["status_counts"] == {"skipped": 1}
+    assert result["items"][0]["reason"] == "non_logger_dispatch_instance"
+    assert sent == []
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["id"] == item["id"]
+    assert persisted["status"] == "queued"
+    assert store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID) == []
 
 
 def test_codex_history_acknowledge_marks_item_without_deleting_it(tmp_path: Path, capsys) -> None:
@@ -1519,12 +1556,13 @@ def test_codex_history_dispatch_dry_run_does_not_mutate_outbox(tmp_path: Path) -
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     admin_id = store.resolve_or_create_account(telegram_identity_key(7), display_label="Admin")
     store.update_identity_route(telegram_identity_key(7), channel="telegram", chat_id="7", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, admin_id)
     append_codex_history_summary(store, repo_root=repo, title="Dry Run", bullets=["Nur anzeigen."])
 
     result = asyncio.run(
         dispatch_codex_history_outbox(
             store,
-            instance_name="Depressionsbot",
+            instance_name="TeeBotus_Logger",
             account_ids=(admin_id,),
             senders={"telegram": lambda _route, _action, _metadata: "must-not-run"},
             dry_run=True,
@@ -1536,6 +1574,59 @@ def test_codex_history_dispatch_dry_run_does_not_mutate_outbox(tmp_path: Path) -
     assert result["status_counts"] == {"would_send": 1}
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status"] == "queued"
     assert store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID) == []
+
+
+def test_codex_history_dispatch_filters_explicit_non_admin_account(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "non-admin-dispatch-demo", version="1.0.2")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(70), display_label="Nichtadmin")
+    store.update_identity_route(telegram_identity_key(70), channel="telegram", chat_id="70", chat_type="private", adapter_slot=1)
+    item = append_codex_history_summary(store, repo_root=repo, title="Nichtadmin", bullets=["Darf nicht senden."])
+    sent: list[str] = []
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="TeeBotus_Logger",
+            account_ids=(account_id,),
+            senders={"telegram": lambda _route, _action, _metadata: sent.append("sent") or "msg"},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["status_counts"] == {"skipped": 1}
+    assert result["items"][0]["reason"] == "no_recipient_accounts"
+    assert sent == []
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["id"] == item["id"]
+    assert persisted["status"] == "skipped"
+    assert store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[0]["account_id"] == ""
+
+
+def test_codex_history_dispatch_sends_once_per_admin_account(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "once-per-admin-demo", version="1.0.3")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(71), display_label="Admin")
+    store.update_identity_route(telegram_identity_key(71), channel="telegram", chat_id="71", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, admin_id)
+    append_codex_history_summary(store, repo_root=repo, title="Einmal", bullets=["Nur einmal pro Account."])
+    sent: list[str] = []
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="TeeBotus_Logger",
+            account_ids=(admin_id, admin_id.upper(), admin_id),
+            senders={"telegram": lambda _route, _action, _metadata: sent.append("sent") or "msg"},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["status_counts"] == {"accepted": 1}
+    assert sent == ["sent"]
+    dispatch_rows = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+    assert len(dispatch_rows) == 1
+    assert dispatch_rows[0]["account_id"] == admin_id
 
 
 def test_render_dispatch_report_formats_empty_status_counts_as_none() -> None:
@@ -1591,12 +1682,13 @@ def test_codex_history_dispatch_marks_missing_sender_failed_without_deleting_ite
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     admin_id = store.resolve_or_create_account(telegram_identity_key(8), display_label="Admin")
     store.update_identity_route(telegram_identity_key(8), channel="telegram", chat_id="8", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, admin_id)
     item = append_codex_history_summary(store, repo_root=repo, title="Missing Sender", bullets=["Fehler bleibt auditierbar."])
 
     result = asyncio.run(
         dispatch_codex_history_outbox(
             store,
-            instance_name="Depressionsbot",
+            instance_name="TeeBotus_Logger",
             account_ids=(admin_id,),
             senders={},
             now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
@@ -1618,6 +1710,7 @@ def test_codex_history_dispatch_requeues_transient_sender_errors(tmp_path: Path)
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     admin_id = store.resolve_or_create_account(telegram_identity_key(9), display_label="Admin")
     store.update_identity_route(telegram_identity_key(9), channel="telegram", chat_id="9", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, admin_id)
     item = append_codex_history_summary(store, repo_root=repo, title="Retry Sender", bullets=["Transienter Fehler."])
 
     def failing_sender(_route: dict[str, object], _action: SendAttachment, _metadata: dict[str, object]) -> str:
@@ -1626,7 +1719,7 @@ def test_codex_history_dispatch_requeues_transient_sender_errors(tmp_path: Path)
     result = asyncio.run(
         dispatch_codex_history_outbox(
             store,
-            instance_name="Depressionsbot",
+            instance_name="TeeBotus_Logger",
             account_ids=(admin_id,),
             senders={"telegram": failing_sender},
             now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
@@ -1650,6 +1743,7 @@ def test_codex_history_dispatch_ignores_fresh_in_flight_item(tmp_path: Path) -> 
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     admin_id = store.resolve_or_create_account(telegram_identity_key(10), display_label="Admin")
     store.update_identity_route(telegram_identity_key(10), channel="telegram", chat_id="10", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, admin_id)
     item = append_codex_history_summary(store, repo_root=repo, title="Fresh In Flight", bullets=["Laeuft gerade."])
     rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
     rows[0]["status"] = "dispatching"
@@ -1661,7 +1755,7 @@ def test_codex_history_dispatch_ignores_fresh_in_flight_item(tmp_path: Path) -> 
     result = asyncio.run(
         dispatch_codex_history_outbox(
             store,
-            instance_name="Depressionsbot",
+            instance_name="TeeBotus_Logger",
             account_ids=(admin_id,),
             senders={"telegram": lambda _route, _action, _metadata: sent.append("sent") or "msg"},
             now=datetime(2026, 6, 19, 12, 16, tzinfo=timezone.utc),
@@ -1680,6 +1774,7 @@ def test_codex_history_dispatch_reclaims_stale_in_flight_item_before_newer_queue
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     admin_id = store.resolve_or_create_account(telegram_identity_key(11), display_label="Admin")
     store.update_identity_route(telegram_identity_key(11), channel="telegram", chat_id="11", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, admin_id)
     stale = append_codex_history_summary(store, repo_root=repo, title="Stale In Flight", bullets=["Claim hing fest."])
     newer = append_codex_history_summary(store, repo_root=repo, title="Newer Queued", bullets=["Normale Queue."])
     rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
@@ -1700,7 +1795,7 @@ def test_codex_history_dispatch_reclaims_stale_in_flight_item_before_newer_queue
     result = asyncio.run(
         dispatch_codex_history_outbox(
             store,
-            instance_name="Depressionsbot",
+            instance_name="TeeBotus_Logger",
             account_ids=(admin_id,),
             senders={"telegram": sender},
             now=datetime(2026, 6, 19, 12, 16, tzinfo=timezone.utc),

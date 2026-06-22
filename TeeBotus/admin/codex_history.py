@@ -36,7 +36,7 @@ from TeeBotus.admin.accounts_report import (
     parse_csv,
 )
 from TeeBotus.runtime.actions import SendAttachment
-from TeeBotus.runtime.admin_accounts import _resolve_admin_notification_route, runtime_admin_account_ids
+from TeeBotus.runtime.admin_accounts import _resolve_admin_notification_route, is_runtime_admin_account, runtime_admin_account_ids
 from TeeBotus.runtime.accounts import (
     INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_STATE_ACCOUNT_ID,
@@ -60,6 +60,8 @@ CODEX_HISTORY_DEFAULT_LOCAL_CATEGORY_PROFILE = "local_ollama"
 CODEX_HISTORY_DEFAULT_STRATEGY_PROFILE = "local_ollama"
 CODEX_HISTORY_DEFAULT_DISPATCH_LIMIT = 0
 CODEX_HISTORY_DISPATCHING_STALE_AFTER_SECONDS = 15 * 60
+CODEX_HISTORY_DISPATCH_INSTANCES_ENV = "TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES"
+DEFAULT_CODEX_HISTORY_DISPATCH_INSTANCES = ("TeeBotus_Logger", "TeeBotusLogger", "TBL")
 CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT = 250
 CODEX_HISTORY_GRAPH_SVG_ENGINES = frozenset({"builtin", "auto", "mmdc"})
 CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
@@ -382,8 +384,32 @@ async def dispatch_codex_history_outbox(
 ) -> dict[str, Any]:
     dispatch_now = now or datetime.now(timezone.utc)
     timestamp = _iso_timestamp(dispatch_now)
+    if not _codex_history_dispatch_instance_allowed(instance_name, env=env):
+        skipped = {
+            "codex_history_item_id": "",
+            "account_id": "",
+            "status": "would_skip" if dry_run else "skipped",
+            "reason": "non_logger_dispatch_instance",
+            "channel": "",
+            "summary_prefix": "",
+        }
+        return {
+            "ok": True,
+            "dry_run": dry_run,
+            "instance": instance_name,
+            "generated_at": timestamp,
+            "items": [skipped],
+            "status_counts": _status_counts([skipped]),
+        }
     resolved_senders = senders or {}
-    candidate_account_ids = _codex_history_dispatch_account_ids(store, instance_name=instance_name, account_ids=account_ids, env=env)
+    candidate_account_ids = _codex_history_dispatch_account_ids(
+        store,
+        instance_name=instance_name,
+        account_ids=account_ids,
+        env=env,
+        instances_dir=instances_dir,
+        secret_provider=secret_provider,
+    )
     rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
     items = [row for row in rows if _codex_history_item_dispatchable(row, now=dispatch_now)]
     items.sort(key=lambda item: _codex_history_dispatch_sort_key(item, now=dispatch_now), reverse=True)
@@ -2529,6 +2555,8 @@ def _codex_history_dispatch_account_ids(
     instance_name: str,
     account_ids: Sequence[str],
     env: Mapping[str, str] | None,
+    instances_dir: str | Path | None = None,
+    secret_provider: InstanceSecretProvider | None = None,
 ) -> tuple[str, ...]:
     candidates = tuple(str(account_id or "").strip().casefold() for account_id in account_ids if str(account_id or "").strip())
     if not candidates:
@@ -2538,9 +2566,79 @@ def _codex_history_dispatch_account_ids(
     for account_id in candidates:
         if account_id in seen:
             continue
+        if not _codex_history_account_is_dispatch_admin(
+            store,
+            account_id,
+            instance_name=instance_name,
+            env=env,
+            instances_dir=instances_dir,
+            secret_provider=secret_provider,
+        ):
+            continue
         seen.add(account_id)
         result.append(account_id)
     return tuple(result)
+
+
+def _codex_history_dispatch_instance_allowed(instance_name: str, *, env: Mapping[str, str] | None) -> bool:
+    source = os.environ if env is None else env
+    raw_value = source.get(CODEX_HISTORY_DISPATCH_INSTANCES_ENV)
+    if raw_value is None:
+        allowed_names = DEFAULT_CODEX_HISTORY_DISPATCH_INSTANCES
+    else:
+        allowed_names = tuple(token for token in re.split(r"[\s,;]+", str(raw_value or "").strip()) if token)
+    instance_token = _codex_history_instance_token(instance_name)
+    allowed_markers = {str(name or "").strip().casefold() for name in allowed_names}
+    allowed_tokens = {_codex_history_instance_token(name) for name in allowed_names if _codex_history_instance_token(name)}
+    return "*" in allowed_markers or "all" in allowed_tokens or instance_token in allowed_tokens
+
+
+def _codex_history_instance_token(value: object) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", str(value or "").strip().casefold()).strip("_")
+
+
+def _codex_history_account_is_dispatch_admin(
+    store: AccountStore,
+    account_id: str,
+    *,
+    instance_name: str,
+    env: Mapping[str, str] | None,
+    instances_dir: str | Path | None,
+    secret_provider: InstanceSecretProvider | None,
+) -> bool:
+    try:
+        if is_runtime_admin_account(store, account_id, instance_name=instance_name, env=env):
+            return True
+    except (AccountStoreError, OSError, ValueError):
+        pass
+    if instances_dir is None:
+        return False
+    try:
+        safe_instances_dir = _safe_repo_root(Path(instances_dir), operation="instances directory")
+        instance_dirs = sorted((path for path in safe_instances_dir.iterdir() if path.is_dir()), key=lambda path: path.name.casefold())
+    except (OSError, ValueError):
+        return False
+    current_token = _codex_history_instance_token(instance_name)
+    normalized_account_id = str(account_id or "").strip().casefold()
+    for instance_dir in instance_dirs:
+        source_instance_name = instance_dir.name
+        if _codex_history_instance_token(source_instance_name) == current_token:
+            continue
+        accounts_root = instance_dir / "data" / "accounts"
+        if not (accounts_root / "accounts" / normalized_account_id).is_dir():
+            continue
+        try:
+            source_store = AccountStore(
+                accounts_root,
+                source_instance_name,
+                secret_provider=secret_provider or ReadOnlySecretToolInstanceSecretProvider(),
+                create_dirs=False,
+            )
+            if is_runtime_admin_account(source_store, normalized_account_id, instance_name=source_instance_name, env=env):
+                return True
+        except (AccountStoreError, OSError, ValueError):
+            continue
+    return False
 
 
 def _codex_history_item_dispatchable(item: Mapping[str, Any], *, now: datetime | None = None) -> bool:

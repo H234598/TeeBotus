@@ -472,7 +472,7 @@ class TeeBotusEngine:
                 return self._handle_account_edit_step(event, account_id, pending_account_edit)
             return EngineResult(account_id, [], handled=False)
         if intent.action == RegistrationAction.ACCOUNT:
-            return EngineResult(account_id, [SendText(event.chat_id, self._account_text(account_id), track=False)], handled=True)
+            return EngineResult(account_id, [SendText(event.chat_id, self._account_text(event.instance, account_id), track=False)], handled=True)
         if intent.action == RegistrationAction.LINKED_ACCOUNTS:
             return EngineResult(account_id, [SendText(event.chat_id, self._linked_accounts_text(account_id), track=False)], handled=True)
         if intent.action == RegistrationAction.REGISTER:
@@ -562,11 +562,17 @@ class TeeBotusEngine:
         self.state.pop_pending_flow(event.instance, account_id, "account_edit")
         return EngineResult(account_id, [SendText(event.chat_id, "Account-Bearbeitung wurde zurückgesetzt.", track=False)], handled=True)
 
-    def _account_text(self, account_id: str) -> str:
+    def _account_text(self, instance_name: str, account_id: str) -> str:
         summary = self.account_store.account_summary(account_id)
         identities = "\n".join(f"- {identity}" for identity in summary.get("linked_identities", [])) or "- keine"
         registered = "ja" if summary.get("secret_exists") else "nein"
-        return f"Deine TeeBotus-Account-ID:\n{account_id}\n\nSecret vorhanden: {registered}\n\nVerknüpfte Kommunikationswege:\n{identities}"
+        admin_status = "ja" if self._account_is_help_admin(instance_name, account_id) else "nein"
+        return (
+            f"Deine TeeBotus-Account-ID:\n{account_id}\n\n"
+            f"Secret vorhanden: {registered}\n"
+            f"Admin: {admin_status}\n\n"
+            f"Verknüpfte Kommunikationswege:\n{identities}"
+        )
 
     def _linked_accounts_text(self, account_id: str) -> str:
         summary = self.account_store.account_summary(account_id)

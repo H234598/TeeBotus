@@ -175,6 +175,24 @@ def test_help_shows_admin_section_for_runtime_admin_accounts(tmp_path, monkeypat
     assert "/codex_index - Codex-History Index-/Obsidian-Export anstossen." in actions[0].text
 
 
+def test_account_command_shows_admin_status(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    regular_actions = engine.process(event(identity, "/account"))
+
+    assert len(regular_actions) == 1
+    assert "Admin: nein" in regular_actions[0].text
+
+    engine.process(event(identity, "/admin yes 18hhGfuu3"))
+    admin_actions = engine.process(event(identity, "/account"))
+
+    assert len(admin_actions) == 1
+    assert "Admin: ja" in admin_actions[0].text
+
+
 def test_status_auth_gate_is_case_insensitive_for_chat_type(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
     account_store = store(tmp_path, "TeeBotus_Logger")

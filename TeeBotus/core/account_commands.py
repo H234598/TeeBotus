@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 from TeeBotus.core.registration import RegistrationAction, RegistrationIntent, parse_registration_intent
@@ -19,9 +20,10 @@ class AccountCommandResult:
 
 
 class AccountCommandHandler:
-    def __init__(self, store: AccountStore, state: RuntimeStateStore) -> None:
+    def __init__(self, store: AccountStore, state: RuntimeStateStore, admin_checker: Callable[[str, str], bool] | None = None) -> None:
         self.store = store
         self.state = state
+        self.admin_checker = admin_checker
 
     @staticmethod
     def _reply(chat_id: str, text: str) -> SendText:
@@ -76,6 +78,13 @@ class AccountCommandHandler:
             lines.append("- keine")
         lines.append("")
         lines.append("Secret vorhanden: ja" if summary.get("secret_exists") else "Secret vorhanden: nein")
+        admin_status = False
+        if self.admin_checker is not None:
+            try:
+                admin_status = bool(self.admin_checker(event.instance, event.account_id))
+            except (AccountStoreError, OSError, ValueError):
+                admin_status = False
+        lines.append("Admin: ja" if admin_status else "Admin: nein")
         return AccountCommandResult(True, (self._reply(event.chat_id, "\n".join(lines)),))
 
     def _register(self, event: IncomingEvent) -> AccountCommandResult:
