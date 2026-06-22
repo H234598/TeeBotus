@@ -108,6 +108,8 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | Non
 
 
 def normalize_log_level(level: str | int) -> int:
+    if isinstance(level, bool):
+        return logging.INFO
     if isinstance(level, int):
         return _normalize_numeric_log_level(level)
     text = str(level or "INFO").strip()

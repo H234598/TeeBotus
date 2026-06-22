@@ -1319,6 +1319,8 @@ def test_normalize_log_level_accepts_documented_debug_all_spellings():
 
 
 def test_normalize_log_level_rejects_undocumented_numeric_trace_levels():
+    assert normalize_log_level(False) == logging.INFO
+    assert normalize_log_level(True) == logging.INFO
     assert normalize_log_level(0) == logging.INFO
     assert normalize_log_level("0") == logging.INFO
     assert normalize_log_level(5) == logging.INFO
