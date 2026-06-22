@@ -68,11 +68,15 @@ def runtime_log_path(base_dir: Path | None = None) -> Path:
 def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | None = None, tee_stdio: bool = False) -> None:
     resolved_level = normalize_log_level(level)
     directory = base_dir or runtime_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    maintain_runtime_directory(directory)
+    runtime_directory_ready = True
+    try:
+        directory.mkdir(parents=True, exist_ok=True)
+        maintain_runtime_directory(directory)
+    except OSError:
+        runtime_directory_ready = False
     log_path = runtime_log_path(directory)
-    stdout_targets_log = _stdout_targets_path(log_path)
-    if tee_stdio:
+    stdout_targets_log = _stdout_targets_path(log_path) if runtime_directory_ready else False
+    if tee_stdio and runtime_directory_ready:
         install_stdio_tee(directory / STDIO_LOG_FILENAME)
 
     formatter = logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s%(teebotus_context)s")
@@ -81,7 +85,7 @@ def configure_runtime_logging(*, level: str | int = "INFO", base_dir: Path | Non
     stream_handler.setFormatter(formatter)
     stream_handler.addFilter(context_filter)
     handlers: list[logging.Handler] = [stream_handler]
-    if not stdout_targets_log:
+    if runtime_directory_ready and not stdout_targets_log:
         try:
             file_handler = RuntimeTimedRotatingFileHandler(log_path)
         except OSError:

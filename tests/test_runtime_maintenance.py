@@ -1275,6 +1275,23 @@ def test_configure_runtime_logging_uses_file_handler_when_stdout_is_not_runtime_
     assert any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
 
 
+def test_configure_runtime_logging_continues_when_runtime_directory_is_blocked(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    blocked_runtime_dir = tmp_path / "runtime-as-file"
+    blocked_runtime_dir.write_text("not a directory\n", encoding="utf-8")
+
+    configure_runtime_logging(base_dir=blocked_runtime_dir, tee_stdio=True)
+    logging.getLogger("TeeBotus.test").warning("stream only")
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    handlers = logging.getLogger().handlers
+    assert len(handlers) == 1
+    assert not any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
+    assert "stream only" in sys.stdout.getvalue()
+    assert blocked_runtime_dir.read_text(encoding="utf-8") == "not a directory\n"
+
+
 def test_configure_runtime_logging_refuses_symlinked_runtime_log_path(tmp_path, monkeypatch):
     monkeypatch.setattr(sys, "stdout", io.StringIO())
     external = tmp_path / "external.log"
