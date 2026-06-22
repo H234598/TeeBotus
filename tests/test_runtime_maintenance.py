@@ -69,6 +69,23 @@ def test_rotate_runtime_text_file_does_not_overwrite_target_created_during_rotat
         assert handle.read() == "0123456789\n"
 
 
+def test_rotate_runtime_text_file_skips_broken_symlink_rotation_target(tmp_path, monkeypatch):
+    path = tmp_path / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+    blocked_target = tmp_path / f"{path.name}.2026-06-22-181200"
+    blocked_target.symlink_to(tmp_path / "missing-target")
+    monkeypatch.setattr("TeeBotus.runtime.maintenance._next_rotated_path", lambda _path: blocked_target)
+
+    compressed = rotate_runtime_text_file_if_needed(path, max_bytes=4)
+
+    assert compressed is not None
+    assert compressed.name.startswith(f"{blocked_target.name}.")
+    assert blocked_target.is_symlink()
+    assert not path.exists()
+    with gzip.open(compressed, "rt", encoding="utf-8") as handle:
+        assert handle.read() == "0123456789\n"
+
+
 def test_rotate_runtime_text_file_preserves_source_replaced_before_cleanup(tmp_path, monkeypatch):
     path = tmp_path / "Security_Events.jsonl"
     path.write_text("0123456789\n", encoding="utf-8")
@@ -327,6 +344,21 @@ def test_gzip_file_does_not_overwrite_target_created_during_publish(tmp_path, mo
         assert handle.read() == "old log\n"
 
 
+def test_gzip_file_skips_broken_symlink_target(tmp_path):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    blocked_target = tmp_path / f"{path.name}.gz"
+    blocked_target.symlink_to(tmp_path / "missing-target")
+
+    published = gzip_file(path)
+
+    assert published.name == f"{blocked_target.name}.1"
+    assert blocked_target.is_symlink()
+    assert not path.exists()
+    with gzip.open(published, "rt", encoding="utf-8") as handle:
+        assert handle.read() == "old log\n"
+
+
 def test_gzip_file_preserves_source_replaced_before_cleanup(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")
@@ -535,6 +567,28 @@ def test_runtime_maintenance_does_not_overwrite_archive_created_during_publish(t
     published_archives = [archive for archive in archives if archive != raced_target]
     assert len(published_archives) == 1
     assert not path.exists()
+    with tarfile.open(published_archives[0], "r:gz") as archive:
+        assert path.name in archive.getnames()
+
+
+def test_runtime_maintenance_skips_broken_symlink_archive_target(tmp_path):
+    now = time.time()
+    old_mtime = time.mktime(time.strptime("2026-03-01", "%Y-%m-%d"))
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    archive_dir = tmp_path / "monthly_archives"
+    archive_dir.mkdir()
+    blocked_target = archive_dir / "teebotus-runtime-2026-03.tar.gz"
+    blocked_target.symlink_to(tmp_path / "missing-target")
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert blocked_target.is_symlink()
+    archives = sorted(archive_dir.glob("teebotus-runtime-2026-03.tar.gz*"))
+    published_archives = [archive for archive in archives if archive != blocked_target]
+    assert len(published_archives) == 1
+    assert published_archives[0].name == f"{blocked_target.name}.1"
     with tarfile.open(published_archives[0], "r:gz") as archive:
         assert path.name in archive.getnames()
 

@@ -451,10 +451,14 @@ def _is_temporary_runtime_file(path: Path) -> bool:
 
 
 def _unique_path(path: Path) -> Path:
-    if not path.exists():
+    if not _path_exists_or_symlink(path):
         return path
     for index in range(1, 1000):
         candidate = path.with_name(f"{path.name}.{index}")
-        if not candidate.exists():
+        if not _path_exists_or_symlink(candidate):
             return candidate
     raise OSError(f"could not find free runtime archive path for {path}")
+
+
+def _path_exists_or_symlink(path: Path) -> bool:
+    return os.path.lexists(path)
