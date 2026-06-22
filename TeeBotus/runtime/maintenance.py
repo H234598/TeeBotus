@@ -657,6 +657,7 @@ def _link_file_to_unique_path(source: Path, target: Path, *, expected_stat: os.s
         try:
             linked_stat = os.stat(linked, follow_symlinks=False)
         except (OSError, ValueError):
+            _unlink_if_same_file(linked, expected_stat)
             return None
         if _same_file_stat(linked_stat, expected_stat):
             return linked
@@ -715,7 +716,11 @@ def _publish_temporary_file(temporary: Path, target: Path, *, expected_stat: os.
                 raise OSError(f"refusing unsafe runtime publish path: {target}")
             published = _unique_path(target)
             continue
-        linked_stat = os.stat(published, follow_symlinks=False)
+        try:
+            linked_stat = os.stat(published, follow_symlinks=False)
+        except (OSError, ValueError):
+            _unlink_if_same_file(published, expected_stat)
+            raise
         if not _same_file_stat(linked_stat, expected_stat):
             try:
                 current_temp_stat = os.stat(temporary, follow_symlinks=False)

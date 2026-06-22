@@ -260,6 +260,39 @@ def test_rotate_runtime_text_file_preserves_rotated_path_replaced_before_link_st
     assert not (tmp_path / f"{rotated.name}.gz").exists()
 
 
+def test_rotate_runtime_text_file_removes_link_when_rotated_stat_fails_after_link(tmp_path, monkeypatch):
+    path = tmp_path / "Security_Events.jsonl"
+    path.write_text("0123456789\n", encoding="utf-8")
+    rotated = tmp_path / "Security_Events.jsonl.2026-06-22-181200"
+    real_link = os.link
+    real_stat = os.stat
+    fail_rotated_stat = False
+    monkeypatch.setattr("TeeBotus.runtime.maintenance._next_rotated_path", lambda _path: rotated)
+
+    def recording_link(source, destination, *args, **kwargs):
+        nonlocal fail_rotated_stat
+        result = real_link(source, destination, *args, **kwargs)
+        if Path(destination) == rotated:
+            fail_rotated_stat = True
+        return result
+
+    def fail_first_rotated_stat(file, *args, **kwargs):
+        nonlocal fail_rotated_stat
+        if Path(file) == rotated and kwargs.get("follow_symlinks") is False and fail_rotated_stat:
+            fail_rotated_stat = False
+            raise ValueError("rotated stat failed")
+        return real_stat(file, *args, **kwargs)
+
+    monkeypatch.setattr(os, "link", recording_link)
+    monkeypatch.setattr(os, "stat", fail_first_rotated_stat)
+
+    assert rotate_runtime_text_file_if_needed(path, max_bytes=4) is None
+
+    assert path.read_text(encoding="utf-8") == "0123456789\n"
+    assert not rotated.exists()
+    assert not (tmp_path / f"{rotated.name}.gz").exists()
+
+
 def test_rotate_runtime_text_file_refuses_link_when_parent_becomes_symlink(tmp_path, monkeypatch):
     runtime_dir = tmp_path / "runtime"
     runtime_dir.mkdir()
@@ -1105,6 +1138,39 @@ def test_runtime_publish_preserves_changed_file_error_when_temporary_stat_raises
 
     assert temporary.read_text(encoding="utf-8") == "temporary\n"
     assert target.read_text(encoding="utf-8") == "different target\n"
+
+
+def test_runtime_publish_removes_link_when_published_stat_fails_after_link(tmp_path, monkeypatch):
+    temporary = tmp_path / ".teebotus-production.log.2026-06-01.gz.tmp"
+    temporary.write_text("temporary\n", encoding="utf-8")
+    expected_stat = temporary.stat()
+    target = tmp_path / "teebotus-production.log.2026-06-01.gz"
+    real_link = os.link
+    real_stat = os.stat
+    fail_target_stat = False
+
+    def recording_link(source, destination, *args, **kwargs):
+        nonlocal fail_target_stat
+        result = real_link(source, destination, *args, **kwargs)
+        if Path(destination) == target:
+            fail_target_stat = True
+        return result
+
+    def fail_first_target_stat(file, *args, **kwargs):
+        nonlocal fail_target_stat
+        if Path(file) == target and kwargs.get("follow_symlinks") is False and fail_target_stat:
+            fail_target_stat = False
+            raise ValueError("published stat failed")
+        return real_stat(file, *args, **kwargs)
+
+    monkeypatch.setattr(os, "link", recording_link)
+    monkeypatch.setattr(os, "stat", fail_first_target_stat)
+
+    with pytest.raises(ValueError, match="published stat failed"):
+        _publish_temporary_file(temporary, target, expected_stat=expected_stat)
+
+    assert temporary.read_text(encoding="utf-8") == "temporary\n"
+    assert not target.exists()
 
 
 def test_gzip_file_does_not_utime_temporary_symlink_replacement(tmp_path, monkeypatch):
