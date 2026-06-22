@@ -2312,6 +2312,23 @@ def test_tee_stream_keeps_primary_stream_working_when_secondary_fails():
     assert primary.getvalue() == "probe"
 
 
+def test_tee_stream_keeps_primary_stream_working_when_secondary_raises_runtime_error():
+    class RuntimeFailingSecondary(io.StringIO):
+        def write(self, _text):
+            raise RuntimeError("secondary write failed")
+
+        def flush(self):
+            raise RuntimeError("secondary flush failed")
+
+    primary = io.StringIO()
+    tee = TeeStream(primary, RuntimeFailingSecondary(), Path("secondary.log"))
+
+    assert tee.write("probe") == 5
+    tee.flush()
+
+    assert primary.getvalue() == "probe"
+
+
 def test_tee_stream_flushes_secondary_when_primary_flush_fails():
     class FailingPrimary(io.StringIO):
         def flush(self):
@@ -2378,6 +2395,26 @@ def test_tee_stream_closes_primary_and_secondary():
 
     assert primary.closed is True
     assert secondary.closed is True
+
+
+def test_tee_stream_closes_primary_when_secondary_close_raises_runtime_error():
+    class RuntimeFailingSecondary(io.StringIO):
+        def __init__(self):
+            super().__init__()
+            self.failed_once = False
+
+        def close(self):
+            if self.failed_once:
+                return super().close()
+            self.failed_once = True
+            raise RuntimeError("secondary close failed")
+
+    primary = io.StringIO()
+    tee = TeeStream(primary, RuntimeFailingSecondary(), Path("secondary.log"))
+
+    tee.close()
+
+    assert primary.closed is True
 
 
 def test_tee_stream_keeps_primary_stream_working_when_secondary_is_closed():

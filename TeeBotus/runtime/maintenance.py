@@ -194,7 +194,7 @@ class TeeStream:
         written = primary_write(text)
         try:
             secondary_write(text)
-        except (OSError, ValueError):
+        except Exception:
             pass
         return len(text) if written is None else int(written)
 
@@ -210,7 +210,7 @@ class TeeStream:
         if callable(secondary_flush):
             try:
                 secondary_flush()
-            except (OSError, ValueError):
+            except Exception:
                 pass
         if primary_exception is not None:
             raise primary_exception
@@ -701,7 +701,7 @@ def _close_quietly(stream: object) -> None:
     if callable(close):
         try:
             close()
-        except (OSError, ValueError):
+        except Exception:
             pass
 
 
