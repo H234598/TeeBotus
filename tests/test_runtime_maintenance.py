@@ -604,6 +604,28 @@ def test_gzip_file_skips_broken_symlink_target(tmp_path):
         assert handle.read() == "old log\n"
 
 
+def test_gzip_file_skips_target_when_existence_check_fails(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    blocked_target = tmp_path / f"{path.name}.gz"
+    real_lexists = os.path.lexists
+
+    def fail_target_lexists(file):
+        if Path(file) == blocked_target:
+            raise PermissionError("cannot inspect target")
+        return real_lexists(file)
+
+    monkeypatch.setattr(os.path, "lexists", fail_target_lexists)
+
+    published = gzip_file(path)
+
+    assert published == blocked_target.with_name(f"{blocked_target.name}.1")
+    assert not blocked_target.exists()
+    assert not path.exists()
+    with gzip.open(published, "rt", encoding="utf-8") as handle:
+        assert handle.read() == "old log\n"
+
+
 def test_gzip_file_does_not_overwrite_temporary_file_created_during_open(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")

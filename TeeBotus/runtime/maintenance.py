@@ -690,4 +690,7 @@ def _unique_path(path: Path) -> Path:
 
 
 def _path_exists_or_symlink(path: Path) -> bool:
-    return os.path.lexists(path)
+    try:
+        return os.path.lexists(path)
+    except OSError:
+        return True
