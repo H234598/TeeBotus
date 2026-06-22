@@ -359,6 +359,23 @@ def test_llm_profiles_plan2_contract_rejects_wrong_api_key_env(monkeypatch) -> N
     assert "profile openai_premium api_key_env=GEMINI_API_KEY expected=OPENAI_API_KEY" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_unexpected_profile_service_tier(monkeypatch) -> None:
+    from dataclasses import replace
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    profiles = dict(llm_profiles.load_llm_profiles())
+    default_profile, routing = llm_profiles.load_llm_routing()
+    profiles["gemini_flash_stateful"] = replace(profiles["gemini_flash_stateful"], service_tier="flex")
+    monkeypatch.setattr(llm_profiles, "load_llm_profiles", lambda: profiles)
+    monkeypatch.setattr(llm_profiles, "load_llm_routing", lambda: (default_profile, routing))
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "profile gemini_flash_stateful service_tier=flex expected=<empty>" in message
+
+
 def test_llm_profiles_plan2_contract_rejects_wrong_purpose_routes(monkeypatch) -> None:
     from dataclasses import replace
 
@@ -417,7 +434,7 @@ def test_llm_profiles_plan2_contract_rejects_selector_field_drift(monkeypatch) -
     def drifting_selector(purpose: str, **kwargs):
         route = original_selector(purpose, **kwargs)
         if route.purpose == "hard_reasoning":
-            return replace(route, api_key_env="", fallback_api_key_env="OPENAI_API_KEY")
+            return replace(route, api_key_env="", fallback_api_key_env="OPENAI_API_KEY", service_tier="flex")
         return route
 
     monkeypatch.setattr(llm_profiles, "select_llm_route", drifting_selector)
@@ -426,6 +443,7 @@ def test_llm_profiles_plan2_contract_rejects_selector_field_drift(monkeypatch) -
 
     assert not ok
     assert "routing hard_reasoning selector api_key_env=<empty> expected=OPENAI_API_KEY" in message
+    assert "routing hard_reasoning selector service_tier=flex expected=<empty>" in message
     assert "routing hard_reasoning selector fallback_api_key_env=OPENAI_API_KEY expected=GEMINI_API_KEY" in message
 
 

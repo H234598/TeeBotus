@@ -441,6 +441,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
     unexpected_profiles = sorted(set(profiles) - set(expected_profiles))
     if unexpected_profiles:
         errors.append(f"unexpected profile(s): {','.join(unexpected_profiles)}")
+    expected_profile_service_tiers = {name: "" for name in expected_profiles}
     for name, (provider, model_prefix, exact_model, api_key_env) in expected_profiles.items():
         profile = profiles.get(name)
         if profile is None:
@@ -455,6 +456,12 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
         if profile.api_key_env != api_key_env:
             errors.append(
                 f"profile {name} api_key_env={profile.api_key_env or '<empty>'} expected={api_key_env or '<empty>'}"
+            )
+        expected_service_tier = expected_profile_service_tiers[name]
+        if profile.service_tier != expected_service_tier:
+            errors.append(
+                f"profile {name} service_tier={profile.service_tier or '<empty>'} "
+                f"expected={expected_service_tier or '<empty>'}"
             )
     expected_hf_pool_selectors = {
         "hf_pool_default": "pool:default#normal_chat",
@@ -516,6 +523,7 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
                 "model": selected.model,
                 "api_key_env": selected.api_key_env,
                 "base_url": selected.base_url,
+                "service_tier": selected.service_tier,
             }
             for field, selected_value in selected_fields.items():
                 expected_value = getattr(expected_profile, field)
