@@ -765,6 +765,20 @@ def test_runtime_status_section_redacts_at_print_sink(capsys) -> None:
     assert "target=https://<redacted>@example.test/path" in captured.out
 
 
+def test_runtime_status_text_redacts_url_query_and_fragment_secrets() -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+
+    text = bot._sanitize_status_text(
+        "target=https://user:pass@example.test/path?api_key=plain-secret&ok=1&api_key_env=GEMINI_API_KEY"
+        "#access_token=fragment-secret;token=configured"
+    )
+
+    assert "user:pass" not in text
+    assert "plain-secret" not in text
+    assert "fragment-secret" not in text
+    assert "target=https://<redacted>@example.test/path?api_key=<redacted>&ok=1&api_key_env=GEMINI_API_KEY#access_token=<redacted>;token=configured" in text
+
+
 def test_runtime_status_admin_notify_sanitizes_report_lines() -> None:
     bot = importlib.import_module("TeeBotus.bot")
 

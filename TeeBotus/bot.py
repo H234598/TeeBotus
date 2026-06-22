@@ -1902,14 +1902,18 @@ def _sanitize_status_url_value(value: str, *, value_prefix: str = "") -> str:
     except ValueError:
         return f"{value_prefix}{value}"
     if parsed.username is None or parsed.password is None:
-        return f"{value_prefix}{value}"
+        query = _sanitize_status_url_param_secrets(parsed.query)
+        fragment = _sanitize_status_url_param_secrets(parsed.fragment)
+        return f"{value_prefix}{urlunsplit((parsed.scheme, parsed.netloc, parsed.path, query, fragment))}"
     host = parsed.hostname or ""
     if not host:
         return f"{value_prefix}{value}"
     netloc = f"<redacted>@{host}"
     if parsed.port is not None:
         netloc = f"{netloc}:{parsed.port}"
-    return f"{value_prefix}{urlunsplit((parsed.scheme, netloc, parsed.path, parsed.query, parsed.fragment))}"
+    query = _sanitize_status_url_param_secrets(parsed.query)
+    fragment = _sanitize_status_url_param_secrets(parsed.fragment)
+    return f"{value_prefix}{urlunsplit((parsed.scheme, netloc, parsed.path, query, fragment))}"
 
 
 def _status_secret_assignment_replacement(match: re.Match[str]) -> str:
@@ -1938,6 +1942,22 @@ def _status_secret_assignment_text(key: str, separator: str, value: str, *, orig
     if not value:
         return f"{key}{separator}{value}"
     return f"{key}{separator}<redacted>"
+
+
+_status_url_secret_param_pattern = re.compile(
+    r"(?i)(^|[&#;])([^=&#;]{0,120}(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+    r"[^=&#;]{0,120})=([^&#;]*)"
+)
+
+
+def _sanitize_status_url_param_secrets(value: str) -> str:
+    def replace(match: re.Match[str]) -> str:
+        prefix = str(match.group(1) or "")
+        key = str(match.group(2) or "")
+        secret_value = str(match.group(3) or "")
+        return prefix + _status_secret_assignment_text(key, "=", secret_value, original=match.group(0))
+
+    return _status_url_secret_param_pattern.sub(replace, value)
 
 
 def _runtime_config_from_main_args(args: list[str]) -> Any | None:
