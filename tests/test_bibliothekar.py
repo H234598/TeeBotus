@@ -1438,6 +1438,44 @@ def test_llamaindex_backend_uses_fake_query_engine_chunks(tmp_path):
     assert created[0].queries == ["Therapie"]
 
 
+def test_llamaindex_backend_filters_foreign_instance_chunks(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    (library_dir / "therapie.txt").write_text("Depression Therapie Aktivierung Schlaf.", encoding="utf-8")
+
+    class FakeQueryEngine:
+        def __init__(self, store):
+            store.rebuild()
+            own_chunk = json.loads(store.chunks_path.read_text(encoding="utf-8").splitlines()[0])
+            own_chunk["instance_name"] = "Depressionsbot"
+            foreign_chunk = {
+                **own_chunk,
+                "chunk_id": "foreign_chunk",
+                "instance_name": "AndereInstanz",
+                "relative_path": "fremd.txt",
+                "file_path": "fremd.txt",
+                "title": "Fremde Quelle",
+                "text": "Fremde Instanz Therapie darf nicht auftauchen.",
+            }
+            self.chunks = [foreign_chunk, own_chunk]
+
+        def search(self, _query_text):
+            return self.chunks
+
+    backend = LlamaIndexBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        query_engine_factory=FakeQueryEngine,
+    )
+
+    selection = backend.search(BibliothekarQuery(text="Therapie", max_chunks=2))
+    payload = json.loads(selection.prompt_text)
+
+    assert [chunk["file"] for chunk in payload["selected_library_chunks"]] == ["therapie.txt"]
+    assert selection.selected_ids == (payload["selected_library_chunks"][0]["chunk_id"],)
+    assert "Fremde Instanz" not in selection.prompt_text
+
+
 def test_llamaindex_backend_refreshes_cached_query_engine_after_library_change(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)

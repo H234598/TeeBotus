@@ -482,8 +482,12 @@ class LlamaIndexBibliothekarBackend:
             result = method(query.text)
             chunks = _coerce_query_engine_chunks(result)
             if chunks:
-                return chunks
+                return [chunk for chunk in chunks if self._chunk_belongs_to_instance(chunk)]
         return []
+
+    def _chunk_belongs_to_instance(self, chunk: Mapping[str, Any]) -> bool:
+        chunk_instance = str(chunk.get("instance_name") or "").strip()
+        return not chunk_instance or chunk_instance.casefold() == self.instance_name.casefold()
 
 
 class _StaticLlamaIndexRetriever:
