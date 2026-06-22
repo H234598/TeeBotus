@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import re
 from contextlib import contextmanager
 from dataclasses import asdict
 from collections.abc import Iterator
@@ -19,13 +18,11 @@ from TeeBotus.embedding.rebuild import (
 from TeeBotus.runtime.dotenv import load_project_dotenv_for_instances
 from TeeBotus.runtime.qdrant import (
     QDRANT_CODEX_HISTORY_COLLECTION,
+    QDRANT_COLLECTION_NAME_RE,
     QDRANT_USER_MEMORY_COLLECTION,
     qdrant_user_memory_side_collection,
     qdrant_user_memory_side_collection_spec,
 )
-
-
-_QDRANT_COLLECTION_NAME_RE = re.compile(r"^[A-Za-z0-9_.-]{1,255}$")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -238,7 +235,7 @@ def _positive_cli_int(parser: argparse.ArgumentParser, value: object, argument_n
 
 def _validate_cli_collection_name(parser: argparse.ArgumentParser, value: str, argument_name: str) -> None:
     name = str(value or "").strip()
-    if not _QDRANT_COLLECTION_NAME_RE.fullmatch(name):
+    if not QDRANT_COLLECTION_NAME_RE.fullmatch(name):
         parser.error(f"{argument_name} must contain only letters, numbers, underscore, dot or dash.")
 
 
