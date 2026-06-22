@@ -27,6 +27,7 @@ MIN_SAFE_LITELLM_VERSION = "1.84.0"
 PY313_LITELLM_VERSION = "1.89.2"
 PY314_COMPATIBLE_LITELLM_VERSION = "1.89.2"
 PSYCOPG_VERSION = "3.3.4"
+PYTEST_VERSION = "9.1.1"
 WATCHDOG_VERSION = "6.0.0"
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -216,7 +217,7 @@ def _check_pyproject_plan2_contract(path: Path = REPO_ROOT / "pyproject.toml") -
     litellm_version, openai_version = _active_llm_versions()
     fastmcp_version = _active_fastmcp_version()
     expected_extras = {
-        "dev": {"pytest": "", "pytest-cov": "", "ruff": "", "mypy": "", "pip-audit": ""},
+        "dev": {"pytest": PYTEST_VERSION, "pytest-cov": "", "ruff": "", "mypy": "", "pip-audit": ""},
         "llm": {
             "litellm": litellm_version,
             "openai": openai_version,

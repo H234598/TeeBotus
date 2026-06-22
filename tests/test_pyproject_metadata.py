@@ -31,7 +31,7 @@ def test_pyproject_declares_plan1_optional_dependency_groups() -> None:
 
     assert _pyproject()["project"]["requires-python"] == ">=3.11"
     assert set(optional) >= {"dev", "llm", "agents", "rag", "tools"}
-    assert set(optional["dev"]) >= {"pytest", "pytest-cov", "ruff", "mypy", "pip-audit"}
+    assert set(optional["dev"]) >= {"pytest==9.1.1", "pytest-cov", "ruff", "mypy", "pip-audit"}
     assert any(dependency.startswith("litellm==1.89.2") for dependency in optional["llm"])
     assert any(dependency.startswith("openai==2.43.0;") for dependency in optional["llm"])
     assert any(dependency.startswith("openai==2.30.0;") for dependency in optional["llm"])

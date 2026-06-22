@@ -1948,7 +1948,7 @@ dynamic = ["version"]
 requires-python = ">=3.11"
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov", "ruff", "mypy", "pip-audit"]
+dev = ["pytest==9.1.1", "pytest-cov", "ruff", "mypy", "pip-audit"]
 llm = ["litellm==1.89.2", "openai==2.43.0; python_version < '3.14'", "openai==2.30.0; python_version >= '3.14'", "ollama==0.6.2"]
 rag = ["haystack-ai==2.30.2", "qdrant-haystack==10.3.0", "sentence-transformers==5.6.0", "pypdf==6.13.3", "pymupdf==1.27.2.3", "ebooklib==0.20", "beautifulsoup4==4.15.0", "llama-index-core==0.14.22"]
 agents = ["pydantic-ai-slim==1.107.0", "langgraph==1.2.6"]
