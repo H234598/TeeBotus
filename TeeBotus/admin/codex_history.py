@@ -23,6 +23,7 @@ from inspect import isawaitable
 from pathlib import Path
 from urllib.parse import urlsplit
 from typing import Any
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from TeeBotus import __version__
 from TeeBotus.artifact_outputs import obsidian_incoming_path
@@ -183,6 +184,24 @@ CodexHistoryStrategist = Callable[[Sequence[Mapping[str, Any]]], Mapping[str, An
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _display_timestamp(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return text
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    timezone_name = os.environ.get("TEEBOTUS_CODEX_HISTORY_TIMEZONE", "Europe/Berlin").strip() or "Europe/Berlin"
+    try:
+        display_timezone = ZoneInfo(timezone_name)
+    except ZoneInfoNotFoundError:
+        display_timezone = datetime.now().astimezone().tzinfo or timezone.utc
+    return parsed.astimezone(display_timezone).isoformat(timespec="seconds")
 
 
 def _build_codex_history_summary_item(
@@ -1754,7 +1773,7 @@ def build_codex_history_markdown(
         f"- Version: `{version.get('tag', '')}`",
         f"- Commit: `{repo.get('head_commit', '') or '<none>'}`",
         f"- Branch: `{repo.get('branch', '') or '<none>'}`",
-        f"- Erstellt: `{created_at}`",
+        f"- Erstellt: `{_display_timestamp(created_at)}`",
         "",
         "## Zusammenfassung",
     ]
@@ -4158,7 +4177,7 @@ def _codex_history_bibliothekar_markdown(item: Mapping[str, Any]) -> str:
         f"- Tag: `{redact_codex_history_text(version.get('tag', '')).strip()}`",
         f"- Summary: `{redact_codex_history_text(item.get('summary_prefix', '')).strip()}`",
         f"- Status: `{redact_codex_history_text(item.get('status', '')).strip()}`",
-        f"- Erstellt: `{redact_codex_history_text(item.get('created_at', '')).strip()}`",
+        f"- Erstellt: `{redact_codex_history_text(_display_timestamp(item.get('created_at', ''))).strip()}`",
         f"- Aktualisiert: `{redact_codex_history_text(item.get('updated_at', '')).strip()}`",
         f"- Sent: `{redact_codex_history_text(delivery.get('sent_at', '')).strip()}`",
         f"- Accepted: `{redact_codex_history_text(delivery.get('accepted_at', '')).strip()}`",
@@ -4252,7 +4271,7 @@ def _codex_history_graph_markdown(items: Sequence[Mapping[str, Any]], *, instanc
         f"- Repo-Filter: `{redact_codex_history_text(repo_filter).strip() or '<alle>'}`",
         f"- Repos: `{len(repos)}`",
         f"- Summaries: `{len(items)}`",
-        f"- Erstellt: `{utc_now()}`",
+        f"- Erstellt: `{_display_timestamp(utc_now())}`",
         "",
         "```mermaid",
         "flowchart LR",
@@ -4343,7 +4362,7 @@ def _codex_history_graph_artifact_markdown(
         f"- Quelle: `{redact_codex_history_text(source_path).strip()}`",
         f"- Repos: `{int(repo_count or 0)}`",
         f"- Summaries: `{int(item_count or 0)}`",
-        f"- Erstellt: `{redact_codex_history_text(created_at).strip()}`",
+        f"- Erstellt: `{redact_codex_history_text(_display_timestamp(created_at)).strip()}`",
         "",
         "Das zugehoerige SVG wird als Attachment dieses Codex-History-Outbox-Eintrags versendet.",
         "",
@@ -4715,7 +4734,7 @@ def _codex_history_strategy_markdown(
         f"- Instanz: `{redact_codex_history_text(instance_name).strip()}`",
         f"- Repo-Filter: `{redact_codex_history_text(repo_filter).strip() or '<alle>'}`",
         f"- Analysierte Summaries: `{len(source_items)}`",
-        f"- Erstellt: `{redact_codex_history_text(created_at).strip()}`",
+        f"- Erstellt: `{redact_codex_history_text(_display_timestamp(created_at)).strip()}`",
         f"- Confidence: `{redact_codex_history_text(analysis.get('confidence', '')).strip()}`",
         "",
     ]

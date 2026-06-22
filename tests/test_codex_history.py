@@ -19,6 +19,7 @@ from TeeBotus.admin.codex_history import (
     _update_watch_instance_report,
     acknowledge_codex_history_item,
     append_codex_history_summary,
+    build_codex_history_markdown,
     build_local_codex_history_categorizer,
     build_codex_history_strategist,
     build_codex_history_report,
@@ -217,6 +218,24 @@ def test_append_codex_history_summary_numbers_per_repo_and_redacts_secrets(tmp_p
     assert first["status"] == "queued"
     assert first["delivery"]["target_group"] == "status_admins"
     assert first["indexing"]["indexable"] is True
+
+
+def test_codex_history_markdown_displays_berlin_time(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_CODEX_HISTORY_TIMEZONE", "Europe/Berlin")
+
+    markdown = build_codex_history_markdown(
+        summary_prefix="v1.2.3 #0001",
+        title="Zeitcheck",
+        repo={"repo_name": "TeeBotus", "repo_root": "/tmp/TeeBotus", "head_commit": "abc", "branch": "main"},
+        version={"tag": "v1.2.3"},
+        bullets=["Zeit stimmt lokal."],
+        changed_files=[],
+        tests=[],
+        created_at="2026-06-19T12:00:00+00:00",
+    )
+
+    assert "- Erstellt: `2026-06-19T14:00:00+02:00`" in markdown
+    assert "2026-06-19T12:00:00+00:00" not in markdown
 
 
 def test_codex_history_cli_append_and_report_json(tmp_path: Path, capsys) -> None:
