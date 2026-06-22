@@ -235,7 +235,13 @@ def _absolute_without_symlink_resolution(path: Path) -> Path:
 
 def _has_symlink_parent(path: Path) -> bool:
     absolute = _absolute_without_symlink_resolution(path)
-    return any(parent.is_symlink() for parent in absolute.parents)
+    for parent in absolute.parents:
+        try:
+            if parent.is_symlink():
+                return True
+        except OSError:
+            return True
+    return False
 
 
 class RuntimeTimedRotatingFileHandler(TimedRotatingFileHandler):

@@ -1374,6 +1374,28 @@ def test_configure_runtime_logging_refuses_symlinked_runtime_ancestor(tmp_path, 
     assert not (external_parent / "runtime").exists()
 
 
+def test_configure_runtime_logging_refuses_path_when_parent_check_fails(tmp_path, monkeypatch):
+    monkeypatch.setattr(sys, "stdout", io.StringIO())
+    blocked_parent = tmp_path / "blocked-parent"
+    real_is_symlink = Path.is_symlink
+
+    def fail_parent_check(self):
+        if self == blocked_parent:
+            raise PermissionError("cannot inspect parent")
+        return real_is_symlink(self)
+
+    monkeypatch.setattr(Path, "is_symlink", fail_parent_check)
+
+    configure_runtime_logging(base_dir=blocked_parent / "runtime")
+    logging.getLogger("TeeBotus.test").warning("probe")
+    for handler in logging.getLogger().handlers:
+        handler.flush()
+
+    handlers = logging.getLogger().handlers
+    assert not any(isinstance(handler, RuntimeTimedRotatingFileHandler) for handler in handlers)
+    assert not blocked_parent.exists()
+
+
 def test_runtime_file_handler_rollover_preserves_existing_rotated_log(tmp_path):
     log_path = tmp_path / "teebotus-production.log"
     handler = RuntimeTimedRotatingFileHandler(log_path)
