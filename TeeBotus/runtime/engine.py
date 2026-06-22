@@ -890,13 +890,21 @@ class TeeBotusEngine:
             return self.llm_enabled_override
         return instructions.text_llm_enabled()
 
+    def _text_llm_client(self) -> object | None:
+        if self.llm_client is not None:
+            return self.llm_client
+        if self.openai_client is not None and callable(getattr(self.openai_client, "create_reply", None)):
+            return self.openai_client
+        return None
+
     def _llm_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         text = str(event.text or "").strip()
         if not self._text_llm_enabled(instructions) or (not text and not event.attachments) or text.startswith("/"):
             return []
-        if self.llm_client is None:
+        llm_client = self._text_llm_client()
+        if llm_client is None:
             return [SendText(event.chat_id, instructions.llm_missing_key)]
-        create_reply = getattr(self.llm_client, "create_reply", None)
+        create_reply = getattr(llm_client, "create_reply", None)
         if not callable(create_reply):
             return [SendText(event.chat_id, instructions.llm_error)]
         try:
@@ -906,7 +914,7 @@ class TeeBotusEngine:
                 event.channel,
                 event.event_id,
                 account_id,
-                type(self.llm_client).__name__,
+                type(llm_client).__name__,
                 len(text),
                 len(event.attachments),
             )
@@ -916,7 +924,7 @@ class TeeBotusEngine:
             weather_context = weather_context_text(self.account_store, account_id)
             working_memory_context = _build_working_memory_context(self.working_memory_store, text)
             library_context = _build_bibliothekar_context(self.bibliothekar_store, instructions, text, structured_decision_runner=self.structured_decision_runner)
-            previous_response_id = _previous_response_id_for_client(self.llm_client, self.state, event.instance, account_id)
+            previous_response_id = _previous_response_id_for_client(llm_client, self.state, event.instance, account_id)
             LOGGER.log(
                 DEBUG_ALL,
                 "LLM action context built instance=%s event_id=%s attachment_chars=%s account_memory_chars=%s account_memory_ids=%s weather_chars=%s working_memory_chars=%s library_chars=%s previous_response=%s",
