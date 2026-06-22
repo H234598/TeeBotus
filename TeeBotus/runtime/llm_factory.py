@@ -563,6 +563,8 @@ def _is_remote_fallback_model(provider: str, model: str) -> bool:
         return False
     if value.startswith(("ollama/", "ollama_chat/")):
         return False
+    if route_uses_google_gemini(provider=provider, model=model):
+        return True
     if value.startswith(("openai/", "huggingface/", "groq/", "gemini/", "vertex_ai/", "hf_pool/")):
         return True
     if provider == "litellm":

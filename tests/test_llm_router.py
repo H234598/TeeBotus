@@ -590,6 +590,24 @@ def test_runtime_text_client_profile_filters_remote_fallback_without_explicit_al
     assert allowed.fallback_models == ("groq/llama-3.3-70b-versatile", "ollama_chat/qwen2.5:7b")
 
 
+def test_runtime_fallback_filter_blocks_unprefixed_gemini_for_gemini_provider_alias() -> None:
+    from TeeBotus.runtime.llm_factory import filter_runtime_fallback_models
+
+    blocked = filter_runtime_fallback_models(
+        provider="gemini_paid_interactions",
+        fallback_models="gemini-2.5-flash, ollama_chat/qwen2.5:7b",
+        allow_remote_fallback=False,
+    )
+    allowed = filter_runtime_fallback_models(
+        provider="gemini_paid_interactions",
+        fallback_models="gemini-2.5-flash, ollama_chat/qwen2.5:7b",
+        allow_remote_fallback=True,
+    )
+
+    assert blocked == ("ollama_chat/qwen2.5:7b",)
+    assert allowed == ("gemini-2.5-flash", "ollama_chat/qwen2.5:7b")
+
+
 def test_runtime_text_client_returns_none_when_runtime_llm_is_disabled() -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(llm_provider="openai", llm_model="ignored"),
