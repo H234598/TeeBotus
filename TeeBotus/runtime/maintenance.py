@@ -213,7 +213,9 @@ def _stdout_targets_path(path: Path) -> bool:
 def rotate_runtime_text_file_if_needed(path: Path, *, max_bytes: int = MAX_RUNTIME_TEXT_FILE_BYTES) -> Path | None:
     if path.name in ACTIVE_RUNTIME_TEXT_FILENAMES:
         return None
-    if not path.exists() or path.stat().st_size <= max_bytes:
+    if path.is_symlink() or not path.is_file():
+        return None
+    if path.stat().st_size <= max_bytes:
         return None
     rotated = _next_rotated_path(path)
     path.rename(rotated)
@@ -241,7 +243,7 @@ def maintain_runtime_directory(
 
 
 def gzip_file(path: Path) -> Path:
-    if path.suffix == ".gz" or not path.exists():
+    if path.is_symlink() or path.suffix == ".gz" or not path.is_file():
         return path
     stat = path.stat()
     target = _unique_path(path.with_name(f"{path.name}.gz"))

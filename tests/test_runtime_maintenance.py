@@ -50,6 +50,27 @@ def test_rotate_runtime_text_file_preserves_active_runtime_log_names(tmp_path):
         assert not list(tmp_path.glob(f"{filename}.*.gz"))
 
 
+def test_rotate_runtime_text_file_preserves_symlinked_file(tmp_path):
+    target = tmp_path / "external-target.txt"
+    target.write_text("0123456789\n", encoding="utf-8")
+    symlink = tmp_path / "Security_Events.jsonl"
+    symlink.symlink_to(target)
+
+    assert rotate_runtime_text_file_if_needed(symlink, max_bytes=4) is None
+
+    assert symlink.is_symlink()
+    assert target.read_text(encoding="utf-8") == "0123456789\n"
+    assert not list(tmp_path.glob("Security_Events.jsonl.*.gz"))
+
+
+def test_rotate_runtime_text_file_ignores_non_file_paths(tmp_path):
+    directory = tmp_path / "Security_Events.jsonl"
+    directory.mkdir()
+
+    assert rotate_runtime_text_file_if_needed(directory, max_bytes=4) is None
+    assert directory.is_dir()
+
+
 def test_runtime_maintenance_compresses_old_logs(tmp_path):
     now = time.time()
     path = tmp_path / "teebotus-production.log.2026-06-01"
@@ -127,6 +148,19 @@ def test_runtime_maintenance_preserves_symlinked_runtime_text_files(tmp_path):
     assert not (tmp_path / f"{symlink.name}.gz").exists()
     assert not rotated.exists()
     assert (tmp_path / f"{rotated.name}.gz").exists()
+
+
+def test_gzip_file_preserves_symlinked_runtime_file(tmp_path):
+    target = tmp_path / "external-target.txt"
+    target.write_text("do not copy\n", encoding="utf-8")
+    symlink = tmp_path / "linked-runtime.log"
+    symlink.symlink_to(target)
+
+    assert gzip_file(symlink) == symlink
+
+    assert symlink.is_symlink()
+    assert target.read_text(encoding="utf-8") == "do not copy\n"
+    assert not (tmp_path / f"{symlink.name}.gz").exists()
 
 
 def test_gzip_file_removes_partial_temporary_file_on_copy_failure(tmp_path, monkeypatch):
