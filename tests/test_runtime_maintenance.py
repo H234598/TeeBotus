@@ -630,6 +630,21 @@ def test_runtime_maintenance_keeps_sources_when_archive_write_fails(tmp_path, mo
     assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
 
 
+def test_runtime_maintenance_keeps_sources_when_archive_directory_is_blocked(tmp_path):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    blocked_archive_dir = tmp_path / "monthly_archives"
+    blocked_archive_dir.write_text("not a directory\n", encoding="utf-8")
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert path.read_bytes() == b"compressed-ish"
+    assert blocked_archive_dir.read_text(encoding="utf-8") == "not a directory\n"
+
+
 def test_runtime_maintenance_groups_compressed_logs_with_single_stat(tmp_path, monkeypatch):
     now = time.time()
     old_mtime = now - 70 * 24 * 60 * 60
