@@ -395,7 +395,7 @@ def test_codex_history_systemd_print_mode_can_output_collector_timer(tmp_path: P
     assert captured.out.count("--sessions-root") == 1
     assert f"--sessions-root {tmp_path / 'sessions'}" in captured.out
     assert "--dispatch-limit 50" in captured.out
-    assert "OnUnitActiveSec=5min" in captured.out
+    assert "OnUnitActiveSec=1min" in captured.out
 
 
 def test_codex_history_systemd_enable_runs_system_systemctl(monkeypatch, tmp_path: Path) -> None:
