@@ -472,6 +472,30 @@ def test_source_harvester_rejects_absolute_promote_destination_dir(tmp_path):
         harvester.promote_accepted(harvest.stored_path, destination_dir=str(tmp_path / "outside"))
 
 
+@pytest.mark.parametrize("destination_dir", ("https://example.test/books", "file:books"))
+def test_source_harvester_rejects_uri_promote_destination_dir(tmp_path, destination_dir):
+    source = tmp_path / "download" / "therapie.txt"
+    source.parent.mkdir()
+    source.write_text("Schlafhygiene und Aktivierung.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    harvester = SourceHarvester(
+        store.library_dir,
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+    harvest = harvester.harvest_path(
+        source,
+        metadata={"title": "Therapie", "license": "private"},
+        claims=("Schlafhygiene ist relevant.",),
+        evidence=("Schlafhygiene und Aktivierung.",),
+    )
+
+    with pytest.raises(ValueError, match="relative library subdirectory"):
+        harvester.promote_accepted(harvest.stored_path, destination_dir=destination_dir)
+
+    assert not (store.library_dir / "https").exists()
+    assert not (store.library_dir / "file_books").exists()
+
+
 @pytest.mark.parametrize("destination_dir", ("###", "books/###"))
 def test_source_harvester_rejects_promote_destination_without_usable_name(tmp_path, destination_dir):
     source = tmp_path / "download" / "therapie.txt"

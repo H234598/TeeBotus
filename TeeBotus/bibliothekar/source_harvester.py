@@ -262,7 +262,7 @@ def _safe_filename(value: str) -> str:
 
 def _safe_destination_dir(value: str) -> str:
     raw = str(value or PROMOTED_DIR).strip()
-    if Path(raw).is_absolute() or raw.startswith(("/", "\\")) or (len(raw) >= 2 and raw[1] == ":"):
+    if Path(raw).is_absolute() or raw.startswith(("/", "\\")) or (len(raw) >= 2 and raw[1] == ":") or _looks_like_uri_destination(raw):
         raise ValueError("destination_dir must be a relative library subdirectory")
     text = raw.replace("\\", "/")
     parts = tuple(part for part in text.split("/") if part and part != ".")
@@ -273,6 +273,16 @@ def _safe_destination_dir(value: str) -> str:
     if parts[0].casefold() in set(HARVEST_DIRS):
         raise ValueError("destination_dir must not be a harvest staging directory")
     return "/".join(_safe_filename(part) for part in parts)
+
+
+def _looks_like_uri_destination(value: str) -> bool:
+    text = str(value or "").strip().casefold()
+    scheme, separator, _rest = text.partition(":")
+    if not separator:
+        return False
+    if scheme == "file":
+        return True
+    return "://" in text and bool(scheme) and scheme[0].isalpha() and all(char.isalnum() or char in {"+", "-", "."} for char in scheme)
 
 
 def _unique_destination(candidate: Path, *, sha256: str) -> Path:
