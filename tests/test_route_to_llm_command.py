@@ -70,6 +70,17 @@ def test_resolve_route_to_target_uses_aliases_profiles_and_purposes() -> None:
     assert purpose.provider == "hf_pool"
 
 
+def test_resolve_route_to_target_displays_litellm_openai_profile_as_openai() -> None:
+    profiles = {
+        "openai_premium": LLMProfile("openai_premium", "litellm", "openai/gpt-5.5", api_key_env="OPENAI_API_KEY"),
+    }
+
+    target = resolve_route_to_target("OAI", profiles=profiles, routing={})
+
+    assert target.provider == "openai"
+    assert target.model == "openai/gpt-5.5"
+
+
 def test_route_to_llm_inline_prompt_is_admin_only_and_bypasses_normal_llm(tmp_path, monkeypatch) -> None:
     account_store = _store(tmp_path)
     identity = telegram_identity_key(1)

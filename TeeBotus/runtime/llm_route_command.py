@@ -120,7 +120,7 @@ def resolve_route_to_target(
         return RouteToTarget(
             kind="profile",
             name=profile.name,
-            provider=profile.provider,
+            provider=_display_provider(profile.provider, profile.model),
             model=profile.model,
             label=f"Profil {profile.name}",
         )
@@ -193,10 +193,20 @@ def _target_from_route(route: LLMRoute) -> RouteToTarget:
     return RouteToTarget(
         kind="purpose",
         name=route.purpose,
-        provider=route.provider,
+        provider=_display_provider(route.provider, route.model),
         model=route.model,
         label=f"Route {route.purpose} -> Profil {route.profile_name}",
     )
+
+
+def _display_provider(provider: str, model: str) -> str:
+    normalized_provider = str(provider or "").strip()
+    normalized_model = str(model or "").strip()
+    if normalized_provider.casefold() == "litellm" and "/" in normalized_model:
+        prefix = normalized_model.split("/", maxsplit=1)[0].strip()
+        if prefix:
+            return prefix
+    return normalized_provider
 
 
 __all__ = [
