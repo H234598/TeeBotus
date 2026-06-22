@@ -1,14 +1,31 @@
 from __future__ import annotations
 
+import shlex
 import subprocess
 from pathlib import Path
 
+import TeeBotus.codex_history_systemd as codex_history_systemd_module
 from TeeBotus.codex_history_systemd import (
     main,
     render_codex_history_collector_timer_units,
     render_codex_history_index_systemd_units,
     render_codex_history_systemd_unit,
 )
+
+
+def _exec_start_args(service_text: str) -> list[str]:
+    for line in service_text.splitlines():
+        if line.startswith("ExecStart="):
+            return shlex.split(line.removeprefix("ExecStart="))
+    raise AssertionError("missing ExecStart line")
+
+
+def _option_values(args: list[str], option: str) -> list[str]:
+    values: list[str] = []
+    for index, value in enumerate(args[:-1]):
+        if value == option:
+            values.append(args[index + 1])
+    return values
 
 
 def test_render_codex_history_systemd_unit_matches_plan_shape(tmp_path: Path) -> None:
@@ -39,11 +56,27 @@ def test_render_codex_history_systemd_unit_matches_plan_shape(tmp_path: Path) ->
     assert "WantedBy=multi-user.target" in unit.service_text
 
 
-def test_render_codex_history_systemd_unit_root_collector_uses_repo_owner_session_roots() -> None:
-    unit = render_codex_history_systemd_unit(repo_root=Path("/home/teladi/TeeBotus"))
+def test_render_codex_history_systemd_unit_root_collector_uses_direct_agent_session_roots(
+    tmp_path: Path, monkeypatch
+) -> None:
+    owner_home = tmp_path / "owner"
+    (owner_home / ".codex" / "sessions").mkdir(parents=True)
+    (owner_home / ".codex-agents" / "a1" / "sessions").mkdir(parents=True)
+    (owner_home / ".codex-agents" / "a2" / "sessions").mkdir(parents=True)
+    (owner_home / ".codex-agents" / "b90" / "sessions").mkdir(parents=True)
+    (owner_home / ".codex-agents" / "without-sessions").mkdir(parents=True)
+    monkeypatch.setattr(codex_history_systemd_module, "_home_from_repo_root", lambda _repo: owner_home)
 
-    assert "--sessions-root /home/teladi/.codex/sessions" in unit.service_text
-    assert "--sessions-root /home/teladi/.codex-agents" in unit.service_text
+    unit = render_codex_history_systemd_unit(repo_root=tmp_path)
+    roots = _option_values(_exec_start_args(unit.service_text), "--sessions-root")
+
+    assert roots == [
+        str(owner_home / ".codex" / "sessions"),
+        str(owner_home / ".codex-agents" / "a1" / "sessions"),
+        str(owner_home / ".codex-agents" / "a2" / "sessions"),
+        str(owner_home / ".codex-agents" / "b90" / "sessions"),
+    ]
+    assert str(owner_home / ".codex-agents") not in roots
 
 
 def test_render_codex_history_systemd_unit_can_target_instance_and_session_roots(tmp_path: Path) -> None:

@@ -766,16 +766,13 @@ def _default_collector_session_roots(repo_root: Path, *, run_user: str) -> tuple
     agents_root = owner_home / ".codex-agents"
     if agents_root.is_dir():
         roots.extend(
-            path / "sessions"
+            sessions_dir
             for path in sorted(agents_root.iterdir())
-            if path.is_dir() and _is_default_codex_agent_dir(path)
+            if path.is_dir()
+            for sessions_dir in (path / "sessions",)
+            if sessions_dir.is_dir()
         )
     return tuple(roots)
-
-
-def _is_default_codex_agent_dir(path: Path) -> bool:
-    name = path.name
-    return len(name) == 2 and name[0].islower() and name[1] == "1"
 
 
 def _home_from_repo_root(repo_root: Path) -> Path | None:
