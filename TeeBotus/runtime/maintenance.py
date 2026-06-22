@@ -220,7 +220,7 @@ def _open_append_text_no_follow(path: Path) -> object | None:
     try:
         fd = os.open(path, flags, 0o600)
     except OSError as exc:
-        if exc.errno in {errno.EISDIR, errno.ELOOP, errno.ENODEV, errno.ENOTDIR, errno.ENXIO}:
+        if exc.errno in {errno.EISDIR, errno.ELOOP, errno.ENODEV, errno.ENOENT, errno.ENOTDIR, errno.ENXIO}:
             return None
         raise
     try:
