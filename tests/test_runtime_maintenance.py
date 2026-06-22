@@ -619,6 +619,34 @@ def test_runtime_maintenance_skips_archive_files_that_disappear_before_open(tmp_
     assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
 
 
+def test_runtime_maintenance_skips_archive_files_replaced_before_open(tmp_path, monkeypatch):
+    now = time.time()
+    old_mtime = now - 70 * 24 * 60 * 60
+    path = tmp_path / "teebotus-production.log.2026-03-01.gz"
+    path.write_bytes(b"compressed-ish")
+    os.utime(path, (old_mtime, old_mtime))
+    real_open = os.open
+    raced = False
+
+    def racing_open(file, flags, *args, **kwargs):
+        nonlocal raced
+        if Path(file) == path and not raced:
+            raced = True
+            path.unlink()
+            path.write_bytes(b"replacement")
+            os.utime(path, (now, now))
+        return real_open(file, flags, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", racing_open)
+
+    maintain_runtime_directory(tmp_path, now=now)
+
+    assert raced is True
+    assert path.read_bytes() == b"replacement"
+    assert not list((tmp_path / "monthly_archives").glob("teebotus-runtime-*.tar.gz"))
+    assert not list((tmp_path / "monthly_archives").glob("*.tmp"))
+
+
 def test_runtime_maintenance_skips_archive_files_replaced_by_symlink_before_open(tmp_path, monkeypatch):
     if not hasattr(os, "O_NOFOLLOW"):
         pytest.skip("O_NOFOLLOW is required to reject symlink archive races")

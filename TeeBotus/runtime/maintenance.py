@@ -307,7 +307,7 @@ def _runtime_text_files(runtime_path: Path) -> list[Path]:
 
 def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_after_seconds: int) -> None:
     archive_dir = runtime_path / "monthly_archives"
-    groups: dict[str, list[Path]] = {}
+    groups: dict[str, list[tuple[Path, os.stat_result]]] = {}
     for path in runtime_path.glob("*.gz"):
         if path.is_symlink():
             continue
@@ -321,7 +321,7 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
         if age < archive_after_seconds:
             continue
         month = datetime.fromtimestamp(stat.st_mtime).strftime("%Y-%m")
-        groups.setdefault(month, []).append(path)
+        groups.setdefault(month, []).append((path, stat))
 
     for month, paths in groups.items():
         archive_dir.mkdir(parents=True, exist_ok=True)
@@ -330,8 +330,8 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
         added_paths: list[tuple[Path, os.stat_result]] = []
         try:
             with tarfile.open(temporary, "w:gz") as archive:
-                for path in paths:
-                    archived_stat = _add_regular_file_to_archive(archive, path)
+                for path, selected_stat in paths:
+                    archived_stat = _add_regular_file_to_archive(archive, path, expected_stat=selected_stat)
                     if archived_stat is None:
                         continue
                     added_paths.append((path, archived_stat))
@@ -346,7 +346,12 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
             _unlink_if_same_file(path, archived_stat)
 
 
-def _add_regular_file_to_archive(archive: tarfile.TarFile, path: Path) -> os.stat_result | None:
+def _add_regular_file_to_archive(
+    archive: tarfile.TarFile,
+    path: Path,
+    *,
+    expected_stat: os.stat_result | None = None,
+) -> os.stat_result | None:
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(path, flags)
@@ -358,6 +363,9 @@ def _add_regular_file_to_archive(archive: tarfile.TarFile, path: Path) -> os.sta
         os.close(fd)
         return None
     if not stat_module.S_ISREG(archived_stat.st_mode):
+        os.close(fd)
+        return None
+    if expected_stat is not None and not _same_file_stat(archived_stat, expected_stat):
         os.close(fd)
         return None
     with os.fdopen(fd, "rb") as source:
