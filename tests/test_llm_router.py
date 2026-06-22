@@ -387,6 +387,10 @@ def test_llm_loaders_skip_non_string_names_and_references(monkeypatch, tmp_path:
                         "provider": "litellm",
                         "model": "ollama_chat/ignored:latest",
                     },
+                    " ": {
+                        "provider": "litellm",
+                        "model": "ollama_chat/blank:latest",
+                    },
                     "bad_model_type": {
                         "provider": "litellm",
                         "model": 123,
@@ -398,6 +402,7 @@ def test_llm_loaders_skip_non_string_names_and_references(monkeypatch, tmp_path:
                 "default_profile": 123,
                 "purposes": {
                     "normal_chat": {"profile": "local_ollama"},
+                    " ": {"profile": "local_ollama"},
                     "bad_profile_type": {"profile": 456},
                     "bad_fallback_type": {"profile": "local_ollama", "fallback": ["local_ollama"]},
                     456: {"profile": "local_ollama"},

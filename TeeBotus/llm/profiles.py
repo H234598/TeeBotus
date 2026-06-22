@@ -91,6 +91,8 @@ def load_llm_profiles(path: str | Path = DEFAULT_PROFILE_PATH) -> dict[str, LLMP
     for name, raw_profile in raw_profiles.items():
         if not isinstance(name, str):
             continue
+        if not name.strip():
+            continue
         if not isinstance(raw_profile, Mapping):
             continue
         profile = LLMProfile(
@@ -114,6 +116,8 @@ def load_llm_routing(path: str | Path = DEFAULT_ROUTING_PATH) -> tuple[str, dict
     if isinstance(raw_purposes, Mapping):
         for purpose, raw_rule in raw_purposes.items():
             if not isinstance(purpose, str):
+                continue
+            if not purpose.strip():
                 continue
             if not isinstance(raw_rule, Mapping):
                 continue
