@@ -233,10 +233,7 @@ def gzip_file(path: Path) -> Path:
         os.utime(temporary, (stat.st_atime, stat.st_mtime))
         temporary.replace(target)
     except Exception:
-        try:
-            temporary.unlink()
-        except FileNotFoundError:
-            pass
+        _unlink_quietly(temporary)
         raise
     path.unlink()
     return target
@@ -284,14 +281,11 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
                         continue
                     added_paths.append(path)
             if not added_paths:
-                temporary.unlink()
+                _unlink_quietly(temporary)
                 continue
             temporary.replace(archive_path)
         except Exception:
-            try:
-                temporary.unlink()
-            except FileNotFoundError:
-                pass
+            _unlink_quietly(temporary)
             raise
         for path in added_paths:
             try:
@@ -303,6 +297,13 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
 def _next_rotated_path(path: Path) -> Path:
     timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     return _unique_path(path.with_name(f"{path.name}.{timestamp}"))
+
+
+def _unlink_quietly(path: Path) -> None:
+    try:
+        path.unlink()
+    except OSError:
+        pass
 
 
 def _unique_path(path: Path) -> Path:

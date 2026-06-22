@@ -8,6 +8,7 @@ import shutil
 import sys
 import tarfile
 import time
+from pathlib import Path
 
 import pytest
 
@@ -86,6 +87,28 @@ def test_gzip_file_removes_partial_temporary_file_on_copy_failure(tmp_path, monk
     assert path.read_text(encoding="utf-8") == "old log\n"
     assert not (tmp_path / f"{path.name}.gz").exists()
     assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_gzip_file_preserves_primary_error_when_temporary_cleanup_fails(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    original_unlink = Path.unlink
+
+    def fail_copy(*_args, **_kwargs):
+        raise OSError("copy failed")
+
+    def fail_temporary_unlink(self, *_args, **_kwargs):
+        if self.name.startswith(".") and ".gz.tmp" in self.name:
+            raise PermissionError("cleanup failed")
+        return original_unlink(self)
+
+    monkeypatch.setattr(shutil, "copyfileobj", fail_copy)
+    monkeypatch.setattr(Path, "unlink", fail_temporary_unlink)
+
+    with pytest.raises(OSError, match="copy failed"):
+        gzip_file(path)
+
+    assert path.read_text(encoding="utf-8") == "old log\n"
 
 
 def test_runtime_maintenance_archives_compressed_logs_older_than_two_months(tmp_path):
