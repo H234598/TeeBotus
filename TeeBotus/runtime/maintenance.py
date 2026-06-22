@@ -267,13 +267,13 @@ def gzip_file(path: Path, *, expected_stat: os.stat_result | None = None) -> Pat
     try:
         source_stat = os.fstat(fd)
     except OSError:
-        os.close(fd)
+        _close_fd_quietly(fd)
         raise
     if not stat_module.S_ISREG(source_stat.st_mode):
-        os.close(fd)
+        _close_fd_quietly(fd)
         return path
     if expected_stat is not None and not _same_file_stat(source_stat, expected_stat):
-        os.close(fd)
+        _close_fd_quietly(fd)
         return path
     target = _unique_path(path.with_name(f"{path.name}.gz"))
     source_fd: int | None = fd
@@ -291,9 +291,9 @@ def gzip_file(path: Path, *, expected_stat: os.stat_result | None = None) -> Pat
         published = _publish_temporary_file(temporary, target)
     except Exception:
         if source_fd is not None:
-            os.close(source_fd)
+            _close_fd_quietly(source_fd)
         if temporary_fd is not None:
-            os.close(temporary_fd)
+            _close_fd_quietly(temporary_fd)
         _unlink_quietly(temporary)
         raise
     _unlink_if_same_file(path, source_stat)
@@ -360,7 +360,7 @@ def _archive_old_compressed_files(runtime_path: Path, *, now: float, archive_aft
             _publish_temporary_file(temporary, archive_path)
         except Exception:
             if temporary_fd is not None:
-                os.close(temporary_fd)
+                _close_fd_quietly(temporary_fd)
             _unlink_quietly(temporary)
             raise
         for path, archived_stat in added_paths:
@@ -381,13 +381,13 @@ def _add_regular_file_to_archive(
     try:
         archived_stat = os.fstat(fd)
     except OSError:
-        os.close(fd)
+        _close_fd_quietly(fd)
         return None
     if not stat_module.S_ISREG(archived_stat.st_mode):
-        os.close(fd)
+        _close_fd_quietly(fd)
         return None
     if expected_stat is not None and not _same_file_stat(archived_stat, expected_stat):
-        os.close(fd)
+        _close_fd_quietly(fd)
         return None
     with os.fdopen(fd, "rb") as source:
         try:
@@ -469,6 +469,13 @@ def _publish_temporary_file(temporary: Path, target: Path) -> Path:
 def _unlink_quietly(path: Path) -> None:
     try:
         path.unlink()
+    except OSError:
+        pass
+
+
+def _close_fd_quietly(fd: int) -> None:
+    try:
+        os.close(fd)
     except OSError:
         pass
 

@@ -518,6 +518,32 @@ def test_gzip_file_removes_temporary_file_when_source_fdopen_fails(tmp_path, mon
     assert len(closed_fds) >= 2
 
 
+def test_gzip_file_preserves_primary_error_when_fd_close_cleanup_fails(tmp_path, monkeypatch):
+    path = tmp_path / "teebotus-production.log.2026-06-01"
+    path.write_text("old log\n", encoding="utf-8")
+    real_fdopen = os.fdopen
+    real_close = os.close
+
+    def fail_source_fdopen(fd, mode="r", *args, **kwargs):
+        if mode == "rb":
+            raise OSError("source fdopen failed")
+        return real_fdopen(fd, mode, *args, **kwargs)
+
+    def fail_close_after_closing(fd):
+        real_close(fd)
+        raise OSError("close cleanup failed")
+
+    monkeypatch.setattr(os, "fdopen", fail_source_fdopen)
+    monkeypatch.setattr(os, "close", fail_close_after_closing)
+
+    with pytest.raises(OSError, match="source fdopen failed"):
+        gzip_file(path)
+
+    assert path.read_text(encoding="utf-8") == "old log\n"
+    assert not (tmp_path / f"{path.name}.gz").exists()
+    assert not list(tmp_path.glob(".*.tmp"))
+
+
 def test_gzip_file_preserves_primary_error_when_temporary_cleanup_fails(tmp_path, monkeypatch):
     path = tmp_path / "teebotus-production.log.2026-06-01"
     path.write_text("old log\n", encoding="utf-8")
