@@ -503,11 +503,47 @@ def _check_llm_profiles_plan2_contract() -> tuple[bool, str]:
             errors.append(
                 f"routing {purpose} selector profile={selected.profile_name or '<empty>'} expected={profile}"
             )
+        expected_profile = profiles.get(profile)
+        if expected_profile is not None:
+            selected_fields = {
+                "provider": selected.provider,
+                "model": selected.model,
+                "api_key_env": selected.api_key_env,
+                "base_url": selected.base_url,
+            }
+            for field, selected_value in selected_fields.items():
+                expected_value = getattr(expected_profile, field)
+                if selected_value != expected_value:
+                    errors.append(
+                        f"routing {purpose} selector {field}={selected_value or '<empty>'} "
+                        f"expected={expected_value or '<empty>'}"
+                    )
         if selected.fallback_profile_name != fallback:
             errors.append(
                 f"routing {purpose} selector fallback={selected.fallback_profile_name or '<empty>'} "
                 f"expected={fallback or '<empty>'}"
             )
+        expected_fallback = profiles.get(fallback) if fallback else None
+        if expected_fallback is not None:
+            fallback_fields = {
+                "fallback_model": selected.fallback_model,
+                "fallback_api_key_env": selected.fallback_api_key_env,
+                "fallback_base_url": selected.fallback_base_url,
+            }
+            expected_values = {
+                "fallback_model": expected_fallback.model,
+                "fallback_api_key_env": expected_fallback.api_key_env,
+                "fallback_base_url": expected_fallback.base_url,
+            }
+            for field, selected_value in fallback_fields.items():
+                expected_value = expected_values[field]
+                if selected_value != expected_value:
+                    errors.append(
+                        f"routing {purpose} selector {field}={selected_value or '<empty>'} "
+                        f"expected={expected_value or '<empty>'}"
+                    )
+        elif selected.fallback_model or selected.fallback_api_key_env or selected.fallback_base_url:
+            errors.append(f"routing {purpose} selector fallback fields must be empty without fallback")
     if errors:
         return False, "llm profiles plan2 contract failed: " + "; ".join(errors)
     return True, (
