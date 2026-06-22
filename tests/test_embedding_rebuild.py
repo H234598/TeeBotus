@@ -156,14 +156,15 @@ def test_rebuild_qdrant_memory_indexes_uses_instance_memory_search_config_by_def
 
 def test_rebuild_qdrant_memory_indexes_ignores_blank_qdrant_url_override(monkeypatch, tmp_path):
     monkeypatch.setattr("TeeBotus.instructions.PROJECT_ROOT", tmp_path)
-    calls: list[str] = []
+    calls: list[tuple[str, str]] = []
 
     class FakeQdrantMemoryIndex:
         def __init__(self, *, url=None, collection, embedding_provider, **_kwargs) -> None:
             self.url = str(url)
+            self.collection = str(collection)
 
         def rebuild(self, *, account_store, instance_name: str, account_id: str, include_legacy_raw_account_id_cleanup: bool = False):
-            calls.append(self.url)
+            calls.append((self.url, self.collection))
             return tuple(f"point:{entry['id']}" for entry in account_store.read_memory_entries(account_id))
 
     instances_dir = tmp_path / "instances"
@@ -188,12 +189,14 @@ def test_rebuild_qdrant_memory_indexes_ignores_blank_qdrant_url_override(monkeyp
     results = rebuild_qdrant_memory_indexes(
         instances_dir=instances_dir,
         qdrant_url=" ",
+        collection_name=" ",
         secret_provider=StaticSecretProvider(b"a" * 32),
         qdrant_index_factory=FakeQdrantMemoryIndex,
     )
 
-    assert calls == ["http://localhost:6334"]
+    assert calls == [("http://localhost:6334", QDRANT_USER_MEMORY_COLLECTION)]
     assert results[0].qdrant_url == "http://localhost:6334"
+    assert results[0].collection_name == QDRANT_USER_MEMORY_COLLECTION
 
 
 def test_rebuild_qdrant_memory_indexes_dry_run_avoids_qdrant_writes(tmp_path):
@@ -422,7 +425,7 @@ def test_rebuild_qdrant_codex_history_indexes_uses_admin_only_chunks(tmp_path):
 
 
 def test_rebuild_qdrant_codex_history_indexes_full_rebuild_clears_when_empty(tmp_path):
-    deleted_instances: list[str] = []
+    deleted_instances: list[tuple[str, str]] = []
 
     class FakeQdrantBibliothekarIndex:
         def __init__(self, *, url=None, collection, embedding_provider, **_kwargs) -> None:
@@ -431,7 +434,7 @@ def test_rebuild_qdrant_codex_history_indexes_full_rebuild_clears_when_empty(tmp
             self.embedding_provider = embedding_provider
 
         def delete_instance(self, *, instance_name: str) -> None:
-            deleted_instances.append(instance_name)
+            deleted_instances.append((instance_name, self.collection))
 
         def index_chunks(self, *, instance_name: str, chunks):
             raise AssertionError("empty Codex-History full rebuild must not write Qdrant points")
@@ -452,6 +455,7 @@ def test_rebuild_qdrant_codex_history_indexes_full_rebuild_clears_when_empty(tmp
     results = rebuild_qdrant_codex_history_indexes(
         instances_dir=instances_dir,
         instance_names=("Depressionsbot",),
+        collection_name=" ",
         secret_provider=StaticSecretProvider(b"a" * 32),
         qdrant_index_factory=FakeQdrantBibliothekarIndex,
     )
@@ -461,8 +465,9 @@ def test_rebuild_qdrant_codex_history_indexes_full_rebuild_clears_when_empty(tmp
     assert results[0].chunk_count == 0
     assert results[0].point_count == 0
     assert results[0].point_ids == ()
+    assert results[0].collection_name == QDRANT_CODEX_HISTORY_COLLECTION
     assert results[0].qdrant_url == "http://localhost:6334"
-    assert deleted_instances == ["Depressionsbot"]
+    assert deleted_instances == [("Depressionsbot", QDRANT_CODEX_HISTORY_COLLECTION)]
 
 
 def test_rebuild_qdrant_codex_history_indexes_repo_filter_does_not_clear_instance(tmp_path):

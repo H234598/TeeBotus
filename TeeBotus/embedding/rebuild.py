@@ -116,6 +116,7 @@ def rebuild_qdrant_memory_indexes(
 ) -> tuple[QdrantMemoryRebuildResult, ...]:
     root = Path(instances_dir)
     selected_instances = _resolve_instance_names(root, instance_names)
+    target_collection = _optional_override(collection_name, default=QDRANT_USER_MEMORY_COLLECTION)
     requested_accounts = tuple(
         validate_sha512_token(str(account_id or "").strip().lower(), field_name="account_id")
         for account_id in account_ids
@@ -144,7 +145,7 @@ def rebuild_qdrant_memory_indexes(
                     "",
                     "error",
                     qdrant_url=effective_qdrant_url,
-                    collection_name=collection_name or QDRANT_USER_MEMORY_COLLECTION,
+                    collection_name=target_collection,
                     embedding_config=effective_embedding_config,
                     error=f"{type(exc).__name__}: {exc}",
                 )
@@ -157,7 +158,7 @@ def rebuild_qdrant_memory_indexes(
                     "",
                     "skipped",
                     qdrant_url=effective_qdrant_url,
-                    collection_name=collection_name or QDRANT_USER_MEMORY_COLLECTION,
+                    collection_name=target_collection,
                     embedding_config=effective_embedding_config,
                     error="no accounts",
                 )
@@ -175,14 +176,14 @@ def rebuild_qdrant_memory_indexes(
                             "dry_run",
                             point_count=len(entries),
                             qdrant_url=effective_qdrant_url,
-                            collection_name=collection_name or QDRANT_USER_MEMORY_COLLECTION,
+                            collection_name=target_collection,
                             embedding_config=effective_embedding_config,
                         )
                     )
                     continue
                 index = qdrant_index_factory(
                     url=effective_qdrant_url,
-                    collection=collection_name or QDRANT_USER_MEMORY_COLLECTION,
+                    collection=target_collection,
                     embedding_provider=embedding_provider,
                 )
                 point_ids = rebuild_qdrant_memory_index(
@@ -200,7 +201,7 @@ def rebuild_qdrant_memory_indexes(
                         point_count=len(point_ids),
                         point_ids=tuple(point_ids),
                         qdrant_url=effective_qdrant_url,
-                        collection_name=collection_name or QDRANT_USER_MEMORY_COLLECTION,
+                        collection_name=target_collection,
                         embedding_config=effective_embedding_config,
                     )
                 )
@@ -211,7 +212,7 @@ def rebuild_qdrant_memory_indexes(
                         account_id,
                         "error",
                         qdrant_url=effective_qdrant_url,
-                        collection_name=collection_name or QDRANT_USER_MEMORY_COLLECTION,
+                        collection_name=target_collection,
                         embedding_config=effective_embedding_config,
                         error=f"{type(exc).__name__}: {exc}",
                     )
@@ -316,6 +317,7 @@ def rebuild_qdrant_codex_history_indexes(
 ) -> tuple[QdrantCodexHistoryRebuildResult, ...]:
     root = Path(instances_dir)
     selected_instances = _resolve_instruction_instance_names(root, instance_names)
+    target_collection = _optional_override(collection_name, default=QDRANT_CODEX_HISTORY_COLLECTION)
     results: list[QdrantCodexHistoryRebuildResult] = []
     for instance_name in selected_instances:
         instructions = _load_instance_memory_instructions(root, instance_name)
@@ -347,7 +349,7 @@ def rebuild_qdrant_codex_history_indexes(
                         chunk_count=len(chunks),
                         point_count=len(chunks),
                         qdrant_url=effective_qdrant_url,
-                        collection_name=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                        collection_name=target_collection,
                         embedding_config=effective_embedding_config,
                     )
                 )
@@ -357,7 +359,7 @@ def rebuild_qdrant_codex_history_indexes(
                 if full_rebuild:
                     index = qdrant_index_factory(
                         url=effective_qdrant_url,
-                        collection=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                        collection=target_collection,
                         embedding_provider=embedding_provider,
                     )
                     index.delete_instance(instance_name=instance_name)
@@ -366,7 +368,7 @@ def rebuild_qdrant_codex_history_indexes(
                             instance_name,
                             "cleared",
                             qdrant_url=effective_qdrant_url,
-                            collection_name=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                            collection_name=target_collection,
                             embedding_config=effective_embedding_config,
                         )
                     )
@@ -376,7 +378,7 @@ def rebuild_qdrant_codex_history_indexes(
                         instance_name,
                         "skipped",
                         qdrant_url=effective_qdrant_url,
-                        collection_name=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                        collection_name=target_collection,
                         embedding_config=effective_embedding_config,
                         error="no codex history chunks",
                     )
@@ -384,7 +386,7 @@ def rebuild_qdrant_codex_history_indexes(
                 continue
             index = qdrant_index_factory(
                 url=effective_qdrant_url,
-                collection=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                collection=target_collection,
                 embedding_provider=embedding_provider,
             )
             if full_rebuild:
@@ -398,7 +400,7 @@ def rebuild_qdrant_codex_history_indexes(
                     point_count=len(point_ids),
                     point_ids=tuple(point_ids),
                     qdrant_url=effective_qdrant_url,
-                    collection_name=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                    collection_name=target_collection,
                     embedding_config=effective_embedding_config,
                 )
             )
@@ -408,7 +410,7 @@ def rebuild_qdrant_codex_history_indexes(
                     instance_name,
                     "error",
                     qdrant_url=effective_qdrant_url,
-                    collection_name=collection_name or QDRANT_CODEX_HISTORY_COLLECTION,
+                    collection_name=target_collection,
                     embedding_config=effective_embedding_config,
                     error=f"{type(exc).__name__}: {exc}",
                 )
