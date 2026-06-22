@@ -38,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
             results = rebuild_qdrant_memory_indexes(
                 instances_dir=args.instances_dir,
                 instance_names=args.instance,
-                account_ids=args.account_id,
+                account_ids=_memory_account_ids_from_args(args),
                 qdrant_url=args.qdrant_url or None,
                 collection_name=_memory_collection_from_args(args),
                 embedding_overrides=_embedding_overrides_from_args(args),
@@ -205,11 +205,12 @@ def _memory_collection_from_args(args: argparse.Namespace) -> str:
     return str(getattr(args, "collection", "") or QDRANT_USER_MEMORY_COLLECTION).strip() or QDRANT_USER_MEMORY_COLLECTION
 
 
+def _memory_account_ids_from_args(args: argparse.Namespace) -> list[str]:
+    return [str(value or "").strip().lower() for value in getattr(args, "account_id", ()) or () if str(value or "").strip()]
+
+
 def _validate_memory_rebuild_args(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
-    for value in getattr(args, "account_id", ()) or ():
-        account_id = str(value or "").strip()
-        if not account_id:
-            continue
+    for account_id in _memory_account_ids_from_args(args):
         try:
             validate_sha512_token(account_id, field_name="account_id")
         except AccountStoreError as exc:

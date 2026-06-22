@@ -698,6 +698,35 @@ def test_embedding_cli_memory_rebuild_rejects_invalid_account_id(capsys, tmp_pat
     assert "--account-id account_id must be a 128 character lowercase hex SHA-512 token" in capsys.readouterr().err
 
 
+def test_embedding_cli_memory_rebuild_accepts_uppercase_account_id(monkeypatch, tmp_path):
+    account_id = "A" * 128
+    captured_account_ids: list[str] = []
+
+    def fake_rebuild(**kwargs):
+        captured_account_ids.extend(kwargs["account_ids"])
+        from TeeBotus.embedding.rebuild import QdrantMemoryRebuildResult
+
+        return (QdrantMemoryRebuildResult("Depressionsbot", "a" * 128, "dry_run", point_count=1),)
+
+    monkeypatch.setattr("TeeBotus.embedding.cli.rebuild_qdrant_memory_indexes", fake_rebuild)
+
+    assert (
+        embedding_cli_main(
+            [
+                "--instances-dir",
+                str(tmp_path / "instances"),
+                "memory-rebuild",
+                "--account-id",
+                account_id,
+                "--dry-run",
+            ]
+        )
+        == 0
+    )
+
+    assert captured_account_ids == [account_id.lower()]
+
+
 @pytest.mark.parametrize(
     ("argument", "value"),
     (
