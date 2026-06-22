@@ -363,7 +363,7 @@ def _read_harvest_source_metadata(library_dir: Path) -> dict[str, dict[str, Any]
     accepted_by_key: dict[tuple[str, str], dict[str, Any]] = {}
     accepted_by_hash: dict[str, dict[str, Any]] = {}
     for row in rows:
-        if row.get("event") == "promoted" or row.get("route") != "accepted":
+        if _manifest_token(row.get("event")) == "promoted" or _manifest_token(row.get("route")) != "accepted":
             continue
         sha256 = str(row.get("sha256") or "").strip()
         stored_path = str(row.get("stored_path") or "").strip()
@@ -376,7 +376,7 @@ def _read_harvest_source_metadata(library_dir: Path) -> dict[str, dict[str, Any]
         accepted_by_hash[sha256] = row
     metadata: dict[str, dict[str, Any]] = {}
     for row in rows:
-        if row.get("event") != "promoted":
+        if _manifest_token(row.get("event")) != "promoted":
             continue
         sha256 = str(row.get("sha256") or "").strip()
         promoted_text = str(row.get("stored_path") or "").strip()
@@ -413,8 +413,12 @@ def _source_metadata_from_harvest_row(row: dict[str, Any]) -> dict[str, Any]:
         "citation_quality": _citation_quality_from_source_status(status),
         "source_quality_reason": str(decision.get("reason") or "").strip(),
         "source_requires_human_review": _coerce_bool(decision.get("requires_human_review")),
-        "source_harvest_route": str(row.get("route") or "accepted").strip() or "accepted",
+        "source_harvest_route": _manifest_token(row.get("route")) or "accepted",
     }
+
+
+def _manifest_token(value: object) -> str:
+    return str(value or "").strip().casefold()
 
 
 def _source_quality_from_source_status(status: str) -> str:
