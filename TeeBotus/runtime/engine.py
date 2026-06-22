@@ -1881,11 +1881,16 @@ def _build_bibliothekar_context(
         search_text = decision.query or query_text
         search = getattr(bibliothekar_store, "search", None)
         if callable(search):
+            search_kwargs = {
+                "max_prompt_chars": instructions.bibliothekar_max_prompt_chars,
+                "max_chunks": instructions.bibliothekar_max_chunks,
+                "max_quote_chars": instructions.bibliothekar_max_quote_chars,
+            }
+            if decision.filters:
+                search_kwargs["filters"] = decision.filters
             return search(
                 search_text,
-                max_prompt_chars=instructions.bibliothekar_max_prompt_chars,
-                max_chunks=instructions.bibliothekar_max_chunks,
-                max_quote_chars=instructions.bibliothekar_max_quote_chars,
+                **search_kwargs,
             ).prompt_text
         return bibliothekar_store.select(  # type: ignore[union-attr]
             search_text,

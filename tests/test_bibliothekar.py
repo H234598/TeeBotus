@@ -1908,6 +1908,7 @@ def test_engine_bibliothekar_context_uses_structured_query_decision(tmp_path):
         return {
             "should_search": True,
             "query": "Schlafhygiene Depression",
+            "filters": {"file": "schlaf.txt", "topic": "Depression"},
             "confidence": 0.93,
             "reason_short": "normalized",
             "source": "model",
@@ -1942,6 +1943,7 @@ def test_engine_bibliothekar_context_uses_structured_query_decision(tmp_path):
     engine._openai_actions(event, account_id, BotInstructions(openai_enabled=True, bibliothekar_enabled=True))
 
     assert service.calls[0][0] == "Schlafhygiene Depression"
+    assert service.calls[0][1]["filters"] == {"file": "schlaf.txt", "topic": "Depression"}
     assert "schlaf.txt" in fake_client.prompt
 
 
