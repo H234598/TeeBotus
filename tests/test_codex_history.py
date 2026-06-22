@@ -342,6 +342,25 @@ def test_codex_history_report_builds_repo_history_and_filters_dispatch_results(t
     assert "beta-history" not in rendered
 
 
+def test_codex_history_latest_by_repo_uses_summary_order_over_row_order(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    repo = make_git_repo(tmp_path, "latest-order-demo", version="1.8.1")
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    first = append_codex_history_summary(store, repo_root=repo, title="Aeltere Summary", bullets=["Erster Lauf."])
+    second = append_codex_history_summary(store, repo_root=repo, title="Neuere Summary", bullets=["Zweiter Lauf."])
+    rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    for row in rows:
+        row["created_at"] = "2026-06-19T12:00:00+00:00"
+    store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, list(reversed(rows)))
+
+    report = build_codex_history_report(instances_dir=tmp_path, instances=("Depressionsbot",), provider=provider())
+    latest = report["instances"][0]["codex_history"]["latest_by_repo"][0]
+
+    assert latest["summary_prefix"] == second["summary_prefix"]
+    assert latest["title"] == "Neuere Summary"
+    assert latest["summary_prefix"] != first["summary_prefix"]
+
+
 def test_codex_history_bibliothekar_export_writes_admin_only_docs(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     repo = make_git_repo(tmp_path, "bibliothekar-export-demo", version="1.8.6")

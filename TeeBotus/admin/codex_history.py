@@ -5082,7 +5082,7 @@ def _latest_by_repo(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
         if not repo_id:
             continue
         previous = latest.get(repo_id)
-        if previous is None or str(row.get("created_at") or "") >= str(previous.get("created_at") or ""):
+        if previous is None or _summary_sort_key(row) >= _summary_sort_key(previous):
             latest[repo_id] = row
     result = []
     for row in latest.values():
