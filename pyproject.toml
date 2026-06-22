@@ -53,6 +53,7 @@ teebotus-codex-history-collector = "TeeBotus.codex_history_systemd:main"
 teebotus-codex-history-systemd = "TeeBotus.codex_history_systemd:main"
 teebotus-embedding = "TeeBotus.embedding.cli:main"
 teebotus-cinnamon-applet = "TeeBotus.cinnamon_applet:main"
+teebotus-selinux-doctor = "TeeBotus.selinux_doctor:main"
 
 [tool.setuptools.packages.find]
 include = ["TeeBotus*"]
