@@ -666,6 +666,27 @@ def test_llm_profiles_plan2_contract_rejects_raw_profile_field_alias_key(monkeyp
     assert "raw profile openai_premium key api-key-env must use canonical key api_key_env" in message
 
 
+def test_llm_profiles_plan2_contract_rejects_duplicate_raw_profile_field_aliases(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_PROFILE_PATH:
+            payload["profiles"]["openai_premium"]["api-key-env"] = "OPENAI_API_KEY"
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "duplicate raw profile openai_premium key api_key_env: api-key-env,api_key_env" in message
+
+
 def test_llm_profiles_plan2_contract_rejects_raw_profile_missing_required_keys(monkeypatch) -> None:
     from copy import deepcopy
 
@@ -861,6 +882,27 @@ def test_llm_profiles_plan2_contract_rejects_raw_routing_unknown_keys(monkeypatc
     assert not ok
     assert "raw routing purpose hard_reasoning key fallback_profile must use canonical key fallback" in message
     assert "raw routing purpose hard_reasoning unexpected key(s): fallback_profile" in message
+
+
+def test_llm_profiles_plan2_contract_rejects_duplicate_raw_routing_field_aliases(monkeypatch) -> None:
+    from copy import deepcopy
+
+    from TeeBotus.llm import profiles as llm_profiles
+
+    original_loader = llm_profiles._load_yaml_mapping
+
+    def fake_loader(path):
+        payload = deepcopy(original_loader(path))
+        if Path(path) == llm_profiles.DEFAULT_ROUTING_PATH:
+            payload["purposes"]["hard_reasoning"]["fallback_profile"] = "gemini_flash_stateful"
+        return payload
+
+    monkeypatch.setattr(llm_profiles, "_load_yaml_mapping", fake_loader)
+
+    ok, message = check_adapter_deps._check_llm_profiles_plan2_contract()
+
+    assert not ok
+    assert "duplicate raw routing purpose hard_reasoning key fallback: fallback,fallback_profile" in message
 
 
 def test_llm_profiles_plan2_contract_rejects_raw_routing_missing_required_keys(monkeypatch) -> None:
