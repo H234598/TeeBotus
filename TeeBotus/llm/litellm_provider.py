@@ -626,6 +626,7 @@ def _redact_litellm_error(exc: Exception, kwargs: dict[str, object]) -> str:
     if api_key:
         text = text.replace(api_key, "<redacted>")
     text = URL_CREDENTIAL_RE.sub(lambda match: _redact_url_credentials(match.group(0)), text)
+    text = _redact_url_credentials(text)
     text = SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, text)
     # Common provider-key shapes. Keep this conservative so normal diagnostics
     # remain readable while accidental secrets are removed.

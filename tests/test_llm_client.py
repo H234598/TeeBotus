@@ -742,6 +742,29 @@ def test_litellm_text_client_safe_api_base_log_redacts_schemeless_credentials(
     assert "<redacted>@example.invalid/v1" in log_text
 
 
+def test_litellm_text_client_redacts_bare_schemeless_url_credentials_in_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    def completion(**_kwargs):
+        raise RuntimeError("provider leaked proxy user:pass@example.invalid/v1")
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        provider="huggingface",
+        model="meta-llama/Llama-3.1-8B-Instruct",
+    )
+
+    with caplog.at_level("WARNING", logger="TeeBotus.llm.litellm_provider"):
+        with pytest.raises(LLMAPIError) as error:
+            client.create_reply("Ping", BotInstructions(), None)
+
+    combined = str(error.value) + "\n" + "\n".join(record.getMessage() for record in caplog.records)
+
+    assert "user:pass" not in combined
+    assert "<redacted>@example.invalid/v1" in combined
+
+
 def test_litellm_text_client_redacts_common_provider_key_shapes(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     tokens = [
         "hf_" + "A" * 16,
