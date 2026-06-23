@@ -2140,6 +2140,36 @@ def test_signal_backend_does_not_autostart_https_local_service(monkeypatch, tmp_
         ensure_signal_services_available(config)
 
 
+def test_signal_preflight_rejects_reachable_non_signal_cli_api(monkeypatch, tmp_path) -> None:
+    account = AccountRunConfig(
+        instance_name="Demo",
+        channel="signal",
+        slot=1,
+        label="signal:1",
+        openai_api_key="",
+        signal_service="http://127.0.0.1:8080",
+        signal_phone_number="+491",
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("signal",),
+        instances=(InstanceRunConfig("Demo", tmp_path / "Bot_Verhalten.md", (account,)),),
+    )
+    monkeypatch.setattr(
+        "TeeBotus.runtime.signal_runner.check_signal_services",
+        lambda _config: (SignalServiceHealth(account=account, ok=True, target="127.0.0.1:8080"),),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_service_looks_like_signal_cli_api", lambda _account: False)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.signal_runner._signal_cli_api_accounts",
+        lambda _account: (_ for _ in ()).throw(AssertionError("non-signal service must not query accounts")),
+    )
+
+    with pytest.raises(SignalRuntimeError, match="keine kompatible /v1/about-Antwort"):
+        ensure_signal_services_available(config)
+
+
 def test_signal_backend_autostarts_shared_local_service_once(monkeypatch, tmp_path) -> None:
     accounts = (
         AccountRunConfig(

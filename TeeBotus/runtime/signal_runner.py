@@ -1227,6 +1227,7 @@ def _signal_cli_rest_api_locked_version() -> str:
 
 def _require_signal_cli_api_accounts_registered(config: RuntimeConfig) -> None:
     missing: list[str] = []
+    incompatible_services: list[str] = []
     checked_services: set[str] = set()
     signal_accounts = _signal_accounts(config)
     for account in signal_accounts:
@@ -1235,6 +1236,11 @@ def _require_signal_cli_api_accounts_registered(config: RuntimeConfig) -> None:
             continue
         checked_services.add(service_key)
         if not _signal_service_looks_like_signal_cli_api(account):
+            try:
+                _host, _port, target = _signal_service_host_port(account.signal_service)
+            except SignalRuntimeError:
+                target = account.signal_service
+            incompatible_services.append(target)
             continue
         accounts = _signal_cli_api_accounts(account)
         configured_numbers = {
@@ -1244,6 +1250,12 @@ def _require_signal_cli_api_accounts_registered(config: RuntimeConfig) -> None:
         }
         available = {_signal_cli_api_account_identifier(value) for value in accounts}
         missing.extend(sorted(number for number in configured_numbers if number not in available))
+    if incompatible_services:
+        details = ", ".join(incompatible_services)
+        raise SignalRuntimeError(
+            f"signal-cli-rest-api ist erreichbar, stellt aber keine kompatible /v1/about-Antwort bereit: {details}. "
+            "Pruefe SIGNAL_BOT_SERVICE_<INSTANCE> oder starte die gepinnte signal-cli-rest-api."
+        )
     if missing:
         details = ", ".join(missing)
         raise SignalRuntimeError(
