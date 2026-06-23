@@ -364,8 +364,9 @@ def _interaction_usage(interaction: object) -> dict[str, Any]:
         try:
             payload = model_dump()
         except Exception:
-            payload = {}
-        return payload if isinstance(payload, dict) else {}
+            payload = None
+        if isinstance(payload, dict) and payload:
+            return payload
     result: dict[str, Any] = {}
     for name in (
         "prompt_tokens",

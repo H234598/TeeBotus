@@ -1366,6 +1366,38 @@ def test_gemini_interactions_client_ignores_broken_optional_interaction_fields(m
     }
 
 
+def test_gemini_interactions_client_falls_back_to_usage_attrs_after_empty_model_dump(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Usage:
+        input_tokens = 6
+        total_tokens = 9
+
+        def model_dump(self) -> dict[str, object]:
+            return {}
+
+    class Interaction:
+        output_text = "ok"
+        usage = Usage()
+
+    def create_interaction(**_kwargs):
+        return Interaction()
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-key",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.text == "ok"
+    assert response.usage == {"input_tokens": 6, "total_tokens": 9}
+
+
 def test_gemini_interactions_client_extracts_choice_content_parts(monkeypatch: pytest.MonkeyPatch) -> None:
     class Interaction:
         id = "interaction-parts"
