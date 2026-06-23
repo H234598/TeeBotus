@@ -52,7 +52,7 @@ class LiteLLMGeminiStatefulClient:
         self.model = _litellm_gemini_model_id(settings.model)
         self.api_key = str(settings.api_key or "").strip()
         self.api_key_ring = RotatingAPIKeyRing(settings.api_key_ring, name=f"{self.provider}:{self.model}") if settings.api_key_ring else None
-        self.timeout = max(1, int(settings.timeout or 90))
+        self.timeout = _first_positive_int(settings.timeout, 90) or 90
         self.temperature = settings.temperature
         self.max_tokens = settings.max_tokens
         self.service_tier = normalize_service_tier(settings.service_tier)

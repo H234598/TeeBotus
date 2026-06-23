@@ -1131,6 +1131,19 @@ def test_build_text_llm_client_can_build_paid_gemini_stateful_client() -> None:
     assert client.capabilities.previous_response_id is True
 
 
+def test_gemini_stateful_client_uses_default_timeout_for_invalid_direct_setting() -> None:
+    client = LiteLLMGeminiStatefulClient(
+        LiteLLMGeminiStatefulSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-key",
+            timeout="slow",  # type: ignore[arg-type]
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    assert client.timeout == 90
+
+
 def test_gemini_stateful_client_uses_central_paid_alias_scope() -> None:
     client = LiteLLMGeminiStatefulClient(
         LiteLLMGeminiStatefulSettings(
