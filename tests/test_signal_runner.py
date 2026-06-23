@@ -2678,6 +2678,52 @@ def test_signal_account_health_groups_normalized_service_urls(monkeypatch, tmp_p
     assert calls == ["http://localhost:8080"]
 
 
+def test_signal_account_health_groups_normalized_ipv6_service_urls(monkeypatch, tmp_path) -> None:
+    accounts = (
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://[::1]:8080",
+            signal_phone_number="+491",
+        ),
+        AccountRunConfig(
+            instance_name="Other",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="[::1]:8080",
+            signal_phone_number="+492",
+        ),
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo", "Other"),
+        channels=("signal",),
+        instances=(
+            InstanceRunConfig("Demo", tmp_path / "Demo.md", (accounts[0],)),
+            InstanceRunConfig("Other", tmp_path / "Other.md", (accounts[1],)),
+        ),
+    )
+    calls: list[str] = []
+
+    def fake_accounts(account: AccountRunConfig) -> list[str]:
+        calls.append(account.signal_service)
+        return ["+491", "+492"]
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_service_looks_like_signal_cli_api", lambda _account: True)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._signal_cli_api_accounts", fake_accounts)
+
+    health = check_signal_accounts(config)
+
+    assert [item.registered for item in health] == [True, True]
+    assert [item.target for item in health] == ["[::1]:8080", "[::1]:8080"]
+    assert calls == ["http://[::1]:8080"]
+
+
 def test_signal_account_normalizes_documented_http_service_url(monkeypatch, tmp_path) -> None:
     captured: dict[str, object] = {}
 
@@ -2828,6 +2874,40 @@ def test_signal_service_health_uses_normalized_host_port(monkeypatch) -> None:
     assert health.ok
     assert health.target == "127.0.0.1:8080"
     assert calls == [(("127.0.0.1", 8080), 0.25)]
+
+
+def test_signal_service_health_formats_ipv6_target_with_brackets(monkeypatch) -> None:
+    calls: list[tuple[tuple[str, int], float]] = []
+
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+    def fake_create_connection(address, timeout):
+        calls.append((address, timeout))
+        return FakeSocket()
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.socket.create_connection", fake_create_connection)
+
+    health = check_signal_service(
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://[::1]:8080",
+            signal_phone_number="+491234",
+        ),
+        timeout_seconds=0.25,
+    )
+
+    assert health.ok
+    assert health.target == "[::1]:8080"
+    assert calls == [(("::1", 8080), 0.25)]
 
 
 def test_signal_service_health_uses_http_default_port_without_scheme(monkeypatch) -> None:

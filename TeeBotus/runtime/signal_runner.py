@@ -1398,8 +1398,14 @@ def _signal_service_host_port(signal_service: str) -> tuple[str, int, str]:
         raise SignalRuntimeError("SIGNAL_BOT_SERVICE_<INSTANCE> enthaelt keinen gueltigen Port.") from exc
     if port is None:
         port = 443 if scheme == "https" else 80
-    target = f"{parsed.hostname}:{port}"
+    target = _signal_service_target(parsed.hostname, port)
     return parsed.hostname, port, target
+
+
+def _signal_service_target(host: str, port: int) -> str:
+    if ":" in host and not host.startswith("["):
+        return f"[{host}]:{port}"
+    return f"{host}:{port}"
 
 
 def _signal_service_cache_key(signal_service: str) -> str:
