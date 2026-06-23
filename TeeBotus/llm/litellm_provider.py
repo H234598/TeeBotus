@@ -756,7 +756,7 @@ def _resolve_litellm_gemini_free_tier_limits(
     fallback_models: tuple[str, ...] = (),
     explicit_limits: GeminiFreeTierLimits | None,
 ) -> GeminiFreeTierLimits:
-    if provider_is_paid_google_gemini(provider) and _model_uses_google_gemini(provider=provider, model=model):
+    if provider_is_paid_google_gemini(provider):
         return GeminiFreeTierLimits(enabled=False, requests_per_minute=None, input_tokens_per_minute=None, requests_per_day=None)
     if _model_uses_google_gemini(provider=provider, model=model):
         return explicit_limits or resolve_gemini_free_tier_limits(provider=provider, model=model)

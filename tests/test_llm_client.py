@@ -179,6 +179,24 @@ def test_litellm_gemini_paid_stateless_disables_free_tier_guard(monkeypatch: pyt
     assert calls == ["paid-a"]
 
 
+def test_litellm_paid_gemini_fallback_disables_explicit_free_tier_limits() -> None:
+    client = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="litellm-gemini-paid-stateless",
+            model="openai/gpt-primary",
+            fallback_models=("gemini/gemini-3.5-flash",),
+            gemini_free_tier_limits=GeminiFreeTierLimits(
+                enabled=True,
+                requests_per_minute=0,
+                input_tokens_per_minute=0,
+                requests_per_day=0,
+            ),
+        )
+    )
+
+    assert client.gemini_free_tier_limits.status_summary() == "off"
+
+
 def test_litellm_text_client_uses_default_key_when_instruction_env_is_unset(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, object]] = []
 
