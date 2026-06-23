@@ -389,8 +389,11 @@ def _interaction_content_item_text(item: object) -> str:
 
 
 def _interaction_id(interaction: object) -> str | None:
-    value = _object_value(interaction, "id")
-    return value if isinstance(value, str) and value.strip() else None
+    for key in ("id", "interaction_id"):
+        value = _object_value(interaction, key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
 
 
 def _interaction_usage(interaction: object) -> dict[str, Any]:

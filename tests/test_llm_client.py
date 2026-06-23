@@ -1599,6 +1599,30 @@ def test_gemini_interactions_client_extracts_content_delta_wrappers(monkeypatch:
     assert response.usage == {"input_tokens": 5, "output_tokens": 4}
 
 
+def test_gemini_interactions_client_uses_interaction_id_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Interaction:
+        interaction_id = "  interaction-from-event  "
+        output_text = "ok"
+        usage = {"input_tokens": 5, "output_tokens": 4}
+
+    def create_interaction(**_kwargs):
+        return Interaction()
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-key",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.text == "ok"
+    assert response.response_id == "interaction-from-event"
+
+
 def test_gemini_interactions_client_extracts_root_model_outputs(monkeypatch: pytest.MonkeyPatch) -> None:
     class Interaction:
         id = "interaction-root-output"
