@@ -1303,14 +1303,20 @@ def test_gemini_interactions_client_ignores_broken_optional_interaction_fields(m
     class Usage:
         input_tokens = 5
         input_token_count = 5
+        input_tokens_by_modality = [{"modality": "TEXT", "token_count": 5}]
         output_token_count = 3
+        output_tokens_by_modality = [{"modality": "TEXT", "token_count": 3}]
         total_token_count = 8
         total_tokens = 8
         cached_tokens = 2
         total_cached_tokens = 2
+        cached_tokens_by_modality = [{"modality": "TEXT", "token_count": 2}]
         cache_read_input_tokens = 1
         cache_creation_input_tokens = 1
         reasoning_tokens = 1
+        total_reasoning_tokens = 1
+        total_tool_use_tokens = 2
+        tool_use_tokens_by_modality = [{"modality": "TEXT", "token_count": 2}]
         prompt_tokens_details = {"cached_tokens": 2}
         completion_tokens_details = {"reasoning_tokens": 1}
 
@@ -1353,14 +1359,20 @@ def test_gemini_interactions_client_ignores_broken_optional_interaction_fields(m
     assert response.usage == {
         "input_tokens": 5,
         "input_token_count": 5,
+        "input_tokens_by_modality": [{"modality": "TEXT", "token_count": 5}],
         "output_token_count": 3,
+        "output_tokens_by_modality": [{"modality": "TEXT", "token_count": 3}],
         "total_token_count": 8,
         "total_tokens": 8,
         "cached_tokens": 2,
         "total_cached_tokens": 2,
+        "cached_tokens_by_modality": [{"modality": "TEXT", "token_count": 2}],
         "cache_read_input_tokens": 1,
         "cache_creation_input_tokens": 1,
         "reasoning_tokens": 1,
+        "total_reasoning_tokens": 1,
+        "total_tool_use_tokens": 2,
+        "tool_use_tokens_by_modality": [{"modality": "TEXT", "token_count": 2}],
         "prompt_tokens_details": {"cached_tokens": 2},
         "completion_tokens_details": {"reasoning_tokens": 1},
     }
