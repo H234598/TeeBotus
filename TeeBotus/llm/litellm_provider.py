@@ -762,9 +762,10 @@ def _extract_usage(response: object) -> dict[str, Any]:
         return {}
     if isinstance(usage, Mapping):
         return dict(usage)
-    if hasattr(usage, "model_dump"):
+    model_dump = _response_value(usage, "model_dump")
+    if callable(model_dump):
         try:
-            payload = usage.model_dump()
+            payload = model_dump()
         except Exception:
             payload = None
         if isinstance(payload, dict):
@@ -791,7 +792,7 @@ def _extract_usage(response: object) -> dict[str, Any]:
         "input_tokens_details",
         "output_tokens_details",
     ):
-        value = getattr(usage, key, None)
+        value = _response_value(usage, key)
         if value is not None:
             result[key] = value
     return result
@@ -907,8 +908,12 @@ def _has_explicit_litellm_model_prefix(model: str) -> bool:
 def _response_value(response: object, key: str) -> object:
     try:
         return response[key]  # type: ignore[index]
-    except (AttributeError, KeyError, IndexError, TypeError, ValueError):
+    except Exception:
+        pass
+    try:
         return getattr(response, key, None)
+    except Exception:
+        return None
 
 
 __all__ = [

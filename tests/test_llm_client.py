@@ -340,6 +340,40 @@ def test_litellm_text_client_keeps_object_usage_token_fields(monkeypatch: pytest
     }
 
 
+def test_litellm_text_client_ignores_broken_optional_usage_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Usage:
+        input_tokens = 4
+        total_tokens = 7
+
+        @property
+        def model_dump(self) -> object:
+            raise RuntimeError("model_dump property unavailable")
+
+        @property
+        def output_tokens(self) -> object:
+            raise RuntimeError("output_tokens property unavailable")
+
+    def completion(**kwargs):
+        return {
+            "choices": [{"message": {"content": f"ok:{kwargs['model']}"}}],
+            "usage": Usage(),
+        }
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="litellm-gemini-stateless",
+            model="gemini-3.5-flash",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.text == "ok:gemini/gemini-3.5-flash"
+    assert response.usage == {"input_tokens": 4, "total_tokens": 7}
+
+
 def test_litellm_compact_usage_log_keeps_cache_and_reasoning_counts() -> None:
     assert litellm_provider._compact_usage_for_log(
         {
