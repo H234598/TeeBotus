@@ -1500,6 +1500,35 @@ def test_gemini_interactions_client_extracts_output_content_parts(monkeypatch: p
     assert response.usage == {"input_tokens": 5, "output_tokens": 4}
 
 
+def test_gemini_interactions_client_extracts_root_model_outputs(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Interaction:
+        id = "interaction-root-output"
+        outputs = [
+            types.SimpleNamespace(root=types.SimpleNamespace(type="text", text="  Root-Text  ")),
+            types.SimpleNamespace(root={"type": "image", "uri": "https://example.invalid/bild.png"}),
+            types.SimpleNamespace(root={"type": "output_text", "text": {"value": "Output"}}),
+        ]
+        usage = {"input_tokens": 5, "output_tokens": 4}
+
+    def create_interaction(**_kwargs):
+        return Interaction()
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-key",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.text == "Root-Text\nOutput"
+    assert response.response_id == "interaction-root-output"
+    assert response.usage == {"input_tokens": 5, "output_tokens": 4}
+
+
 def test_gemini_interactions_client_extracts_step_content_parts(monkeypatch: pytest.MonkeyPatch) -> None:
     class Interaction:
         id = "interaction-step-parts"
@@ -1509,7 +1538,10 @@ def test_gemini_interactions_client_extracts_step_content_parts(monkeypatch: pyt
                     {"type": "text", "text": "Step"},
                     {"type": "image_url", "image_url": {"url": "https://example.invalid/bild.png"}},
                 ],
-                "output": [{"text": {"content": {"text": "verschachtelt"}}}],
+                "output": [
+                    {"text": {"content": {"text": "verschachtelt"}}},
+                    types.SimpleNamespace(root={"type": "text", "text": "Root-Step"}),
+                ],
             }
         ]
         usage = {"input_tokens": 5, "output_tokens": 4}
@@ -1528,7 +1560,7 @@ def test_gemini_interactions_client_extracts_step_content_parts(monkeypatch: pyt
 
     response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
 
-    assert response.text == "Step\nverschachtelt"
+    assert response.text == "Step\nverschachtelt\nRoot-Step"
     assert response.response_id == "interaction-step-parts"
     assert response.usage == {"input_tokens": 5, "output_tokens": 4}
 

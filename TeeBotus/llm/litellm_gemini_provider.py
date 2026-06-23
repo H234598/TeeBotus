@@ -282,7 +282,7 @@ def _interaction_output_text(interaction: object) -> str:
     if isinstance(outputs, Sequence) and not isinstance(outputs, (str, bytes, bytearray)):
         parts: list[str] = []
         for item in outputs:
-            item_text = _interaction_content_text(_object_value(item, "text"))
+            item_text = _interaction_content_text(item)
             if item_text:
                 parts.append(item_text)
         if parts:
@@ -309,7 +309,7 @@ def _interaction_output_text(interaction: object) -> str:
             output = _object_value(step, "output")
             if isinstance(output, Sequence) and not isinstance(output, (str, bytes, bytearray)):
                 for item in output:
-                    item_text = _interaction_content_text(_object_value(item, "text"))
+                    item_text = _interaction_content_text(item)
                     if item_text:
                         parts.append(item_text)
         if parts:
@@ -335,6 +335,11 @@ def _interaction_content_text(content: object) -> str:
 def _interaction_content_item_text(item: object) -> str:
     if isinstance(item, str):
         return item.strip()
+    root = _object_value(item, "root")
+    if root is not None and root is not item:
+        root_text = _interaction_content_text(root)
+        if root_text:
+            return root_text
     item_type = str(_object_value(item, "type") or "").strip().casefold()
     if item_type and item_type not in {"text", "output_text", "refusal"}:
         return ""
