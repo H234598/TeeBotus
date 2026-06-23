@@ -2211,6 +2211,33 @@ def test_signal_json_rpc_daemon_writes_config_and_starts_signal_cli(monkeypatch,
     assert (tmp_path / "runtime" / "signal-cli-json-rpc-daemon.pid").read_text(encoding="utf-8") == "9876\n"
 
 
+def test_signal_json_rpc_daemon_waits_for_running_pid_until_port_ready(monkeypatch, tmp_path) -> None:
+    calls = {"port": 0, "popen": 0}
+
+    def fake_port_open(*_args, **_kwargs):
+        calls["port"] += 1
+        return calls["port"] >= 3
+
+    def fake_popen(*_args, **_kwargs):
+        calls["popen"] += 1
+        raise AssertionError("running pid must not spawn a second signal-cli daemon")
+
+    runtime = tmp_path / "runtime"
+    runtime.mkdir()
+    (runtime / "signal-cli-json-rpc-daemon.pid").write_text("9876\n", encoding="utf-8")
+
+    monkeypatch.setenv("SIGNAL_CLI_CONFIG_DIR", str(tmp_path / "signal-cli"))
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: runtime)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._pid_file_process_is_running", lambda _path: True)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._tcp_port_is_open", fake_port_open)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.time.sleep", lambda _seconds: None)
+
+    _ensure_signal_json_rpc_daemon()
+
+    assert calls == {"port": 3, "popen": 0}
+
+
 def test_signalbot_patch_accepts_signal_cli_rest_api_about_shape() -> None:
     class FakeSignalAPI:
         async def get_signal_cli_about(self):
