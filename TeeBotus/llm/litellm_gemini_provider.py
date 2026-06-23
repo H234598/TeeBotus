@@ -439,16 +439,31 @@ def _sum_token_breakdown(value: object) -> int | None:
     total = 0
     found = False
     for item in items:
-        for key in ("tokens", "token_count", "count"):
-            token_value = _object_value(item, key)
-            if token_value is None:
-                continue
-            parsed = _parse_nonnegative_token_count(token_value)
-            if parsed is None:
-                continue
+        parsed = _token_breakdown_item_count(item)
+        if parsed is not None:
             total += parsed
             found = True
-            break
+    return total if found else None
+
+
+def _token_breakdown_item_count(item: object) -> int | None:
+    for key in ("tokens", "token_count", "count"):
+        token_value = _object_value(item, key)
+        if token_value is None:
+            continue
+        parsed = _parse_nonnegative_token_count(token_value)
+        if parsed is not None:
+            return parsed
+    if not isinstance(item, Mapping):
+        return _parse_nonnegative_token_count(item)
+    total = 0
+    found = False
+    for value in item.values():
+        parsed = _parse_nonnegative_token_count(value)
+        if parsed is None:
+            continue
+        total += parsed
+        found = True
     return total if found else None
 
 
