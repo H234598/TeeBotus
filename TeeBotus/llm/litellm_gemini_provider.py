@@ -421,12 +421,8 @@ def _fill_usage_attrs(result: dict[str, Any], usage: object) -> None:
 
 def _extract_input_tokens(usage: Mapping[str, Any]) -> int | None:
     for key in ("prompt_tokens", "input_tokens", "input_token_count", "total_input_tokens"):
-        value = usage.get(key)
-        try:
-            parsed = int(value)
-        except (TypeError, ValueError):
-            continue
-        if parsed >= 0:
+        parsed = _parse_nonnegative_token_count(usage.get(key))
+        if parsed is not None:
             return parsed
     return _sum_token_breakdown(usage.get("input_tokens_by_modality"))
 
@@ -445,15 +441,23 @@ def _sum_token_breakdown(value: object) -> int | None:
             token_value = _object_value(item, key)
             if token_value is None:
                 continue
-            try:
-                parsed = int(token_value)
-            except (TypeError, ValueError):
+            parsed = _parse_nonnegative_token_count(token_value)
+            if parsed is None:
                 continue
-            if parsed >= 0:
-                total += parsed
-                found = True
-                break
+            total += parsed
+            found = True
+            break
     return total if found else None
+
+
+def _parse_nonnegative_token_count(value: object) -> int | None:
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return parsed if parsed >= 0 else None
 
 
 def _add_litellm_response_cost(usage: dict[str, Any], response: object) -> None:
