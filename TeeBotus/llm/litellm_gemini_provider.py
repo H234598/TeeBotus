@@ -5,6 +5,7 @@ import math
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 from typing import Any
 
 from TeeBotus.instructions import BotInstructions
@@ -453,6 +454,9 @@ def _sum_token_breakdown(value: object) -> int | None:
 def _parse_nonnegative_token_count(value: object) -> int | None:
     if isinstance(value, bool):
         return None
+    if isinstance(value, Decimal):
+        if not value.is_finite() or value != value.to_integral_value():
+            return None
     if isinstance(value, float):
         if not math.isfinite(value) or not value.is_integer():
             return None
