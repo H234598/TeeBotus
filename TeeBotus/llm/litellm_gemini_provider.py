@@ -337,7 +337,7 @@ def _interaction_output_text(interaction: object) -> str:
                 if root_text:
                     parts.append(root_text)
                     continue
-            for attr in ("text", "content", "output_text", "delta"):
+            for attr in ("text", "content", "output_text", "delta", "step"):
                 value_text = _interaction_content_text(_object_value(step, attr))
                 if value_text:
                     parts.append(value_text)
@@ -376,9 +376,9 @@ def _interaction_content_item_text(item: object) -> str:
         if root_text:
             return root_text
     item_type = str(_object_value(item, "type") or "").strip().casefold()
-    if item_type and item_type not in {"text", "output_text", "refusal", "content.delta", "step.delta"}:
+    if item_type and item_type not in {"text", "output_text", "refusal", "content.delta", "step.delta", "step.start"}:
         return ""
-    for key in ("text", "content", "output_text", "refusal", "delta", "value"):
+    for key in ("text", "content", "output_text", "refusal", "delta", "step", "value"):
         value = _object_value(item, key)
         if value is item:
             continue
