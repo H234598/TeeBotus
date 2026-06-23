@@ -2097,6 +2097,49 @@ def test_signal_backend_autostart_requires_signal_cli_binary(monkeypatch, tmp_pa
         raise AssertionError("SignalRuntimeError was not raised")
 
 
+def test_signal_backend_does_not_autostart_https_local_service(monkeypatch, tmp_path) -> None:
+    account = AccountRunConfig(
+        instance_name="Demo",
+        channel="signal",
+        slot=1,
+        label="signal:1",
+        openai_api_key="",
+        signal_service="https://localhost:8080",
+        signal_phone_number="+491",
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("signal",),
+        instances=(InstanceRunConfig("Demo", tmp_path / "Bot_Verhalten.md", (account,)),),
+    )
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.signal_runner.check_signal_services",
+        lambda _config: (SignalServiceHealth(account=account, ok=False, target="localhost:8080", error="connection refused"),),
+    )
+    monkeypatch.setattr(
+        "TeeBotus.runtime.signal_runner.check_signal_service",
+        lambda _account, timeout_seconds=1.0: SignalServiceHealth(
+            account=account,
+            ok=False,
+            target="localhost:8080",
+            error="connection refused",
+        ),
+    )
+    monkeypatch.setattr(
+        "TeeBotus.runtime.signal_runner._ensure_signal_json_rpc_daemon",
+        lambda: (_ for _ in ()).throw(AssertionError("json-rpc daemon must not start for https service")),
+    )
+    monkeypatch.setattr(
+        "TeeBotus.runtime.signal_runner.subprocess.Popen",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("signal-cli-rest-api must not start for https service")),
+    )
+
+    with pytest.raises(SignalRuntimeError, match="signal-cli-rest-api nicht erreichbar"):
+        ensure_signal_services_available(config)
+
+
 def test_signal_backend_autostarts_shared_local_service_once(monkeypatch, tmp_path) -> None:
     accounts = (
         AccountRunConfig(

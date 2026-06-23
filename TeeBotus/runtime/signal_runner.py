@@ -1024,10 +1024,13 @@ def ensure_signal_services_available(config: RuntimeConfig) -> None:
 
 def _start_local_signal_backend_if_possible(account: AccountRunConfig) -> None:
     try:
-        host, port, target = _signal_service_host_port(account.signal_service)
+        host, port, _target = _signal_service_host_port(account.signal_service)
+        _normalized, scheme = _normalize_signal_service(account.signal_service)
     except SignalRuntimeError:
         return
-    if host not in LOCAL_SIGNAL_HOSTS:
+    if scheme == "https":
+        return
+    if host.casefold() not in LOCAL_SIGNAL_HOSTS:
         return
     if check_signal_service(account, timeout_seconds=0.25).ok:
         return
