@@ -134,6 +134,33 @@ def test_litellm_text_client_calls_completion_with_instruction_settings(monkeypa
     ]
 
 
+def test_litellm_text_client_extracts_text_from_content_parts(monkeypatch: pytest.MonkeyPatch) -> None:
+    def completion(**_kwargs):
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "content": [
+                            {"type": "text", "text": "  Hallo  "},
+                            {"type": "image_url", "image_url": {"url": "https://example.invalid/bild.png"}},
+                            {"type": "output_text", "text": "Welt  "},
+                        ]
+                    }
+                }
+            ],
+        }
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(provider="litellm", model="openai/gpt-test").create_reply(
+        "Ping",
+        BotInstructions(openai_system_prompt="System."),
+        None,
+    )
+
+    assert response.text == "Hallo\nWelt"
+
+
 def test_litellm_gemini_stateless_provider_reports_response_cost(monkeypatch: pytest.MonkeyPatch) -> None:
     class Response(dict):
         _hidden_params = {"response_cost": 0.0042}

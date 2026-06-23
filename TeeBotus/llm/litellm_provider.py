@@ -689,7 +689,31 @@ def _extract_litellm_text(response: object) -> str:
         content = message["content"]  # type: ignore[index]
     except (KeyError, TypeError):
         content = getattr(message, "content", "")
+    return _extract_litellm_content_text(content)
+
+
+def _extract_litellm_content_text(content: object) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, Mapping):
+        return _extract_litellm_content_item_text(content)
+    if isinstance(content, Sequence) and not isinstance(content, str | bytes | bytearray):
+        parts = [_extract_litellm_content_item_text(item) for item in content]
+        return "\n".join(part for part in parts if part).strip()
     return str(content or "").strip()
+
+
+def _extract_litellm_content_item_text(item: object) -> str:
+    if isinstance(item, str):
+        return item.strip()
+    item_type = str(_response_value(item, "type") or "").strip()
+    if item_type and item_type not in {"text", "output_text", "refusal"}:
+        return ""
+    for key in ("text", "content", "output_text", "refusal"):
+        value = _response_value(item, key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return ""
 
 
 def _extract_usage(response: object) -> dict[str, Any]:
