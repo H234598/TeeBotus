@@ -101,6 +101,7 @@ class TelegramRuntimeBridge:
             state_store=self.state_store,
             message_tracker=self.message_tracker,
             openai_client=self.openai_client,
+            openai_api_key=run_config.openai_api_key,
             working_memory_store=self.working_memory_store,
             bibliothekar_store=self.bibliothekar_store,
             youtube_job_runner=youtube_job_runner,

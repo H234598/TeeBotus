@@ -813,6 +813,7 @@ def build_telegram_runtime_context(
     state_store: RuntimeStateStore,
     message_tracker: MessageTracker,
     openai_client: OpenAIClient | None,
+    openai_api_key: str = "",
     working_memory_store: WorkingMemoryStore | None,
     bibliothekar_store: BibliothekarService | BibliothekarStore | None,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None,
@@ -828,6 +829,7 @@ def build_telegram_runtime_context(
         message_tracker=message_tracker,
         instructions=instruction_store.get,
         openai_client=openai_client,
+        openai_api_key=openai_api_key,
         llm_client=llm_client,
         llm_enabled_override=llm_enabled_override,
         bot_address_names=tuple(

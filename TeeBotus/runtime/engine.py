@@ -154,6 +154,7 @@ class TeeBotusEngine:
         instructions: BotInstructions | Callable[[], BotInstructions] | None = None,
         project_root: Path | None = None,
         openai_client: object | None = None,
+        openai_api_key: str = "",
         llm_client: object | None = None,
         llm_enabled_override: bool | str | None = None,
         bot_address_names: Iterable[str] = (),
@@ -175,6 +176,7 @@ class TeeBotusEngine:
         self._instructions = instructions
         self.project_root = project_root or PROJECT_ROOT
         self.openai_client = openai_client
+        self.openai_api_key = str(openai_api_key or "").strip()
         self.llm_client = llm_client
         self.llm_enabled_override = _parse_optional_bool(llm_enabled_override)
         self.bot_address_names = frozenset(_normalize_address_name(name) for name in bot_address_names if str(name or "").strip())
@@ -1108,6 +1110,7 @@ class TeeBotusEngine:
             client = self.route_to_client_factory(
                 instructions=direct_instructions,
                 openai_client=self.openai_client,
+                default_api_key=self.openai_api_key,
                 enabled=True,
                 profile=target.name if target.kind == "profile" else "",
                 purpose=target.name if target.kind == "purpose" else "",

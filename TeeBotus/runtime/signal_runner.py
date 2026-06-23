@@ -151,6 +151,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             message_tracker=self.message_tracker,
             instructions=self.instruction_store.get,
             openai_client=self.openai_client,
+            openai_api_key=run_config.openai_api_key,
             llm_client=self.llm_client,
             llm_enabled_override=run_config.llm_enabled,
             bot_address_names=(run_config.signal_phone_number, run_config.label, run_config.instance_name),
