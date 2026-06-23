@@ -1233,6 +1233,34 @@ def test_gemini_interactions_client_sends_stateful_request(monkeypatch: pytest.M
     ]
 
 
+def test_gemini_interactions_client_uses_google_api_key_env_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
+    keys: list[str] = []
+
+    class Interaction:
+        output_text = "ok"
+        id = "interaction-google-key"
+        usage = {"input_tokens": 3, "output_tokens": 2}
+
+    def create_interaction(**kwargs):
+        keys.append(str(kwargs.get("api_key") or ""))
+        return Interaction()
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    monkeypatch.setenv("GOOGLE_API_KEY", "google-env-key")
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.text == "ok"
+    assert keys == ["google-env-key"]
+
+
 def test_gemini_interactions_client_ignores_invalid_generation_config_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, object]] = []
 

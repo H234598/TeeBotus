@@ -72,7 +72,7 @@ class LiteLLMGeminiStatefulClient:
         previous_response_id: str | None = None,
     ) -> LLMResponse:
         create_interaction = _load_litellm_create_interaction()
-        key_attempts = self.api_key_ring.ordered_keys() if self.api_key_ring else (self.api_key or os.environ.get("GEMINI_API_KEY", "").strip(),)
+        key_attempts = self.api_key_ring.ordered_keys() if self.api_key_ring else (self.api_key or _fallback_gemini_api_key(),)
         key_attempts = tuple(key for key in key_attempts if str(key or "").strip())
         if not key_attempts:
             raise LLMAPIError("LiteLLM Gemini Stateful API key is missing")
@@ -234,6 +234,13 @@ def _first_positive_int(*values: object) -> int | None:
         if parsed > 0:
             return parsed
     return None
+
+
+def _fallback_gemini_api_key() -> str:
+    google_key = os.environ.get("GOOGLE_API_KEY", "").strip()
+    if google_key:
+        return google_key
+    return os.environ.get("GEMINI_API_KEY", "").strip()
 
 
 def _litellm_gemini_model_id(value: object) -> str:
