@@ -1182,9 +1182,9 @@ def _signal_backend_binary(binary: str) -> str | None:
 def _signal_backend_env(port: int | None = None) -> dict[str, str]:
     env = dict(os.environ)
     env["PATH"] = _signal_backend_path()
-    env.setdefault("MODE", "json-rpc")
-    env.setdefault("BUILD_VERSION", _signal_cli_rest_api_locked_version())
-    env.setdefault("SIGNAL_CLI_CONFIG_DIR", str(_signal_cli_config_dir()))
+    env["MODE"] = "json-rpc"
+    env["BUILD_VERSION"] = _signal_cli_rest_api_locked_version()
+    env["SIGNAL_CLI_CONFIG_DIR"] = str(_signal_cli_config_dir())
     if port is not None:
         env["PORT"] = str(port)
     return env

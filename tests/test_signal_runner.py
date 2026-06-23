@@ -1968,6 +1968,9 @@ def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -
     commands: list[list[str]] = []
     envs: list[dict[str, str]] = []
     service_up = {"value": False}
+    monkeypatch.setenv("MODE", "native")
+    monkeypatch.setenv("BUILD_VERSION", "unlocked")
+    monkeypatch.setenv("SIGNAL_CLI_CONFIG_DIR", str(tmp_path / "custom-signal-cli"))
 
     class FakeProcess:
         pid = 4321
@@ -2020,7 +2023,7 @@ def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -
         [
             "signal-cli-rest-api",
             "-signal-cli-config",
-            str(Path.home() / ".local" / "share" / "signal-cli"),
+            str(tmp_path / "custom-signal-cli"),
             "-attachment-tmp-dir",
             str(tmp_path / "runtime"),
             "-avatar-tmp-dir",
@@ -2030,6 +2033,7 @@ def test_signal_backend_autostarts_local_signal_cli_api(monkeypatch, tmp_path) -
     assert envs[0]["PORT"] == "8080"
     assert envs[0]["MODE"] == "json-rpc"
     assert envs[0]["BUILD_VERSION"] == "0.100"
+    assert envs[0]["SIGNAL_CLI_CONFIG_DIR"] == str(tmp_path / "custom-signal-cli")
     assert ".local/bin" in envs[0]["PATH"]
     assert ".cargo/bin" in envs[0]["PATH"]
     assert (tmp_path / "runtime" / "signal-cli-rest-api-Demo-1.pid").read_text(encoding="utf-8") == "4321\n"
