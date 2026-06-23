@@ -222,6 +222,50 @@ def test_litellm_text_client_extracts_text_from_attr_objects_with_unusual_getite
     assert response.text == "Objekt-Antwort"
 
 
+def test_litellm_text_client_extracts_text_from_attr_content_object(monkeypatch: pytest.MonkeyPatch) -> None:
+    class AttrContent:
+        text = "  Content-Objekt  "
+
+        def __getitem__(self, _key: str) -> object:
+            raise ValueError("SDK object has no mapping item")
+
+    def completion(**_kwargs):
+        return {"choices": [{"message": {"content": AttrContent()}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(provider="litellm", model="openai/gpt-test").create_reply(
+        "Ping",
+        BotInstructions(openai_system_prompt="System."),
+        None,
+    )
+
+    assert response.text == "Content-Objekt"
+
+
+def test_litellm_text_client_does_not_emit_unstructured_content_object_repr(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class OpaqueContent:
+        def __repr__(self) -> str:
+            return "<OpaqueContent should-not-leak>"
+
+    def completion(**_kwargs):
+        return {"choices": [{"message": {"content": OpaqueContent()}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    with pytest.raises(LLMAPIError) as error:
+        LiteLLMTextClient(provider="litellm", model="openai/gpt-test").create_reply(
+            "Ping",
+            BotInstructions(openai_system_prompt="System."),
+            None,
+        )
+
+    assert "should-not-leak" not in str(error.value)
+    assert "empty text" in str(error.value)
+
+
 def test_litellm_gemini_stateless_provider_reports_response_cost(monkeypatch: pytest.MonkeyPatch) -> None:
     class Response(dict):
         _hidden_params = {"response_cost": 0.0042}

@@ -726,6 +726,8 @@ def _extract_litellm_choice_text(choice: object) -> str:
 
 
 def _extract_litellm_content_text(content: object) -> str:
+    if content is None:
+        return ""
     if isinstance(content, str):
         return content.strip()
     if isinstance(content, Mapping):
@@ -733,7 +735,9 @@ def _extract_litellm_content_text(content: object) -> str:
     if isinstance(content, Sequence) and not isinstance(content, str | bytes | bytearray):
         parts = [_extract_litellm_content_item_text(item) for item in content]
         return "\n".join(part for part in parts if part).strip()
-    return str(content or "").strip()
+    if isinstance(content, int | float | bool):
+        return str(content).strip()
+    return _extract_litellm_content_item_text(content)
 
 
 def _extract_litellm_content_item_text(item: object) -> str:
