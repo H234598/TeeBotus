@@ -2744,6 +2744,74 @@ def test_signal_service_health_uses_normalized_host_port(monkeypatch) -> None:
     assert calls == [(("127.0.0.1", 8080), 0.25)]
 
 
+def test_signal_service_health_uses_http_default_port_without_scheme(monkeypatch) -> None:
+    calls: list[tuple[tuple[str, int], float]] = []
+
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+    def fake_create_connection(address, timeout):
+        calls.append((address, timeout))
+        return FakeSocket()
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.socket.create_connection", fake_create_connection)
+
+    health = check_signal_service(
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="localhost",
+            signal_phone_number="+491234",
+        ),
+        timeout_seconds=0.25,
+    )
+
+    assert health.ok
+    assert health.target == "localhost:80"
+    assert calls == [(("localhost", 80), 0.25)]
+
+
+def test_signal_service_health_uses_https_default_port(monkeypatch) -> None:
+    calls: list[tuple[tuple[str, int], float]] = []
+
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+    def fake_create_connection(address, timeout):
+        calls.append((address, timeout))
+        return FakeSocket()
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.socket.create_connection", fake_create_connection)
+
+    health = check_signal_service(
+        AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="https://signal.example.test",
+            signal_phone_number="+491234",
+        ),
+        timeout_seconds=0.25,
+    )
+
+    assert health.ok
+    assert health.target == "signal.example.test:443"
+    assert calls == [(("signal.example.test", 443), 0.25)]
+
+
 def test_signal_service_health_reports_unreachable_service(monkeypatch) -> None:
     def fake_create_connection(_address, timeout=None):
         raise OSError("connection refused")
