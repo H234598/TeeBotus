@@ -429,7 +429,9 @@ def _extract_input_tokens(usage: Mapping[str, Any]) -> int | None:
     return _sum_token_breakdown(usage.get("input_tokens_by_modality"))
 
 
-def _sum_token_breakdown(value: object) -> int | None:
+def _sum_token_breakdown(value: object, *, depth: int = 0) -> int | None:
+    if depth > 4:
+        return None
     if isinstance(value, Mapping):
         items = (value,)
     elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
@@ -439,14 +441,14 @@ def _sum_token_breakdown(value: object) -> int | None:
     total = 0
     found = False
     for item in items:
-        parsed = _token_breakdown_item_count(item)
+        parsed = _token_breakdown_item_count(item, depth=depth)
         if parsed is not None:
             total += parsed
             found = True
     return total if found else None
 
 
-def _token_breakdown_item_count(item: object) -> int | None:
+def _token_breakdown_item_count(item: object, *, depth: int = 0) -> int | None:
     for key in ("tokens", "token_count", "count"):
         token_value = _object_value(item, key)
         if token_value is None:
@@ -460,6 +462,8 @@ def _token_breakdown_item_count(item: object) -> int | None:
     found = False
     for value in item.values():
         parsed = _parse_nonnegative_token_count(value)
+        if parsed is None:
+            parsed = _sum_token_breakdown(value, depth=depth + 1)
         if parsed is None:
             continue
         total += parsed
