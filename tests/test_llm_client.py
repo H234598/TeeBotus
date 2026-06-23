@@ -1280,6 +1280,64 @@ def test_gemini_interactions_client_extracts_choice_content_parts(monkeypatch: p
     assert response.usage == {"input_tokens": 5, "output_tokens": 4}
 
 
+def test_gemini_interactions_client_extracts_output_content_parts(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Interaction:
+        id = "interaction-output-parts"
+        outputs = [{"text": {"value": "  Output-Teil  "}}]
+        usage = {"input_tokens": 5, "output_tokens": 4}
+
+    def create_interaction(**_kwargs):
+        return Interaction()
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-key",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.text == "Output-Teil"
+    assert response.response_id == "interaction-output-parts"
+    assert response.usage == {"input_tokens": 5, "output_tokens": 4}
+
+
+def test_gemini_interactions_client_extracts_step_content_parts(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Interaction:
+        id = "interaction-step-parts"
+        steps = [
+            {
+                "content": [
+                    {"type": "text", "text": "Step"},
+                    {"type": "image_url", "image_url": {"url": "https://example.invalid/bild.png"}},
+                ],
+                "output": [{"text": {"content": {"text": "verschachtelt"}}}],
+            }
+        ]
+        usage = {"input_tokens": 5, "output_tokens": 4}
+
+    def create_interaction(**_kwargs):
+        return Interaction()
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-key",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.text == "Step\nverschachtelt"
+    assert response.response_id == "interaction-step-parts"
+    assert response.usage == {"input_tokens": 5, "output_tokens": 4}
+
+
 def test_gemini_interactions_client_drops_previous_interaction_on_key_failover(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, object]] = []
     keys: list[str] = []

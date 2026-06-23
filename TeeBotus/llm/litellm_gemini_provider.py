@@ -248,9 +248,9 @@ def _interaction_output_text(interaction: object) -> str:
     if isinstance(outputs, Sequence) and not isinstance(outputs, (str, bytes, bytearray)):
         parts: list[str] = []
         for item in outputs:
-            item_text = _object_value(item, "text")
-            if isinstance(item_text, str) and item_text.strip():
-                parts.append(item_text.strip())
+            item_text = _interaction_content_text(_object_value(item, "text"))
+            if item_text:
+                parts.append(item_text)
         if parts:
             return "\n".join(parts).strip()
     choices = _object_value(interaction, "choices")
@@ -269,15 +269,15 @@ def _interaction_output_text(interaction: object) -> str:
         parts = []
         for step in steps:
             for attr in ("text", "content", "output_text"):
-                value = _object_value(step, attr)
-                if isinstance(value, str) and value.strip():
-                    parts.append(value.strip())
+                value_text = _interaction_content_text(_object_value(step, attr))
+                if value_text:
+                    parts.append(value_text)
             output = _object_value(step, "output")
             if isinstance(output, Sequence) and not isinstance(output, (str, bytes, bytearray)):
                 for item in output:
-                    item_text = _object_value(item, "text")
-                    if isinstance(item_text, str) and item_text.strip():
-                        parts.append(item_text.strip())
+                    item_text = _interaction_content_text(_object_value(item, "text"))
+                    if item_text:
+                        parts.append(item_text)
         if parts:
             return "\n".join(parts).strip()
     return ""
