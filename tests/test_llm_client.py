@@ -1200,6 +1200,50 @@ def test_gemini_interactions_client_sends_stateful_request(monkeypatch: pytest.M
     ]
 
 
+def test_gemini_interactions_client_ignores_broken_optional_interaction_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Usage:
+        input_tokens = 5
+        total_tokens = 8
+
+        @property
+        def model_dump(self) -> object:
+            raise RuntimeError("model_dump property unavailable")
+
+        @property
+        def output_tokens(self) -> object:
+            raise RuntimeError("output_tokens property unavailable")
+
+    class Interaction:
+        id = "interaction-safe"
+        outputs = [types.SimpleNamespace(text="  Fallback-Output  ")]
+        usage = Usage()
+
+        @property
+        def output_text(self) -> object:
+            raise RuntimeError("output_text property unavailable")
+
+        def __getitem__(self, _key: str) -> object:
+            raise IndexError("SDK object has no mapping item")
+
+    def create_interaction(**_kwargs):
+        return Interaction()
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-key",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.text == "Fallback-Output"
+    assert response.response_id == "interaction-safe"
+    assert response.usage == {"input_tokens": 5, "total_tokens": 8}
+
+
 def test_gemini_interactions_client_drops_previous_interaction_on_key_failover(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, object]] = []
     keys: list[str] = []

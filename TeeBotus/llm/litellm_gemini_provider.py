@@ -241,7 +241,7 @@ def _resolve_litellm_gemini_free_tier_limits(
 
 
 def _interaction_output_text(interaction: object) -> str:
-    text = getattr(interaction, "output_text", "")
+    text = _object_value(interaction, "output_text")
     if isinstance(text, str) and text.strip():
         return text.strip()
     outputs = _object_value(interaction, "outputs")
@@ -293,9 +293,10 @@ def _interaction_usage(interaction: object) -> dict[str, Any]:
         return {}
     if isinstance(usage, Mapping):
         return dict(usage)
-    if hasattr(usage, "model_dump"):
+    model_dump = _object_value(usage, "model_dump")
+    if callable(model_dump):
         try:
-            payload = usage.model_dump()
+            payload = model_dump()
         except Exception:
             payload = {}
         return payload if isinstance(payload, dict) else {}
@@ -311,7 +312,7 @@ def _interaction_usage(interaction: object) -> dict[str, Any]:
         "cached_tokens",
         "total_cached_tokens",
     ):
-        value = getattr(usage, name, None)
+        value = _object_value(usage, name)
         if value is not None:
             result[name] = value
     return result
@@ -353,8 +354,12 @@ def _object_value(source: object, key: str) -> object:
         return None
     try:
         return source[key]  # type: ignore[index]
-    except (KeyError, TypeError):
+    except Exception:
+        pass
+    try:
         return getattr(source, key, None)
+    except Exception:
+        return None
 
 
 def _redact_litellm_gemini_error(exc: Exception, kwargs: Mapping[str, object]) -> str:
