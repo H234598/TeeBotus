@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -217,7 +218,7 @@ def _first_optional_float(*values: object) -> float | None:
             parsed = float(str(value).strip())
         except (TypeError, ValueError):
             continue
-        if parsed >= 0:
+        if math.isfinite(parsed) and parsed >= 0:
             return parsed
     return None
 

@@ -1250,7 +1250,7 @@ def test_gemini_interactions_client_ignores_invalid_generation_config_overrides(
         GeminiInteractionsSettings(
             model="gemini/gemini-3.5-flash",
             api_key="gemini-key",
-            temperature="warm",  # type: ignore[arg-type]
+            temperature="inf",  # type: ignore[arg-type]
             max_tokens=-1,  # type: ignore[arg-type]
             gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
         )
