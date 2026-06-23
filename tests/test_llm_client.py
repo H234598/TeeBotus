@@ -5,6 +5,7 @@ import sys
 import types
 import builtins
 from decimal import Decimal
+from fractions import Fraction
 
 import pytest
 
@@ -1860,6 +1861,50 @@ def test_gemini_interactions_client_ignores_decimal_fractional_input_usage_for_b
     class Interaction:
         output_text = "ok"
         usage = {"input_tokens": Decimal("1.7"), "input_tokens_by_modality": [{"modality": "TEXT", "tokens": 20}]}
+
+    def create_interaction(**kwargs):
+        calls.append(str(kwargs.get("api_key") or ""))
+        return Interaction()
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-budget-one",
+            gemini_free_tier_limits=GeminiFreeTierLimits(
+                requests_per_minute=10,
+                input_tokens_per_minute=estimated + 10,
+                requests_per_day=10,
+                reserve_input_tokens=0,
+            ),
+        )
+    )
+
+    first = client.create_reply(user_text, instructions, None)
+    with pytest.raises(LLMAPIError, match="TPM free-tier budget would be exceeded"):
+        client.create_reply(user_text, instructions, None)
+
+    assert first.text == "ok"
+    assert calls == ["gemini-budget-one"]
+
+
+def test_gemini_interactions_client_ignores_fraction_input_usage_for_budget(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    reset_gemini_free_tier_budget_state()
+    calls: list[str] = []
+    instructions = BotInstructions(openai_system_prompt="System.")
+    user_text = "Ping " * 24
+    estimated = estimate_litellm_input_tokens(
+        (
+            {"role": "system", "content": instructions.openai_instructions_text()},
+            {"role": "user", "content": user_text},
+        )
+    )
+
+    class Interaction:
+        output_text = "ok"
+        usage = {"input_tokens": Fraction(3, 2), "input_tokens_by_modality": [{"modality": "TEXT", "tokens": 20}]}
 
     def create_interaction(**kwargs):
         calls.append(str(kwargs.get("api_key") or ""))

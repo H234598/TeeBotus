@@ -6,6 +6,7 @@ import os
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import Decimal
+from fractions import Fraction
 from typing import Any
 
 from TeeBotus.instructions import BotInstructions
@@ -457,6 +458,8 @@ def _parse_nonnegative_token_count(value: object) -> int | None:
     if isinstance(value, Decimal):
         if not value.is_finite() or value != value.to_integral_value():
             return None
+    if isinstance(value, Fraction) and value.denominator != 1:
+        return None
     if isinstance(value, float):
         if not math.isfinite(value) or not value.is_integer():
             return None
