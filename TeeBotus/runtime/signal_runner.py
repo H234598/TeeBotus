@@ -1414,9 +1414,17 @@ def _signal_service_target(host: str, port: int) -> str:
 
 
 def _signal_service_cache_key(signal_service: str) -> str:
-    _host, _port, target = _signal_service_host_port(signal_service)
+    host, port, _target = _signal_service_host_port(signal_service)
     _normalized, scheme = _normalize_signal_service(signal_service)
+    target = _signal_service_target(_signal_service_cache_host(host), port)
     return f"{scheme or 'http'}://{target}"
+
+
+def _signal_service_cache_host(host: str) -> str:
+    normalized = host.casefold()
+    if normalized == "localhost":
+        return "127.0.0.1"
+    return normalized
 
 
 def _signalbot_connection_mode(signalbot: Any, scheme: str, signal_service: str = "") -> Any | None:
