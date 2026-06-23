@@ -1497,6 +1497,31 @@ def test_gemini_interactions_client_does_not_try_next_key_on_non_limit_error(mon
     assert keys == ["gemini-nonlimit-a"]
 
 
+def test_gemini_interactions_client_does_not_try_next_key_on_empty_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    keys: list[str] = []
+
+    class Interaction:
+        output_text = "   "
+
+    def create_interaction(**kwargs):
+        keys.append(str(kwargs.get("api_key") or ""))
+        return Interaction()
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key_ring=("gemini-empty-a", "gemini-empty-b"),
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    with pytest.raises(LLMAPIError, match="empty text"):
+        client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert keys == ["gemini-empty-a"]
+
+
 def test_build_text_llm_client_passes_env_to_hf_pool_provider() -> None:
     env = {"HF_TOKEN_MAIN": "hf-secret", "TEEBOTUS_HF_POOL_LIVE": "0"}
 

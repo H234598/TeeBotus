@@ -109,7 +109,7 @@ class LiteLLMGeminiStatefulClient:
             text = _interaction_output_text(interaction)
             if not text:
                 errors.append(f"provider={self.provider} model={self.model}: empty text")
-                continue
+                break
             usage = _interaction_usage(interaction)
             _add_litellm_response_cost(usage, interaction)
             if reservation is not None:
