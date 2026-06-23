@@ -455,6 +455,8 @@ def _sum_token_breakdown(value: object) -> int | None:
 def _parse_nonnegative_token_count(value: object) -> int | None:
     if isinstance(value, bool):
         return None
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return None
     if isinstance(value, Decimal):
         if not value.is_finite() or value != value.to_integral_value():
             return None
