@@ -1280,6 +1280,35 @@ def test_gemini_interactions_client_extracts_choice_content_parts(monkeypatch: p
     assert response.usage == {"input_tokens": 5, "output_tokens": 4}
 
 
+def test_gemini_interactions_client_extracts_output_text_content_parts(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Interaction:
+        id = "interaction-output-text-parts"
+        output_text = [
+            {"type": "text", "text": "  Top  "},
+            {"type": "image_url", "image_url": {"url": "https://example.invalid/bild.png"}},
+            {"type": "output_text", "content": {"text": "Level"}},
+        ]
+        usage = {"input_tokens": 5, "output_tokens": 4}
+
+    def create_interaction(**_kwargs):
+        return Interaction()
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-key",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.text == "Top\nLevel"
+    assert response.response_id == "interaction-output-text-parts"
+    assert response.usage == {"input_tokens": 5, "output_tokens": 4}
+
+
 def test_gemini_interactions_client_extracts_output_content_parts(monkeypatch: pytest.MonkeyPatch) -> None:
     class Interaction:
         id = "interaction-output-parts"

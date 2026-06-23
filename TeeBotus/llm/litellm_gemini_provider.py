@@ -241,9 +241,9 @@ def _resolve_litellm_gemini_free_tier_limits(
 
 
 def _interaction_output_text(interaction: object) -> str:
-    text = _object_value(interaction, "output_text")
-    if isinstance(text, str) and text.strip():
-        return text.strip()
+    text = _interaction_content_text(_object_value(interaction, "output_text"))
+    if text:
+        return text
     outputs = _object_value(interaction, "outputs")
     if isinstance(outputs, Sequence) and not isinstance(outputs, (str, bytes, bytearray)):
         parts: list[str] = []
