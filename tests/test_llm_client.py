@@ -714,6 +714,34 @@ def test_litellm_text_client_safe_api_base_log_handles_invalid_port(
     assert "https://<redacted>@example.invalid:bad/v1" in log_text
 
 
+def test_litellm_text_client_safe_api_base_log_redacts_schemeless_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    calls: list[dict[str, object]] = []
+
+    def completion(**kwargs):
+        calls.append(kwargs)
+        return {"choices": [{"message": {"content": "ok"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        provider="huggingface",
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        api_base="user:pass@example.invalid/v1",
+    )
+
+    with caplog.at_level("INFO", logger="TeeBotus.llm.litellm_provider"):
+        response = client.create_reply("Ping", BotInstructions(), None)
+
+    log_text = "\n".join(record.getMessage() for record in caplog.records)
+
+    assert response.text == "ok"
+    assert calls[0]["api_base"] == "user:pass@example.invalid/v1"
+    assert "user:pass" not in log_text
+    assert "<redacted>@example.invalid/v1" in log_text
+
+
 def test_litellm_text_client_redacts_common_provider_key_shapes(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     tokens = [
         "hf_" + "A" * 16,

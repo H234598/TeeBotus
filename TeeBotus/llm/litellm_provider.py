@@ -644,6 +644,7 @@ def _redact_litellm_error(exc: Exception, kwargs: dict[str, object]) -> str:
 def _redact_url_credentials(value: str) -> str:
     text = str(value or "")
     text = re.sub(r"(?<=://)[^\s/@:=]+:[^\s/@]+@", "<redacted>@", text)
+    text = re.sub(r"\b[^\s/@:=]+:[^\s/@]+@", "<redacted>@", text)
     return re.sub(
         r"\b((?:target|base_url|api_base|url)=)[^\s/@:=]+:[^\s/@]+@",
         r"\1<redacted>@",
