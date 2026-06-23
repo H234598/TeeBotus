@@ -141,9 +141,9 @@ def test_litellm_text_client_extracts_text_from_content_parts(monkeypatch: pytes
                 {
                     "message": {
                         "content": [
-                            {"type": "text", "text": "  Hallo  "},
+                            {"type": "Text", "text": "  Hallo  "},
                             {"type": "image_url", "image_url": {"url": "https://example.invalid/bild.png"}},
-                            {"type": "output_text", "text": "Welt  "},
+                            {"type": "OUTPUT_TEXT", "text": "Welt  "},
                         ]
                     }
                 }

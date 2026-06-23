@@ -719,7 +719,7 @@ def _extract_litellm_content_text(content: object) -> str:
 def _extract_litellm_content_item_text(item: object) -> str:
     if isinstance(item, str):
         return item.strip()
-    item_type = str(_response_value(item, "type") or "").strip()
+    item_type = str(_response_value(item, "type") or "").strip().casefold()
     if item_type and item_type not in {"text", "output_text", "refusal"}:
         return ""
     for key in ("text", "content", "output_text", "refusal"):
