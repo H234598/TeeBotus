@@ -259,8 +259,9 @@ def _interaction_output_text(interaction: object) -> str:
         for choice in choices:
             message = _object_value(choice, "message")
             content = _object_value(message, "content") if message is not None else ""
-            if isinstance(content, str) and content.strip():
-                parts.append(content.strip())
+            content_text = _interaction_content_text(content)
+            if content_text:
+                parts.append(content_text)
         if parts:
             return "\n".join(parts).strip()
     steps = _object_value(interaction, "steps")
@@ -279,6 +280,37 @@ def _interaction_output_text(interaction: object) -> str:
                         parts.append(item_text.strip())
         if parts:
             return "\n".join(parts).strip()
+    return ""
+
+
+def _interaction_content_text(content: object) -> str:
+    if content is None:
+        return ""
+    if isinstance(content, str):
+        return content.strip()
+    if isinstance(content, Mapping):
+        return _interaction_content_item_text(content)
+    if isinstance(content, Sequence) and not isinstance(content, (str, bytes, bytearray)):
+        parts = [_interaction_content_item_text(item) for item in content]
+        return "\n".join(part for part in parts if part).strip()
+    if isinstance(content, (int, float, bool)):
+        return str(content).strip()
+    return _interaction_content_item_text(content)
+
+
+def _interaction_content_item_text(item: object) -> str:
+    if isinstance(item, str):
+        return item.strip()
+    item_type = str(_object_value(item, "type") or "").strip().casefold()
+    if item_type and item_type not in {"text", "output_text", "refusal"}:
+        return ""
+    for key in ("text", "content", "output_text", "refusal", "value"):
+        value = _object_value(item, key)
+        if value is item:
+            continue
+        text = _interaction_content_text(value)
+        if text:
+            return text
     return ""
 
 
