@@ -25,6 +25,33 @@ from TeeBotus.llm.litellm_provider import normalize_llm_provider
 from TeeBotus.llm.service_tier import normalize_service_tier
 
 LOGGER = logging.getLogger("TeeBotus.llm.litellm_gemini_provider")
+_USAGE_FIELD_NAMES = (
+    "prompt_tokens",
+    "completion_tokens",
+    "input_tokens",
+    "output_tokens",
+    "input_token_count",
+    "output_token_count",
+    "total_input_tokens",
+    "total_output_tokens",
+    "input_tokens_by_modality",
+    "output_tokens_by_modality",
+    "total_token_count",
+    "total_tokens",
+    "cached_tokens",
+    "total_cached_tokens",
+    "cached_tokens_by_modality",
+    "cache_read_input_tokens",
+    "cache_creation_input_tokens",
+    "reasoning_tokens",
+    "total_reasoning_tokens",
+    "total_tool_use_tokens",
+    "tool_use_tokens_by_modality",
+    "prompt_tokens_details",
+    "completion_tokens_details",
+    "input_tokens_details",
+    "output_tokens_details",
+)
 
 
 @dataclass(frozen=True)
@@ -377,39 +404,19 @@ def _interaction_usage(interaction: object) -> dict[str, Any]:
         except Exception:
             payload = None
         if isinstance(payload, dict) and any(value is not None for value in payload.values()):
-            return payload
+            result = {key: value for key, value in payload.items() if value is not None}
+            _fill_usage_attrs(result, usage)
+            return result
     result: dict[str, Any] = {}
-    for name in (
-        "prompt_tokens",
-        "completion_tokens",
-        "input_tokens",
-        "output_tokens",
-        "input_token_count",
-        "output_token_count",
-        "total_input_tokens",
-        "total_output_tokens",
-        "input_tokens_by_modality",
-        "output_tokens_by_modality",
-        "total_token_count",
-        "total_tokens",
-        "cached_tokens",
-        "total_cached_tokens",
-        "cached_tokens_by_modality",
-        "cache_read_input_tokens",
-        "cache_creation_input_tokens",
-        "reasoning_tokens",
-        "total_reasoning_tokens",
-        "total_tool_use_tokens",
-        "tool_use_tokens_by_modality",
-        "prompt_tokens_details",
-        "completion_tokens_details",
-        "input_tokens_details",
-        "output_tokens_details",
-    ):
-        value = _object_value(usage, name)
-        if value is not None:
-            result[name] = value
+    _fill_usage_attrs(result, usage)
     return result
+
+
+def _fill_usage_attrs(result: dict[str, Any], usage: object) -> None:
+    for name in _USAGE_FIELD_NAMES:
+        value = _object_value(usage, name)
+        if value is not None and result.get(name) is None:
+            result[name] = value
 
 
 def _extract_input_tokens(usage: Mapping[str, Any]) -> int | None:
