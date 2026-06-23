@@ -1200,6 +1200,44 @@ def test_gemini_interactions_client_sends_stateful_request(monkeypatch: pytest.M
     ]
 
 
+def test_gemini_interactions_client_ignores_invalid_generation_config_overrides(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+
+    class Interaction:
+        output_text = "ok"
+        id = "interaction-config"
+        usage = {"input_tokens": 3, "output_tokens": 2}
+
+    def create_interaction(**kwargs):
+        calls.append(kwargs)
+        return Interaction()
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-key",
+            temperature="warm",  # type: ignore[arg-type]
+            max_tokens=-1,  # type: ignore[arg-type]
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply(
+        "Ping",
+        BotInstructions(
+            openai_system_prompt="System.",
+            llm_temperature=0.3,
+            llm_max_output_tokens=44,
+            openai_max_output_tokens=77,
+        ),
+        None,
+    )
+
+    assert response.text == "ok"
+    assert calls[0]["generation_config"] == {"temperature": 0.3, "max_output_tokens": 44}
+
+
 def test_gemini_interactions_client_ignores_broken_optional_interaction_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     class Usage:
         input_tokens = 5

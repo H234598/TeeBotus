@@ -200,15 +200,39 @@ def _load_litellm_create_interaction() -> Any:
 
 def _generation_config(client: LiteLLMGeminiStatefulClient, instructions: BotInstructions) -> dict[str, object]:
     config: dict[str, object] = {}
-    temperature = client.temperature if client.temperature is not None else instructions.llm_temperature
+    temperature = _first_optional_float(client.temperature, instructions.llm_temperature)
     if temperature is not None:
-        config["temperature"] = float(temperature)
-    max_tokens = client.max_tokens if client.max_tokens is not None else instructions.llm_max_output_tokens
-    if max_tokens is None:
-        max_tokens = instructions.openai_max_output_tokens
+        config["temperature"] = temperature
+    max_tokens = _first_positive_int(client.max_tokens, instructions.llm_max_output_tokens, instructions.openai_max_output_tokens)
     if max_tokens is not None:
-        config["max_output_tokens"] = int(max_tokens)
+        config["max_output_tokens"] = max_tokens
     return config
+
+
+def _first_optional_float(*values: object) -> float | None:
+    for value in values:
+        if value is None:
+            continue
+        try:
+            parsed = float(str(value).strip())
+        except (TypeError, ValueError):
+            continue
+        if parsed >= 0:
+            return parsed
+    return None
+
+
+def _first_positive_int(*values: object) -> int | None:
+    for value in values:
+        if value is None:
+            continue
+        try:
+            parsed = int(str(value).strip())
+        except (TypeError, ValueError):
+            continue
+        if parsed > 0:
+            return parsed
+    return None
 
 
 def _litellm_gemini_model_id(value: object) -> str:
