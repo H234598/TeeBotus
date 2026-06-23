@@ -18,7 +18,16 @@ from TeeBotus.llm.gemini_interactions_provider import GeminiInteractionsClient, 
 from TeeBotus.llm.hf_pool.provider import HFPoolProvider
 from TeeBotus.llm import litellm_provider
 from TeeBotus.llm.litellm_gemini_provider import LiteLLMGeminiStatefulClient, LiteLLMGeminiStatefulSettings
-from TeeBotus.llm_client import LLMAPIError, LLMImage, LLMVoice, LiteLLMSettings, LiteLLMTextClient, build_text_llm_client, normalize_llm_provider
+from TeeBotus.llm_client import (
+    LLMAPIError,
+    LLMImage,
+    LLMVoice,
+    LiteLLMSettings,
+    LiteLLMTextClient,
+    build_text_llm_client,
+    normalize_llm_provider,
+    parse_fallback_models,
+)
 
 
 def test_build_text_llm_client_routes_default_openai_text_through_litellm() -> None:
@@ -72,6 +81,13 @@ def test_neutral_voice_and_image_payloads_are_plain_capability_types() -> None:
 )
 def test_normalize_llm_provider(value: str, expected: str) -> None:
     assert normalize_llm_provider(value) == expected
+
+
+def test_parse_fallback_models_accepts_sequence_values() -> None:
+    assert parse_fallback_models([" groq/llama ", "", "ollama/llama3.1:8b"]) == (
+        "groq/llama",
+        "ollama/llama3.1:8b",
+    )
 
 
 def test_litellm_text_client_calls_completion_with_instruction_settings(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -435,8 +435,8 @@ def normalize_llm_provider(value: str) -> str:
     return normalized
 
 
-def parse_fallback_models(value: str | tuple[str, ...]) -> tuple[str, ...]:
-    if isinstance(value, tuple):
+def parse_fallback_models(value: object) -> tuple[str, ...]:
+    if isinstance(value, Sequence) and not isinstance(value, str | bytes | bytearray):
         return tuple(str(item or "").strip() for item in value if str(item or "").strip())
     return tuple(part.strip() for part in str(value or "").split(",") if part.strip())
 
