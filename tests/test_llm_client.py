@@ -1302,7 +1302,17 @@ def test_gemini_interactions_client_ignores_invalid_generation_config_overrides(
 def test_gemini_interactions_client_ignores_broken_optional_interaction_fields(monkeypatch: pytest.MonkeyPatch) -> None:
     class Usage:
         input_tokens = 5
+        input_token_count = 5
+        output_token_count = 3
+        total_token_count = 8
         total_tokens = 8
+        cached_tokens = 2
+        total_cached_tokens = 2
+        cache_read_input_tokens = 1
+        cache_creation_input_tokens = 1
+        reasoning_tokens = 1
+        prompt_tokens_details = {"cached_tokens": 2}
+        completion_tokens_details = {"reasoning_tokens": 1}
 
         @property
         def model_dump(self) -> object:
@@ -1340,7 +1350,20 @@ def test_gemini_interactions_client_ignores_broken_optional_interaction_fields(m
 
     assert response.text == "Fallback-Output"
     assert response.response_id == "interaction-safe"
-    assert response.usage == {"input_tokens": 5, "total_tokens": 8}
+    assert response.usage == {
+        "input_tokens": 5,
+        "input_token_count": 5,
+        "output_token_count": 3,
+        "total_token_count": 8,
+        "total_tokens": 8,
+        "cached_tokens": 2,
+        "total_cached_tokens": 2,
+        "cache_read_input_tokens": 1,
+        "cache_creation_input_tokens": 1,
+        "reasoning_tokens": 1,
+        "prompt_tokens_details": {"cached_tokens": 2},
+        "completion_tokens_details": {"reasoning_tokens": 1},
+    }
 
 
 def test_gemini_interactions_client_extracts_choice_content_parts(monkeypatch: pytest.MonkeyPatch) -> None:

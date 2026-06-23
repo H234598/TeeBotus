@@ -372,11 +372,21 @@ def _interaction_usage(interaction: object) -> dict[str, Any]:
         "completion_tokens",
         "input_tokens",
         "output_tokens",
+        "input_token_count",
+        "output_token_count",
         "total_input_tokens",
         "total_output_tokens",
+        "total_token_count",
         "total_tokens",
         "cached_tokens",
         "total_cached_tokens",
+        "cache_read_input_tokens",
+        "cache_creation_input_tokens",
+        "reasoning_tokens",
+        "prompt_tokens_details",
+        "completion_tokens_details",
+        "input_tokens_details",
+        "output_tokens_details",
     ):
         value = _object_value(usage, name)
         if value is not None:
