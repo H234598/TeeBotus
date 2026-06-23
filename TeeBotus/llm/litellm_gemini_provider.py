@@ -376,9 +376,9 @@ def _interaction_content_item_text(item: object) -> str:
         if root_text:
             return root_text
     item_type = str(_object_value(item, "type") or "").strip().casefold()
-    if item_type and item_type not in {"text", "output_text", "refusal"}:
+    if item_type and item_type not in {"text", "output_text", "refusal", "content.delta"}:
         return ""
-    for key in ("text", "content", "output_text", "refusal", "value"):
+    for key in ("text", "content", "output_text", "refusal", "delta", "value"):
         value = _object_value(item, key)
         if value is item:
             continue
