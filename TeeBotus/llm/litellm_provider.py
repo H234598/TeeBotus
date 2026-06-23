@@ -701,10 +701,7 @@ def _looks_like_numeric_metric(value: str) -> bool:
 
 
 def _extract_litellm_text(response: object) -> str:
-    try:
-        choices = response["choices"]  # type: ignore[index]
-    except (KeyError, TypeError):
-        choices = getattr(response, "choices", None)
+    choices = _response_value(response, "choices")
     if not isinstance(choices, Sequence) or isinstance(choices, str | bytes | bytearray):
         return ""
     for choice in choices:
@@ -715,15 +712,9 @@ def _extract_litellm_text(response: object) -> str:
 
 
 def _extract_litellm_choice_text(choice: object) -> str:
-    try:
-        message = choice["message"]  # type: ignore[index]
-    except (KeyError, TypeError):
-        message = getattr(choice, "message", None)
+    message = _response_value(choice, "message")
     if message is not None:
-        try:
-            content = message["content"]  # type: ignore[index]
-        except (KeyError, TypeError):
-            content = getattr(message, "content", "")
+        content = _response_value(message, "content")
         text = _extract_litellm_content_text(content)
         if text:
             return text
@@ -912,7 +903,7 @@ def _has_explicit_litellm_model_prefix(model: str) -> bool:
 def _response_value(response: object, key: str) -> object:
     try:
         return response[key]  # type: ignore[index]
-    except (KeyError, TypeError):
+    except (AttributeError, KeyError, IndexError, TypeError, ValueError):
         return getattr(response, key, None)
 
 

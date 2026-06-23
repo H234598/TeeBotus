@@ -198,6 +198,30 @@ def test_litellm_text_client_extracts_choice_level_text(monkeypatch: pytest.Monk
     assert response.text == "Completion-Antwort"
 
 
+def test_litellm_text_client_extracts_text_from_attr_objects_with_unusual_getitem(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class AttrOnly:
+        def __init__(self, **fields: object) -> None:
+            self.__dict__.update(fields)
+
+        def __getitem__(self, _key: str) -> object:
+            raise IndexError("SDK object has no mapping item")
+
+    def completion(**_kwargs):
+        return AttrOnly(choices=[AttrOnly(message=AttrOnly(content="  Objekt-Antwort  "))])
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(provider="litellm", model="openai/gpt-test").create_reply(
+        "Ping",
+        BotInstructions(openai_system_prompt="System."),
+        None,
+    )
+
+    assert response.text == "Objekt-Antwort"
+
+
 def test_litellm_gemini_stateless_provider_reports_response_cost(monkeypatch: pytest.MonkeyPatch) -> None:
     class Response(dict):
         _hidden_params = {"response_cost": 0.0042}
