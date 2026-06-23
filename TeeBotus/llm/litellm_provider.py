@@ -466,9 +466,12 @@ def _resolve_litellm_models(
 
 def _litellm_model_name(provider: str, model: str) -> str:
     value = model.strip()
-    if not value or provider == "litellm":
+    if not value:
         return value
-    if value.startswith(KNOWN_LITELLM_MODEL_PREFIXES):
+    explicit = _canonical_litellm_model_prefix(value)
+    if explicit:
+        return explicit
+    if provider == "litellm":
         return value
     prefixes = {
         "ollama": "ollama/",
@@ -483,6 +486,15 @@ def _litellm_model_name(provider: str, model: str) -> str:
     if prefix and not value.startswith(prefix):
         return f"{prefix}{value}"
     return value
+
+
+def _canonical_litellm_model_prefix(model: str) -> str:
+    value = str(model or "").strip()
+    lowered = value.casefold()
+    for prefix in KNOWN_LITELLM_MODEL_PREFIXES:
+        if lowered.startswith(prefix):
+            return f"{prefix}{value[len(prefix):]}"
+    return ""
 
 
 def _litellm_provider_scope(provider: str, model: str) -> str:

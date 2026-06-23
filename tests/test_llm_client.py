@@ -598,6 +598,28 @@ def test_litellm_text_client_keeps_explicit_cross_provider_fallback_prefixes(mon
     assert response.model == "groq/llama-3.3-70b-versatile"
 
 
+def test_litellm_text_client_keeps_mixed_case_explicit_model_prefixes(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
+    def completion(**kwargs):
+        model = str(kwargs["model"])
+        calls.append(model)
+        if model == "groq/primary-down":
+            raise RuntimeError("down")
+        return {"choices": [{"message": {"content": f"ok:{model}"}}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(
+        provider="groq",
+        model="primary-down",
+        fallback_models=("OpenAI/gpt-4.1-mini",),
+    ).create_reply("Ping", BotInstructions(), None)
+
+    assert response.model == "openai/gpt-4.1-mini"
+    assert calls == ["groq/primary-down", "openai/gpt-4.1-mini"]
+
+
 def test_litellm_text_client_redacts_provider_errors_from_logs_and_exception(monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
     def completion(**_kwargs):
         raise RuntimeError(
