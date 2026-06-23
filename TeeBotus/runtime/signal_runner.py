@@ -1377,14 +1377,14 @@ def _normalize_signal_service(signal_service: str) -> tuple[str, str]:
     lowered = service.casefold()
     if lowered.startswith(("http://", "https://")):
         parsed = urlsplit(service)
-        if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
-            raise SignalRuntimeError("SIGNAL_BOT_SERVICE_<INSTANCE> darf keinen Pfad, Query-String oder Fragment enthalten.")
+        if parsed.username or parsed.password or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+            raise SignalRuntimeError("SIGNAL_BOT_SERVICE_<INSTANCE> darf keinen Pfad, Query-String, Fragment oder Zugangsdaten enthalten.")
         if not parsed.netloc:
             raise SignalRuntimeError("SIGNAL_BOT_SERVICE_<INSTANCE> muss Host und optional Port enthalten.")
         return parsed.netloc, parsed.scheme.casefold()
     parsed = urlsplit(f"//{service}")
-    if parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
-        raise SignalRuntimeError("SIGNAL_BOT_SERVICE_<INSTANCE> darf keinen Pfad, Query-String oder Fragment enthalten.")
+    if parsed.username or parsed.password or parsed.path not in {"", "/"} or parsed.query or parsed.fragment:
+        raise SignalRuntimeError("SIGNAL_BOT_SERVICE_<INSTANCE> darf keinen Pfad, Query-String, Fragment oder Zugangsdaten enthalten.")
     if parsed.path == "/":
         return service[:-1], ""
     return service, ""

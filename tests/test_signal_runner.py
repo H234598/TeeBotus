@@ -3003,6 +3003,34 @@ def test_signal_account_rejects_service_url_with_repeated_trailing_slash(monkeyp
             raise AssertionError(f"SignalRuntimeError was not raised for {signal_service}")
 
 
+def test_signal_account_rejects_service_url_with_userinfo(monkeypatch, tmp_path) -> None:
+    fake_signalbot = SimpleNamespace(
+        Config=lambda **kwargs: kwargs,
+        SignalBot=lambda _config: None,
+        api=SimpleNamespace(ConnectionMode=SimpleNamespace(HTTP_ONLY="http_only", HTTPS_ONLY="https_only")),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: fake_signalbot)
+
+    for signal_service in ("http://user:secret@127.0.0.1:8080", "user:secret@127.0.0.1:8080"):
+        try:
+            run_signal_account(
+                account=AccountRunConfig(
+                    instance_name="Demo",
+                    channel="signal",
+                    slot=1,
+                    label="signal:1",
+                    openai_api_key="",
+                    signal_service=signal_service,
+                    signal_phone_number="+491234",
+                ),
+                instances_dir=tmp_path,
+            )
+        except SignalRuntimeError as exc:
+            assert "Zugangsdaten" in str(exc)
+        else:
+            raise AssertionError(f"SignalRuntimeError was not raised for {signal_service}")
+
+
 def test_signal_service_health_uses_normalized_host_port(monkeypatch) -> None:
     calls: list[tuple[tuple[str, int], float]] = []
 
