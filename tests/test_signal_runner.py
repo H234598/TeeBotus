@@ -2173,6 +2173,65 @@ def test_signal_backend_autostarts_shared_local_service_once(monkeypatch, tmp_pa
     ]
 
 
+def test_signal_backend_waits_for_running_rest_api_pid_until_health_ready(monkeypatch, tmp_path) -> None:
+    account = AccountRunConfig(
+        instance_name="Demo",
+        channel="signal",
+        slot=1,
+        label="signal:1",
+        openai_api_key="",
+        signal_service="http://localhost:8080",
+        signal_phone_number="+491",
+    )
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("signal",),
+        instances=(InstanceRunConfig("Demo", tmp_path / "Demo.md", (account,)),),
+    )
+    calls = {"service": 0, "popen": 0}
+
+    def service_ready() -> bool:
+        return calls["service"] >= 3
+
+    def fake_check_signal_services(_config):
+        return (
+            SignalServiceHealth(
+                account=account,
+                ok=service_ready(),
+                target="localhost:8080",
+                error="" if service_ready() else "connection refused",
+            ),
+        )
+
+    def fake_check_signal_service(_account, timeout_seconds=1.0):
+        calls["service"] += 1
+        return SignalServiceHealth(
+            account=account,
+            ok=service_ready(),
+            target="localhost:8080",
+            error="" if service_ready() else "connection refused",
+        )
+
+    def fake_popen(*_args, **_kwargs):
+        calls["popen"] += 1
+        raise AssertionError("running pid must not spawn a second signal-cli-rest-api")
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", fake_check_signal_services)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_service", fake_check_signal_service)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._pid_file_process_is_running", lambda _path: True)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", lambda binary, path=None: "signal-cli-rest-api" if binary == "signal-cli-rest-api" else None)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._ensure_signal_json_rpc_daemon", lambda: None)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._require_signal_cli_api_accounts_registered", lambda _config: None)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.time.sleep", lambda _seconds: None)
+
+    ensure_signal_services_available(config)
+
+    assert calls == {"service": 3, "popen": 0}
+
+
 def test_signal_json_rpc_daemon_writes_config_and_starts_signal_cli(monkeypatch, tmp_path) -> None:
     commands: list[list[str]] = []
     opened = {"value": False}

@@ -88,6 +88,7 @@ LOCAL_SIGNAL_HOSTS = frozenset({"127.0.0.1", "localhost", "::1"})
 SIGNAL_JSON_RPC_HOST = "127.0.0.1"
 SIGNAL_JSON_RPC_PORT = 6001
 SIGNAL_JSON_RPC_START_TIMEOUT_SECONDS = 45.0
+SIGNAL_REST_API_START_TIMEOUT_SECONDS = 45.0
 
 
 class TeeBotusSignalCommand(_SignalBotCommand):
@@ -1029,6 +1030,7 @@ def _start_local_signal_backend_if_possible(account: AccountRunConfig) -> None:
     log_path = runtime_dir() / f"signal-cli-rest-api-{account.instance_name}-{account.slot}.log"
     pid_path = runtime_dir() / f"signal-cli-rest-api-{account.instance_name}-{account.slot}.pid"
     if _pid_file_process_is_running(pid_path):
+        _wait_for_signal_cli_rest_api(account=account, process=None, log_path=log_path)
         return
     _require_signal_backend_binary("signal-cli")
     _ensure_signal_json_rpc_daemon()
@@ -1060,10 +1062,20 @@ def _start_local_signal_backend_if_possible(account: AccountRunConfig) -> None:
         except OSError:
             pass
     pid_path.write_text(f"{process.pid}\n", encoding="utf-8")
-    deadline = time.monotonic() + 10
+    _wait_for_signal_cli_rest_api(account=account, process=process, log_path=log_path)
+
+
+def _wait_for_signal_cli_rest_api(
+    *,
+    account: AccountRunConfig,
+    process: subprocess.Popen[Any] | None,
+    log_path: Path,
+) -> None:
+    deadline = time.monotonic() + SIGNAL_REST_API_START_TIMEOUT_SECONDS
     last_error = ""
+    _host, _port, target = _signal_service_host_port(account.signal_service)
     while time.monotonic() < deadline:
-        if process.poll() is not None:
+        if process is not None and process.poll() is not None:
             raise SignalRuntimeError(
                 f"signal-cli-rest-api fuer {target} wurde gestartet, ist aber sofort beendet. Siehe {log_path}."
             )
