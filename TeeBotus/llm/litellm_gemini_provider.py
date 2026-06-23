@@ -415,7 +415,32 @@ def _extract_input_tokens(usage: Mapping[str, Any]) -> int | None:
             continue
         if parsed >= 0:
             return parsed
-    return None
+    return _sum_token_breakdown(usage.get("input_tokens_by_modality"))
+
+
+def _sum_token_breakdown(value: object) -> int | None:
+    if isinstance(value, Mapping):
+        items = (value,)
+    elif isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
+        items = tuple(value)
+    else:
+        return None
+    total = 0
+    found = False
+    for item in items:
+        for key in ("tokens", "token_count", "count"):
+            token_value = _object_value(item, key)
+            if token_value is None:
+                continue
+            try:
+                parsed = int(token_value)
+            except (TypeError, ValueError):
+                continue
+            if parsed >= 0:
+                total += parsed
+                found = True
+                break
+    return total if found else None
 
 
 def _add_litellm_response_cost(usage: dict[str, Any], response: object) -> None:
