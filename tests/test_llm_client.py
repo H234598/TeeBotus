@@ -264,6 +264,25 @@ def test_litellm_text_client_keeps_object_usage_token_fields(monkeypatch: pytest
     }
 
 
+def test_litellm_compact_usage_log_keeps_cache_and_reasoning_counts() -> None:
+    assert litellm_provider._compact_usage_for_log(
+        {
+            "input_tokens": 4,
+            "output_tokens": 3,
+            "cache_read_input_tokens": 2,
+            "cache_creation_input_tokens": 1,
+            "reasoning_tokens": 5,
+            "prompt_tokens_details": {"cached_tokens": 2},
+        }
+    ) == {
+        "input_tokens": 4,
+        "output_tokens": 3,
+        "cache_read_input_tokens": 2,
+        "cache_creation_input_tokens": 1,
+        "reasoning_tokens": 5,
+    }
+
+
 def test_litellm_gemini_paid_stateless_disables_free_tier_guard(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 

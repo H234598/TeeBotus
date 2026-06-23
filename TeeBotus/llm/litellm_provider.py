@@ -827,6 +827,9 @@ def _compact_usage_for_log(usage: Mapping[str, Any]) -> dict[str, Any]:
         "total_tokens",
         "cached_tokens",
         "total_cached_tokens",
+        "cache_read_input_tokens",
+        "cache_creation_input_tokens",
+        "reasoning_tokens",
     )
     return {key: usage[key] for key in keys if key in usage}
 
