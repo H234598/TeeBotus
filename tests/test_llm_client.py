@@ -146,6 +146,40 @@ def test_litellm_gemini_stateless_provider_reports_response_cost(monkeypatch: py
     assert response.usage["response_cost"] == 0.0042
 
 
+def test_litellm_text_client_keeps_object_usage_token_fields(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Usage:
+        input_tokens = 4
+        output_tokens = 3
+        total_tokens = 7
+        cached_tokens = 2
+        total_cached_tokens = 2
+
+    def completion(**kwargs):
+        return {
+            "choices": [{"message": {"content": f"ok:{kwargs['model']}"}}],
+            "usage": Usage(),
+        }
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+    client = LiteLLMTextClient(
+        LiteLLMSettings(
+            provider="litellm-gemini-stateless",
+            model="gemini-3.5-flash",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.usage == {
+        "input_tokens": 4,
+        "output_tokens": 3,
+        "total_tokens": 7,
+        "cached_tokens": 2,
+        "total_cached_tokens": 2,
+    }
+
+
 def test_litellm_gemini_paid_stateless_disables_free_tier_guard(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 

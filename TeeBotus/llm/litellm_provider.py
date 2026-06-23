@@ -696,7 +696,7 @@ def _extract_usage(response: object) -> dict[str, Any]:
     usage = _response_value(response, "usage")
     if usage is None:
         return {}
-    if isinstance(usage, dict):
+    if isinstance(usage, Mapping):
         return dict(usage)
     if hasattr(usage, "model_dump"):
         try:
@@ -706,9 +706,19 @@ def _extract_usage(response: object) -> dict[str, Any]:
         if isinstance(payload, dict):
             return payload
     result: dict[str, Any] = {}
-    for key in ("prompt_tokens", "completion_tokens", "total_tokens"):
+    for key in (
+        "prompt_tokens",
+        "completion_tokens",
+        "input_tokens",
+        "output_tokens",
+        "total_input_tokens",
+        "total_output_tokens",
+        "total_tokens",
+        "cached_tokens",
+        "total_cached_tokens",
+    ):
         value = getattr(usage, key, None)
-        if isinstance(value, int | float | str):
+        if value is not None:
             result[key] = value
     return result
 
@@ -763,7 +773,17 @@ def _safe_litellm_api_base(value: object) -> str:
 
 
 def _compact_usage_for_log(usage: Mapping[str, Any]) -> dict[str, Any]:
-    keys = ("input_tokens", "prompt_tokens", "output_tokens", "completion_tokens", "total_tokens")
+    keys = (
+        "input_tokens",
+        "prompt_tokens",
+        "output_tokens",
+        "completion_tokens",
+        "total_input_tokens",
+        "total_output_tokens",
+        "total_tokens",
+        "cached_tokens",
+        "total_cached_tokens",
+    )
     return {key: usage[key] for key in keys if key in usage}
 
 
