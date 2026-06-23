@@ -144,6 +144,8 @@ def test_litellm_text_client_extracts_text_from_content_parts(monkeypatch: pytes
                             {"type": "Text", "text": "  Hallo  "},
                             {"type": "image_url", "image_url": {"url": "https://example.invalid/bild.png"}},
                             {"type": "OUTPUT_TEXT", "text": "Welt  "},
+                            {"type": "text", "text": {"value": "verschachtelt"}},
+                            {"type": "text", "content": {"text": "Content-Feld"}},
                         ]
                     }
                 }
@@ -158,7 +160,7 @@ def test_litellm_text_client_extracts_text_from_content_parts(monkeypatch: pytes
         None,
     )
 
-    assert response.text == "Hallo\nWelt"
+    assert response.text == "Hallo\nWelt\nverschachtelt\nContent-Feld"
 
 
 def test_litellm_text_client_uses_first_nonempty_choice_text(monkeypatch: pytest.MonkeyPatch) -> None:
