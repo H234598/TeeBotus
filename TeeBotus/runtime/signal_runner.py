@@ -583,7 +583,7 @@ class SharedSignalRouterCommand(_SignalBotCommand):
 
 
 def start_signal_accounts_in_background(config: RuntimeConfig) -> list[threading.Thread]:
-    accounts = _signal_accounts(config)
+    accounts = _require_signal_accounts(config)
     groups = _signal_router_groups(accounts)
     _import_signalbot()
     ensure_signal_services_available(config)
@@ -596,11 +596,7 @@ def start_signal_accounts_in_background(config: RuntimeConfig) -> list[threading
 
 
 def run_signal_accounts(config: RuntimeConfig) -> int:
-    accounts = _signal_accounts(config)
-    if not accounts:
-        raise SignalRuntimeError(
-            "Signal ist angefordert, aber kein SIGNAL_BOT_SERVICE_<INSTANCE> plus SIGNAL_BOT_PHONE_NUMBER_<INSTANCE> ist konfiguriert."
-        )
+    accounts = _require_signal_accounts(config)
     groups = _signal_router_groups(accounts)
     _import_signalbot()
     ensure_signal_services_available(config)
@@ -642,6 +638,15 @@ def run_signal_router_group(*, accounts: Sequence[AccountRunConfig], instances_d
 
 def _signal_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
     return tuple(account for instance in config.instances for account in instance.accounts if account.channel == "signal")
+
+
+def _require_signal_accounts(config: RuntimeConfig) -> tuple[AccountRunConfig, ...]:
+    accounts = _signal_accounts(config)
+    if not accounts:
+        raise SignalRuntimeError(
+            "Signal ist angefordert, aber kein SIGNAL_BOT_SERVICE_<INSTANCE> plus SIGNAL_BOT_PHONE_NUMBER_<INSTANCE> ist konfiguriert."
+        )
+    return accounts
 
 
 def _signal_router_groups(accounts: Sequence[AccountRunConfig]) -> tuple[tuple[AccountRunConfig, ...], ...]:

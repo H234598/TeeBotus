@@ -1877,6 +1877,19 @@ def test_signal_background_start_uses_shared_router_for_same_service_duplicate_p
     assert calls == [("background", ("DemoA", "DemoB"))]
 
 
+def test_signal_background_start_rejects_missing_signal_accounts_before_import(monkeypatch, tmp_path) -> None:
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("signal",),
+        instances=(InstanceRunConfig("Demo", tmp_path / "Demo.md", ()),),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: (_ for _ in ()).throw(AssertionError("imported")))
+
+    with pytest.raises(SignalRuntimeError, match="Signal ist angefordert"):
+        start_signal_accounts_in_background(config)
+
+
 def test_signal_start_rejects_duplicate_phone_on_different_services_before_import(monkeypatch, tmp_path) -> None:
     accounts = (
         AccountRunConfig(
