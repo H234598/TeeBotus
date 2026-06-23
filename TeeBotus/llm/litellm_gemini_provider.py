@@ -304,6 +304,7 @@ def _resolve_litellm_gemini_free_tier_limits(
 
 
 def _interaction_output_text(interaction: object) -> str:
+    interaction = _unwrap_interaction_payload(interaction)
     text = _interaction_content_text(_object_value(interaction, "output_text"))
     if text:
         return text
@@ -389,6 +390,7 @@ def _interaction_content_item_text(item: object) -> str:
 
 
 def _interaction_id(interaction: object) -> str | None:
+    interaction = _unwrap_interaction_payload(interaction)
     for key in ("id", "interaction_id"):
         value = _object_value(interaction, key)
         if isinstance(value, str) and value.strip():
@@ -397,6 +399,7 @@ def _interaction_id(interaction: object) -> str | None:
 
 
 def _interaction_usage(interaction: object) -> dict[str, Any]:
+    interaction = _unwrap_interaction_payload(interaction)
     usage = _object_value(interaction, "usage")
     if usage is None:
         return {}
@@ -415,6 +418,21 @@ def _interaction_usage(interaction: object) -> dict[str, Any]:
     result: dict[str, Any] = {}
     _fill_usage_attrs(result, usage)
     return result
+
+
+def _unwrap_interaction_payload(interaction: object) -> object:
+    current = interaction
+    for _ in range(4):
+        root = _object_value(current, "root")
+        if root is not None and root is not current:
+            current = root
+            continue
+        nested = _object_value(current, "interaction")
+        if nested is not None and nested is not current:
+            current = nested
+            continue
+        return current
+    return current
 
 
 def _fill_usage_attrs(result: dict[str, Any], usage: object) -> None:

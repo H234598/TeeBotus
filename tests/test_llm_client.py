@@ -1623,6 +1623,39 @@ def test_gemini_interactions_client_uses_interaction_id_fallback(monkeypatch: py
     assert response.response_id == "interaction-from-event"
 
 
+def test_gemini_interactions_client_unwraps_completed_interaction_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    class InteractionCompleted:
+        event_type = "interaction.completed"
+        interaction = {
+            "id": "interaction-completed",
+            "steps": [
+                {
+                    "event_type": "step.delta",
+                    "delta": {"type": "text", "text": "Fertig"},
+                }
+            ],
+            "usage": {"input_tokens": 5, "output_tokens": 4},
+        }
+
+    def create_interaction(**_kwargs):
+        return InteractionCompleted()
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-key",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.text == "Fertig"
+    assert response.response_id == "interaction-completed"
+    assert response.usage == {"input_tokens": 5, "output_tokens": 4}
+
+
 def test_gemini_interactions_client_extracts_root_model_outputs(monkeypatch: pytest.MonkeyPatch) -> None:
     class Interaction:
         id = "interaction-root-output"
