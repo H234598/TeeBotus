@@ -676,13 +676,20 @@ def _extract_litellm_text(response: object) -> str:
         choices = response["choices"]  # type: ignore[index]
     except (KeyError, TypeError):
         choices = getattr(response, "choices", None)
-    if not choices:
+    if not isinstance(choices, Sequence) or isinstance(choices, str | bytes | bytearray):
         return ""
-    first = choices[0]
+    for choice in choices:
+        text = _extract_litellm_choice_text(choice)
+        if text:
+            return text
+    return ""
+
+
+def _extract_litellm_choice_text(choice: object) -> str:
     try:
-        message = first["message"]  # type: ignore[index]
+        message = choice["message"]  # type: ignore[index]
     except (KeyError, TypeError):
-        message = getattr(first, "message", None)
+        message = getattr(choice, "message", None)
     if message is None:
         return ""
     try:
