@@ -657,6 +657,8 @@ def _redact_url_credentials(value: str) -> str:
 def _redact_secret_assignment(match: re.Match[str]) -> str:
     key = match.group(1)
     value = match.group(2)
+    if _secret_assignment_key_is_usage_metric(key) and _looks_like_numeric_metric(value):
+        return match.group(0)
     if _secret_assignment_key_is_env_name(key) and _looks_like_env_var_name(value):
         return match.group(0)
     return f"{key}=<redacted>"
@@ -667,8 +669,19 @@ def _secret_assignment_key_is_env_name(key: str) -> bool:
     return normalized.endswith("_env")
 
 
+def _secret_assignment_key_is_usage_metric(key: str) -> bool:
+    normalized = re.sub(r"[\s-]+", "_", str(key or "").strip().casefold())
+    if normalized in {"max_tokens", "tokens"}:
+        return True
+    return normalized.endswith("_tokens") or normalized.endswith("_token_count")
+
+
 def _looks_like_env_var_name(value: str) -> bool:
     return bool(re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", str(value or "").strip().strip("\"'`")))
+
+
+def _looks_like_numeric_metric(value: str) -> bool:
+    return bool(re.fullmatch(r"[+-]?\d+(?:\.\d+)?", str(value or "").strip().strip("\"'`")))
 
 
 def _extract_litellm_text(response: object) -> str:

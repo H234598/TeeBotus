@@ -777,7 +777,8 @@ def test_litellm_text_client_redacts_provider_errors_from_logs_and_exception(mon
     def completion(**_kwargs):
         raise RuntimeError(
             "provider rejected api_key=hf-test-secret bearer sk-test-secret123456 "
-            "api_key_env=GEMINI_API_KEY fallback_api_key_env=plain-secret"
+            "api_key_env=GEMINI_API_KEY fallback_api_key_env=plain-secret "
+            "total_tokens=4096 input_token_count=512 max_tokens=800 session_token=123456"
         )
 
     monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
@@ -798,9 +799,14 @@ def test_litellm_text_client_redacts_provider_errors_from_logs_and_exception(mon
     assert "provider=huggingface" in combined
     assert "model=huggingface/meta-llama/Llama-3.1-8B-Instruct" in combined
     assert "api_key_env=GEMINI_API_KEY" in combined
+    assert "total_tokens=4096" in combined
+    assert "input_token_count=512" in combined
+    assert "max_tokens=800" in combined
     assert "hf-test-secret" not in combined
     assert "sk-test-secret123456" not in combined
     assert "plain-secret" not in combined
+    assert "session_token=123456" not in combined
+    assert "session_token=<redacted>" in combined
     assert "fallback_api_key_env=<redacted>" in combined
     assert "<redacted>" in combined
 
