@@ -376,7 +376,7 @@ def _interaction_usage(interaction: object) -> dict[str, Any]:
             payload = model_dump()
         except Exception:
             payload = None
-        if isinstance(payload, dict) and payload:
+        if isinstance(payload, dict) and any(value is not None for value in payload.values()):
             return payload
     result: dict[str, Any] = {}
     for name in (
