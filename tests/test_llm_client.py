@@ -281,6 +281,7 @@ def test_litellm_compact_usage_log_keeps_cache_and_reasoning_counts() -> None:
             "cache_read_input_tokens": 2,
             "cache_creation_input_tokens": 1,
             "reasoning_tokens": 5,
+            "response_cost": 0.0012,
             "prompt_tokens_details": {"cached_tokens": 2},
         }
     ) == {
@@ -292,6 +293,7 @@ def test_litellm_compact_usage_log_keeps_cache_and_reasoning_counts() -> None:
         "cache_read_input_tokens": 2,
         "cache_creation_input_tokens": 1,
         "reasoning_tokens": 5,
+        "response_cost": 0.0012,
     }
 
 
