@@ -1534,6 +1534,7 @@ def test_gemini_interactions_client_extracts_step_content_parts(monkeypatch: pyt
     class Interaction:
         id = "interaction-step-parts"
         steps = [
+            types.SimpleNamespace(root=types.SimpleNamespace(type="text", text="Root-Step-Top")),
             {
                 "content": [
                     {"type": "text", "text": "Step"},
@@ -1561,7 +1562,7 @@ def test_gemini_interactions_client_extracts_step_content_parts(monkeypatch: pyt
 
     response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
 
-    assert response.text == "Step\nverschachtelt\nRoot-Step"
+    assert response.text == "Root-Step-Top\nStep\nverschachtelt\nRoot-Step"
     assert response.response_id == "interaction-step-parts"
     assert response.usage == {"input_tokens": 5, "output_tokens": 4}
 

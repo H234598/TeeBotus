@@ -302,6 +302,12 @@ def _interaction_output_text(interaction: object) -> str:
     if isinstance(steps, Sequence) and not isinstance(steps, (str, bytes, bytearray)):
         parts = []
         for step in steps:
+            step_root = _object_value(step, "root")
+            if step_root is not None and step_root is not step:
+                root_text = _interaction_content_text(step_root)
+                if root_text:
+                    parts.append(root_text)
+                    continue
             for attr in ("text", "content", "output_text"):
                 value_text = _interaction_content_text(_object_value(step, attr))
                 if value_text:
