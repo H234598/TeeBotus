@@ -735,11 +735,15 @@ def _safe_litellm_api_base(value: object) -> str:
     text = str(value or "").strip()
     if not text:
         return ""
-    split = urlsplit(text)
+    try:
+        split = urlsplit(text)
+        port_value = split.port
+    except ValueError:
+        return _redact_url_credentials(text)[:160]
     if not split.scheme or not split.netloc:
-        return text[:160]
+        return _redact_url_credentials(text)[:160]
     host = split.hostname or ""
-    port = f":{split.port}" if split.port is not None else ""
+    port = f":{port_value}" if port_value is not None else ""
     path = split.path.rstrip("/")
     return f"{split.scheme}://{host}{port}{path}"[:160]
 
