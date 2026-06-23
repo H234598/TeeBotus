@@ -453,8 +453,9 @@ def _sum_token_breakdown(value: object) -> int | None:
 def _parse_nonnegative_token_count(value: object) -> int | None:
     if isinstance(value, bool):
         return None
-    if isinstance(value, float) and not math.isfinite(value):
-        return None
+    if isinstance(value, float):
+        if not math.isfinite(value) or not value.is_integer():
+            return None
     try:
         parsed = int(value)
     except (TypeError, ValueError, OverflowError):
