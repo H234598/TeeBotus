@@ -671,9 +671,25 @@ def _secret_assignment_key_is_env_name(key: str) -> bool:
 
 def _secret_assignment_key_is_usage_metric(key: str) -> bool:
     normalized = re.sub(r"[\s-]+", "_", str(key or "").strip().casefold())
-    if normalized in {"max_tokens", "tokens"}:
-        return True
-    return normalized.endswith("_tokens") or normalized.endswith("_token_count")
+    return normalized in {
+        "cache_creation_input_tokens",
+        "cache_read_input_tokens",
+        "cached_tokens",
+        "completion_tokens",
+        "input_token_count",
+        "input_tokens",
+        "max_tokens",
+        "output_token_count",
+        "output_tokens",
+        "prompt_tokens",
+        "reasoning_tokens",
+        "tokens",
+        "total_cached_tokens",
+        "total_input_tokens",
+        "total_output_tokens",
+        "total_token_count",
+        "total_tokens",
+    }
 
 
 def _looks_like_env_var_name(value: str) -> bool:

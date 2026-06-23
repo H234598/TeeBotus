@@ -778,7 +778,7 @@ def test_litellm_text_client_redacts_provider_errors_from_logs_and_exception(mon
         raise RuntimeError(
             "provider rejected api_key=hf-test-secret bearer sk-test-secret123456 "
             "api_key_env=GEMINI_API_KEY fallback_api_key_env=plain-secret "
-            "total_tokens=4096 input_token_count=512 max_tokens=800 session_token=123456"
+            "total_tokens=4096 input_token_count=512 max_tokens=800 session_token=123456 refresh_tokens=123456"
         )
 
     monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
@@ -807,6 +807,8 @@ def test_litellm_text_client_redacts_provider_errors_from_logs_and_exception(mon
     assert "plain-secret" not in combined
     assert "session_token=123456" not in combined
     assert "session_token=<redacted>" in combined
+    assert "refresh_tokens=123456" not in combined
+    assert "refresh_tokens=<redacted>" in combined
     assert "fallback_api_key_env=<redacted>" in combined
     assert "<redacted>" in combined
 
