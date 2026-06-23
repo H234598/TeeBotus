@@ -228,6 +228,9 @@ def test_litellm_text_client_keeps_object_usage_token_fields(monkeypatch: pytest
     class Usage:
         input_tokens = 4
         output_tokens = 3
+        input_token_count = 4
+        output_token_count = 3
+        total_token_count = 7
         total_tokens = 7
         cached_tokens = 2
         total_cached_tokens = 2
@@ -255,6 +258,9 @@ def test_litellm_text_client_keeps_object_usage_token_fields(monkeypatch: pytest
     assert response.usage == {
         "input_tokens": 4,
         "output_tokens": 3,
+        "input_token_count": 4,
+        "output_token_count": 3,
+        "total_token_count": 7,
         "total_tokens": 7,
         "cached_tokens": 2,
         "total_cached_tokens": 2,
@@ -268,7 +274,10 @@ def test_litellm_compact_usage_log_keeps_cache_and_reasoning_counts() -> None:
     assert litellm_provider._compact_usage_for_log(
         {
             "input_tokens": 4,
+            "input_token_count": 4,
             "output_tokens": 3,
+            "output_token_count": 3,
+            "total_token_count": 7,
             "cache_read_input_tokens": 2,
             "cache_creation_input_tokens": 1,
             "reasoning_tokens": 5,
@@ -276,7 +285,10 @@ def test_litellm_compact_usage_log_keeps_cache_and_reasoning_counts() -> None:
         }
     ) == {
         "input_tokens": 4,
+        "input_token_count": 4,
         "output_tokens": 3,
+        "output_token_count": 3,
+        "total_token_count": 7,
         "cache_read_input_tokens": 2,
         "cache_creation_input_tokens": 1,
         "reasoning_tokens": 5,
