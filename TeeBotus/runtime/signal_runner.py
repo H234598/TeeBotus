@@ -1029,7 +1029,7 @@ def _start_local_signal_backend_if_possible(account: AccountRunConfig) -> None:
     command = _signal_cli_rest_api_command(host, port)
     log_path = runtime_dir() / f"signal-cli-rest-api-{account.instance_name}-{account.slot}.log"
     pid_path = runtime_dir() / f"signal-cli-rest-api-{account.instance_name}-{account.slot}.pid"
-    if _pid_file_process_is_running(pid_path):
+    if _pid_file_process_is_running(pid_path, markers=("signal-cli-rest-api",)):
         _wait_for_signal_cli_rest_api(account=account, process=None, log_path=log_path)
         return
     _require_signal_backend_binary("signal-cli")
@@ -1106,7 +1106,7 @@ def _ensure_signal_json_rpc_daemon() -> None:
         return
     log_path = runtime_dir() / "signal-cli-json-rpc-daemon.log"
     pid_path = runtime_dir() / "signal-cli-json-rpc-daemon.pid"
-    if _pid_file_process_is_running(pid_path):
+    if _pid_file_process_is_running(pid_path, markers=("org.asamk.signal.Main",)):
         _wait_for_signal_json_rpc_daemon(process=None, log_path=log_path)
         return
     signal_cli = _require_signal_backend_binary("signal-cli")
@@ -1284,18 +1284,35 @@ def _signal_service_json(account: AccountRunConfig, path: str) -> Any:
         raise SignalRuntimeError(f"signal-cli-rest-api Statusabfrage fehlgeschlagen: {url}: {exc}") from exc
 
 
-def _pid_file_process_is_running(path: Path) -> bool:
+def _pid_file_process_is_running(path: Path, *, markers: Sequence[str] = ()) -> bool:
     try:
         pid = int(path.read_text(encoding="utf-8").strip())
     except (OSError, ValueError):
         return False
     if pid <= 0:
         return False
+    if markers and not _pid_matches_markers(pid, markers):
+        return False
     try:
         result = subprocess.run(["kill", "-0", str(pid)], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError:
         return False
     return result.returncode == 0
+
+
+def _pid_matches_markers(pid: int, markers: Sequence[str]) -> bool:
+    normalized_markers = tuple(str(marker or "").strip() for marker in markers if str(marker or "").strip())
+    if not normalized_markers:
+        return True
+    cmdline_path = Path("/proc") / str(pid) / "cmdline"
+    try:
+        raw = cmdline_path.read_bytes()
+    except FileNotFoundError:
+        return False
+    except OSError:
+        return True
+    cmdline = raw.replace(b"\x00", b" ").decode("utf-8", errors="replace")
+    return any(marker in cmdline for marker in normalized_markers)
 
 
 def _signal_account_thread(*, account: AccountRunConfig, instances_dir: str | Path) -> threading.Thread:

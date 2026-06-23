@@ -2220,7 +2220,7 @@ def test_signal_backend_waits_for_running_rest_api_pid_until_health_ready(monkey
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_services", fake_check_signal_services)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.check_signal_service", fake_check_signal_service)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: tmp_path / "runtime")
-    monkeypatch.setattr("TeeBotus.runtime.signal_runner._pid_file_process_is_running", lambda _path: True)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._pid_file_process_is_running", lambda _path, **_kwargs: True)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.shutil.which", lambda binary, path=None: "signal-cli-rest-api" if binary == "signal-cli-rest-api" else None)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._ensure_signal_json_rpc_daemon", lambda: None)
@@ -2287,7 +2287,7 @@ def test_signal_json_rpc_daemon_waits_for_running_pid_until_port_ready(monkeypat
 
     monkeypatch.setenv("SIGNAL_CLI_CONFIG_DIR", str(tmp_path / "signal-cli"))
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.runtime_dir", lambda: runtime)
-    monkeypatch.setattr("TeeBotus.runtime.signal_runner._pid_file_process_is_running", lambda _path: True)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._pid_file_process_is_running", lambda _path, **_kwargs: True)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner._tcp_port_is_open", fake_port_open)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.Popen", fake_popen)
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.time.sleep", lambda _seconds: None)
@@ -2367,6 +2367,47 @@ def test_signal_pid_check_rejects_dead_process(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.run", lambda *_args, **_kwargs: Result())
 
     assert _pid_file_process_is_running(pid_file) is False
+
+
+def test_signal_pid_check_rejects_reused_unrelated_process(monkeypatch, tmp_path) -> None:
+    pid_file = tmp_path / "signal-cli-rest-api.pid"
+    pid_file.write_text("1234\n", encoding="utf-8")
+    kills: list[str] = []
+    original_read_bytes = Path.read_bytes
+
+    def fake_read_bytes(path: Path) -> bytes:
+        if str(path) == "/proc/1234/cmdline":
+            return b"/usr/bin/python\x00unrelated-worker"
+        return original_read_bytes(path)
+
+    def fake_run(command, **_kwargs):
+        kills.append(command[-1])
+        raise AssertionError("unrelated pid must be rejected before kill -0")
+
+    monkeypatch.setattr(Path, "read_bytes", fake_read_bytes)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.run", fake_run)
+
+    assert _pid_file_process_is_running(pid_file, markers=("signal-cli-rest-api",)) is False
+    assert kills == []
+
+
+def test_signal_pid_check_accepts_expected_process_marker(monkeypatch, tmp_path) -> None:
+    pid_file = tmp_path / "signal-cli-rest-api.pid"
+    pid_file.write_text("1234\n", encoding="utf-8")
+    original_read_bytes = Path.read_bytes
+
+    class Result:
+        returncode = 0
+
+    def fake_read_bytes(path: Path) -> bytes:
+        if str(path) == "/proc/1234/cmdline":
+            return b"/home/teladi/.local/bin/signal-cli-rest-api\x00-signal-cli-config"
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", fake_read_bytes)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.subprocess.run", lambda *_args, **_kwargs: Result())
+
+    assert _pid_file_process_is_running(pid_file, markers=("signal-cli-rest-api",)) is True
 
 
 def test_signal_cli_api_account_preflight_accepts_registered_number(monkeypatch, tmp_path) -> None:
