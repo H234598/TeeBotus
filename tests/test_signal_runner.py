@@ -2815,6 +2815,48 @@ def test_signal_account_uses_http_only_for_local_service_without_scheme(monkeypa
     assert captured["connection_mode"] == "http_only"
 
 
+def test_signal_account_allows_single_trailing_service_slash(monkeypatch, tmp_path) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeConfig:
+        def __init__(self, **kwargs) -> None:
+            captured.update(kwargs)
+
+    class FakeBot:
+        def __init__(self, config: FakeConfig) -> None:
+            self.config = config
+
+        def register(self, _command) -> None:
+            return None
+
+        def start(self) -> None:
+            return None
+
+    fake_signalbot = SimpleNamespace(
+        Config=FakeConfig,
+        SignalBot=FakeBot,
+        InMemoryConfig=lambda: "memory-storage",
+        api=SimpleNamespace(ConnectionMode=SimpleNamespace(HTTP_ONLY="http_only", HTTPS_ONLY="https_only")),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: fake_signalbot)
+
+    run_signal_account(
+        account=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080/",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+    )
+
+    assert captured["signal_service"] == "127.0.0.1:8080"
+    assert captured["connection_mode"] == "http_only"
+
+
 def test_signal_account_rejects_service_url_with_path(monkeypatch, tmp_path) -> None:
     fake_signalbot = SimpleNamespace(
         Config=lambda **kwargs: kwargs,
@@ -2840,6 +2882,34 @@ def test_signal_account_rejects_service_url_with_path(monkeypatch, tmp_path) -> 
         assert "darf keinen Pfad" in str(exc)
     else:
         raise AssertionError("SignalRuntimeError was not raised")
+
+
+def test_signal_account_rejects_service_url_with_repeated_trailing_slash(monkeypatch, tmp_path) -> None:
+    fake_signalbot = SimpleNamespace(
+        Config=lambda **kwargs: kwargs,
+        SignalBot=lambda _config: None,
+        api=SimpleNamespace(ConnectionMode=SimpleNamespace(HTTP_ONLY="http_only", HTTPS_ONLY="https_only")),
+    )
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._import_signalbot", lambda: fake_signalbot)
+
+    for signal_service in ("http://127.0.0.1:8080//", "127.0.0.1:8080//"):
+        try:
+            run_signal_account(
+                account=AccountRunConfig(
+                    instance_name="Demo",
+                    channel="signal",
+                    slot=1,
+                    label="signal:1",
+                    openai_api_key="",
+                    signal_service=signal_service,
+                    signal_phone_number="+491234",
+                ),
+                instances_dir=tmp_path,
+            )
+        except SignalRuntimeError as exc:
+            assert "darf keinen Pfad" in str(exc)
+        else:
+            raise AssertionError(f"SignalRuntimeError was not raised for {signal_service}")
 
 
 def test_signal_service_health_uses_normalized_host_port(monkeypatch) -> None:
