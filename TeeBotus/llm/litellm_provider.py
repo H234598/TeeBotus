@@ -753,6 +753,13 @@ def _extract_usage(response: object) -> dict[str, Any]:
         "total_tokens",
         "cached_tokens",
         "total_cached_tokens",
+        "cache_read_input_tokens",
+        "cache_creation_input_tokens",
+        "reasoning_tokens",
+        "prompt_tokens_details",
+        "completion_tokens_details",
+        "input_tokens_details",
+        "output_tokens_details",
     ):
         value = getattr(usage, key, None)
         if value is not None:

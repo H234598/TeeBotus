@@ -231,6 +231,9 @@ def test_litellm_text_client_keeps_object_usage_token_fields(monkeypatch: pytest
         total_tokens = 7
         cached_tokens = 2
         total_cached_tokens = 2
+        reasoning_tokens = 1
+        prompt_tokens_details = {"cached_tokens": 2}
+        completion_tokens_details = {"reasoning_tokens": 1}
 
     def completion(**kwargs):
         return {
@@ -255,6 +258,9 @@ def test_litellm_text_client_keeps_object_usage_token_fields(monkeypatch: pytest
         "total_tokens": 7,
         "cached_tokens": 2,
         "total_cached_tokens": 2,
+        "reasoning_tokens": 1,
+        "prompt_tokens_details": {"cached_tokens": 2},
+        "completion_tokens_details": {"reasoning_tokens": 1},
     }
 
 
