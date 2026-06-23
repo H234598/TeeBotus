@@ -237,9 +237,11 @@ def _first_positive_int(*values: object) -> int | None:
 
 def _litellm_gemini_model_id(value: object) -> str:
     model = str(value or "").strip()
-    if model.startswith("models/"):
+    if model.casefold().startswith("models/"):
         model = model[len("models/") :]
-    if model and not model.startswith("gemini/"):
+    if model.casefold().startswith("gemini/"):
+        model = f"gemini/{model[len('gemini/') :]}"
+    elif model:
         model = f"gemini/{model}"
     return model or "gemini/gemini-3.5-flash"
 

@@ -1144,6 +1144,26 @@ def test_gemini_stateful_client_uses_default_timeout_for_invalid_direct_setting(
     assert client.timeout == 90
 
 
+def test_gemini_stateful_client_normalizes_mixed_case_model_prefixes() -> None:
+    mixed_gemini = LiteLLMGeminiStatefulClient(
+        LiteLLMGeminiStatefulSettings(
+            model="Gemini/Gemini-3.5-Flash",
+            api_key="gemini-key",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+    mixed_models = LiteLLMGeminiStatefulClient(
+        LiteLLMGeminiStatefulSettings(
+            model="Models/gemini-3.5-flash",
+            api_key="gemini-key",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    assert mixed_gemini.model == "gemini/Gemini-3.5-Flash"
+    assert mixed_models.model == "gemini/gemini-3.5-flash"
+
+
 def test_gemini_stateful_client_uses_central_paid_alias_scope() -> None:
     client = LiteLLMGeminiStatefulClient(
         LiteLLMGeminiStatefulSettings(
