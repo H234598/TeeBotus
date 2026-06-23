@@ -181,6 +181,21 @@ def test_litellm_text_client_uses_first_nonempty_choice_text(monkeypatch: pytest
     assert response.text == "zweite Antwort"
 
 
+def test_litellm_text_client_extracts_choice_level_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    def completion(**_kwargs):
+        return {"choices": [{"text": "  Completion-Antwort  "}]}
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(completion=completion))
+
+    response = LiteLLMTextClient(provider="litellm", model="openai/gpt-test").create_reply(
+        "Ping",
+        BotInstructions(openai_system_prompt="System."),
+        None,
+    )
+
+    assert response.text == "Completion-Antwort"
+
+
 def test_litellm_gemini_stateless_provider_reports_response_cost(monkeypatch: pytest.MonkeyPatch) -> None:
     class Response(dict):
         _hidden_params = {"response_cost": 0.0042}
