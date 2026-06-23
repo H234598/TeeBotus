@@ -1665,6 +1665,36 @@ def test_gemini_interactions_client_extracts_step_content_parts(monkeypatch: pyt
     assert response.usage == {"input_tokens": 5, "output_tokens": 4}
 
 
+def test_gemini_interactions_client_extracts_step_delta_parts(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Interaction:
+        id = "interaction-step-delta"
+        steps = [
+            {
+                "event_type": "step.delta",
+                "delta": {"type": "text", "text": "Step Delta"},
+            }
+        ]
+        usage = {"input_tokens": 5, "output_tokens": 4}
+
+    def create_interaction(**_kwargs):
+        return Interaction()
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key="gemini-key",
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    response = client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert response.text == "Step Delta"
+    assert response.response_id == "interaction-step-delta"
+    assert response.usage == {"input_tokens": 5, "output_tokens": 4}
+
+
 def test_gemini_interactions_client_drops_previous_interaction_on_key_failover(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[dict[str, object]] = []
     keys: list[str] = []
