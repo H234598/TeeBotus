@@ -105,7 +105,7 @@ class LiteLLMGeminiStatefulClient:
                 if self.api_key_ring and _is_usage_limit_error(exc, detail):
                     self.api_key_ring.mark_limited(api_key)
                     continue
-                continue
+                break
             text = _interaction_output_text(interaction)
             if not text:
                 errors.append(f"provider={self.provider} model={self.model}: empty text")

@@ -1474,6 +1474,29 @@ def test_gemini_interactions_client_drops_previous_interaction_on_key_failover(m
     assert "previous_interaction_id" not in calls[1]
 
 
+def test_gemini_interactions_client_does_not_try_next_key_on_non_limit_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    keys: list[str] = []
+
+    def create_interaction(**kwargs):
+        api_key = str(kwargs.get("api_key") or "")
+        keys.append(api_key)
+        raise RuntimeError("provider rejected request body")
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(create_interaction=create_interaction))
+    client = GeminiInteractionsClient(
+        GeminiInteractionsSettings(
+            model="gemini/gemini-3.5-flash",
+            api_key_ring=("gemini-nonlimit-a", "gemini-nonlimit-b"),
+            gemini_free_tier_limits=GeminiFreeTierLimits(enabled=False),
+        )
+    )
+
+    with pytest.raises(LLMAPIError, match="provider rejected request body"):
+        client.create_reply("Ping", BotInstructions(openai_system_prompt="System."), None)
+
+    assert keys == ["gemini-nonlimit-a"]
+
+
 def test_build_text_llm_client_passes_env_to_hf_pool_provider() -> None:
     env = {"HF_TOKEN_MAIN": "hf-secret", "TEEBOTUS_HF_POOL_LIVE": "0"}
 
