@@ -394,8 +394,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "const SECONDARY_PROBLEM_STATUS_FIELDS = [" in source
     assert "this._statusFieldHasProblem(values, key)" in source
     assert '"; Kontext " + fields.context_length' in source
-    assert "summary.problem_status_count" in source
-    assert "health.total_problem_count" in source
+    assert "_healthProblemTotal: function(health, summary, counts)" in source
     assert "_problemStatusCount: function(counts)" in source
     assert "_problemBreakdownText: function(value)" in source
     assert "_commandProblemBreakdownText: function(health)" in source
@@ -1154,7 +1153,7 @@ def test_cinnamon_applet_rejects_partial_integer_settings() -> None:
         "staleJunk": False,
         "staleValid": True,
         "malformedSummary": (
-            "Health Warnung | Unit active | 1 | telegram | Warnungen 9 | "
+            "Health Warnung | Unit active | 1 | telegram | Warnungen 13 | "
             "Probleme defekt:6 | Qdrant Probe:4"
         ),
     }
@@ -1387,6 +1386,74 @@ def test_cinnamon_applet_menu_header_omits_zero_problem_total() -> None:
     assert "Probleme 0" not in result["version"]
     assert result["version"].startswith("Health: ok")
     assert "LLM-Routen: 0" in result["version"]
+
+
+def test_cinnamon_applet_menu_header_derives_total_from_command_and_qdrant_problems() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.statusPayload = {
+            version: "1.2.3",
+            repo: { short_commit: "abc1234" },
+            unit: { active_state: "active", sub_state: "running" },
+            health: {
+              status: "warning",
+              command_problem_count: 1,
+              qdrant_problem_count: 1,
+              qdrant_runtime_problem_count: 1,
+              qdrant_probe_problem_count: 0,
+              qdrant_unit_problem_count: 0,
+              problem_statuses: ""
+            },
+            runtime: { summary: { problem_status_count: 0, llm_routes: 0 } }
+          };
+          values.statusSummary = applet._statusSummary(applet.statusPayload);
+          applet.headerItem = {label: {set_text: function(value) { values.header = value; }}};
+          applet.summaryItem = {label: {set_text: function(value) { values.summary = value; }}};
+          applet.versionItem = {label: {set_text: function(value) { values.version = value; }}};
+          applet._updateHeader();
+          return values;
+        })()
+        """
+    )
+
+    assert "Warnungen 2" in result["statusSummary"]
+    assert "Probleme 2" in result["version"]
+    assert "Kommando:1" in result["version"]
+    assert "Qdrant Runtime:1" in result["version"]
+
+
+def test_cinnamon_applet_menu_header_derives_total_from_zeroed_summary_fields() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.statusPayload = {
+            version: "1.2.3",
+            repo: { short_commit: "abc1234" },
+            unit: { active_state: "active", sub_state: "running" },
+            health: {
+              status: "warning",
+              command_problem_count: 0,
+              qdrant_problem_count: 0,
+              qdrant_runtime_problem_count: 1,
+              qdrant_probe_problem_count: 0,
+              qdrant_unit_problem_count: 0,
+              problem_statuses: ""
+            },
+            runtime: {
+              summary: { problem_status_count: 0, llm_routes: 0 },
+              status_counts: { warning: 3 }
+            }
+          };
+          values.statusSummary = applet._statusSummary(applet.statusPayload);
+          return values;
+        })()
+        """
+    )
+
+    assert "Warnungen 4" in result["statusSummary"]
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:

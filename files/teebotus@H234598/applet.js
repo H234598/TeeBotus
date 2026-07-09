@@ -1119,13 +1119,7 @@ TeeBotusApplet.prototype = {
     let runtime = payload.runtime || {};
     let summary = runtime.summary || {};
     let counts = runtime.status_counts || {};
-    let bad = this._nonNegativeInt(health.total_problem_count, null);
-    if (bad === null) {
-      bad = this._nonNegativeInt(summary.problem_status_count, null);
-    }
-    if (bad === null) {
-      bad = this._problemStatusCount(counts);
-    }
+    let bad = this._healthProblemTotal(health, summary, counts);
     let state = String(unit.active_state || "unknown");
     let instances = String(summary.instances || "?");
     let channels = String(summary.channels || this._channels());
@@ -1137,6 +1131,27 @@ TeeBotusApplet.prototype = {
     let commandBreakdown = this._commandProblemBreakdownText(health);
     let qdrantBreakdown = this._qdrantProblemBreakdownText(health);
     return "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + " | Warnungen " + String(bad) + breakdown + commandBreakdown + qdrantBreakdown;
+  },
+
+  _healthProblemTotal: function(health, summary, counts) {
+    let total = this._nonNegativeInt((health || {}).total_problem_count, null);
+    if (total !== null && total > 0) {
+      return total;
+    }
+    let runtimeTotal = this._nonNegativeInt((summary || {}).problem_status_count, 0);
+    if (runtimeTotal <= 0) {
+      runtimeTotal = this._problemStatusCount(counts);
+    }
+    let commandTotal = this._nonNegativeInt((health || {}).command_problem_count, 0);
+    let qdrantTotal = this._nonNegativeInt((health || {}).qdrant_problem_count, 0);
+    if (qdrantTotal <= 0) {
+      qdrantTotal =
+        this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0) +
+        this._nonNegativeInt((health || {}).qdrant_probe_problem_count, 0) +
+        this._nonNegativeInt((health || {}).qdrant_unit_problem_count, 0);
+    }
+    let derivedTotal = runtimeTotal + commandTotal + qdrantTotal;
+    return total === null ? derivedTotal : Math.max(total, derivedTotal);
   },
 
   _problemBreakdownText: function(value) {
@@ -1193,10 +1208,7 @@ TeeBotusApplet.prototype = {
   },
 
   _healthDetailText: function(health, summary) {
-    let total = this._nonNegativeInt((health || {}).total_problem_count, null);
-    if (total === null) {
-      total = this._nonNegativeInt((summary || {}).problem_status_count, null);
-    }
+    let total = this._healthProblemTotal(health, summary, {});
     let text = total > 0 ? " | Probleme " + String(total) : "";
     text += this._problemBreakdownText((health || {}).problem_statuses || (summary || {}).problem_statuses || "");
     text += this._commandProblemBreakdownText(health);
