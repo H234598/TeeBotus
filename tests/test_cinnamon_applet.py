@@ -1402,7 +1402,7 @@ def test_cinnamon_applet_menu_header_derives_total_from_command_and_qdrant_probl
               command_problem_count: 1,
               qdrant_problem_count: 1,
               qdrant_runtime_problem_count: 1,
-              qdrant_probe_problem_count: 0,
+              qdrant_probe_problem_count: 1,
               qdrant_unit_problem_count: 0,
               problem_statuses: ""
             },
@@ -1421,7 +1421,7 @@ def test_cinnamon_applet_menu_header_derives_total_from_command_and_qdrant_probl
     assert "Warnungen 3" in result["statusSummary"]
     assert "Probleme 3" in result["version"]
     assert "Kommando:1" in result["version"]
-    assert "Qdrant Runtime:1" in result["version"]
+    assert "Qdrant Runtime:1, Probe:1" in result["version"]
 
 
 def test_cinnamon_applet_menu_header_derives_total_from_zeroed_summary_fields() -> None:
