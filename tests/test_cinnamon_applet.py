@@ -2433,6 +2433,59 @@ def test_cinnamon_applet_payload_does_not_double_count_runtime_qdrant_failure(mo
     assert payload["health"]["total_problem_count"] == 2
 
 
+def test_cinnamon_applet_payload_does_not_add_qdrant_service_failure_to_probe_failure(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "_runtime_status",
+        lambda *_args, **_kwargs: {
+            "returncode": 0,
+            "stdout": (
+                "[Memory und semantische Suche]\n"
+                "qdrant=127.0.0.1:6333 status=unreachable\n"
+                "qdrant_collection=teebotus_user_memory status=unavailable\n"
+            ),
+            "stderr": "",
+        },
+    )
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "_systemd_unit_status",
+        lambda unit: (
+            {"active_state": "active", "sub_state": "running", "returncode": 0}
+            if unit == "teebotus.service"
+            else {"active_state": "failed", "sub_state": "failed", "returncode": 0}
+        ),
+    )
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "_qdrant_status",
+        lambda _url: {
+            "url": "http://127.0.0.1:6333",
+            "collections": {
+                "teebotus_user_memory": {"status": "unreachable", "count": 0},
+                "teebotus_bibliothekar_chunks": {"status": "unreachable", "count": 0},
+            },
+            "error": "connection refused",
+        },
+    )
+    monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
+
+    payload = build_status_payload(
+        repo_root=tmp_path,
+        channels="telegram,signal",
+        unit_name="teebotus.service",
+        python_executable="/usr/bin/python3",
+        timeout_seconds=1,
+    )
+
+    assert payload["health"]["runtime_problem_count"] == 0
+    assert payload["health"]["qdrant_runtime_problem_count"] == 2
+    assert payload["health"]["qdrant_probe_problem_count"] == 2
+    assert payload["health"]["qdrant_unit_problem_count"] == 1
+    assert payload["health"]["qdrant_problem_count"] == 2
+    assert payload["health"]["total_problem_count"] == 2
+
+
 def test_cinnamon_applet_payload_warns_when_only_qdrant_runtime_count_is_present(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "", "stderr": ""})
     monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})

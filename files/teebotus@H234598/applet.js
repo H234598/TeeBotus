@@ -1162,7 +1162,7 @@ TeeBotusApplet.prototype = {
     if (qdrantTotal <= 0) {
       qdrantTotal = Math.max(
         this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0),
-        this._nonNegativeInt((health || {}).qdrant_probe_problem_count, 0) +
+        this._nonNegativeInt((health || {}).qdrant_probe_problem_count, 0),
         this._nonNegativeInt((health || {}).qdrant_unit_problem_count, 0)
       );
     }
