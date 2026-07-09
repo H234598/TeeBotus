@@ -11,11 +11,12 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, TOKEN_HEX
 from TeeBotus.runtime.proactive_agent import approve_proactive_review_item, reject_proactive_review_item
 
 StoreFactory = Callable[[Path, str], AccountStore]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def main(argv: list[str] | None = None, *, store_factory: StoreFactory | None = None) -> int:
     parser = argparse.ArgumentParser(description="Review TeeBotus Proactive Agent human-review outbox items.")
-    parser.add_argument("--instances-dir", default="instances", help="TeeBotus instances directory.")
+    parser.add_argument("--instances-dir", default=str(PROJECT_ROOT / "instances"), help="TeeBotus instances directory.")
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
     subparsers = parser.add_subparsers(dest="command")
 

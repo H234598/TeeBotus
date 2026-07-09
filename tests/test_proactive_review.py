@@ -109,6 +109,20 @@ def test_proactive_review_cli_prints_json(tmp_path: Path, capsys) -> None:
     assert item_id in captured.out
 
 
+def test_proactive_review_cli_default_instances_dir_is_repo_root_relative(tmp_path: Path, monkeypatch, capsys) -> None:
+    import TeeBotus.proactive_review as proactive_review_module
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(proactive_review_module, "PROJECT_ROOT", tmp_path)
+    _instance_dir, store, _account_id, _item_id = _review_fixture(tmp_path)
+
+    result = main(["list", "--instance", "Depressionsbot"], store_factory=lambda _root, _instance: store)
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert "review_pending=1" in captured.out
+
+
 def _review_fixture(tmp_path: Path) -> tuple[Path, AccountStore, str, str]:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     store = AccountStore(instance_dir / "data" / "accounts", instance_dir.name, StaticSecretProvider(b"p" * 32))
