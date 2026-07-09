@@ -2279,9 +2279,24 @@ def test_cinnamon_applet_rejects_active_unit_with_failed_substate() -> None:
 def test_cinnamon_applet_rejects_active_unit_without_confirmed_substate() -> None:
     assert cinnamon_applet._unit_state_ok({"active_state": "active", "sub_state": ""}) is False
     assert cinnamon_applet._unit_state_ok({"active_state": "active", "sub_state": "unknown"}) is False
-    assert cinnamon_applet._unit_state_ok({"active_state": "unknown", "sub_state": "unknown"}) is True
+    assert cinnamon_applet._unit_state_ok({"active_state": "unknown", "sub_state": "unknown"}) is False
     assert cinnamon_applet._unit_state_ok({"active_state": "unknown", "sub_state": "failed"}) is False
     assert cinnamon_applet._unit_state_ok({"active_state": "unknown", "sub_state": "running"}) is False
+
+
+def test_cinnamon_applet_rejects_successful_systemd_query_without_states(monkeypatch) -> None:
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "_run",
+        lambda *_args, **_kwargs: {"returncode": 0, "stdout": "", "stderr": ""},
+    )
+
+    unit = cinnamon_applet._systemd_unit_status("teebotus.service")
+
+    assert unit["active_state"] == "unknown"
+    assert unit["sub_state"] == "unknown"
+    assert cinnamon_applet._status_query_ok(unit) is True
+    assert cinnamon_applet._unit_problem_count(unit) == 1
 
 
 def test_cinnamon_applet_empty_systemd_unit_is_not_healthy() -> None:
