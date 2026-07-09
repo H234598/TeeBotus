@@ -1131,7 +1131,7 @@ TeeBotusApplet.prototype = {
     let vectors = this._qdrantCollectionCount(qdrant.collections || {}, "teebotus_user_memory");
     let vectorText = vectors > 0 ? " | Vektoren " + String(vectors) : "";
     let healthText = this._statusWord(health.status || (payload.ok ? "ok" : "warning"));
-    let breakdown = this._problemBreakdownText(health.problem_statuses || summary.problem_statuses || "");
+    let breakdown = this._problemBreakdownText(health.problem_statuses || summary.problem_statuses || this._problemStatusesFromCounts(counts || {}));
     let commandBreakdown = this._commandProblemBreakdownText(health);
     let qdrantBreakdown = this._qdrantProblemBreakdownText(health);
     return "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + " | Warnungen " + String(bad) + breakdown + commandBreakdown + qdrantBreakdown;

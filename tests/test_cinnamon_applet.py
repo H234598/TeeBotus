@@ -1715,6 +1715,46 @@ def test_cinnamon_applet_menu_header_uses_status_counts_for_problem_breakdown_wh
     assert "Probleme Warnung:2, defekt:1" in result["version"]
 
 
+def test_cinnamon_applet_status_summary_uses_status_counts_for_problem_breakdown_when_missing() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.statusPayload = {
+            version: "1.2.3",
+            repo: { short_commit: "abc1234" },
+            unit: { active_state: "active", sub_state: "running" },
+            health: {
+              status: "warning",
+              runtime_problem_count: 2,
+              problem_statuses: "",
+              command_problem_count: 0,
+              qdrant_problem_count: 0,
+              qdrant_probe_problem_count: 0,
+              qdrant_unit_problem_count: 0,
+              qdrant_runtime_problem_count: 0
+            },
+            runtime: {
+              summary: {
+                instances: "Demo",
+                channels: "telegram",
+                problem_status_count: 0,
+                problem_statuses: "",
+                llm_routes: 0
+              },
+              status_counts: { warning: 2, broken: 1 }
+            }
+          };
+          values.statusSummary = applet._statusSummary(applet.statusPayload);
+          return values;
+        })()
+        """
+    )
+
+    assert "Warnungen 3" in result["statusSummary"]
+    assert "Probleme Warnung:2, defekt:1" in result["statusSummary"]
+
+
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     parsed = parse_runtime_status(
         """
