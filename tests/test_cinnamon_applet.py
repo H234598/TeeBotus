@@ -1453,7 +1453,7 @@ def test_cinnamon_applet_menu_header_derives_total_from_zeroed_summary_fields() 
         """
     )
 
-    assert "Warnungen 4" in result["statusSummary"]
+    assert "Warnungen 3" in result["statusSummary"]
 
 
 def test_cinnamon_applet_menu_header_uses_runtime_counts_in_detail_text() -> None:
@@ -1541,7 +1541,7 @@ def test_cinnamon_applet_menu_header_does_not_trust_zero_total_problem_count() -
     assert "Warnungen 1" in result["statusSummary"]
 
 
-def test_cinnamon_applet_menu_header_counts_qdrant_runtime_problems_in_fallback_total() -> None:
+def test_cinnamon_applet_menu_header_does_not_double_count_qdrant_runtime_problems() -> None:
     result = _run_js_applet_expression(
         """
         (function() {
@@ -1558,7 +1558,7 @@ def test_cinnamon_applet_menu_header_counts_qdrant_runtime_problems_in_fallback_
               qdrant_unit_problem_count: 0,
               qdrant_problem_count: 0
             },
-            runtime: { summary: { problem_status_count: 0, llm_routes: 0 } }
+            runtime: { summary: { problem_status_count: 1, llm_routes: 0 } }
           };
           values.statusSummary = applet._statusSummary(applet.statusPayload);
           return values;
@@ -1567,6 +1567,7 @@ def test_cinnamon_applet_menu_header_counts_qdrant_runtime_problems_in_fallback_
     )
 
     assert "Warnungen 1" in result["statusSummary"]
+    assert "Qdrant Runtime:1" in result["statusSummary"]
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
