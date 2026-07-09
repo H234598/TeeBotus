@@ -460,3 +460,16 @@ def test_codex_history_systemd_enable_with_index_timer_writes_and_enables_timer(
         ["systemctl", "enable", "--now", "teebotus-codex-history-collector.service"],
         ["systemctl", "enable", "--now", "teebotus-codex-history-index.timer"],
     ]
+
+
+def test_codex_history_systemd_default_repo_root_is_project_root(tmp_path: Path, monkeypatch, capsys) -> None:
+    import TeeBotus.codex_history_systemd as codex_history_systemd
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(codex_history_systemd, "PROJECT_ROOT", tmp_path)
+
+    result = main(["--print"])
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert f"WorkingDirectory={tmp_path.resolve()}" in captured.out

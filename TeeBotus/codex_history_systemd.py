@@ -33,6 +33,7 @@ DEFAULT_COLLECTOR_INTERVAL = "24h"
 DEFAULT_COLLECTOR_RANDOMIZED_DELAY = "0"
 DEFAULT_INDEX_INTERVAL = "24h"
 DEFAULT_INDEX_RANDOMIZED_DELAY = "15min"
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 @dataclass(frozen=True)
@@ -59,7 +60,7 @@ class CodexHistoryIndexSystemdUnits:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Install or print the TeeBotus Codex history collector systemd service.")
-    parser.add_argument("--repo-root", default=str(Path.cwd()), help="TeeBotus repository root used as WorkingDirectory.")
+    parser.add_argument("--repo-root", default=str(PROJECT_ROOT), help="TeeBotus repository root used as WorkingDirectory.")
     parser.add_argument(
         "--python",
         default="",

@@ -10,6 +10,7 @@ from pathlib import Path
 
 DEFAULT_CHANNELS = "telegram,signal,matrix"
 SYSTEMD_EXEC_PREFIX_CHARS = frozenset("@-:+!|")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 @dataclass(frozen=True)
@@ -21,7 +22,7 @@ class TeeBotusSystemdUnit:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Install or print TeeBotus user systemd service.")
     parser.add_argument("--check-env-file", default="", help=argparse.SUPPRESS)
-    parser.add_argument("--repo-root", default=str(Path.cwd()), help="TeeBotus repository root used as WorkingDirectory.")
+    parser.add_argument("--repo-root", default=str(PROJECT_ROOT), help="TeeBotus repository root used as WorkingDirectory.")
     parser.add_argument(
         "--python",
         default="",

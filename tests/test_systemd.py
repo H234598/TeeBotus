@@ -156,6 +156,19 @@ def test_teebotus_systemd_print_mode_outputs_service(tmp_path: Path, capsys) -> 
     assert "ExecStart=python3 -m TeeBotus --all --channels telegram,signal,matrix" in captured.out
 
 
+def test_teebotus_systemd_default_repo_root_is_project_root(tmp_path: Path, monkeypatch, capsys) -> None:
+    import TeeBotus.systemd as systemd_module
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(systemd_module, "PROJECT_ROOT", tmp_path)
+
+    result = main(["--print"])
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert f"WorkingDirectory={tmp_path.resolve()}" in captured.out
+
+
 def test_teebotus_systemd_cli_reports_invalid_render_options_without_traceback(tmp_path: Path, capsys) -> None:
     try:
         main(["--repo-root", str(tmp_path), "--channels", "telegram,irc", "--print"])
