@@ -134,6 +134,40 @@ def test_proactive_main_loads_runtime_environment_before_configuring_logging(tmp
     assert recorded["tee_stdio"] is True
 
 
+def test_proactive_cli_default_instances_dir_is_project_root_relative(tmp_path, capsys, monkeypatch) -> None:
+    import TeeBotus.proactive as proactive_module
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(proactive_module, "PROJECT_ROOT", tmp_path)
+    recorded: dict[str, object] = {}
+
+    def fake_load_dotenv(path) -> None:
+        return None
+
+    def fake_load_runtime_config_defaults(path) -> None:
+        return None
+
+    def fake_configure_runtime_logging(*, level, tee_stdio) -> None:
+        return None
+
+    def fake_run_proactive_agent_cycle(**kwargs):
+        recorded["instances_dir"] = kwargs["instances_dir"]
+        return {"ok": True, "generated_at": "2026-06-15T12:00:00+00:00", "dispatch": False, "instances": []}
+
+    with (
+        patch("TeeBotus.proactive._load_dotenv", side_effect=fake_load_dotenv),
+        patch("TeeBotus.proactive._load_runtime_config_defaults", side_effect=fake_load_runtime_config_defaults),
+        patch("TeeBotus.proactive.configure_runtime_logging", side_effect=fake_configure_runtime_logging),
+        patch("TeeBotus.proactive.run_proactive_agent_cycle", side_effect=fake_run_proactive_agent_cycle),
+    ):
+        result = proactive_module.main(["--dry-run"])
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert recorded["instances_dir"] == tmp_path / "instances"
+    assert "proactive_dry_run" in captured.out
+
+
 def test_proactive_cli_dispatch_can_run_without_injected_sender_registry(tmp_path, capsys) -> None:
     result = main(["--instances-dir", str(tmp_path / "instances"), "--dispatch"])
 

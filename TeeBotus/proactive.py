@@ -65,7 +65,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run TeeBotus Proactive Agent scheduler checks.")
-    parser.add_argument("--instances-dir", default="instances", help="TeeBotus instances directory.")
+    parser.add_argument("--instances-dir", default=str(PROJECT_ROOT / "instances"), help="TeeBotus instances directory.")
     parser.add_argument("--instance", action="append", default=[], help="Instance name to check. Can be repeated.")
     parser.add_argument("--dry-run", action="store_true", help="Do not send due items. Plain dry-run only inspects; --plan can still write planner output.")
     parser.add_argument("--dispatch", action="store_true", help="Dispatch due items using explicitly configured in-process senders.")
