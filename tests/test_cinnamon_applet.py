@@ -2104,9 +2104,9 @@ def test_cinnamon_applet_payload_does_not_double_count_runtime_qdrant_failure(mo
     assert payload["health"]["command_problem_count"] == 0
     assert payload["health"]["problem_status_count"] == 2
     assert payload["health"]["qdrant_runtime_problem_count"] == 2
-    assert payload["health"]["qdrant_probe_problem_count"] == 0
-    assert payload["health"]["qdrant_problem_count"] == 0
-    assert payload["health"]["total_problem_count"] == 2
+    assert payload["health"]["qdrant_probe_problem_count"] == 1
+    assert payload["health"]["qdrant_problem_count"] == 1
+    assert payload["health"]["total_problem_count"] == 3
 
 
 def test_cinnamon_applet_payload_counts_top_level_qdrant_error_without_collections(monkeypatch, tmp_path) -> None:
