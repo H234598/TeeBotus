@@ -399,7 +399,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_problemBreakdownText: function(value)" in source
     assert "_commandProblemBreakdownText: function(health)" in source
     assert "_qdrantProblemBreakdownText: function(health)" in source
-    assert "_healthDetailText: function(health, summary)" in source
+    assert "_healthDetailText: function(health, summary, counts)" in source
     assert "this._styleMenuItemLabel(this.summaryItem, { maxWidthEm: SUBMENU_LABEL_WIDTH_EM, wrap: true });" in source
     assert "this._styleMenuItemLabel(this.versionItem, { maxWidthEm: SUBMENU_LABEL_WIDTH_EM, wrap: true });" in source
     assert "qdrant_runtime_problem_count" in source
@@ -1454,6 +1454,37 @@ def test_cinnamon_applet_menu_header_derives_total_from_zeroed_summary_fields() 
     )
 
     assert "Warnungen 4" in result["statusSummary"]
+
+
+def test_cinnamon_applet_menu_header_uses_runtime_counts_in_detail_text() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.statusPayload = {
+            version: "1.2.3",
+            repo: { short_commit: "abc1234" },
+            unit: { active_state: "active", sub_state: "running" },
+            health: {
+              status: "warning",
+              problem_statuses: "warning:1"
+            },
+            runtime: {
+              summary: { problem_status_count: 0, llm_routes: 0 },
+              status_counts: { warning: 3, broken: 1 }
+            }
+          };
+          applet.headerItem = {label: {set_text: function(value) { values.header = value; }}};
+          applet.summaryItem = {label: {set_text: function(value) { values.summary = value; }}};
+          applet.versionItem = {label: {set_text: function(value) { values.version = value; }}};
+          applet._updateHeader();
+          return values;
+        })()
+        """
+    )
+
+    assert "Probleme 4" in result["version"]
+    assert "Warnung:1" in result["version"]
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:

@@ -1207,8 +1207,8 @@ TeeBotusApplet.prototype = {
     return " | Qdrant " + parts.join(", ");
   },
 
-  _healthDetailText: function(health, summary) {
-    let total = this._healthProblemTotal(health, summary, {});
+  _healthDetailText: function(health, summary, counts) {
+    let total = this._healthProblemTotal(health, summary, counts || {});
     let text = total > 0 ? " | Probleme " + String(total) : "";
     text += this._problemBreakdownText((health || {}).problem_statuses || (summary || {}).problem_statuses || "");
     text += this._commandProblemBreakdownText(health);
@@ -1231,13 +1231,14 @@ TeeBotusApplet.prototype = {
     let health = payload.health || {};
     let runtime = payload.runtime || {};
     let summary = runtime.summary || {};
+    let counts = runtime.status_counts || {};
     this.headerItem.label.set_text("TB " + String(payload.version || "?"));
     this.summaryItem.label.set_text(this.statusText || _("Status unbekannt"));
     let commit = repo.short_commit ? " | " + repo.short_commit : "";
     this.versionItem.label.set_text(
       "Health: " +
         this._statusWord(health.status || "unknown") +
-        this._healthDetailText(health, summary) +
+        this._healthDetailText(health, summary, counts) +
         " | Unit: " +
         String(unit.active_state || "unknown") +
         " / " +
