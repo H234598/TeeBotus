@@ -1750,8 +1750,8 @@ def test_cinnamon_applet_status_summary_uses_status_counts_for_problem_breakdown
         """
     )
 
-    assert result["statusSummary"].startswith("Warnungen 3")
-    assert "Warnungen 3" in result["statusSummary"]
+    assert result["statusSummary"].startswith("Warnungen 2")
+    assert "Warnungen 2" in result["statusSummary"]
     assert "Probleme Warnung:2, defekt:1" in result["statusSummary"]
 
 
@@ -1795,9 +1795,9 @@ def test_cinnamon_applet_menu_header_problem_counts_come_before_health_status() 
         """
     )
 
-    assert result["summary"].startswith("Warnungen 3")
-    assert result["version"].startswith("Probleme 3")
-    assert result["version"].index("Probleme 3") < result["version"].index("Health: Warnung")
+    assert result["summary"].startswith("Warnungen 2")
+    assert result["version"].startswith("Probleme 2")
+    assert result["version"].index("Probleme 2") < result["version"].index("Health: Warnung")
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
