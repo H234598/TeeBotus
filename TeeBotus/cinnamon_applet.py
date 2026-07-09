@@ -262,7 +262,7 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
         "command_ok": bool(command_ok),
         "command_problem_count": command_problem_count,
         "problem_status_count": problem_count,
-        "problem_statuses": str(runtime_summary.get("problem_statuses", "") or ""),
+        "problem_statuses": str(runtime_summary.get("problem_statuses", "") or _problem_statuses_from_counts(status_counts)),
         "runtime_problem_count": runtime_problem_count,
         "qdrant_problem_count": qdrant_problem_count,
         "qdrant_probe_problem_count": qdrant_probe_problem_count,
@@ -297,6 +297,15 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _problem_statuses_from_counts(status_counts: Mapping[str, Any]) -> str:
+    items: list[str] = []
+    for status in PROBLEM_STATUSES:
+        count = _safe_int(status_counts.get(status, 0))
+        if count > 0:
+            items.append(f"{status}:{count}")
+    return ",".join(items)
 
 
 def parse_runtime_status(output: str) -> dict[str, Any]:

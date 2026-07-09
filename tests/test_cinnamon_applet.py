@@ -2250,6 +2250,7 @@ def test_cinnamon_applet_payload_uses_status_counts_when_problem_status_count_is
         monkeypatch.setattr(cinnamon_applet, "parse_runtime_status", original)
 
     assert payload["health"]["runtime_problem_count"] == 3
+    assert payload["health"]["problem_statuses"] == "warning:3"
     assert payload["health"]["total_problem_count"] == 3
 
 
