@@ -217,7 +217,7 @@ def build_status_payload(
     command_ok = (
         runtime["returncode"] == 0
         and _status_query_ok(unit)
-        and unit.get("active_state") in {"active", "unknown"}
+        and _unit_state_ok(unit)
     )
     health = _health_summary(command_ok=command_ok, parsed_runtime=parsed_runtime, qdrant=qdrant, qdrant_unit=qdrant_unit)
     return {
@@ -283,10 +283,7 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
 def _unit_problem_count(unit: dict[str, Any]) -> int:
     if not _status_query_ok(unit):
         return 1
-    active_state = str(unit.get("active_state", "") or "").strip()
-    if not active_state or active_state in {"active", "unknown"}:
-        return 0
-    return 1
+    return 0 if _unit_state_ok(unit) else 1
 
 
 def _status_query_ok(unit: dict[str, Any]) -> bool:
@@ -297,6 +294,12 @@ def _status_query_ok(unit: dict[str, Any]) -> bool:
     if isinstance(value, int):
         return value == 0
     return isinstance(value, str) and value.strip() == "0"
+
+
+def _unit_state_ok(unit: dict[str, Any]) -> bool:
+    active_state = str(unit.get("active_state", "") or "").strip()
+    sub_state = str(unit.get("sub_state", "") or "").strip()
+    return active_state in {"active", "unknown"} and sub_state != "failed"
 
 
 def _qdrant_problem_count(qdrant: dict[str, Any]) -> int:
