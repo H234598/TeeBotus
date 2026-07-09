@@ -250,8 +250,10 @@ TeeBotusApplet.prototype = {
     this.headerItem.actor.add_style_class_name("teebotus-status-label");
     this.menu.addMenuItem(this.headerItem);
     this.summaryItem = this._menuLine(_("Status wird geladen..."), false);
+    this._styleMenuItemLabel(this.summaryItem, { maxWidthEm: SUBMENU_LABEL_WIDTH_EM, wrap: true });
     this.menu.addMenuItem(this.summaryItem);
     this.versionItem = this._menuLine("", false);
+    this._styleMenuItemLabel(this.versionItem, { maxWidthEm: SUBMENU_LABEL_WIDTH_EM, wrap: true });
     this.menu.addMenuItem(this.versionItem);
     this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 

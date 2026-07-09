@@ -401,6 +401,8 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_commandProblemBreakdownText: function(health)" in source
     assert "_qdrantProblemBreakdownText: function(health)" in source
     assert "_healthDetailText: function(health, summary)" in source
+    assert "this._styleMenuItemLabel(this.summaryItem, { maxWidthEm: SUBMENU_LABEL_WIDTH_EM, wrap: true });" in source
+    assert "this._styleMenuItemLabel(this.versionItem, { maxWidthEm: SUBMENU_LABEL_WIDTH_EM, wrap: true });" in source
     assert "qdrant_runtime_problem_count" in source
     assert '"Runtime:" + String(runtimeCount)' in source
     assert '" | Probleme "' in source
