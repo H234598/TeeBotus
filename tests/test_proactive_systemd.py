@@ -244,3 +244,15 @@ def test_proactive_systemd_print_mode_can_enable_llm_plan(tmp_path, capsys) -> N
     assert result == 0
     assert "--dispatch --plan --llm-plan" in captured.out
     assert "--tool-plan" not in captured.out
+
+
+def test_proactive_systemd_default_repo_root_is_project_root(tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.chdir(tmp_path)
+
+    result = main(["--print", "--instance", "Depressionsbot"])
+
+    captured = capsys.readouterr()
+    expected_root = Path(__file__).resolve().parents[1]
+    assert result == 0
+    assert f"WorkingDirectory={expected_root}" in captured.out
+    assert str(tmp_path) not in captured.out

@@ -8,6 +8,8 @@ from pathlib import Path
 
 from TeeBotus.instructions import load_instructions
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 
 @dataclass(frozen=True)
 class ProactiveSystemdUnit:
@@ -19,7 +21,7 @@ class ProactiveSystemdUnit:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Install or print TeeBotus proactive-agent user systemd units.")
-    parser.add_argument("--repo-root", default=str(Path.cwd()), help="TeeBotus repository root used as WorkingDirectory.")
+    parser.add_argument("--repo-root", default=str(PROJECT_ROOT), help="TeeBotus repository root used as WorkingDirectory.")
     parser.add_argument("--instances-dir", default="instances", help="Instances directory passed to TeeBotus.proactive.")
     parser.add_argument("--instance", default="Depressionsbot", help="Instance name for the proactive scheduler.")
     parser.add_argument("--interval", default="5min", help="systemd OnUnitActiveSec interval.")
