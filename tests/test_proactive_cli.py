@@ -102,6 +102,9 @@ def test_proactive_main_loads_runtime_environment_before_configuring_logging(tmp
         events.append(f"load:{path}")
         os.environ["TEEBOTUS_LOG_LEVEL"] = "debug_all"
 
+    def fake_load_runtime_config_defaults(path) -> None:
+        events.append(f"defaults:{path}")
+
     def fake_configure_runtime_logging(*, level, tee_stdio) -> None:
         events.append("configure")
         recorded["level"] = level
@@ -109,6 +112,7 @@ def test_proactive_main_loads_runtime_environment_before_configuring_logging(tmp
 
     with (
         patch("TeeBotus.proactive._load_dotenv", side_effect=fake_load_dotenv),
+        patch("TeeBotus.proactive._load_runtime_config_defaults", side_effect=fake_load_runtime_config_defaults),
         patch("TeeBotus.proactive.configure_runtime_logging", side_effect=fake_configure_runtime_logging),
         patch(
             "TeeBotus.proactive.run_proactive_agent_cycle",
@@ -124,7 +128,8 @@ def test_proactive_main_loads_runtime_environment_before_configuring_logging(tmp
 
     assert result == 0
     assert events[0].startswith("load:")
-    assert events[1] == "configure"
+    assert events[1].startswith("defaults:")
+    assert events[2] == "configure"
     assert recorded["level"] == "debug_all"
     assert recorded["tee_stdio"] is True
 

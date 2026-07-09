@@ -13,6 +13,7 @@ from typing import Any, Callable, Iterable, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, TOKEN_HEX_RE
 from TeeBotus.adapters.telegram_runtime import TelegramAPI
+from TeeBotus.adapters.telegram_runtime import ALL_BOTS_DEFAULT_FILENAME, _load_runtime_config_defaults
 from TeeBotus.instructions import load_instructions
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.config import AccountRunConfig, build_runtime_config, resolve_llm_setting, resolve_openai_key
@@ -74,6 +75,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
     args = parser.parse_args(argv)
     _load_dotenv(PROJECT_ROOT / ".env")
+    _load_runtime_config_defaults(PROJECT_ROOT / ALL_BOTS_DEFAULT_FILENAME)
     configure_runtime_logging(level=os.getenv("TEEBOTUS_LOG_LEVEL") or os.getenv("LOG_LEVEL", "INFO"), tee_stdio=True)
     if args.dry_run == args.dispatch:
         print("Use exactly one of --dry-run or --dispatch.", file=sys.stderr)
