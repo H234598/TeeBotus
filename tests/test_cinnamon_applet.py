@@ -2730,6 +2730,36 @@ def test_cinnamon_applet_qdrant_point_count_rejects_unexpected_success_payloads(
     assert non_object == {"status": "broken", "count": 0, "error": "unexpected JSON payload"}
 
 
+def test_cinnamon_applet_qdrant_point_count_rejects_non_integer_counts(monkeypatch) -> None:
+    class FakeResponse:
+        status = 200
+
+        def __init__(self, payload: object) -> None:
+            self.payload = payload
+
+        def read(self) -> bytes:
+            return json.dumps(self.payload).encode("utf-8")
+
+        def close(self) -> None:
+            return None
+
+    payloads = [
+        {"status": "ok", "result": {"count": 7.9}},
+        {"status": "ok", "result": {"count": True}},
+        {"status": "ok", "result": {"count": "7abc"}},
+    ]
+
+    def fake_urlopen(_request: object, timeout: int) -> FakeResponse:
+        assert timeout == 2
+        return FakeResponse(payloads.pop(0))
+
+    monkeypatch.setattr(cinnamon_applet, "urlopen", fake_urlopen)
+
+    assert cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")["error"] == "invalid Qdrant count result"
+    assert cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")["error"] == "invalid Qdrant count result"
+    assert cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")["error"] == "invalid Qdrant count result"
+
+
 def test_cinnamon_applet_qdrant_point_count_rejects_oversized_response(monkeypatch) -> None:
     class FakeResponse:
         status = 200

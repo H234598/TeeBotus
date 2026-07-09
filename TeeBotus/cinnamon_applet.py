@@ -601,9 +601,13 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
     if not isinstance(result, dict) or "count" not in result:
         return {"status": "broken", "count": 0, "error": "missing Qdrant count result"}
     count = result.get("count")
-    try:
-        parsed_count = int(count)
-    except (TypeError, ValueError):
+    if isinstance(count, bool):
+        return {"status": "broken", "count": 0, "error": "invalid Qdrant count result"}
+    if isinstance(count, int):
+        parsed_count = count
+    elif isinstance(count, str) and re.fullmatch(r"[0-9]+", count.strip()):
+        parsed_count = int(count.strip())
+    else:
         return {"status": "broken", "count": 0, "error": "invalid Qdrant count result"}
     if parsed_count < 0:
         return {"status": "broken", "count": 0, "error": "negative Qdrant count result"}
