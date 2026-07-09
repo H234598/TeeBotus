@@ -249,7 +249,8 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     qdrant_probe_problem_count = _qdrant_problem_count(qdrant)
     qdrant_problem_count = qdrant_probe_problem_count + qdrant_unit_problem_count
     severe_count = sum(_safe_int(status_counts.get(status, 0)) for status in ("broken", "config_conflict", "error", "failed", "invalid", "schema_mismatch"))
-    total_problem_count = command_problem_count + problem_count + qdrant_problem_count
+    runtime_problem_count = max(problem_count, qdrant_runtime_problem_count)
+    total_problem_count = command_problem_count + runtime_problem_count + qdrant_problem_count
     status = "ok"
     if not command_ok or severe_count > 0:
         status = "broken"
@@ -261,6 +262,7 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
         "command_problem_count": command_problem_count,
         "problem_status_count": problem_count,
         "problem_statuses": str(runtime_summary.get("problem_statuses", "") or ""),
+        "runtime_problem_count": runtime_problem_count,
         "qdrant_problem_count": qdrant_problem_count,
         "qdrant_probe_problem_count": qdrant_probe_problem_count,
         "qdrant_runtime_problem_count": qdrant_runtime_problem_count,

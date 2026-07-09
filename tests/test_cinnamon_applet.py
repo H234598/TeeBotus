@@ -1418,8 +1418,8 @@ def test_cinnamon_applet_menu_header_derives_total_from_command_and_qdrant_probl
         """
     )
 
-    assert "Warnungen 2" in result["statusSummary"]
-    assert "Probleme 2" in result["version"]
+    assert "Warnungen 3" in result["statusSummary"]
+    assert "Probleme 3" in result["version"]
     assert "Kommando:1" in result["version"]
     assert "Qdrant Runtime:1" in result["version"]
 
@@ -1568,6 +1568,34 @@ def test_cinnamon_applet_menu_header_does_not_double_count_qdrant_runtime_proble
 
     assert "Warnungen 1" in result["statusSummary"]
     assert "Qdrant Runtime:1" in result["statusSummary"]
+
+
+def test_cinnamon_applet_menu_header_warns_on_qdrant_runtime_only_fallback() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.statusPayload = {
+            version: "1.2.3",
+            repo: { short_commit: "abc1234" },
+            unit: { active_state: "active", sub_state: "running" },
+            health: {
+              status: "warning",
+              qdrant_runtime_problem_count: 1,
+              qdrant_probe_problem_count: 0,
+              qdrant_unit_problem_count: 0,
+              qdrant_problem_count: 0,
+              problem_statuses: ""
+            },
+            runtime: { summary: { problem_status_count: 0, llm_routes: 0 } }
+          };
+          values.statusSummary = applet._statusSummary(applet.statusPayload);
+          return values;
+        })()
+        """
+    )
+
+    assert "Warnungen 1" in result["statusSummary"]
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
@@ -1895,6 +1923,7 @@ def test_cinnamon_applet_payload_ok_reflects_runtime_health(monkeypatch, tmp_pat
         "command_problem_count": 0,
         "problem_status_count": 1,
         "problem_statuses": "warning:1",
+        "runtime_problem_count": 1,
         "qdrant_problem_count": 0,
         "qdrant_probe_problem_count": 0,
         "qdrant_runtime_problem_count": 0,
@@ -2107,6 +2136,54 @@ def test_cinnamon_applet_payload_does_not_double_count_runtime_qdrant_failure(mo
     assert payload["health"]["qdrant_probe_problem_count"] == 1
     assert payload["health"]["qdrant_problem_count"] == 1
     assert payload["health"]["total_problem_count"] == 3
+
+
+def test_cinnamon_applet_payload_warns_when_only_qdrant_runtime_count_is_present(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "", "stderr": ""})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "_qdrant_status",
+        lambda _url: {"url": "http://127.0.0.1:6333", "collections": {}, "error": ""},
+    )
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "_repo_status",
+        lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"},
+    )
+
+    original = cinnamon_applet.parse_runtime_status
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "parse_runtime_status",
+        lambda _output: {
+            "sections": {},
+            "summary": {
+                "instances": "",
+                "channels": "",
+                "problem_status_count": 0,
+                "problem_statuses": "",
+                "qdrant_problem_status_count": 1,
+            },
+            "status_counts": {},
+        },
+    )
+
+    try:
+        payload = build_status_payload(
+            repo_root=tmp_path,
+            channels="telegram,signal",
+            unit_name="teebotus.service",
+            python_executable="/usr/bin/python3",
+            timeout_seconds=1,
+        )
+    finally:
+        monkeypatch.setattr(cinnamon_applet, "parse_runtime_status", original)
+
+    assert payload["ok"] is False
+    assert payload["health"]["status"] == "warning"
+    assert payload["health"]["runtime_problem_count"] == 1
+    assert payload["health"]["total_problem_count"] == 1
 
 
 def test_cinnamon_applet_payload_counts_top_level_qdrant_error_without_collections(monkeypatch, tmp_path) -> None:
