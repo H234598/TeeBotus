@@ -490,7 +490,14 @@ def _python_command_argv(value: str) -> list[str]:
 def _systemd_unit_status(unit_name: str) -> dict[str, Any]:
     name = str(unit_name or "").strip()
     if not name:
-        return {"name": "", "active_state": "unknown", "sub_state": "unknown", "main_pid": ""}
+        return {
+            "name": "",
+            "active_state": "unknown",
+            "sub_state": "unknown",
+            "main_pid": "",
+            "returncode": 2,
+            "stderr": "systemd unit name is empty",
+        }
     result = _run(
         ["systemctl", "--user", "show", name, "--property=ActiveState,SubState,MainPID,FragmentPath,LoadState"],
         timeout_seconds=5,

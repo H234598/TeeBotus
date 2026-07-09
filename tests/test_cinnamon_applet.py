@@ -2280,6 +2280,13 @@ def test_cinnamon_applet_rejects_active_unit_without_confirmed_substate() -> Non
     assert cinnamon_applet._unit_state_ok({"active_state": "unknown", "sub_state": "running"}) is False
 
 
+def test_cinnamon_applet_empty_systemd_unit_is_not_healthy() -> None:
+    unit = cinnamon_applet._systemd_unit_status("")
+    assert unit["returncode"] != 0
+    assert cinnamon_applet._status_query_ok(unit) is False
+    assert cinnamon_applet._unit_problem_count(unit) == 1
+
+
 def test_cinnamon_applet_payload_counts_command_failure_without_other_problems(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 124, "stdout": "", "stderr": "timeout"})
     monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
