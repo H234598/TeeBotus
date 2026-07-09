@@ -2007,7 +2007,8 @@ TeeBotusApplet.prototype = {
     if (!/^[0-9]+$/.test(text)) {
       return null;
     }
-    return parseInt(text, 10);
+    let parsed = parseInt(text, 10);
+    return Number.isSafeInteger(parsed) ? parsed : null;
   },
 
   _statusTimeoutSeconds: function() {
