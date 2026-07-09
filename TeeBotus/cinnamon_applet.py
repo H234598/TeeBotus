@@ -214,7 +214,11 @@ def build_status_payload(
     qdrant_unit = _systemd_unit_status(qdrant_unit_name)
     qdrant = _qdrant_status(qdrant_url)
     repo = _repo_status(root)
-    command_ok = runtime["returncode"] == 0 and unit.get("active_state") in {"active", "unknown"}
+    command_ok = (
+        runtime["returncode"] == 0
+        and _status_query_ok(unit)
+        and unit.get("active_state") in {"active", "unknown"}
+    )
     health = _health_summary(command_ok=command_ok, parsed_runtime=parsed_runtime, qdrant=qdrant, qdrant_unit=qdrant_unit)
     return {
         "ok": health["status"] == "ok",
@@ -274,10 +278,17 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
 
 
 def _unit_problem_count(unit: dict[str, Any]) -> int:
+    if not _status_query_ok(unit):
+        return 1
     active_state = str(unit.get("active_state", "") or "").strip()
     if not active_state or active_state in {"active", "unknown"}:
         return 0
     return 1
+
+
+def _status_query_ok(unit: dict[str, Any]) -> bool:
+    """Treat a failed systemd query as unhealthy even if output looks active."""
+    return _safe_int(unit.get("returncode", 0), 0) == 0
 
 
 def _qdrant_problem_count(qdrant: dict[str, Any]) -> int:
