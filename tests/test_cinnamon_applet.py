@@ -13,6 +13,7 @@ import TeeBotus.cinnamon_applet as cinnamon_applet
 from TeeBotus.cinnamon_applet import FREE_TEXT_STATUS_FIELD_BOUNDARIES
 from TeeBotus.cinnamon_applet import FLAG_PROBLEM_STATUS_FIELDS
 from TeeBotus.cinnamon_applet import FORCED_PROBLEM_STATUS_FIELDS
+from TeeBotus.cinnamon_applet import NEUTRAL_FLAG_VALUES
 from TeeBotus.cinnamon_applet import PROBLEM_STATUSES
 from TeeBotus.cinnamon_applet import SECONDARY_PROBLEM_STATUS_FIELDS
 from TeeBotus.cinnamon_applet import STATUS_FIELD_BOUNDARY_KEYS
@@ -437,6 +438,9 @@ def test_cinnamon_applet_problem_status_constants_match_helper() -> None:
     assert "_quotedCharacterIndexes: function(text)" in source
     assert "key && !quoted[keyStart]" in source
     assert _js_const_array_values(source, "FLAG_PROBLEM_STATUS_FIELDS") == set(FLAG_PROBLEM_STATUS_FIELDS)
+    assert NEUTRAL_FLAG_VALUES == frozenset({"0", "false", "no", "none", "off"})
+    for value in NEUTRAL_FLAG_VALUES:
+        assert f'"{value}": true' in source
     assert "const FORCED_PROBLEM_STATUS_FIELDS = {" in source
     for field, status in FORCED_PROBLEM_STATUS_FIELDS.items():
         assert f"{field}: \"{status}\"" in source
@@ -3033,6 +3037,30 @@ def test_cinnamon_applet_runtime_parser_keeps_apostrophes_in_free_text_neutral()
     assert parsed["status_counts"]["unreachable"] == 1
     assert parsed["status_counts"]["warning"] == 4
     assert parsed["summary"]["problem_statuses"] == "unreachable:1,warning:4"
+
+
+def test_cinnamon_applet_runtime_parser_ignores_neutral_warning_flags() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Lokale Dienste]
+        service=zero status=ok warning=0
+        service=false status=ok warning=false
+        service=off status=ok warning=off
+        service=real status=ok warning=retry
+        """
+    )
+
+    assert parsed["status_counts"]["warning"] == 1
+    assert parsed["summary"]["problem_status_count"] == 1
+    assert parsed["summary"]["problem_statuses"] == "warning:1"
+
+
+def test_cinnamon_applet_js_ignores_neutral_warning_flags() -> None:
+    for value, expected in (("0", False), ("false", False), ("OFF", False), ("retry", True)):
+        result = _run_js_applet_expression(
+            f"applet._lineHasProblemStatus({{status: 'ok', warning: {json.dumps(value)}}})"
+        )
+        assert result is expected
 
 
 def test_cinnamon_applet_runtime_parser_counts_status_field_after_free_text_error() -> None:

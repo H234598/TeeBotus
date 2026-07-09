@@ -113,6 +113,13 @@ const FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
 const FLAG_PROBLEM_STATUS_FIELDS = [
   "warning"
 ];
+const NEUTRAL_FLAG_VALUES = {
+  "0": true,
+  "false": true,
+  "no": true,
+  "none": true,
+  "off": true
+};
 const FORCED_PROBLEM_STATUS_FIELDS = {
   account_identity_warning: "warning"
 };
@@ -835,16 +842,21 @@ TeeBotusApplet.prototype = {
       }
     }
     for (let key of FLAG_PROBLEM_STATUS_FIELDS) {
-      if (values[key]) {
+      if (this._statusFlagIsSet(values[key])) {
         return true;
       }
     }
     for (let key in FORCED_PROBLEM_STATUS_FIELDS) {
-      if (values[key]) {
+      if (this._statusFlagIsSet(values[key])) {
         return true;
       }
     }
     return false;
+  },
+
+  _statusFlagIsSet: function(value) {
+    let normalized = String(value || "").trim().toLowerCase();
+    return Boolean(normalized) && !NEUTRAL_FLAG_VALUES[normalized];
   },
 
   _statusFieldHasProblem: function(fields, key) {

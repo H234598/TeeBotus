@@ -77,6 +77,7 @@ FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
     ),
 }
 FLAG_PROBLEM_STATUS_FIELDS = frozenset({"warning"})
+NEUTRAL_FLAG_VALUES = frozenset({"0", "false", "no", "none", "off"})
 FORCED_PROBLEM_STATUS_FIELDS = {"account_identity_warning": "warning"}
 SENSITIVE_ASSIGNMENT_KEY_PATTERN = (
     r"(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
@@ -454,10 +455,10 @@ def _line_status_values(fields: dict[str, str]) -> tuple[str, ...]:
         if secondary and secondary in PROBLEM_STATUSES:
             _append_status_value(values, secondary)
     for key in sorted(FLAG_PROBLEM_STATUS_FIELDS):
-        if fields.get(key):
+        if _status_flag_is_set(fields.get(key, "")):
             _append_status_value(values, "warning")
     for key, status in sorted(FORCED_PROBLEM_STATUS_FIELDS.items()):
-        if fields.get(key):
+        if _status_flag_is_set(fields.get(key, "")):
             _append_status_value(values, status)
     return tuple(values)
 
@@ -465,6 +466,11 @@ def _line_status_values(fields: dict[str, str]) -> tuple[str, ...]:
 def _append_status_value(values: list[str], status: str) -> None:
     if status and status not in values:
         values.append(status)
+
+
+def _status_flag_is_set(value: str) -> bool:
+    normalized = str(value or "").strip().casefold()
+    return bool(normalized) and normalized not in NEUTRAL_FLAG_VALUES
 
 
 def _codex_usage_is_stale(fields: dict[str, str]) -> bool:
