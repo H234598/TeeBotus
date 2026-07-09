@@ -13,6 +13,8 @@ from TeeBotus.runtime.bibliothekar import BibliothekarStore, SUPPORTED_SUFFIXES,
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService, check_bibliothekar_service
 from TeeBotus.runtime.graphs import run_bibliothekar_deep_query
 
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
@@ -33,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="TeeBotus Bibliothekar service CLI.")
-    parser.add_argument("--instances-dir", default="instances")
+    parser.add_argument("--instances-dir", default=str(PROJECT_ROOT / "instances"))
     parser.add_argument("--instance", action="append", default=[])
     parser.add_argument("--json", action="store_true")
     subparsers = parser.add_subparsers(dest="command")

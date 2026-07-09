@@ -3155,6 +3155,23 @@ def test_bibliothekar_cli_default_status_ignores_data_only_directories(tmp_path,
     assert "Bench: backend=local" in explicit_output
 
 
+def test_bibliothekar_cli_default_instances_dir_is_project_root_relative(tmp_path, monkeypatch, capsys):
+    import TeeBotus.bibliothekar.cli as bibliothekar_cli_module
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(bibliothekar_cli_module, "PROJECT_ROOT", tmp_path)
+    instances_dir = tmp_path / "instances"
+    configured = instances_dir / "Depressionsbot"
+    configured.mkdir(parents=True)
+    (configured / "Bot_Verhalten.md").write_text("## Bibliothekar\n- backend: local\n", encoding="utf-8")
+
+    assert bibliothekar_cli_main(["status"]) == 0
+
+    output = capsys.readouterr().out
+    assert "Depressionsbot: backend=local" in output
+    assert str(instances_dir) in output or "local" in output
+
+
 def test_bibliothekar_cli_accepts_json_after_status_subcommand(tmp_path, capsys):
     instances_dir = tmp_path / "instances"
     instance_dir = instances_dir / "Depressionsbot"
