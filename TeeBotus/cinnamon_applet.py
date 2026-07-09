@@ -615,7 +615,7 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
 
 
 def _repo_status(repo_root: Path) -> dict[str, Any]:
-    status = {
+    status: dict[str, Any] = {
         "path": str(repo_root),
         "exists": repo_root.exists(),
         "branch": "",
