@@ -1135,7 +1135,7 @@ TeeBotusApplet.prototype = {
 
   _healthProblemTotal: function(health, summary, counts) {
     let total = this._nonNegativeInt((health || {}).total_problem_count, null);
-    if (total !== null) {
+    if (total !== null && total > 0) {
       return total;
     }
     let runtimeTotal = this._nonNegativeInt((summary || {}).problem_status_count, 0);
