@@ -1453,7 +1453,7 @@ def test_cinnamon_applet_menu_header_derives_total_from_zeroed_summary_fields() 
         """
     )
 
-    assert "Warnungen 3" in result["statusSummary"]
+    assert "Warnungen 4" in result["statusSummary"]
 
 
 def test_cinnamon_applet_menu_header_uses_runtime_counts_in_detail_text() -> None:
@@ -1529,6 +1529,34 @@ def test_cinnamon_applet_menu_header_does_not_trust_zero_total_problem_count() -
               total_problem_count: 0,
               command_problem_count: 1,
               problem_statuses: ""
+            },
+            runtime: { summary: { problem_status_count: 0, llm_routes: 0 } }
+          };
+          values.statusSummary = applet._statusSummary(applet.statusPayload);
+          return values;
+        })()
+        """
+    )
+
+    assert "Warnungen 1" in result["statusSummary"]
+
+
+def test_cinnamon_applet_menu_header_counts_qdrant_runtime_problems_in_fallback_total() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.statusPayload = {
+            version: "1.2.3",
+            repo: { short_commit: "abc1234" },
+            unit: { active_state: "active", sub_state: "running" },
+            health: {
+              status: "warning",
+              problem_statuses: "",
+              qdrant_runtime_problem_count: 1,
+              qdrant_probe_problem_count: 0,
+              qdrant_unit_problem_count: 0,
+              qdrant_problem_count: 0
             },
             runtime: { summary: { problem_status_count: 0, llm_routes: 0 } }
           };

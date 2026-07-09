@@ -1146,6 +1146,7 @@ TeeBotusApplet.prototype = {
     let qdrantTotal = this._nonNegativeInt((health || {}).qdrant_problem_count, 0);
     if (qdrantTotal <= 0) {
       qdrantTotal =
+        this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0) +
         this._nonNegativeInt((health || {}).qdrant_probe_problem_count, 0) +
         this._nonNegativeInt((health || {}).qdrant_unit_problem_count, 0);
     }
