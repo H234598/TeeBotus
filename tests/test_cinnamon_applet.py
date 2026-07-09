@@ -2260,6 +2260,12 @@ def test_cinnamon_applet_payload_rejects_failed_systemd_query_with_active_output
     assert payload["health"]["total_problem_count"] == 2
 
 
+def test_cinnamon_applet_rejects_malformed_systemd_returncode() -> None:
+    assert cinnamon_applet._status_query_ok({"active_state": "active", "returncode": "0"}) is True
+    assert cinnamon_applet._status_query_ok({"active_state": "active", "returncode": "1abc"}) is False
+    assert cinnamon_applet._status_query_ok({"active_state": "active", "returncode": True}) is False
+
+
 def test_cinnamon_applet_payload_counts_command_failure_without_other_problems(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 124, "stdout": "", "stderr": "timeout"})
     monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})

@@ -291,7 +291,12 @@ def _unit_problem_count(unit: dict[str, Any]) -> int:
 
 def _status_query_ok(unit: dict[str, Any]) -> bool:
     """Treat a failed systemd query as unhealthy even if output looks active."""
-    return _safe_int(unit.get("returncode", 0), 0) == 0
+    value = unit.get("returncode", 0)
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return value == 0
+    return isinstance(value, str) and value.strip() == "0"
 
 
 def _qdrant_problem_count(qdrant: dict[str, Any]) -> int:
