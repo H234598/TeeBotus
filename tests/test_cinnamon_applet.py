@@ -2166,7 +2166,7 @@ def test_cinnamon_applet_payload_ok_reflects_runtime_health(monkeypatch, tmp_pat
         "_runtime_status",
         lambda *_args, **_kwargs: {"returncode": 0, "stdout": "[Diagnose]\nllm_route=demo status=warning\n", "stderr": ""},
     )
-    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running", "returncode": 0})
     monkeypatch.setattr(cinnamon_applet, "_qdrant_status", lambda _url: {"url": "http://127.0.0.1:6333", "collections": {}, "error": ""})
     monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
 
@@ -2198,7 +2198,7 @@ def test_cinnamon_applet_payload_ok_reflects_runtime_health(monkeypatch, tmp_pat
 
 def test_cinnamon_applet_payload_health_reports_command_and_qdrant_failures(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 124, "stdout": "", "stderr": "timeout"})
-    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda unit: {"active_state": "missing", "sub_state": "dead"} if unit == "teebotus.service" else {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda unit: {"active_state": "missing", "sub_state": "dead", "returncode": 0} if unit == "teebotus.service" else {"active_state": "active", "sub_state": "running", "returncode": 0})
     monkeypatch.setattr(
         cinnamon_applet,
         "_qdrant_status",
@@ -2268,6 +2268,7 @@ def test_cinnamon_applet_rejects_malformed_systemd_returncode() -> None:
     assert cinnamon_applet._status_query_ok({"active_state": "active", "returncode": "0"}) is True
     assert cinnamon_applet._status_query_ok({"active_state": "active", "returncode": "1abc"}) is False
     assert cinnamon_applet._status_query_ok({"active_state": "active", "returncode": True}) is False
+    assert cinnamon_applet._status_query_ok({"active_state": "active"}) is False
 
 
 def test_cinnamon_applet_rejects_active_unit_with_failed_substate() -> None:
@@ -2308,7 +2309,7 @@ def test_cinnamon_applet_empty_systemd_unit_is_not_healthy() -> None:
 
 def test_cinnamon_applet_payload_counts_command_failure_without_other_problems(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 124, "stdout": "", "stderr": "timeout"})
-    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running", "returncode": 0})
     monkeypatch.setattr(cinnamon_applet, "_qdrant_status", lambda _url: {"url": "http://127.0.0.1:6333", "collections": {}, "error": ""})
     monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
 
@@ -2346,7 +2347,7 @@ def test_cinnamon_applet_runtime_status_splits_python_command(monkeypatch, tmp_p
 
 def test_cinnamon_applet_payload_counts_qdrant_unit_health(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "[Diagnose]\nservice=demo status=ready\n", "stderr": ""})
-    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda unit: {"active_state": "active", "sub_state": "running"} if unit == "teebotus.service" else {"active_state": "failed", "sub_state": "failed"})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda unit: {"active_state": "active", "sub_state": "running", "returncode": 0} if unit == "teebotus.service" else {"active_state": "failed", "sub_state": "failed", "returncode": 0})
     monkeypatch.setattr(cinnamon_applet, "_qdrant_status", lambda _url: {"url": "http://127.0.0.1:6333", "collections": {}, "error": ""})
     monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
 
@@ -2372,7 +2373,7 @@ def test_cinnamon_applet_payload_counts_qdrant_unit_health(monkeypatch, tmp_path
 
 def test_cinnamon_applet_payload_total_problems_includes_qdrant_health(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "[Diagnose]\nservice=demo status=ready\n", "stderr": ""})
-    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running", "returncode": 0})
     monkeypatch.setattr(
         cinnamon_applet,
         "_qdrant_status",
@@ -2406,7 +2407,7 @@ def test_cinnamon_applet_payload_total_problems_includes_qdrant_health(monkeypat
 
 def test_cinnamon_applet_payload_counts_malformed_qdrant_collection_health(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "[Diagnose]\nservice=demo status=ready\n", "stderr": ""})
-    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running", "returncode": 0})
     monkeypatch.setattr(
         cinnamon_applet,
         "_qdrant_status",
@@ -2447,7 +2448,7 @@ def test_cinnamon_applet_payload_does_not_double_count_runtime_qdrant_failure(mo
             "stderr": "",
         },
     )
-    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running", "returncode": 0})
     monkeypatch.setattr(
         cinnamon_applet,
         "_qdrant_status",
@@ -2534,7 +2535,7 @@ def test_cinnamon_applet_payload_does_not_add_qdrant_service_failure_to_probe_fa
 
 def test_cinnamon_applet_payload_warns_when_only_qdrant_runtime_count_is_present(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "", "stderr": ""})
-    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running", "returncode": 0})
     monkeypatch.setattr(
         cinnamon_applet,
         "_qdrant_status",
@@ -2583,7 +2584,7 @@ def test_cinnamon_applet_payload_warns_when_only_qdrant_runtime_count_is_present
 
 def test_cinnamon_applet_payload_uses_status_counts_when_problem_status_count_is_missing(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "", "stderr": ""})
-    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running", "returncode": 0})
     monkeypatch.setattr(cinnamon_applet, "_qdrant_status", lambda _url: {"url": "http://127.0.0.1:6333", "collections": {}, "error": ""})
     monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
 
@@ -2622,7 +2623,7 @@ def test_cinnamon_applet_payload_uses_status_counts_when_problem_status_count_is
 
 def test_cinnamon_applet_payload_problem_statuses_from_counts_match_parser_order(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "", "stderr": ""})
-    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running", "returncode": 0})
     monkeypatch.setattr(cinnamon_applet, "_qdrant_status", lambda _url: {"url": "http://127.0.0.1:6333", "collections": {}, "error": ""})
     monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
 
@@ -2659,7 +2660,7 @@ def test_cinnamon_applet_payload_problem_statuses_from_counts_match_parser_order
 
 def test_cinnamon_applet_payload_counts_top_level_qdrant_error_without_collections(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "[Diagnose]\nservice=demo status=ready\n", "stderr": ""})
-    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running", "returncode": 0})
     monkeypatch.setattr(cinnamon_applet, "_qdrant_status", lambda _url: {"url": "https://qdrant.example", "collections": {}, "error": "invalid local qdrant url"})
     monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
 

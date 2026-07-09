@@ -289,7 +289,9 @@ def _unit_problem_count(unit: dict[str, Any]) -> int:
 
 def _status_query_ok(unit: dict[str, Any]) -> bool:
     """Treat a failed systemd query as unhealthy even if output looks active."""
-    value = unit.get("returncode", 0)
+    if not isinstance(unit, dict) or "returncode" not in unit:
+        return False
+    value = unit["returncode"]
     if isinstance(value, bool):
         return False
     if isinstance(value, int):
