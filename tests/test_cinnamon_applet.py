@@ -400,6 +400,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_problemBreakdownText: function(value)" in source
     assert "_commandProblemBreakdownText: function(health)" in source
     assert "_qdrantProblemBreakdownText: function(health)" in source
+    assert "_healthDetailText: function(health, summary)" in source
     assert "qdrant_runtime_problem_count" in source
     assert '"Runtime:" + String(runtimeCount)' in source
     assert '" | Probleme "' in source
@@ -1313,6 +1314,45 @@ def test_cinnamon_applet_local_status_text_updates_menu_header() -> None:
     assert result["tooltip"] == "Kopiert."
     assert result["summary"] == "Kopiert."
     assert result["header"] == "TB 1.2.3"
+    assert "LLM-Routen: 2" in result["version"]
+
+
+def test_cinnamon_applet_menu_header_includes_health_details() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.statusPayload = {
+            version: "1.2.3",
+            repo: { short_commit: "abc1234" },
+            unit: { active_state: "active", sub_state: "running" },
+            health: {
+              status: "broken",
+              total_problem_count: 3,
+              command_problem_count: 1,
+              qdrant_runtime_problem_count: 2,
+              qdrant_probe_problem_count: 0,
+              qdrant_unit_problem_count: 1,
+              problem_statuses: "broken:2,warning:1"
+            },
+            runtime: { summary: { llm_routes: 2 } }
+          };
+          applet.headerItem = {label: {set_text: function(value) { values.header = value; }}};
+          applet.summaryItem = {label: {set_text: function(value) { values.summary = value; }}};
+          applet.versionItem = {label: {set_text: function(value) { values.version = value; }}};
+          applet._updateHeader();
+          return values;
+        })()
+        """
+    )
+
+    assert result["header"] == "TB 1.2.3"
+    assert result["summary"] == "Status unbekannt"
+    assert "Health: defekt" in result["version"]
+    assert "Probleme 3" in result["version"]
+    assert "Probleme defekt:2, Warnung:1" in result["version"]
+    assert "Kommando:1" in result["version"]
+    assert "Qdrant Runtime:2, Service:1" in result["version"]
     assert "LLM-Routen: 2" in result["version"]
 
 

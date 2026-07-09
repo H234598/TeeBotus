@@ -1190,6 +1190,18 @@ TeeBotusApplet.prototype = {
     return " | Qdrant " + parts.join(", ");
   },
 
+  _healthDetailText: function(health, summary) {
+    let total = this._nonNegativeInt((health || {}).total_problem_count, null);
+    if (total === null) {
+      total = this._nonNegativeInt((summary || {}).problem_status_count, null);
+    }
+    let text = total !== null ? " | Probleme " + String(total) : "";
+    text += this._problemBreakdownText((health || {}).problem_statuses || (summary || {}).problem_statuses || "");
+    text += this._commandProblemBreakdownText(health);
+    text += this._qdrantProblemBreakdownText(health);
+    return text;
+  },
+
   _problemStatusCount: function(counts) {
     let total = 0;
     for (let status of PROBLEM_STATUSES) {
@@ -1208,7 +1220,18 @@ TeeBotusApplet.prototype = {
     this.headerItem.label.set_text("TB " + String(payload.version || "?"));
     this.summaryItem.label.set_text(this.statusText || _("Status unbekannt"));
     let commit = repo.short_commit ? " | " + repo.short_commit : "";
-    this.versionItem.label.set_text("Health: " + this._statusWord(health.status || "unknown") + " | Unit: " + String(unit.active_state || "unknown") + " / " + String(unit.sub_state || "unknown") + commit + " | LLM-Routen: " + String(summary.llm_routes || 0));
+    this.versionItem.label.set_text(
+      "Health: " +
+        this._statusWord(health.status || "unknown") +
+        this._healthDetailText(health, summary) +
+        " | Unit: " +
+        String(unit.active_state || "unknown") +
+        " / " +
+        String(unit.sub_state || "unknown") +
+        commit +
+        " | LLM-Routen: " +
+        String(summary.llm_routes || 0)
+    );
   },
 
   _updatePanel: function() {
