@@ -1471,8 +1471,8 @@ def test_cinnamon_applet_menu_header_derives_total_from_command_and_qdrant_probl
         """
     )
 
-    assert "Warnungen 3" in result["statusSummary"]
-    assert "Probleme 3" in result["version"]
+    assert "Warnungen 2" in result["statusSummary"]
+    assert "Probleme 2" in result["version"]
     assert "Kommando:1" in result["version"]
     assert "Qdrant Runtime:1, Probe:1" in result["version"]
 
@@ -2334,9 +2334,10 @@ def test_cinnamon_applet_payload_does_not_double_count_runtime_qdrant_failure(mo
     assert payload["health"]["status"] == "warning"
     assert payload["health"]["command_problem_count"] == 0
     assert payload["health"]["problem_status_count"] == 2
+    assert payload["health"]["runtime_problem_count"] == 0
     assert payload["health"]["qdrant_runtime_problem_count"] == 2
-    assert payload["health"]["qdrant_probe_problem_count"] == 0
-    assert payload["health"]["qdrant_problem_count"] == 0
+    assert payload["health"]["qdrant_probe_problem_count"] == 1
+    assert payload["health"]["qdrant_problem_count"] == 2
     assert payload["health"]["total_problem_count"] == 2
 
 
@@ -2384,7 +2385,8 @@ def test_cinnamon_applet_payload_warns_when_only_qdrant_runtime_count_is_present
 
     assert payload["ok"] is False
     assert payload["health"]["status"] == "warning"
-    assert payload["health"]["runtime_problem_count"] == 1
+    assert payload["health"]["runtime_problem_count"] == 0
+    assert payload["health"]["qdrant_problem_count"] == 1
     assert payload["health"]["total_problem_count"] == 1
 
 

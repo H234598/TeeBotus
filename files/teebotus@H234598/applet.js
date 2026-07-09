@@ -1145,18 +1145,24 @@ TeeBotusApplet.prototype = {
     if (total !== null && total > 0) {
       return total;
     }
-    let runtimeTotal = this._nonNegativeInt((health || {}).runtime_problem_count, 0);
-    if (runtimeTotal <= 0) {
+    let runtimeTotal = this._nonNegativeInt((health || {}).runtime_problem_count, null);
+    let runtimeDerived = false;
+    if (runtimeTotal === null || runtimeTotal <= 0) {
       runtimeTotal = this._nonNegativeInt((summary || {}).problem_status_count, 0);
+      runtimeDerived = true;
     }
     runtimeTotal = Math.max(runtimeTotal, this._problemStatusCount(counts));
-    runtimeTotal = Math.max(runtimeTotal, this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0));
+    if (runtimeDerived) {
+      runtimeTotal = Math.max(0, runtimeTotal - this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0));
+    }
     let commandTotal = this._nonNegativeInt((health || {}).command_problem_count, 0);
     let qdrantTotal = this._nonNegativeInt((health || {}).qdrant_problem_count, 0);
     if (qdrantTotal <= 0) {
-      qdrantTotal =
+      qdrantTotal = Math.max(
+        this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0),
         this._nonNegativeInt((health || {}).qdrant_probe_problem_count, 0) +
-        this._nonNegativeInt((health || {}).qdrant_unit_problem_count, 0);
+        this._nonNegativeInt((health || {}).qdrant_unit_problem_count, 0)
+      );
     }
     let derivedTotal = runtimeTotal + commandTotal + qdrantTotal;
     return derivedTotal;

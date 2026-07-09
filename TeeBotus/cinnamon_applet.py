@@ -247,10 +247,10 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     status_problem_count = sum(_safe_int(status_counts.get(status, 0)) for status in PROBLEM_STATUSES)
     qdrant_unit_problem_count = _unit_problem_count(qdrant_unit)
     qdrant_runtime_problem_count = _safe_int(runtime_summary.get("qdrant_problem_status_count", 0))
-    qdrant_probe_problem_count = 0 if qdrant_runtime_problem_count > 0 else _qdrant_problem_count(qdrant)
-    qdrant_problem_count = qdrant_probe_problem_count + qdrant_unit_problem_count
+    qdrant_probe_problem_count = _qdrant_problem_count(qdrant)
+    qdrant_problem_count = max(qdrant_runtime_problem_count, qdrant_probe_problem_count + qdrant_unit_problem_count)
     severe_count = sum(_safe_int(status_counts.get(status, 0)) for status in ("broken", "config_conflict", "error", "failed", "invalid", "schema_mismatch"))
-    runtime_problem_count = max(problem_count, status_problem_count, qdrant_runtime_problem_count)
+    runtime_problem_count = max(0, max(problem_count, status_problem_count) - qdrant_runtime_problem_count)
     total_problem_count = command_problem_count + runtime_problem_count + qdrant_problem_count
     status = "ok"
     if not command_ok or severe_count > 0:
