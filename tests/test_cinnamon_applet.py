@@ -1598,6 +1598,35 @@ def test_cinnamon_applet_menu_header_warns_on_qdrant_runtime_only_fallback() -> 
     assert "Warnungen 1" in result["statusSummary"]
 
 
+def test_cinnamon_applet_menu_header_prefers_payload_runtime_problem_count() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.statusPayload = {
+            version: "1.2.3",
+            repo: { short_commit: "abc1234" },
+            unit: { active_state: "active", sub_state: "running" },
+            health: {
+              status: "warning",
+              runtime_problem_count: 2,
+              problem_statuses: "",
+              qdrant_problem_count: 0,
+              qdrant_probe_problem_count: 0,
+              qdrant_unit_problem_count: 0,
+              qdrant_runtime_problem_count: 0
+            },
+            runtime: { summary: { problem_status_count: 0, llm_routes: 0 } }
+          };
+          values.statusSummary = applet._statusSummary(applet.statusPayload);
+          return values;
+        })()
+        """
+    )
+
+    assert "Warnungen 2" in result["statusSummary"]
+
+
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     parsed = parse_runtime_status(
         """

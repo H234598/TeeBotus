@@ -1138,7 +1138,10 @@ TeeBotusApplet.prototype = {
     if (total !== null && total > 0) {
       return total;
     }
-    let runtimeTotal = this._nonNegativeInt((summary || {}).problem_status_count, 0);
+    let runtimeTotal = this._nonNegativeInt((health || {}).runtime_problem_count, 0);
+    if (runtimeTotal <= 0) {
+      runtimeTotal = this._nonNegativeInt((summary || {}).problem_status_count, 0);
+    }
     runtimeTotal = Math.max(runtimeTotal, this._problemStatusCount(counts));
     runtimeTotal = Math.max(runtimeTotal, this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0));
     let commandTotal = this._nonNegativeInt((health || {}).command_problem_count, 0);
