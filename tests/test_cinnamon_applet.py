@@ -1453,7 +1453,7 @@ def test_cinnamon_applet_menu_header_derives_total_from_zeroed_summary_fields() 
         """
     )
 
-    assert "Warnungen 4" in result["statusSummary"]
+    assert "Warnungen 3" in result["statusSummary"]
 
 
 def test_cinnamon_applet_menu_header_uses_runtime_counts_in_detail_text() -> None:
@@ -1485,6 +1485,34 @@ def test_cinnamon_applet_menu_header_uses_runtime_counts_in_detail_text() -> Non
 
     assert "Probleme 4" in result["version"]
     assert "Warnung:1" in result["version"]
+
+
+def test_cinnamon_applet_menu_header_keeps_authoritative_total_problem_count() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.statusPayload = {
+            version: "1.2.3",
+            repo: { short_commit: "abc1234" },
+            unit: { active_state: "active", sub_state: "running" },
+            health: {
+              status: "warning",
+              total_problem_count: 1,
+              problem_statuses: "warning:1"
+            },
+            runtime: {
+              summary: { problem_status_count: 0, llm_routes: 0 },
+              status_counts: { warning: 3, broken: 1 }
+            }
+          };
+          values.statusSummary = applet._statusSummary(applet.statusPayload);
+          return values;
+        })()
+        """
+    )
+
+    assert "Warnungen 1" in result["statusSummary"]
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:

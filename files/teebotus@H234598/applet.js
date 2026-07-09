@@ -1135,7 +1135,7 @@ TeeBotusApplet.prototype = {
 
   _healthProblemTotal: function(health, summary, counts) {
     let total = this._nonNegativeInt((health || {}).total_problem_count, null);
-    if (total !== null && total > 0) {
+    if (total !== null) {
       return total;
     }
     let runtimeTotal = this._nonNegativeInt((summary || {}).problem_status_count, 0);
@@ -1146,12 +1146,11 @@ TeeBotusApplet.prototype = {
     let qdrantTotal = this._nonNegativeInt((health || {}).qdrant_problem_count, 0);
     if (qdrantTotal <= 0) {
       qdrantTotal =
-        this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0) +
         this._nonNegativeInt((health || {}).qdrant_probe_problem_count, 0) +
         this._nonNegativeInt((health || {}).qdrant_unit_problem_count, 0);
     }
     let derivedTotal = runtimeTotal + commandTotal + qdrantTotal;
-    return total === null ? derivedTotal : Math.max(total, derivedTotal);
+    return derivedTotal;
   },
 
   _problemBreakdownText: function(value) {
