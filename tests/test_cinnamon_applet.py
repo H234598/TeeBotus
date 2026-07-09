@@ -1708,6 +1708,33 @@ def test_cinnamon_applet_menu_header_uses_health_problem_count_when_runtime_summ
     assert "Probleme defekt:4" in result["statusSummary"]
 
 
+def test_cinnamon_applet_menu_header_does_not_let_zero_health_count_hide_summary_count() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.statusPayload = {
+            version: "1.2.3",
+            repo: { short_commit: "abc1234" },
+            unit: { active_state: "active", sub_state: "running" },
+            health: {
+              status: "warning",
+              problem_status_count: 0,
+              problem_statuses: "warning:3",
+              qdrant_runtime_problem_count: 0,
+              qdrant_problem_count: 0
+            },
+            runtime: { summary: { problem_status_count: 3 } }
+          };
+          values.statusSummary = applet._statusSummary(applet.statusPayload);
+          return values;
+        })()
+        """
+    )
+
+    assert result["statusSummary"].startswith("Warnungen 3")
+
+
 def test_cinnamon_applet_menu_header_uses_status_counts_for_problem_breakdown_when_missing() -> None:
     result = _run_js_applet_expression(
         """

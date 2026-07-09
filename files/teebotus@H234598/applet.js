@@ -1149,9 +1149,8 @@ TeeBotusApplet.prototype = {
     let runtimeDerived = false;
     if (runtimeTotal === null || runtimeTotal <= 0) {
       let healthProblemCount = this._nonNegativeInt((health || {}).problem_status_count, null);
-      runtimeTotal = healthProblemCount === null
-        ? this._nonNegativeInt((summary || {}).problem_status_count, 0)
-        : healthProblemCount;
+      let summaryProblemCount = this._nonNegativeInt((summary || {}).problem_status_count, 0);
+      runtimeTotal = Math.max(healthProblemCount === null ? 0 : healthProblemCount, summaryProblemCount);
       runtimeDerived = true;
       runtimeTotal = Math.max(runtimeTotal, this._problemStatusCount(counts));
     }
