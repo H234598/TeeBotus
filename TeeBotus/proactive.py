@@ -19,6 +19,7 @@ from TeeBotus.runtime.config import AccountRunConfig, build_runtime_config, reso
 from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.notification_loudness import queue_due_notification_loudness_prompts
+from TeeBotus.runtime.maintenance import configure_runtime_logging
 from TeeBotus.runtime.proactive_backends import matrix_proactive_sender, signal_proactive_sender, telegram_proactive_sender
 from TeeBotus.runtime.proactive_agent import (
     ProactiveSender,
@@ -58,6 +59,7 @@ PROACTIVE_ROLE_LLM_SETTING_NAMES = (
 )
 MATRIX_LAZY_READY_TIMEOUT_SECONDS = 35.0
 LOGGER = logging.getLogger("TeeBotus.proactive")
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -71,7 +73,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tool-plan", action="store_true", help="Run the native tool-call planner before due selection. Requires --plan, the LLM instance gate, and an OpenAI key.")
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
     args = parser.parse_args(argv)
-    _load_dotenv(Path.cwd() / ".env")
+    _load_dotenv(PROJECT_ROOT / ".env")
+    configure_runtime_logging(level=os.getenv("TEEBOTUS_LOG_LEVEL") or os.getenv("LOG_LEVEL", "INFO"), tee_stdio=True)
     if args.dry_run == args.dispatch:
         print("Use exactly one of --dry-run or --dispatch.", file=sys.stderr)
         return 2

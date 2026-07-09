@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 from TeeBotus.proactive import (
     ProactiveRoleLLMClient,
@@ -87,6 +89,44 @@ def test_proactive_cli_requires_dry_run_for_now(tmp_path, capsys) -> None:
     captured = capsys.readouterr()
     assert result == 2
     assert "Use exactly one of --dry-run or --dispatch" in captured.err
+
+
+def test_proactive_main_loads_runtime_environment_before_configuring_logging(tmp_path) -> None:
+    import TeeBotus.proactive as proactive_module
+
+    events: list[str] = []
+    recorded: dict[str, object] = {}
+    original_level = os.environ.get("TEEBOTUS_LOG_LEVEL")
+
+    def fake_load_dotenv(path) -> None:
+        events.append(f"load:{path}")
+        os.environ["TEEBOTUS_LOG_LEVEL"] = "debug_all"
+
+    def fake_configure_runtime_logging(*, level, tee_stdio) -> None:
+        events.append("configure")
+        recorded["level"] = level
+        recorded["tee_stdio"] = tee_stdio
+
+    with (
+        patch("TeeBotus.proactive._load_dotenv", side_effect=fake_load_dotenv),
+        patch("TeeBotus.proactive.configure_runtime_logging", side_effect=fake_configure_runtime_logging),
+        patch(
+            "TeeBotus.proactive.run_proactive_agent_cycle",
+            return_value={"ok": True, "generated_at": "2026-06-15T12:00:00+00:00", "dispatch": False, "instances": []},
+        ),
+    ):
+        result = proactive_module.main(["--instances-dir", str(tmp_path / "instances"), "--dry-run"])
+
+    if original_level is None:
+        os.environ.pop("TEEBOTUS_LOG_LEVEL", None)
+    else:
+        os.environ["TEEBOTUS_LOG_LEVEL"] = original_level
+
+    assert result == 0
+    assert events[0].startswith("load:")
+    assert events[1] == "configure"
+    assert recorded["level"] == "debug_all"
+    assert recorded["tee_stdio"] is True
 
 
 def test_proactive_cli_dispatch_can_run_without_injected_sender_registry(tmp_path, capsys) -> None:
