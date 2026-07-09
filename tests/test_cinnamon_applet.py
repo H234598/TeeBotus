@@ -3062,7 +3062,10 @@ def test_cinnamon_applet_runtime_parser_ignores_neutral_warning_flags() -> None:
         service=zero status=ok warning=0
         service=false status=ok warning=false
         service=off status=ok warning=off
-        service=real status=ok warning=retry
+        service=double status=ok warning="false"
+        service=single status=ok warning='off'
+        service=backtick status=ok warning=`none`
+        service=real status=ok warning="retry"
         """
     )
 
@@ -3072,7 +3075,15 @@ def test_cinnamon_applet_runtime_parser_ignores_neutral_warning_flags() -> None:
 
 
 def test_cinnamon_applet_js_ignores_neutral_warning_flags() -> None:
-    for value, expected in (("0", False), ("false", False), ("OFF", False), ("retry", True)):
+    for value, expected in (
+        ("0", False),
+        ("false", False),
+        ("OFF", False),
+        ('"false"', False),
+        ("'OFF'", False),
+        ("`none`", False),
+        ('"retry"', True),
+    ):
         result = _run_js_applet_expression(
             f"applet._lineHasProblemStatus({{status: 'ok', warning: {json.dumps(value)}}})"
         )

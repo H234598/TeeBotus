@@ -470,6 +470,8 @@ def _append_status_value(values: list[str], status: str) -> None:
 
 def _status_flag_is_set(value: str) -> bool:
     normalized = str(value or "").strip().casefold()
+    if len(normalized) >= 2 and normalized[0] == normalized[-1] and normalized[0] in {'"', "'", "`"}:
+        normalized = normalized[1:-1].strip()
     return bool(normalized) and normalized not in NEUTRAL_FLAG_VALUES
 
 

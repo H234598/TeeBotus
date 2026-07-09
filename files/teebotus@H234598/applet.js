@@ -856,6 +856,9 @@ TeeBotusApplet.prototype = {
 
   _statusFlagIsSet: function(value) {
     let normalized = String(value || "").trim().toLowerCase();
+    if (normalized.length >= 2 && normalized.charAt(0) === normalized.charAt(normalized.length - 1) && ["\"", "'", "`"].indexOf(normalized.charAt(0)) >= 0) {
+      normalized = normalized.slice(1, -1).trim();
+    }
     return Boolean(normalized) && !NEUTRAL_FLAG_VALUES[normalized];
   },
 
