@@ -1183,6 +1183,20 @@ TeeBotusApplet.prototype = {
     return " | Probleme " + rendered.join(", ");
   },
 
+  _problemStatusesFromCounts: function(counts) {
+    let pairs = [];
+    for (let status of Object.keys(counts || {}).sort()) {
+      if (PROBLEM_STATUSES.indexOf(status) < 0) {
+        continue;
+      }
+      let count = this._nonNegativeInt((counts || {})[status], 0);
+      if (count > 0) {
+        pairs.push(status + ":" + String(count));
+      }
+    }
+    return pairs.join(",");
+  },
+
   _commandProblemBreakdownText: function(health) {
     let count = this._nonNegativeInt((health || {}).command_problem_count, 0);
     return count > 0 ? " | Kommando:" + String(count) : "";
@@ -1211,7 +1225,7 @@ TeeBotusApplet.prototype = {
   _healthDetailText: function(health, summary, counts) {
     let total = this._healthProblemTotal(health, summary, counts || {});
     let text = total > 0 ? " | Probleme " + String(total) : "";
-    text += this._problemBreakdownText((health || {}).problem_statuses || (summary || {}).problem_statuses || "");
+    text += this._problemBreakdownText((health || {}).problem_statuses || (summary || {}).problem_statuses || this._problemStatusesFromCounts(counts || {}));
     text += this._commandProblemBreakdownText(health);
     text += this._qdrantProblemBreakdownText(health);
     return text;
