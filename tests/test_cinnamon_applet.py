@@ -2254,6 +2254,43 @@ def test_cinnamon_applet_payload_uses_status_counts_when_problem_status_count_is
     assert payload["health"]["total_problem_count"] == 3
 
 
+def test_cinnamon_applet_payload_problem_statuses_from_counts_match_parser_order(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "", "stderr": ""})
+    monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})
+    monkeypatch.setattr(cinnamon_applet, "_qdrant_status", lambda _url: {"url": "http://127.0.0.1:6333", "collections": {}, "error": ""})
+    monkeypatch.setattr(cinnamon_applet, "_repo_status", lambda _root: {"path": str(tmp_path), "short_commit": "abc1234"})
+
+    original = cinnamon_applet.parse_runtime_status
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "parse_runtime_status",
+        lambda _output: {
+            "sections": {},
+            "summary": {
+                "instances": "",
+                "channels": "",
+                "problem_status_count": 0,
+                "problem_statuses": "",
+                "qdrant_problem_status_count": 0,
+            },
+            "status_counts": {"never": 1, "needed": 2},
+        },
+    )
+
+    try:
+        payload = build_status_payload(
+            repo_root=tmp_path,
+            channels="telegram,signal",
+            unit_name="teebotus.service",
+            python_executable="/usr/bin/python3",
+            timeout_seconds=1,
+        )
+    finally:
+        monkeypatch.setattr(cinnamon_applet, "parse_runtime_status", original)
+
+    assert payload["health"]["problem_statuses"] == "needed:2,never:1"
+
+
 def test_cinnamon_applet_payload_counts_top_level_qdrant_error_without_collections(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "[Diagnose]\nservice=demo status=ready\n", "stderr": ""})
     monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running"})

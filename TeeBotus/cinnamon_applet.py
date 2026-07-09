@@ -301,8 +301,10 @@ def _safe_int(value: Any, default: int = 0) -> int:
 
 def _problem_statuses_from_counts(status_counts: Mapping[str, Any]) -> str:
     items: list[str] = []
-    for status in PROBLEM_STATUSES:
-        count = _safe_int(status_counts.get(status, 0))
+    for status, value in sorted(status_counts.items(), key=lambda item: str(item[0])):
+        if status not in PROBLEM_STATUSES:
+            continue
+        count = _safe_int(value)
         if count > 0:
             items.append(f"{status}:{count}")
     return ",".join(items)
