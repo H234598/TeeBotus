@@ -300,7 +300,7 @@ def _unit_state_ok(unit: dict[str, Any]) -> bool:
     active_state = str(unit.get("active_state", "") or "").strip()
     sub_state = str(unit.get("sub_state", "") or "").strip()
     if active_state == "unknown":
-        return True
+        return sub_state in {"", "unknown"}
     return active_state == "active" and sub_state not in {"", "unknown", "failed", "dead"}
 
 

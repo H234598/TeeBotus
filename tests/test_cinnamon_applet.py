@@ -2276,6 +2276,8 @@ def test_cinnamon_applet_rejects_active_unit_without_confirmed_substate() -> Non
     assert cinnamon_applet._unit_state_ok({"active_state": "active", "sub_state": ""}) is False
     assert cinnamon_applet._unit_state_ok({"active_state": "active", "sub_state": "unknown"}) is False
     assert cinnamon_applet._unit_state_ok({"active_state": "unknown", "sub_state": "unknown"}) is True
+    assert cinnamon_applet._unit_state_ok({"active_state": "unknown", "sub_state": "failed"}) is False
+    assert cinnamon_applet._unit_state_ok({"active_state": "unknown", "sub_state": "running"}) is False
 
 
 def test_cinnamon_applet_payload_counts_command_failure_without_other_problems(monkeypatch, tmp_path) -> None:
