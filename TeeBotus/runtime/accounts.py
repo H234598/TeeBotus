@@ -73,8 +73,10 @@ INSTANCE_MEMORY_STATE_FILENAMES = ("Version_Notifications.json",)
 SECRET_TOOL_COMMAND = "secret-tool"
 SECRET_TOOL_LOOKUP_RETRIES_ENV = "TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES"
 SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS_ENV = "TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS"
+SECRET_TOOL_TIMEOUT_SECONDS_ENV = "TEEBOTUS_SECRET_TOOL_TIMEOUT_SECONDS"
 DEFAULT_RUNTIME_SECRET_TOOL_LOOKUP_RETRIES = 6
 DEFAULT_RUNTIME_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS = 2.0
+DEFAULT_RUNTIME_SECRET_TOOL_TIMEOUT_SECONDS = 5.0
 INSTANCE_KEY_SIZE_BYTES = 32
 INSTANCE_SECRET_SERVICE = "TeeBotus"
 INSTANCE_PEPPER_PURPOSE = "account-secret-pepper"
@@ -415,12 +417,14 @@ class SecretToolInstanceSecretProvider:
         create_if_missing: bool = False,
         lookup_retries: int = 0,
         lookup_retry_delay_seconds: float = 0.0,
+        timeout_seconds: float | None = DEFAULT_RUNTIME_SECRET_TOOL_TIMEOUT_SECONDS,
         sleep: Callable[[float], None] | None = None,
     ) -> None:
         self.command = command
         self.create_if_missing = create_if_missing
         self.lookup_retries = max(0, int(lookup_retries))
         self.lookup_retry_delay_seconds = max(0.0, float(lookup_retry_delay_seconds))
+        self.timeout_seconds = None if timeout_seconds is None else max(0.0, float(timeout_seconds))
         self._sleep = time.sleep if sleep is None else sleep
         self._cache: dict[tuple[str, str], bytes] = {}
 
@@ -520,7 +524,15 @@ class SecretToolInstanceSecretProvider:
                 errors="replace",
                 capture_output=True,
                 check=False,
+                timeout=self.timeout_seconds,
             )
+        except subprocess.TimeoutExpired as exc:
+            operation = args[0] if args else "command"
+            timeout = f"{self.timeout_seconds:g}s" if self.timeout_seconds is not None else "configured timeout"
+            raise AccountStoreError(
+                f"secret-tool {operation} timed out after {timeout}; "
+                "Secret Service may be locked, unavailable, or waiting for a graphical prompt"
+            ) from exc
         except OSError as exc:
             raise AccountStoreError("secret-tool could not be started") from exc
 
@@ -614,6 +626,7 @@ def runtime_secret_provider() -> SecretToolInstanceSecretProvider:
         create_if_missing=False,
         lookup_retries=_runtime_secret_tool_lookup_retries(),
         lookup_retry_delay_seconds=_runtime_secret_tool_lookup_retry_delay_seconds(),
+        timeout_seconds=_runtime_secret_tool_timeout_seconds(),
     )
 
 
@@ -625,6 +638,13 @@ def _runtime_secret_tool_lookup_retry_delay_seconds() -> float:
     return _nonnegative_float_env(
         SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS_ENV,
         DEFAULT_RUNTIME_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS,
+    )
+
+
+def _runtime_secret_tool_timeout_seconds() -> float:
+    return _nonnegative_float_env(
+        SECRET_TOOL_TIMEOUT_SECONDS_ENV,
+        DEFAULT_RUNTIME_SECRET_TOOL_TIMEOUT_SECONDS,
     )
 
 

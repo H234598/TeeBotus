@@ -88,21 +88,50 @@ def test_runtime_secret_provider_never_autocreates_missing_secret(monkeypatch) -
 def test_runtime_secret_provider_uses_secret_service_retry_defaults(monkeypatch) -> None:
     monkeypatch.delenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES", raising=False)
     monkeypatch.delenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS", raising=False)
+    monkeypatch.delenv("TEEBOTUS_SECRET_TOOL_TIMEOUT_SECONDS", raising=False)
 
     provider_instance = runtime_secret_provider()
 
     assert provider_instance.lookup_retries == 6
     assert provider_instance.lookup_retry_delay_seconds == 2.0
+    assert provider_instance.timeout_seconds == 5.0
 
 
 def test_runtime_secret_provider_accepts_secret_service_retry_env(monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES", "2")
     monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS", "0.25")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_TIMEOUT_SECONDS", "0.75")
 
     provider_instance = runtime_secret_provider()
 
     assert provider_instance.lookup_retries == 2
     assert provider_instance.lookup_retry_delay_seconds == 0.25
+    assert provider_instance.timeout_seconds == 0.75
+
+
+def test_secret_tool_provider_keeps_explicit_zero_timeout(monkeypatch) -> None:
+    provider_instance = SecretToolInstanceSecretProvider(timeout_seconds=0)
+
+    assert provider_instance.timeout_seconds == 0.0
+
+
+def test_secret_tool_provider_times_out_hung_secret_tool(monkeypatch) -> None:
+    provider_instance = SecretToolInstanceSecretProvider(timeout_seconds=0.25)
+    calls: dict[str, object] = {}
+
+    monkeypatch.setattr(provider_instance, "_secret_tool", lambda: "/usr/bin/secret-tool")
+
+    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls["command"] = command
+        calls["timeout"] = kwargs.get("timeout")
+        raise subprocess.TimeoutExpired(command, kwargs.get("timeout"))
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    with pytest.raises(AccountStoreError, match="timed out"):
+        provider_instance._run(["lookup", "application", "TeeBotus"])
+
+    assert calls["timeout"] == 0.25
 
 
 def test_secret_tool_provider_retries_transient_missing_lookup(monkeypatch) -> None:
