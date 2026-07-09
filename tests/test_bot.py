@@ -4374,6 +4374,29 @@ class BotTests(unittest.TestCase):
         self.assertEqual(factory_calls[0]["profile"], "local_ollama")
         self.assertEqual(seen_contexts[0].engine.llm_client, "profile-client")
 
+    def test_main_impl_loads_runtime_environment_before_configuring_logging(self) -> None:
+        from TeeBotus import bot as bot_module
+
+        recorded = {}
+
+        def fake_load_runtime_environment() -> None:
+            os.environ["TEEBOTUS_LOG_LEVEL"] = "debug_all"
+
+        def fake_configure_runtime_logging(*, level, tee_stdio) -> None:
+            recorded["level"] = level
+            recorded["tee_stdio"] = tee_stdio
+
+        with (
+            patch("TeeBotus.bot._load_runtime_environment", side_effect=fake_load_runtime_environment),
+            patch("TeeBotus.runtime.maintenance.configure_runtime_logging", side_effect=fake_configure_runtime_logging),
+            patch("TeeBotus.bot._runtime_config_from_main_args", side_effect=RuntimeError("stop")),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "stop"):
+                bot_module._main_impl([])
+
+        self.assertEqual(recorded["level"], "debug_all")
+        self.assertTrue(recorded["tee_stdio"])
+
     def test_split_telegram_message_prefers_paragraph_boundaries(self) -> None:
         text = ("a" * 20) + "\n\n" + ("b" * 20) + "\n\n" + ("c" * 20)
 

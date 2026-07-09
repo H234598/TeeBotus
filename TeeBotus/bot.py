@@ -2376,6 +2376,7 @@ def _main_impl(argv: list[str] | None = None) -> int:
     if args and args[0] in {"--runtime-status", "runtime-status"}:
         return _runtime_status_preserving_environment(args[1:])
 
+    _load_runtime_environment()
     try:
         from TeeBotus.runtime.maintenance import configure_runtime_logging
 
