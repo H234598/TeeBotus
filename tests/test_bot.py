@@ -269,6 +269,10 @@ class BotTests(unittest.TestCase):
         with patch.dict("os.environ", {}, clear=True):
             self.assertEqual(_resolve_instruction_path(), "instances/Bote_der_Wahrheit/Bot_Verhalten.md")
 
+    def test_default_instruction_path_prefers_teebotus_instances_dir(self) -> None:
+        with patch.dict("os.environ", {"TEEBOTUS_INSTANCES_DIR": "/tmp/teebotus-instances"}, clear=True):
+            self.assertEqual(_resolve_instruction_path(), "/tmp/teebotus-instances/Bote_der_Wahrheit/Bot_Verhalten.md")
+
     def test_pre_account_sender_memory_payload_is_not_touched_by_account_store_memory(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             memory_path = Path(directory) / "instances" / "Depressionsbot" / "data" / "accounts" / "pre_account_sender_memory" / "456" / "User_Memory_Index.json"
@@ -932,6 +936,17 @@ class BotTests(unittest.TestCase):
             (instances_dir / "Ignoriert").mkdir()
 
             with patch.dict("os.environ", {"TELEGRAM_BOT_INSTANCES_DIR": str(instances_dir)}, clear=True):
+                self.assertEqual(_discover_instance_names(), ["Bote_der_Wahrheit", "Depressionsbot"])
+
+    def test_discovers_instances_from_teebotus_instances_dir(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            instances_dir = Path(directory)
+            (instances_dir / "Bote_der_Wahrheit").mkdir()
+            (instances_dir / "Bote_der_Wahrheit" / "Bot_Verhalten.md").write_text("", encoding="utf-8")
+            (instances_dir / "Depressionsbot").mkdir()
+            (instances_dir / "Depressionsbot" / "Bot_Verhalten.md").write_text("", encoding="utf-8")
+
+            with patch.dict("os.environ", {"TEEBOTUS_INSTANCES_DIR": str(instances_dir)}, clear=True):
                 self.assertEqual(_discover_instance_names(), ["Bote_der_Wahrheit", "Depressionsbot"])
 
     def test_instance_token_overrides_generic_token(self) -> None:

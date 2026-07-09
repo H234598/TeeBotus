@@ -53,6 +53,7 @@ from TeeBotus.runtime.engine import TeeBotusEngine, account_bot_address_names
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
 from TeeBotus.runtime.log_context import logging_context
+from TeeBotus.runtime.config import resolve_instances_dir
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.adapters.telegram import (
@@ -3965,7 +3966,7 @@ def _teladi_call_state_path(instance_name: str) -> Path:
 
 
 def _resolve_instances_dir() -> Path:
-    return Path(os.getenv("TELEGRAM_BOT_INSTANCES_DIR", "instances").strip() or "instances")
+    return resolve_instances_dir(os.environ)
 
 
 def _discover_instance_names() -> list[str]:
