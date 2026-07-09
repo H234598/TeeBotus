@@ -1153,8 +1153,7 @@ def test_cinnamon_applet_rejects_partial_integer_settings() -> None:
         "staleJunk": False,
         "staleValid": True,
         "malformedSummary": (
-            "Health Warnung | Unit active | 1 | telegram | Warnungen 13 | "
-            "Probleme defekt:6 | Qdrant Probe:4"
+            "Warnungen 13 | Probleme defekt:6 | Qdrant Probe:4 | Health Warnung | Unit active | 1 | telegram"
         ),
     }
 
@@ -1751,8 +1750,54 @@ def test_cinnamon_applet_status_summary_uses_status_counts_for_problem_breakdown
         """
     )
 
+    assert result["statusSummary"].startswith("Warnungen 3")
     assert "Warnungen 3" in result["statusSummary"]
     assert "Probleme Warnung:2, defekt:1" in result["statusSummary"]
+
+
+def test_cinnamon_applet_menu_header_problem_counts_come_before_health_status() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.statusPayload = {
+            version: "1.2.3",
+            repo: { short_commit: "abc1234" },
+            unit: { active_state: "active", sub_state: "running" },
+            health: {
+              status: "warning",
+              runtime_problem_count: 2,
+              problem_statuses: "",
+              command_problem_count: 0,
+              qdrant_problem_count: 0,
+              qdrant_probe_problem_count: 0,
+              qdrant_unit_problem_count: 0,
+              qdrant_runtime_problem_count: 0
+            },
+            runtime: {
+              summary: {
+                instances: "Demo",
+                channels: "telegram",
+                problem_status_count: 0,
+                problem_statuses: "",
+                llm_routes: 0
+              },
+              status_counts: { warning: 2, broken: 1 }
+            }
+          };
+          applet.statusText = applet._statusSummary(applet.statusPayload);
+          applet.headerItem = {label: {set_text: function(value) { values.header = value; }}};
+          applet.summaryItem = {label: {set_text: function(value) { values.summary = value; }}};
+          applet.versionItem = {label: {set_text: function(value) { values.version = value; }}};
+          applet._updateHeader();
+          return values;
+        })()
+        """
+    )
+
+    assert result["summary"].startswith("Warnungen 3")
+    assert result["version"].startswith("Probleme 3")
+    assert result["version"].index("Probleme 3") < result["version"].index("Health: Warnung")
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:

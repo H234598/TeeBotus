@@ -1134,7 +1134,10 @@ TeeBotusApplet.prototype = {
     let breakdown = this._problemBreakdownText(health.problem_statuses || summary.problem_statuses || this._problemStatusesFromCounts(counts || {}));
     let commandBreakdown = this._commandProblemBreakdownText(health);
     let qdrantBreakdown = this._qdrantProblemBreakdownText(health);
-    return "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + " | Warnungen " + String(bad) + breakdown + commandBreakdown + qdrantBreakdown;
+    if (bad > 0) {
+      return "Warnungen " + String(bad) + breakdown + commandBreakdown + qdrantBreakdown + " | Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText;
+    }
+    return "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + breakdown + commandBreakdown + qdrantBreakdown;
   },
 
   _healthProblemTotal: function(health, summary, counts) {
@@ -1229,6 +1232,12 @@ TeeBotusApplet.prototype = {
   _healthDetailText: function(health, summary, counts) {
     let total = this._healthProblemTotal(health, summary, counts || {});
     let text = total > 0 ? " | Probleme " + String(total) : "";
+    text += this._healthProblemDetailsText(health, summary, counts);
+    return text;
+  },
+
+  _healthProblemDetailsText: function(health, summary, counts) {
+    let text = "";
     text += this._problemBreakdownText((health || {}).problem_statuses || (summary || {}).problem_statuses || this._problemStatusesFromCounts(counts || {}));
     text += this._commandProblemBreakdownText(health);
     text += this._qdrantProblemBreakdownText(health);
@@ -1254,10 +1263,14 @@ TeeBotusApplet.prototype = {
     this.headerItem.label.set_text("TB " + String(payload.version || "?"));
     this.summaryItem.label.set_text(this.statusText || _("Status unbekannt"));
     let commit = repo.short_commit ? " | " + repo.short_commit : "";
+    let problemTotal = this._healthProblemTotal(health, summary, counts);
+    let healthWord = this._statusWord(health.status || "unknown");
+    let prefix = problemTotal > 0 ? "Probleme " + String(problemTotal) + " | " : "";
     this.versionItem.label.set_text(
-      "Health: " +
-        this._statusWord(health.status || "unknown") +
-        this._healthDetailText(health, summary, counts) +
+      prefix +
+        "Health: " +
+        healthWord +
+        this._healthProblemDetailsText(health, summary, counts) +
         " | Unit: " +
         String(unit.active_state || "unknown") +
         " / " +
