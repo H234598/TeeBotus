@@ -1075,8 +1075,12 @@ TeeBotusApplet.prototype = {
       this.statusRunning = false;
       if (error) {
         this.lastError = error;
-        this.statusPayload = null;
-        this.statusText = _("Statusfehler: ") + this._shortText(error, 80);
+        if (this.statusPayload) {
+          this.statusText = this._statusSummary(this.statusPayload) + " | " + _("Statusfehler: ") + this._shortText(error, 80);
+        } else {
+          this.statusPayload = null;
+          this.statusText = _("Statusfehler: ") + this._shortText(error, 80);
+        }
       } else {
         this.statusPayload = payload;
         this.lastError = "";

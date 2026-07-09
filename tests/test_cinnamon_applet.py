@@ -1250,6 +1250,60 @@ def test_cinnamon_applet_status_refresh_rejects_large_json_output() -> None:
     assert result["lastError"] == "Helper JSON output too large"
 
 
+def test_cinnamon_applet_status_refresh_keeps_previous_payload_on_error() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          applet.statusTimeoutSeconds = 30;
+          applet.repoPath = "/repo";
+          applet.statusPayload = {
+            version: "1.2.3",
+            repo: { short_commit: "abc1234" },
+            unit: { active_state: "active", sub_state: "running" },
+            health: {
+              status: "warning",
+              runtime_problem_count: 2,
+              problem_statuses: "warning:2",
+              command_problem_count: 0,
+              qdrant_problem_count: 0,
+              qdrant_probe_problem_count: 0,
+              qdrant_unit_problem_count: 0,
+              qdrant_runtime_problem_count: 0,
+              total_problem_count: 2
+            },
+            runtime: {
+              summary: {
+                instances: "Demo",
+                channels: "telegram",
+                problem_status_count: 2,
+                problem_statuses: "warning:2",
+                llm_routes: 0
+              },
+              status_counts: { warning: 2 }
+            }
+          };
+          applet._setPanelState = function() {};
+          applet._buildMenu = function() {};
+          applet._updatePanel = function() {};
+          applet._spawnJson = function(_argv, callback) {
+            callback(null, "timeout");
+          };
+          applet._refreshStatus();
+          return {
+            statusPayload: applet.statusPayload,
+            statusText: applet.statusText,
+            lastError: applet.lastError
+          };
+        })()
+        """
+    )
+
+    assert result["statusPayload"]["health"]["runtime_problem_count"] == 2
+    assert "Warnungen 2" in result["statusText"]
+    assert "Statusfehler: timeout" in result["statusText"]
+    assert result["lastError"] == "timeout"
+
+
 def test_cinnamon_applet_status_refresh_queues_changes_while_running() -> None:
     result = _run_js_applet_expression(
         """
