@@ -1358,6 +1358,37 @@ def test_cinnamon_applet_menu_header_includes_health_details() -> None:
     assert "LLM-Routen: 2" in result["version"]
 
 
+def test_cinnamon_applet_menu_header_omits_zero_problem_total() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.statusPayload = {
+            version: "1.2.3",
+            repo: { short_commit: "abc1234" },
+            unit: { active_state: "active", sub_state: "running" },
+            health: {
+              status: "ok",
+              total_problem_count: 0,
+              problem_statuses: ""
+            },
+            runtime: { summary: { llm_routes: 0 } }
+          };
+          applet.headerItem = {label: {set_text: function(value) { values.header = value; }}};
+          applet.summaryItem = {label: {set_text: function(value) { values.summary = value; }}};
+          applet.versionItem = {label: {set_text: function(value) { values.version = value; }}};
+          applet._updateHeader();
+          return values;
+        })()
+        """
+    )
+
+    assert result["header"] == "TB 1.2.3"
+    assert "Probleme 0" not in result["version"]
+    assert result["version"].startswith("Health: ok")
+    assert "LLM-Routen: 0" in result["version"]
+
+
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     parsed = parse_runtime_status(
         """

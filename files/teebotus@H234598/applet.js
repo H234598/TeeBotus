@@ -1197,7 +1197,7 @@ TeeBotusApplet.prototype = {
     if (total === null) {
       total = this._nonNegativeInt((summary || {}).problem_status_count, null);
     }
-    let text = total !== null ? " | Probleme " + String(total) : "";
+    let text = total > 0 ? " | Probleme " + String(total) : "";
     text += this._problemBreakdownText((health || {}).problem_statuses || (summary || {}).problem_statuses || "");
     text += this._commandProblemBreakdownText(health);
     text += this._qdrantProblemBreakdownText(health);
