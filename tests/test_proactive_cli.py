@@ -98,7 +98,7 @@ def test_proactive_main_loads_runtime_environment_before_configuring_logging(tmp
     recorded: dict[str, object] = {}
     original_level = os.environ.get("TEEBOTUS_LOG_LEVEL")
 
-    def fake_load_dotenv(path) -> None:
+    def fake_load_project_dotenv_for_instances(path, *, environ=None) -> None:
         events.append(f"load:{path}")
         os.environ["TEEBOTUS_LOG_LEVEL"] = "debug_all"
 
@@ -111,7 +111,7 @@ def test_proactive_main_loads_runtime_environment_before_configuring_logging(tmp
         recorded["tee_stdio"] = tee_stdio
 
     with (
-        patch("TeeBotus.proactive._load_dotenv", side_effect=fake_load_dotenv),
+        patch("TeeBotus.proactive.load_project_dotenv_for_instances", side_effect=fake_load_project_dotenv_for_instances),
         patch("TeeBotus.proactive._load_runtime_config_defaults", side_effect=fake_load_runtime_config_defaults),
         patch("TeeBotus.proactive.configure_runtime_logging", side_effect=fake_configure_runtime_logging),
         patch(
@@ -141,8 +141,9 @@ def test_proactive_cli_default_instances_dir_is_project_root_relative(tmp_path, 
     monkeypatch.setattr(proactive_module, "PROJECT_ROOT", tmp_path)
     recorded: dict[str, object] = {}
 
-    def fake_load_dotenv(path) -> None:
-        return None
+    def fake_load_dotenv(path, *, environ=None) -> None:
+        if environ is not None:
+            environ["TEEBOTUS_LOG_LEVEL"] = "debug_all"
 
     def fake_load_runtime_config_defaults(path) -> None:
         return None
@@ -155,7 +156,7 @@ def test_proactive_cli_default_instances_dir_is_project_root_relative(tmp_path, 
         return {"ok": True, "generated_at": "2026-06-15T12:00:00+00:00", "dispatch": False, "instances": []}
 
     with (
-        patch("TeeBotus.proactive._load_dotenv", side_effect=fake_load_dotenv),
+        patch("TeeBotus.proactive.load_project_dotenv_for_instances", side_effect=fake_load_dotenv),
         patch("TeeBotus.proactive._load_runtime_config_defaults", side_effect=fake_load_runtime_config_defaults),
         patch("TeeBotus.proactive.configure_runtime_logging", side_effect=fake_configure_runtime_logging),
         patch("TeeBotus.proactive.run_proactive_agent_cycle", side_effect=fake_run_proactive_agent_cycle),
@@ -165,6 +166,51 @@ def test_proactive_cli_default_instances_dir_is_project_root_relative(tmp_path, 
     captured = capsys.readouterr()
     assert result == 0
     assert recorded["instances_dir"] == tmp_path / "instances"
+    assert "proactive_dry_run" in captured.out
+
+
+def test_proactive_cli_uses_instances_dir_to_resolve_project_root(tmp_path, capsys) -> None:
+    import TeeBotus.proactive as proactive_module
+
+    custom_repo = tmp_path / "custom-project"
+    instances_dir = custom_repo / "instances"
+    instances_dir.mkdir(parents=True)
+    (custom_repo / ".env").write_text("TEEBOTUS_LOG_LEVEL=debug_all\n", encoding="utf-8")
+    (custom_repo / "ALL_BOTS_DEFAULT.md").write_text("## Laufzeitkonfiguration\n\n- LOG_LEVEL: info\n", encoding="utf-8")
+
+    recorded: dict[str, object] = {}
+
+    def fake_load_project_dotenv_for_instances(path, *, environ=None) -> None:
+        recorded["dotenv_instances_dir"] = path
+        if environ is not None:
+            environ["TEEBOTUS_LOG_LEVEL"] = "debug_all"
+
+    def fake_load_runtime_config_defaults(path) -> None:
+        recorded["defaults_path"] = path
+
+    def fake_configure_runtime_logging(*, level, tee_stdio) -> None:
+        recorded["level"] = level
+        recorded["tee_stdio"] = tee_stdio
+
+    def fake_run_proactive_agent_cycle(**kwargs):
+        recorded["instances_dir"] = kwargs["instances_dir"]
+        return {"ok": True, "generated_at": "2026-06-15T12:00:00+00:00", "dispatch": False, "instances": []}
+
+    with (
+        patch("TeeBotus.proactive.load_project_dotenv_for_instances", side_effect=fake_load_project_dotenv_for_instances),
+        patch("TeeBotus.proactive._load_runtime_config_defaults", side_effect=fake_load_runtime_config_defaults),
+        patch("TeeBotus.proactive.configure_runtime_logging", side_effect=fake_configure_runtime_logging),
+        patch("TeeBotus.proactive.run_proactive_agent_cycle", side_effect=fake_run_proactive_agent_cycle),
+    ):
+        result = proactive_module.main(["--instances-dir", str(instances_dir), "--dry-run"])
+
+    captured = capsys.readouterr()
+    assert result == 0
+    assert recorded["dotenv_instances_dir"] == instances_dir
+    assert recorded["defaults_path"] == custom_repo / "ALL_BOTS_DEFAULT.md"
+    assert recorded["level"] == "debug_all"
+    assert recorded["tee_stdio"] is True
+    assert recorded["instances_dir"] == instances_dir
     assert "proactive_dry_run" in captured.out
 
 

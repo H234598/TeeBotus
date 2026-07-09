@@ -13,14 +13,15 @@ from typing import Any, Callable, Iterable, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, TOKEN_HEX_RE
 from TeeBotus.adapters.telegram_runtime import TelegramAPI
-from TeeBotus.adapters.telegram_runtime import ALL_BOTS_DEFAULT_FILENAME, _load_runtime_config_defaults
 from TeeBotus.instructions import load_instructions
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.config import AccountRunConfig, build_runtime_config, resolve_llm_setting, resolve_openai_key
+from TeeBotus.runtime.dotenv import load_project_dotenv_for_instances, project_root_for_instances_dir
 from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.notification_loudness import queue_due_notification_loudness_prompts
 from TeeBotus.runtime.maintenance import configure_runtime_logging
+from TeeBotus.adapters.telegram_runtime import _load_runtime_config_defaults
 from TeeBotus.runtime.proactive_backends import matrix_proactive_sender, signal_proactive_sender, telegram_proactive_sender
 from TeeBotus.runtime.proactive_agent import (
     ProactiveSender,
@@ -74,9 +75,6 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tool-plan", action="store_true", help="Run the native tool-call planner before due selection. Requires --plan, the LLM instance gate, and an OpenAI key.")
     parser.add_argument("--json", action="store_true", help="Emit JSON.")
     args = parser.parse_args(argv)
-    _load_dotenv(PROJECT_ROOT / ".env")
-    _load_runtime_config_defaults(PROJECT_ROOT / ALL_BOTS_DEFAULT_FILENAME)
-    configure_runtime_logging(level=os.getenv("TEEBOTUS_LOG_LEVEL") or os.getenv("LOG_LEVEL", "INFO"), tee_stdio=True)
     if args.dry_run == args.dispatch:
         print("Use exactly one of --dry-run or --dispatch.", file=sys.stderr)
         return 2
@@ -90,6 +88,10 @@ def main(argv: list[str] | None = None) -> int:
         print("Use only one model planner: --llm-plan or --tool-plan.", file=sys.stderr)
         return 2
     instances_dir = Path(args.instances_dir)
+    project_root = project_root_for_instances_dir(instances_dir)
+    load_project_dotenv_for_instances(instances_dir, environ=os.environ)
+    _load_runtime_config_defaults(project_root / "ALL_BOTS_DEFAULT.md")
+    configure_runtime_logging(level=os.getenv("TEEBOTUS_LOG_LEVEL") or os.getenv("LOG_LEVEL", "INFO"), tee_stdio=True)
     report = asyncio.run(
         run_proactive_agent_cycle(
             instances_dir=instances_dir,
