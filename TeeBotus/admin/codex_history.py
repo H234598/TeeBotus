@@ -20,6 +20,7 @@ from collections import Counter
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timedelta, timezone
+from functools import wraps
 from inspect import isawaitable
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -63,6 +64,7 @@ CODEX_HISTORY_DISPATCHING_STALE_AFTER_SECONDS = 15 * 60
 CODEX_HISTORY_DISPATCH_INSTANCES_ENV = "TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES"
 DEFAULT_CODEX_HISTORY_DISPATCH_INSTANCES = ("TeeBotus_Logger", "TeeBotusLogger", "TBL")
 CODEX_HISTORY_RECEIPT_RANKS = {"delivered": 1, "viewed": 2, "read": 3}
+_CODEX_HISTORY_EVENT_LOCK = threading.RLock()
 CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT = 250
 CODEX_HISTORY_GRAPH_SVG_ENGINES = frozenset({"builtin", "auto", "mmdc"})
 CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
@@ -545,6 +547,16 @@ def acknowledge_codex_history_item(
     }
 
 
+def _synchronized_codex_history_event(function: Callable[..., dict[str, Any]]) -> Callable[..., dict[str, Any]]:
+    @wraps(function)
+    def wrapped(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        with _CODEX_HISTORY_EVENT_LOCK:
+            return function(*args, **kwargs)
+
+    return wrapped
+
+
+@_synchronized_codex_history_event
 def record_codex_history_reply(
     store: AccountStore,
     *,
@@ -664,6 +676,7 @@ def record_codex_history_reply(
     }
 
 
+@_synchronized_codex_history_event
 def record_codex_history_delivery_receipt(
     store: AccountStore,
     *,
