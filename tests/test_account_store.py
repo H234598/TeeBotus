@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import subprocess
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -1431,6 +1432,24 @@ def test_account_store_sqlite_backend_migrates_proactive_jsonl_collections(tmp_p
     assert b"SQL Migration geheim" not in raw_db
     assert b"unsafe_message_text" not in raw_db
     assert b"state-geheim" not in raw_db
+
+
+def test_append_proactive_audit_event_uses_outbox_lock(tmp_path, monkeypatch):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    calls: list[str] = []
+
+    @contextmanager
+    def tracked_lock(locked_account_id: str):
+        calls.append(locked_account_id)
+        yield
+
+    monkeypatch.setattr(store, "proactive_outbox_lock", tracked_lock)
+
+    event_id = store.append_proactive_audit_event(account_id, {"event_type": "test"})
+
+    assert calls == [account_id]
+    assert store.read_proactive_audit(account_id)[0]["id"] == event_id
 
 
 def test_account_store_sqlite_backend_keeps_newer_legacy_jsonl_row_for_same_id(tmp_path, monkeypatch):

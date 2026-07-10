@@ -2974,19 +2974,20 @@ class AccountStore:
 
     def append_proactive_audit_event(self, account_id: str, event: dict[str, Any]) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")
-        rows = self.read_proactive_audit(account_id)
-        normalized = dict(event)
-        event_id = str(normalized.get("id") or f"paud_{uuid.uuid4().hex}").strip()
-        existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
-        while not event_id or event_id in existing_ids:
-            event_id = f"paud_{uuid.uuid4().hex}"
-        timestamp = utc_now()
-        normalized["id"] = event_id
-        normalized.setdefault("schema_version", 1)
-        normalized.setdefault("created_at", timestamp)
-        rows.append(normalized)
-        self.write_proactive_audit(account_id, rows)
-        return event_id
+        with self.proactive_outbox_lock(account_id):
+            rows = self.read_proactive_audit(account_id)
+            normalized = dict(event)
+            event_id = str(normalized.get("id") or f"paud_{uuid.uuid4().hex}").strip()
+            existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
+            while not event_id or event_id in existing_ids:
+                event_id = f"paud_{uuid.uuid4().hex}"
+            timestamp = utc_now()
+            normalized["id"] = event_id
+            normalized.setdefault("schema_version", 1)
+            normalized.setdefault("created_at", timestamp)
+            rows.append(normalized)
+            self.write_proactive_audit(account_id, rows)
+            return event_id
 
     def read_proactive_dispatch_results(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
