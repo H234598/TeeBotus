@@ -3602,6 +3602,34 @@ def test_cinnamon_applet_repo_status_does_not_fail_open_on_git_status(monkeypatc
     assert truncated["dirty"] is True
 
 
+def test_cinnamon_applet_repo_status_rejects_empty_successful_git_output(monkeypatch, tmp_path) -> None:
+    monkeypatch.setattr(
+        cinnamon_applet,
+        "_run",
+        lambda *_args, **_kwargs: {"returncode": 0, "stdout": "", "stderr": ""},
+    )
+
+    status = cinnamon_applet._repo_status(tmp_path)
+
+    assert status["dirty"] is True
+    assert status["ahead_behind"] == ""
+
+
+def test_cinnamon_applet_repo_status_rejects_failed_metadata_queries(monkeypatch, tmp_path) -> None:
+    def fake_run(argv: list[str], **_kwargs: object) -> dict[str, object]:
+        if argv[1] == "branch":
+            return {"returncode": 1, "stdout": "", "stderr": "branch failed"}
+        if argv[1] == "rev-parse":
+            return {"returncode": 1, "stdout": "", "stderr": "rev-parse failed"}
+        return {"returncode": 0, "stdout": "## main\n", "stderr": ""}
+
+    monkeypatch.setattr(cinnamon_applet, "_run", fake_run)
+
+    status = cinnamon_applet._repo_status(tmp_path)
+
+    assert status["dirty"] is True
+
+
 def test_cinnamon_applet_qdrant_point_count_rejects_unexpected_success_payloads(monkeypatch) -> None:
     class FakeResponse:
         status = 200
