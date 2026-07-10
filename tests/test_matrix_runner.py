@@ -258,11 +258,12 @@ def test_matrix_bridge_records_codex_history_native_receipts(tmp_path) -> None:
         title="Matrix Receipt",
         bullets=["Native Receipts markieren delivered."],
     )
+    account_id = bridge.account_store.resolve_or_create_account("matrix:user:@alice:example")
     bridge.account_store.append_codex_history_dispatch_result(
         INSTANCE_STATE_ACCOUNT_ID,
         {
             "codex_history_item_id": item["id"],
-            "account_id": "",
+            "account_id": account_id,
             "instance": "Demo",
             "status": "accepted",
             "channel": "matrix",

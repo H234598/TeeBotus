@@ -14,7 +14,7 @@ from TeeBotus.adapters.matrix import _matrix_response_error_message, matrix_mess
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.llm_factory import build_runtime_structured_decision_runner, build_runtime_text_llm_client
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, runtime_secret_provider
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, matrix_identity_key, runtime_secret_provider
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.async_bridge import run_background_coroutine
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
@@ -402,11 +402,24 @@ class MatrixRuntimeBridge:
                 continue
             receipt_type = _matrix_codex_receipt_type(getattr(receipt, "receipt_type", ""))
             try:
+                account_id = self.account_store.get_account_for_identity(matrix_identity_key(user_id)) or ""
+            except (AccountStoreError, OSError, ValueError, AttributeError):
+                account_id = ""
+            if not account_id:
+                LOGGER.warning(
+                    "Matrix Codex-History receipt ignored without linked account instance=%s room_id=%s user_id=%s.",
+                    self.run_config.instance_name,
+                    room_id,
+                    user_id,
+                )
+                continue
+            try:
                 record_codex_history_delivery_receipt(
                     self.account_store,
                     instance_name=self.run_config.instance_name,
                     channel="matrix",
                     chat_id=room_id,
+                    account_id=account_id,
                     message_ref=event_id,
                     receipt_type=receipt_type,
                 )

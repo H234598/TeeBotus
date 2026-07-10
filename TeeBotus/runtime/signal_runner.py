@@ -22,7 +22,7 @@ from TeeBotus.adapters.signal import _signal_message_recipient, _signal_raw_data
 from TeeBotus.instructions import InstructionStore
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.llm_factory import build_runtime_structured_decision_runner, build_runtime_text_llm_client
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, runtime_secret_provider
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, runtime_secret_provider, signal_identity_key
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.async_bridge import run_background_coroutine
 from TeeBotus.runtime.config import AccountRunConfig, RuntimeConfig
@@ -452,7 +452,23 @@ class TeeBotusSignalCommand(_SignalBotCommand):
         chat_id = receipt.get("chat_id", "")
         receipt_type = receipt.get("receipt_type", "delivered")
         message_refs = receipt.get("message_refs", ())
+        identity_keys = receipt.get("identity_keys", ())
         if not chat_id or not message_refs:
+            return True
+        account_id = ""
+        for identity_key in identity_keys if isinstance(identity_keys, Sequence) and not isinstance(identity_keys, (str, bytes, bytearray)) else ():
+            try:
+                account_id = self.account_store.get_account_for_identity(str(identity_key or "")) or ""
+            except (AccountStoreError, OSError, ValueError, AttributeError):
+                continue
+            if account_id:
+                break
+        if not account_id:
+            LOGGER.warning(
+                "Signal Codex-History receipt ignored without linked account instance=%s recipient=%s.",
+                self.run_config.instance_name,
+                chat_id,
+            )
             return True
         for message_ref in message_refs:
             try:
@@ -461,6 +477,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                     instance_name=self.run_config.instance_name,
                     channel="signal",
                     chat_id=chat_id,
+                    account_id=account_id,
                     message_ref=message_ref,
                     receipt_type=receipt_type,
                 )
@@ -762,6 +779,7 @@ def _signal_native_receipt(message: Any) -> dict[str, Any]:
         "chat_id": chat_id,
         "receipt_type": _signal_receipt_type(message),
         "message_refs": tuple(dict.fromkeys(message_refs)),
+        "identity_keys": _signal_receipt_identity_keys(message),
     }
 
 
@@ -802,6 +820,38 @@ def _signal_message_recipient_for_receipt(message: Any) -> str:
         if value:
             return value
     return ""
+
+
+def _signal_receipt_identity_keys(message: Any) -> tuple[str, ...]:
+    source_uuid = str(getattr(message, "source_uuid", "") or "").strip()
+    source_number = str(getattr(message, "source_number", "") or "").strip()
+    source = str(getattr(message, "source", "") or "").strip()
+    raw_message = getattr(message, "raw_message", None)
+    if isinstance(raw_message, str) and raw_message.strip():
+        try:
+            payload = json.loads(raw_message)
+        except (TypeError, ValueError):
+            payload = {}
+        envelope = payload.get("envelope") if isinstance(payload, Mapping) else {}
+        if isinstance(envelope, Mapping):
+            source_uuid = source_uuid or str(envelope.get("sourceUuid") or envelope.get("source_uuid") or "").strip()
+            source_number = source_number or str(envelope.get("sourceNumber") or envelope.get("source_number") or "").strip()
+            source = source or str(envelope.get("source") or "").strip()
+    candidates: list[str] = []
+    for kwargs in (
+        {"source_uuid": source_uuid},
+        {"source_number": source_number},
+        {"source": source},
+    ):
+        if not any(str(value or "").strip() for value in kwargs.values()):
+            continue
+        try:
+            key = signal_identity_key(**kwargs)
+        except (AccountStoreError, ValueError):
+            continue
+        if key not in candidates:
+            candidates.append(key)
+    return tuple(candidates)
 
 
 def _signal_receipt_type(message: Any) -> str:
