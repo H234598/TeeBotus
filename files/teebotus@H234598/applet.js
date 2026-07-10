@@ -1383,7 +1383,10 @@ TeeBotusApplet.prototype = {
     if (typeof payload.ok !== "boolean") {
       return false;
     }
-    if (payload.health && payload.health.status !== undefined && ["ok", "warning", "broken"].indexOf(payload.health.status) < 0) {
+    if (!this._isJsonObject(payload.health) || ["ok", "warning", "broken"].indexOf(payload.health.status) < 0) {
+      return false;
+    }
+    if (payload.ok !== (payload.health.status === "ok")) {
       return false;
     }
     for (let key of ["repo", "unit", "health", "qdrant", "runtime"]) {

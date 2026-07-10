@@ -1198,7 +1198,7 @@ def test_cinnamon_applet_status_refresh_uses_bounded_spawn_timeout() -> None:
           applet._updatePanel = function() {};
           applet._spawn = function(argv, callback, cwd, options) {
             captured = {argv: argv, cwd: cwd, options: options, runningBeforeCallback: applet.statusRunning};
-            callback(JSON.stringify({ok: true, repo: {}, unit: {}, health: {}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
+            callback(JSON.stringify({ok: true, repo: {}, unit: {}, health: {status: "ok"}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           applet._refreshStatus();
           return {
@@ -1347,7 +1347,7 @@ def test_cinnamon_applet_status_refresh_queues_changes_while_running() -> None:
               applet.repoPath = "/new-repo";
               applet._refreshStatus();
             }
-            callback(JSON.stringify({ok: true, repo: {}, unit: {}, health: {}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
+            callback(JSON.stringify({ok: true, repo: {}, unit: {}, health: {status: "ok"}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           applet._refreshStatus();
           return {
@@ -1404,6 +1404,18 @@ def test_cinnamon_applet_status_payload_requires_boolean_ok() -> None:
     )
 
     assert result is False
+
+
+def test_cinnamon_applet_status_payload_requires_health_status_and_consistent_ok() -> None:
+    missing_status = _run_js_applet_expression(
+        "applet._isStatusPayload({ok: true, repo: {}, unit: {}, health: {}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}})"
+    )
+    inconsistent_status = _run_js_applet_expression(
+        "applet._isStatusPayload({ok: true, repo: {}, unit: {}, health: {status: 'broken'}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}})"
+    )
+
+    assert missing_status is False
+    assert inconsistent_status is False
 
 
 def test_cinnamon_applet_status_payload_rejects_invalid_health_status() -> None:
@@ -1476,7 +1488,7 @@ def test_cinnamon_applet_spawn_json_does_not_reinvoke_throwing_consumer() -> Non
         (function() {
           let calls = [];
           applet._spawn = function(argv, callback, cwd, options) {
-            callback(JSON.stringify({ok: true, repo: {}, unit: {}, health: {}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
+            callback(JSON.stringify({ok: true, repo: {}, unit: {}, health: {status: "ok"}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           try {
             applet._spawnJson([], function(payload, error) {
