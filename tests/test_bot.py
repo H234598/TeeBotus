@@ -1829,6 +1829,28 @@ class BotTests(unittest.TestCase):
         self.assertEqual(chat_state.get_previous_response_id(123, "account-b"), "resp_b")
         self.assertIsNone(chat_state.get_previous_response_id(123, "account-c"))
 
+    def test_legacy_group_messages_do_not_share_llm_context_between_users(self) -> None:
+        api = FakeAPI()
+        client = FakeOpenAIClient()
+        chat_state = ChatState()
+        instructions = BotInstructions(openai_enabled=True)
+
+        def update(sender_id: int, text: str) -> dict[str, object]:
+            return {
+                "message": {
+                    "message_id": sender_id,
+                    "text": text,
+                    "chat": {"id": -100, "type": "group"},
+                    "from": {"id": sender_id},
+                }
+            }
+
+        handle_update(api, update(1, "Erste Nachricht"), instructions, client, chat_state, llm_client=client)
+        handle_update(api, update(2, "Andere Person"), instructions, client, chat_state, llm_client=client)
+        handle_update(api, update(1, "Noch einmal"), instructions, client, chat_state, llm_client=client)
+
+        self.assertEqual(client.previous_response_ids, [None, None, "resp_123"])
+
     def test_handle_update_with_runtime_context_uses_modern_engine(self) -> None:
         class FixedWakeDatetime(datetime):
             @classmethod
