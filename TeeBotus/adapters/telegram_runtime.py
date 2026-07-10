@@ -474,10 +474,15 @@ class TelegramAPI:
         self.request("deleteMessage", {"chat_id": chat_id, "message_id": message_id})
 
 
+def _chat_state_response_key(chat_id: int, scope_key: str = "") -> tuple[int, str]:
+    scope = str(scope_key or "").strip() or f"chat:{chat_id}"
+    return int(chat_id), scope
+
+
 class ChatState:
     def __init__(self, teladi_call_state_path: Path | None = None, instance_name: str = "") -> None:
         self._lock = threading.RLock()
-        self.previous_response_ids: dict[int, str] = {}
+        self.previous_response_ids: dict[tuple[int, str], str] = {}
         self.sent_message_ids: dict[int, list[int]] = {}
         self.recent_message_ids: dict[int, list[int]] = {}
         self.auto_voice_eligible_counts: dict[int, int] = {}
@@ -491,20 +496,21 @@ class ChatState:
         self.instance_name = instance_name
         self.teladi_call_used_at: dict[str, float] = self._load_teladi_call_used_at()
 
-    def get_previous_response_id(self, chat_id: int) -> str | None:
+    def get_previous_response_id(self, chat_id: int, scope_key: str = "") -> str | None:
         with self._lock:
-            return self.previous_response_ids.get(chat_id)
+            return self.previous_response_ids.get(_chat_state_response_key(chat_id, scope_key))
 
-    def set_previous_response_id(self, chat_id: int, response_id: str | None) -> None:
+    def set_previous_response_id(self, chat_id: int, response_id: str | None, scope_key: str = "") -> None:
         with self._lock:
+            state_key = _chat_state_response_key(chat_id, scope_key)
             if response_id:
-                self.previous_response_ids[chat_id] = response_id
+                self.previous_response_ids[state_key] = response_id
             else:
-                self.previous_response_ids.pop(chat_id, None)
+                self.previous_response_ids.pop(state_key, None)
 
-    def reset(self, chat_id: int) -> None:
+    def reset(self, chat_id: int, scope_key: str = "") -> None:
         with self._lock:
-            self.previous_response_ids.pop(chat_id, None)
+            self.previous_response_ids.pop(_chat_state_response_key(chat_id, scope_key), None)
 
     def record_sent_message(self, chat_id: int, message_id: int | None) -> None:
         if message_id is None:
@@ -1743,6 +1749,7 @@ def _process_text_message(
 ) -> None:
     chat_state.mark_sender_seen(_telegram_sender_state_key(message))
     bot_identity = bot_identity or BotIdentity()
+    response_scope = _account_id_from_user_memory(user_memory) or _telegram_sender_state_key(message)
     _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, text, instance_name, "incoming")
     if text and _handle_privacy_confirmation_flow(api, chat_state, chat_id, message, user_memory_store, text):
         return
@@ -1771,7 +1778,7 @@ def _process_text_message(
             return
 
     if text and _normalize_command(text) == "/reset":
-        chat_state.reset(chat_id)
+        chat_state.reset(chat_id, response_scope)
         reply = _with_first_contact_intro(instructions.llm_reset, first_contact, bot_identity)
         _send_tracked_message(api, chat_state, chat_id, reply)
         _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
@@ -1904,7 +1911,7 @@ def _process_text_message(
                     require_library_citations=instructions.bibliothekar_require_citations,
                 ),
                 instructions,
-                chat_state.get_previous_response_id(chat_id),
+                chat_state.get_previous_response_id(chat_id, response_scope),
             )
         except (LLMAPIError, OpenAIAPIError) as exc:
             LOGGER.error("Text LLM request failed: %s", exc)
@@ -1913,7 +1920,7 @@ def _process_text_message(
             _send_tracked_message(api, chat_state, chat_id, reply)
             _record_user_memory(user_memory_store, user_memory, message, text, reply, instructions, api)
             return
-        chat_state.set_previous_response_id(chat_id, getattr(llm_response, "response_id", None))
+        chat_state.set_previous_response_id(chat_id, getattr(llm_response, "response_id", None), response_scope)
         reply = _with_first_contact_intro(str(getattr(llm_response, "text", "") or llm_response), first_contact, bot_identity)
         _maybe_send_depression_alert(api, chat_state, chat_id, message, instructions, reply, instance_name, "reply")
         _send_openai_response(
@@ -4955,6 +4962,7 @@ def _send_youtube_transcript_to_llm_pipeline(
     working_memory_store: WorkingMemoryStore | None,
 ) -> None:
     pipeline_text = _build_youtube_pipeline_text(user_text, transcript, source, url)
+    response_scope = _account_id_from_user_memory(user_memory) or _telegram_sender_state_key(message)
     create_reply = getattr(llm_client, "create_reply", None)
     if not callable(create_reply):
         reply = _with_first_contact_intro(instructions.llm_error, first_contact, bot_identity)
@@ -4975,7 +4983,7 @@ def _send_youtube_transcript_to_llm_pipeline(
                 weather_text,
             ),
             instructions,
-            chat_state.get_previous_response_id(chat_id),
+            chat_state.get_previous_response_id(chat_id, response_scope),
         )
     except (LLMAPIError, OpenAIAPIError) as exc:
         LOGGER.error("Text LLM request failed after YouTube transcript: %s", exc)
@@ -4990,7 +4998,7 @@ def _send_youtube_transcript_to_llm_pipeline(
         LOGGER.warning("Telegram request failed during YouTube transcript text LLM pipeline: %s", exc)
         return
 
-    chat_state.set_previous_response_id(chat_id, getattr(llm_response, "response_id", None))
+    chat_state.set_previous_response_id(chat_id, getattr(llm_response, "response_id", None), response_scope)
     reply = _with_first_contact_intro(str(getattr(llm_response, "text", "") or llm_response), first_contact, bot_identity)
     try:
         _send_openai_response(

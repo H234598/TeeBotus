@@ -1819,6 +1819,16 @@ class BotTests(unittest.TestCase):
 
         self.assertIsNone(chat_state.get_previous_response_id(123))
 
+    def test_chat_state_scopes_previous_response_id_inside_shared_group_chat(self) -> None:
+        chat_state = ChatState()
+
+        chat_state.set_previous_response_id(123, "resp_a", "account-a")
+        chat_state.set_previous_response_id(123, "resp_b", "account-b")
+
+        self.assertEqual(chat_state.get_previous_response_id(123, "account-a"), "resp_a")
+        self.assertEqual(chat_state.get_previous_response_id(123, "account-b"), "resp_b")
+        self.assertIsNone(chat_state.get_previous_response_id(123, "account-c"))
+
     def test_handle_update_with_runtime_context_uses_modern_engine(self) -> None:
         class FixedWakeDatetime(datetime):
             @classmethod
