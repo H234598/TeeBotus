@@ -1396,6 +1396,14 @@ def test_cinnamon_applet_status_refresh_rejects_structurally_invalid_payload() -
     assert result["lastError"] == "Invalid status payload from helper"
 
 
+def test_cinnamon_applet_status_payload_requires_boolean_ok() -> None:
+    result = _run_js_applet_expression(
+        "applet._isStatusPayload({ok: 'false', repo: {}, unit: {}, health: {}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}})"
+    )
+
+    assert result is False
+
+
 def test_cinnamon_applet_removal_terminates_running_helpers() -> None:
     result = _run_js_applet_expression(
         """

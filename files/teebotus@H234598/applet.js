@@ -1379,6 +1379,9 @@ TeeBotusApplet.prototype = {
     if (!this._isJsonObject(payload)) {
       return false;
     }
+    if (typeof payload.ok !== "boolean") {
+      return false;
+    }
     for (let key of ["repo", "unit", "health", "qdrant", "runtime"]) {
       if (!this._isJsonObject(payload[key])) {
         return false;
