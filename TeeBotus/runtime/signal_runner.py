@@ -517,6 +517,18 @@ class TeeBotusSignalCommand(_SignalBotCommand):
 
 
 async def _send_signal_actions_with_retry(context: Any, actions: list[Any]) -> list[Any]:
+    if len(actions) > 1:
+        return await send_signal_actions(
+            context,
+            actions,
+            retry_delays_seconds=SIGNAL_ACTION_RETRY_DELAYS_SECONDS,
+            on_retry=lambda attempt, attempts, delay: LOGGER.warning(
+                "Signal action dispatch failed; retrying action attempt=%s/%s in %ss.",
+                attempt,
+                attempts,
+                delay,
+            ),
+        )
     return await _run_signal_operation_with_retry(
         lambda: send_signal_actions(context, actions),
         label="action dispatch",

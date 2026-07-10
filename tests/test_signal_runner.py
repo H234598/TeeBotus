@@ -292,6 +292,54 @@ def test_signal_command_retries_transient_action_dispatch_failure(tmp_path, monk
     assert calls == 2
 
 
+def test_signal_command_does_not_resend_completed_actions_when_later_action_fails(tmp_path, monkeypatch) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine.process_result = lambda event: EngineResult(  # type: ignore[method-assign]
+        event.account_id,
+        [SendText(event.chat_id, "erste"), SendText(event.chat_id, "zweite")],
+        handled=True,
+    )
+
+    class Context(FakeSignalContext):
+        def __init__(self) -> None:
+            super().__init__()
+            self.attempts: list[str] = []
+            self.bot.send = self.send
+
+        async def send(self, *args, **_kwargs) -> int:
+            text = str(args[-1])
+            self.attempts.append(text)
+            if text == "zweite" and self.attempts.count("zweite") == 1:
+                raise RuntimeError("temporary send failure")
+            self.sent.append(text)
+            return 100 + len(self.attempts)
+
+    async def no_sleep(_delay):
+        return None
+
+    monkeypatch.setattr("TeeBotus.adapters.signal.asyncio.sleep", no_sleep)
+    context = Context()
+
+    asyncio.run(command.handle(context))
+
+    assert context.attempts == ["erste", "zweite", "zweite"]
+    assert context.sent == ["erste", "zweite"]
+    refs = command.message_tracker.pop_for_cleanup(instance_name="Demo", channel="signal", chat_id="+491234", count=2)
+    assert [ref.message_ref for ref in refs] == ["103", "101"]
+
+
 def test_signal_command_can_login_from_linked_device_sync_message(tmp_path) -> None:
     secret_provider = StaticSecretProvider(b"x" * 32)
     command = TeeBotusSignalCommand(

@@ -4,6 +4,7 @@ import asyncio
 import base64
 import json
 import mimetypes
+from collections.abc import Callable, Sequence
 from inspect import isawaitable
 from typing import Any
 
@@ -97,125 +98,132 @@ def signal_context_to_event(
     return signal_message_to_event(context.message, instance=instance_name, adapter_slot=adapter_slot, account_id="", account_label=account_label)
 
 
-async def send_signal_actions(context: Any, actions: list[Any]) -> list[int | None]:
+async def send_signal_actions(
+    context: Any,
+    actions: list[Any],
+    *,
+    retry_delays_seconds: Sequence[float] = (),
+    on_retry: Callable[[int, int, float], None] | None = None,
+) -> list[int | None]:
     sent: list[int | None] = []
     typing_target: str | None = None
     try:
         for action in actions:
-            if isinstance(action, SendText):
-                sent.append(
-                    _signal_required_timestamp(
-                        await _send_signal_text(
-                            context,
-                            text_with_button_fallback(action.text, action.buttons),
-                            chat_id=action.chat_id,
-                            reply_to_ref=action.reply_to_ref,
-                            mentions=list(action.mentions) or None,
-                            text_mode=_signal_text_mode(action),
-                            view_once=action.view_once,
-                            link_preview=action.link_preview,
-                        ),
-                        "Signal text send",
-                    )
-                )
-                typing_target = await _stop_signal_typing_if_started(context, typing_target)
-            elif isinstance(action, DelaySeconds):
-                typing_target = await _stop_signal_typing_if_started(context, typing_target)
-                await asyncio.sleep(max(0.0, float(action.seconds)))
-                sent.append(None)
-            elif isinstance(action, SendTyping):
-                typing_target = await _stop_signal_typing_if_started(context, typing_target)
-                typing_target = await _start_signal_typing(context, action.chat_id)
-                sent.append(None)
-            elif isinstance(action, SendReaction):
-                await _send_signal_reaction(context, action.chat_id, action.message_ref, action.emoji)
-                sent.append(None)
-            elif isinstance(action, SendReceipt):
-                await _send_signal_receipt(context, action.chat_id, action.message_ref, action.receipt_type)
-                sent.append(None)
-            elif isinstance(action, SendEdit):
-                sent.append(
-                    _signal_required_timestamp(
-                        await _send_signal_edit(
-                            context,
-                            action.chat_id,
-                            action.message_ref,
-                            action.text,
-                            mentions=list(action.mentions) or None,
-                            text_mode=action.text_mode,
-                            view_once=action.view_once,
-                            link_preview=action.link_preview,
-                        ),
-                        "Signal edit send",
-                    )
-                )
-                typing_target = await _stop_signal_typing_if_started(context, typing_target)
-            elif isinstance(action, SendPoll):
-                sent.append(
-                    _signal_required_timestamp(
-                        await _send_signal_poll(
-                            context,
-                            action.chat_id,
-                            action.question,
-                            list(action.answers),
-                            action.allow_multiple_selections,
-                        ),
-                        "Signal poll send",
-                    )
-                )
-                typing_target = await _stop_signal_typing_if_started(context, typing_target)
-            elif isinstance(action, SendAttachment):
-                encoded = base64.b64encode(action.data).decode("ascii")
-                sent.append(
-                    _signal_required_timestamp(
-                        await _send_signal_text(
-                            context,
-                            action.caption or action.filename,
-                            chat_id=action.chat_id,
-                            base64_attachments=[encoded],
-                            reply_to_ref=action.reply_to_ref,
-                            mentions=list(action.mentions) or None,
-                            text_mode=action.text_mode,
-                            view_once=action.view_once,
-                            link_preview=action.link_preview,
-                        ),
-                        "Signal attachment send",
-                    )
-                )
-                typing_target = await _stop_signal_typing_if_started(context, typing_target)
-            elif isinstance(action, NotifyLinkedIdentity):
-                sent.append(None)
-            elif isinstance(action, DeleteTrackedMessages):
-                sent.append(None)
-            elif isinstance(action, SetMatrixState):
-                sent.append(None)
-            elif isinstance(action, UpdateSignalContact):
-                await _update_signal_contact(context, action)
-                sent.append(None)
-            elif isinstance(action, UpdateSignalGroup):
-                await _update_signal_group(context, action)
-                sent.append(None)
-            elif isinstance(action, ExportFile):
-                encoded = base64.b64encode(action.data).decode("ascii")
-                sent.append(
-                    _signal_required_timestamp(
-                        await _send_signal_text(
-                            context,
-                            action.caption or f"Export: {action.filename}",
-                            chat_id=action.chat_id,
-                            base64_attachments=[encoded],
-                            reply_to_ref=action.reply_to_ref,
-                        ),
-                        "Signal export send",
-                    )
-                )
-                typing_target = await _stop_signal_typing_if_started(context, typing_target)
-            else:
-                sent.append(None)
+            attempts = len(retry_delays_seconds) + 1
+            for attempt in range(attempts):
+                try:
+                    sent_ref, typing_target = await _send_signal_action(context, action, typing_target)
+                except Exception:
+                    if attempt >= attempts - 1:
+                        raise
+                    delay = max(0.0, float(retry_delays_seconds[attempt]))
+                    if on_retry is not None:
+                        on_retry(attempt + 1, attempts, delay)
+                    await asyncio.sleep(delay)
+                else:
+                    sent.append(sent_ref)
+                    break
     finally:
         if typing_target is not None:
             await _stop_signal_typing_if_started(context, typing_target)
     return sent
+
+
+async def _send_signal_action(context: Any, action: Any, typing_target: str | None) -> tuple[int | None, str | None]:
+    if isinstance(action, SendText):
+        sent_ref = _signal_required_timestamp(
+            await _send_signal_text(
+                context,
+                text_with_button_fallback(action.text, action.buttons),
+                chat_id=action.chat_id,
+                reply_to_ref=action.reply_to_ref,
+                mentions=list(action.mentions) or None,
+                text_mode=_signal_text_mode(action),
+                view_once=action.view_once,
+                link_preview=action.link_preview,
+            ),
+            "Signal text send",
+        )
+        return sent_ref, await _stop_signal_typing_if_started(context, typing_target)
+    if isinstance(action, DelaySeconds):
+        typing_target = await _stop_signal_typing_if_started(context, typing_target)
+        await asyncio.sleep(max(0.0, float(action.seconds)))
+        return None, typing_target
+    if isinstance(action, SendTyping):
+        typing_target = await _stop_signal_typing_if_started(context, typing_target)
+        return None, await _start_signal_typing(context, action.chat_id)
+    if isinstance(action, SendReaction):
+        await _send_signal_reaction(context, action.chat_id, action.message_ref, action.emoji)
+        return None, typing_target
+    if isinstance(action, SendReceipt):
+        await _send_signal_receipt(context, action.chat_id, action.message_ref, action.receipt_type)
+        return None, typing_target
+    if isinstance(action, SendEdit):
+        sent_ref = _signal_required_timestamp(
+            await _send_signal_edit(
+                context,
+                action.chat_id,
+                action.message_ref,
+                action.text,
+                mentions=list(action.mentions) or None,
+                text_mode=action.text_mode,
+                view_once=action.view_once,
+                link_preview=action.link_preview,
+            ),
+            "Signal edit send",
+        )
+        return sent_ref, await _stop_signal_typing_if_started(context, typing_target)
+    if isinstance(action, SendPoll):
+        sent_ref = _signal_required_timestamp(
+            await _send_signal_poll(
+                context,
+                action.chat_id,
+                action.question,
+                list(action.answers),
+                action.allow_multiple_selections,
+            ),
+            "Signal poll send",
+        )
+        return sent_ref, await _stop_signal_typing_if_started(context, typing_target)
+    if isinstance(action, SendAttachment):
+        encoded = base64.b64encode(action.data).decode("ascii")
+        sent_ref = _signal_required_timestamp(
+            await _send_signal_text(
+                context,
+                action.caption or action.filename,
+                chat_id=action.chat_id,
+                base64_attachments=[encoded],
+                reply_to_ref=action.reply_to_ref,
+                mentions=list(action.mentions) or None,
+                text_mode=action.text_mode,
+                view_once=action.view_once,
+                link_preview=action.link_preview,
+            ),
+            "Signal attachment send",
+        )
+        return sent_ref, await _stop_signal_typing_if_started(context, typing_target)
+    if isinstance(action, (NotifyLinkedIdentity, DeleteTrackedMessages, SetMatrixState)):
+        return None, typing_target
+    if isinstance(action, UpdateSignalContact):
+        await _update_signal_contact(context, action)
+        return None, typing_target
+    if isinstance(action, UpdateSignalGroup):
+        await _update_signal_group(context, action)
+        return None, typing_target
+    if isinstance(action, ExportFile):
+        encoded = base64.b64encode(action.data).decode("ascii")
+        sent_ref = _signal_required_timestamp(
+            await _send_signal_text(
+                context,
+                action.caption or f"Export: {action.filename}",
+                chat_id=action.chat_id,
+                base64_attachments=[encoded],
+                reply_to_ref=action.reply_to_ref,
+            ),
+            "Signal export send",
+        )
+        return sent_ref, await _stop_signal_typing_if_started(context, typing_target)
+    return None, typing_target
 
 
 async def _update_signal_contact(context: Any, action: UpdateSignalContact) -> None:
