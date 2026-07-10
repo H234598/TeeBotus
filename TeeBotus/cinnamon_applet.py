@@ -726,6 +726,26 @@ def _safe_local_qdrant_url(value: str) -> str:
     return raw.rstrip("/")
 
 
+def _qdrant_response_has_same_local_origin(base_url: str, response_url: Any) -> bool:
+    if not isinstance(response_url, str) or not response_url.strip():
+        return False
+    try:
+        base = urlparse(base_url)
+        final = urlparse(response_url)
+        base_port = base.port
+        final_port = final.port
+    except ValueError:
+        return False
+    return (
+        base.scheme.casefold() == final.scheme.casefold()
+        and (base.hostname or "").casefold() == (final.hostname or "").casefold()
+        and base_port is not None
+        and final_port == base_port
+        and final.username is None
+        and final.password is None
+    )
+
+
 def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
     name = str(collection or "").strip()
     if not name:
@@ -775,6 +795,13 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
                     pass
     if not 200 <= status_code < 300:
         return {"status": "unreachable", "count": 0, "error": f"HTTP {status_code}"}
+    response_url_getter = getattr(response, "geturl", None)
+    try:
+        response_url = response_url_getter() if callable(response_url_getter) else getattr(response, "url", None)
+    except Exception as exc:  # noqa: BLE001 - malformed response metadata must not escape the status probe.
+        return {"status": "broken", "count": 0, "error": f"invalid Qdrant response URL: {type(exc).__name__}"}
+    if response_url is not None and not _qdrant_response_has_same_local_origin(url, response_url):
+        return {"status": "broken", "count": 0, "error": "Qdrant response redirected outside local origin"}
     if not isinstance(raw, (bytes, bytearray)):
         return {"status": "broken", "count": 0, "error": "invalid Qdrant response body"}
     if len(raw) > MAX_QDRANT_COUNT_RESPONSE_BYTES:

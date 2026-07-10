@@ -3663,6 +3663,26 @@ def test_cinnamon_applet_qdrant_point_count_uses_code_when_status_is_missing(mon
     assert result == {"status": "unreachable", "count": 0, "error": "HTTP 503"}
 
 
+def test_cinnamon_applet_qdrant_point_count_rejects_response_outside_local_origin(monkeypatch) -> None:
+    class FakeResponse:
+        status = 200
+        url = "https://qdrant.example.test/collections/demo/points/count"
+
+        def read(self, _size: int = -1) -> bytes:
+            return b'{"status":"ok","result":{"count":1}}'
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(cinnamon_applet, "urlopen", lambda _request, timeout: FakeResponse())
+
+    assert cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo") == {
+        "status": "broken",
+        "count": 0,
+        "error": "Qdrant response redirected outside local origin",
+    }
+
+
 def test_cinnamon_applet_qdrant_point_count_rejects_non_integer_http_status(monkeypatch) -> None:
     class FakeResponse:
         status = 200.9
