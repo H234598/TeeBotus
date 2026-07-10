@@ -77,7 +77,7 @@ const context = {{
             get_home_dir: () => "/tmp",
             build_filenamev: (parts) => parts.join("/"),
             find_program_in_path: (name) => name === "gnome-terminal" ? "/usr/bin/gnome-terminal" : null,
-            file_test: (path, flag) => flag === 1 && ["/usr/bin/bash", "/usr/bin/gnome-terminal", "/usr/bin/python3", "/usr/bin/systemctl", "/usr/bin/xterm", "/tmp/.local/bin/codex-usage", "/tmp/.local/bin/custom-tool", "/tmp/.local/bin/constructor"].includes(path),
+            file_test: (path, flag) => flag === 1 && ["/usr/bin/bash", "/usr/bin/gnome-terminal", "/usr/bin/python3", "/tmp/TeeBotus/.venv-py313/bin/python", "/usr/bin/systemctl", "/usr/bin/xterm", "/tmp/.local/bin/codex-usage", "/tmp/.local/bin/custom-tool", "/tmp/.local/bin/constructor"].includes(path),
         shell_parse_argv: (raw) => [true, String(raw || "").split(/\\s+/).filter(Boolean)]
       }}
     }},
@@ -412,7 +412,10 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "this.spawnGeneration += 1;" in source
     assert "_commandArgs: function(value, fallback)" in source
     assert "GLib.shell_parse_argv(raw)" in source
-    assert "return this._safePythonArgs(this.pythonCommand, [DEFAULT_PYTHON]);" in source
+    assert "const SYSTEM_PYTHON = \"/usr/bin/python3\";" in source
+    assert "const DEFAULT_VENV_BIN = GLib.build_filenamev([DEFAULT_REPO_PATH, \".venv-py313\", \"bin\"]);" in source
+    assert "let configured = String(this.pythonCommand || \"\").trim();" in source
+    assert "let fallback = GLib.file_test(DEFAULT_PYTHON, GLib.FileTest.IS_EXECUTABLE) ? [DEFAULT_PYTHON] : [SYSTEM_PYTHON];" in source
     assert "this._codexUsageArgs().concat(args || [])" in source
     assert "this._safeExecutableArgs(configured, [])" in source
     assert "_terminalCommandArgs: function(parsed)" in source
@@ -1093,17 +1096,17 @@ def test_cinnamon_applet_sanitizes_executable_settings() -> None:
         """
     )
 
-    assert result["invalidStatusCommand"][0] == "/usr/bin/python3"
-    assert result["invalidStatusCommand"][result["invalidStatusCommand"].index("--python") + 1] == "'/usr/bin/python3'"
+    assert result["invalidStatusCommand"][0] == "/tmp/TeeBotus/.venv-py313/bin/python"
+    assert result["invalidStatusCommand"][result["invalidStatusCommand"].index("--python") + 1] == "'/tmp/TeeBotus/.venv-py313/bin/python'"
     assert result["invalidCodex"] == ["codex-usage"]
     assert result["invalidTerminal"] == ["/usr/bin/gnome-terminal", "--"]
-    assert result["missingAbsoluteStatusCommand"][0] == "/usr/bin/python3"
+    assert result["missingAbsoluteStatusCommand"][0] == "/tmp/TeeBotus/.venv-py313/bin/python"
     assert "/tmp/missing-python" not in result["missingAbsoluteStatusCommand"]
     assert result["missingAbsoluteTerminal"] == ["/usr/bin/gnome-terminal", "--"]
-    assert result["dangerousPythonCommand"][0] == "/usr/bin/python3"
+    assert result["dangerousPythonCommand"][0] == "/tmp/TeeBotus/.venv-py313/bin/python"
     assert "-c" not in result["dangerousPythonCommand"]
     assert "print(1)" not in result["dangerousPythonCommand"]
-    assert result["moduleOverrideCommand"][0] == "/usr/bin/python3"
+    assert result["moduleOverrideCommand"][0] == "/tmp/TeeBotus/.venv-py313/bin/python"
     assert "other" not in result["moduleOverrideCommand"]
     assert result["validStatusCommand"][:2] == ["/usr/bin/python3", "-B"]
     assert result["validStatusCommand"][result["validStatusCommand"].index("--python") + 1] == "'/usr/bin/python3' '-B'"
@@ -1187,6 +1190,7 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
             prototypeDisallowedAbsolute: applet._trustedExecutablePath("/tmp/.local/bin/constructor"),
             shellBare: applet._trustedExecutablePath("bash"),
             trustedAbsolute: applet._trustedExecutablePath("/usr/bin/python3"),
+            venvAbsolute: applet._trustedExecutablePath("/tmp/TeeBotus/.venv-py313/bin/python"),
             missingAbsolute: applet._trustedExecutablePath("/tmp/missing-python"),
             trusted: applet._findTrustedProgramInPath("gnome-terminal"),
             unsafeName: applet._findTrustedProgramInPath("../gnome-terminal"),
@@ -1215,6 +1219,7 @@ def test_cinnamon_applet_resolves_spawn_commands_to_trusted_paths() -> None:
         "prototypeDisallowedAbsolute": None,
         "shellBare": "/usr/bin/bash",
         "trustedAbsolute": "/usr/bin/python3",
+        "venvAbsolute": "/tmp/TeeBotus/.venv-py313/bin/python",
         "missingAbsolute": None,
         "trusted": "/usr/bin/gnome-terminal",
         "unsafeName": None,

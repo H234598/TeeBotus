@@ -144,8 +144,8 @@
   "python-command": {
     "type": "entry",
     "description": "Python executable",
-    "tooltip": "Use an absolute path where possible. Default matches the local system Python used for the bot runtime.",
-    "default": "/usr/bin/python3"
+    "tooltip": "Use the same local Python environment as teebotus.service unless you have a specific reason to override it.",
+    "default": "/home/teladi/TeeBotus/.venv-py313/bin/python"
   },
   "channels": {
     "type": "combobox",

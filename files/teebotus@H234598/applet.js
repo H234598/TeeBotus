@@ -11,7 +11,9 @@ const Mainloop = imports.mainloop;
 
 const UUID = "teebotus@H234598";
 const DEFAULT_REPO_PATH = GLib.build_filenamev([GLib.get_home_dir(), "TeeBotus"]);
-const DEFAULT_PYTHON = "/usr/bin/python3";
+const SYSTEM_PYTHON = "/usr/bin/python3";
+const DEFAULT_VENV_BIN = GLib.build_filenamev([DEFAULT_REPO_PATH, ".venv-py313", "bin"]);
+const DEFAULT_PYTHON = GLib.build_filenamev([DEFAULT_VENV_BIN, "python"]);
 const DEFAULT_UNIT = "teebotus.service";
 const DEFAULT_CHANNELS = "telegram,signal";
 const DEFAULT_QDRANT_UNIT = "teebotus-qdrant.service";
@@ -161,7 +163,7 @@ const QUICK_COMMANDS = [
   "/memory_reset"
 ];
 const MAX_UNIT_TOKEN_CHARS = 96;
-const TRUSTED_SPAWN_DIRS = ["/usr/bin", "/usr/local/bin", "/bin"];
+const TRUSTED_SPAWN_DIRS = ["/usr/bin", "/usr/local/bin", "/bin", DEFAULT_VENV_BIN];
 const TRUSTED_USER_LOCAL_SPAWN_DIR = GLib.build_filenamev([GLib.get_home_dir(), ".local", "bin"]);
 const TRUSTED_USER_LOCAL_COMMANDS = {
   "codex-usage": true
@@ -2197,7 +2199,14 @@ TeeBotusApplet.prototype = {
   },
 
   _pythonArgs: function() {
-    return this._safePythonArgs(this.pythonCommand, [DEFAULT_PYTHON]);
+    let configured = String(this.pythonCommand || "").trim();
+    // Migrate the old applet default to the interpreter used by teebotus.service.
+    // An explicitly configured non-default interpreter remains untouched.
+    if ((configured === "" || configured === SYSTEM_PYTHON) && GLib.file_test(DEFAULT_PYTHON, GLib.FileTest.IS_EXECUTABLE)) {
+      return [DEFAULT_PYTHON];
+    }
+    let fallback = GLib.file_test(DEFAULT_PYTHON, GLib.FileTest.IS_EXECUTABLE) ? [DEFAULT_PYTHON] : [SYSTEM_PYTHON];
+    return this._safePythonArgs(configured, fallback);
   },
 
   _pythonPath: function() {
