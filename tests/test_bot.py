@@ -1811,6 +1811,14 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(api.sent_messages, [(123, "Pong")])
 
+    def test_chat_state_clears_previous_response_id_when_provider_returns_none(self) -> None:
+        chat_state = ChatState()
+
+        chat_state.set_previous_response_id(123, "resp_old")
+        chat_state.set_previous_response_id(123, None)
+
+        self.assertIsNone(chat_state.get_previous_response_id(123))
+
     def test_handle_update_with_runtime_context_uses_modern_engine(self) -> None:
         class FixedWakeDatetime(datetime):
             @classmethod

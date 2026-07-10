@@ -499,6 +499,8 @@ class ChatState:
         with self._lock:
             if response_id:
                 self.previous_response_ids[chat_id] = response_id
+            else:
+                self.previous_response_ids.pop(chat_id, None)
 
     def reset(self, chat_id: int) -> None:
         with self._lock:
