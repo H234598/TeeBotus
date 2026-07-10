@@ -3629,10 +3629,11 @@ def run_polling(
                             token_label,
                             update_id,
                         )
-                        # Keep the same offset in case this was a transient shutdown during handling,
-                        # so the update is retried after restart once before being dropped.
-                        _write_telegram_update_offset(offset_path, persisted_offset)
-                        offset = persisted_offset
+                        # Do not acknowledge a failed update. Processing later updates from the
+                        # same batch would otherwise advance the offset past the failed message.
+                        time.sleep(retry_delay)
+                        retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
+                        break
                     else:
                         _write_telegram_update_offset(offset_path, persisted_offset)
                         offset = persisted_offset

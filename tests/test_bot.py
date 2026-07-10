@@ -4554,6 +4554,42 @@ class BotTests(unittest.TestCase):
         self.assertEqual(factory_calls[0]["profile"], "local_ollama")
         self.assertEqual(seen_contexts[0].engine.llm_client, "profile-client")
 
+    def test_run_polling_retries_failed_update_without_advancing_offset(self) -> None:
+        class RetryPollingAPI(FakeAPI):
+            def __init__(self) -> None:
+                super().__init__()
+                self.offsets: list[int | None] = []
+                self.calls = 0
+
+            def get_updates(self, offset, timeout=50):
+                self.offsets.append(offset)
+                self.calls += 1
+                if self.calls <= 2:
+                    return [{"update_id": 7, "message": {"text": "/ping", "chat": {"id": 123}}}]
+                raise KeyboardInterrupt
+
+        api = RetryPollingAPI()
+        runtime_context = SimpleNamespace(account_store=object(), bot_identity=BotIdentity())
+
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch.dict("os.environ", {"TELEGRAM_BOT_INSTANCES_DIR": directory}, clear=False),
+                patch(
+                    "TeeBotus.adapters.telegram_runtime.handle_update",
+                    side_effect=[RuntimeError("transient processing failure"), None],
+                ) as handle,
+                patch("TeeBotus.adapters.telegram_runtime.time.sleep"),
+            ):
+                run_polling(
+                    api,
+                    runtime_context=runtime_context,
+                    chat_state=ChatState(),
+                    youtube_job_runner=FakeJobRunner(),
+                )
+
+        self.assertEqual(handle.call_count, 2)
+        self.assertEqual(api.offsets, [None, None, 8])
+
     def test_main_impl_loads_runtime_environment_before_configuring_logging(self) -> None:
         from TeeBotus import bot as bot_module
 
