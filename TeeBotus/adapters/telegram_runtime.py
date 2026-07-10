@@ -597,14 +597,17 @@ class ChatState:
             return True
 
     def request_user_memory_reset(self, chat_id: int, sender_id: str) -> None:
-        if sender_id:
-            self.pending_user_memory_resets.add((chat_id, sender_id))
+        with self._lock:
+            if sender_id:
+                self.pending_user_memory_resets.add((chat_id, sender_id))
 
     def has_pending_user_memory_reset(self, chat_id: int, sender_id: str) -> bool:
-        return (chat_id, sender_id) in self.pending_user_memory_resets
+        with self._lock:
+            return (chat_id, sender_id) in self.pending_user_memory_resets
 
     def clear_pending_user_memory_reset(self, chat_id: int, sender_id: str) -> None:
-        self.pending_user_memory_resets.discard((chat_id, sender_id))
+        with self._lock:
+            self.pending_user_memory_resets.discard((chat_id, sender_id))
 
     def request_youtube_transcript_link(self, chat_id: int, youtube_key: str) -> None:
         with self._lock:
@@ -633,33 +636,39 @@ class ChatState:
             self.pending_youtube_local_options.pop((chat_id, youtube_key), None)
 
     def request_teladi_call(self, chat_id: int, teladi_key: str) -> None:
-        if teladi_key:
-            self.pending_teladi_calls[teladi_key] = chat_id
+        with self._lock:
+            if teladi_key:
+                self.pending_teladi_calls[teladi_key] = chat_id
 
     def has_pending_teladi_call(self, chat_id: int, teladi_key: str) -> bool:
-        return self.pending_teladi_calls.get(teladi_key) == chat_id
+        with self._lock:
+            return self.pending_teladi_calls.get(teladi_key) == chat_id
 
     def clear_pending_teladi_call(self, teladi_key: str) -> None:
-        self.pending_teladi_calls.pop(teladi_key, None)
+        with self._lock:
+            self.pending_teladi_calls.pop(teladi_key, None)
 
     def teladi_call_remaining_seconds(self, teladi_key: str, now: float) -> int:
-        self._refresh_teladi_call_used_at()
-        used_at = self.teladi_call_used_at.get(teladi_key)
-        if used_at is None:
-            return 0
-        remaining = int(used_at + TELADI_EMERGENCY_COOLDOWN_SECONDS - now)
-        return max(0, remaining)
+        with self._lock:
+            self._refresh_teladi_call_used_at()
+            used_at = self.teladi_call_used_at.get(teladi_key)
+            if used_at is None:
+                return 0
+            remaining = int(used_at + TELADI_EMERGENCY_COOLDOWN_SECONDS - now)
+            return max(0, remaining)
 
     def mark_teladi_call_used(self, teladi_key: str, now: float) -> None:
-        if teladi_key:
-            self._refresh_teladi_call_used_at()
-            self.teladi_call_used_at[teladi_key] = now
-            self._persist_teladi_call_used_at()
+        with self._lock:
+            if teladi_key:
+                self._refresh_teladi_call_used_at()
+                self.teladi_call_used_at[teladi_key] = now
+                self._persist_teladi_call_used_at()
 
     def clear_teladi_call_used(self, teladi_key: str) -> None:
-        self._refresh_teladi_call_used_at()
-        self.teladi_call_used_at.pop(teladi_key, None)
-        self._persist_teladi_call_used_at()
+        with self._lock:
+            self._refresh_teladi_call_used_at()
+            self.teladi_call_used_at.pop(teladi_key, None)
+            self._persist_teladi_call_used_at()
 
     def _refresh_teladi_call_used_at(self) -> None:
         if self.teladi_call_state_path is not None:
