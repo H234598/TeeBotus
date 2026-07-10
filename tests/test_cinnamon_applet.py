@@ -480,6 +480,9 @@ def test_cinnamon_applet_js_parser_matches_python_parser_for_status_edges() -> N
         "llm_route=demo error=provider status=constructor warning=retry",
         "llm_route=demo error=provider status=toString warning=retry",
         "llm_route=demo error=provider status=__proto__ warning=retry",
+        "account_memory=Demo message=hello constructor=bad warning=retry",
+        "account_memory=Demo message=hello toString=bad warning=retry",
+        "account_memory=Demo message=hello __proto__=bad warning=retry",
         "account_identity_warning=Demo code=runtime_channel_without_identity "
         "message=Use option foo=bar only after login. "
         "action=First run /register, then confirm status=ok manually",

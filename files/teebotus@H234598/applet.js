@@ -1049,7 +1049,7 @@ TeeBotusApplet.prototype = {
     }
     let boundaries = _hasOwn(FREE_TEXT_STATUS_FIELD_BOUNDARIES, key) ? FREE_TEXT_STATUS_FIELD_BOUNDARIES[key] : {};
     for (let i = index + 1; i < matches.length; i++) {
-      if (boundaries[matches[i].key] || this._fieldMatchIsStructuredBoundary(text, matches, i)) {
+      if (_hasOwn(boundaries, matches[i].key) || this._fieldMatchIsStructuredBoundary(text, matches, i)) {
         return matches[i].keyStart;
       }
     }
