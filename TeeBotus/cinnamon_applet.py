@@ -176,6 +176,13 @@ QUOTED_SECRET_ASSIGNMENT_RE = re.compile(
 SAFE_SECRET_VALUES = frozenset({"configured", "none", "missing", "redacted", "<redacted>", "<redacted-secret>"})
 SAFE_SECRET_NUMERIC_METADATA = frozenset({"api_key_ring", "gemini_api_key_ring", "api_key_instances", "max_output_tokens"})
 SAFE_SECRET_TEXT_METADATA = frozenset({"tokens", "token_usage", "costs", "limits", "free_tier_guard"})
+SAFE_SECRET_TEXT_VALUE_PATTERNS = {
+    "tokens": re.compile(r"(?:provider_usage_response(?:\+[A-Za-z0-9_]+)*|response_usage_when_available|hf_pool_usage_log|local_model|local)"),
+    "token_usage": re.compile(r"(?:provider_usage_response(?:\+[A-Za-z0-9_]+)*|response_usage_when_available|hf_pool_usage_log|local_model|local)"),
+    "costs": re.compile(r"(?:local|provider|target_provider|provider_billing_not_fetched)"),
+    "limits": re.compile(r"(?:local|provider|pool_state|on(?:\([A-Za-z0-9_=,]+\))?)"),
+    "free_tier_guard": re.compile(r"(?:on(?:\([A-Za-z0-9_=,]+\))?|off|disabled|enabled)"),
+}
 PROBLEM_STATUSES = frozenset(
     {
         "broken",
@@ -1095,7 +1102,8 @@ def _redact_secret_assignment_text(key: str, separator: str, value: str, *, orig
         return original
     if key_token in SAFE_SECRET_NUMERIC_METADATA and (unquoted_value.isdigit() or re.fullmatch(r"\d+/\d+", unquoted_value)):
         return original
-    if key_token in SAFE_SECRET_TEXT_METADATA:
+    safe_text_pattern = SAFE_SECRET_TEXT_VALUE_PATTERNS.get(key_token)
+    if key_token in SAFE_SECRET_TEXT_METADATA and safe_text_pattern and safe_text_pattern.fullmatch(unquoted_value):
         return original
     return f"{key}{separator}<redacted>"
 

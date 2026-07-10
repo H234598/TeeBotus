@@ -4044,6 +4044,9 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert cinnamon_applet._redact("command=tool --password=plain-secret -api-key='api secret' --token=--verbose") == (
         "command=tool --password=<redacted> -api-key=<redacted> --token=<redacted>"
     )
+    assert cinnamon_applet._redact("token_usage=plain-secret free_tier_guard=on(rpm=5,tpm=1)") == (
+        "token_usage=<redacted> free_tier_guard=on(rpm=5,tpm=1)"
+    )
 
 
 def test_cinnamon_applet_runtime_parser_redacts_nested_key_and_cookie_headers() -> None:
