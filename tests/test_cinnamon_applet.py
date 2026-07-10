@@ -1198,7 +1198,7 @@ def test_cinnamon_applet_status_refresh_uses_bounded_spawn_timeout() -> None:
           applet._updatePanel = function() {};
           applet._spawn = function(argv, callback, cwd, options) {
             captured = {argv: argv, cwd: cwd, options: options, runningBeforeCallback: applet.statusRunning};
-            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {}, health: {status: "ok", command_ok: true}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
+            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {active_state: "active", sub_state: "running"}, health: {status: "ok", command_ok: true}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           applet._refreshStatus();
           return {
@@ -1347,7 +1347,7 @@ def test_cinnamon_applet_status_refresh_queues_changes_while_running() -> None:
               applet.repoPath = "/new-repo";
               applet._refreshStatus();
             }
-            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {}, health: {status: "ok", command_ok: true}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
+            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {active_state: "active", sub_state: "running"}, health: {status: "ok", command_ok: true}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           applet._refreshStatus();
           return {
@@ -1434,6 +1434,32 @@ def test_cinnamon_applet_status_payload_requires_consistent_command_status() -> 
     assert failed_ok is False
 
 
+def test_cinnamon_applet_status_payload_requires_healthy_unit_for_health_ok() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let payload = {
+            ok: true,
+            command_ok: true,
+            repo: {},
+            unit: {active_state: "active", sub_state: "running"},
+            health: {status: "ok", command_ok: true},
+            qdrant: {collections: {}},
+            runtime: {sections: {}, summary: {}, status_counts: {}}
+          };
+          let healthy = applet._isStatusPayload(payload);
+          payload.unit = {active_state: "failed", sub_state: "failed"};
+          let failed = applet._isStatusPayload(payload);
+          payload.unit = {active_state: "active", sub_state: "typo"};
+          let unknown = applet._isStatusPayload(payload);
+          return {healthy: healthy, failed: failed, unknown: unknown};
+        })()
+        """
+    )
+
+    assert result == {"healthy": True, "failed": False, "unknown": False}
+
+
 def test_cinnamon_applet_status_payload_rejects_ok_with_problem_counts() -> None:
     explicit_total = _run_js_applet_expression(
         "applet._isStatusPayload({ok: true, repo: {}, unit: {}, health: {status: 'ok', total_problem_count: 1}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}})"
@@ -1516,7 +1542,7 @@ def test_cinnamon_applet_spawn_json_does_not_reinvoke_throwing_consumer() -> Non
         (function() {
           let calls = [];
           applet._spawn = function(argv, callback, cwd, options) {
-            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {}, health: {status: "ok", command_ok: true}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
+            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {active_state: "active", sub_state: "running"}, health: {status: "ok", command_ok: true}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           try {
             applet._spawnJson([], function(payload, error) {

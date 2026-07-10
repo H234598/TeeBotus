@@ -66,6 +66,16 @@ const SECONDARY_PROBLEM_STATUS_FIELDS = [
   "route_status",
   "semantic"
 ];
+const CONFIRMED_ACTIVE_SUBSTATES = {
+  active: true,
+  elapsed: true,
+  exited: true,
+  listening: true,
+  mounted: true,
+  plugged: true,
+  running: true,
+  waiting: true
+};
 const STATUS_FIELD_BOUNDARY_KEYS = {
   status: true,
   models_feed: true,
@@ -1408,6 +1418,9 @@ TeeBotusApplet.prototype = {
         return false;
       }
     }
+    if (payload.health.status === "ok" && !this._unitStateIsHealthy(payload.unit)) {
+      return false;
+    }
     if (!this._isJsonObject(payload.qdrant.collections)) {
       return false;
     }
@@ -1425,6 +1438,12 @@ TeeBotusApplet.prototype = {
       }
     }
     return true;
+  },
+
+  _unitStateIsHealthy: function(unit) {
+    let activeState = String((unit || {}).active_state || "").trim().toLowerCase();
+    let subState = String((unit || {}).sub_state || "").trim().toLowerCase();
+    return activeState === "active" && _hasOwn(CONFIRMED_ACTIVE_SUBSTATES, subState);
   },
 
   _spawn: function(argv, callback, cwd, options) {
