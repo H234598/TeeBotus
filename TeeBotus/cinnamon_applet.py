@@ -148,6 +148,7 @@ SECRET_ASSIGNMENT_REDACTION_HINTS = frozenset(
         "auth-token",
         "bearer_token",
         "bearer-token",
+        "authorization",
         "cookie",
         "token",
         "secret",
@@ -178,14 +179,16 @@ FLAG_PROBLEM_STATUS_FIELDS = frozenset({"warning"})
 NEUTRAL_FLAG_VALUES = frozenset({"0", "false", "no", "none", "off"})
 FORCED_PROBLEM_STATUS_FIELDS = {"account_identity_warning": "warning"}
 SENSITIVE_ASSIGNMENT_KEY_PATTERN = (
-    r"(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|cookie|token|secret|password)"
+    r"(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|authorization|cookie|token|secret|password)"
 )
 SECRET_ASSIGNMENT_VALUE_PATTERN = (
-    r"<redacted(?:-secret)?>|\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|"
+    r"<redacted(?:-secret)?>|(?:Bearer|Basic|ApiKey|Token)\s+<redacted(?:-secret)?>|"
+    r"\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|"
     r"(?:(?!\s+[A-Za-z_][A-Za-z0-9_-]*\s*[=:])[^,;\r\n)\]}>])+"
 )
 SECRET_ASSIGNMENT_FRAGMENT_VALUE_PATTERN = (
-    r"<redacted(?:-secret)?>|\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|"
+    r"<redacted(?:-secret)?>|(?:Bearer|Basic|ApiKey|Token)\s+<redacted(?:-secret)?>|"
+    r"\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|"
     r"(?:(?!\s+[A-Za-z_][A-Za-z0-9_-]*\s*[=:])[^,;\r\n)&\]}>])+"
 )
 SECRET_ASSIGNMENT_RE = re.compile(
@@ -1235,6 +1238,12 @@ def _redact_secret_assignment_text(key: str, separator: str, value: str, *, orig
     unquoted_value = raw_value.strip("\"'`")
     normalized_value = unquoted_value.casefold()
     if normalized_value in SAFE_SECRET_VALUES:
+        return original
+    if key_token in {"authorization", "proxy_authorization"} and re.fullmatch(
+        r"(?:bearer|basic|apikey|token)\s+<redacted(?:-secret)?>",
+        unquoted_value,
+        re.IGNORECASE,
+    ):
         return original
     if key_token.endswith("_env") and re.fullmatch(r"[A-Z][A-Z0-9_]{2,}", unquoted_value):
         return original
