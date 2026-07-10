@@ -1063,9 +1063,13 @@ def _quoted_character_indexes(text: str) -> set[int]:
     index = 0
     while index < len(text):
         char = text[index]
-        if char == "=" and index + 1 < len(text) and text[index + 1] in {"'", '"', "`"}:
-            quote = text[index + 1]
-            quote_index = index + 1
+        quote_index = index + 1
+        if char == "=":
+            while quote_index < len(text) and text[quote_index] in {" ", "\t"}:
+                quote_index += 1
+        if char == "=" and quote_index < len(text) and text[quote_index] in {"'", '"', "`"}:
+            quote = text[quote_index]
+            opening_quote_index = quote_index
             candidate: set[int] = set()
             closed = False
             while quote_index < len(text):
@@ -1074,7 +1078,7 @@ def _quoted_character_indexes(text: str) -> set[int]:
                     candidate.add(quote_index + 1)
                     quote_index += 2
                     continue
-                if quote_index > index + 1 and text[quote_index] == quote:
+                if quote_index > opening_quote_index and text[quote_index] == quote:
                     closed = True
                     break
                 quote_index += 1

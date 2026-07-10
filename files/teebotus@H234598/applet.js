@@ -1196,10 +1196,16 @@ TeeBotusApplet.prototype = {
     let indexes = {};
     for (let i = 0; i < text.length; i++) {
       let value = text.charAt(i);
-      let nextValue = i + 1 < text.length ? text.charAt(i + 1) : "";
+      let quoteIndex = i + 1;
+      if (value === "=") {
+        while (quoteIndex < text.length && (text.charAt(quoteIndex) === " " || text.charAt(quoteIndex) === "\t")) {
+          quoteIndex++;
+        }
+      }
+      let nextValue = quoteIndex < text.length ? text.charAt(quoteIndex) : "";
       if (value === "=" && (nextValue === "\"" || nextValue === "'" || nextValue === "`")) {
         let quote = nextValue;
-        let quoteIndex = i + 1;
+        let openingQuoteIndex = quoteIndex;
         let candidate = {};
         let closed = false;
         while (quoteIndex < text.length) {
@@ -1209,7 +1215,7 @@ TeeBotusApplet.prototype = {
             quoteIndex += 2;
             continue;
           }
-          if (quoteIndex > i + 1 && text.charAt(quoteIndex) === quote) {
+          if (quoteIndex > openingQuoteIndex && text.charAt(quoteIndex) === quote) {
             closed = true;
             break;
           }

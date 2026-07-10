@@ -548,6 +548,7 @@ def test_cinnamon_applet_js_parser_matches_python_parser_for_status_edges() -> N
     lines = [
         'account_memory=Demo path="/tmp/\\" status=broken warning=fake" status=ok warning=real',
         'account_memory=Demo path="/tmp/status=hidden status=broken warning=real',
+        'account_memory=Demo message= "hello status=broken warning=real" status=ok warning=retry',
         "structured_decision=demo/telegram status=enabled route_status=unavailable "
         "route_error=provider status=500 fallback=local_ollama fallback_model=llama3 "
         "remote_fallback=enabled warning=retry",
@@ -572,6 +573,12 @@ def test_cinnamon_applet_js_parser_matches_python_parser_for_status_edges() -> N
 
     for line in lines:
         assert _run_js_parse_fields(line) == cinnamon_applet._parse_status_fields(line)
+
+    spaced_quote_line = 'account_memory=Demo message= "hello status=broken warning=real" status=ok warning=retry'
+    parsed = cinnamon_applet._parse_status_fields(spaced_quote_line)
+    assert parsed["message"] == '"hello status=broken warning=real"'
+    assert parsed["status"] == "ok"
+    assert parsed["warning"] == "retry"
 
 
 def test_cinnamon_applet_js_label_maps_do_not_use_prototype_keys() -> None:
