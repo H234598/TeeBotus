@@ -1514,6 +1514,32 @@ def test_record_codex_history_delivery_receipt_marks_dispatch_delivered_only(tmp
     assert dispatch_rows[-1]["message_ref"] == "$event-1"
     assert dispatch_rows[-1]["receipt_type"] == "read"
 
+    duplicate = record_codex_history_delivery_receipt(
+        store,
+        instance_name="Depressionsbot",
+        channel="matrix",
+        chat_id="!room:test",
+        account_id=admin_id,
+        message_ref="$event-1",
+        receipt_type="read",
+        now=datetime(2026, 6, 19, 14, 1, tzinfo=timezone.utc),
+    )
+    weaker = record_codex_history_delivery_receipt(
+        store,
+        instance_name="Depressionsbot",
+        channel="matrix",
+        chat_id="!room:test",
+        account_id=admin_id,
+        message_ref="$event-1",
+        receipt_type="viewed",
+        now=datetime(2026, 6, 19, 14, 2, tzinfo=timezone.utc),
+    )
+
+    assert duplicate["idempotent"] is True
+    assert weaker["idempotent"] is True
+    assert len(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)) == 2
+    assert len(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status_history"]) == 2
+
 
 def test_record_codex_history_delivery_receipt_does_not_downgrade_acknowledged_item(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "receipt-after-ack-demo", version="1.8.4")

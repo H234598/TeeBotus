@@ -62,6 +62,7 @@ CODEX_HISTORY_DEFAULT_DISPATCH_LIMIT = 0
 CODEX_HISTORY_DISPATCHING_STALE_AFTER_SECONDS = 15 * 60
 CODEX_HISTORY_DISPATCH_INSTANCES_ENV = "TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES"
 DEFAULT_CODEX_HISTORY_DISPATCH_INSTANCES = ("TeeBotus_Logger", "TeeBotusLogger", "TBL")
+CODEX_HISTORY_RECEIPT_RANKS = {"delivered": 1, "viewed": 2, "read": 3}
 CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT = 250
 CODEX_HISTORY_GRAPH_SVG_ENGINES = frozenset({"builtin", "auto", "mmdc"})
 CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
@@ -699,6 +700,25 @@ def record_codex_history_delivery_receipt(
     timestamp = _iso_timestamp(now)
     route = {"channel": normalized_channel, "chat_id": normalized_chat_id}
     matched_account_id = str(match.get("account_id") or account_id or "").strip()
+    normalized_instance_name = str(instance_name or "").strip()
+    existing_receipt = _find_codex_history_receipt_result(
+        store,
+        item_id=item_id,
+        instance_name=normalized_instance_name,
+        account_id=matched_account_id,
+        message_ref=normalized_message_ref,
+    )
+    if existing_receipt is not None:
+        existing_receipt_type = _normalize_delivery_receipt_type(existing_receipt.get("receipt_type"))
+        if CODEX_HISTORY_RECEIPT_RANKS.get(existing_receipt_type, 0) >= CODEX_HISTORY_RECEIPT_RANKS[normalized_receipt_type]:
+            current_status = str(item.get("status") or "").strip().casefold()
+            return {
+                "ok": True,
+                "status": "acknowledged" if current_status == "acknowledged" else "delivered",
+                "item_id": item_id,
+                "idempotent": True,
+                "delivered_result": existing_receipt,
+            }
     reason = f"{normalized_channel}_{normalized_receipt_type}_receipt"
     delivered = _record_codex_history_dispatch_result(
         store,
@@ -707,7 +727,7 @@ def record_codex_history_delivery_receipt(
         status="delivered",
         reason=reason,
         now=timestamp,
-        instance_name=instance_name,
+        instance_name=normalized_instance_name,
         route=route,
         message_ref=normalized_message_ref,
         receipt_type=normalized_receipt_type,
@@ -726,6 +746,7 @@ def record_codex_history_delivery_receipt(
         "ok": True,
         "status": "delivered" if current_status != "acknowledged" else "acknowledged",
         "item_id": item_id,
+        "idempotent": False,
         "delivered_result": delivered,
     }
 
@@ -3866,6 +3887,39 @@ def _find_codex_history_reply_result(
         if str(row.get("reply_message_ref") or "").strip() != normalized_reply_ref:
             continue
         if str(row.get("status") or "").strip().casefold() != normalized_status:
+            continue
+        return dict(row)
+    return None
+
+
+def _find_codex_history_receipt_result(
+    store: AccountStore,
+    *,
+    item_id: str,
+    instance_name: str,
+    account_id: str,
+    message_ref: str,
+) -> dict[str, Any] | None:
+    normalized_item_id = str(item_id or "").strip()
+    normalized_instance = str(instance_name or "").strip()
+    normalized_account_id = str(account_id or "").strip().casefold()
+    normalized_message_ref = str(message_ref or "").strip()
+    if not normalized_item_id or not normalized_account_id or not normalized_message_ref:
+        return None
+    for row in reversed(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)):
+        if not isinstance(row, Mapping):
+            continue
+        if str(row.get("codex_history_item_id") or "").strip() != normalized_item_id:
+            continue
+        if normalized_instance and str(row.get("instance") or "").strip() != normalized_instance:
+            continue
+        if str(row.get("account_id") or "").strip().casefold() != normalized_account_id:
+            continue
+        if str(row.get("message_ref") or "").strip() != normalized_message_ref:
+            continue
+        if str(row.get("status") or "").strip().casefold() != "delivered":
+            continue
+        if not str(row.get("receipt_type") or "").strip():
             continue
         return dict(row)
     return None
