@@ -456,6 +456,7 @@ def test_cinnamon_applet_problem_status_constants_match_helper() -> None:
     for field, status in FORCED_PROBLEM_STATUS_FIELDS.items():
         assert f"{field}: \"{status}\"" in source
     assert set(PROBLEM_STATUSES) <= _js_status_label_keys(source)
+    assert set(STATUS_FIELD_BOUNDARY_VALUES) <= _js_status_label_keys(source)
     assert 'action: { warning: true }' in source
     assert 'command: { apply_command: true }' in source
     assert 'error: { warning: true }' in source
@@ -502,6 +503,9 @@ def test_cinnamon_applet_js_parser_matches_python_parser_for_status_edges() -> N
         "service=demo error=provider status=accepted warning=retry",
         "service=demo error=provider status=queued warning=retry",
         "service=demo error=provider status=skipped warning=retry",
+        "service=demo error=provider status=none warning=retry",
+        "service=demo error=provider models_feed=empty warning=retry",
+        "service=demo error=provider status=partial warning=retry",
     ]
 
     for line in lines:
