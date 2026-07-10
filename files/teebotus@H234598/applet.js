@@ -33,6 +33,9 @@ const CODEX_USAGE_STALE_WARNING_HOURS = 24;
 // The Python helper caps raw runtime output at 80,000 characters; JSON escaping
 // and copied summary lines can expand a valid payload substantially.
 const MAX_HELPER_JSON_CHARS = 1000000;
+const MAX_SUBPROCESS_STDOUT_CHARS = MAX_HELPER_JSON_CHARS;
+const MAX_SUBPROCESS_STDERR_CHARS = 20000;
+const SUBPROCESS_READ_CHUNK_BYTES = 65536;
 const MAX_COMMAND_ARG_CHARS = 4096;
 const MAX_COMMAND_ARG_COUNT = 128;
 const MAX_COMMAND_CHARS = 32768;
@@ -1537,6 +1540,11 @@ TeeBotusApplet.prototype = {
   },
 
   _spawnJson: function(argv, callback, cwd, options) {
+    let spawnOptions = Object.assign({}, options || {}, {
+      maxStdoutChars: MAX_HELPER_JSON_CHARS,
+      maxStderrChars: MAX_SUBPROCESS_STDERR_CHARS,
+      outputLimitError: _("Helper JSON output too large")
+    });
     this._spawn(argv, (stdout, stderr, ok) => {
       if (!ok) {
         callback(null, stderr || _("Command failed"));
@@ -1563,7 +1571,7 @@ TeeBotusApplet.prototype = {
         return;
       }
       callback(payload, null);
-    }, cwd, options);
+    }, cwd, spawnOptions);
   },
 
   _isJsonObject: function(value) {
@@ -1706,12 +1714,105 @@ TeeBotusApplet.prototype = {
           return false;
         });
       }
-      process.communicate_utf8_async(null, null, (proc, result) => {
+      let stdoutLimit = this._boundedInt(options.maxStdoutChars, MAX_SUBPROCESS_STDOUT_CHARS, 1, MAX_SUBPROCESS_STDOUT_CHARS);
+      let stderrLimit = this._boundedInt(options.maxStderrChars, MAX_SUBPROCESS_STDERR_CHARS, 1, MAX_SUBPROCESS_STDERR_CHARS);
+      let streams = {
+        stdout: {stream: process.get_stdout_pipe(), limit: stdoutLimit, chunks: [], capturedBytes: 0, truncated: false, done: false},
+        stderr: {stream: process.get_stderr_pipe(), limit: stderrLimit, chunks: [], capturedBytes: 0, truncated: false, done: false}
+      };
+      let processDone = false;
+      let processSuccessful = false;
+      let fail = (err) => {
         try {
-          let [, stdout, stderr] = proc.communicate_utf8_finish(result);
-          finish(String(stdout || ""), String(stderr || ""), proc.get_successful());
+          if (process && !process.get_if_exited()) {
+            process.force_exit();
+          }
+        } catch (forceError) {
+          global.logError(forceError);
+        }
+        finish("", String(err), false);
+      };
+      let decode = (state) => {
+        let data = new Uint8Array(state.capturedBytes);
+        let offset = 0;
+        for (let chunk of state.chunks) {
+          data.set(chunk, offset);
+          offset += chunk.length;
+        }
+        return new TextDecoder().decode(data);
+      };
+      let maybeFinish = () => {
+        if (!processDone || !streams.stdout.done || !streams.stderr.done) {
+          return;
+        }
+        if (streams.stdout.truncated || streams.stderr.truncated) {
+          finish("", String(options.outputLimitError || _("Command output too large")), false);
+          return;
+        }
+        try {
+          finish(decode(streams.stdout), decode(streams.stderr), processSuccessful);
         } catch (err) {
-          finish("", String(err), false);
+          fail(err);
+        }
+      };
+      let readStream = (name) => {
+        let state = streams[name];
+        if (done) {
+          return;
+        }
+        if (!state.stream) {
+          fail("Missing " + name + " pipe");
+          return;
+        }
+        state.stream.read_bytes_async(SUBPROCESS_READ_CHUNK_BYTES, GLib.PRIORITY_DEFAULT, null, (stream, result) => {
+          if (done) {
+            return;
+          }
+          try {
+            let bytes = stream.read_bytes_finish(result);
+            let size = bytes ? bytes.get_size() : 0;
+            if (!size) {
+              state.done = true;
+              maybeFinish();
+              return;
+            }
+            if (!state.truncated) {
+              let raw = bytes.get_data();
+              if (!raw) {
+                fail("Invalid " + name + " pipe data");
+                return;
+              }
+              let remaining = state.limit - state.capturedBytes;
+              if (size > remaining) {
+                if (remaining > 0) {
+                  state.chunks.push(raw.slice(0, remaining));
+                  state.capturedBytes += remaining;
+                }
+                state.truncated = true;
+              } else {
+                state.chunks.push(raw);
+                state.capturedBytes += size;
+              }
+            }
+            readStream(name);
+          } catch (err) {
+            fail(err);
+          }
+        });
+      };
+      readStream("stdout");
+      readStream("stderr");
+      process.wait_async(null, (proc, result) => {
+        if (done) {
+          return;
+        }
+        try {
+          proc.wait_finish(result);
+          processSuccessful = proc.get_successful();
+          processDone = true;
+          maybeFinish();
+        } catch (err) {
+          fail(err);
         }
       });
     } catch (err) {
