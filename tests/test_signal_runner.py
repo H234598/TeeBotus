@@ -245,12 +245,51 @@ def test_signal_command_logs_action_dispatch_errors(tmp_path, caplog, monkeypatc
     async def failing_send_actions(_context, _actions):
         raise RuntimeError("send refused")
 
+    async def no_sleep(_delay):
+        return None
+
     monkeypatch.setattr("TeeBotus.runtime.signal_runner.send_signal_actions", failing_send_actions)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.asyncio.sleep", no_sleep)
 
     with caplog.at_level(logging.ERROR, logger="TeeBotus.signal"):
         asyncio.run(command.handle(FakeSignalContext()))
 
     assert "Signal action dispatch failed" in caplog.text
+
+
+def test_signal_command_retries_transient_action_dispatch_failure(tmp_path, monkeypatch) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.engine.process_result = lambda event: EngineResult(event.account_id, [SendText(event.chat_id, "ok")], handled=True)  # type: ignore[method-assign]
+    calls = 0
+
+    async def send_once_fails(_context, _actions):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("temporary send failure")
+        return [987654]
+
+    async def no_sleep(_delay):
+        return None
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.send_signal_actions", send_once_fails)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.asyncio.sleep", no_sleep)
+
+    asyncio.run(command.handle(FakeSignalContext()))
+
+    assert calls == 2
 
 
 def test_signal_command_can_login_from_linked_device_sync_message(tmp_path) -> None:

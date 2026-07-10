@@ -43,6 +43,7 @@ from TeeBotus.runtime.working_memory import WorkingMemoryStore
 from TeeBotus.runtime.bibliothekar_service import BibliothekarService
 
 LOGGER = logging.getLogger("TeeBotus.signal")
+SIGNAL_ACTION_RETRY_DELAYS_SECONDS = (1.0, 3.0)
 
 try:
     from signalbot import Command as _SignalBotCommand  # type: ignore[import-not-found]
@@ -241,7 +242,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             await self._delete_tracked_messages(context, event, actions)
             actions = _with_signal_reply_context(actions, event)
             try:
-                sent_refs = await send_signal_actions(context, actions)
+                sent_refs = await _send_signal_actions_with_retry(context, actions)
             except Exception:
                 LOGGER.exception(
                     "Signal action dispatch failed instance=%s recipient=%s message_ref=%s.",
@@ -507,6 +508,26 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 await _maybe_await(delete_attachment(filename))
             except Exception:
                 continue
+
+
+async def _send_signal_actions_with_retry(context: Any, actions: list[Any]) -> list[Any]:
+    attempts = len(SIGNAL_ACTION_RETRY_DELAYS_SECONDS) + 1
+    for attempt in range(attempts):
+        try:
+            return await send_signal_actions(context, actions)
+        except Exception:
+            if attempt >= attempts - 1:
+                raise
+            delay = SIGNAL_ACTION_RETRY_DELAYS_SECONDS[attempt]
+            LOGGER.warning(
+                "Signal action dispatch failed; retrying attempt=%s/%s in %ss.",
+                attempt + 1,
+                attempts,
+                delay,
+                exc_info=True,
+            )
+            await asyncio.sleep(delay)
+    raise SignalRuntimeError("Signal action dispatch retry loop ended unexpectedly")
 
 
 class SharedSignalRouterCommand(_SignalBotCommand):
