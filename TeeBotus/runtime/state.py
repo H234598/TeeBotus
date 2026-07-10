@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 from TeeBotus.runtime.accounts import (
-    ACCOUNT_MEMORY_KEY_PURPOSE,
     ACCOUNTS_DIRNAME,
     AccountStore,
     AccountStoreError,
@@ -18,7 +17,6 @@ from TeeBotus.runtime.accounts import (
     LLM_STATE_FILENAME,
     OPENAI_STATE_FILENAME,
     SecretToolInstanceSecretProvider,
-    _choose_newer_state,
     utc_now,
     validate_sha512_token,
 )
@@ -216,6 +214,7 @@ class RuntimeStateStore(RuntimeState):
         self.llm_state_persistence_error = ""
         self.openai_state_persistence_error = ""
         self._account_store_secret_guard_checked = False
+        self._llm_account_store: AccountStore | None = None
         self._load_persisted_link_notifications()
 
     @property
@@ -225,25 +224,24 @@ class RuntimeStateStore(RuntimeState):
         self._guard_account_store_secrets()
         return EncryptedJsonVault(self.instance_name, self.secret_provider)
 
-    @property
-    def _llm_state_vault(self) -> EncryptedJsonVault:
-        if self.secret_provider is None:
-            raise AccountStoreError("LLM state persistence has no secret provider")
-        self._guard_account_store_secrets()
-        return EncryptedJsonVault(self.instance_name, self.secret_provider, purpose=ACCOUNT_MEMORY_KEY_PURPOSE)
-
     def _guard_account_store_secrets(self) -> None:
         if self._account_store_secret_guard_checked:
             return
         if isinstance(self.secret_provider, SecretToolInstanceSecretProvider):
-            AccountStore(
+            self._account_store_for_llm_state()
+        self._account_store_secret_guard_checked = True
+
+    def _account_store_for_llm_state(self) -> AccountStore:
+        if self.secret_provider is None:
+            raise AccountStoreError("LLM state persistence has no secret provider")
+        if self._llm_account_store is None:
+            self._llm_account_store = AccountStore(
                 self.accounts_root,
                 self.instance_name,
                 self.secret_provider,
                 create_dirs=False,
-                memory_backend_enabled=False,
             )
-        self._account_store_secret_guard_checked = True
+        return self._llm_account_store
 
     def set_pending_flow(self, *args, **kwargs) -> None:  # type: ignore[override]
         if len(args) == 1 and isinstance(args[0], PendingFlow):
@@ -384,22 +382,11 @@ class RuntimeStateStore(RuntimeState):
             return nullcontext()
         return account_memory_lock_for_root(self.accounts_root, account_id)
 
-    def _read_state_payload(self, path: Path) -> dict[str, Any]:
-        if not path.exists():
-            return {}
-        return self._llm_state_vault.read_json(path, {})
-
     def _read_llm_state(self, account_id: str) -> dict[str, Any]:
         with self._llm_state_lock(account_id):
             try:
-                llm_path = self._llm_state_path(account_id)
-                legacy_path = self._openai_state_path(account_id)
-                llm_payload = self._read_state_payload(llm_path)
-                legacy_payload = self._read_state_payload(legacy_path)
+                selected = self._account_store_for_llm_state().read_llm_state(account_id)
                 self._set_llm_state_persistence_error("")
-                selected = _choose_newer_state(legacy_payload, llm_payload)
-                if selected and selected != llm_payload:
-                    self._llm_state_vault.write_json(llm_path, selected)
                 return selected
             except AccountStoreError as exc:
                 self._set_llm_state_persistence_error(str(exc))
@@ -408,9 +395,8 @@ class RuntimeStateStore(RuntimeState):
     def _write_llm_state(self, account_id: str, payload: dict[str, Any]) -> None:
         with self._llm_state_lock(account_id):
             try:
-                path = self._llm_state_path(account_id)
+                self._account_store_for_llm_state().write_llm_state(account_id, payload)
                 self._set_llm_state_persistence_error("")
-                self._llm_state_vault.write_json(path, payload)
             except AccountStoreError as exc:
                 self._set_llm_state_persistence_error(str(exc))
 

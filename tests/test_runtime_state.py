@@ -95,6 +95,24 @@ def test_runtime_state_store_persists_previous_llm_response_id(tmp_path, monkeyp
     assert llm_state_path.exists()
 
 
+def test_runtime_state_store_persists_llm_state_through_sql_backend(tmp_path, monkeypatch):
+    data_dir = tmp_path / "Bot" / "data"
+    sqlite_path = data_dir / "Account_Memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", raising=False)
+    provider = StaticSecretProvider(b"s" * 32)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    state.set_previous_response_id("Bot", ACCOUNT_ID, "resp-sql", provider="openai", model="gpt-5.5")
+    reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
+    assert account_store.read_llm_state(ACCOUNT_ID)["previous_response_id"] == "resp-sql"
+    assert not (account_store.account_dir(ACCOUNT_ID) / LLM_STATE_FILENAME).exists()
+    assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID, provider="openai", model="gpt-5.5") == "resp-sql"
+
+
 def test_runtime_state_store_scopes_previous_response_to_provider_and_model(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"
