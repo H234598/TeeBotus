@@ -340,6 +340,13 @@ def test_proactive_sender_reports_missing_slot() -> None:
         raise AssertionError("missing adapter slot should fail")
 
 
+def test_proactive_sender_does_not_fallback_to_slot_one_for_explicit_slot_two() -> None:
+    sender = telegram_proactive_sender({1: object()})
+
+    with pytest.raises(KeyError, match="no proactive backend object configured for adapter slot 2"):
+        sender({"adapter_slot": 2}, SendText("123", "hi"), {})
+
+
 def test_proactive_sender_rejects_invalid_slot() -> None:
     sender = telegram_proactive_sender({1: object()})
 

@@ -150,8 +150,6 @@ def _object_for_route_slot(objects: Mapping[int, Any], route: Mapping[str, Any])
         raise KeyError(f"invalid adapter slot {raw_slot!r}")
     if slot in objects:
         return objects[slot]
-    if len(objects) == 1 and 1 in objects:
-        return objects[1]
     raise KeyError(f"no proactive backend object configured for adapter slot {slot}")
 
 
