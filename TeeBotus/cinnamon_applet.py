@@ -321,7 +321,11 @@ def _qdrant_problem_count(qdrant: dict[str, Any]) -> int:
     collections = qdrant.get("collections", {})
     if isinstance(collections, dict):
         for result in collections.values():
-            if not isinstance(result, dict) or str(result.get("status", "") or "") != "ready":
+            if (
+                not isinstance(result, dict)
+                or _normalized_status_value(result.get("status")) != "ready"
+                or str(result.get("error", "") or "").strip()
+            ):
                 count += 1
     if count == 0 and str(qdrant.get("error", "") or "").strip():
         count = 1
