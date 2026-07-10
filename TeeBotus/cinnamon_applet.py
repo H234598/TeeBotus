@@ -68,6 +68,10 @@ SECRET_OPTION_VALUE_RE = re.compile(
     r"(\s+|=)((?:\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|(?!-)[^\s,;&)\]}}>]+))",
     re.IGNORECASE,
 )
+SECRET_OPTION_NAME_RE = re.compile(
+    r"^--?(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|cookie|token|secret|password)$",
+    re.IGNORECASE,
+)
 COOKIE_HEADER_RE = re.compile(r"(?i)(?<![A-Za-z0-9_-])((?:set-cookie|cookie)\s*:\s*)[^\r\n]+")
 SECRET_TOKEN_HINTS = frozenset(
     {
@@ -809,7 +813,7 @@ def _repo_status(repo_root: Path) -> dict[str, Any]:
 
 
 def _run(argv: list[str], *, cwd: Path | None = None, timeout_seconds: int = 10) -> dict[str, Any]:
-    quoted_argv = [shlex.quote(str(part)) for part in argv]
+    quoted_argv = _redacted_argv(argv)
     try:
         bounded_timeout = max(1, int(timeout_seconds))
         process = subprocess.Popen(
@@ -842,6 +846,21 @@ def _run(argv: list[str], *, cwd: Path | None = None, timeout_seconds: int = 10)
             "stdout": "",
             "stderr": _limit_text(_redact(f"{type(exc).__name__}: {exc}"), MAX_ERROR_CHARS),
         }
+
+
+def _redacted_argv(argv: list[str]) -> list[str]:
+    rendered: list[str] = []
+    parts = [str(part) for part in argv]
+    index = 0
+    while index < len(parts):
+        part = parts[index]
+        rendered.append(shlex.quote(_redact(part)))
+        if SECRET_OPTION_NAME_RE.fullmatch(part) and index + 1 < len(parts) and not parts[index + 1].startswith("-"):
+            rendered.append(shlex.quote("<redacted>"))
+            index += 2
+            continue
+        index += 1
+    return rendered
 
 
 def _collect_process_output(

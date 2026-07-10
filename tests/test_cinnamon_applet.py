@@ -3922,6 +3922,16 @@ def test_cinnamon_applet_run_redacts_stdout_before_truncating() -> None:
     assert "sk-" not in result["stdout"]
 
 
+def test_cinnamon_applet_run_redacts_secret_arguments_in_diagnostic_argv() -> None:
+    secret = "plain-secret-argument"
+    result = cinnamon_applet._run(["demo", "--api-key", secret, "--password=inline-secret", "--verbose"])
+    rendered_argv = " ".join(result["argv"])
+
+    assert secret not in rendered_argv
+    assert "inline-secret" not in rendered_argv
+    assert "<redacted>" in rendered_argv
+
+
 def test_cinnamon_applet_run_bounds_child_output_before_returning() -> None:
     result = cinnamon_applet._run(
         [
