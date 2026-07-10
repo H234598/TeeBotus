@@ -4068,6 +4068,17 @@ def test_cinnamon_applet_run_bounds_child_output_before_returning() -> None:
     assert result["stderr"].endswith("<truncated>")
 
 
+def test_cinnamon_applet_run_preserves_truncation_after_redaction() -> None:
+    secret = "sk-" + "A" * 20
+    repetitions = (cinnamon_applet.MAX_CAPTURE_CHARS + cinnamon_applet.MAX_REDACTION_GUARD_BYTES) // len(secret) + 100
+    result = cinnamon_applet._run(
+        [sys.executable, "-c", f"import sys; sys.stdout.write({(' ' + secret) * repetitions!r})"]
+    )
+
+    assert result["stdout"].endswith("<truncated>")
+    assert secret not in result["stdout"]
+
+
 def test_cinnamon_applet_run_terminates_timed_out_child() -> None:
     result = cinnamon_applet._run([sys.executable, "-c", "import time; time.sleep(5)"], timeout_seconds=1)
 

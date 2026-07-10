@@ -886,7 +886,7 @@ def _run(argv: list[str], *, cwd: Path | None = None, timeout_seconds: int = 10)
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        stdout, stderr, returncode, timed_out = _collect_process_output(
+        stdout, stderr, returncode, timed_out, stdout_truncated, stderr_truncated = _collect_process_output(
             process,
             timeout_seconds=bounded_timeout,
         )
@@ -900,8 +900,16 @@ def _run(argv: list[str], *, cwd: Path | None = None, timeout_seconds: int = 10)
         return {
             "argv": quoted_argv,
             "returncode": returncode,
-            "stdout": _limit_text(_redact(stdout.decode("utf-8", errors="replace")), MAX_CAPTURE_CHARS),
-            "stderr": _limit_text(_redact(stderr.decode("utf-8", errors="replace")), MAX_ERROR_CHARS),
+            "stdout": _limit_text(
+                _redact(stdout.decode("utf-8", errors="replace")),
+                MAX_CAPTURE_CHARS,
+                truncated=stdout_truncated,
+            ),
+            "stderr": _limit_text(
+                _redact(stderr.decode("utf-8", errors="replace")),
+                MAX_ERROR_CHARS,
+                truncated=stderr_truncated,
+            ),
         }
     except Exception as exc:  # noqa: BLE001 - applet status should degrade to JSON, not crash.
         return {
@@ -935,12 +943,13 @@ def _collect_process_output(
     process: subprocess.Popen[bytes],
     *,
     timeout_seconds: int,
-) -> tuple[bytes, bytes, int, bool]:
+) -> tuple[bytes, bytes, int, bool, bool, bool]:
     limits = {
         "stdout": MAX_CAPTURE_CHARS + MAX_REDACTION_GUARD_BYTES,
         "stderr": MAX_ERROR_CHARS + MAX_REDACTION_GUARD_BYTES,
     }
     buffers = {name: bytearray() for name in limits}
+    truncated = {name: False for name in limits}
     selector = selectors.DefaultSelector()
     streams = {"stdout": process.stdout, "stderr": process.stderr}
     deadline = time.monotonic() + timeout_seconds
@@ -970,6 +979,8 @@ def _collect_process_output(
                 remaining_capacity = limits[key.data] - len(buffer)
                 if remaining_capacity > 0:
                     buffer.extend(chunk[:remaining_capacity])
+                if len(chunk) > max(0, remaining_capacity):
+                    truncated[key.data] = True
     finally:
         force_stop = timed_out or process.poll() is None
         if force_stop:
@@ -991,7 +1002,14 @@ def _collect_process_output(
         selector.close()
 
     returncode = process.returncode if process.returncode is not None else 124
-    return bytes(buffers["stdout"]), bytes(buffers["stderr"]), int(returncode), timed_out
+    return (
+        bytes(buffers["stdout"]),
+        bytes(buffers["stderr"]),
+        int(returncode),
+        timed_out,
+        truncated["stdout"],
+        truncated["stderr"],
+    )
 
 
 def _parse_status_fields(line: str) -> dict[str, str]:
@@ -1197,10 +1215,10 @@ def _redact_secret_assignment_text(key: str, separator: str, value: str, *, orig
     return f"{key}{separator}<redacted>"
 
 
-def _limit_text(value: str, limit: int) -> str:
+def _limit_text(value: str, limit: int, *, truncated: bool = False) -> str:
     text = str(value or "")
     if len(text) <= limit:
-        return text
+        return text + "\n<truncated>" if truncated else text
     return text[:limit] + "\n<truncated>"
 
 
