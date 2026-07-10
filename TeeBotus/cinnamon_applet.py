@@ -675,7 +675,7 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
         return {"status": "broken", "count": 0, "error": "Qdrant count response too large"}
     try:
         payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError) as exc:
+    except (RecursionError, UnicodeDecodeError, ValueError) as exc:
         return {"status": "broken", "count": 0, "error": f"invalid JSON: {type(exc).__name__}"}
     if not isinstance(payload, dict):
         return {"status": "broken", "count": 0, "error": "unexpected JSON payload"}

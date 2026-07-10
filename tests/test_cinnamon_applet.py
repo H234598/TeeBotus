@@ -3530,6 +3530,27 @@ def test_cinnamon_applet_qdrant_point_count_normalizes_status_whitespace(monkeyp
     }
 
 
+def test_cinnamon_applet_qdrant_point_count_rejects_deep_json(monkeypatch) -> None:
+    class FakeResponse:
+        status = 200
+
+        def read(self, _size: int = -1) -> bytes:
+            return b"{}"
+
+        def close(self) -> None:
+            return None
+
+    def raise_recursion(_raw: object) -> object:
+        raise RecursionError("deep JSON")
+
+    monkeypatch.setattr(cinnamon_applet, "urlopen", lambda _request, timeout: FakeResponse())
+    monkeypatch.setattr(cinnamon_applet.json, "loads", raise_recursion)
+
+    result = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
+
+    assert result == {"status": "broken", "count": 0, "error": "invalid JSON: RecursionError"}
+
+
 def test_cinnamon_applet_qdrant_point_count_rejects_non_integer_counts(monkeypatch) -> None:
     class FakeResponse:
         status = 200
