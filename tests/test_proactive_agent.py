@@ -957,6 +957,25 @@ def test_select_proactive_route_rejects_invalid_adapter_slot(tmp_path, monkeypat
     assert select_proactive_route(account_store, account_id) is None
 
 
+def test_proactive_policy_does_not_treat_missing_item_slot_as_current_slot(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=2)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+
+    decision = proactive_policy_decision(
+        account_store,
+        account_id,
+        category="reminder",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        item={"route": {"channel": "signal", "chat_id": "+491", "chat_type": "private"}},
+    )
+
+    assert decision.allowed is False
+    assert decision.reason == "stale_route"
+
+
 def test_select_proactive_route_accepts_case_variant_route_fields(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
@@ -2391,7 +2410,7 @@ def test_dispatch_skips_queued_item_when_stored_route_becomes_stale(tmp_path) ->
     assert results[0].reason == "stale_route"
     item = account_store.read_proactive_outbox(account_id)[0]
     assert item["status"] == "skipped"
-    assert item["status_history"][-1]["reason"] == "stale_route"
+    assert item["status_history"][-1]["reason"] == "policy:stale_route"
 
 
 def test_dispatch_skips_stale_outbox_snapshot_without_sending(tmp_path, monkeypatch) -> None:

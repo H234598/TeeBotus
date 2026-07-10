@@ -904,10 +904,8 @@ def proactive_policy_decision(
     item: Mapping[str, Any] | None = None,
 ) -> ProactiveDecision:
     if is_notification_loudness_outbox_item(item):
-        route = _item_route(item or {})
-        if str(route.get("chat_type") or "").strip().casefold() != "private":
-            return ProactiveDecision(False, "invalid_route")
-        if not str(route.get("channel") or "").strip() or not str(route.get("chat_id") or "").strip():
+        route = _normalize_proactive_route(_item_route(item or {}))
+        if route is None:
             return ProactiveDecision(False, "invalid_route")
         if not _account_has_matching_proactive_route(account_store, account_id, route):
             return ProactiveDecision(False, "stale_route")
@@ -926,9 +924,16 @@ def proactive_policy_decision(
     if not risk_decision.allowed:
         return risk_decision
     resolved_now = now or datetime.now(timezone.utc)
-    route = select_proactive_route(account_store, account_id)
-    if route is None:
-        return ProactiveDecision(False, "no_private_route")
+    if isinstance(item, Mapping) and "route" in item:
+        route = _normalize_proactive_route(item.get("route"))
+        if route is None:
+            return ProactiveDecision(False, "invalid_route")
+        if not _account_has_matching_proactive_route(account_store, account_id, route):
+            return ProactiveDecision(False, "stale_route")
+    else:
+        route = select_proactive_route(account_store, account_id)
+        if route is None:
+            return ProactiveDecision(False, "no_private_route")
     if isinstance(item, Mapping) and item.get("user_requested_reminder") is True:
         return ProactiveDecision(True, "user_requested_reminder", route)
     hour = to_local(resolved_now).hour
@@ -1164,8 +1169,7 @@ async def dispatch_due_proactive_outbox_items(
             )
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", decision.reason, _item_channel(item)))
             continue
-        has_stored_route = "route" in item
-        route = _item_route(item) if has_stored_route else (decision.route or _item_route(item))
+        route = decision.route or _item_route(item)
         if not isinstance(route, Mapping):
             route_channel = _item_channel(item)
             update_proactive_outbox_item_status(
@@ -1190,18 +1194,6 @@ async def dispatch_due_proactive_outbox_items(
         ):
             update_proactive_outbox_item_status(account_store, account_id, item_id, status="skipped", reason="invalid_route", now=resolved_now, expected_status="queued")
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "invalid_route", channel))
-            continue
-        if has_stored_route and not _account_has_matching_proactive_route(account_store, account_id, route):
-            update_proactive_outbox_item_status(
-                account_store,
-                account_id,
-                item_id,
-                status="skipped",
-                reason="stale_route",
-                now=resolved_now,
-                expected_status="queued",
-            )
-            results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "stale_route", channel))
             continue
         sender = _sender_for_channel(senders, channel)
         if sender is _SENDER_NOT_FOUND:
@@ -2252,47 +2244,55 @@ def select_proactive_route(account_store: AccountStore, account_id: str) -> dict
     routes: list[dict[str, Any]] = []
     for identity in identities:
         route = account_store.get_identity_route(str(identity))
-        if not isinstance(route, Mapping) or str(route.get("chat_type") or "").strip().casefold() != "private":
+        normalized_route = _normalize_proactive_route(route)
+        if normalized_route is None:
             continue
-        channel = str(route.get("channel") or "").strip().casefold()
-        chat_id = str(route.get("chat_id") or "").strip()
-        if not channel or not chat_id:
-            continue
-        if route.get("adapter_slot") is not None and _normalize_route_slot(route.get("adapter_slot")) is None:
-            continue
-        routes.append(dict(route))
+        routes.append(normalized_route)
     if not routes:
         return None
     return sorted(routes, key=lambda route: (preferred_order.get(str(route.get("channel") or "").strip().casefold(), 99), -_route_seen_timestamp(route)))[0]
 
 
 def _account_has_matching_proactive_route(account_store: AccountStore, account_id: str, route: Mapping[str, Any]) -> bool:
-    expected_channel = str(route.get("channel") or "").strip().casefold()
-    expected_chat_id = str(route.get("chat_id") or "").strip()
-    if (
-        not expected_channel
-        or not expected_chat_id
-        or str(route.get("chat_type") or "").strip().casefold() != "private"
-    ):
+    expected_route = _normalize_proactive_route(route)
+    if expected_route is None:
         return False
-    expected_slot = route.get("adapter_slot")
+    expected_channel = str(expected_route.get("channel") or "").strip().casefold()
+    expected_chat_id = str(expected_route.get("chat_id") or "").strip()
+    expected_slot = expected_route["adapter_slot"]
     for identity_key in account_store.list_identities_for_account(account_id):
         current = account_store.get_identity_route(identity_key)
-        if not current:
+        current_route = _normalize_proactive_route(current)
+        if current_route is None:
             continue
-        if str(current.get("channel") or "").strip().casefold() != expected_channel:
+        if str(current_route.get("channel") or "").strip().casefold() != expected_channel:
             continue
-        if str(current.get("chat_id") or "").strip() != expected_chat_id:
+        if str(current_route.get("chat_id") or "").strip() != expected_chat_id:
             continue
-        if str(current.get("chat_type") or "").strip().casefold() != "private":
+        if str(current_route.get("chat_type") or "").strip().casefold() != "private":
             continue
-        if expected_slot is not None:
-            normalized_expected_slot = _normalize_route_slot(expected_slot)
-            normalized_current_slot = _normalize_route_slot(current.get("adapter_slot"))
-            if normalized_expected_slot is None or normalized_current_slot is None or normalized_current_slot != normalized_expected_slot:
-                continue
+        if current_route["adapter_slot"] != expected_slot:
+            continue
         return True
     return False
+
+
+def _normalize_proactive_route(route: Mapping[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(route, Mapping):
+        return None
+    if str(route.get("chat_type") or "").strip().casefold() != "private":
+        return None
+    if not str(route.get("channel") or "").strip() or not str(route.get("chat_id") or "").strip():
+        return None
+    raw_slot = route.get("adapter_slot", 1)
+    if raw_slot is None:
+        raw_slot = 1
+    normalized_slot = _normalize_route_slot(raw_slot)
+    if normalized_slot is None:
+        return None
+    normalized = dict(route)
+    normalized["adapter_slot"] = normalized_slot
+    return normalized
 
 
 def _normalize_route_slot(value: Any) -> int | None:
@@ -2434,7 +2434,7 @@ async def _maybe_await(value: Any) -> Any:
 
 def _item_route(item: Mapping[str, Any]) -> dict[str, Any]:
     route = item.get("route")
-    return dict(route) if isinstance(route, dict) else {}
+    return dict(route) if isinstance(route, Mapping) else {}
 
 
 def _item_channel(item: Mapping[str, Any]) -> str:
