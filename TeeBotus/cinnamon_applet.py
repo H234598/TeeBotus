@@ -406,6 +406,8 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             continue
         fields = _parse_status_fields(line)
         line_statuses = list(_line_status_values(fields))
+        if _line_has_ready_error(line, fields):
+            _append_status_value(line_statuses, "warning")
         if line.startswith("codex_usage=") and _codex_usage_is_stale(fields):
             _append_status_value(line_statuses, "stale")
         for status in line_statuses:
@@ -453,12 +455,12 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         elif line.startswith("qdrant_collection="):
             summary["qdrant_collections"] += 1
             summary["qdrant_problem_status_count"] += sum(status in PROBLEM_STATUSES for status in line_statuses)
-            if _normalized_status_value(fields.get("status")) == "ready":
+            if _status_is_ready_without_error(fields, "status"):
                 summary["qdrant_ready_collections"] += 1
         elif (
             line.startswith("memory_index=")
-            and _normalized_status_value(fields.get("status")) == "ready"
-            and _normalized_status_value(fields.get("semantic")) == "ready"
+            and _status_is_ready_without_error(fields, "status")
+            and _status_is_ready_without_error(fields, "semantic")
         ):
             summary["memory_semantic_ready"] += 1
         elif line.startswith("hf_pool=") and not fields.get("target"):
@@ -492,6 +494,18 @@ def _line_status_values(fields: dict[str, str]) -> tuple[str, ...]:
 
 def _normalized_status_value(value: Any) -> str:
     return str(value or "").strip().casefold()
+
+
+def _status_is_ready_without_error(fields: Mapping[str, Any], key: str) -> bool:
+    return _normalized_status_value(fields.get(key)) == "ready" and not str(fields.get("error", "") or "").strip()
+
+
+def _line_has_ready_error(line: str, fields: Mapping[str, Any]) -> bool:
+    if not str(fields.get("error", "") or "").strip():
+        return False
+    if line.startswith("qdrant_collection="):
+        return _normalized_status_value(fields.get("status")) == "ready"
+    return line.startswith("memory_index=") and _normalized_status_value(fields.get("status")) == "ready" and _normalized_status_value(fields.get("semantic")) == "ready"
 
 
 def _append_status_value(values: list[str], status: str) -> None:

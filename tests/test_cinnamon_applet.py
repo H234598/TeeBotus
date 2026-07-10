@@ -2543,6 +2543,23 @@ def test_cinnamon_applet_runtime_parser_normalizes_structured_status_case() -> N
     assert parsed["summary"]["memory_semantic_ready"] == 0
 
 
+def test_cinnamon_applet_runtime_parser_does_not_count_ready_status_with_error() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Memory und semantische Suche]
+        qdrant_collection=teebotus_user_memory status=READY error=stale collection metadata
+        memory_index=demo status=READY semantic=READY error=qdrant probe failed
+        """
+    )
+
+    assert parsed["summary"]["qdrant_collections"] == 1
+    assert parsed["summary"]["qdrant_ready_collections"] == 0
+    assert parsed["summary"]["memory_semantic_ready"] == 0
+    assert parsed["summary"]["problem_status_count"] == 2
+    assert parsed["summary"]["problem_statuses"] == "warning:2"
+    assert parsed["summary"]["qdrant_problem_status_count"] == 1
+
+
 def test_cinnamon_applet_js_parser_normalizes_structured_status_case() -> None:
     fields = _run_js_parse_fields("route_status=UNAVAILABLE status=WARNING semantic=READY")
     result = _run_js_applet_expression(
