@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -2301,7 +2302,13 @@ def _maybe_send_depression_alert(
         return
 
     sender_id = _sender_identifier(message) or f"chat:{chat_id}"
-    signature = f"{instance_name}:{chat_id}:{sender_id}:{reason}"
+    message_id = _message_id_or_none(message)
+    if message_id is not None:
+        event_key = str(message_id)
+    else:
+        message_payload = json.dumps(message, ensure_ascii=False, sort_keys=True, default=str)
+        event_key = hashlib.sha256(message_payload.encode("utf-8")).hexdigest()
+    signature = f"{instance_name}:{chat_id}:{sender_id}:{reason}:{event_key}"
     if not chat_state.claim_depression_alert_signature(signature):
         return
 

@@ -4006,6 +4006,30 @@ class BotTests(unittest.TestCase):
         self.assertIn("Quelle: incoming", alerts[0])
         self.assertIn("sender_id: 456", alerts[0])
 
+    def test_depression_alert_deduplicates_messages_not_users(self) -> None:
+        from TeeBotus.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState(instance_name="Depressionsbot")
+        for message_id in (1, 2):
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "message_id": message_id,
+                        "text": "Ich will mich umbringen.",
+                        "chat": {"id": 123},
+                        "from": {"id": 456, "first_name": "Ada"},
+                    }
+                },
+                BotInstructions(),
+                None,
+                chat_state,
+            )
+
+        alerts = [text for chat_id, text in api.sent_messages if chat_id == TELADI_EMERGENCY_CHAT_ID]
+        self.assertEqual(len(alerts), 2)
+
     def test_depression_alert_notifies_teladi_for_stress_level_ten(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
