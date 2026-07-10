@@ -1587,6 +1587,52 @@ def test_record_codex_history_delivery_receipt_marks_dispatch_delivered_only(tmp
     assert len(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status_history"]) == 2
 
 
+def test_record_codex_history_delivery_receipt_keeps_routes_separate(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "receipt-route-demo", version="1.8.4")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(42), display_label="Admin")
+    item = append_codex_history_summary(store, repo_root=repo, title="Route Receipt", bullets=["IDs koennen kanalweise kollidieren."])
+    for channel, chat_id in (("telegram", "42"), ("signal", "+491")):
+        store.append_codex_history_dispatch_result(
+            INSTANCE_STATE_ACCOUNT_ID,
+            {
+                "codex_history_item_id": item["id"],
+                "account_id": admin_id,
+                "instance": "Depressionsbot",
+                "status": "accepted",
+                "channel": channel,
+                "chat_id": chat_id,
+                "message_ref": "101",
+                "summary_prefix": item["summary_prefix"],
+            },
+        )
+
+    telegram_result = record_codex_history_delivery_receipt(
+        store,
+        instance_name="Depressionsbot",
+        channel="telegram",
+        chat_id="42",
+        account_id=admin_id,
+        message_ref="101",
+        now=datetime(2026, 6, 19, 16, tzinfo=timezone.utc),
+    )
+    signal_result = record_codex_history_delivery_receipt(
+        store,
+        instance_name="Depressionsbot",
+        channel="signal",
+        chat_id="+491",
+        account_id=admin_id,
+        message_ref="101",
+        now=datetime(2026, 6, 19, 16, 1, tzinfo=timezone.utc),
+    )
+
+    assert telegram_result["idempotent"] is False
+    assert signal_result["idempotent"] is False
+    rows = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+    delivered = [row for row in rows if row.get("status") == "delivered"]
+    assert {(row["channel"], row["chat_id"]) for row in delivered} == {("telegram", "42"), ("signal", "+491")}
+
+
 def test_record_codex_history_delivery_receipt_does_not_downgrade_acknowledged_item(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "receipt-after-ack-demo", version="1.8.4")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())

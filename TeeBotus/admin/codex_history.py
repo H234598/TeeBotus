@@ -645,6 +645,8 @@ def record_codex_history_reply(
         item_id=item_id,
         instance_name=normalized_instance_name,
         account_id=matched_account_id,
+        channel=normalized_channel,
+        chat_id=normalized_chat_id,
         message_ref=normalized_reply_to,
         reply_message_ref=normalized_reply_ref,
         status="acknowledged",
@@ -662,6 +664,8 @@ def record_codex_history_reply(
         item_id=item_id,
         instance_name=normalized_instance_name,
         account_id=matched_account_id,
+        channel=normalized_channel,
+        chat_id=normalized_chat_id,
         message_ref=normalized_reply_to,
         reply_message_ref=normalized_reply_ref,
         status="delivered",
@@ -764,6 +768,8 @@ def record_codex_history_delivery_receipt(
         item_id=item_id,
         instance_name=normalized_instance_name,
         account_id=matched_account_id,
+        channel=normalized_channel,
+        chat_id=normalized_chat_id,
         message_ref=normalized_message_ref,
     )
     if existing_receipt is not None:
@@ -3919,6 +3925,8 @@ def _find_codex_history_reply_result(
     item_id: str,
     instance_name: str,
     account_id: str,
+    channel: str,
+    chat_id: str,
     message_ref: str,
     reply_message_ref: str,
     status: str,
@@ -3926,10 +3934,12 @@ def _find_codex_history_reply_result(
     normalized_item_id = str(item_id or "").strip()
     normalized_instance = str(instance_name or "").strip()
     normalized_account_id = str(account_id or "").strip().casefold()
+    normalized_channel = str(channel or "").strip().casefold()
+    normalized_chat_id = str(chat_id or "").strip()
     normalized_message_ref = str(message_ref or "").strip()
     normalized_reply_ref = str(reply_message_ref or "").strip()
     normalized_status = str(status or "").strip().casefold()
-    if not normalized_item_id or not normalized_account_id or not normalized_message_ref or not normalized_status:
+    if not normalized_item_id or not normalized_account_id or not normalized_channel or not normalized_chat_id or not normalized_message_ref or not normalized_status:
         return None
     for row in reversed(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)):
         if not isinstance(row, Mapping):
@@ -3939,6 +3949,10 @@ def _find_codex_history_reply_result(
         if normalized_instance and str(row.get("instance") or "").strip() != normalized_instance:
             continue
         if str(row.get("account_id") or "").strip().casefold() != normalized_account_id:
+            continue
+        if str(row.get("channel") or "").strip().casefold() != normalized_channel:
+            continue
+        if str(row.get("chat_id") or "").strip() != normalized_chat_id:
             continue
         if str(row.get("message_ref") or "").strip() != normalized_message_ref:
             continue
@@ -3957,13 +3971,17 @@ def _find_codex_history_receipt_result(
     item_id: str,
     instance_name: str,
     account_id: str,
+    channel: str,
+    chat_id: str,
     message_ref: str,
 ) -> dict[str, Any] | None:
     normalized_item_id = str(item_id or "").strip()
     normalized_instance = str(instance_name or "").strip()
     normalized_account_id = str(account_id or "").strip().casefold()
+    normalized_channel = str(channel or "").strip().casefold()
+    normalized_chat_id = str(chat_id or "").strip()
     normalized_message_ref = str(message_ref or "").strip()
-    if not normalized_item_id or not normalized_account_id or not normalized_message_ref:
+    if not normalized_item_id or not normalized_account_id or not normalized_channel or not normalized_chat_id or not normalized_message_ref:
         return None
     for row in reversed(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)):
         if not isinstance(row, Mapping):
@@ -3973,6 +3991,10 @@ def _find_codex_history_receipt_result(
         if normalized_instance and str(row.get("instance") or "").strip() != normalized_instance:
             continue
         if str(row.get("account_id") or "").strip().casefold() != normalized_account_id:
+            continue
+        if str(row.get("channel") or "").strip().casefold() != normalized_channel:
+            continue
+        if str(row.get("chat_id") or "").strip() != normalized_chat_id:
             continue
         if str(row.get("message_ref") or "").strip() != normalized_message_ref:
             continue
