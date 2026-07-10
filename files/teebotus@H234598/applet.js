@@ -1402,6 +1402,9 @@ TeeBotusApplet.prototype = {
         return false;
       }
     }
+    if (payload.health.status === "ok" && this._healthProblemTotal(payload.health, payload.runtime.summary, payload.runtime.status_counts) > 0) {
+      return false;
+    }
     for (let key in payload.runtime.sections) {
       if (_hasOwn(payload.runtime.sections, key) && !Array.isArray(payload.runtime.sections[key])) {
         return false;

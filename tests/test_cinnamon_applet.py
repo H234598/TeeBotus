@@ -1418,6 +1418,18 @@ def test_cinnamon_applet_status_payload_requires_health_status_and_consistent_ok
     assert inconsistent_status is False
 
 
+def test_cinnamon_applet_status_payload_rejects_ok_with_problem_counts() -> None:
+    explicit_total = _run_js_applet_expression(
+        "applet._isStatusPayload({ok: true, repo: {}, unit: {}, health: {status: 'ok', total_problem_count: 1}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}})"
+    )
+    runtime_count = _run_js_applet_expression(
+        "applet._isStatusPayload({ok: true, repo: {}, unit: {}, health: {status: 'ok'}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {broken: 1}}})"
+    )
+
+    assert explicit_total is False
+    assert runtime_count is False
+
+
 def test_cinnamon_applet_status_payload_rejects_invalid_health_status() -> None:
     result = _run_js_applet_expression(
         "applet._isStatusPayload({ok: true, repo: {}, unit: {}, health: {status: 'false'}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}})"
