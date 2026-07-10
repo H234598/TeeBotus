@@ -246,7 +246,7 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "STATUS_TIMEOUT_MAX_SECONDS = 300" in source
     assert "STATUS_TIMEOUT_GRACE_SECONDS = 5" in source
     assert "STATUS_HELPER_OVERHEAD_SECONDS = 30" in source
-    assert "const MAX_HELPER_JSON_CHARS = 120000;" in source
+    assert "const MAX_HELPER_JSON_CHARS = 1000000;" in source
     assert "if (text.length > MAX_HELPER_JSON_CHARS)" in source
     assert "const MAX_COMMAND_ARG_CHARS = 4096;" in source
     assert "const MAX_COMMAND_ARG_COUNT = 128;" in source
@@ -1295,7 +1295,7 @@ def test_cinnamon_applet_status_refresh_rejects_large_json_output() -> None:
           applet._buildMenu = function() {};
           applet._updatePanel = function() {};
           applet._spawn = function(argv, callback, cwd, options) {
-            callback(" ".repeat(120001), "", true);
+            callback(" ".repeat(1000001), "", true);
           };
           applet._refreshStatus();
           return {
@@ -1312,6 +1312,48 @@ def test_cinnamon_applet_status_refresh_rejects_large_json_output() -> None:
     assert result["statusPayload"] is None
     assert result["statusText"] == "Statusfehler: Helper JSON output too large"
     assert result["lastError"] == "Helper JSON output too large"
+
+
+def test_cinnamon_applet_status_refresh_accepts_escaped_payload_within_bound() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let result = {};
+          let payload = {
+            ok: false,
+            command_ok: true,
+            repo: {},
+            unit: {active_state: "active", sub_state: "running", returncode: 0},
+            health: {status: "warning", command_ok: true},
+            qdrant: {
+              unit: {active_state: "active", sub_state: "running", returncode: 0},
+              collections: {}
+            },
+            runtime: {
+              returncode: 0,
+              sections: {Diagnose: [String.fromCharCode(92).repeat(70000)]},
+              summary: {},
+              status_counts: {}
+            }
+          };
+          applet._spawn = function(argv, callback, cwd, options) {
+            let text = JSON.stringify(payload);
+            result.size = text.length;
+            callback(text, "", true);
+          };
+          applet._spawnJson([], function(value, error) {
+            result.accepted = Boolean(value);
+            result.error = error;
+          });
+          return result;
+        })()
+        """
+    )
+
+    assert result["size"] > 120000
+    assert result["size"] < 1000000
+    assert result["accepted"] is True
+    assert result["error"] is None
 
 
 def test_cinnamon_applet_status_refresh_keeps_previous_payload_on_error() -> None:

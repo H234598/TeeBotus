@@ -30,7 +30,9 @@ const STATUS_TIMEOUT_MAX_SECONDS = 300;
 const STATUS_TIMEOUT_GRACE_SECONDS = 5;
 const STATUS_HELPER_OVERHEAD_SECONDS = 30;
 const CODEX_USAGE_STALE_WARNING_HOURS = 24;
-const MAX_HELPER_JSON_CHARS = 120000;
+// The Python helper caps raw runtime output at 80,000 characters; JSON escaping
+// and copied summary lines can expand a valid payload substantially.
+const MAX_HELPER_JSON_CHARS = 1000000;
 const MAX_COMMAND_ARG_CHARS = 4096;
 const MAX_COMMAND_ARG_COUNT = 128;
 const MAX_COMMAND_CHARS = 32768;
