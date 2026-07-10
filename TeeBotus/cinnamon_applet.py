@@ -59,6 +59,11 @@ QUOTED_AUTHORIZATION_TOKEN_RE = re.compile(
     r"(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(\5)",
     re.IGNORECASE,
 )
+SECRET_OPTION_VALUE_RE = re.compile(
+    r"(?<![A-Za-z0-9_-])(--?(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|cookie|token|secret|password))"
+    r"(\s+)((?:\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|(?!-)[^\s,;&)\]}}>]+))",
+    re.IGNORECASE,
+)
 COOKIE_HEADER_RE = re.compile(r"(?i)(?<![A-Za-z0-9_-])((?:set-cookie|cookie)\s*:\s*)[^\r\n]+")
 STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
 FREE_TEXT_STATUS_FIELDS = frozenset({"action", "command", "error", "message", "route_error"})
@@ -859,6 +864,7 @@ def _redact(value: str) -> str:
     text = AUTHORIZATION_TOKEN_RE.sub(r"\1\2 <redacted-secret>", text)
     text = BARE_AUTHORIZATION_TOKEN_RE.sub(r"\1 <redacted-secret>", text)
     text = QUOTED_AUTHORIZATION_TOKEN_RE.sub(_redact_quoted_authorization_token, text)
+    text = SECRET_OPTION_VALUE_RE.sub(_redact_secret_option_value, text)
     text = COOKIE_HEADER_RE.sub(r"\1<redacted-secret>", text)
     text = QUOTED_SECRET_ASSIGNMENT_RE.sub(_redact_quoted_secret_assignment, text)
     text = SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, text)
@@ -884,6 +890,12 @@ def _redact_quoted_authorization_token(match: re.Match[str]) -> str:
     scheme = str(match.group(6) or "Bearer")
     closing_quote = str(match.group(8) or value_quote)
     return f"{prefix}{key_quote}{key}{key_quote}{separator}{value_quote}{scheme} <redacted-secret>{closing_quote}"
+
+
+def _redact_secret_option_value(match: re.Match[str]) -> str:
+    option = str(match.group(1) or "")
+    separator = str(match.group(2) or " ")
+    return f"{option}{separator}<redacted>"
 
 
 def _redact_secret_assignment(match: re.Match[str]) -> str:
