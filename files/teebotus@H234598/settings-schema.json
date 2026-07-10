@@ -14,7 +14,8 @@
         "menu-map-section",
         "runtime-section",
         "display-section",
-        "sections-section"
+        "sections-section",
+        "history-dispatcher-section"
       ]
     },
     "actions-page": {
@@ -84,6 +85,28 @@
         "show-actions-section",
         "show-quick-commands-section",
         "show-project-section"
+      ]
+    },
+    "history-dispatcher-section": {
+      "type": "section",
+      "title": "History-Dispatcher mirror",
+      "keys": [
+        "show-history-dispatcher-section",
+        "history-dispatcher-runtime-path",
+        "history-dispatcher-command-path",
+        "history-dispatcher-config-path",
+        "history-dispatcher-collector-enabled",
+        "history-dispatcher-collector-interval-seconds",
+        "history-dispatcher-collector-scan-limit",
+        "history-dispatcher-log-level",
+        "history-dispatcher-status-heartbeat-seconds",
+        "history-dispatcher-dispatch-enabled",
+        "history-dispatcher-dispatch-paused",
+        "history-dispatcher-dispatch-batch-size",
+        "history-dispatcher-claim-ttl-seconds",
+        "history-dispatcher-max-attempts",
+        "history-dispatcher-completed-retention-days",
+        "history-dispatcher-audit-retention-days"
       ]
     },
     "service-actions-section": {
@@ -262,6 +285,112 @@
     "type": "switch",
     "description": "Show project links",
     "default": true
+  },
+  "show-history-dispatcher-section": {
+    "type": "switch",
+    "description": "Show the full History-Dispatcher mirror",
+    "tooltip": "Reads the bounded local Dispatcher status snapshot and exposes only allowlisted actions.",
+    "default": false
+  },
+  "history-dispatcher-runtime-path": {
+    "type": "entry",
+    "description": "History-Dispatcher runtime directory",
+    "default": "/run/user/1000/history-dispatcher"
+  },
+  "history-dispatcher-command-path": {
+    "type": "entry",
+    "description": "History-Dispatcher executable",
+    "default": "/home/teladi/History-Dispatcher/.venv-py313/bin/history-dispatcher"
+  },
+  "history-dispatcher-config-path": {
+    "type": "entry",
+    "description": "History-Dispatcher config.toml",
+    "default": "/home/teladi/.config/history-dispatcher/config.toml"
+  },
+  "history-dispatcher-collector-enabled": {
+    "type": "switch",
+    "description": "Enable History-Dispatcher collector",
+    "default": true
+  },
+  "history-dispatcher-collector-interval-seconds": {
+    "type": "spinbutton",
+    "description": "Dispatcher collector interval in seconds",
+    "min": 60,
+    "max": 86400,
+    "step": 60,
+    "default": 300
+  },
+  "history-dispatcher-collector-scan-limit": {
+    "type": "spinbutton",
+    "description": "Dispatcher source file scan limit",
+    "min": 1,
+    "max": 10000,
+    "step": 1,
+    "default": 25
+  },
+  "history-dispatcher-log-level": {
+    "type": "combobox",
+    "description": "Dispatcher log level",
+    "options": {"Debug": "DEBUG", "Info": "INFO", "Warning": "WARNING", "Error": "ERROR", "Critical": "CRITICAL"},
+    "default": "INFO"
+  },
+  "history-dispatcher-status-heartbeat-seconds": {
+    "type": "spinbutton",
+    "description": "Dispatcher status heartbeat in seconds",
+    "min": 1,
+    "max": 3600,
+    "step": 1,
+    "default": 30
+  },
+  "history-dispatcher-dispatch-enabled": {
+    "type": "switch",
+    "description": "Enable Dispatcher dispatch",
+    "default": true
+  },
+  "history-dispatcher-dispatch-paused": {
+    "type": "switch",
+    "description": "Pause History-Dispatcher dispatch",
+    "default": false
+  },
+  "history-dispatcher-dispatch-batch-size": {
+    "type": "spinbutton",
+    "description": "Dispatcher dispatch batch size",
+    "min": 1,
+    "max": 1000,
+    "step": 1,
+    "default": 20
+  },
+  "history-dispatcher-claim-ttl-seconds": {
+    "type": "spinbutton",
+    "description": "Dispatcher claim lease in seconds",
+    "min": 1,
+    "max": 604800,
+    "step": 1,
+    "default": 900
+  },
+  "history-dispatcher-max-attempts": {
+    "type": "spinbutton",
+    "description": "Dispatcher maximum automatic attempts",
+    "min": 1,
+    "max": 1000,
+    "step": 1,
+    "default": 12
+  },
+  "history-dispatcher-completed-retention-days": {
+    "type": "spinbutton",
+    "description": "Completed Dispatcher retention in days",
+    "min": 1,
+    "max": 3650,
+    "step": 1,
+    "default": 30
+  },
+  "history-dispatcher-audit-retention-days": {
+    "type": "spinbutton",
+    "description": "Dispatcher audit retention in days",
+    "min": 1,
+    "max": 3650,
+    "step": 1,
+    "default": 365
   },
   "enable-service-actions": {
     "type": "switch",

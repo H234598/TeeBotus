@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -49,10 +50,9 @@ def _run_js_applet_expression(expression: str) -> object:
     node = shutil.which("node")
     if not node:
         pytest.skip("node is not available for Cinnamon applet behavior check")
-    source = (APPLET_DIR / "applet.js").read_text(encoding="utf-8")
     script = f"""
 const vm = require("vm");
-const source = {json.dumps(source)};
+const source = require("fs").readFileSync(process.env.TEEBOTUS_APPLET_SOURCE, "utf8");
 const TextIconApplet = function() {{}};
 TextIconApplet.prototype = {{}};
 const context = {{
@@ -98,7 +98,9 @@ const result = (function() {{
 }})();
 console.log(JSON.stringify(result));
 """
-    completed = subprocess.run([node, "-e", script], check=True, capture_output=True, text=True, timeout=10)
+    env = os.environ.copy()
+    env["TEEBOTUS_APPLET_SOURCE"] = str(APPLET_DIR / "applet.js")
+    completed = subprocess.run([node, "-e", script], check=True, capture_output=True, text=True, timeout=10, env=env)
     return json.loads(completed.stdout)
 
 
@@ -1522,6 +1524,19 @@ def test_cinnamon_applet_panel_status_summary_is_bounded() -> None:
     assert "…" in result
 
 
+def test_cinnamon_applet_optional_history_dispatcher_mirror_is_wired() -> None:
+    source = (APPLET_DIR / "applet.js").read_text(encoding="utf-8")
+    schema = json.loads((APPLET_DIR / "settings-schema.json").read_text(encoding="utf-8"))
+    assert schema["show-history-dispatcher-section"]["default"] is False
+    assert "history-dispatcher-section" in schema["layout"]["main-page"]["sections"]
+    assert "historyDispatcherPayload" in source
+    assert "_refreshHistoryDispatcherStatus" in source
+    assert "_runHistoryDispatcherConfigApply" in source
+    assert "_confirmHistoryDispatcherDelete" in source
+    assert "load_contents_async" in source
+    assert "spawn_sync" not in source
+
+
 def test_cinnamon_applet_status_refresh_keeps_previous_payload_on_error() -> None:
     result = _run_js_applet_expression(
         """
@@ -1845,6 +1860,7 @@ def test_cinnamon_applet_refreshes_existing_menu_in_place() -> None:
           applet.menu = {};
           applet.statusMenu = {};
           applet.runtimeMenu = {};
+          applet.historyDispatcherMenu = {};
           applet.messengerMenu = {};
           applet.llmMenu = {};
           applet.apiMenu = {};

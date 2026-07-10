@@ -1259,6 +1259,77 @@ def test_codex_history_dispatch_sends_markdown_attachment_and_marks_accepted(
     assert Path(dispatch["obsidian_path"]).name.startswith("20260619T140000_")
 
 
+def test_codex_history_dispatch_bridge_claims_sends_and_completes_only_open_recipients(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            calls.append((operation, dict(body or {})))
+            if operation == "dispatch.claim":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "hd-item-1",
+                            "kind": "codex_run_summary",
+                            "created_at": "2026-06-19T12:00:00+00:00",
+                            "payload": {"summary": {"text": "Bridge summary"}, "project": "/tmp/bridge"},
+                            "recipient_results": [{"recipient_id": "already", "status": "delivered"}],
+                        }],
+                    },
+                }
+            if operation == "dispatch.complete":
+                return {"ok": True, "data": {"ok": True, "status": "delivered"}}
+            raise AssertionError(operation)
+
+    async def fake_send(*_args, **kwargs):
+        return {"account_id": kwargs.get("account_id", "open"), "status": "accepted", "channel": "telegram"}
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_account_ids", lambda *args, **kwargs: ("already", "open"))
+    monkeypatch.setattr(codex_history_module, "_dispatch_codex_history_item_to_account", fake_send)
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            object(),
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+        )
+    )
+    assert result["mode"] == "history-dispatcher"
+    assert [operation for operation, _body in calls] == ["dispatch.claim", "dispatch.complete"]
+    complete_body = calls[-1][1]
+    assert [row["recipient_id"] for row in complete_body["recipient_results"]] == ["open"]
+
+
+def test_codex_history_shadow_append_mirrors_after_legacy_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = make_git_repo(tmp_path, "shadow-demo", version="1.9.0")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    mirrored: list[dict[str, object]] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object]) -> dict[str, object]:
+            mirrored.append({"operation": operation, **body})
+            return {"ok": True, "data": {"id": body.get("id")}}
+
+    monkeypatch.setenv("TEEBOTUS_HISTORY_DISPATCHER_MODE", "shadow")
+    monkeypatch.setenv("HISTORY_DISPATCHER_SOCKET", str(tmp_path / "control.sock"))
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    item = append_codex_history_summary(store, repo_root=repo, title="Shadow", bullets=["Legacy bleibt lesbar."])
+    assert item["id"] == mirrored[0]["id"]
+    assert mirrored[0]["operation"] == "history.append"
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["id"] == item["id"]
+
+
 def test_codex_history_dispatch_uses_cross_instance_admin_route(tmp_path: Path) -> None:
     instances_dir = tmp_path / "instances"
     logger_dir = make_instance(instances_dir, "TeeBotus_Logger")

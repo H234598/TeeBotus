@@ -7,6 +7,7 @@ from contextlib import contextmanager
 import hashlib
 import html
 import json
+import logging
 import os
 import re
 import shutil
@@ -28,6 +29,8 @@ from urllib.parse import urlsplit
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+LOGGER = logging.getLogger("TeeBotus.admin.codex_history")
+
 try:
     import fcntl
 except ImportError:  # pragma: no cover - Windows compatibility.
@@ -35,6 +38,10 @@ except ImportError:  # pragma: no cover - Windows compatibility.
 
 from TeeBotus import __version__
 from TeeBotus.artifact_outputs import obsidian_incoming_path
+from TeeBotus.history_dispatcher_bridge import (
+    HistoryDispatcherClient,
+    HistoryDispatcherError,
+)
 from TeeBotus.admin.accounts_report import (
     BOT_INSTRUCTION_FILENAME,
     DEFAULT_INSTANCES_DIR,
@@ -70,6 +77,8 @@ CODEX_HISTORY_DISPATCHING_STALE_AFTER_SECONDS = 15 * 60
 CODEX_HISTORY_DISPATCH_INSTANCES_ENV = "TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES"
 DEFAULT_CODEX_HISTORY_DISPATCH_INSTANCES = ("TeeBotus_Logger", "TeeBotusLogger", "TBL")
 CODEX_HISTORY_RECEIPT_RANKS = {"delivered": 1, "viewed": 2, "read": 3}
+HISTORY_DISPATCHER_MODE_ENV = "TEEBOTUS_HISTORY_DISPATCHER_MODE"
+HISTORY_DISPATCHER_SOCKET_ENV = "HISTORY_DISPATCHER_SOCKET"
 _CODEX_HISTORY_EVENT_LOCK = threading.RLock()
 _CODEX_HISTORY_EVENT_LOCK_FILENAME = ".Codex_History_Events.lock"
 CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT = 250
@@ -376,7 +385,9 @@ def append_codex_history_summary(
         project = item.get("project", {})
         if isinstance(project, Mapping):
             _upsert_project(store, account_id, project, item, timestamp)
-        return dict(item)
+        result = dict(item)
+    _mirror_codex_history_item_to_dispatcher(result)
+    return result
 
 
 async def dispatch_codex_history_outbox(
@@ -392,6 +403,19 @@ async def dispatch_codex_history_outbox(
     dry_run: bool = False,
     limit: int = 100,
 ) -> dict[str, Any]:
+    if _history_dispatcher_mode(env) == "bridge":
+        return await _dispatch_codex_history_outbox_via_dispatcher(
+            store,
+            instance_name=instance_name,
+            account_ids=account_ids,
+            senders=senders,
+            env=env,
+            instances_dir=instances_dir,
+            secret_provider=secret_provider,
+            now=now,
+            dry_run=dry_run,
+            limit=limit,
+        )
     dispatch_now = now or datetime.now(timezone.utc)
     timestamp = _iso_timestamp(dispatch_now)
     if not _codex_history_dispatch_instance_allowed(instance_name, env=env):
@@ -509,6 +533,204 @@ async def dispatch_codex_history_outbox(
         "items": result_rows,
         "status_counts": _status_counts(result_rows),
     }
+
+
+def _history_dispatcher_mode(env: Mapping[str, str] | None) -> str:
+    source = env if env is not None else os.environ
+    mode = str(source.get(HISTORY_DISPATCHER_MODE_ENV, "legacy") or "legacy").strip().casefold()
+    if mode not in {"legacy", "shadow", "bridge"}:
+        return "legacy"
+    return mode
+
+
+def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any]) -> None:
+    if _history_dispatcher_mode(None) not in {"shadow", "bridge"}:
+        return
+    try:
+        project = item.get("project")
+        if isinstance(project, Mapping):
+            project = str(project.get("repo_root") or project.get("repo_name") or "")
+        client = HistoryDispatcherClient(_history_dispatcher_socket_path(None), timeout_seconds=3)
+        delivery = item.get("delivery") if isinstance(item.get("delivery"), Mapping) else {}
+        response = client.request("history.append", {
+            "id": str(item.get("id") or ""),
+            "source": str(item.get("source") or "teebotus"),
+            "kind": str(item.get("kind") or "codex_run_summary"),
+            "target_group": str(item.get("target_group") or delivery.get("target_group") or CODEX_HISTORY_TARGET_GROUP),
+            "project": str(project or ""),
+            "created_at": str(item.get("created_at") or ""),
+            "dedupe_key": str(item.get("id") or ""),
+            "payload": dict(item),
+        })
+        if not response.get("ok"):
+            LOGGER.warning("History-Dispatcher shadow append failed: %s", str(response.get("error") or "")[:240])
+    except HistoryDispatcherError as exc:
+        LOGGER.warning("History-Dispatcher shadow append unavailable: %s", str(exc)[:240])
+
+
+def _history_dispatcher_socket_path(env: Mapping[str, str] | None) -> Path:
+    source = env if env is not None else os.environ
+    configured = str(source.get(HISTORY_DISPATCHER_SOCKET_ENV, "") or "").strip()
+    if configured:
+        candidate = Path(configured).expanduser()
+    else:
+        runtime = str(source.get("XDG_RUNTIME_DIR", "") or "").strip() or f"/run/user/{os.getuid()}"
+        candidate = Path(runtime) / "history-dispatcher" / "control.sock"
+    if not candidate.is_absolute() or len(str(candidate)) > 4096 or any(ord(char) < 0x20 for char in str(candidate)):
+        raise ValueError("History-Dispatcher socket path is unsafe")
+    return candidate
+
+
+def _history_dispatcher_item_to_legacy(item: Mapping[str, Any]) -> dict[str, Any]:
+    payload = item.get("payload", {})
+    payload = dict(payload) if isinstance(payload, Mapping) else {}
+    summary = payload.get("summary", {})
+    summary = dict(summary) if isinstance(summary, Mapping) else {}
+    if not str(summary.get("markdown") or "").strip() and str(summary.get("text") or "").strip():
+        summary["markdown"] = str(summary["text"]).strip()
+    payload["summary"] = summary
+    project_value = item.get("project") or payload.get("project") or "project"
+    if isinstance(project_value, Mapping):
+        project = dict(project_value)
+    else:
+        project_text = str(project_value).strip()
+        project = {"repo_name": Path(project_text).name or "project", "repo_root": project_text}
+    payload["project"] = project
+    payload["id"] = str(item.get("id") or payload.get("id") or "")
+    payload["kind"] = str(item.get("kind") or payload.get("kind") or "codex_run_summary")
+    payload["created_at"] = str(item.get("created_at") or payload.get("created_at") or "")
+    payload.setdefault("version", {"semver": "untagged", "summary_number": 1, "summary_prefix": "untagged"})
+    payload.setdefault("summary_prefix", "untagged")
+    return payload
+
+
+async def _dispatch_codex_history_outbox_via_dispatcher(
+    store: AccountStore,
+    *,
+    instance_name: str,
+    account_ids: Sequence[str] = (),
+    senders: Mapping[str, ProactiveSender] | None = None,
+    env: Mapping[str, str] | None = None,
+    instances_dir: str | Path | None = None,
+    secret_provider: InstanceSecretProvider | None = None,
+    now: datetime | None = None,
+    dry_run: bool = False,
+    limit: int = 100,
+) -> dict[str, Any]:
+    dispatch_now = now or datetime.now(timezone.utc)
+    timestamp = _iso_timestamp(dispatch_now)
+    if not _codex_history_dispatch_instance_allowed(instance_name, env=env):
+        return {
+            "ok": True,
+            "dry_run": dry_run,
+            "instance": instance_name,
+            "generated_at": timestamp,
+            "items": [],
+            "status_counts": {},
+            "mode": "history-dispatcher",
+        }
+    client = HistoryDispatcherClient(_history_dispatcher_socket_path(env), timeout_seconds=10)
+    candidate_account_ids = _codex_history_dispatch_account_ids(
+        store,
+        instance_name=instance_name,
+        account_ids=account_ids,
+        env=env,
+        instances_dir=instances_dir,
+        secret_provider=secret_provider,
+    )
+    try:
+        if dry_run:
+            response = client.request("history.query", {"status": "queued", "limit": max(1, min(int(limit or 100), 100))})
+            if not response.get("ok"):
+                raise HistoryDispatcherError(str(response.get("error") or "History-Dispatcher query failed"))
+            rows: list[dict[str, Any]] = []
+            for item in response.get("data", {}).get("items", []):
+                if isinstance(item, Mapping):
+                    rows.extend(_dry_run_dispatch_rows(_history_dispatcher_item_to_legacy(item), candidate_account_ids, store, instance_name=instance_name, instances_dir=instances_dir, secret_provider=secret_provider))
+            return {
+                "ok": True,
+                "dry_run": True,
+                "instance": instance_name,
+                "generated_at": timestamp,
+                "items": rows,
+                "status_counts": _status_counts(rows),
+                "mode": "history-dispatcher",
+            }
+        claimed = client.request("dispatch.claim", {
+            "worker_id": f"teebotus:{os.getpid()}:{_codex_history_instance_token(instance_name)}",
+            "limit": max(1, min(int(limit or 100), 100)),
+        })
+        if not claimed.get("ok"):
+            raise HistoryDispatcherError(str(claimed.get("error") or "History-Dispatcher claim failed"))
+        result_rows: list[dict[str, Any]] = []
+        for raw_item in claimed.get("data", {}).get("items", []):
+            if not isinstance(raw_item, Mapping):
+                continue
+            item = _history_dispatcher_item_to_legacy(raw_item)
+            item_id = str(item.get("id") or "")
+            existing_results = [dict(result) for result in raw_item.get("recipient_results", []) if isinstance(result, Mapping)]
+            successful_accounts = {
+                str(result.get("recipient_id") or "").strip()
+                for result in existing_results
+                if str(result.get("status") or "").strip().casefold() in {"delivered", "accepted", "acknowledged"}
+            }
+            item_results: list[dict[str, Any]] = []
+            for account_id in candidate_account_ids:
+                if account_id in successful_accounts:
+                    continue
+                item_results.append(await _dispatch_codex_history_item_to_account(
+                    store,
+                    item,
+                    account_id,
+                    instance_name=instance_name,
+                    senders=senders or {},
+                    instances_dir=instances_dir,
+                    secret_provider=secret_provider,
+                    now=timestamp,
+                    persist_result=False,
+                ))
+            if not item_results:
+                item_results = existing_results or [{"account_id": "", "status": "skipped", "reason": "no_recipient_accounts", "channel": ""}]
+            completion_results = [
+                {
+                    "recipient_id": str(result.get("account_id") or ""),
+                    "status": "delivered" if str(result.get("status") or "").casefold() == "accepted" else str(result.get("status") or "failed"),
+                    "channel": str(result.get("channel") or ""),
+                    "message_ref": str(result.get("message_ref") or ""),
+                    "reason": str(result.get("reason") or ""),
+                    "possible_duplicate": bool(result.get("possible_duplicate")),
+                }
+                for result in item_results
+                if str(result.get("account_id") or "")
+            ]
+            completed = client.request("dispatch.complete", {
+                "item_id": item_id,
+                "worker_id": f"teebotus:{os.getpid()}:{_codex_history_instance_token(instance_name)}",
+                "recipient_results": completion_results,
+                "reason": _overall_dispatch_reason(item_results),
+            })
+            if not completed.get("ok"):
+                raise HistoryDispatcherError(str(completed.get("error") or "History-Dispatcher complete failed"))
+            result_rows.extend(item_results)
+        return {
+            "ok": not any(str(row.get("status") or "").casefold() in {"failed", "error"} for row in result_rows),
+            "dry_run": False,
+            "instance": instance_name,
+            "generated_at": timestamp,
+            "items": result_rows,
+            "status_counts": _status_counts(result_rows),
+            "mode": "history-dispatcher",
+        }
+    except HistoryDispatcherError as exc:
+        return {
+            "ok": False,
+            "dry_run": dry_run,
+            "instance": instance_name,
+            "generated_at": timestamp,
+            "items": [{"status": "failed", "reason": "history_dispatcher_unavailable", "error": str(exc)[:240]}],
+            "status_counts": {"failed": 1},
+            "mode": "history-dispatcher",
+        }
 
 
 def acknowledge_codex_history_item(

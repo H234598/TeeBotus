@@ -7,6 +7,7 @@ const St = imports.gi.St;
 const Gio = imports.gi.Gio;
 const GLib = imports.gi.GLib;
 const Pango = imports.gi.Pango;
+const ByteArray = imports.byteArray || { toString: function(value) { return String(value || ""); } };
 const Mainloop = imports.mainloop;
 
 const UUID = "teebotus@H234598";
@@ -21,6 +22,11 @@ const DEFAULT_QDRANT_URL = "http://127.0.0.1:6333";
 const REQUIRED_QDRANT_COLLECTIONS = ["teebotus_user_memory", "teebotus_bibliothekar_chunks"];
 const DEFAULT_CODEX_USAGE_PATH = GLib.build_filenamev([GLib.get_home_dir(), "codex-usage"]);
 const DEFAULT_CODEX_USAGE_COMMAND = "codex-usage";
+const DEFAULT_HISTORY_DISPATCHER_RUNTIME_PATH = GLib.build_filenamev([(GLib.getenv ? GLib.getenv("XDG_RUNTIME_DIR") : "") || GLib.build_filenamev(["/run", "user", String(0)]), "history-dispatcher"]);
+const DEFAULT_HISTORY_DISPATCHER_COMMAND = GLib.build_filenamev([GLib.get_home_dir(), "History-Dispatcher", ".venv-py313", "bin", "history-dispatcher"]);
+const DEFAULT_HISTORY_DISPATCHER_CONFIG = GLib.build_filenamev([GLib.get_home_dir(), ".config", "history-dispatcher", "config.toml"]);
+const MAX_HISTORY_DISPATCHER_SNAPSHOT_BYTES = 65536;
+const HISTORY_DISPATCHER_STALE_AFTER_SECONDS = 120;
 const DEFAULT_GITHUB_URL = "https://github.com/H234598/TeeBotus";
 const DEFAULT_COMMITS_URL = "https://github.com/H234598/TeeBotus/commits/main";
 const DEFAULT_STATUS_REFRESH_SECONDS = 60;
@@ -163,7 +169,7 @@ const QUICK_COMMANDS = [
   "/memory_reset"
 ];
 const MAX_UNIT_TOKEN_CHARS = 96;
-const TRUSTED_SPAWN_DIRS = ["/usr/bin", "/usr/local/bin", "/bin", DEFAULT_VENV_BIN];
+const TRUSTED_SPAWN_DIRS = ["/usr/bin", "/usr/local/bin", "/bin", DEFAULT_VENV_BIN, GLib.build_filenamev([GLib.get_home_dir(), "History-Dispatcher", ".venv-py313", "bin"])];
 const TRUSTED_USER_LOCAL_SPAWN_DIR = GLib.build_filenamev([GLib.get_home_dir(), ".local", "bin"]);
 const TRUSTED_USER_LOCAL_COMMANDS = {
   "codex-usage": true
@@ -226,6 +232,26 @@ TeeBotusApplet.prototype = {
     this.commitsUrl = DEFAULT_COMMITS_URL;
     this.codexUsagePath = DEFAULT_CODEX_USAGE_PATH;
     this.codexUsageCommand = DEFAULT_CODEX_USAGE_COMMAND;
+    this.showHistoryDispatcherSection = false;
+    this.historyDispatcherRuntimePath = DEFAULT_HISTORY_DISPATCHER_RUNTIME_PATH;
+    this.historyDispatcherCommandPath = DEFAULT_HISTORY_DISPATCHER_COMMAND;
+    this.historyDispatcherConfigPath = DEFAULT_HISTORY_DISPATCHER_CONFIG;
+    this.historyDispatcherPayload = null;
+    this.historyDispatcherError = "";
+    this.historyDispatcherRunning = false;
+    this.historyDispatcherCancellable = Gio.Cancellable ? new Gio.Cancellable() : null;
+    this.historyDispatcherCollectorEnabled = true;
+    this.historyDispatcherCollectorIntervalSeconds = 300;
+    this.historyDispatcherCollectorScanLimit = 25;
+    this.historyDispatcherLogLevel = "INFO";
+    this.historyDispatcherStatusHeartbeatSeconds = 30;
+    this.historyDispatcherDispatchEnabled = true;
+    this.historyDispatcherDispatchPaused = false;
+    this.historyDispatcherDispatchBatchSize = 20;
+    this.historyDispatcherClaimTtlSeconds = 900;
+    this.historyDispatcherMaxAttempts = 12;
+    this.historyDispatcherCompletedRetentionDays = 30;
+    this.historyDispatcherAuditRetentionDays = 365;
     this.clipboard = St.Clipboard.get_default();
     this.statusPayload = null;
     this.statusText = "";
@@ -284,10 +310,26 @@ TeeBotusApplet.prototype = {
     this.settings.bindProperty(Settings.BindingDirection.IN, "commits-url", "commitsUrl", null, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "codex-usage-path", "codexUsagePath", null, null);
     this.settings.bindProperty(Settings.BindingDirection.IN, "codex-usage-command", "codexUsageCommand", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "show-history-dispatcher-section", "showHistoryDispatcherSection", this._rebuildFromSettings, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-runtime-path", "historyDispatcherRuntimePath", this._refreshHistoryDispatcherStatus, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-command-path", "historyDispatcherCommandPath", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-config-path", "historyDispatcherConfigPath", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-collector-enabled", "historyDispatcherCollectorEnabled", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-collector-interval-seconds", "historyDispatcherCollectorIntervalSeconds", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-collector-scan-limit", "historyDispatcherCollectorScanLimit", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-log-level", "historyDispatcherLogLevel", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-status-heartbeat-seconds", "historyDispatcherStatusHeartbeatSeconds", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-dispatch-enabled", "historyDispatcherDispatchEnabled", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-dispatch-paused", "historyDispatcherDispatchPaused", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-dispatch-batch-size", "historyDispatcherDispatchBatchSize", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-claim-ttl-seconds", "historyDispatcherClaimTtlSeconds", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-max-attempts", "historyDispatcherMaxAttempts", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-completed-retention-days", "historyDispatcherCompletedRetentionDays", null, null);
+    this.settings.bindProperty(Settings.BindingDirection.IN, "history-dispatcher-audit-retention-days", "historyDispatcherAuditRetentionDays", null, null);
   },
 
   _refreshMenuContents: function() {
-    if (!this.menu || !this.statusMenu || !this.runtimeMenu || !this.messengerMenu || !this.llmMenu || !this.apiMenu || !this.memoryMenu || !this.bibliothekarMenu || !this.proactiveMenu || !this.actionsMenu || !this.quickCommandsMenu || !this.projectMenu) {
+    if (!this.menu || !this.statusMenu || !this.runtimeMenu || !this.historyDispatcherMenu || !this.messengerMenu || !this.llmMenu || !this.apiMenu || !this.memoryMenu || !this.bibliothekarMenu || !this.proactiveMenu || !this.actionsMenu || !this.quickCommandsMenu || !this.projectMenu) {
       this._buildMenu();
       return;
     }
@@ -313,6 +355,7 @@ TeeBotusApplet.prototype = {
     this.menu.addMenuItem(this.statusMenu);
     this.runtimeMenu = new PopupMenu.PopupSubMenuMenuItem(_("Runtime Details"));
     this.menu.addMenuItem(this.runtimeMenu);
+    this.historyDispatcherMenu = new PopupMenu.PopupSubMenuMenuItem(_("History-Dispatcher"));
     this.messengerMenu = new PopupMenu.PopupSubMenuMenuItem(_("Messenger"));
     this.llmMenu = new PopupMenu.PopupSubMenuMenuItem(_("LLM & Dienste"));
     this.apiMenu = new PopupMenu.PopupSubMenuMenuItem(_("API Keys & Usage"));
@@ -322,6 +365,7 @@ TeeBotusApplet.prototype = {
     this.actionsMenu = new PopupMenu.PopupSubMenuMenuItem(_("Bot-Steuerung"));
     this.quickCommandsMenu = new PopupMenu.PopupSubMenuMenuItem(_("Schnellbefehle"));
     this.projectMenu = new PopupMenu.PopupSubMenuMenuItem(_("Projekt"));
+    if (this.showHistoryDispatcherSection) this.menu.addMenuItem(this.historyDispatcherMenu);
     if (this.showMessengerSection) this.menu.addMenuItem(this.messengerMenu);
     if (this.showLlmSection) this.menu.addMenuItem(this.llmMenu);
     if (this.showApiSection) this.menu.addMenuItem(this.apiMenu);
@@ -341,6 +385,7 @@ TeeBotusApplet.prototype = {
     this._stylePopupMenu(this.menu, MENU_MIN_WIDTH_EM);
     this._styleSubmenu(this.statusMenu);
     this._styleSubmenu(this.runtimeMenu);
+    this._styleSubmenu(this.historyDispatcherMenu);
     this._styleSubmenu(this.messengerMenu);
     this._styleSubmenu(this.llmMenu);
     this._styleSubmenu(this.apiMenu);
@@ -402,6 +447,15 @@ TeeBotusApplet.prototype = {
     this.statusMenu.menu.addMenuItem(this._actionItem(_("Qdrant-Status im Terminal"), () => this._openQdrantStatusTerminal()));
     this.statusMenu.menu.addMenuItem(this._actionItem(_("Status JSON kopieren"), () => this._copyStatusJson()));
     this.statusMenu.menu.addMenuItem(this._actionItem(_("Applet-Einstellungen"), () => this._openAppletSettings()));
+    if (this.showHistoryDispatcherSection) {
+      this.historyDispatcherMenu.menu.removeAll();
+      this.historyDispatcherMenu.menu.addMenuItem(this._actionItem(_("Dispatcher-Status aktualisieren"), () => this._refreshHistoryDispatcherStatus()));
+      this.historyDispatcherMenu.menu.addMenuItem(this._actionItem(_("Dispatcher-Collector jetzt"), () => this._runHistoryDispatcherAction("collect")));
+      this.historyDispatcherMenu.menu.addMenuItem(this._actionItem(_("Dispatcher-Konfiguration anwenden"), () => this._runHistoryDispatcherConfigApply()));
+      this.historyDispatcherMenu.menu.addMenuItem(this._actionItem(_("Dispatcher-Dienst starten"), () => this._runHistoryDispatcherAction("service-start")));
+      this.historyDispatcherMenu.menu.addMenuItem(this._actionItem(_("Dispatcher-Dienst neu starten"), () => this._runHistoryDispatcherAction("service-restart")));
+      this.historyDispatcherMenu.menu.addMenuItem(this._actionItem(_("Dispatcher-Dienst stoppen"), () => this._runHistoryDispatcherAction("service-stop")));
+    }
 
     this.actionsMenu.menu.removeAll();
     if (!this.enableServiceActions) {
@@ -446,6 +500,9 @@ TeeBotusApplet.prototype = {
 
   _populateDynamicMenus: function() {
     let payload = this.statusPayload || {};
+    if (this.showHistoryDispatcherSection) {
+      this._populateHistoryDispatcherMenu();
+    }
     let runtime = payload.runtime || {};
     let sections = runtime.sections || {};
     let summary = runtime.summary || {};
@@ -626,6 +683,211 @@ TeeBotusApplet.prototype = {
       return loadingText;
     }
     return _("Keine passenden Statuszeilen im Runtime-Status.");
+  },
+
+  _historyDispatcherSnapshotPath: function() {
+    let runtime = this._safeLocalPath(this.historyDispatcherRuntimePath, DEFAULT_HISTORY_DISPATCHER_RUNTIME_PATH);
+    return GLib.build_filenamev([runtime, "status-v1.json"]);
+  },
+
+  _historyDispatcherConfig: function() {
+    return this._safeLocalPath(this.historyDispatcherConfigPath, DEFAULT_HISTORY_DISPATCHER_CONFIG);
+  },
+
+  _historyDispatcherCommand: function() {
+    let args = this._safeExecutableArgs(this.historyDispatcherCommandPath, [DEFAULT_HISTORY_DISPATCHER_COMMAND]);
+    return args.length ? args[0] : DEFAULT_HISTORY_DISPATCHER_COMMAND;
+  },
+
+  _refreshHistoryDispatcherStatus: function() {
+    if (!this.showHistoryDispatcherSection || this.appletRemoved || this.historyDispatcherRunning) {
+      return;
+    }
+    this.historyDispatcherRunning = true;
+    let generation = this.spawnGeneration;
+    let file = Gio.file_new_for_path(this._historyDispatcherSnapshotPath());
+    try {
+      file.query_info_async("standard::size", Gio.FileQueryInfoFlags.NONE, GLib.PRIORITY_DEFAULT, this.historyDispatcherCancellable, (source, result) => {
+        if (this.appletRemoved || generation !== this.spawnGeneration) {
+          return;
+        }
+        try {
+          let info = source.query_info_finish(result);
+          if (info.get_size() > MAX_HISTORY_DISPATCHER_SNAPSHOT_BYTES) {
+            throw new Error(_("Dispatcher-Snapshot zu groß"));
+          }
+          source.load_contents_async(this.historyDispatcherCancellable, (loadedSource, loadedResult) => {
+            if (this.appletRemoved || generation !== this.spawnGeneration) {
+              return;
+            }
+            try {
+              let loaded = loadedSource.load_contents_finish(loadedResult);
+              let text = ByteArray.toString(loaded[1]);
+              if (text.length > MAX_HISTORY_DISPATCHER_SNAPSHOT_BYTES) {
+                throw new Error(_("Dispatcher-Snapshot zu groß"));
+              }
+              let payload = JSON.parse(text);
+              if (!payload || typeof payload !== "object" || payload.schema_version !== 1) {
+                throw new Error(_("Ungültiger Dispatcher-Snapshot"));
+              }
+              this.historyDispatcherPayload = payload;
+              this.historyDispatcherError = "";
+            } catch (error) {
+              this.historyDispatcherError = String(error);
+            }
+            this.historyDispatcherRunning = false;
+            this._populateHistoryDispatcherMenu();
+          });
+        } catch (error) {
+          this.historyDispatcherError = String(error);
+          this.historyDispatcherRunning = false;
+          this._populateHistoryDispatcherMenu();
+        }
+      });
+    } catch (error) {
+      this.historyDispatcherRunning = false;
+      this.historyDispatcherError = String(error);
+      this._populateHistoryDispatcherMenu();
+    }
+  },
+
+  _populateHistoryDispatcherMenu: function() {
+    if (!this.historyDispatcherMenu || !this.historyDispatcherMenu.menu) {
+      return;
+    }
+    try {
+      this.historyDispatcherMenu.menu.removeAll();
+      let payload = this.historyDispatcherPayload || {};
+      let generated = Date.parse(String(payload.generated_at || ""));
+      let stale = !Number.isFinite(generated) || (Date.now() - generated) > HISTORY_DISPATCHER_STALE_AFTER_SECONDS * 1000;
+      this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(payload.ok === false ? _("Status: Warnung") : (stale ? _("Status: veraltet") : _("Status: bereit")), false));
+      if (this.historyDispatcherError) {
+        this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(this._shortText(this.historyDispatcherError, 160), false));
+      }
+      this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(_("Queue: ") + String(payload.queued || 0) + _(" / gesamt ") + String(payload.total || 0), false));
+      let collector = payload.collector || {};
+      this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(_("Collector: ") + (collector.enabled ? _("aktiv") : _("aus")) + _(" / Sources ") + String(collector.sources || 0), false));
+      let dispatch = payload.dispatch || {};
+      this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(_("Dispatch: ") + (dispatch.paused ? _("pausiert") : (dispatch.enabled ? _("aktiv") : _("aus"))), false));
+      this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(_("Version: ") + String(payload.version || "?"), false));
+      let preview = Array.isArray(payload.queue_preview) ? payload.queue_preview : [];
+      for (let i = 0; i < preview.length && i < 10; i++) {
+        let item = preview[i] || {};
+        let itemId = String(item.id || "");
+        if (!itemId) {
+          continue;
+        }
+        let state = String(item.status || "unknown");
+        this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(_("Eintrag ") + this._shortText(itemId, 24) + ": " + state, false));
+        if (state === "failed") {
+          this.historyDispatcherMenu.menu.addMenuItem(this._actionItem(_("Retry ") + this._shortText(itemId, 20), () => this._runHistoryDispatcherAction("retry", itemId)));
+        }
+        this.historyDispatcherMenu.menu.addMenuItem(this._actionItem(_("Löschen ") + this._shortText(itemId, 20), () => this._confirmHistoryDispatcherDelete(itemId)));
+      }
+    } catch (error) {
+      try { global.logError(error); } catch (_) {}
+    }
+  },
+
+  _runHistoryDispatcherAction: function(action, itemId) {
+    let allowed = ["collect", "retry", "service-start", "service-stop", "service-restart"];
+    if (allowed.indexOf(String(action || "")) < 0 || this.appletRemoved) {
+      return;
+    }
+    let args = [this._historyDispatcherCommand(), "--config", this._historyDispatcherConfig()];
+    args.push("applet-action", "--action", action);
+    if (action === "retry") {
+      args.push("--item-id", String(itemId || ""));
+    }
+    this._spawn(args, (stdout, stderr, ok) => {
+      if (!ok) {
+        this.historyDispatcherError = this._shortText(stderr || stdout || _("Dispatcher-Aktion fehlgeschlagen"), 160);
+      } else {
+        this.historyDispatcherError = "";
+      }
+      this._populateHistoryDispatcherMenu();
+      this._refreshHistoryDispatcherStatus();
+    }, this._repoPath(), { timeoutMs: 30000, maxStdoutChars: 65536, maxStderrChars: 10000 });
+  },
+
+  _runHistoryDispatcherConfigApply: function() {
+    let values = {
+      collector_enabled: Boolean(this.historyDispatcherCollectorEnabled),
+      collector_interval_seconds: this._boundedInt(this.historyDispatcherCollectorIntervalSeconds, 300, 60, 86400),
+      collector_scan_limit: this._boundedInt(this.historyDispatcherCollectorScanLimit, 25, 1, 10000),
+      log_level: ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"].indexOf(String(this.historyDispatcherLogLevel || "INFO").toUpperCase()) >= 0 ? String(this.historyDispatcherLogLevel || "INFO").toUpperCase() : "INFO",
+      status_heartbeat_seconds: this._boundedInt(this.historyDispatcherStatusHeartbeatSeconds, 30, 1, 3600),
+      dispatch_enabled: Boolean(this.historyDispatcherDispatchEnabled),
+      dispatch_paused: Boolean(this.historyDispatcherDispatchPaused),
+      dispatch_batch_size: this._boundedInt(this.historyDispatcherDispatchBatchSize, 20, 1, 1000),
+      claim_ttl_seconds: this._boundedInt(this.historyDispatcherClaimTtlSeconds, 900, 1, 604800),
+      max_attempts: this._boundedInt(this.historyDispatcherMaxAttempts, 12, 1, 1000),
+      completed_retention_days: this._boundedInt(this.historyDispatcherCompletedRetentionDays, 30, 1, 3650),
+      audit_retention_days: this._boundedInt(this.historyDispatcherAuditRetentionDays, 365, 1, 3650)
+    };
+    this._spawn([
+      this._historyDispatcherCommand(),
+      "--config",
+      this._historyDispatcherConfig(),
+      "config-apply",
+      "--values-json",
+      JSON.stringify(values)
+    ], (stdout, stderr, ok) => {
+      this.historyDispatcherError = ok ? "" : this._shortText(stderr || stdout || _("Dispatcher-Konfiguration fehlgeschlagen"), 160);
+      this._populateHistoryDispatcherMenu();
+      this._refreshHistoryDispatcherStatus();
+    }, this._repoPath(), { timeoutMs: 30000, maxStdoutChars: 65536, maxStderrChars: 10000 });
+  },
+
+  _confirmHistoryDispatcherDelete: function(itemId) {
+    let dialog = new ModalDialog.ModalDialog();
+    let completed = false;
+    let finish = (confirmed) => {
+      if (completed) {
+        return;
+      }
+      completed = true;
+      if (confirmed) {
+        this._runHistoryDispatcherDelete(itemId);
+      }
+    };
+    try {
+      dialog.contentLayout.add_child(new St.Label({ text: _("Queue-Eintrag endgültig löschen?"), x_expand: true }));
+      dialog.contentLayout.add_child(new St.Label({ text: String(itemId).slice(0, 96) + " / LOESCHEN 1", x_expand: true }));
+      dialog.setButtons([
+        {
+          label: _("Abbrechen"),
+          key: Clutter.KEY_Escape,
+          action: function() { dialog.close(); finish(false); }
+        },
+        {
+          label: _("LOESCHEN 1"),
+          action: function() { dialog.close(); finish(true); }
+        }
+      ]);
+      if (!dialog.open()) {
+        this._setStatusText(_("Dispatcher-Bestätigungsdialog konnte nicht geöffnet werden."));
+        finish(false);
+      }
+    } catch (error) {
+      try { global.logError(error); } catch (_) {}
+      finish(false);
+    }
+  },
+
+  _runHistoryDispatcherDelete: function(itemId) {
+    this._spawn([
+      this._historyDispatcherCommand(),
+      "--config",
+      this._historyDispatcherConfig(),
+      "delete-item",
+      "--item-id",
+      String(itemId)
+    ], (stdout, stderr, ok) => {
+      this.historyDispatcherError = ok ? "" : this._shortText(stderr || stdout || _("Dispatcher-Löschen fehlgeschlagen"), 160);
+      this._populateHistoryDispatcherMenu();
+      this._refreshHistoryDispatcherStatus();
+    }, this._repoPath(), { timeoutMs: 30000, maxStdoutChars: 65536, maxStderrChars: 10000 });
   },
 
   _sectionProblemText: function(value) {
@@ -1282,6 +1544,7 @@ TeeBotusApplet.prototype = {
   },
 
   _refreshStatus: function() {
+    this._refreshHistoryDispatcherStatus();
     if (this.statusRunning) {
       this.statusRefreshPending = true;
       return;
@@ -2627,6 +2890,11 @@ TeeBotusApplet.prototype = {
   on_applet_removed_from_panel: function() {
     this.appletRemoved = true;
     this.spawnGeneration += 1;
+    try {
+      if (this.historyDispatcherCancellable) this.historyDispatcherCancellable.cancel();
+    } catch (err) {
+      try { global.logError(err); } catch (_) {}
+    }
     let runningProcesses = this.spawnProcesses || [];
     this.spawnProcesses = [];
     for (let process of runningProcesses) {
@@ -2640,6 +2908,7 @@ TeeBotusApplet.prototype = {
     }
     this.statusRunning = false;
     this.statusRefreshPending = false;
+    this.historyDispatcherRunning = false;
     if (this.statusTimer) {
       Mainloop.source_remove(this.statusTimer);
       this.statusTimer = 0;
