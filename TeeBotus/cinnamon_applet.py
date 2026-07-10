@@ -228,7 +228,7 @@ def build_status_payload(
     repo = _repo_status(root)
     runtime_output_ok = bool(str(runtime.get("stdout", "") or "").strip())
     command_ok = (
-        runtime["returncode"] == 0
+        _status_query_ok(runtime)
         and runtime_output_ok
         and _status_query_ok(unit)
         and _unit_state_ok(unit)
