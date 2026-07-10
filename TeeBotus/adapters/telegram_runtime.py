@@ -3680,6 +3680,12 @@ def _is_telegram_getupdates_conflict(exc: TelegramAPIError) -> bool:
 
 
 def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:
+    try:
+        from TeeBotus.runtime.telegram_runner import build_telegram_runtime_bridge
+    except Exception:
+        LOGGER.exception("Modern Telegram runtime bridge is unavailable; refusing legacy polling startup.")
+        raise
+
     stop_event = threading.Event()
     threads: list[threading.Thread] = []
     youtube_job_runner = YouTubeTranscriptionJobRunner()
@@ -3690,32 +3696,6 @@ def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:
             api = TelegramAPI(config.token)
             api.instance_name = instance_config.instance_name
             api.adapter_slot = adapter_slot
-            try:
-                from TeeBotus.runtime.telegram_runner import build_telegram_runtime_bridge
-            except Exception:
-                LOGGER.exception(
-                    "Failed to initialize runtime bridge for instance=%s slot=%s. Falling back to direct polling.",
-                    instance_config.instance_name,
-                    adapter_slot,
-                )
-                thread = threading.Thread(
-                    target=run_polling,
-                    kwargs={
-                        "api": api,
-                        "instruction_store": InstructionStore(instance_config.instruction_path),
-                        "instance_name": instance_config.instance_name,
-                        "stop_event": stop_event,
-                        "poll_timeout": MULTI_BOT_POLL_TIMEOUT_SECONDS,
-                        "token_label": config.label,
-                        "openai_api_key": config.openai_api_key,
-                        "youtube_job_runner": youtube_job_runner,
-                    },
-                    name=f"telegram-bot-{instance_config.instance_name}-{config.label}",
-                    daemon=True,
-                )
-                threads.append(thread)
-                thread.start()
-                continue
             bridge = build_telegram_runtime_bridge(
                 api=api,
                 instance_name=instance_config.instance_name,
