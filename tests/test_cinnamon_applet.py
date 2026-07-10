@@ -1725,7 +1725,7 @@ def test_cinnamon_applet_formats_runtime_slot_and_admin_status_lines() -> None:
         """
         ({
           runtime: applet._formatLlmLine("runtime_slot=Demo/signal status=not_configured reason=missing_signal_credentials"),
-          group: applet._formatAccountLine("admin_accounts=Demo status=configured source=default accounts=2 local=1 cross_instance=1 routable=2"),
+          group: applet._formatAccountLine("admin_accounts=Demo status=configured source=default accounts=2 local=1 cross_instance=1 not_local=1 routable=2 warnings=0 invalid=0"),
           account: applet._formatAccountLine("admin_account=Demo/abcdefghijklmnopqrstuvwxyz0123456789 status=routable channel=telegram slot=1 source_instance=Demo")
         })
         """
@@ -1733,8 +1733,24 @@ def test_cinnamon_applet_formats_runtime_slot_and_admin_status_lines() -> None:
 
     assert result == {
         "runtime": "Runtime-Slot Demo/signal: nicht konfiguriert; Grund missing_signal_credentials",
-        "group": "Admin-Gruppe Demo: konfiguriert; Accounts 2; Lokal 1; Cross-Instanz 1; Routbar 2; Quelle default",
+        "group": "Admin-Gruppe Demo: konfiguriert; Accounts 2; Lokal 1; Cross-Instanz 1; Nicht-lokal 1; Routbar 2; Warnungen 0; Ungueltig 0; Quelle default",
         "account": "Admin-Konto Demo/abcdefghijklmnopqrstuvwxyz0123456789: routbar; Kanal telegram; Slot 1; Quelle Demo",
+    }
+
+
+def test_cinnamon_applet_usage_formatters_keep_error_details() -> None:
+    result = _run_js_applet_expression(
+        """
+        ({
+          summary: applet._formatApiBudgetLine("codex_usage=local status=broken snapshots=2 error=snapshot_failed"),
+          account: applet._formatApiBudgetLine("codex_usage_account=Demo status=unavailable five_hour=? weekly=? error=account_unreachable")
+        })
+        """
+    )
+
+    assert result == {
+        "summary": "codex-usage: defekt; Snapshots 2; Fehler snapshot_failed",
+        "account": "codex-usage Demo: nicht verfuegbar; 5h ?; Woche ?; Fehler account_unreachable",
     }
 
 

@@ -769,10 +769,10 @@ TeeBotusApplet.prototype = {
     if (fields.codex_usage) {
       let stale = fields.stale_hours ? "; Alter " + fields.stale_hours + "h" : "";
       let status = this._codexUsageIsStale(fields) ? "stale" : fields.status;
-      return "codex-usage: " + this._statusWord(status) + "; Snapshots " + String(fields.snapshots || "0") + stale;
+      return "codex-usage: " + this._statusWord(status) + "; Snapshots " + String(fields.snapshots || "0") + stale + this._errorText(fields);
     }
     if (fields.codex_usage_account) {
-      return "codex-usage " + fields.codex_usage_account + ": " + this._statusWord(fields.status) + "; 5h " + String(fields.five_hour || "?") + "; Woche " + String(fields.weekly || "?");
+      return "codex-usage " + fields.codex_usage_account + ": " + this._statusWord(fields.status) + "; 5h " + String(fields.five_hour || "?") + "; Woche " + String(fields.weekly || "?") + this._errorText(fields);
     }
     return line;
   },
@@ -988,7 +988,10 @@ TeeBotusApplet.prototype = {
       let counts = "; Accounts " + String(fields.accounts || "?")
         + "; Lokal " + String(fields.local || "?")
         + "; Cross-Instanz " + String(fields.cross_instance || "?")
-        + "; Routbar " + String(fields.routable || "?");
+        + "; Nicht-lokal " + String(fields.not_local || "?")
+        + "; Routbar " + String(fields.routable || "?")
+        + "; Warnungen " + String(fields.warnings || "0")
+        + "; Ungueltig " + String(fields.invalid || "0");
       return "Admin-Gruppe " + fields.admin_accounts + ": " + this._statusWord(fields.status) + counts + source + this._errorText(fields);
     }
     if (fields.admin_account) {
