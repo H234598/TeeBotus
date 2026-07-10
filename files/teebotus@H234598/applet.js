@@ -24,6 +24,7 @@ const DEFAULT_COMMITS_URL = "https://github.com/H234598/TeeBotus/commits/main";
 const DEFAULT_STATUS_REFRESH_SECONDS = 60;
 const DEFAULT_STATUS_TIMEOUT_SECONDS = 30;
 const STATUS_REFRESH_MIN_SECONDS = 15;
+const STATUS_REFRESH_MAX_SECONDS = 3600;
 const STATUS_TIMEOUT_MIN_SECONDS = 1;
 const STATUS_TIMEOUT_MAX_SECONDS = 300;
 const STATUS_TIMEOUT_GRACE_SECONDS = 5;
@@ -2453,7 +2454,7 @@ TeeBotusApplet.prototype = {
     if (!this.autoRefresh) {
       return;
     }
-    let seconds = Math.max(STATUS_REFRESH_MIN_SECONDS, this._positiveInt(this.statusRefreshSeconds, DEFAULT_STATUS_REFRESH_SECONDS));
+    let seconds = this._boundedInt(this.statusRefreshSeconds, DEFAULT_STATUS_REFRESH_SECONDS, STATUS_REFRESH_MIN_SECONDS, STATUS_REFRESH_MAX_SECONDS);
     this.statusTimer = Mainloop.timeout_add_seconds(seconds, () => {
       this._refreshStatus();
       if (!this.autoRefresh) {

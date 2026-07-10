@@ -165,6 +165,15 @@ console.log(JSON.stringify({{before, after: applet.statusTimer, keepRunning, rem
     assert result == {"before": 42, "after": 0, "keepRunning": False, "removed": []}
 
 
+def test_cinnamon_applet_refresh_interval_is_bounded() -> None:
+    result = _run_js_applet_expression(
+        "({high: (applet.statusRefreshSeconds = 999999, applet._boundedInt(applet.statusRefreshSeconds, 60, 15, 3600)), "
+        "low: (applet.statusRefreshSeconds = 1, applet._boundedInt(applet.statusRefreshSeconds, 60, 15, 3600))})"
+    )
+
+    assert result == {"high": 3600, "low": 60}
+
+
 def test_cinnamon_applet_menu_labels_have_bounded_layout() -> None:
     result = _run_js_applet_expression(
         """
@@ -226,7 +235,8 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert schema["status-refresh-seconds"]["default"] == 60
     assert "const DEFAULT_STATUS_REFRESH_SECONDS = 60;" in source
     assert "this.statusRefreshSeconds = DEFAULT_STATUS_REFRESH_SECONDS;" in source
-    assert "this._positiveInt(this.statusRefreshSeconds, DEFAULT_STATUS_REFRESH_SECONDS)" in source
+    assert "STATUS_REFRESH_MAX_SECONDS = 3600" in source
+    assert "this._boundedInt(this.statusRefreshSeconds, DEFAULT_STATUS_REFRESH_SECONDS, STATUS_REFRESH_MIN_SECONDS, STATUS_REFRESH_MAX_SECONDS)" in source
     assert "const CODEX_USAGE_STALE_WARNING_HOURS = 24;" in source
     assert schema["status-timeout-seconds"]["default"] == 30
     assert "const DEFAULT_STATUS_TIMEOUT_SECONDS = 30;" in source
