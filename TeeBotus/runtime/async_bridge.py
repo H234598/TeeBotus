@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
 from collections.abc import Callable, Coroutine
 from typing import Any
 
@@ -21,23 +20,22 @@ def run_background_coroutine(
 ) -> Any:
     """Run a background coroutine on the runtime loop when one is available."""
     if loop is not None and not loop.is_closed():
-        if threading.get_ident() == loop_thread_id:
-            try:
-                running_loop = asyncio.get_running_loop()
-            except RuntimeError:
-                running_loop = None
-            if running_loop is loop:
-                task = loop.create_task(coroutine_factory())
-                if on_scheduled_result is not None:
-                    task.add_done_callback(lambda completed: _handle_scheduled_result(completed, on_scheduled_result))
-                return None
-
-        future = asyncio.run_coroutine_threadsafe(coroutine_factory(), loop)
         try:
-            return future.result(timeout=timeout)
-        except Exception:
-            future.cancel()
-            raise
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+        if running_loop is loop:
+            task = loop.create_task(coroutine_factory())
+            if on_scheduled_result is not None:
+                task.add_done_callback(lambda completed: _handle_scheduled_result(completed, on_scheduled_result))
+            return None
+        if loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(coroutine_factory(), loop)
+            try:
+                return future.result(timeout=timeout)
+            except Exception:
+                future.cancel()
+                raise
 
     return asyncio.run(coroutine_factory())
 
