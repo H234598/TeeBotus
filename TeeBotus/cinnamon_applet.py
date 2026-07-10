@@ -65,7 +65,7 @@ QUOTED_AUTHORIZATION_TOKEN_RE = re.compile(
 )
 SECRET_OPTION_VALUE_RE = re.compile(
     r"(?<![A-Za-z0-9_-])(--?(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|cookie|token|secret|password))"
-    r"(\s+)((?:\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|(?!-)[^\s,;&)\]}}>]+))",
+    r"(\s+|=)((?:\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|(?!-)[^\s,;&)\]}}>]+))",
     re.IGNORECASE,
 )
 COOKIE_HEADER_RE = re.compile(r"(?i)(?<![A-Za-z0-9_-])((?:set-cookie|cookie)\s*:\s*)[^\r\n]+")
