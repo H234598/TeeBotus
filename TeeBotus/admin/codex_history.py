@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import copy
+from contextlib import contextmanager
 import hashlib
 import html
 import json
@@ -26,6 +27,11 @@ from pathlib import Path
 from urllib.parse import urlsplit
 from typing import Any
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - Windows compatibility.
+    fcntl = None
 
 from TeeBotus import __version__
 from TeeBotus.artifact_outputs import obsidian_incoming_path
@@ -65,6 +71,7 @@ CODEX_HISTORY_DISPATCH_INSTANCES_ENV = "TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCE
 DEFAULT_CODEX_HISTORY_DISPATCH_INSTANCES = ("TeeBotus_Logger", "TeeBotusLogger", "TBL")
 CODEX_HISTORY_RECEIPT_RANKS = {"delivered": 1, "viewed": 2, "read": 3}
 _CODEX_HISTORY_EVENT_LOCK = threading.RLock()
+_CODEX_HISTORY_EVENT_LOCK_FILENAME = ".Codex_History_Events.lock"
 CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT = 250
 CODEX_HISTORY_GRAPH_SVG_ENGINES = frozenset({"builtin", "auto", "mmdc"})
 CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
@@ -551,9 +558,47 @@ def _synchronized_codex_history_event(function: Callable[..., dict[str, Any]]) -
     @wraps(function)
     def wrapped(*args: Any, **kwargs: Any) -> dict[str, Any]:
         with _CODEX_HISTORY_EVENT_LOCK:
-            return function(*args, **kwargs)
+            store = args[0] if args else kwargs.get("store")
+            with _codex_history_event_file_lock(store):
+                return function(*args, **kwargs)
 
     return wrapped
+
+
+@contextmanager
+def _codex_history_event_file_lock(store: object) -> Iterator[None]:
+    if fcntl is None or store is None:
+        yield
+        return
+    try:
+        account_dir = getattr(store, "account_dir")(INSTANCE_STATE_ACCOUNT_ID)
+        account_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = account_dir / _CODEX_HISTORY_EVENT_LOCK_FILENAME
+        handle = lock_path.open("a+b")
+    except (AttributeError, OSError):
+        yield
+        return
+    try:
+        try:
+            os.chmod(lock_path, 0o600)
+        except OSError:
+            pass
+        try:
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+        except OSError:
+            handle.close()
+            yield
+            return
+        try:
+            yield
+        finally:
+            try:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            finally:
+                handle.close()
+    except BaseException:
+        handle.close()
+        raise
 
 
 @_synchronized_codex_history_event
