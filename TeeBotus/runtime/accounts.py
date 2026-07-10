@@ -59,6 +59,8 @@ _ACCOUNT_IDENTITY_LOCK = threading.RLock()
 _ACCOUNT_IDENTITY_LOCK_STATE = threading.local()
 _ACCOUNT_MEMORY_LOCK = threading.RLock()
 _ACCOUNT_MEMORY_LOCK_STATE = threading.local()
+_PROACTIVE_OUTBOX_LOCK = threading.RLock()
+_PROACTIVE_OUTBOX_LOCK_STATE = threading.local()
 PROACTIVE_OUTBOX_FILENAME = "Proactive_Outbox.jsonl"
 PROACTIVE_AUDIT_FILENAME = "Proactive_Audit.jsonl"
 PROACTIVE_DISPATCH_RESULTS_FILENAME = "Proactive_Dispatch_Results.jsonl"
@@ -1507,18 +1509,31 @@ class AccountStore:
         account_dir = self.account_dir(account_id)
         account_dir.mkdir(parents=True, exist_ok=True)
         lock_path = account_dir / f".{PROACTIVE_OUTBOX_FILENAME}.lock"
-        with lock_path.open("a+b") as handle:
-            try:
-                os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
-            except OSError:
-                pass
-            if fcntl is not None:
-                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-            try:
+        lock_key = os.path.realpath(os.fspath(lock_path))
+        with _PROACTIVE_OUTBOX_LOCK:
+            held_paths = getattr(_PROACTIVE_OUTBOX_LOCK_STATE, "paths", None)
+            if held_paths is None:
+                held_paths = set()
+                _PROACTIVE_OUTBOX_LOCK_STATE.paths = held_paths
+            if lock_key in held_paths:
                 yield
-            finally:
+                return
+            with lock_path.open("a+b") as handle:
+                try:
+                    os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
+                except OSError:
+                    pass
                 if fcntl is not None:
-                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                held_paths.add(lock_key)
+                try:
+                    yield
+                finally:
+                    held_paths.discard(lock_key)
+                    if fcntl is not None:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            if not held_paths:
+                del _PROACTIVE_OUTBOX_LOCK_STATE.paths
 
     @contextmanager
     def status_outbox_lock(self, account_id: str) -> Iterator[None]:

@@ -1452,6 +1452,17 @@ def test_append_proactive_audit_event_uses_outbox_lock(tmp_path, monkeypatch):
     assert store.read_proactive_audit(account_id)[0]["id"] == event_id
 
 
+def test_proactive_outbox_lock_is_reentrant(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+
+    with store.proactive_outbox_lock(account_id):
+        with store.proactive_outbox_lock(account_id):
+            event_id = store.append_proactive_audit_event(account_id, {"event_type": "nested"})
+
+    assert store.read_proactive_audit(account_id)[0]["id"] == event_id
+
+
 def test_account_store_sqlite_backend_keeps_newer_legacy_jsonl_row_for_same_id(tmp_path, monkeypatch):
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
