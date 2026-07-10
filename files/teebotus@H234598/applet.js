@@ -1193,13 +1193,12 @@ TeeBotusApplet.prototype = {
     }
     let commandTotal = this._nonNegativeInt((health || {}).command_problem_count, 0);
     let qdrantTotal = this._nonNegativeInt((health || {}).qdrant_problem_count, 0);
-    if (qdrantTotal <= 0) {
-      qdrantTotal = Math.max(
-        this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0),
-        this._nonNegativeInt((health || {}).qdrant_probe_problem_count, 0),
-        this._nonNegativeInt((health || {}).qdrant_unit_problem_count, 0)
-      );
-    }
+    qdrantTotal = Math.max(
+      qdrantTotal,
+      this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0),
+      this._nonNegativeInt((health || {}).qdrant_probe_problem_count, 0),
+      this._nonNegativeInt((health || {}).qdrant_unit_problem_count, 0)
+    );
     let derivedTotal = runtimeTotal + commandTotal + qdrantTotal;
     return derivedTotal;
   },
