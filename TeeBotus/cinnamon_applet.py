@@ -59,6 +59,7 @@ QUOTED_AUTHORIZATION_TOKEN_RE = re.compile(
     r"(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(\5)",
     re.IGNORECASE,
 )
+COOKIE_HEADER_RE = re.compile(r"(?i)(?<![A-Za-z0-9_-])((?:set-cookie|cookie)\s*:\s*)[^\r\n]+")
 STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
 FREE_TEXT_STATUS_FIELDS = frozenset({"action", "command", "error", "message", "route_error"})
 FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
@@ -83,7 +84,7 @@ FLAG_PROBLEM_STATUS_FIELDS = frozenset({"warning"})
 NEUTRAL_FLAG_VALUES = frozenset({"0", "false", "no", "none", "off"})
 FORCED_PROBLEM_STATUS_FIELDS = {"account_identity_warning": "warning"}
 SENSITIVE_ASSIGNMENT_KEY_PATTERN = (
-    r"(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|token|secret|password)"
+    r"(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|cookie|token|secret|password)"
 )
 SECRET_ASSIGNMENT_VALUE_PATTERN = (
     r"<redacted(?:-secret)?>|\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|"
@@ -99,12 +100,12 @@ SECRET_ASSIGNMENT_RE = re.compile(
     re.IGNORECASE,
 )
 SECRET_ASSIGNMENT_FRAGMENT_RE = re.compile(
-    rf"([\s=;,&?#(\[<{{])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\s*([:=])\s*"
+    rf"([\s=:;,&?#(\[<{{])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\s*([:=])\s*"
     rf"({SECRET_ASSIGNMENT_FRAGMENT_VALUE_PATTERN})",
     re.IGNORECASE,
 )
 QUOTED_SECRET_ASSIGNMENT_RE = re.compile(
-    rf"(^|[\s=;,&?#(\[<{{])([\"'])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\2(\s*[=:]\s*)"
+    rf"(^|[\s=:;,&?#(\[<{{])([\"'])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\2(\s*[=:]\s*)"
     rf"({SECRET_ASSIGNMENT_FRAGMENT_VALUE_PATTERN})",
     re.IGNORECASE,
 )
@@ -849,6 +850,7 @@ def _redact(value: str) -> str:
     text = AUTHORIZATION_TOKEN_RE.sub(r"\1\2 <redacted-secret>", text)
     text = BARE_AUTHORIZATION_TOKEN_RE.sub(r"\1 <redacted-secret>", text)
     text = QUOTED_AUTHORIZATION_TOKEN_RE.sub(_redact_quoted_authorization_token, text)
+    text = COOKIE_HEADER_RE.sub(r"\1<redacted-secret>", text)
     text = QUOTED_SECRET_ASSIGNMENT_RE.sub(_redact_quoted_secret_assignment, text)
     text = SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, text)
     text = SECRET_ASSIGNMENT_FRAGMENT_RE.sub(_redact_secret_assignment_fragment, text)

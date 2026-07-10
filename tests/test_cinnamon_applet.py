@@ -3654,6 +3654,28 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert cinnamon_applet._redact('"api_key_env":"GEMINI_API_KEY"') == '"api_key_env":"GEMINI_API_KEY"'
 
 
+def test_cinnamon_applet_runtime_parser_redacts_nested_key_and_cookie_headers() -> None:
+    nested_secret = "nested-plain-secret-value"
+    cookie_secret = "cookie-plain-secret-value"
+    json_cookie_secret = "json-cookie-plain-secret-value"
+
+    parsed = parse_runtime_status(
+        f"""
+        [Tools und Account-Memory]
+        account_memory=Demo status=broken error=diagnostic:api_key={nested_secret}; Cookie: session={cookie_secret}
+        account_memory=Demo/second status=broken error={{"cookie":"{json_cookie_secret}"}}
+        """
+    )
+    rendered = json.dumps(parsed, sort_keys=True)
+
+    assert nested_secret not in rendered
+    assert cookie_secret not in rendered
+    assert json_cookie_secret not in rendered
+    assert "diagnostic:api_key=<redacted>" in rendered
+    assert "Cookie: <redacted-secret>" in rendered
+    assert '"cookie":"<redacted>"' in parsed["sections"]["Tools und Account-Memory"][1]
+
+
 def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> None:
     bearer_token = "abcdefghijklmnopqrstuvwxyz123456"
     bare_bearer_token = "barebearerabcdefghijklmnopqrstuvwxyz123456"
