@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import base64
+import threading
+import time
 
 import pytest
 
@@ -44,6 +46,43 @@ def test_account_text_helpers_reject_path_traversal(tmp_path):
         store.read_account_text(account_id, "nested/file.md")
 
     assert not (tmp_path / "escape.md").exists()
+
+
+def test_account_identity_creation_is_serialized_across_threads(tmp_path, monkeypatch):
+    root = tmp_path / "accounts"
+    first = AccountStore(root, "Depressionsbot", provider())
+    second = AccountStore(root, "Depressionsbot", provider())
+    original_load = AccountStore._load_identities
+    state = {"active": 0, "maximum": 0}
+    state_lock = threading.Lock()
+
+    def slow_load(store):
+        with state_lock:
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+        try:
+            time.sleep(0.03)
+            return original_load(store)
+        finally:
+            with state_lock:
+                state["active"] -= 1
+
+    monkeypatch.setattr(AccountStore, "_load_identities", slow_load)
+    identity = telegram_identity_key(4242)
+    results: list[str] = []
+
+    threads = [
+        threading.Thread(target=lambda store=store: results.append(store.resolve_or_create_account(identity)), args=())
+        for store in (first, second)
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert len(results) == 2
+    assert results[0] == results[1]
+    assert state["maximum"] == 1
 
 
 def test_tombstoned_account_cannot_receive_login_or_secret_rotation(tmp_path):

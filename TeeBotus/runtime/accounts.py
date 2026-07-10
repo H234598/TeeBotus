@@ -13,6 +13,7 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import threading
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -37,6 +38,7 @@ MAPPING_ALGORITHM = "AES-256-GCM"
 TEEBOTUS_ENCRYPTION_MAGICS = {"TMBMAP1", "TMBMEM1", "TMBKEY1"}
 ACCOUNT_INDEX_FILENAME = "Account_Index.json"
 ACCOUNT_IDENTITIES_FILENAME = "Account_Identities.json"
+ACCOUNT_IDENTITIES_LOCK_FILENAME = ".Account_Identities.json.lock"
 ACCOUNT_SECRETS_FILENAME = "Account_Secrets.json"
 ACCOUNT_KEYRING_FILENAME = "Account_Keyring.json"
 ACCOUNTS_DIRNAME = "accounts"
@@ -51,6 +53,7 @@ AGENT_STATE_FILENAME = "Agent_State.json"
 LLM_STATE_COLLECTION = "llm_state"
 AGENT_STATE_COLLECTION = "agent_state"
 INSTANCE_STATE_ACCOUNT_ID = hashlib.sha512(b"TeeBotus:instance-state:v1").hexdigest()
+_ACCOUNT_IDENTITY_LOCK = threading.RLock()
 PROACTIVE_OUTBOX_FILENAME = "Proactive_Outbox.jsonl"
 PROACTIVE_AUDIT_FILENAME = "Proactive_Audit.jsonl"
 PROACTIVE_DISPATCH_RESULTS_FILENAME = "Proactive_Dispatch_Results.jsonl"
@@ -1532,6 +1535,26 @@ class AccountStore:
                 if fcntl is not None:
                     fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
+    @contextmanager
+    def account_identity_lock(self) -> Iterator[None]:
+        """Serialize identity-map reads that may normalize or create accounts."""
+
+        with _ACCOUNT_IDENTITY_LOCK:
+            self.root.mkdir(parents=True, exist_ok=True)
+            lock_path = self.root / ACCOUNT_IDENTITIES_LOCK_FILENAME
+            with lock_path.open("a+b") as handle:
+                try:
+                    os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
+                except OSError:
+                    pass
+                if fcntl is not None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    if fcntl is not None:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
     def account_id(self, identity_key: str, *, create: bool = False, display_label: str = "") -> str | None:
         if create:
             return self.resolve_or_create_account(identity_key, display_label=display_label)
@@ -1565,49 +1588,52 @@ class AccountStore:
         return tuple(resolvable_ids)
 
     def resolve_or_create_account(self, identity_key: str, *, display_label: str = "") -> str:
-        identities = self._load_identities()
         key = self._normalize_identity_key(identity_key)
-        payload = self._identity_payload_for_key(identities, key)
-        existing = payload.get("account_id") if isinstance(payload, dict) else None
-        if isinstance(existing, str) and TOKEN_HEX_RE.fullmatch(existing) and self._account_is_resolvable(existing):
-            self._touch_identity(identities, key)
-            return existing
-        account_id = new_sha512_token()
-        now = utc_now()
-        account = {
-            "schema_version": ACCOUNT_SCHEMA_VERSION,
-            "instance": self.instance_name,
-            "account_id": account_id,
-            "created_at": now,
-            "updated_at": now,
-            "registered": False,
-            "secret_exists": False,
-            "linked_identities": [key],
-            "status": "active",
-        }
-        self._write_account_profile(account_id, account)
-        identities[key] = {
-            "schema_version": ACCOUNT_SCHEMA_VERSION,
-            "instance": self.instance_name,
-            "identity_key": key,
-            "account_id": account_id,
-            "display_label": display_label,
-            "first_seen_at": now,
-            "last_seen_at": now,
-        }
-        self._save_identities(identities)
-        self._upsert_account_index(account)
-        return account_id
+        with self.account_identity_lock():
+            identities = self._load_identities()
+            payload = self._identity_payload_for_key(identities, key)
+            existing = payload.get("account_id") if isinstance(payload, dict) else None
+            if isinstance(existing, str) and TOKEN_HEX_RE.fullmatch(existing) and self._account_is_resolvable(existing):
+                self._touch_identity(identities, key)
+                return existing
+            account_id = new_sha512_token()
+            now = utc_now()
+            account = {
+                "schema_version": ACCOUNT_SCHEMA_VERSION,
+                "instance": self.instance_name,
+                "account_id": account_id,
+                "created_at": now,
+                "updated_at": now,
+                "registered": False,
+                "secret_exists": False,
+                "linked_identities": [key],
+                "status": "active",
+            }
+            self._write_account_profile(account_id, account)
+            identities[key] = {
+                "schema_version": ACCOUNT_SCHEMA_VERSION,
+                "instance": self.instance_name,
+                "identity_key": key,
+                "account_id": account_id,
+                "display_label": display_label,
+                "first_seen_at": now,
+                "last_seen_at": now,
+            }
+            self._save_identities(identities)
+            self._upsert_account_index(account)
+            return account_id
 
     def get_account_for_identity(self, identity_key: str) -> str | None:
-        identities = self._load_identities()
-        data = self._identity_payload_for_key(identities, self._normalize_identity_key(identity_key))
-        if isinstance(data, dict):
-            account_id = data.get("account_id")
-            if isinstance(account_id, str) and TOKEN_HEX_RE.fullmatch(account_id):
-                if self._account_is_resolvable(account_id):
-                    return account_id
-        return None
+        key = self._normalize_identity_key(identity_key)
+        with self.account_identity_lock():
+            identities = self._load_identities()
+            data = self._identity_payload_for_key(identities, key)
+            if isinstance(data, dict):
+                account_id = data.get("account_id")
+                if isinstance(account_id, str) and TOKEN_HEX_RE.fullmatch(account_id):
+                    if self._account_is_resolvable(account_id):
+                        return account_id
+            return None
 
     def update_identity_route(
         self,
@@ -1619,22 +1645,23 @@ class AccountStore:
         adapter_slot: int | None = None,
     ) -> None:
         key = self._normalize_identity_key(identity_key)
-        identities = self._load_identities()
-        payload = self._identity_payload_for_key(identities, key)
-        if not isinstance(payload, dict):
-            return
-        route = {
-            "channel": str(channel or "").strip().casefold(),
-            "chat_id": str(chat_id or "").strip(),
-            "chat_type": str(chat_type or "").strip().casefold(),
-            "last_seen_at": utc_now(),
-        }
-        if adapter_slot is not None:
-            route["adapter_slot"] = int(adapter_slot)
-        payload["last_route"] = route
-        payload["last_seen_at"] = route["last_seen_at"]
-        identities[key] = payload
-        self._save_identities(identities)
+        with self.account_identity_lock():
+            identities = self._load_identities()
+            payload = self._identity_payload_for_key(identities, key)
+            if not isinstance(payload, dict):
+                return
+            route = {
+                "channel": str(channel or "").strip().casefold(),
+                "chat_id": str(chat_id or "").strip(),
+                "chat_type": str(chat_type or "").strip().casefold(),
+                "last_seen_at": utc_now(),
+            }
+            if adapter_slot is not None:
+                route["adapter_slot"] = int(adapter_slot)
+            payload["last_route"] = route
+            payload["last_seen_at"] = route["last_seen_at"]
+            identities[key] = payload
+            self._save_identities(identities)
 
     def get_identity_route(self, identity_key: str) -> dict[str, Any] | None:
         identities = self._load_identities()
