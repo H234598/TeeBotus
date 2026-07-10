@@ -1738,6 +1738,22 @@ def test_cinnamon_applet_formats_runtime_slot_and_admin_status_lines() -> None:
     }
 
 
+def test_cinnamon_applet_formats_runtime_directory_and_agent_pilot_lines() -> None:
+    result = _run_js_applet_expression(
+        """
+        ({
+          directory: applet._formatRuntimeLine("instances_dir=instances"),
+          pilot: applet._formatAgentPilotLine("crew_pilot=source_quality_expedition status=planned dependency=missing enabled_by_default=false roles=harvester,formatter workflow=discover,format")
+        })
+        """
+    )
+
+    assert result == {
+        "directory": "Instanzen-Verzeichnis: instances",
+        "pilot": "Agenten-Pilot source_quality_expedition: geplant; Abhaengigkeit fehlt; Standard false; Rollen harvester, formatter; Ablauf discover -> format",
+    }
+
+
 def test_cinnamon_applet_menu_header_omits_zero_problem_total() -> None:
     result = _run_js_applet_expression(
         """

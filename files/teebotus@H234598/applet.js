@@ -525,7 +525,7 @@ TeeBotusApplet.prototype = {
     }
     if (this.showProactiveSection) {
       this.proactiveMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
-      this._appendLines(this.proactiveMenu.menu, sections["Agenten-Piloten"] || [], _("Keine Agenten-Pilot-Zeilen."));
+      this._appendLines(this.proactiveMenu.menu, this._formatLines(sections["Agenten-Piloten"] || [], (line) => this._formatAgentPilotLine(line)), _("Keine Agenten-Pilot-Zeilen."));
     }
   },
 
@@ -619,7 +619,22 @@ TeeBotusApplet.prototype = {
     if (fields.channels) {
       return "Kanaele: " + fields.channels;
     }
+    if (fields.instances_dir) {
+      return "Instanzen-Verzeichnis: " + fields.instances_dir;
+    }
     return line;
+  },
+
+  _formatAgentPilotLine: function(line) {
+    let fields = this._parseFields(line);
+    if (!fields.crew_pilot) {
+      return line;
+    }
+    let dependency = fields.dependency ? "; Abhaengigkeit " + this._statusWord(fields.dependency) : "";
+    let enabled = fields.enabled_by_default ? "; Standard " + fields.enabled_by_default : "";
+    let roles = fields.roles ? "; Rollen " + fields.roles.replace(/,/g, ", ") : "";
+    let workflow = fields.workflow ? "; Ablauf " + fields.workflow.replace(/,/g, " -> ") : "";
+    return "Agenten-Pilot " + fields.crew_pilot + ": " + this._statusWord(fields.status) + dependency + enabled + roles + workflow + this._errorText(fields);
   },
 
   _formatMessengerLine: function(line) {
