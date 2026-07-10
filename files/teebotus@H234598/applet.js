@@ -46,6 +46,7 @@ const SUBMENU_LABEL_WIDTH_EM = 48;
 const MENU_LINE_LIMIT = 14;
 const MENU_LINE_WRAP_THRESHOLD = 110;
 const MAX_MENU_LINE_CHARS = 2000;
+const MAX_PANEL_STATUS_CHARS = 500;
 const ALLOWED_CHANNELS = ["telegram", "signal", "matrix"];
 const SAFE_PYTHON_PREFIX_FLAGS = ["-B", "-u", "-E", "-q", "-O", "-OO"];
 const PROBLEM_STATUSES = [
@@ -1329,9 +1330,9 @@ TeeBotusApplet.prototype = {
     let summary = runtime.summary || {};
     let counts = runtime.status_counts || {};
     let bad = this._healthProblemTotal(health, summary, counts);
-    let state = String(unit.active_state || "unknown");
-    let instances = String(summary.instances || "?");
-    let channels = String(summary.channels || this._channels());
+    let state = this._shortText(String(unit.active_state || "unknown"), 80);
+    let instances = this._shortText(String(summary.instances || "?"), 160);
+    let channels = this._shortText(String(summary.channels || this._channels()), 160);
     let qdrant = payload.qdrant || {};
     let vectors = this._qdrantCollectionCount(qdrant.collections || {}, "teebotus_user_memory");
     let vectorText = vectors > 0 ? " | Vektoren " + String(vectors) : "";
@@ -1339,11 +1340,14 @@ TeeBotusApplet.prototype = {
     let breakdown = this._problemBreakdownText(health.problem_statuses || summary.problem_statuses || this._problemStatusesFromCounts(counts || {}));
     let commandBreakdown = this._commandProblemBreakdownText(health);
     let qdrantBreakdown = this._qdrantProblemBreakdownText(health);
+    let result;
     if (bad > 0) {
       let problemLabel = health.status === "broken" ? "Probleme " : "Warnungen ";
-      return problemLabel + String(bad) + breakdown + commandBreakdown + qdrantBreakdown + " | Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText;
+      result = problemLabel + String(bad) + breakdown + commandBreakdown + qdrantBreakdown + " | Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText;
+    } else {
+      result = "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + breakdown + commandBreakdown + qdrantBreakdown;
     }
-    return "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + breakdown + commandBreakdown + qdrantBreakdown;
+    return this._shortText(result, MAX_PANEL_STATUS_CHARS);
   },
 
   _healthProblemTotal: function(health, summary, counts) {
@@ -1501,7 +1505,7 @@ TeeBotusApplet.prototype = {
     let summary = runtime.summary || {};
     let counts = runtime.status_counts || {};
     this.headerItem.label.set_text("TB " + String(payload.version || "?"));
-    this.summaryItem.label.set_text(this.statusText || _("Status unbekannt"));
+    this.summaryItem.label.set_text(this._shortText(this.statusText || _("Status unbekannt"), MAX_PANEL_STATUS_CHARS));
     let commit = repo.short_commit ? " | " + repo.short_commit : "";
     let problemTotal = this._healthProblemTotal(health, summary, counts);
     let healthWord = this._statusWord(health.status || "unknown");
@@ -1523,7 +1527,7 @@ TeeBotusApplet.prototype = {
 
   _updatePanel: function() {
     this.set_applet_label("TB");
-    this.set_applet_tooltip(this.statusText || _("TB"));
+    this.set_applet_tooltip(this._shortText(this.statusText || _("TB"), MAX_PANEL_STATUS_CHARS));
   },
 
   _setStatusText: function(text) {

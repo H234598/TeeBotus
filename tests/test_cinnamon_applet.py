@@ -300,6 +300,7 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "const MAX_COMMAND_ARG_COUNT = 128;" in source
     assert "const MAX_COMMAND_CHARS = 32768;" in source
     assert "const MAX_MENU_LINE_CHARS = 2000;" in source
+    assert "const MAX_PANEL_STATUS_CHARS = 500;" in source
     assert "let text = this._shortText(String(label || \"\"), MAX_MENU_LINE_CHARS);" in source
     assert "const MAX_UNIT_TOKEN_CHARS = 96;" in source
     assert "_boundedInt: function(value, fallback, minValue, maxValue)" in source
@@ -1423,6 +1424,15 @@ def test_cinnamon_applet_menu_text_is_bounded() -> None:
 
     assert len(result) == 2000
     assert result.endswith("…")
+
+
+def test_cinnamon_applet_panel_status_summary_is_bounded() -> None:
+    result = _run_js_applet_expression(
+        "applet._statusSummary({ok: true, unit: {active_state: 'active'}, health: {status: 'ok'}, runtime: {summary: {instances: 'x'.repeat(5000), channels: 'telegram'}, status_counts: {}}, qdrant: {collections: {}}})"
+    )
+
+    assert len(result) <= 500
+    assert "…" in result
 
 
 def test_cinnamon_applet_status_refresh_keeps_previous_payload_on_error() -> None:
