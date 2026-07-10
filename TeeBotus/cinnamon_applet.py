@@ -345,6 +345,7 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
     sections: dict[str, list[str]] = {"Start": []}
     current = "Start"
     status_counts: dict[str, int] = {}
+    codex_history_has_problem = False
     summary: dict[str, Any] = {
         "instances": "",
         "channels": "",
@@ -426,10 +427,10 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["codex_history_strategies"] += _safe_int(fields.get("strategies", 0))
             summary["codex_history_graphs"] += _safe_int(fields.get("graphs", 0))
             summary["codex_history_other"] += _safe_int(fields.get("other", 0))
-            if _normalized_status_value(fields.get("status")) in PROBLEM_STATUSES and not summary["codex_history"]:
+            line_has_problem = any(status in PROBLEM_STATUSES for status in line_statuses)
+            if not summary["codex_history"] or (line_has_problem and not codex_history_has_problem):
                 summary["codex_history"] = line
-            elif not summary["codex_history"]:
-                summary["codex_history"] = line
+                codex_history_has_problem = line_has_problem
         elif line.startswith("codex_history_repo="):
             summary["codex_history_repos"] += 1
         elif line.startswith("gemini_free_tier_limits "):
