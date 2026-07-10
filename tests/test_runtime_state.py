@@ -83,7 +83,8 @@ def test_runtime_state_store_persists_previous_llm_response_id(tmp_path, monkeyp
     account_store.write_llm_state(ACCOUNT_ID, {"kept": "value"})
     state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
 
-    state.set_previous_response_id("Bot", ACCOUNT_ID, "resp-1")
+    with account_store.account_memory_lock(ACCOUNT_ID):
+        state.set_previous_response_id("Bot", ACCOUNT_ID, "resp-1")
     reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
 
     assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID) == "resp-1"

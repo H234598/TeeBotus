@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import time
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Literal
@@ -11,6 +12,7 @@ from TeeBotus.runtime.accounts import (
     ACCOUNTS_DIRNAME,
     AccountStore,
     AccountStoreError,
+    account_memory_lock_for_root,
     EncryptedJsonVault,
     InstanceSecretProvider,
     LLM_STATE_FILENAME,
@@ -339,33 +341,44 @@ class RuntimeStateStore(RuntimeState):
         self.llm_state_persistence_error = error
         self.openai_state_persistence_error = error
 
+    def _llm_state_lock(self, account_id: str):
+        try:
+            validate_sha512_token(account_id, field_name="account_id")
+        except AccountStoreError:
+            # Keep the legacy in-memory behavior for invalid IDs; the actual
+            # state-path validation below still records the persistence error.
+            return nullcontext()
+        return account_memory_lock_for_root(self.accounts_root, account_id)
+
     def _read_state_payload(self, path: Path) -> dict[str, Any]:
         if not path.exists():
             return {}
         return self._llm_state_vault.read_json(path, {})
 
     def _read_llm_state(self, account_id: str) -> dict[str, Any]:
-        try:
-            llm_path = self._llm_state_path(account_id)
-            legacy_path = self._openai_state_path(account_id)
-            llm_payload = self._read_state_payload(llm_path)
-            legacy_payload = self._read_state_payload(legacy_path)
-            self._set_llm_state_persistence_error("")
-            selected = _choose_newer_state(legacy_payload, llm_payload)
-            if selected and selected != llm_payload:
-                self._llm_state_vault.write_json(llm_path, selected)
-            return selected
-        except AccountStoreError as exc:
-            self._set_llm_state_persistence_error(str(exc))
-            return {}
+        with self._llm_state_lock(account_id):
+            try:
+                llm_path = self._llm_state_path(account_id)
+                legacy_path = self._openai_state_path(account_id)
+                llm_payload = self._read_state_payload(llm_path)
+                legacy_payload = self._read_state_payload(legacy_path)
+                self._set_llm_state_persistence_error("")
+                selected = _choose_newer_state(legacy_payload, llm_payload)
+                if selected and selected != llm_payload:
+                    self._llm_state_vault.write_json(llm_path, selected)
+                return selected
+            except AccountStoreError as exc:
+                self._set_llm_state_persistence_error(str(exc))
+                return {}
 
     def _write_llm_state(self, account_id: str, payload: dict[str, Any]) -> None:
-        try:
-            path = self._llm_state_path(account_id)
-            self._set_llm_state_persistence_error("")
-            self._llm_state_vault.write_json(path, payload)
-        except AccountStoreError as exc:
-            self._set_llm_state_persistence_error(str(exc))
+        with self._llm_state_lock(account_id):
+            try:
+                path = self._llm_state_path(account_id)
+                self._set_llm_state_persistence_error("")
+                self._llm_state_vault.write_json(path, payload)
+            except AccountStoreError as exc:
+                self._set_llm_state_persistence_error(str(exc))
 
     def _read_llm_previous_response(self, account_id: str) -> tuple[str | None, tuple[str, str] | None]:
         payload = self._read_llm_state(account_id)
@@ -383,28 +396,30 @@ class RuntimeStateStore(RuntimeState):
         clean_response_id = str(response_id or "").strip()
         if not clean_response_id:
             return
-        payload = self._read_llm_state(account_id)
-        payload["previous_response_id"] = clean_response_id
-        clean_provider = str(provider or "").strip().casefold()
-        clean_model = str(model or "").strip()
-        if clean_provider and clean_model:
-            payload[PREVIOUS_RESPONSE_PROVIDER_FIELD] = clean_provider
-            payload[PREVIOUS_RESPONSE_MODEL_FIELD] = clean_model
-        else:
-            payload.pop(PREVIOUS_RESPONSE_PROVIDER_FIELD, None)
-            payload.pop(PREVIOUS_RESPONSE_MODEL_FIELD, None)
-        payload["updated_at"] = utc_now()
-        self._write_llm_state(account_id, payload)
+        with self._llm_state_lock(account_id):
+            payload = self._read_llm_state(account_id)
+            payload["previous_response_id"] = clean_response_id
+            clean_provider = str(provider or "").strip().casefold()
+            clean_model = str(model or "").strip()
+            if clean_provider and clean_model:
+                payload[PREVIOUS_RESPONSE_PROVIDER_FIELD] = clean_provider
+                payload[PREVIOUS_RESPONSE_MODEL_FIELD] = clean_model
+            else:
+                payload.pop(PREVIOUS_RESPONSE_PROVIDER_FIELD, None)
+                payload.pop(PREVIOUS_RESPONSE_MODEL_FIELD, None)
+            payload["updated_at"] = utc_now()
+            self._write_llm_state(account_id, payload)
 
     def _clear_llm_previous_response_id(self, account_id: str) -> None:
-        payload = self._read_llm_state(account_id)
-        if not payload or "previous_response_id" not in payload:
-            return
-        payload.pop("previous_response_id", None)
-        payload.pop(PREVIOUS_RESPONSE_PROVIDER_FIELD, None)
-        payload.pop(PREVIOUS_RESPONSE_MODEL_FIELD, None)
-        payload["updated_at"] = utc_now()
-        self._write_llm_state(account_id, payload)
+        with self._llm_state_lock(account_id):
+            payload = self._read_llm_state(account_id)
+            if not payload or "previous_response_id" not in payload:
+                return
+            payload.pop("previous_response_id", None)
+            payload.pop(PREVIOUS_RESPONSE_PROVIDER_FIELD, None)
+            payload.pop(PREVIOUS_RESPONSE_MODEL_FIELD, None)
+            payload["updated_at"] = utc_now()
+            self._write_llm_state(account_id, payload)
 
     def _load_persisted_link_notifications(self) -> None:
         if self.secret_provider is None or not self.link_notifications_path.exists():

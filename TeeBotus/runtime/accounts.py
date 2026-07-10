@@ -1063,6 +1063,42 @@ def _serialize_account_memory(method: Callable[..., Any]) -> Callable[..., Any]:
     return wrapped
 
 
+@contextmanager
+def account_memory_lock_for_root(root: Path, account_id: str) -> Iterator[None]:
+    """Serialize account-memory/state operations for an AccountStore root."""
+
+    root = Path(root).expanduser().resolve()
+    account_id = validate_sha512_token(account_id, field_name="account_id")
+    account_dir = root / ACCOUNTS_DIRNAME / account_id
+    account_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = account_dir / ACCOUNT_MEMORY_LOCK_FILENAME
+    lock_key = os.path.realpath(os.fspath(lock_path))
+    with _ACCOUNT_MEMORY_LOCK:
+        held_paths = getattr(_ACCOUNT_MEMORY_LOCK_STATE, "paths", None)
+        if held_paths is None:
+            held_paths = set()
+            _ACCOUNT_MEMORY_LOCK_STATE.paths = held_paths
+        if lock_key in held_paths:
+            yield
+            return
+        with lock_path.open("a+b") as handle:
+            try:
+                os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
+            except OSError:
+                pass
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            held_paths.add(lock_key)
+            try:
+                yield
+            finally:
+                held_paths.discard(lock_key)
+                if fcntl is not None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+        if not held_paths:
+            del _ACCOUNT_MEMORY_LOCK_STATE.paths
+
+
 @dataclass
 class AccountStore:
     root: Path
@@ -1609,35 +1645,8 @@ class AccountStore:
     def account_memory_lock(self, account_id: str) -> Iterator[None]:
         """Serialize per-account memory read-modify-write operations."""
 
-        account_id = validate_sha512_token(account_id, field_name="account_id")
-        account_dir = self.account_dir(account_id)
-        account_dir.mkdir(parents=True, exist_ok=True)
-        lock_path = account_dir / ACCOUNT_MEMORY_LOCK_FILENAME
-        lock_key = os.path.realpath(os.fspath(lock_path))
-        with _ACCOUNT_MEMORY_LOCK:
-            held_paths = getattr(_ACCOUNT_MEMORY_LOCK_STATE, "paths", None)
-            if held_paths is None:
-                held_paths = set()
-                _ACCOUNT_MEMORY_LOCK_STATE.paths = held_paths
-            if lock_key in held_paths:
-                yield
-                return
-            with lock_path.open("a+b") as handle:
-                try:
-                    os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
-                except OSError:
-                    pass
-                if fcntl is not None:
-                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
-                held_paths.add(lock_key)
-                try:
-                    yield
-                finally:
-                    held_paths.discard(lock_key)
-                    if fcntl is not None:
-                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
-            if not held_paths:
-                del _ACCOUNT_MEMORY_LOCK_STATE.paths
+        with account_memory_lock_for_root(self.root, account_id):
+            yield
 
     def account_id(self, identity_key: str, *, create: bool = False, display_label: str = "") -> str | None:
         if create:
