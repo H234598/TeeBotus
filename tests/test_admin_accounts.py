@@ -143,6 +143,30 @@ def test_admin_report_marks_store_errors(tmp_path: Path) -> None:
     assert store_report["errors"]
 
 
+def test_admin_report_warns_for_dangling_account_directory(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts" / "accounts"
+    accounts_root.mkdir(parents=True)
+    (accounts_root / ("a" * 128)).mkdir()
+
+    report = build_accounts_admin_report(instances_dir=tmp_path, provider=provider())
+
+    store_report = report["instances"][0]["account_store"]
+    assert store_report["readable"] is True
+    assert store_report["errors"] == []
+    assert store_report["dangling_account_dirs"] == 1
+    assert store_report["warnings"] == ["account directory has no Account_Profile.json"]
+    assert report["totals"]["store_errors"] == 0
+    identity_health = report["instances"][0]["identity_health"]
+    assert identity_health["status"] == "warning"
+    assert identity_health["warning_count"] == 1
+    assert identity_health["warnings"][0]["code"] == "account_store_integrity_warning"
+    assert identity_health["warnings"][0]["configured_runtime_slots"] == "<none>"
+    text = render_text_report(report)
+    assert "dangling_account_dirs: 1" in text
+    assert "account_store_warning: account directory has no Account_Profile.json" in text
+
+
 def test_text_report_contains_account_store_and_identity_summary(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())

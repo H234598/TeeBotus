@@ -191,6 +191,8 @@ def _build_store_report(store: AccountStore) -> dict[str, Any]:
         "unregistered_accounts": 0,
         "orphaned_accounts": 0,
         "tombstoned_account_dirs": 0,
+        "dangling_account_dirs": 0,
+        "warnings": [],
         "linked_identities": 0,
         "identities_by_channel": {},
         "active_secrets": 0,
@@ -229,6 +231,10 @@ def _build_store_report(store: AccountStore) -> dict[str, Any]:
         tombstone_path = account_dir / "Account_Tombstone.json"
         if tombstone_path.exists() and not profile_path.exists():
             report["tombstoned_account_dirs"] += 1
+            continue
+        if not profile_path.exists():
+            report["dangling_account_dirs"] += 1
+            report["warnings"].append("account directory has no Account_Profile.json")
             continue
         try:
             summary = store.account_summary(account_dir.name)
@@ -298,6 +304,25 @@ def _build_identity_health(account_store: Mapping[str, Any], runtime_slots: Mapp
     runtime_counts = _string_int_mapping(runtime_slots.get("configured_channels", {}))
     runtime_labels = _string_list_mapping(runtime_slots.get("configured_slot_labels_by_channel", {}))
     linked_identities = int(account_store.get("linked_identities", 0) or 0)
+    store_warnings = tuple(
+        str(warning or "").strip()
+        for warning in account_store.get("warnings", [])
+        if str(warning or "").strip()
+    )
+    if store_warnings:
+        warnings.append(
+            {
+                "code": "account_store_integrity_warning",
+                "configured_runtime_slots": "<none>",
+                "configured_runtime_labels": [],
+                "linked_identities": linked_identities,
+                "identity_channels": dict(sorted(identity_counts.items())),
+                "message": (
+                    f"Account store contains {len(store_warnings)} dangling account directory(ies) without readable profile metadata."
+                ),
+                "recommended_action": "Review the account-memory recovery report before quarantining the directories.",
+            }
+        )
     runtime_errors = tuple(str(error or "").strip() for error in runtime_slots.get("errors", []) if str(error or "").strip())
     if runtime_errors:
         warnings.append(
@@ -451,9 +476,12 @@ def render_text_report(report: Mapping[str, Any]) -> str:
                 f"  linked_identities: {store.get('linked_identities', 0)}",
                 f"  identities_by_channel: {_format_counts(store.get('identities_by_channel', {}))}",
                 f"  active_secrets: {store.get('active_secrets', 0)}",
+                f"  dangling_account_dirs: {store.get('dangling_account_dirs', 0)}",
             ])
             for error in store.get("errors", []) if isinstance(store.get("errors"), list) else []:
                 lines.append(f"  error: {error}")
+            for warning in store.get("warnings", []) if isinstance(store.get("warnings"), list) else []:
+                lines.append(f"  account_store_warning: {warning}")
         runtime_slots = instance.get("runtime_slots", {})
         if isinstance(runtime_slots, Mapping):
             lines.append(f"  runtime_slots_by_channel: {_format_counts(runtime_slots.get('configured_channels', {}))}")
