@@ -4590,6 +4590,36 @@ class BotTests(unittest.TestCase):
         self.assertEqual(handle.call_count, 2)
         self.assertEqual(api.offsets, [None, None, 8])
 
+    def test_run_polling_all_cleans_up_when_bridge_setup_fails(self) -> None:
+        from TeeBotus.adapters.telegram_runtime import run_polling_all
+
+        class JobRunner:
+            def __init__(self) -> None:
+                self.shutdown_calls: list[bool] = []
+
+            def shutdown(self, *, wait: bool = False) -> None:
+                self.shutdown_calls.append(wait)
+
+        job_runner = JobRunner()
+        config = InstanceRunConfig(
+            instance_name="Demo",
+            instruction_path="/tmp/Bot_Verhalten.md",
+            token_configs=(BotTokenConfig(label="1", token="telegram-token", openai_api_key=""),),
+        )
+
+        with (
+            patch("TeeBotus.adapters.telegram_runtime.YouTubeTranscriptionJobRunner", return_value=job_runner),
+            patch("TeeBotus.adapters.telegram_runtime._notify_recent_users_for_current_version"),
+            patch(
+                "TeeBotus.runtime.telegram_runner.build_telegram_runtime_bridge",
+                side_effect=RuntimeError("bridge setup failed"),
+            ),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "bridge setup failed"):
+                run_polling_all([config])
+
+        self.assertEqual(job_runner.shutdown_calls, [False])
+
     def test_main_impl_loads_runtime_environment_before_configuring_logging(self) -> None:
         from TeeBotus import bot as bot_module
 

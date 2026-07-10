@@ -3689,38 +3689,38 @@ def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:
     stop_event = threading.Event()
     threads: list[threading.Thread] = []
     youtube_job_runner = YouTubeTranscriptionJobRunner()
-    _notify_recent_users_for_current_version(instance_configs)
-    for instance_config in instance_configs:
-        for config in instance_config.token_configs:
-            adapter_slot = _telegram_slot_from_label(config.label)
-            api = TelegramAPI(config.token)
-            api.instance_name = instance_config.instance_name
-            api.adapter_slot = adapter_slot
-            bridge = build_telegram_runtime_bridge(
-                api=api,
-                instance_name=instance_config.instance_name,
-                adapter_slot=adapter_slot,
-                instances_dir=_resolve_instances_dir(),
-                instruction_store=InstructionStore(instance_config.instruction_path),
-                openai_api_key=config.openai_api_key,
-                secret_provider=runtime_secret_provider(),
-                youtube_job_runner=youtube_job_runner,
-            )
-            thread = threading.Thread(
-                target=bridge.run_polling,
-                kwargs={
-                    "stop_event": stop_event,
-                    "poll_timeout": MULTI_BOT_POLL_TIMEOUT_SECONDS,
-                    "youtube_job_runner": youtube_job_runner,
-                },
-                name=f"telegram-bot-{instance_config.instance_name}-{config.label}",
-                daemon=True,
-            )
-            threads.append(thread)
-            thread.start()
-
-    LOGGER.info("Started %s Telegram bot token slots across %s instance(s).", len(threads), len(instance_configs))
     try:
+        _notify_recent_users_for_current_version(instance_configs)
+        for instance_config in instance_configs:
+            for config in instance_config.token_configs:
+                adapter_slot = _telegram_slot_from_label(config.label)
+                api = TelegramAPI(config.token)
+                api.instance_name = instance_config.instance_name
+                api.adapter_slot = adapter_slot
+                bridge = build_telegram_runtime_bridge(
+                    api=api,
+                    instance_name=instance_config.instance_name,
+                    adapter_slot=adapter_slot,
+                    instances_dir=_resolve_instances_dir(),
+                    instruction_store=InstructionStore(instance_config.instruction_path),
+                    openai_api_key=config.openai_api_key,
+                    secret_provider=runtime_secret_provider(),
+                    youtube_job_runner=youtube_job_runner,
+                )
+                thread = threading.Thread(
+                    target=bridge.run_polling,
+                    kwargs={
+                        "stop_event": stop_event,
+                        "poll_timeout": MULTI_BOT_POLL_TIMEOUT_SECONDS,
+                        "youtube_job_runner": youtube_job_runner,
+                    },
+                    name=f"telegram-bot-{instance_config.instance_name}-{config.label}",
+                    daemon=True,
+                )
+                threads.append(thread)
+                thread.start()
+
+        LOGGER.info("Started %s Telegram bot token slots across %s instance(s).", len(threads), len(instance_configs))
         while any(thread.is_alive() for thread in threads):
             for thread in threads:
                 thread.join(timeout=0.5)
@@ -3729,6 +3729,11 @@ def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:
         stop_event.set()
         for thread in threads:
             thread.join(timeout=MULTI_BOT_POLL_TIMEOUT_SECONDS + 1)
+    except Exception:
+        stop_event.set()
+        for thread in threads:
+            thread.join(timeout=MULTI_BOT_POLL_TIMEOUT_SECONDS + 1)
+        raise
     finally:
         youtube_job_runner.shutdown(wait=False)
 
