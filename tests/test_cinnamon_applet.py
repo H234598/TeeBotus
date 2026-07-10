@@ -4099,6 +4099,32 @@ def test_cinnamon_applet_redacted_argv_hides_dash_prefixed_values_without_swallo
     ]
 
 
+@pytest.mark.parametrize(
+    "option",
+    (
+        "--client-secret",
+        "--refresh-token",
+        "--telegram-token",
+        "--bot-token",
+        "--service-account-private-key",
+        "--openai-api-key",
+    ),
+)
+def test_cinnamon_applet_redacts_compound_secret_options(option: str) -> None:
+    assert cinnamon_applet._redact(f"{option} plain-secret") == f"{option} <redacted>"
+    assert cinnamon_applet._redacted_argv(["demo", option, "plain-secret"]) == [
+        "demo",
+        option,
+        "'<redacted>'",
+    ]
+
+
+def test_cinnamon_applet_does_not_treat_token_usage_or_file_options_as_secret_values() -> None:
+    assert cinnamon_applet._redact("--token-usage 123 --token-file /tmp/token") == (
+        "--token-usage 123 --token-file /tmp/token"
+    )
+
+
 def test_cinnamon_applet_runtime_parser_redacts_nested_key_and_cookie_headers() -> None:
     nested_secret = "nested-plain-secret-value"
     cookie_secret = "cookie-plain-secret-value"

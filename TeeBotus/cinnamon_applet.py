@@ -65,19 +65,25 @@ QUOTED_AUTHORIZATION_TOKEN_RE = re.compile(
     r"(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]+)(\5)",
     re.IGNORECASE,
 )
+SECRET_OPTION_CORE_PATTERN = (
+    r"(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?(?:key|token)|"
+    r"auth[_-]?token|bearer[_-]?token|cookie|token|secret(?:[_-]?key)?|password)"
+)
+SECRET_OPTION_KEY_PATTERN = rf"(?:[A-Za-z0-9]+[_-])*{SECRET_OPTION_CORE_PATTERN}"
+SECRET_OPTION_NAME_PATTERN = rf"(?:--{SECRET_OPTION_KEY_PATTERN}|--?{SECRET_OPTION_CORE_PATTERN})"
 SECRET_OPTION_VALUE_RE = re.compile(
-    r"(?<![A-Za-z0-9_-])(--?(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|cookie|token|secret|password))"
+    rf"(?<![A-Za-z0-9_-])({SECRET_OPTION_NAME_PATTERN})"
     r"(\s+|=)((?:\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|"
-    r"(?!--?(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|cookie|token|secret|password)(?=$|[\s=]))[^\s]+))",
+    rf"(?!(?:{SECRET_OPTION_NAME_PATTERN})(?=$|[\s=]))[^\s]+))",
     re.IGNORECASE,
 )
 SECRET_OPTION_EQUALS_VALUE_RE = re.compile(
-    r"(?<![A-Za-z0-9_-])(--?(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|cookie|token|secret|password))"
+    rf"(?<![A-Za-z0-9_-])({SECRET_OPTION_NAME_PATTERN})"
     r"(=)((?:\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|[^\s]+))",
     re.IGNORECASE,
 )
 SECRET_OPTION_NAME_RE = re.compile(
-    r"^--?(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|cookie|token|secret|password)$",
+    rf"^{SECRET_OPTION_NAME_PATTERN}$",
     re.IGNORECASE,
 )
 COOKIE_HEADER_RE = re.compile(r"(?i)(?<![A-Za-z0-9_-])((?:set-cookie|cookie)\s*:\s*)[^\r\n]+")
