@@ -16,7 +16,7 @@ from TeeBotus.adapters.telegram_runtime import TelegramAPI
 from TeeBotus.instructions import load_instructions
 from TeeBotus.openai_client import OpenAIClient
 from TeeBotus.runtime.config import AccountRunConfig, build_runtime_config, resolve_llm_setting, resolve_openai_key
-from TeeBotus.runtime.dotenv import load_project_dotenv_for_instances, project_root_for_instances_dir
+from TeeBotus.runtime.dotenv import load_dotenv_defaults, load_project_dotenv_for_instances, project_root_for_instances_dir
 from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.notification_loudness import queue_due_notification_loudness_prompts
@@ -503,24 +503,7 @@ def _log_matrix_start_task_failure(task: asyncio.Task[Any]) -> None:
 
 
 def _load_dotenv(path: Path) -> None:
-    if not path.exists():
-        return
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if not key or key in os.environ:
-            continue
-        os.environ[key] = _clean_dotenv_value(value)
-
-
-def _clean_dotenv_value(value: str) -> str:
-    cleaned = value.strip()
-    if len(cleaned) >= 2 and cleaned[0] == cleaned[-1] and cleaned[0] in {"'", '"'}:
-        return cleaned[1:-1]
-    return cleaned
+    load_dotenv_defaults(path)
 
 
 async def run_proactive_agent_cycle(
