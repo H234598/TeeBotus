@@ -746,7 +746,7 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
     if "status" in payload and not isinstance(payload["status"], str):
         return {"status": "broken", "count": 0, "error": "invalid Qdrant status"}
     api_status = str(payload.get("status", "")).strip().casefold()
-    if api_status and api_status not in {"ok", "green"}:
+    if "status" in payload and api_status not in {"ok", "green"}:
         return {"status": "broken", "count": 0, "error": f"unexpected Qdrant status: {api_status}"}
     result = payload.get("result")
     if not isinstance(result, dict) or "count" not in result:
