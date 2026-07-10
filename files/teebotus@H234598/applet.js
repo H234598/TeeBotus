@@ -41,7 +41,7 @@ const SUBMENU_LABEL_WIDTH_EM = 48;
 const MENU_LINE_LIMIT = 14;
 const MENU_LINE_WRAP_THRESHOLD = 110;
 const ALLOWED_CHANNELS = ["telegram", "signal", "matrix"];
-const SAFE_PYTHON_PREFIX_FLAGS = ["-B", "-u", "-S", "-E", "-s", "-q", "-O", "-OO"];
+const SAFE_PYTHON_PREFIX_FLAGS = ["-B", "-u", "-E", "-q", "-O", "-OO"];
 const PROBLEM_STATUSES = [
   "broken",
   "config_conflict",
