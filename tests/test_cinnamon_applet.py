@@ -3455,6 +3455,34 @@ def test_cinnamon_applet_qdrant_point_count_uses_code_when_status_is_missing(mon
     assert result == {"status": "unreachable", "count": 0, "error": "HTTP 503"}
 
 
+def test_cinnamon_applet_qdrant_point_count_rejects_non_bytes_response_body(monkeypatch) -> None:
+    class FakeResponse:
+        status = 200
+
+        def __init__(self, body: object) -> None:
+            self.body = body
+
+        def read(self, _size: int = -1) -> object:
+            return self.body
+
+        def close(self) -> None:
+            return None
+
+    bodies = ["{\"status\":\"ok\"}", None]
+    monkeypatch.setattr(cinnamon_applet, "urlopen", lambda _request, timeout: FakeResponse(bodies.pop(0)))
+
+    assert cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo") == {
+        "status": "broken",
+        "count": 0,
+        "error": "invalid Qdrant response body",
+    }
+    assert cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo") == {
+        "status": "broken",
+        "count": 0,
+        "error": "invalid Qdrant response body",
+    }
+
+
 def test_cinnamon_applet_qdrant_point_count_rejects_non_integer_counts(monkeypatch) -> None:
     class FakeResponse:
         status = 200

@@ -669,6 +669,8 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
                     pass
     if not 200 <= status_code < 300:
         return {"status": "unreachable", "count": 0, "error": f"HTTP {status_code}"}
+    if not isinstance(raw, (bytes, bytearray)):
+        return {"status": "broken", "count": 0, "error": "invalid Qdrant response body"}
     if len(raw) > MAX_QDRANT_COUNT_RESPONSE_BYTES:
         return {"status": "broken", "count": 0, "error": "Qdrant count response too large"}
     try:
