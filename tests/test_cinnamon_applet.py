@@ -4178,7 +4178,7 @@ def test_cinnamon_applet_qdrant_point_count_closes_http_error_response(monkeypat
 
 
 def test_cinnamon_applet_run_redacts_stdout_before_truncating() -> None:
-    secret = "sk-12345678901234567890"
+    secret = "sk-test-placeholder-value-12345"
     stdout = "x" * (cinnamon_applet.MAX_CAPTURE_CHARS - len(secret) - 2) + " " + secret + "tail"
 
     result = cinnamon_applet._run([sys.executable, "-c", f"import sys; sys.stdout.write({stdout!r})"])
