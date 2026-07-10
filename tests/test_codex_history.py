@@ -7,6 +7,7 @@ import subprocess
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -1876,6 +1877,59 @@ def test_codex_history_dispatch_reclaims_stale_in_flight_item_before_newer_queue
     persisted = {row["id"]: row for row in store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)}
     assert persisted[stale["id"]]["status"] == "accepted"
     assert persisted[newer["id"]]["status"] == "queued"
+
+
+def test_codex_history_dispatch_atomically_claims_item_across_concurrent_dispatchers(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "concurrent-dispatch-demo", version="1.0.6")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(12), display_label="Admin")
+    store.update_identity_route(telegram_identity_key(12), channel="telegram", chat_id="12", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, admin_id)
+    item = append_codex_history_summary(store, repo_root=repo, title="Concurrent", bullets=["Nur einmal senden."])
+    first_sender_started = asyncio.Event()
+    release_first_sender = asyncio.Event()
+    sent_ids: list[str] = []
+
+    async def sender(_route: dict[str, object], _action: SendAttachment, metadata: dict[str, object]) -> str:
+        sent_ids.append(str(metadata["codex_history_item_id"]))
+        first_sender_started.set()
+        await release_first_sender.wait()
+        return "msg-1"
+
+    async def run() -> tuple[dict[str, Any], dict[str, Any]]:
+        now = datetime(2026, 6, 19, 12, tzinfo=timezone.utc)
+        first = asyncio.create_task(
+            dispatch_codex_history_outbox(
+                store,
+                instance_name="TeeBotus_Logger",
+                account_ids=(admin_id,),
+                senders={"telegram": sender},
+                now=now,
+            )
+        )
+        await first_sender_started.wait()
+        second = asyncio.create_task(
+            dispatch_codex_history_outbox(
+                store,
+                instance_name="TeeBotus_Logger",
+                account_ids=(admin_id,),
+                senders={"telegram": sender},
+                now=now,
+            )
+        )
+        second_result = await second
+        release_first_sender.set()
+        first_result = await first
+        return first_result, second_result
+
+    first_result, second_result = asyncio.run(run())
+
+    assert first_result["status_counts"] == {"accepted": 1}
+    assert second_result["items"] == []
+    assert sent_ids == [item["id"]]
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "accepted"
+    assert persisted["delivery"]["attempts"] == 1
 
 
 def test_import_codex_session_file_creates_redacted_deduped_history_item(tmp_path: Path) -> None:

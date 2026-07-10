@@ -431,7 +431,16 @@ async def dispatch_codex_history_outbox(
             )
             result_rows.extend(dry_rows)
             continue
-        _update_codex_history_item_status(store, item_id, "dispatching", reason="worker_claimed", now=timestamp, increment_attempt=True)
+        claimed_item = _claim_codex_history_item_for_dispatch(
+            store,
+            item_id,
+            dispatch_now=dispatch_now,
+            now=timestamp,
+        )
+        if claimed_item is None:
+            # Another dispatcher claimed or finalized the item after our snapshot.
+            continue
+        item = claimed_item
         item_results: list[dict[str, Any]] = []
         for account_id in candidate_account_ids:
             item_results.append(
@@ -3421,6 +3430,51 @@ def _update_codex_history_item_status(
                 return
             break
         store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
+
+
+def _claim_codex_history_item_for_dispatch(
+    store: AccountStore,
+    item_id: str,
+    *,
+    dispatch_now: datetime,
+    now: str,
+) -> dict[str, Any] | None:
+    """Claim a dispatchable item while holding the same lock used for writes."""
+
+    normalized_item_id = str(item_id or "").strip()
+    if not normalized_item_id:
+        return None
+    with store.codex_history_outbox_lock(INSTANCE_STATE_ACCOUNT_ID):
+        rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+        for item in rows:
+            if not isinstance(item, dict) or str(item.get("id") or "").strip() != normalized_item_id:
+                continue
+            if not _codex_history_item_dispatchable(item, now=dispatch_now):
+                return None
+            item["status"] = "dispatching"
+            item["updated_at"] = now
+            delivery = item.setdefault("delivery", {})
+            if not isinstance(delivery, dict):
+                delivery = {}
+                item["delivery"] = delivery
+            try:
+                delivery["attempts"] = int(delivery.get("attempts") or 0) + 1
+            except (TypeError, ValueError):
+                delivery["attempts"] = 1
+            delivery["last_attempt_at"] = now
+            delivery["sent_at"] = now
+            item["last_reason"] = "worker_claimed"
+            history = item.setdefault("status_history", [])
+            if not isinstance(history, list):
+                history = []
+                item["status_history"] = history
+            history.append({"at": now, "status": "dispatching", "reason": "worker_claimed"})
+            replace_item = getattr(store, "replace_codex_history_outbox_item", None)
+            if callable(replace_item) and replace_item(INSTANCE_STATE_ACCOUNT_ID, item):
+                return dict(item)
+            store.write_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID, rows)
+            return dict(item)
+    return None
 
 
 def _overall_dispatch_status(rows: Sequence[Mapping[str, Any]]) -> str:
