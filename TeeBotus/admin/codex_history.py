@@ -3166,10 +3166,13 @@ def _repair_codex_history_project_prefixes(
             "last_summary_at": latest.get("created_at") or latest.get("updated_at") or copied.get("last_summary_at", ""),
             "updated_at": latest.get("updated_at") or latest.get("created_at") or copied.get("updated_at", ""),
         }
+        project_changed = False
         for key, value in updates.items():
             if copied.get(key) != value:
                 copied[key] = value
-                changed += 1
+                project_changed = True
+        if project_changed:
+            changed += 1
         rewritten.append(copied)
     return rewritten, changed
 
