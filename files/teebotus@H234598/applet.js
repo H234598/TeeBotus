@@ -1431,6 +1431,9 @@ TeeBotusApplet.prototype = {
     if (payload.health.status === "ok" && !this._qdrantCollectionsAreHealthy(payload.qdrant.collections)) {
       return false;
     }
+    if (payload.health.status === "ok" && !this._runtimeStatusIsHealthy(payload.runtime)) {
+      return false;
+    }
     if (!this._isJsonObject(payload.qdrant.collections)) {
       return false;
     }
@@ -1453,10 +1456,16 @@ TeeBotusApplet.prototype = {
   _unitStateIsHealthy: function(unit) {
     let activeState = String((unit || {}).active_state || "").trim().toLowerCase();
     let subState = String((unit || {}).sub_state || "").trim().toLowerCase();
-    let returncode = (unit || {}).returncode;
-    let queryOk = (typeof returncode === "number" && Number.isInteger(returncode) && returncode === 0) ||
-      (typeof returncode === "string" && returncode.trim() === "0");
-    return queryOk && activeState === "active" && _hasOwn(CONFIRMED_ACTIVE_SUBSTATES, subState);
+    return this._returncodeIsSuccessful((unit || {}).returncode) && activeState === "active" && _hasOwn(CONFIRMED_ACTIVE_SUBSTATES, subState);
+  },
+
+  _runtimeStatusIsHealthy: function(runtime) {
+    return this._returncodeIsSuccessful((runtime || {}).returncode);
+  },
+
+  _returncodeIsSuccessful: function(value) {
+    return (typeof value === "number" && Number.isInteger(value) && value === 0) ||
+      (typeof value === "string" && value.trim() === "0");
   },
 
   _qdrantCollectionsAreHealthy: function(collections) {
