@@ -1448,6 +1448,24 @@ def test_record_codex_history_reply_marks_dispatch_delivered_and_acknowledged(tm
     assert dispatch_rows[-1]["reply_message_ref"] == "202"
     assert dispatch_rows[-1]["reply_text_preview"] == "ok, angekommen"
 
+    duplicate = record_codex_history_reply(
+        store,
+        instance_name="Depressionsbot",
+        channel="telegram",
+        chat_id="42",
+        account_id=admin_id,
+        reply_to_message_ref="101",
+        reply_message_ref="202",
+        reply_text="ok, angekommen erneut",
+        now=datetime(2026, 6, 19, 13, 1, tzinfo=timezone.utc),
+    )
+
+    assert duplicate["ok"] is True
+    assert duplicate["status"] == "acknowledged"
+    assert duplicate["idempotent"] is True
+    assert len(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)) == 3
+    assert len(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status_history"]) == 3
+
 
 def test_record_codex_history_delivery_receipt_marks_dispatch_delivered_only(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "receipt-demo", version="1.8.3")
