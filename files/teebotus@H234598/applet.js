@@ -642,6 +642,10 @@ TeeBotusApplet.prototype = {
 
   _formatLlmLine: function(line) {
     let fields = this._parseFields(line);
+    if (fields.runtime_slot) {
+      let reason = fields.reason ? "; Grund " + fields.reason : "";
+      return "Runtime-Slot " + fields.runtime_slot + ": " + this._statusWord(fields.status) + reason + this._errorText(fields);
+    }
     if (fields.hf_pool) {
       if (fields.target) {
         let text = "HF-Pool " + fields.hf_pool + " / " + fields.target + ": " + this._statusWord(fields.status);
@@ -964,6 +968,20 @@ TeeBotusApplet.prototype = {
       let action = fields.action ? "; Aktion " + fields.action : "";
       return "Account-Identitaet " + fields.account_identity_warning + ": Warnung" + message + action;
     }
+    if (fields.admin_accounts) {
+      let source = fields.source ? "; Quelle " + fields.source : "";
+      let counts = "; Accounts " + String(fields.accounts || "?")
+        + "; Lokal " + String(fields.local || "?")
+        + "; Cross-Instanz " + String(fields.cross_instance || "?")
+        + "; Routbar " + String(fields.routable || "?");
+      return "Admin-Gruppe " + fields.admin_accounts + ": " + this._statusWord(fields.status) + counts + source + this._errorText(fields);
+    }
+    if (fields.admin_account) {
+      let channel = fields.channel ? "; Kanal " + fields.channel : "";
+      let slot = fields.slot ? "; Slot " + fields.slot : "";
+      let sourceInstance = fields.source_instance ? "; Quelle " + fields.source_instance : "";
+      return "Admin-Konto " + this._shortText(fields.admin_account, 56) + ": " + this._statusWord(fields.status) + channel + slot + sourceInstance + this._errorText(fields);
+    }
     if (fields.account_identity) {
       return "Account-Identitaet " + fields.account_identity + ": " + this._statusWord(fields.status) + "; Runtime " + String(fields.runtime_slots || "?") + "; Identitaeten " + String(fields.identities || "?") + this._errorText(fields);
     }
@@ -1030,6 +1048,7 @@ TeeBotusApplet.prototype = {
       reachable: "erreichbar",
       ready: "bereit",
       registered: "registriert",
+      routable: "routbar",
       schema_mismatch: "Schema passt nicht",
       stale: "veraltet",
       unknown: "unbekannt",

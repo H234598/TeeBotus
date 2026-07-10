@@ -1720,6 +1720,24 @@ def test_cinnamon_applet_status_menu_detail_lines_include_health_and_runtime_dat
     ]
 
 
+def test_cinnamon_applet_formats_runtime_slot_and_admin_status_lines() -> None:
+    result = _run_js_applet_expression(
+        """
+        ({
+          runtime: applet._formatLlmLine("runtime_slot=Demo/signal status=not_configured reason=missing_signal_credentials"),
+          group: applet._formatAccountLine("admin_accounts=Demo status=configured source=default accounts=2 local=1 cross_instance=1 routable=2"),
+          account: applet._formatAccountLine("admin_account=Demo/abcdefghijklmnopqrstuvwxyz0123456789 status=routable channel=telegram slot=1 source_instance=Demo")
+        })
+        """
+    )
+
+    assert result == {
+        "runtime": "Runtime-Slot Demo/signal: nicht konfiguriert; Grund missing_signal_credentials",
+        "group": "Admin-Gruppe Demo: konfiguriert; Accounts 2; Lokal 1; Cross-Instanz 1; Routbar 2; Quelle default",
+        "account": "Admin-Konto Demo/abcdefghijklmnopqrstuvwxyz0123456789: routbar; Kanal telegram; Slot 1; Quelle Demo",
+    }
+
+
 def test_cinnamon_applet_menu_header_omits_zero_problem_total() -> None:
     result = _run_js_applet_expression(
         """
