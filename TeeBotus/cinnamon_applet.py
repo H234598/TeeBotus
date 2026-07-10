@@ -679,7 +679,9 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
         return {"status": "broken", "count": 0, "error": f"invalid JSON: {type(exc).__name__}"}
     if not isinstance(payload, dict):
         return {"status": "broken", "count": 0, "error": "unexpected JSON payload"}
-    api_status = str(payload.get("status", "") or "").casefold()
+    if "status" in payload and not isinstance(payload["status"], str):
+        return {"status": "broken", "count": 0, "error": "invalid Qdrant status"}
+    api_status = str(payload.get("status", "")).casefold()
     if api_status and api_status not in {"ok", "green"}:
         return {"status": "broken", "count": 0, "error": f"unexpected Qdrant status: {api_status}"}
     result = payload.get("result")

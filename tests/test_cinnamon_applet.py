@@ -3483,6 +3483,34 @@ def test_cinnamon_applet_qdrant_point_count_rejects_non_bytes_response_body(monk
     }
 
 
+def test_cinnamon_applet_qdrant_point_count_rejects_non_string_status(monkeypatch) -> None:
+    class FakeResponse:
+        status = 200
+
+        def __init__(self, payload: object) -> None:
+            self.payload = payload
+
+        def read(self, _size: int = -1) -> bytes:
+            return json.dumps(self.payload).encode("utf-8")
+
+        def close(self) -> None:
+            return None
+
+    payloads: list[object] = [
+        {"status": False, "result": {"count": 1}},
+        {"status": 0, "result": {"count": 1}},
+        {"status": None, "result": {"count": 1}},
+    ]
+    monkeypatch.setattr(cinnamon_applet, "urlopen", lambda _request, timeout: FakeResponse(payloads.pop(0)))
+
+    for _ in range(3):
+        assert cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo") == {
+            "status": "broken",
+            "count": 0,
+            "error": "invalid Qdrant status",
+        }
+
+
 def test_cinnamon_applet_qdrant_point_count_rejects_non_integer_counts(monkeypatch) -> None:
     class FakeResponse:
         status = 200
