@@ -700,9 +700,9 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
         status_value = getattr(response, "status", None)
         if status_value is None:
             status_value = getattr(response, "code", 200)
-        if isinstance(status_value, bool):
+        if isinstance(status_value, bool) or not isinstance(status_value, int):
             raise ValueError("invalid Qdrant HTTP status")
-        status_code = int(status_value)
+        status_code = status_value
         try:
             raw = response.read(MAX_QDRANT_COUNT_RESPONSE_BYTES + 1)
         except TypeError:
