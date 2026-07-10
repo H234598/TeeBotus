@@ -233,6 +233,7 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "this._statusTimeoutSeconds()" in source
     assert "STATUS_TIMEOUT_MAX_SECONDS = 300" in source
     assert "STATUS_TIMEOUT_GRACE_SECONDS = 5" in source
+    assert "STATUS_HELPER_OVERHEAD_SECONDS = 30" in source
     assert "const MAX_HELPER_JSON_CHARS = 120000;" in source
     assert "if (text.length > MAX_HELPER_JSON_CHARS)" in source
     assert "const MAX_COMMAND_ARG_CHARS = 4096;" in source
@@ -1211,7 +1212,7 @@ def test_cinnamon_applet_status_refresh_uses_bounded_spawn_timeout() -> None:
     command = result["captured"]["argv"]
     assert command[command.index("--timeout") + 1] == "300"
     assert result["captured"]["cwd"] == "/repo"
-    assert result["captured"]["options"]["timeoutMs"] == 305000
+    assert result["captured"]["options"]["timeoutMs"] == 335000
     assert result["captured"]["runningBeforeCallback"] is True
     assert result["runningAfterCallback"] is False
     assert result["statusText"].startswith("Health")

@@ -26,6 +26,7 @@ const STATUS_REFRESH_MIN_SECONDS = 15;
 const STATUS_TIMEOUT_MIN_SECONDS = 1;
 const STATUS_TIMEOUT_MAX_SECONDS = 300;
 const STATUS_TIMEOUT_GRACE_SECONDS = 5;
+const STATUS_HELPER_OVERHEAD_SECONDS = 30;
 const CODEX_USAGE_STALE_WARNING_HOURS = 24;
 const MAX_HELPER_JSON_CHARS = 120000;
 const MAX_COMMAND_ARG_CHARS = 4096;
@@ -1125,7 +1126,7 @@ TeeBotusApplet.prototype = {
         this.statusRefreshPending = false;
         this._refreshStatus();
       }
-    }, this._repoPath(), { timeoutMs: (this._statusTimeoutSeconds() + STATUS_TIMEOUT_GRACE_SECONDS) * 1000 });
+    }, this._repoPath(), { timeoutMs: (this._statusTimeoutSeconds() + STATUS_HELPER_OVERHEAD_SECONDS + STATUS_TIMEOUT_GRACE_SECONDS) * 1000 });
   },
 
   _statusCommand: function() {
