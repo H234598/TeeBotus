@@ -494,6 +494,7 @@ def test_cinnamon_applet_js_parser_matches_python_parser_for_status_edges() -> N
         "account_identity_warning=Demo code=runtime_channel_without_identity "
         "message=Use option foo=bar only after login. "
         "action=First run /register, then confirm status=ok manually",
+        "route_status=UNAVAILABLE status=WARNING semantic=READY",
     ]
 
     for line in lines:

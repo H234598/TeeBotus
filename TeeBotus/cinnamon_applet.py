@@ -724,7 +724,10 @@ def _parse_status_fields(line: str) -> dict[str, str]:
             continue
         value_start = match.value_start
         value_end = _status_field_value_end(text, matches, index, key)
-        fields[key] = text[value_start:value_end].strip()
+        value = text[value_start:value_end].strip()
+        if key in STATUS_FIELD_BOUNDARY_KEYS:
+            value = value.casefold()
+        fields[key] = value
         index += 1
         while index < len(matches) and matches[index].key_start < value_end:
             index += 1
