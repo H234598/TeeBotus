@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from contextlib import contextmanager
+from functools import wraps
 import hashlib
 import hmac
 import json
@@ -54,6 +55,7 @@ LLM_STATE_COLLECTION = "llm_state"
 AGENT_STATE_COLLECTION = "agent_state"
 INSTANCE_STATE_ACCOUNT_ID = hashlib.sha512(b"TeeBotus:instance-state:v1").hexdigest()
 _ACCOUNT_IDENTITY_LOCK = threading.RLock()
+_ACCOUNT_IDENTITY_LOCK_STATE = threading.local()
 PROACTIVE_OUTBOX_FILENAME = "Proactive_Outbox.jsonl"
 PROACTIVE_AUDIT_FILENAME = "Proactive_Audit.jsonl"
 PROACTIVE_DISPATCH_RESULTS_FILENAME = "Proactive_Dispatch_Results.jsonl"
@@ -1038,6 +1040,15 @@ class EncryptedJsonVault:
         self.decrypt(raw, kind=path.name)
 
 
+def _serialize_identity_map(method: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(method)
+    def wrapped(self: "AccountStore", *args: Any, **kwargs: Any) -> Any:
+        with self.account_identity_lock():
+            return method(self, *args, **kwargs)
+
+    return wrapped
+
+
 @dataclass
 class AccountStore:
     root: Path
@@ -1542,6 +1553,14 @@ class AccountStore:
         with _ACCOUNT_IDENTITY_LOCK:
             self.root.mkdir(parents=True, exist_ok=True)
             lock_path = self.root / ACCOUNT_IDENTITIES_LOCK_FILENAME
+            lock_key = os.path.realpath(os.fspath(lock_path))
+            held_paths = getattr(_ACCOUNT_IDENTITY_LOCK_STATE, "paths", None)
+            if held_paths is None:
+                held_paths = set()
+                _ACCOUNT_IDENTITY_LOCK_STATE.paths = held_paths
+            if lock_key in held_paths:
+                yield
+                return
             with lock_path.open("a+b") as handle:
                 try:
                     os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
@@ -1549,11 +1568,15 @@ class AccountStore:
                     pass
                 if fcntl is not None:
                     fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                held_paths.add(lock_key)
                 try:
                     yield
                 finally:
+                    held_paths.discard(lock_key)
                     if fcntl is not None:
                         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            if not held_paths:
+                del _ACCOUNT_IDENTITY_LOCK_STATE.paths
 
     def account_id(self, identity_key: str, *, create: bool = False, display_label: str = "") -> str | None:
         if create:
@@ -1663,6 +1686,7 @@ class AccountStore:
             identities[key] = payload
             self._save_identities(identities)
 
+    @_serialize_identity_map
     def get_identity_route(self, identity_key: str) -> dict[str, Any] | None:
         identities = self._load_identities()
         payload = self._identity_payload_for_key(identities, self._normalize_identity_key(identity_key))
@@ -1773,6 +1797,7 @@ class AccountStore:
         self._write_account_profile(account_id, profile)
         self._upsert_account_index(profile)
 
+    @_serialize_identity_map
     def link_identity_to_account(self, identity_key: str, account_id: str, *, display_label: str = "") -> dict[str, Any]:
         target_account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(target_account_id)
@@ -1817,6 +1842,7 @@ class AccountStore:
             "old_identity_keys": [identity for identity in old_identity_keys if identity != key],
         }
 
+    @_serialize_identity_map
     def unlink_identity(self, identity_key: str) -> str | None:
         key = self._normalize_identity_key(identity_key)
         identities = self._load_identities()
@@ -1850,6 +1876,7 @@ class AccountStore:
         self._save_identities(new_identities)
         return account_id
 
+    @_serialize_identity_map
     def unlink_identity_if_linked_to(self, identity_key: str, expected_account_id: str) -> str | None:
         """Unlink an identity only if it still belongs to the expected account.
 
@@ -1864,6 +1891,7 @@ class AccountStore:
             return None
         return self.unlink_identity(key)
 
+    @_serialize_identity_map
     def merge_accounts(self, source_account_id: str, target_account_id: str) -> None:
         source_account_id = validate_sha512_token(source_account_id, field_name="source_account_id")
         target_account_id = validate_sha512_token(target_account_id, field_name="target_account_id")
@@ -3182,6 +3210,7 @@ class AccountStore:
         profile = self._read_account_profile(account_id)
         return profile.get("status") != "tombstoned"
 
+    @_serialize_identity_map
     def _active_identities_for_account(self, account_id: str) -> list[str]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         identities = self._load_identities()

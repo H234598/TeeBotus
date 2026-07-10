@@ -84,6 +84,47 @@ def test_account_identity_creation_is_serialized_across_threads(tmp_path, monkey
     assert state["maximum"] == 1
 
 
+def test_account_identity_mutations_are_serialized_across_threads(tmp_path, monkeypatch):
+    root = tmp_path / "accounts"
+    first = AccountStore(root, "Depressionsbot", provider())
+    second = AccountStore(root, "Depressionsbot", provider())
+    target = first.resolve_or_create_account(telegram_identity_key(1))
+    original_load = AccountStore._load_identities
+    state = {"active": 0, "maximum": 0}
+    state_lock = threading.Lock()
+    errors: list[BaseException] = []
+
+    def slow_load(store):
+        with state_lock:
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+        try:
+            time.sleep(0.03)
+            return original_load(store)
+        finally:
+            with state_lock:
+                state["active"] -= 1
+
+    def link(store, identity):
+        try:
+            store.link_identity_to_account(identity, target)
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    monkeypatch.setattr(AccountStore, "_load_identities", slow_load)
+    identities = (signal_identity_key(source_uuid="parallel-a"), signal_identity_key(source_uuid="parallel-b"))
+    threads = [threading.Thread(target=link, args=(store, identity)) for store, identity in zip((first, second), identities)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert state["maximum"] == 1
+    assert first.get_account_for_identity(identities[0]) == target
+    assert first.get_account_for_identity(identities[1]) == target
+
+
 def test_tombstoned_account_cannot_receive_login_or_secret_rotation(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))
