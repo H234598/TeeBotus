@@ -372,6 +372,7 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         "hf_pool": "",
         "problem_status_count": 0,
         "problem_statuses": "",
+        "output_truncated": False,
     }
     for raw_line in str(output or "").splitlines():
         line = _redact(raw_line.strip())
@@ -382,6 +383,9 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             sections.setdefault(current, [])
             continue
         sections.setdefault(current, []).append(line)
+        if line == "<truncated>":
+            summary["output_truncated"] = True
+            continue
         fields = _parse_status_fields(line)
         line_statuses = list(_line_status_values(fields))
         if line.startswith("codex_usage=") and _codex_usage_is_stale(fields):
@@ -439,6 +443,8 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["memory_semantic_ready"] += 1
         elif line.startswith("hf_pool=") and not fields.get("target"):
             summary["hf_pool"] = line
+    if summary["output_truncated"]:
+        status_counts["warning"] = status_counts.get("warning", 0) + 1
     problem_counts = {status: count for status, count in sorted(status_counts.items()) if status in PROBLEM_STATUSES}
     summary["problem_status_count"] = sum(problem_counts.values())
     summary["problem_statuses"] = ",".join(f"{status}:{count}" for status, count in problem_counts.items())

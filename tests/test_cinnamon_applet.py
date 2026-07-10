@@ -2101,6 +2101,21 @@ def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
     assert "Messenger" in parsed["sections"]
 
 
+def test_cinnamon_applet_runtime_parser_marks_truncated_output_as_warning() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Konfiguration]
+        instances=Demo
+        <truncated>
+        """
+    )
+
+    assert parsed["summary"]["output_truncated"] is True
+    assert parsed["status_counts"]["warning"] == 1
+    assert parsed["summary"]["problem_status_count"] == 1
+    assert parsed["summary"]["problem_statuses"] == "warning:1"
+
+
 def test_cinnamon_applet_runtime_parser_counts_section_problems() -> None:
     parsed = parse_runtime_status(
         """
