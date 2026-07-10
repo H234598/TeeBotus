@@ -434,11 +434,11 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["gemini_free_tier"] = line
         elif line.startswith("qdrant="):
             summary["qdrant"] = line
-            if fields.get("status") in PROBLEM_STATUSES:
+            if any(status in PROBLEM_STATUSES for status in line_statuses):
                 summary["qdrant_problem_status_count"] += 1
         elif line.startswith("qdrant_collection="):
             summary["qdrant_collections"] += 1
-            if fields.get("status") in PROBLEM_STATUSES:
+            if any(status in PROBLEM_STATUSES for status in line_statuses):
                 summary["qdrant_problem_status_count"] += 1
             if fields.get("status") == "ready":
                 summary["qdrant_ready_collections"] += 1

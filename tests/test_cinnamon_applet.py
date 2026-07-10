@@ -2232,6 +2232,19 @@ def test_cinnamon_applet_runtime_parser_counts_semantic_secondary_status() -> No
     assert parsed["status_counts"]["unsupported"] == 1
 
 
+def test_cinnamon_applet_runtime_parser_classifies_qdrant_secondary_status() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Memory und semantische Suche]
+        qdrant_collection=teebotus_user_memory status=ready semantic=unavailable
+        """
+    )
+
+    assert parsed["summary"]["qdrant_problem_status_count"] == 1
+    assert parsed["summary"]["problem_status_count"] == 1
+    assert parsed["summary"]["problem_statuses"] == "unavailable:1"
+
+
 def test_cinnamon_applet_runtime_parser_counts_models_feed_secondary_status() -> None:
     parsed = parse_runtime_status(
         """
