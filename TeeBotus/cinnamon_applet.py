@@ -33,7 +33,10 @@ MAX_ERROR_CHARS = 2_000
 MAX_REDACTION_GUARD_BYTES = 4_096
 MAX_QDRANT_COUNT_RESPONSE_BYTES = 64_000
 MAX_QDRANT_COUNT = 9_007_199_254_740_991
-TELEGRAM_BOT_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_])\d{8,12}:[A-Za-z0-9_-]{30,}(?![A-Za-z0-9_-])")
+TELEGRAM_BOT_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:bot)?\d{8,12}:[A-Za-z0-9_-]{30,}(?![A-Za-z0-9_-])",
+    re.IGNORECASE,
+)
 SECRET_TOKEN_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{8,}\b"),
