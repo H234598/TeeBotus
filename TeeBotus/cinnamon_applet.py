@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any, Mapping, NamedTuple
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from TeeBotus import __version__
 from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION, QDRANT_USER_MEMORY_COLLECTION
@@ -744,6 +744,18 @@ def _qdrant_response_has_same_local_origin(base_url: str, response_url: Any) -> 
         and final.username is None
         and final.password is None
     )
+
+
+class _NoRedirectHandler(HTTPRedirectHandler):
+    def redirect_request(self, req: Request, fp: Any, code: int, msg: str, headers: Any, newurl: str) -> Request:
+        raise HTTPError(req.full_url, code, msg, headers, fp)
+
+
+_QDRANT_OPENER = build_opener(_NoRedirectHandler())
+
+
+def urlopen(request: Request, *, timeout: int) -> Any:
+    return _QDRANT_OPENER.open(request, timeout=timeout)
 
 
 def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:

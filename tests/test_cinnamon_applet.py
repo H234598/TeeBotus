@@ -3733,6 +3733,15 @@ def test_cinnamon_applet_qdrant_point_count_rejects_broken_response_url_metadata
     }
 
 
+def test_cinnamon_applet_qdrant_opener_rejects_redirects() -> None:
+    request = cinnamon_applet.Request("http://127.0.0.1:6333/collections/demo/points/count")
+
+    with pytest.raises(cinnamon_applet.HTTPError) as raised:
+        cinnamon_applet._NoRedirectHandler().redirect_request(request, None, 302, "redirect", {}, "https://example.test")
+
+    assert raised.value.code == 302
+
+
 def test_cinnamon_applet_qdrant_point_count_rejects_non_integer_http_status(monkeypatch) -> None:
     class FakeResponse:
         status = 200.9
