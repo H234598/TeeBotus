@@ -933,7 +933,13 @@ class TeeBotusEngine:
             weather_context = weather_context_text(self.account_store, account_id)
             working_memory_context = _build_working_memory_context(self.working_memory_store, text)
             library_context = _build_bibliothekar_context(self.bibliothekar_store, instructions, text, structured_decision_runner=self.structured_decision_runner)
-            previous_response_id = _previous_response_id_for_client(llm_client, self.state, event.instance, account_id)
+            previous_response_id = _previous_response_id_for_client(
+                llm_client,
+                self.state,
+                event.instance,
+                account_id,
+                instructions=instructions,
+            )
             LOGGER.log(
                 DEBUG_ALL,
                 "LLM action context built instance=%s event_id=%s attachment_chars=%s account_memory_chars=%s account_memory_ids=%s weather_chars=%s working_memory_chars=%s library_chars=%s previous_response=%s",
@@ -998,7 +1004,8 @@ class TeeBotusEngine:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         response_id = _persistable_previous_response_id(response)
         if response_id:
-            self.state.set_previous_response_id(event.instance, account_id, response_id)
+            provider, model = _llm_state_scope(response, client=llm_client, instructions=instructions)
+            self.state.set_previous_response_id(event.instance, account_id, response_id, provider=provider, model=model)
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
             LOGGER.warning("LLM action response empty instance=%s event_id=%s.", event.instance, event.event_id)
@@ -1549,7 +1556,13 @@ class TeeBotusEngine:
                     require_library_citations=instructions.bibliothekar_require_citations,
                 ),
                 instructions,
-                _previous_response_id_for_client(self.llm_client, self.state, event.instance, account_id),
+                _previous_response_id_for_client(
+                    self.llm_client,
+                    self.state,
+                    event.instance,
+                    account_id,
+                    instructions=instructions,
+                ),
             )
             response_text = str(getattr(response, "text", "") or "").strip()
             page_request = _parse_memory_page_request(response_text)
@@ -1572,14 +1585,22 @@ class TeeBotusEngine:
                         weather_context=weather_context,
                     ),
                     instructions,
-                    first_response_id or _previous_response_id_for_client(self.llm_client, self.state, event.instance, account_id),
+                    first_response_id
+                    or _previous_response_id_for_client(
+                        self.llm_client,
+                        self.state,
+                        event.instance,
+                        account_id,
+                        instructions=instructions,
+                    ),
                 )
         except (OpenAIAPIError, LLMAPIError):
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         response_id = _persistable_previous_response_id(response)
         if response_id:
-            self.state.set_previous_response_id(event.instance, account_id, response_id)
+            provider, model = _llm_state_scope(response, client=self.llm_client, instructions=instructions)
+            self.state.set_previous_response_id(event.instance, account_id, response_id, provider=provider, model=model)
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)
@@ -2788,10 +2809,36 @@ def _persistable_previous_response_id(response: object) -> str | None:
     return response_id if provider_is_stateful_google_gemini(provider) else None
 
 
-def _previous_response_id_for_client(client: object, state: RuntimeState, instance_name: str, account_id: str) -> str | None:
+def _llm_state_scope(
+    source: object,
+    *,
+    client: object | None = None,
+    instructions: BotInstructions | None = None,
+) -> tuple[str, str]:
+    provider = str(getattr(source, "provider", "") or getattr(source, "provider_name", "") or "").strip()
+    model = str(getattr(source, "model", "") or getattr(source, "normalized_model", "") or "").strip()
+    if not provider and client is not None:
+        provider = str(getattr(client, "provider", "") or getattr(client, "provider_name", "") or "").strip()
+    if not model and client is not None:
+        model = str(getattr(client, "model", "") or getattr(client, "normalized_model", "") or "").strip()
+    if instructions is not None:
+        provider = provider or str(getattr(instructions, "llm_provider", "") or "").strip()
+        model = model or str(getattr(instructions, "llm_model", "") or getattr(instructions, "openai_model", "") or "").strip()
+    return normalize_llm_provider(provider), model
+
+
+def _previous_response_id_for_client(
+    client: object,
+    state: RuntimeState,
+    instance_name: str,
+    account_id: str,
+    *,
+    instructions: BotInstructions | None = None,
+) -> str | None:
     if not _client_supports_previous_response_id(client):
         return None
-    return state.get_previous_response_id(instance_name, account_id)
+    provider, model = _llm_state_scope(client, instructions=instructions)
+    return state.get_previous_response_id(instance_name, account_id, provider=provider, model=model)
 
 
 def _client_supports_previous_response_id(client: object) -> bool:

@@ -25,6 +25,8 @@ from TeeBotus.runtime.maintenance import maintain_runtime_directory, rotate_runt
 FlowType = Literal["teladi_emergency", "memory_reset", "youtube_options", "account_edit", "link_wtf"] | str
 LINK_NOTIFICATIONS_FILENAME = "Link_Notifications.json"
 LINK_NOTIFICATION_TTL_SECONDS = 15 * 60
+PREVIOUS_RESPONSE_PROVIDER_FIELD = "previous_response_provider"
+PREVIOUS_RESPONSE_MODEL_FIELD = "previous_response_model"
 
 
 @dataclass(frozen=True)
@@ -54,6 +56,7 @@ class RuntimeState:
     pending_flows: dict[tuple[str, str, str], dict[str, Any]] = field(default_factory=dict)
     link_notifications: dict[tuple[str, str, str], dict[str, str]] = field(default_factory=dict)
     previous_response_ids: dict[tuple[str, str], str] = field(default_factory=dict)
+    previous_response_scopes: dict[tuple[str, str], tuple[str, str]] = field(default_factory=dict)
     security_events: list[dict[str, Any]] = field(default_factory=list)
 
     def set_pending_flow(self, instance_name: str, account_id: str, flow_type: str, payload: dict[str, Any]) -> None:
@@ -66,18 +69,59 @@ class RuntimeState:
         payload = self.pending_flows.get((instance_name, account_id, flow_type))
         return dict(payload) if payload is not None else None
 
-    def set_previous_response_id(self, instance_name: str, account_id: str, response_id: str | None) -> None:
+    def set_previous_response_id(
+        self,
+        instance_name: str,
+        account_id: str,
+        response_id: str | None,
+        *,
+        provider: str = "",
+        model: str = "",
+    ) -> None:
+        key = (instance_name, account_id)
         clean_response_id = str(response_id or "").strip()
         if clean_response_id:
-            self.previous_response_ids[(instance_name, account_id)] = clean_response_id
+            self.previous_response_ids[key] = clean_response_id
+            clean_provider = str(provider or "").strip().casefold()
+            clean_model = str(model or "").strip()
+            if clean_provider and clean_model:
+                self.previous_response_scopes[key] = (clean_provider, clean_model)
+            else:
+                # An unscoped ID is retained for backwards-compatible direct
+                # callers, but a provider-aware lookup must reject it.
+                self.previous_response_scopes.pop(key, None)
         else:
-            self.previous_response_ids.pop((instance_name, account_id), None)
+            self.previous_response_ids.pop(key, None)
+            self.previous_response_scopes.pop(key, None)
 
-    def get_previous_response_id(self, instance_name: str, account_id: str) -> str | None:
-        return self.previous_response_ids.get((instance_name, account_id))
+    def get_previous_response_id(
+        self,
+        instance_name: str,
+        account_id: str,
+        *,
+        provider: str = "",
+        model: str = "",
+    ) -> str | None:
+        key = (instance_name, account_id)
+        response_id = self.previous_response_ids.get(key)
+        if not response_id:
+            return None
+        clean_provider = str(provider or "").strip().casefold()
+        clean_model = str(model or "").strip()
+        if clean_provider or clean_model:
+            stored_scope = self.previous_response_scopes.get(key)
+            if stored_scope is None:
+                return None
+            if clean_provider and stored_scope[0] != clean_provider:
+                return None
+            if clean_model and stored_scope[1] != clean_model:
+                return None
+        return response_id
 
     def reset_previous_response_id(self, instance_name: str, account_id: str) -> None:
-        self.previous_response_ids.pop((instance_name, account_id), None)
+        key = (instance_name, account_id)
+        self.previous_response_ids.pop(key, None)
+        self.previous_response_scopes.pop(key, None)
 
     def record_link_notification(self, *, instance_name: str, account_id: str, new_identity_key: str, old_identity_key: str) -> None:
         self.link_notifications[(instance_name, account_id, old_identity_key)] = {
@@ -199,20 +243,40 @@ class RuntimeStateStore(RuntimeState):
             return
         return super().set_pending_flow(*args, **kwargs)
 
-    def set_previous_response_id(self, instance_name: str, account_id: str, response_id: str | None) -> None:
-        super().set_previous_response_id(instance_name, account_id, response_id)
+    def set_previous_response_id(
+        self,
+        instance_name: str,
+        account_id: str,
+        response_id: str | None,
+        *,
+        provider: str = "",
+        model: str = "",
+    ) -> None:
+        super().set_previous_response_id(instance_name, account_id, response_id, provider=provider, model=model)
         if response_id:
-            self._write_llm_previous_response_id(account_id, response_id)
+            self._write_llm_previous_response_id(account_id, response_id, provider=provider, model=model)
         else:
             self._clear_llm_previous_response_id(account_id)
 
-    def get_previous_response_id(self, instance_name: str, account_id: str) -> str | None:
-        cached = super().get_previous_response_id(instance_name, account_id)
+    def get_previous_response_id(
+        self,
+        instance_name: str,
+        account_id: str,
+        *,
+        provider: str = "",
+        model: str = "",
+    ) -> str | None:
+        cached = super().get_previous_response_id(instance_name, account_id, provider=provider, model=model)
         if cached:
             return cached
-        persisted = self._read_llm_previous_response_id(account_id)
+        persisted, persisted_scope = self._read_llm_previous_response(account_id)
         if persisted:
-            self.previous_response_ids[(instance_name, account_id)] = persisted
+            key = (instance_name, account_id)
+            self.previous_response_ids[key] = persisted
+            if persisted_scope is not None:
+                self.previous_response_scopes[key] = persisted_scope
+            if provider or model:
+                return super().get_previous_response_id(instance_name, account_id, provider=provider, model=model)
         return persisted
 
     def reset_previous_response_id(self, instance_name: str, account_id: str) -> None:
@@ -303,17 +367,32 @@ class RuntimeStateStore(RuntimeState):
         except AccountStoreError as exc:
             self._set_llm_state_persistence_error(str(exc))
 
-    def _read_llm_previous_response_id(self, account_id: str) -> str | None:
+    def _read_llm_previous_response(self, account_id: str) -> tuple[str | None, tuple[str, str] | None]:
         payload = self._read_llm_state(account_id)
         value = str(payload.get("previous_response_id") or "").strip()
-        return value or None
+        provider = str(payload.get(PREVIOUS_RESPONSE_PROVIDER_FIELD) or "").strip().casefold()
+        model = str(payload.get(PREVIOUS_RESPONSE_MODEL_FIELD) or "").strip()
+        scope = (provider, model) if provider and model else None
+        return value or None, scope
 
-    def _write_llm_previous_response_id(self, account_id: str, response_id: str) -> None:
+    def _read_llm_previous_response_id(self, account_id: str) -> str | None:
+        response_id, _scope = self._read_llm_previous_response(account_id)
+        return response_id
+
+    def _write_llm_previous_response_id(self, account_id: str, response_id: str, *, provider: str = "", model: str = "") -> None:
         clean_response_id = str(response_id or "").strip()
         if not clean_response_id:
             return
         payload = self._read_llm_state(account_id)
         payload["previous_response_id"] = clean_response_id
+        clean_provider = str(provider or "").strip().casefold()
+        clean_model = str(model or "").strip()
+        if clean_provider and clean_model:
+            payload[PREVIOUS_RESPONSE_PROVIDER_FIELD] = clean_provider
+            payload[PREVIOUS_RESPONSE_MODEL_FIELD] = clean_model
+        else:
+            payload.pop(PREVIOUS_RESPONSE_PROVIDER_FIELD, None)
+            payload.pop(PREVIOUS_RESPONSE_MODEL_FIELD, None)
         payload["updated_at"] = utc_now()
         self._write_llm_state(account_id, payload)
 
@@ -322,6 +401,8 @@ class RuntimeStateStore(RuntimeState):
         if not payload or "previous_response_id" not in payload:
             return
         payload.pop("previous_response_id", None)
+        payload.pop(PREVIOUS_RESPONSE_PROVIDER_FIELD, None)
+        payload.pop(PREVIOUS_RESPONSE_MODEL_FIELD, None)
         payload["updated_at"] = utc_now()
         self._write_llm_state(account_id, payload)
 

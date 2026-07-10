@@ -94,6 +94,34 @@ def test_runtime_state_store_persists_previous_llm_response_id(tmp_path, monkeyp
     assert llm_state_path.exists()
 
 
+def test_runtime_state_store_scopes_previous_response_to_provider_and_model(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    state.set_previous_response_id("Bot", ACCOUNT_ID, "resp-openai", provider="openai", model="gpt-5.5")
+    reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID, provider="openai", model="gpt-5.5") == "resp-openai"
+    assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID, provider="litellm_gemini_stateful", model="gemini/gemini-3.5-flash") is None
+    assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID, provider="openai", model="gpt-5.4") is None
+    persisted = account_store.read_llm_state(ACCOUNT_ID)
+    assert persisted["previous_response_provider"] == "openai"
+    assert persisted["previous_response_model"] == "gpt-5.5"
+
+
+def test_runtime_state_store_does_not_use_legacy_unscoped_id_for_scoped_lookup(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
+    account_store.write_llm_state(ACCOUNT_ID, {"previous_response_id": "resp-legacy"})
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID, provider="openai", model="gpt-5.5") is None
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID) == "resp-legacy"
+
+
 def test_runtime_state_store_migrates_previous_response_id_from_legacy_openai_state(tmp_path, monkeypatch):
     monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
     monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", raising=False)

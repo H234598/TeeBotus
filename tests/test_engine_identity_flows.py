@@ -1603,6 +1603,55 @@ def test_engine_passes_previous_openai_response_id_per_account(tmp_path):
     assert client.previous_ids == [None, "resp-1"]
 
 
+def test_engine_does_not_reuse_previous_response_id_after_provider_switch(tmp_path):
+    provider = StaticSecretProvider(b"e" * 32)
+    data_dir = tmp_path / "Depressionsbot" / "data"
+    identity = telegram_identity_key(1)
+
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("OpenAI-Antwort.", "openai-1", None)
+
+    first_engine = TeeBotusEngine(
+        account_store=AccountStore(data_dir / "accounts", "Depressionsbot", provider),
+        state=RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider),
+        instructions=BotInstructions(openai_enabled=True, llm_provider="openai", openai_model="gpt-5.5"),
+        openai_client=FakeOpenAIClient(),
+        llm_client=FakeOpenAIClient(),
+    )
+    first_engine.process(event(identity, "OpenAI"))
+
+    class FakeGeminiClient:
+        capabilities = GEMINI_INTERACTIONS_CAPABILITIES
+
+        def __init__(self) -> None:
+            self.previous_ids: list[str | None] = []
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            self.previous_ids.append(previous_response_id)
+            return LLMResponse(
+                "Gemini-Antwort.",
+                "gemini-1",
+                provider="litellm_gemini_stateful",
+                model="gemini/gemini-3.5-flash",
+            )
+
+    gemini = FakeGeminiClient()
+    second_engine = TeeBotusEngine(
+        account_store=AccountStore(data_dir / "accounts", "Depressionsbot", provider),
+        state=RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider),
+        instructions=BotInstructions(
+            openai_enabled=True,
+            llm_provider="litellm_gemini_stateful",
+            llm_model="gemini/gemini-3.5-flash",
+        ),
+        llm_client=gemini,
+    )
+    second_engine.process(event(identity, "Gemini"))
+
+    assert gemini.previous_ids == [None]
+
+
 def test_engine_passes_previous_gemini_interaction_id_per_account_and_persists(tmp_path):
     class FakeGeminiClient:
         capabilities = GEMINI_INTERACTIONS_CAPABILITIES
