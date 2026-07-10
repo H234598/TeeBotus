@@ -1015,6 +1015,37 @@ def test_runtime_status_admin_notify_sanitizes_report_lines() -> None:
     assert sanitized == "admin_notify=runtime_status status=failed api_key=<redacted>"
 
 
+def test_runtime_status_admin_notify_reports_dispatch_outcomes(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    results = [
+        SimpleNamespace(instance_name="runtime_status", account_id="a" * 128, status="sent", channel="telegram", reason=""),
+        SimpleNamespace(instance_name="runtime_status", account_id="b" * 128, status="failed", channel="telegram", reason="send:TimeoutError"),
+    ]
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.admin_accounts.runtime_status_problem_lines",
+        lambda _output: ("telegram_slot=Demo/telegram:1 status=broken error=unreachable",),
+    )
+    monkeypatch.setattr(
+        "TeeBotus.runtime.config.resolve_runtime_config",
+        lambda **_kwargs: SimpleNamespace(instances_dir=tmp_path, instances=(SimpleNamespace(instance_name="Demo"),)),
+    )
+
+    async def fake_notify(**_kwargs):
+        return tuple(results)
+
+    monkeypatch.setattr("TeeBotus.runtime.admin_accounts.notify_runtime_status_admin_accounts", fake_notify)
+
+    bot._runtime_status_notify_admins((), "problem")
+
+    output = capsys.readouterr().out.splitlines()
+    assert output == [
+        "admin_notify=runtime_status status=sent account_id=" + ("a" * 128) + " channel=telegram",
+        "admin_notify=runtime_status status=failed account_id=" + ("b" * 128) + " channel=telegram reason=send:TimeoutError",
+        "admin_notify=runtime_status status=failed",
+    ]
+
+
 def test_runtime_status_text_keeps_secret_named_paths_visible() -> None:
     bot = importlib.import_module("TeeBotus.bot")
 

@@ -2329,7 +2329,7 @@ def _run_matrix_runtime(config: Any) -> int:
         return 2
     try:
         return int(run_matrix_accounts(config))
-    except MatrixRuntimeError as exc:
+    except MatrixRuntimeError:
         print("TeeBotus Matrix runtime error", file=sys.stderr)
         return 2
 
@@ -2342,7 +2342,7 @@ def _start_matrix_runtime_background(config: Any) -> int:
         return 2
     try:
         start_matrix_accounts_in_background(config)
-    except MatrixRuntimeError as exc:
+    except MatrixRuntimeError:
         print("TeeBotus Matrix runtime error", file=sys.stderr)
         return 2
     return 0
@@ -2356,7 +2356,7 @@ def _run_telegram_runtime(config: Any) -> int:
         return 2
     try:
         return int(start_telegram_accounts(config))
-    except TelegramRuntimeError as exc:
+    except TelegramRuntimeError:
         print("TeeBotus Telegram runtime error", file=sys.stderr)
         return 2
 
@@ -2370,7 +2370,7 @@ def _start_gemini_free_tier_limit_refresh(config: Any) -> None:
     try:
         instance_names = tuple(str(instance.instance_name) for instance in getattr(config, "instances", ()))
         start_gemini_free_tier_limit_refresh_background(instance_names=instance_names)
-    except Exception as exc:  # noqa: BLE001 - refresh must not block bot startup.
+    except Exception:  # noqa: BLE001 - refresh must not block bot startup.
         print(
             "TeeBotus Gemini free-tier refresh start failed",
             file=sys.stderr,
@@ -2517,9 +2517,16 @@ def _runtime_status_notify_admins(argv: Sequence[str], status_output: str) -> No
             )
         )
         result_lines = format_admin_notification_result_lines(results)
-        print(
-            "admin_notify=runtime_status status=ok"
-        )
+        for line in result_lines:
+            print(_sanitize_admin_notify_status_line(line))
+        statuses = {str(getattr(result, "status", "")).strip().casefold() for result in results}
+        if "failed" in statuses:
+            overall_status = "failed"
+        elif "sent" in statuses:
+            overall_status = "ok"
+        else:
+            overall_status = "skipped"
+        print(f"admin_notify=runtime_status status={overall_status}")
     except Exception:  # noqa: BLE001 - notification must not hide runtime-status output.
         print(
             "admin_notify=runtime_status status=failed",
