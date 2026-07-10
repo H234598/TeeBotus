@@ -254,6 +254,31 @@ def test_codex_history_uses_sql_collection_when_account_backend_is_enabled(tmp_p
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["summary_prefix"] == "v1.0.0 #0001"
 
 
+def test_codex_history_sql_dispatch_ids_do_not_duplicate_existing_rows(tmp_path: Path) -> None:
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=tmp_path / "memory.sqlite3", fallback_path=None),
+    )
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    store._account_memory_backend = backend
+
+    first_id = store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {"id": "fixed-dispatch-id", "status": "accepted"},
+    )
+    second_id = store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {"id": "fixed-dispatch-id", "status": "delivered"},
+    )
+
+    rows = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+    assert first_id == "fixed-dispatch-id"
+    assert second_id != first_id
+    assert [row["id"] for row in rows] == [first_id, second_id]
+
+
 def test_codex_history_dispatch_updates_sql_collections(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(tmp_path / "memory.sqlite3"))

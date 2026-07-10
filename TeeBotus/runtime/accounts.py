@@ -3213,26 +3213,25 @@ class AccountStore:
         if not normalized_results:
             return ()
         timestamp = utc_now()
-        created_ids: list[str] = []
-        for result in normalized_results:
-            result_id = str(result.get("id") or f"chdisp_{uuid.uuid4().hex}").strip()
-            while not result_id or result_id in created_ids:
-                result_id = f"chdisp_{uuid.uuid4().hex}"
-            result["id"] = result_id
-            result.setdefault("schema_version", 1)
-            result.setdefault("created_at", timestamp)
-            result.setdefault("updated_at", result["created_at"])
-            created_ids.append(result_id)
         backend = self.account_memory_backend
         append_collection_items = getattr(backend, "append_collection_items", None) if backend is not None else None
-        if callable(append_collection_items):
-            with self.codex_history_outbox_lock(account_id):
-                append_collection_items(account_id, CODEX_HISTORY_DISPATCH_RESULTS_COLLECTION, normalized_results)
-                self._unlink_migrated_account_file(self.account_dir(account_id) / CODEX_HISTORY_DISPATCH_RESULTS_FILENAME)
-            return tuple(created_ids)
         with self.codex_history_outbox_lock(account_id):
             rows = self.read_codex_history_dispatch_results(account_id)
             existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
+            created_ids: list[str] = []
+            for result in normalized_results:
+                result_id = str(result.get("id") or f"chdisp_{uuid.uuid4().hex}").strip()
+                while not result_id or result_id in existing_ids or result_id in created_ids:
+                    result_id = f"chdisp_{uuid.uuid4().hex}"
+                result["id"] = result_id
+                result.setdefault("schema_version", 1)
+                result.setdefault("created_at", timestamp)
+                result.setdefault("updated_at", result["created_at"])
+                created_ids.append(result_id)
+            if callable(append_collection_items):
+                append_collection_items(account_id, CODEX_HISTORY_DISPATCH_RESULTS_COLLECTION, normalized_results)
+                self._unlink_migrated_account_file(self.account_dir(account_id) / CODEX_HISTORY_DISPATCH_RESULTS_FILENAME)
+                return tuple(created_ids)
             final_created_ids: list[str] = []
             for result in normalized_results:
                 result_id = str(result.get("id") or "").strip()
