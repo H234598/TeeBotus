@@ -105,7 +105,7 @@ class SourceHarvester:
                 _unlink_new_destination_if_same(stored_path, stored_stat)
             raise
         if not copy:
-            _unlink_if_same_file(source, source_stat)
+            _unlink_if_same_file(source, source_stat, expected_sha256=sha256)
         return result
 
     def promote_accepted(
@@ -148,7 +148,7 @@ class SourceHarvester:
                 _unlink_new_destination_if_same(promoted_path, promoted_stat)
             raise
         if not copy:
-            _unlink_if_same_file(staged, source_stat)
+            _unlink_if_same_file(staged, source_stat, expected_sha256=sha256)
         return result
 
     def _stored_path(self, source: Path, sha256: str, route: SourceRoute) -> Path:
@@ -373,12 +373,19 @@ def _copy_file_private(source: Path, destination: Path) -> os.stat_result:
         _close_fd_if_open(dst_fd)
 
 
-def _unlink_if_same_file(path: Path, expected_stat: os.stat_result) -> None:
+def _unlink_if_same_file(
+    path: Path,
+    expected_stat: os.stat_result,
+    *,
+    expected_sha256: str = "",
+) -> None:
     try:
         current = os.stat(path, follow_symlinks=False)
     except FileNotFoundError:
         return
     if not stat.S_ISREG(current.st_mode) or current.st_dev != expected_stat.st_dev or current.st_ino != expected_stat.st_ino:
+        raise ValueError(f"SourceHarvester source changed before unlink: {path}")
+    if expected_sha256 and _file_sha256(path) != expected_sha256:
         raise ValueError(f"SourceHarvester source changed before unlink: {path}")
     path.unlink()
 

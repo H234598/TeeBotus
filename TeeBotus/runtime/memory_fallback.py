@@ -393,7 +393,8 @@ class WarningFallbackAccountMemoryBackend:
                 self._fallback_stale_set(operation).add(self._operation_stale_key(operation, account_id))
                 self.last_fallback_sync_error = f"{operation}: primary repair failed: {exc}"
                 LOGGER.critical(
-                    "ACCOUNT MEMORY PRIMARY DATABASE REPAIR FROM FALLBACK FAILED. label=%s operation=%s account_id=%s error=%s.",
+                    "ACCOUNT MEMORY PRIMARY DATABASE REPAIR FROM FALLBACK FAILED. "
+                    "ACCOUNT MEMORY PRIMARY DATABASE FAILED. label=%s operation=%s account_id=%s error=%s.",
                     self.label,
                     operation,
                     account_id,
@@ -527,7 +528,12 @@ class WarningFallbackAccountMemoryBackend:
         ):
             return
         if self._fallback_active:
-            LOGGER.critical("Account-Memory primary backend recovered label=%s operation=%s. Fallback warning cleared.", self.label, operation)
+            LOGGER.critical(
+                "ACCOUNT MEMORY PRIMARY DATABASE FAILED earlier; Account-Memory primary backend recovered "
+                "label=%s operation=%s. Fallback warning cleared.",
+                self.label,
+                operation,
+            )
             self.last_fallback_sync_error = ""
         self._fallback_active = False
 

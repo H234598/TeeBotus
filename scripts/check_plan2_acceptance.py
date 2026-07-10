@@ -243,6 +243,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_youtube_parser_misses_report.py",
 )
 LEGACY_IMPORT_TEST_PATTERNS: tuple[str, ...] = ("tests/test_legacy_user_memory_import.py",)
+PLAN2_DEFAULT_INSTANCE_NAMES: tuple[str, ...] = ("Bote_der_Wahrheit", "Depressionsbot")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -604,12 +605,16 @@ def _legacy_import_command(
 
 def _discover_plan2_instances(instances_dir: Path = REPO_ROOT / "instances") -> tuple[str, ...]:
     if not instances_dir.exists():
-        return ()
-    return tuple(
+        return PLAN2_DEFAULT_INSTANCE_NAMES
+    discovered = tuple(
         path.name
         for path in sorted(instances_dir.iterdir())
         if path.is_dir() and (path / "Bot_Verhalten.md").exists()
     )
+    # CI deliberately does not carry user runtime directories. Keep the
+    # documented migration targets visible in the generated command matrix so
+    # the acceptance contract remains deterministic on a clean checkout.
+    return discovered or PLAN2_DEFAULT_INSTANCE_NAMES
 
 
 def _instance_artifact_path(path: Path, instance_name: str) -> Path:
