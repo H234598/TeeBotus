@@ -91,16 +91,16 @@ URL_REDACTION_HINTS = frozenset({"://", "target=", "base_url=", "url="})
 AUTHORIZATION_REDACTION_HINTS = frozenset({"authorization", "bearer", "basic", "apikey", "api_key", "api-key", "token "})
 SECRET_OPTION_REDACTION_HINTS = frozenset(
     {
-        "--api",
-        "--private",
-        "--signing",
-        "--access",
-        "--auth",
-        "--bearer",
-        "--cookie",
-        "--token",
-        "--secret",
-        "--password",
+        "-api",
+        "-private",
+        "-signing",
+        "-access",
+        "-auth",
+        "-bearer",
+        "-cookie",
+        "-token",
+        "-secret",
+        "-password",
     }
 )
 SECRET_ASSIGNMENT_REDACTION_HINTS = frozenset(

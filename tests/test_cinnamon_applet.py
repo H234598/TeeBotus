@@ -4038,6 +4038,9 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert cinnamon_applet._redact("command=tool --password plain-secret --api-key 'api secret' --token --verbose") == (
         "command=tool --password <redacted> --api-key <redacted> --token --verbose"
     )
+    assert cinnamon_applet._redact("command=tool -password plain-secret -api-key 'api secret' -token --verbose") == (
+        "command=tool -password <redacted> -api-key <redacted> -token --verbose"
+    )
 
 
 def test_cinnamon_applet_runtime_parser_redacts_nested_key_and_cookie_headers() -> None:
