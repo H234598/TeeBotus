@@ -1772,6 +1772,26 @@ def test_cinnamon_applet_status_formatters_keep_backend_and_budget_metadata() ->
     }
 
 
+def test_cinnamon_applet_history_status_labels_are_localized() -> None:
+    result = _run_js_applet_expression(
+        """
+        ({
+          accepted: applet._statusWord("accepted"),
+          queued: applet._statusWord("queued"),
+          skipped: applet._statusWord("skipped"),
+          history: applet._formatProjectHistoryLine("codex_history_repo=Demo repo=TeeBotus status=warning queued=1 failed=0 total=2 latest_status=queued latest_kind=codex_run_summary")
+        })
+        """
+    )
+
+    assert result == {
+        "accepted": "akzeptiert",
+        "queued": "wartet",
+        "skipped": "uebersprungen",
+        "history": "Repo-History TeeBotus (Demo): Warnung; offen 1; fehlgeschlagen 0; gesamt 2; letzter Status wartet; Typ Run-Summary",
+    }
+
+
 def test_cinnamon_applet_formats_runtime_directory_and_agent_pilot_lines() -> None:
     result = _run_js_applet_expression(
         """

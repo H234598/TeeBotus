@@ -1061,6 +1061,7 @@ TeeBotusApplet.prototype = {
   _statusWord: function(status) {
     let value = String(status || "unknown").trim().toLowerCase();
     let labels = {
+      accepted: "akzeptiert",
       available: "verfuegbar",
       broken: "defekt",
       configured: "konfiguriert",
@@ -1082,11 +1083,13 @@ TeeBotusApplet.prototype = {
       not_configured: "nicht konfiguriert",
       ok: "ok",
       planned: "geplant",
+      queued: "wartet",
       reachable: "erreichbar",
       ready: "bereit",
       registered: "registriert",
       routable: "routbar",
       schema_mismatch: "Schema passt nicht",
+      skipped: "uebersprungen",
       stale: "veraltet",
       unknown: "unbekannt",
       unavailable: "nicht verfuegbar",
