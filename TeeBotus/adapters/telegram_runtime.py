@@ -4104,11 +4104,23 @@ def _read_telegram_update_offset(path: Path) -> int | None:
 
 
 def _write_telegram_update_offset(path: Path, offset: int) -> None:
+    temporary_path = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"offset": int(offset), "updated_at": _utc_timestamp()}) + "\n", encoding="utf-8")
+        with temporary_path.open("w", encoding="utf-8") as file:
+            file.write(json.dumps({"offset": int(offset), "updated_at": _utc_timestamp()}) + "\n")
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temporary_path, path)
     except OSError:
         LOGGER.exception("Failed to persist telegram update offset path=%s offset=%s.", path, offset)
+    finally:
+        try:
+            temporary_path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            LOGGER.warning("Failed to remove temporary telegram update offset path=%s.", temporary_path)
 
 
 def _has_instance_telegram_tokens(instance_name: str) -> bool:

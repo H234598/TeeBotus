@@ -4670,6 +4670,16 @@ class BotTests(unittest.TestCase):
             self.assertTrue(expected.exists())
             self.assertFalse((fallback_dir / "Demo" / "data" / expected.name).exists())
 
+    def test_telegram_update_offset_write_is_atomic_and_cleans_temp_file(self) -> None:
+        from TeeBotus.adapters.telegram_runtime import _read_telegram_update_offset, _write_telegram_update_offset
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "Telegram_GetUpdates_Offset_1.json"
+            _write_telegram_update_offset(path, 42)
+
+            self.assertEqual(_read_telegram_update_offset(path), 42)
+            self.assertEqual(list(path.parent.glob(f".{path.name}.*.tmp")), [])
+
     def test_main_impl_loads_runtime_environment_before_configuring_logging(self) -> None:
         from TeeBotus import bot as bot_module
 
