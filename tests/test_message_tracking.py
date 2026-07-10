@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
+
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 
 
@@ -36,3 +38,17 @@ def test_message_tracker_persisted_duplicates_are_not_reintroduced(tmp_path) -> 
 
     assert reloaded.list_for_chat("+491", instance_name="Demo", channel="signal") == [ref]
 
+
+def test_message_tracker_merges_concurrent_persistent_writes(tmp_path) -> None:
+    path = tmp_path / "refs.json"
+
+    def record(index: int) -> None:
+        MessageTracker(path).record(_ref(str(index)))
+
+    with ThreadPoolExecutor(max_workers=8) as workers:
+        list(workers.map(record, range(20)))
+
+    reloaded = MessageTracker(path)
+    refs = reloaded.list_for_chat("+491", instance_name="Demo", channel="signal")
+
+    assert {ref.message_ref for ref in refs} == {str(index) for index in range(20)}
