@@ -3511,6 +3511,25 @@ def test_cinnamon_applet_qdrant_point_count_rejects_non_string_status(monkeypatc
         }
 
 
+def test_cinnamon_applet_qdrant_point_count_normalizes_status_whitespace(monkeypatch) -> None:
+    class FakeResponse:
+        status = 200
+
+        def read(self, _size: int = -1) -> bytes:
+            return b'{"status":"  OK  ","result":{"count":4}}'
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(cinnamon_applet, "urlopen", lambda _request, timeout: FakeResponse())
+
+    assert cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo") == {
+        "status": "ready",
+        "count": 4,
+        "error": "",
+    }
+
+
 def test_cinnamon_applet_qdrant_point_count_rejects_non_integer_counts(monkeypatch) -> None:
     class FakeResponse:
         status = 200
