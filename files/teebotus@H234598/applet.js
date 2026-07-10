@@ -1422,6 +1422,9 @@ TeeBotusApplet.prototype = {
     if (payload.health.status === "ok" && !this._unitStateIsHealthy(payload.unit)) {
       return false;
     }
+    if (payload.health.status === "ok" && !this._unitStateIsHealthy(payload.qdrant.unit)) {
+      return false;
+    }
     if (payload.health.status === "ok" && !this._qdrantCollectionsAreHealthy(payload.qdrant.collections)) {
       return false;
     }
@@ -1447,7 +1450,10 @@ TeeBotusApplet.prototype = {
   _unitStateIsHealthy: function(unit) {
     let activeState = String((unit || {}).active_state || "").trim().toLowerCase();
     let subState = String((unit || {}).sub_state || "").trim().toLowerCase();
-    return activeState === "active" && _hasOwn(CONFIRMED_ACTIVE_SUBSTATES, subState);
+    let returncode = (unit || {}).returncode;
+    let queryOk = (typeof returncode === "number" && Number.isInteger(returncode) && returncode === 0) ||
+      (typeof returncode === "string" && returncode.trim() === "0");
+    return queryOk && activeState === "active" && _hasOwn(CONFIRMED_ACTIVE_SUBSTATES, subState);
   },
 
   _qdrantCollectionsAreHealthy: function(collections) {
