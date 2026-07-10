@@ -1451,6 +1451,9 @@ TeeBotusApplet.prototype = {
     if (payload.health.status === "ok" && !this._qdrantCollectionsAreHealthy(payload.qdrant.collections)) {
       return false;
     }
+    if (payload.health.status === "ok" && String(payload.qdrant.error || "").trim()) {
+      return false;
+    }
     if (payload.health.status === "ok" && !this._runtimeStatusIsHealthy(payload.runtime)) {
       return false;
     }

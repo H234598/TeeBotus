@@ -1488,6 +1488,9 @@ def test_cinnamon_applet_status_payload_requires_ready_qdrant_collections_for_he
             runtime: {returncode: 0, sections: {}, summary: {}, status_counts: {}}
           };
           let healthy = applet._isStatusPayload(payload);
+          payload.qdrant.error = "probe failed";
+          let error = applet._isStatusPayload(payload);
+          payload.qdrant.error = "";
           payload.qdrant.collections.teebotus_user_memory.status = "unreachable";
           let failed = applet._isStatusPayload(payload);
           delete payload.qdrant.collections.teebotus_user_memory;
@@ -1495,12 +1498,12 @@ def test_cinnamon_applet_status_payload_requires_ready_qdrant_collections_for_he
           payload.qdrant.collections.teebotus_user_memory = {status: "ready", count: 0};
           payload.runtime.summary.output_truncated = true;
           let truncated = applet._isStatusPayload(payload);
-          return {healthy: healthy, failed: failed, missing: missing, truncated: truncated};
+          return {healthy: healthy, error: error, failed: failed, missing: missing, truncated: truncated};
         })()
         """
     )
 
-    assert result == {"healthy": True, "failed": False, "missing": False, "truncated": False}
+    assert result == {"healthy": True, "error": False, "failed": False, "missing": False, "truncated": False}
 
 
 def test_cinnamon_applet_status_payload_rejects_ok_with_problem_counts() -> None:
