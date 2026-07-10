@@ -2585,6 +2585,19 @@ def test_cinnamon_applet_runtime_parser_does_not_count_ready_status_with_error()
     assert parsed["summary"]["qdrant_problem_status_count"] == 1
 
 
+def test_cinnamon_applet_runtime_parser_marks_any_ready_status_with_error() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Lokale Dienste]
+        service=demo status=READY error=worker returned an error
+        memory_index=demo status=READY semantic=UNAVAILABLE error=qdrant probe failed
+        """
+    )
+
+    assert parsed["summary"]["problem_status_count"] == 2
+    assert parsed["summary"]["problem_statuses"] == "unavailable:1,warning:1"
+
+
 def test_cinnamon_applet_js_parser_normalizes_structured_status_case() -> None:
     fields = _run_js_parse_fields("route_status=UNAVAILABLE status=WARNING semantic=READY")
     result = _run_js_applet_expression(
@@ -2603,6 +2616,14 @@ def test_cinnamon_applet_js_marks_ready_memory_lines_with_errors_as_problems() -
     )
 
     assert result == {"qdrant": True, "semantic": True, "healthy": False}
+
+
+def test_cinnamon_applet_js_marks_any_ready_line_with_error_as_problem() -> None:
+    result = _run_js_applet_expression(
+        "applet._lineHasProblemStatus(applet._parseFields('service=demo status=READY error=worker failed'))"
+    )
+
+    assert result is True
 
 
 def test_cinnamon_applet_runtime_parser_counts_models_feed_secondary_status() -> None:
