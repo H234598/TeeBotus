@@ -33,6 +33,7 @@ MAX_ERROR_CHARS = 2_000
 MAX_REDACTION_GUARD_BYTES = 4_096
 MAX_QDRANT_COUNT_RESPONSE_BYTES = 64_000
 MAX_QDRANT_COUNT = 9_007_199_254_740_991
+TELEGRAM_BOT_TOKEN_RE = re.compile(r"(?<![A-Za-z0-9_])\d{8,12}:[A-Za-z0-9_-]{30,}(?![A-Za-z0-9_-])")
 SECRET_TOKEN_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{8,}\b"),
@@ -45,6 +46,7 @@ SECRET_TOKEN_PATTERNS = (
     re.compile(r"\bya29\.[A-Za-z0-9._-]{16,}\b"),
     re.compile(r"\bxox[baprs]-[A-Za-z0-9-]{20,}\b"),
     re.compile(r"\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}\b"),
+    TELEGRAM_BOT_TOKEN_RE,
 )
 URL_CREDENTIAL_RE = re.compile(
     r"(?:(?:[a-z][a-z0-9+.-]*://)|(?:(?:target|base_url|url)=)(?:[a-z][a-z0-9+.-]*://)?)(?:[^\s/@:]+(?::[^\s/@]*)?|:[^\s/@]+)@",
@@ -1033,8 +1035,9 @@ def _redact(value: str) -> str:
     if not text:
         return text
     lowered = text.casefold()
+    has_secret_token = any(hint in lowered for hint in SECRET_TOKEN_HINTS) or TELEGRAM_BOT_TOKEN_RE.search(text) is not None
     if not (
-        any(hint in lowered for hint in SECRET_TOKEN_HINTS)
+        has_secret_token
         or any(hint in lowered for hint in URL_REDACTION_HINTS)
         or any(hint in lowered for hint in AUTHORIZATION_REDACTION_HINTS)
         or any(hint in lowered for hint in SECRET_OPTION_REDACTION_HINTS)
@@ -1042,7 +1045,7 @@ def _redact(value: str) -> str:
         or lowered.count(".") >= 2
     ):
         return text
-    if any(hint in lowered for hint in SECRET_TOKEN_HINTS) or lowered.count(".") >= 2:
+    if has_secret_token or lowered.count(".") >= 2:
         for pattern in SECRET_TOKEN_PATTERNS:
             text = pattern.sub("<redacted-secret>", text)
     if "@" in text and any(hint in lowered for hint in URL_REDACTION_HINTS):
