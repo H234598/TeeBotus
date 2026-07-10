@@ -141,6 +141,21 @@ def test_status_auth_global_code_does_not_silence_non_logger_instances(tmp_path,
     assert account_store.get_account_for_identity(identity) is not None
 
 
+def test_status_auth_does_not_trust_unverified_event_account_id(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path, "TeeBotus_Logger")
+    authorized_identity = telegram_identity_key(1)
+    authorized_account_id = account_store.resolve_or_create_account(authorized_identity)
+    authorize_status_recipient(account_store, authorized_account_id, event(authorized_identity, "authorized", instance="TeeBotus_Logger"))
+    unlinked_identity = telegram_identity_key(2)
+    engine = TeeBotusEngine(account_store=account_store)
+
+    actions = engine.process(event(unlinked_identity, "/help", instance="TeeBotus_Logger").with_account(authorized_account_id))
+
+    assert actions == []
+    assert account_store.get_account_for_identity(unlinked_identity) is None
+
+
 def test_free_text_status_auth_code_authorizes_runtime_admin_for_non_logger_instances(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
     account_store = store(tmp_path)

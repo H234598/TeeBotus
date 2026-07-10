@@ -113,7 +113,9 @@ def evaluate_status_auth_gate(
 ) -> StatusAuthGateResult:
     if not status_auth_enabled(instance_name=event.instance, env=env):
         return StatusAuthGateResult(True, event.account_id)
-    account_id = event.account_id or account_store.get_account_for_identity(event.identity_key) or ""
+    # The adapter-provided account_id is a routing hint, not an authorization
+    # proof. Resolve the identity map again before granting status access.
+    account_id = account_store.get_account_for_identity(event.identity_key) or ""
     if account_id and status_auth_state_authorized(account_store, account_id):
         return StatusAuthGateResult(True, account_id)
     if not text_contains_status_auth_code(event.text, instance_name=event.instance, env=env):
