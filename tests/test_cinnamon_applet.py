@@ -477,6 +477,9 @@ def test_cinnamon_applet_js_parser_matches_python_parser_for_status_edges() -> N
         "structured_decision=demo/telegram status=enabled route_status=unavailable "
         "route_error=provider status=500 fallback=local_ollama fallback_model=llama3 "
         "remote_fallback=enabled warning=retry",
+        "llm_route=demo error=provider status=constructor warning=retry",
+        "llm_route=demo error=provider status=toString warning=retry",
+        "llm_route=demo error=provider status=__proto__ warning=retry",
         "account_identity_warning=Demo code=runtime_channel_without_identity "
         "message=Use option foo=bar only after login. "
         "action=First run /register, then confirm status=ok manually",
@@ -484,6 +487,14 @@ def test_cinnamon_applet_js_parser_matches_python_parser_for_status_edges() -> N
 
     for line in lines:
         assert _run_js_parse_fields(line) == cinnamon_applet._parse_status_fields(line)
+
+
+def test_cinnamon_applet_js_label_maps_do_not_use_prototype_keys() -> None:
+    result = _run_js_applet_expression(
+        "({status: applet._statusWord('constructor'), kind: applet._codexHistoryKindLabel('constructor')})"
+    )
+
+    assert result == {"status": "constructor", "kind": "constructor"}
 
 
 def test_cinnamon_applet_settings_cover_visible_sections_and_safety() -> None:

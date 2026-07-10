@@ -150,6 +150,10 @@ function _(text) {
   return text;
 }
 
+function _hasOwn(object, key) {
+  return Object.prototype.hasOwnProperty.call(object, key);
+}
+
 function TeeBotusApplet(metadata, orientation, panelHeight, instanceId) {
   this._init(metadata, orientation, panelHeight, instanceId);
 }
@@ -743,7 +747,7 @@ TeeBotusApplet.prototype = {
       codex_strategy_analysis: "Strategieanalyse",
       codex_graph_artifact: "Graph-Artefakt"
     };
-    return kindLabels[value] || value.replace(/_/g, " ");
+    return _hasOwn(kindLabels, value) ? kindLabels[value] : value.replace(/_/g, " ");
   },
 
   _appendProjectHistoryDrilldown: function(lines) {
@@ -859,7 +863,7 @@ TeeBotusApplet.prototype = {
     if (normalized.length >= 2 && normalized.charAt(0) === normalized.charAt(normalized.length - 1) && ["\"", "'", "`"].indexOf(normalized.charAt(0)) >= 0) {
       normalized = normalized.slice(1, -1).trim();
     }
-    return Boolean(normalized) && !Object.prototype.hasOwnProperty.call(NEUTRAL_FLAG_VALUES, normalized);
+    return Boolean(normalized) && !_hasOwn(NEUTRAL_FLAG_VALUES, normalized);
   },
 
   _statusFieldHasProblem: function(fields, key) {
@@ -965,7 +969,7 @@ TeeBotusApplet.prototype = {
       unsupported: "nicht unterstuetzt",
       warning: "Warnung"
     };
-    return labels[value] || value;
+    return _hasOwn(labels, value) ? labels[value] : value;
   },
 
   _appendCodexUsageActions: function() {
@@ -977,7 +981,7 @@ TeeBotusApplet.prototype = {
   },
 
   _parseFields: function(line) {
-    let fields = {};
+    let fields = Object.create(null);
     let text = String(line || "");
     let matches = [];
     let quoted = this._quotedCharacterIndexes(text);
@@ -1040,10 +1044,10 @@ TeeBotusApplet.prototype = {
 
   _fieldValueEnd: function(text, matches, index) {
     let key = String((matches[index] || {}).key || "");
-    if (!FREE_TEXT_STATUS_FIELDS[key]) {
+    if (!_hasOwn(FREE_TEXT_STATUS_FIELDS, key)) {
       return index + 1 < matches.length ? matches[index + 1].keyStart : text.length;
     }
-    let boundaries = FREE_TEXT_STATUS_FIELD_BOUNDARIES[key] || {};
+    let boundaries = _hasOwn(FREE_TEXT_STATUS_FIELD_BOUNDARIES, key) ? FREE_TEXT_STATUS_FIELD_BOUNDARIES[key] : {};
     for (let i = index + 1; i < matches.length; i++) {
       if (boundaries[matches[i].key] || this._fieldMatchIsStructuredBoundary(text, matches, i)) {
         return matches[i].keyStart;
@@ -1054,12 +1058,12 @@ TeeBotusApplet.prototype = {
 
   _fieldMatchIsStructuredBoundary: function(text, matches, index) {
     let match = matches[index] || {};
-    if (!STATUS_FIELD_BOUNDARY_KEYS[match.key]) {
+    if (!_hasOwn(STATUS_FIELD_BOUNDARY_KEYS, match.key)) {
       return false;
     }
     let valueEnd = index + 1 < matches.length ? matches[index + 1].keyStart : text.length;
     let value = text.slice(match.valueStart, valueEnd).trim();
-    return this._statusValueIsProblem(value) || Boolean(STATUS_FIELD_NEUTRAL_BOUNDARY_VALUES[value]);
+    return this._statusValueIsProblem(value) || _hasOwn(STATUS_FIELD_NEUTRAL_BOUNDARY_VALUES, value);
   },
 
   _populateLines: function(menu, lines, emptyText) {
