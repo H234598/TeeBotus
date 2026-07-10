@@ -102,7 +102,12 @@ console.log(JSON.stringify(result));
     return json.loads(completed.stdout)
 
 
-def _run_gjs_spawn_smoke() -> dict[str, object]:
+def _run_gjs_spawn_smoke(
+    *,
+    child_code: str = "import sys; sys.stdout.write('x'*10000); sys.stderr.write('e'*2000)",
+    max_stdout_chars: int = 1000,
+    max_stderr_chars: int = 100,
+) -> dict[str, object]:
     gjs = shutil.which("gjs")
     if not gjs:
         pytest.skip("gjs is not available for Gio subprocess behavior check")
@@ -125,14 +130,14 @@ applet.spawnGeneration = 0;
 applet.spawnProcesses = [];
 applet.appletRemoved = false;
 let loop = new GLib.MainLoop(null, false);
-applet._spawn(
-  ["/usr/bin/python3", "-c", "import sys; sys.stdout.write('x'*10000); sys.stderr.write('e'*2000)"],
+  applet._spawn(
+  ["/usr/bin/python3", "-c", {json.dumps(child_code)}],
   function(stdout, stderr, ok) {{
     print(JSON.stringify({{ok: ok, stdout: stdout.length, stderr: stderr.length, error: stderr}}));
     loop.quit();
   }},
   null,
-  {{maxStdoutChars: 1000, maxStderrChars: 100, outputLimitError: "bounded"}}
+  {{maxStdoutChars: {max_stdout_chars}, maxStderrChars: {max_stderr_chars}, outputLimitError: "bounded"}}
 );
 loop.run();
 """
@@ -1359,6 +1364,12 @@ def test_cinnamon_applet_status_refresh_rejects_large_json_output() -> None:
 
 def test_cinnamon_applet_gio_spawn_bounds_stdout_and_stderr() -> None:
     result = _run_gjs_spawn_smoke()
+
+    assert result == {"ok": False, "stdout": 0, "stderr": 7, "error": "bounded"}
+
+
+def test_cinnamon_applet_gio_spawn_stops_after_output_overflow() -> None:
+    result = _run_gjs_spawn_smoke(child_code="import sys,time; sys.stdout.write('x'*4096); sys.stdout.flush(); time.sleep(30)")
 
     assert result == {"ok": False, "stdout": 0, "stderr": 7, "error": "bounded"}
 

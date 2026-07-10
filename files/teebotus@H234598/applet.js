@@ -1722,6 +1722,20 @@ TeeBotusApplet.prototype = {
       };
       let processDone = false;
       let processSuccessful = false;
+      let outputLimitTriggered = false;
+      let stopForOutputLimit = () => {
+        if (outputLimitTriggered) {
+          return;
+        }
+        outputLimitTriggered = true;
+        try {
+          if (process && !process.get_if_exited()) {
+            process.force_exit();
+          }
+        } catch (err) {
+          global.logError(err);
+        }
+      };
       let fail = (err) => {
         try {
           if (process && !process.get_if_exited()) {
@@ -1789,6 +1803,7 @@ TeeBotusApplet.prototype = {
                   state.capturedBytes += remaining;
                 }
                 state.truncated = true;
+                stopForOutputLimit();
               } else {
                 state.chunks.push(raw);
                 state.capturedBytes += size;
