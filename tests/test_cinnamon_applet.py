@@ -3806,6 +3806,12 @@ def test_cinnamon_applet_run_terminates_timed_out_child() -> None:
     }
 
 
+def test_cinnamon_applet_redaction_does_not_backtrack_on_large_url_without_credentials() -> None:
+    value = "url=" + ("x" * cinnamon_applet.MAX_CAPTURE_CHARS)
+
+    assert cinnamon_applet._redact(value) == value
+
+
 def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_metadata() -> None:
     github_token = "ghp_" + "1234567890ABCDEFGHIJK"
     google_oauth_token = "ya29.a0AfH6SMabcdefghijklmnopqrstuvwxyz1234567890"

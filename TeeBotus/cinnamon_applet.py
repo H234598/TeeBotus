@@ -1006,7 +1006,7 @@ def _redact(value: str) -> str:
     if any(hint in lowered for hint in SECRET_TOKEN_HINTS) or lowered.count(".") >= 2:
         for pattern in SECRET_TOKEN_PATTERNS:
             text = pattern.sub("<redacted-secret>", text)
-    if any(hint in lowered for hint in URL_REDACTION_HINTS):
+    if "@" in text and any(hint in lowered for hint in URL_REDACTION_HINTS):
         text = URL_CREDENTIAL_RE.sub(_redact_url_credentials, text)
     if any(hint in lowered for hint in AUTHORIZATION_REDACTION_HINTS):
         text = AUTHORIZATION_TOKEN_RE.sub(r"\1\2 <redacted-secret>", text)
