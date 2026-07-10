@@ -159,7 +159,7 @@ class LiteLLMTextClient:
         previous_response_id: str | None = None,
     ) -> LLMResponse:
         try:
-            from litellm import completion
+            completion = _import_litellm_completion()
         except ImportError as exc:
             raise LLMAPIError("LiteLLM is not installed") from exc
 
@@ -383,6 +383,28 @@ class LiteLLMTextClient:
                 reason=f"{reservation.reason}; trying next configured project key",
             )
         return reservation
+
+
+def _import_litellm_completion() -> Any:
+    """Import LiteLLM without allowing its optional dotenv loader to mutate us.
+
+    LiteLLM may load a repository ``.env`` as an import side effect. TeeBotus
+    owns its process environment and loads configuration explicitly at the
+    runtime boundary, so a library import must not silently add or replace
+    environment variables for later operations.
+    """
+
+    before = dict(os.environ)
+    try:
+        from litellm import completion
+    finally:
+        added = set(os.environ).difference(before)
+        for key in added:
+            os.environ.pop(key, None)
+        for key, value in before.items():
+            if os.environ.get(key) != value:
+                os.environ[key] = value
+    return completion
 
 
 def normalize_llm_provider(value: str) -> str:
