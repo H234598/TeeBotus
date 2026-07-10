@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from types import SimpleNamespace
 
+import pytest
+
 from TeeBotus.runtime.actions import ExportFile, SendAttachment, SendEdit, SendPoll, SendReaction, SendReceipt, SendText, SendTyping
 from TeeBotus.runtime.proactive_backends import matrix_proactive_sender, signal_proactive_sender, telegram_proactive_sender
 
@@ -336,3 +338,10 @@ def test_proactive_sender_reports_missing_slot() -> None:
         assert "adapter slot 3" in str(exc)
     else:
         raise AssertionError("missing adapter slot should fail")
+
+
+def test_proactive_sender_rejects_invalid_slot() -> None:
+    sender = telegram_proactive_sender({1: object()})
+
+    with pytest.raises(KeyError, match="invalid adapter slot"):
+        sender({"adapter_slot": "broken"}, SendText("123", "hi"), {})

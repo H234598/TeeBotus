@@ -133,12 +133,21 @@ async def _maybe_await(value: Any) -> Any:
 
 def _slot_mapping(value: Any | Mapping[int, Any]) -> dict[int, Any]:
     if isinstance(value, Mapping):
-        return {_normalize_slot(slot): obj for slot, obj in value.items()}
+        normalized: dict[int, Any] = {}
+        for slot, obj in value.items():
+            normalized_slot = _normalize_slot(slot)
+            if normalized_slot is None:
+                raise ValueError(f"invalid adapter slot {slot!r}")
+            normalized[normalized_slot] = obj
+        return normalized
     return {1: value}
 
 
 def _object_for_route_slot(objects: Mapping[int, Any], route: Mapping[str, Any]) -> Any:
-    slot = _normalize_slot(route.get("adapter_slot", 1))
+    raw_slot = route.get("adapter_slot", 1)
+    slot = _normalize_slot(raw_slot)
+    if slot is None:
+        raise KeyError(f"invalid adapter slot {raw_slot!r}")
     if slot in objects:
         return objects[slot]
     if len(objects) == 1 and 1 in objects:
@@ -146,9 +155,11 @@ def _object_for_route_slot(objects: Mapping[int, Any], route: Mapping[str, Any])
     raise KeyError(f"no proactive backend object configured for adapter slot {slot}")
 
 
-def _normalize_slot(value: Any) -> int:
+def _normalize_slot(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
     try:
         slot = int(value)
     except (TypeError, ValueError):
-        return 1
-    return max(1, slot)
+        return None
+    return slot if slot >= 1 else None

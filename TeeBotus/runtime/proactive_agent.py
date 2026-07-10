@@ -1164,7 +1164,8 @@ async def dispatch_due_proactive_outbox_items(
             )
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", decision.reason, _item_channel(item)))
             continue
-        route = decision.route or _item_route(item)
+        has_stored_route = "route" in item
+        route = _item_route(item) if has_stored_route else (decision.route or _item_route(item))
         if not isinstance(route, Mapping):
             route_channel = _item_channel(item)
             update_proactive_outbox_item_status(
@@ -1180,9 +1181,27 @@ async def dispatch_due_proactive_outbox_items(
             continue
         channel = str(route.get("channel") or "").strip().casefold()
         chat_id = str(route.get("chat_id") or "").strip()
-        if str(route.get("chat_type") or "").strip().casefold() != "private" or not channel or not chat_id:
+        route_slot = route.get("adapter_slot")
+        if (
+            str(route.get("chat_type") or "").strip().casefold() != "private"
+            or not channel
+            or not chat_id
+            or (route_slot is not None and _normalize_route_slot(route_slot) is None)
+        ):
             update_proactive_outbox_item_status(account_store, account_id, item_id, status="skipped", reason="invalid_route", now=resolved_now, expected_status="queued")
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "invalid_route", channel))
+            continue
+        if has_stored_route and not _account_has_matching_proactive_route(account_store, account_id, route):
+            update_proactive_outbox_item_status(
+                account_store,
+                account_id,
+                item_id,
+                status="skipped",
+                reason="stale_route",
+                now=resolved_now,
+                expected_status="queued",
+            )
+            results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "stale_route", channel))
             continue
         sender = _sender_for_channel(senders, channel)
         if sender is _SENDER_NOT_FOUND:
@@ -2238,6 +2257,8 @@ def select_proactive_route(account_store: AccountStore, account_id: str) -> dict
         channel = str(route.get("channel") or "").strip().casefold()
         chat_id = str(route.get("chat_id") or "").strip()
         if not channel or not chat_id:
+            continue
+        if route.get("adapter_slot") is not None and _normalize_route_slot(route.get("adapter_slot")) is None:
             continue
         routes.append(dict(route))
     if not routes:

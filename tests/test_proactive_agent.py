@@ -942,6 +942,21 @@ def test_proactive_agent_route_matching_uses_normalized_channel_and_chat_type(tm
     assert route["chat_type"] == "private"
 
 
+def test_select_proactive_route_rejects_invalid_adapter_slot(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+
+    monkeypatch.setattr(
+        account_store,
+        "get_identity_route",
+        lambda _identity: {"channel": "signal", "chat_id": "+491", "chat_type": "private", "adapter_slot": "broken"},
+    )
+
+    assert select_proactive_route(account_store, account_id) is None
+
+
 def test_select_proactive_route_accepts_case_variant_route_fields(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
@@ -2339,6 +2354,46 @@ def test_dispatch_recheck_does_not_count_current_queued_item_against_daily_limit
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "sent"
 
 
+def test_dispatch_skips_queued_item_when_stored_route_becomes_stale(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    account_store.update_identity_route(identity, channel="signal", chat_id="+492", chat_type="private", adapter_slot=1)
+
+    async def sender(_route: dict, _action: SendText, _item: dict) -> str:
+        raise AssertionError("stale proactive route was sent")
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now,
+        )
+    )
+
+    assert len(results) == 1
+    assert results[0].item_id == item_id
+    assert results[0].status == "skipped"
+    assert results[0].reason == "stale_route"
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "skipped"
+    assert item["status_history"][-1]["reason"] == "stale_route"
+
+
 def test_dispatch_skips_stale_outbox_snapshot_without_sending(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
@@ -2651,6 +2706,43 @@ def test_dispatch_due_proactive_items_fails_with_non_mapping_route(tmp_path) -> 
     item = account_store.read_proactive_outbox(account_id)[0]
     assert item["status"] == "failed"
     assert item["status_history"][-1]["reason"] == "invalid_route"
+
+
+def test_dispatch_due_proactive_items_rejects_invalid_route_adapter_slot(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    rows = account_store.read_proactive_outbox(account_id)
+    rows[0]["route"]["adapter_slot"] = "broken"
+    account_store.write_proactive_outbox(account_id, rows)
+
+    async def sender(route: dict, action: SendText, item: dict) -> str:
+        raise AssertionError("sender must not be called")
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now,
+        )
+    )
+
+    assert results[0].status == "skipped"
+    assert results[0].reason == "invalid_route"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "skipped"
 
 
 @pytest.mark.parametrize(
