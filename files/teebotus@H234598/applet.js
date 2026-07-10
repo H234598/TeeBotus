@@ -923,6 +923,9 @@ TeeBotusApplet.prototype = {
   _errorText: function(fields) {
     let value = String((fields || {}).error || (fields || {}).route_error || "").trim();
     let warning = String((fields || {}).warning || "").trim();
+    if (!this._statusFlagIsSet(warning)) {
+      warning = "";
+    }
     let text = value ? "; Fehler " + value : "";
     return warning ? text + "; Warnung " + warning : text;
   },

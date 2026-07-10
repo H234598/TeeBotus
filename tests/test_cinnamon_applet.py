@@ -3090,6 +3090,26 @@ def test_cinnamon_applet_js_ignores_neutral_warning_flags() -> None:
         assert result is expected
 
 
+def test_cinnamon_applet_js_does_not_render_neutral_warning_flags() -> None:
+    result = _run_js_applet_expression(
+        """
+        ({
+          zero: applet._errorText({warning: "0"}),
+          quoted: applet._errorText({warning: '\"false\"'}),
+          real: applet._errorText({warning: "retry"}),
+          errorAndNeutral: applet._errorText({error: "network", warning: "off"})
+        })
+        """
+    )
+
+    assert result == {
+        "zero": "",
+        "quoted": "",
+        "real": "; Warnung retry",
+        "errorAndNeutral": "; Fehler network",
+    }
+
+
 def test_cinnamon_applet_runtime_parser_counts_status_field_after_free_text_error() -> None:
     parsed = parse_runtime_status(
         """
