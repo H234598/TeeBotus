@@ -576,6 +576,7 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
         method="POST",
         headers={"Accept": "application/json", "Content-Type": "application/json"},
     )
+    response = None
     try:
         response = urlopen(request, timeout=2)
         status_code = int(getattr(response, "status", getattr(response, "code", 200)) or 200)
@@ -583,15 +584,20 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
             raw = response.read(MAX_QDRANT_COUNT_RESPONSE_BYTES + 1)
         except TypeError:
             raw = response.read()
-        close = getattr(response, "close", None)
-        if callable(close):
-            close()
     except HTTPError as exc:
         return {"status": "unreachable", "count": 0, "error": f"HTTP {exc.code}"}
     except (URLError, TimeoutError, OSError) as exc:
         return {"status": "unreachable", "count": 0, "error": _redact(str(getattr(exc, "reason", exc)))}
     except Exception as exc:  # noqa: BLE001 - applet status should stay JSON even if Qdrant is broken.
         return {"status": "unreachable", "count": 0, "error": _redact(f"{type(exc).__name__}: {exc}")}
+    finally:
+        if response is not None:
+            close = getattr(response, "close", None)
+            if callable(close):
+                try:
+                    close()
+                except Exception:  # noqa: BLE001 - cleanup must not hide the status result.
+                    pass
     if not 200 <= status_code < 300:
         return {"status": "unreachable", "count": 0, "error": f"HTTP {status_code}"}
     if len(raw) > MAX_QDRANT_COUNT_RESPONSE_BYTES:

@@ -2984,6 +2984,27 @@ def test_cinnamon_applet_qdrant_point_count_rejects_oversized_response(monkeypat
     assert response.closed is True
 
 
+def test_cinnamon_applet_qdrant_point_count_closes_response_when_read_fails(monkeypatch) -> None:
+    class FakeResponse:
+        status = 200
+        closed = False
+
+        def read(self, size: int = -1) -> bytes:
+            raise OSError("read failed")
+
+        def close(self) -> None:
+            self.closed = True
+
+    response = FakeResponse()
+
+    monkeypatch.setattr(cinnamon_applet, "urlopen", lambda _request, timeout: response)
+
+    result = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
+
+    assert result == {"status": "unreachable", "count": 0, "error": "read failed"}
+    assert response.closed is True
+
+
 def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_metadata() -> None:
     github_token = "ghp_" + "1234567890ABCDEFGHIJK"
     google_oauth_token = "ya29.a0AfH6SMabcdefghijklmnopqrstuvwxyz1234567890"
