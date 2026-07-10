@@ -45,6 +45,7 @@ const SUBMENU_MIN_WIDTH_EM = 44;
 const SUBMENU_LABEL_WIDTH_EM = 48;
 const MENU_LINE_LIMIT = 14;
 const MENU_LINE_WRAP_THRESHOLD = 110;
+const MAX_MENU_LINE_CHARS = 2000;
 const ALLOWED_CHANNELS = ["telegram", "signal", "matrix"];
 const SAFE_PYTHON_PREFIX_FLAGS = ["-B", "-u", "-E", "-q", "-O", "-OO"];
 const PROBLEM_STATUSES = [
@@ -2143,7 +2144,7 @@ TeeBotusApplet.prototype = {
   },
 
   _menuLine: function(label, reactive) {
-    let text = String(label || "");
+    let text = this._shortText(String(label || ""), MAX_MENU_LINE_CHARS);
     return this._styleMenuItemLabel(
       new PopupMenu.PopupMenuItem(text, { reactive: Boolean(reactive) }),
       { maxWidthEm: SUBMENU_LABEL_WIDTH_EM, wrap: text.length > MENU_LINE_WRAP_THRESHOLD }

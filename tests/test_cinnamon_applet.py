@@ -299,6 +299,8 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "const MAX_COMMAND_ARG_CHARS = 4096;" in source
     assert "const MAX_COMMAND_ARG_COUNT = 128;" in source
     assert "const MAX_COMMAND_CHARS = 32768;" in source
+    assert "const MAX_MENU_LINE_CHARS = 2000;" in source
+    assert "let text = this._shortText(String(label || \"\"), MAX_MENU_LINE_CHARS);" in source
     assert "const MAX_UNIT_TOKEN_CHARS = 96;" in source
     assert "_boundedInt: function(value, fallback, minValue, maxValue)" in source
     assert "_nonNegativeInt: function(value, fallback)" in source
@@ -1414,6 +1416,13 @@ def test_cinnamon_applet_status_refresh_accepts_escaped_payload_within_bound() -
     assert result["size"] < 1000000
     assert result["accepted"] is True
     assert result["error"] is None
+
+
+def test_cinnamon_applet_menu_text_is_bounded() -> None:
+    result = _run_js_applet_expression("applet._shortText('x'.repeat(5000), 2000)")
+
+    assert len(result) == 2000
+    assert result.endswith("…")
 
 
 def test_cinnamon_applet_status_refresh_keeps_previous_payload_on_error() -> None:
