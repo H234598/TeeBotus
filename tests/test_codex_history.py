@@ -1807,6 +1807,64 @@ def test_codex_history_dispatch_requeues_transient_sender_errors(tmp_path: Path)
     assert dispatch["reason"].startswith("send_error:RuntimeError")
 
 
+def test_codex_history_dispatch_retries_failed_admin_without_duplicate_success(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "mixed-admin-dispatch-demo", version="1.0.35")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    first_admin = store.resolve_or_create_account(telegram_identity_key(91), display_label="Admin 1")
+    second_admin = store.resolve_or_create_account(telegram_identity_key(92), display_label="Admin 2")
+    store.update_identity_route(telegram_identity_key(91), channel="telegram", chat_id="91", chat_type="private", adapter_slot=1)
+    store.update_identity_route(telegram_identity_key(92), channel="telegram", chat_id="92", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, first_admin)
+    authorize_codex_admin(store, second_admin)
+    item = append_codex_history_summary(store, repo_root=repo, title="Mixed Admins", bullets=["Ein Erfolg, ein transienter Fehler."])
+    sent_chat_ids: list[str] = []
+
+    def mixed_sender(route: dict[str, object], _action: SendAttachment, _metadata: dict[str, object]) -> str:
+        chat_id = str(route.get("chat_id") or "")
+        sent_chat_ids.append(chat_id)
+        if chat_id == "92":
+            raise RuntimeError("temporary network issue")
+        return "msg-91"
+
+    first_result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="TeeBotus_Logger",
+            account_ids=(first_admin, second_admin),
+            senders={"telegram": mixed_sender},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert first_result["ok"] is False
+    assert first_result["status_counts"] == {"accepted": 1, "failed": 1}
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status"] == "queued"
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["last_reason"].startswith("send_error:")
+
+    sent_chat_ids.clear()
+
+    def succeeding_sender(route: dict[str, object], _action: SendAttachment, _metadata: dict[str, object]) -> str:
+        sent_chat_ids.append(str(route.get("chat_id") or ""))
+        return "msg-92"
+
+    second_result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="TeeBotus_Logger",
+            account_ids=(first_admin, second_admin),
+            senders={"telegram": succeeding_sender},
+            now=datetime(2026, 6, 19, 12, 1, tzinfo=timezone.utc),
+        )
+    )
+
+    assert second_result["status_counts"] == {"accepted": 2}
+    assert sent_chat_ids == ["92"]
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["id"] == item["id"]
+    assert persisted["status"] == "accepted"
+    assert persisted["delivery"]["attempts"] == 2
+
+
 def test_codex_history_dispatch_ignores_fresh_in_flight_item(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "fresh-in-flight-demo", version="1.0.4")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())

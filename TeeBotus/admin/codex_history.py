@@ -441,9 +441,24 @@ async def dispatch_codex_history_outbox(
             # Another dispatcher claimed or finalized the item after our snapshot.
             continue
         item = claimed_item
-        item_results: list[dict[str, Any]] = []
-        for account_id in candidate_account_ids:
-            item_results.append(
+        successful_accounts = _successful_codex_history_dispatch_accounts(store, item_id)
+        already_dispatched_results = [
+            {
+                "codex_history_item_id": item_id,
+                "account_id": account_id,
+                "status": "accepted",
+                "reason": "already_dispatched",
+                "channel": "",
+                "summary_prefix": item.get("summary_prefix", ""),
+            }
+            for account_id in candidate_account_ids
+            if account_id in successful_accounts
+        ]
+        dispatch_account_ids = tuple(account_id for account_id in candidate_account_ids if account_id not in successful_accounts)
+        item_results: list[dict[str, Any]] = list(already_dispatched_results)
+        new_item_results: list[dict[str, Any]] = []
+        for account_id in dispatch_account_ids:
+            new_item_results.append(
                 await _dispatch_codex_history_item_to_account(
                     store,
                     item,
@@ -456,8 +471,8 @@ async def dispatch_codex_history_outbox(
                     persist_result=False,
                 )
             )
-        if not item_results:
-            item_results.append(
+        if not item_results and not new_item_results:
+            new_item_results.append(
                 _record_codex_history_dispatch_result(
                     store,
                     item,
@@ -469,7 +484,9 @@ async def dispatch_codex_history_outbox(
                     persist=False,
                 )
             )
-        store.append_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID, item_results)
+        item_results.extend(new_item_results)
+        if new_item_results:
+            store.append_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID, new_item_results)
         final_status = _overall_dispatch_status(item_results)
         final_reason = _overall_dispatch_reason(item_results)
         _update_codex_history_item_status(store, item_id, final_status, reason=final_reason, now=timestamp, dispatch_results=item_results)
@@ -3477,14 +3494,26 @@ def _claim_codex_history_item_for_dispatch(
     return None
 
 
+def _successful_codex_history_dispatch_accounts(store: AccountStore, item_id: str) -> frozenset[str]:
+    normalized_item_id = str(item_id or "").strip()
+    if not normalized_item_id:
+        return frozenset()
+    latest_by_account: dict[str, str] = {}
+    for row in store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID):
+        if not isinstance(row, Mapping) or str(row.get("codex_history_item_id") or "").strip() != normalized_item_id:
+            continue
+        account_id = str(row.get("account_id") or "").strip().casefold()
+        if account_id:
+            latest_by_account[account_id] = str(row.get("status") or "").strip().casefold()
+    return frozenset(
+        account_id
+        for account_id, status in latest_by_account.items()
+        if status in {"accepted", "delivered", "acknowledged"}
+    )
+
+
 def _overall_dispatch_status(rows: Sequence[Mapping[str, Any]]) -> str:
     statuses = {str(row.get("status") or "").strip().casefold() for row in rows if isinstance(row, Mapping)}
-    if "acknowledged" in statuses:
-        return "acknowledged"
-    if "delivered" in statuses:
-        return "delivered"
-    if "accepted" in statuses:
-        return "accepted"
     if "failed" in statuses:
         failed_rows = [
             row
@@ -3494,6 +3523,12 @@ def _overall_dispatch_status(rows: Sequence[Mapping[str, Any]]) -> str:
         if failed_rows and all(_codex_history_dispatch_failure_retryable(row) for row in failed_rows):
             return "queued"
         return "failed"
+    if "acknowledged" in statuses:
+        return "acknowledged"
+    if "delivered" in statuses:
+        return "delivered"
+    if "accepted" in statuses:
+        return "accepted"
     if "skipped" in statuses:
         return "skipped"
     return "failed"
@@ -3505,11 +3540,13 @@ def _codex_history_dispatch_failure_retryable(row: Mapping[str, Any]) -> bool:
 
 
 def _overall_dispatch_reason(rows: Sequence[Mapping[str, Any]]) -> str:
-    for row in rows:
-        if not isinstance(row, Mapping):
-            continue
-        if str(row.get("status") or "").strip().casefold() in {"failed", "skipped", "accepted", "delivered", "acknowledged"}:
-            return str(row.get("reason") or "").strip()
+    for status in ("failed", "skipped", "acknowledged", "delivered", "accepted"):
+        for row in rows:
+            if not isinstance(row, Mapping) or str(row.get("status") or "").strip().casefold() != status:
+                continue
+            reason = str(row.get("reason") or "").strip()
+            if reason:
+                return reason
     return ""
 
 
