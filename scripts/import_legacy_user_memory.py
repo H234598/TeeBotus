@@ -355,9 +355,14 @@ def import_legacy_user_memory(
         target_store: AccountStore | None = None
         existing_account_id: str | None = None
         if not (metadata_unreadable_for_source and replace_unreadable_account_metadata and not apply):
+            # A dry-run must not materialize a missing instance merely while
+            # checking whether the legacy identity already exists.  The
+            # AccountStore identity lock creates its root directory even for a
+            # read, so skip opening a store until the target root is present.
             try:
-                metadata_store = _metadata_account_store(target_root, instance_name, provider)
-                existing_account_id = metadata_store.get_account_for_identity(identity)
+                if target_root.exists():
+                    metadata_store = _metadata_account_store(target_root, instance_name, provider)
+                    existing_account_id = metadata_store.get_account_for_identity(identity)
             except AccountStoreError as exc:
                 if not metadata_unreadable_for_source:
                     stats.unreadable_metadata += 1
