@@ -1347,11 +1347,44 @@ TeeBotusApplet.prototype = {
           callback(null, _("Invalid JSON object from helper"));
           return;
         }
+        if (!this._isStatusPayload(payload)) {
+          callback(null, _("Invalid status payload from helper"));
+          return;
+        }
         callback(payload, null);
       } catch (err) {
         callback(null, _("Invalid JSON from helper: ") + String(err));
       }
     }, cwd, options);
+  },
+
+  _isJsonObject: function(value) {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  },
+
+  _isStatusPayload: function(payload) {
+    if (!this._isJsonObject(payload)) {
+      return false;
+    }
+    for (let key of ["repo", "unit", "health", "qdrant", "runtime"]) {
+      if (!this._isJsonObject(payload[key])) {
+        return false;
+      }
+    }
+    if (!this._isJsonObject(payload.qdrant.collections)) {
+      return false;
+    }
+    for (let key of ["sections", "summary", "status_counts"]) {
+      if (!this._isJsonObject(payload.runtime[key])) {
+        return false;
+      }
+    }
+    for (let key in payload.runtime.sections) {
+      if (_hasOwn(payload.runtime.sections, key) && !Array.isArray(payload.runtime.sections[key])) {
+        return false;
+      }
+    }
+    return true;
   },
 
   _spawn: function(argv, callback, cwd, options) {

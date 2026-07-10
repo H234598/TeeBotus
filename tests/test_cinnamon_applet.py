@@ -1190,7 +1190,7 @@ def test_cinnamon_applet_status_refresh_uses_bounded_spawn_timeout() -> None:
           applet._updatePanel = function() {};
           applet._spawn = function(argv, callback, cwd, options) {
             captured = {argv: argv, cwd: cwd, options: options, runningBeforeCallback: applet.statusRunning};
-            callback("{\\"ok\\":true,\\"unit\\":{},\\"health\\":{},\\"runtime\\":{}}", "", true);
+            callback(JSON.stringify({ok: true, repo: {}, unit: {}, health: {}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           applet._refreshStatus();
           return {
@@ -1339,7 +1339,7 @@ def test_cinnamon_applet_status_refresh_queues_changes_while_running() -> None:
               applet.repoPath = "/new-repo";
               applet._refreshStatus();
             }
-            callback("{\\"ok\\":true,\\"unit\\":{},\\"health\\":{},\\"runtime\\":{}}", "", true);
+            callback(JSON.stringify({ok: true, repo: {}, unit: {}, health: {}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           applet._refreshStatus();
           return {
@@ -1359,6 +1359,35 @@ def test_cinnamon_applet_status_refresh_queues_changes_while_running() -> None:
     assert second_command[second_command.index("--repo-root") + 1] == "/new-repo"
     assert result["running"] is False
     assert result["pending"] is False
+
+
+def test_cinnamon_applet_status_refresh_rejects_structurally_invalid_payload() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          applet.statusTimeoutSeconds = 30;
+          applet.repoPath = "/repo";
+          applet._setPanelState = function() {};
+          applet._buildMenu = function() {};
+          applet._updatePanel = function() {};
+          applet._spawn = function(argv, callback, cwd, options) {
+            callback(JSON.stringify({ok: true, repo: {}, unit: {}, health: {}, qdrant: {collections: {}}, runtime: {sections: [], summary: {}, status_counts: {}}}), "", true);
+          };
+          applet._refreshStatus();
+          return {
+            running: applet.statusRunning,
+            statusPayload: applet.statusPayload,
+            statusText: applet.statusText,
+            lastError: applet.lastError
+          };
+        })()
+        """
+    )
+
+    assert result["running"] is False
+    assert result["statusPayload"] is None
+    assert result["statusText"] == "Statusfehler: Invalid status payload from helper"
+    assert result["lastError"] == "Invalid status payload from helper"
 
 
 def test_cinnamon_applet_local_status_text_updates_menu_header() -> None:
