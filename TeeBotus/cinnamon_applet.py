@@ -38,9 +38,14 @@ TELEGRAM_BOT_TOKEN_RE = re.compile(
     re.IGNORECASE,
 )
 PEM_PRIVATE_KEY_BLOCK_RE = re.compile(
-    r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)",
+    r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?-----END [A-Z0-9 ]*PRIVATE KEY-----",
     re.DOTALL,
 )
+PEM_PRIVATE_KEY_UNCLOSED_RE = re.compile(
+    r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*\Z",
+    re.DOTALL,
+)
+PEM_PRIVATE_KEY_HEADER_RE = re.compile(r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----")
 SECRET_TOKEN_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{8,}\b"),
@@ -1131,7 +1136,7 @@ def _redact(value: str) -> str:
         return text
     lowered = text.casefold()
     has_secret_token = any(hint in lowered for hint in SECRET_TOKEN_HINTS) or TELEGRAM_BOT_TOKEN_RE.search(text) is not None
-    has_pem_private_key = PEM_PRIVATE_KEY_BLOCK_RE.search(text) is not None
+    has_pem_private_key = PEM_PRIVATE_KEY_HEADER_RE.search(text) is not None
     if not (
         has_secret_token
         or has_pem_private_key
@@ -1162,6 +1167,7 @@ def _redact(value: str) -> str:
         text = SECRET_ASSIGNMENT_FRAGMENT_RE.sub(_redact_secret_assignment_fragment, text)
     if has_pem_private_key:
         text = PEM_PRIVATE_KEY_BLOCK_RE.sub("<redacted-secret>", text)
+        text = PEM_PRIVATE_KEY_UNCLOSED_RE.sub("<redacted-secret>\n<truncated>", text)
     return text
 
 

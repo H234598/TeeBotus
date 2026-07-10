@@ -4217,6 +4217,7 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert cinnamon_applet._redact('"api_key"=>"plain-secret"') == '"api_key"=>"<redacted>"'
     pem = "-----BEGIN PRIVATE KEY-----\nMIIEplainsecret\n-----END PRIVATE KEY-----"
     assert cinnamon_applet._redact(pem) == "<redacted-secret>"
+    assert cinnamon_applet._redact("-----BEGIN PRIVATE KEY-----\nMIIEplainsecret") == "<redacted-secret>\n<truncated>"
 
 
 def test_cinnamon_applet_runtime_parser_redacts_multiline_pem_private_keys() -> None:
@@ -4233,6 +4234,18 @@ def test_cinnamon_applet_runtime_parser_redacts_multiline_pem_private_keys() -> 
     rendered = json.dumps(parsed, sort_keys=True)
     assert pem_body not in rendered
     assert "<redacted-secret>" in rendered
+
+
+def test_cinnamon_applet_runtime_parser_warns_on_unclosed_pem_private_key() -> None:
+    parsed = parse_runtime_status(
+        "[Diagnose]\n"
+        "service=demo status=ready\n"
+        "-----BEGIN PRIVATE KEY-----\n"
+        "MIIEplainsecret\n"
+    )
+
+    assert parsed["summary"]["output_truncated"] is True
+    assert parsed["status_counts"]["warning"] == 1
 
 
 def test_cinnamon_applet_redacted_argv_hides_dash_prefixed_values_without_swallowing_options() -> None:
