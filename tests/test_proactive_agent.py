@@ -957,8 +957,8 @@ def test_select_proactive_route_rejects_invalid_adapter_slot(tmp_path, monkeypat
     assert select_proactive_route(account_store, account_id) is None
 
 
-@pytest.mark.parametrize("invalid_slot", [1.5, "1.5"])
-def test_select_proactive_route_rejects_fractional_adapter_slot(tmp_path, monkeypatch, invalid_slot) -> None:
+@pytest.mark.parametrize("invalid_slot", [None, 1.5, "1.5"])
+def test_select_proactive_route_rejects_invalid_adapter_slot_value(tmp_path, monkeypatch, invalid_slot) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
     account_id = account_store.resolve_or_create_account(identity)

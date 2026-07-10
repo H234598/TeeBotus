@@ -2284,8 +2284,11 @@ def _normalize_proactive_route(route: Mapping[str, Any] | None) -> dict[str, Any
         return None
     if not str(route.get("channel") or "").strip() or not str(route.get("chat_id") or "").strip():
         return None
-    raw_slot = route.get("adapter_slot", 1)
-    if raw_slot is None:
+    if "adapter_slot" in route:
+        raw_slot = route.get("adapter_slot")
+        if raw_slot is None:
+            return None
+    else:
         raw_slot = 1
     normalized_slot = _normalize_route_slot(raw_slot)
     if normalized_slot is None:
