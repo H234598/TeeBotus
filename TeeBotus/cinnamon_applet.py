@@ -22,6 +22,7 @@ DEFAULT_UNIT_NAME = "teebotus.service"
 DEFAULT_QDRANT_UNIT_NAME = "teebotus-qdrant.service"
 DEFAULT_QDRANT_URL = "http://127.0.0.1:6333"
 DEFAULT_STATUS_TIMEOUT_SECONDS = 30
+MAX_STATUS_TIMEOUT_SECONDS = 300
 CODEX_USAGE_STALE_WARNING_HOURS = 24
 CONFIRMED_ACTIVE_SUBSTATES = frozenset({"active", "elapsed", "exited", "listening", "mounted", "plugged", "running", "waiting"})
 MAX_CAPTURE_CHARS = 80_000
@@ -511,7 +512,15 @@ def _codex_usage_is_stale(fields: dict[str, str]) -> bool:
 
 def _runtime_status(repo_root: Path, *, channels: str, python_executable: str, timeout_seconds: int) -> dict[str, Any]:
     argv = [*_python_command_argv(python_executable), "-m", "TeeBotus", "--runtime-status", "--channels", channels]
-    return _run(argv, cwd=repo_root, timeout_seconds=timeout_seconds)
+    return _run(argv, cwd=repo_root, timeout_seconds=_bounded_status_timeout(timeout_seconds))
+
+
+def _bounded_status_timeout(value: Any) -> int:
+    try:
+        parsed = int(value)
+    except (OverflowError, TypeError, ValueError):
+        parsed = DEFAULT_STATUS_TIMEOUT_SECONDS
+    return min(max(1, parsed), MAX_STATUS_TIMEOUT_SECONDS)
 
 
 def _python_command_argv(value: str) -> list[str]:

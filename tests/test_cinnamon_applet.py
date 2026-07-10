@@ -2916,6 +2916,21 @@ def test_cinnamon_applet_runtime_status_splits_python_command(monkeypatch, tmp_p
     assert calls == [["/usr/bin/python3", "-B", "-m", "TeeBotus", "--runtime-status", "--channels", "telegram,signal"]]
 
 
+def test_cinnamon_applet_runtime_status_clamps_timeout(monkeypatch, tmp_path) -> None:
+    timeouts: list[int] = []
+
+    def fake_run(_argv: list[str], **kwargs: object) -> dict[str, object]:
+        timeouts.append(int(kwargs["timeout_seconds"]))
+        return {"returncode": 0, "stdout": "", "stderr": ""}
+
+    monkeypatch.setattr(cinnamon_applet, "_run", fake_run)
+
+    cinnamon_applet._runtime_status(tmp_path, channels="telegram", python_executable="/usr/bin/python3", timeout_seconds=999999)
+    cinnamon_applet._runtime_status(tmp_path, channels="telegram", python_executable="/usr/bin/python3", timeout_seconds=0)
+
+    assert timeouts == [cinnamon_applet.MAX_STATUS_TIMEOUT_SECONDS, 1]
+
+
 def test_cinnamon_applet_payload_counts_qdrant_unit_health(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "[Diagnose]\nservice=demo status=ready\n", "stderr": ""})
     monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda unit: {"active_state": "active", "sub_state": "running", "returncode": 0} if unit == "teebotus.service" else {"active_state": "failed", "sub_state": "failed", "returncode": 0})
