@@ -19,6 +19,7 @@ from TeeBotus.cinnamon_applet import SECONDARY_PROBLEM_STATUS_FIELDS
 from TeeBotus.cinnamon_applet import STATUS_FIELD_BOUNDARY_KEYS
 from TeeBotus.cinnamon_applet import STATUS_FIELD_BOUNDARY_VALUES
 from TeeBotus.cinnamon_applet import build_status_payload, parse_runtime_status
+from TeeBotus.cinnamon_applet import CONFIRMED_ACTIVE_SUBSTATES
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -2458,9 +2459,12 @@ def test_cinnamon_applet_rejects_active_unit_with_failed_substate() -> None:
 def test_cinnamon_applet_rejects_active_unit_without_confirmed_substate() -> None:
     assert cinnamon_applet._unit_state_ok({"active_state": "active", "sub_state": ""}) is False
     assert cinnamon_applet._unit_state_ok({"active_state": "active", "sub_state": "unknown"}) is False
+    assert cinnamon_applet._unit_state_ok({"active_state": "active", "sub_state": "typo"}) is False
     assert cinnamon_applet._unit_state_ok({"active_state": "unknown", "sub_state": "unknown"}) is False
     assert cinnamon_applet._unit_state_ok({"active_state": "unknown", "sub_state": "failed"}) is False
     assert cinnamon_applet._unit_state_ok({"active_state": "unknown", "sub_state": "running"}) is False
+    for sub_state in CONFIRMED_ACTIVE_SUBSTATES:
+        assert cinnamon_applet._unit_state_ok({"active_state": "active", "sub_state": sub_state}) is True
 
 
 def test_cinnamon_applet_rejects_successful_systemd_query_without_states(monkeypatch) -> None:

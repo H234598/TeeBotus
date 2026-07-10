@@ -23,6 +23,7 @@ DEFAULT_QDRANT_UNIT_NAME = "teebotus-qdrant.service"
 DEFAULT_QDRANT_URL = "http://127.0.0.1:6333"
 DEFAULT_STATUS_TIMEOUT_SECONDS = 30
 CODEX_USAGE_STALE_WARNING_HOURS = 24
+CONFIRMED_ACTIVE_SUBSTATES = frozenset({"active", "elapsed", "exited", "listening", "mounted", "plugged", "running", "waiting"})
 MAX_CAPTURE_CHARS = 80_000
 MAX_ERROR_CHARS = 2_000
 MAX_QDRANT_COUNT_RESPONSE_BYTES = 64_000
@@ -300,9 +301,9 @@ def _status_query_ok(unit: dict[str, Any]) -> bool:
 
 
 def _unit_state_ok(unit: dict[str, Any]) -> bool:
-    active_state = str(unit.get("active_state", "") or "").strip()
-    sub_state = str(unit.get("sub_state", "") or "").strip()
-    return active_state == "active" and sub_state not in {"", "unknown", "failed", "dead"}
+    active_state = str(unit.get("active_state", "") or "").strip().casefold()
+    sub_state = str(unit.get("sub_state", "") or "").strip().casefold()
+    return active_state == "active" and sub_state in CONFIRMED_ACTIVE_SUBSTATES
 
 
 def _qdrant_problem_count(qdrant: dict[str, Any]) -> int:
