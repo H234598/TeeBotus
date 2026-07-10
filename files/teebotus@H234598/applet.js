@@ -1394,6 +1394,15 @@ TeeBotusApplet.prototype = {
     if (payload.ok !== (payload.health.status === "ok")) {
       return false;
     }
+    if (typeof payload.command_ok !== "boolean" || typeof payload.health.command_ok !== "boolean") {
+      return false;
+    }
+    if (payload.command_ok !== payload.health.command_ok) {
+      return false;
+    }
+    if (payload.health.status === "ok" && !payload.command_ok) {
+      return false;
+    }
     for (let key of ["repo", "unit", "health", "qdrant", "runtime"]) {
       if (!this._isJsonObject(payload[key])) {
         return false;

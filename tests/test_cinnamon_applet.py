@@ -1198,7 +1198,7 @@ def test_cinnamon_applet_status_refresh_uses_bounded_spawn_timeout() -> None:
           applet._updatePanel = function() {};
           applet._spawn = function(argv, callback, cwd, options) {
             captured = {argv: argv, cwd: cwd, options: options, runningBeforeCallback: applet.statusRunning};
-            callback(JSON.stringify({ok: true, repo: {}, unit: {}, health: {status: "ok"}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
+            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {}, health: {status: "ok", command_ok: true}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           applet._refreshStatus();
           return {
@@ -1347,7 +1347,7 @@ def test_cinnamon_applet_status_refresh_queues_changes_while_running() -> None:
               applet.repoPath = "/new-repo";
               applet._refreshStatus();
             }
-            callback(JSON.stringify({ok: true, repo: {}, unit: {}, health: {status: "ok"}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
+            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {}, health: {status: "ok", command_ok: true}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           applet._refreshStatus();
           return {
@@ -1416,6 +1416,22 @@ def test_cinnamon_applet_status_payload_requires_health_status_and_consistent_ok
 
     assert missing_status is False
     assert inconsistent_status is False
+
+
+def test_cinnamon_applet_status_payload_requires_consistent_command_status() -> None:
+    missing_command = _run_js_applet_expression(
+        "applet._isStatusPayload({ok: true, repo: {}, unit: {}, health: {status: 'ok'}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}})"
+    )
+    mismatched_command = _run_js_applet_expression(
+        "applet._isStatusPayload({ok: true, command_ok: false, repo: {}, unit: {}, health: {status: 'ok', command_ok: true}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}})"
+    )
+    failed_ok = _run_js_applet_expression(
+        "applet._isStatusPayload({ok: true, command_ok: false, repo: {}, unit: {}, health: {status: 'ok', command_ok: false}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}})"
+    )
+
+    assert missing_command is False
+    assert mismatched_command is False
+    assert failed_ok is False
 
 
 def test_cinnamon_applet_status_payload_rejects_ok_with_problem_counts() -> None:
@@ -1500,7 +1516,7 @@ def test_cinnamon_applet_spawn_json_does_not_reinvoke_throwing_consumer() -> Non
         (function() {
           let calls = [];
           applet._spawn = function(argv, callback, cwd, options) {
-            callback(JSON.stringify({ok: true, repo: {}, unit: {}, health: {status: "ok"}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
+            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {}, health: {status: "ok", command_ok: true}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           try {
             applet._spawnJson([], function(payload, error) {
