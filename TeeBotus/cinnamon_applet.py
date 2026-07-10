@@ -216,8 +216,10 @@ def build_status_payload(
     qdrant_unit = _systemd_unit_status(qdrant_unit_name)
     qdrant = _qdrant_status(qdrant_url)
     repo = _repo_status(root)
+    runtime_output_ok = bool(str(runtime.get("stdout", "") or "").strip())
     command_ok = (
         runtime["returncode"] == 0
+        and runtime_output_ok
         and _status_query_ok(unit)
         and _unit_state_ok(unit)
     )
