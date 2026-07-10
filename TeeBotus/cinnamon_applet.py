@@ -426,7 +426,7 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["codex_history_strategies"] += _safe_int(fields.get("strategies", 0))
             summary["codex_history_graphs"] += _safe_int(fields.get("graphs", 0))
             summary["codex_history_other"] += _safe_int(fields.get("other", 0))
-            if fields.get("status") in PROBLEM_STATUSES and not summary["codex_history"]:
+            if _normalized_status_value(fields.get("status")) in PROBLEM_STATUSES and not summary["codex_history"]:
                 summary["codex_history"] = line
             elif not summary["codex_history"]:
                 summary["codex_history"] = line
@@ -440,9 +440,13 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         elif line.startswith("qdrant_collection="):
             summary["qdrant_collections"] += 1
             summary["qdrant_problem_status_count"] += sum(status in PROBLEM_STATUSES for status in line_statuses)
-            if fields.get("status") == "ready":
+            if _normalized_status_value(fields.get("status")) == "ready":
                 summary["qdrant_ready_collections"] += 1
-        elif line.startswith("memory_index=") and fields.get("status") == "ready" and fields.get("semantic") == "ready":
+        elif (
+            line.startswith("memory_index=")
+            and _normalized_status_value(fields.get("status")) == "ready"
+            and _normalized_status_value(fields.get("semantic")) == "ready"
+        ):
             summary["memory_semantic_ready"] += 1
         elif line.startswith("hf_pool=") and not fields.get("target"):
             summary["hf_pool"] = line
@@ -457,11 +461,11 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
 
 def _line_status_values(fields: dict[str, str]) -> tuple[str, ...]:
     values: list[str] = []
-    primary = fields.get("status", "")
+    primary = _normalized_status_value(fields.get("status"))
     if primary:
         _append_status_value(values, primary)
     for key in sorted(SECONDARY_PROBLEM_STATUS_FIELDS):
-        secondary = fields.get(key, "")
+        secondary = _normalized_status_value(fields.get(key))
         if secondary and secondary in PROBLEM_STATUSES:
             _append_status_value(values, secondary)
     for key in sorted(FLAG_PROBLEM_STATUS_FIELDS):
@@ -471,6 +475,10 @@ def _line_status_values(fields: dict[str, str]) -> tuple[str, ...]:
         if _status_flag_is_set(fields.get(key, "")):
             _append_status_value(values, status)
     return tuple(values)
+
+
+def _normalized_status_value(value: Any) -> str:
+    return str(value or "").strip().casefold()
 
 
 def _append_status_value(values: list[str], status: str) -> None:
@@ -777,7 +785,7 @@ def _status_match_is_structured_boundary(text: str, matches: list[_StatusFieldMa
     if match.key not in STATUS_FIELD_BOUNDARY_KEYS:
         return False
     value_end = matches[index + 1].key_start if index + 1 < len(matches) else len(text)
-    value = text[match.value_start : value_end].strip()
+    value = _normalized_status_value(text[match.value_start : value_end])
     return value in STATUS_FIELD_BOUNDARY_VALUES
 
 

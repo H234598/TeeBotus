@@ -887,8 +887,9 @@ TeeBotusApplet.prototype = {
   },
 
   _statusValueIsProblem: function(value) {
+    let normalized = String(value || "").trim().toLowerCase();
     for (let status of PROBLEM_STATUSES) {
-      if (value === status) {
+      if (normalized === status) {
         return true;
       }
     }
@@ -947,7 +948,7 @@ TeeBotusApplet.prototype = {
   },
 
   _statusWord: function(status) {
-    let value = String(status || "unknown");
+    let value = String(status || "unknown").trim().toLowerCase();
     let labels = {
       available: "verfuegbar",
       broken: "defekt",
@@ -1012,7 +1013,11 @@ TeeBotusApplet.prototype = {
     }
     for (let i = 0; i < matches.length; i++) {
       let valueEnd = this._fieldValueEnd(text, matches, i);
-      fields[matches[i].key] = text.slice(matches[i].valueStart, valueEnd).trim();
+      let value = text.slice(matches[i].valueStart, valueEnd).trim();
+      if (_hasOwn(STATUS_FIELD_BOUNDARY_KEYS, matches[i].key)) {
+        value = value.toLowerCase();
+      }
+      fields[matches[i].key] = value;
       while (i + 1 < matches.length && matches[i + 1].keyStart < valueEnd) {
         i++;
       }
@@ -1074,7 +1079,7 @@ TeeBotusApplet.prototype = {
       return false;
     }
     let valueEnd = index + 1 < matches.length ? matches[index + 1].keyStart : text.length;
-    let value = text.slice(match.valueStart, valueEnd).trim();
+    let value = text.slice(match.valueStart, valueEnd).trim().toLowerCase();
     return this._statusValueIsProblem(value) || _hasOwn(STATUS_FIELD_NEUTRAL_BOUNDARY_VALUES, value);
   },
 

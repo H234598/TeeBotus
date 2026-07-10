@@ -2258,6 +2258,34 @@ def test_cinnamon_applet_runtime_parser_classifies_qdrant_secondary_status() -> 
     assert parsed["summary"]["problem_statuses"] == "unavailable:1,unreachable:1,unsupported:1"
 
 
+def test_cinnamon_applet_runtime_parser_normalizes_structured_status_case() -> None:
+    parsed = parse_runtime_status(
+        """
+        [API Keys, Limits und Kosten]
+        api_budget=demo status=WARNING
+
+        [Memory und semantische Suche]
+        qdrant_collection=teebotus_user_memory status=READY
+        memory_index=demo status=READY semantic=UNAVAILABLE
+        """
+    )
+
+    assert parsed["summary"]["problem_status_count"] == 2
+    assert parsed["summary"]["problem_statuses"] == "unavailable:1,warning:1"
+    assert parsed["summary"]["qdrant_ready_collections"] == 1
+    assert parsed["summary"]["memory_semantic_ready"] == 0
+
+
+def test_cinnamon_applet_js_parser_normalizes_structured_status_case() -> None:
+    fields = _run_js_parse_fields("route_status=UNAVAILABLE status=WARNING semantic=READY")
+    result = _run_js_applet_expression(
+        "({problem: applet._lineHasProblemStatus({status: 'WARNING', route_status: 'UNAVAILABLE'}), word: applet._statusWord('WARNING')})"
+    )
+
+    assert fields == {"route_status": "unavailable", "status": "warning", "semantic": "ready"}
+    assert result == {"problem": True, "word": "Warnung"}
+
+
 def test_cinnamon_applet_runtime_parser_counts_models_feed_secondary_status() -> None:
     parsed = parse_runtime_status(
         """
