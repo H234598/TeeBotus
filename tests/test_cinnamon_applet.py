@@ -3082,6 +3082,8 @@ def test_cinnamon_applet_js_ignores_neutral_warning_flags() -> None:
         ('"false"', False),
         ("'OFF'", False),
         ("`none`", False),
+        ("constructor", True),
+        ("__proto__", True),
         ('"retry"', True),
     ):
         result = _run_js_applet_expression(

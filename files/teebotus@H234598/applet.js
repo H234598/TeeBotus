@@ -859,7 +859,7 @@ TeeBotusApplet.prototype = {
     if (normalized.length >= 2 && normalized.charAt(0) === normalized.charAt(normalized.length - 1) && ["\"", "'", "`"].indexOf(normalized.charAt(0)) >= 0) {
       normalized = normalized.slice(1, -1).trim();
     }
-    return Boolean(normalized) && !NEUTRAL_FLAG_VALUES[normalized];
+    return Boolean(normalized) && !Object.prototype.hasOwnProperty.call(NEUTRAL_FLAG_VALUES, normalized);
   },
 
   _statusFieldHasProblem: function(fields, key) {
