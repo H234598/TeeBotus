@@ -1231,6 +1231,14 @@ def test_cinnamon_applet_status_refresh_uses_bounded_spawn_timeout() -> None:
     assert result["statusText"].startswith("Health")
 
 
+def test_cinnamon_applet_rejects_isolated_python_mode_for_repo_module_commands() -> None:
+    result = _run_js_applet_expression(
+        "applet._safePythonArgs('/usr/bin/python3 -I', ['/usr/bin/python3'])"
+    )
+
+    assert result == ["/usr/bin/python3"]
+
+
 def test_cinnamon_applet_status_refresh_rejects_non_object_json() -> None:
     result = _run_js_applet_expression(
         """
