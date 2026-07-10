@@ -2710,6 +2710,7 @@ class AccountStore:
         self.rebuild_structured_memory_index(account_id)
         return created
 
+    @_serialize_account_memory
     def read_llm_state(self, account_id: str) -> dict[str, Any]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         account_dir = self.account_dir(account_id)
@@ -2749,6 +2750,7 @@ class AccountStore:
             self._unlink_migrated_account_file(legacy_path)
         return selected
 
+    @_serialize_account_memory
     def write_llm_state(self, account_id: str, data: dict[str, Any]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         if self._account_memory_collection_backend_available():
