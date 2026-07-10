@@ -1494,7 +1494,7 @@ TeeBotusApplet.prototype = {
   _qdrantCollectionsAreHealthy: function(collections) {
     for (let name of REQUIRED_QDRANT_COLLECTIONS) {
       let item = (collections || {})[name];
-      if (!this._isJsonObject(item) || String(item.status || "").trim().toLowerCase() !== "ready") {
+      if (!this._isJsonObject(item) || String(item.status || "").trim().toLowerCase() !== "ready" || String(item.error || "").trim()) {
         return false;
       }
     }
