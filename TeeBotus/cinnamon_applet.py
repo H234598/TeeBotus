@@ -322,9 +322,11 @@ def _qdrant_problem_count(qdrant: dict[str, Any]) -> int:
 
 
 def _safe_int(value: Any, default: int = 0) -> int:
+    if isinstance(value, bool):
+        return default
     try:
         return int(value)
-    except (TypeError, ValueError):
+    except (OverflowError, TypeError, ValueError):
         return default
 
 

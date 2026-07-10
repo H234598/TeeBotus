@@ -2524,6 +2524,14 @@ def test_cinnamon_applet_rejects_malformed_systemd_returncode() -> None:
     assert cinnamon_applet._status_query_ok({"active_state": "active"}) is False
 
 
+def test_cinnamon_applet_safe_int_rejects_boolean_and_overflow_values() -> None:
+    assert cinnamon_applet._safe_int(True, 7) == 7
+    assert cinnamon_applet._safe_int(False, 7) == 7
+    assert cinnamon_applet._safe_int(float("inf"), 7) == 7
+    assert cinnamon_applet._safe_int(float("-inf"), 7) == 7
+    assert cinnamon_applet._safe_int("12", 7) == 12
+
+
 def test_cinnamon_applet_rejects_active_unit_with_failed_substate() -> None:
     unit = {"active_state": "active", "sub_state": "failed", "returncode": 0}
     assert cinnamon_applet._unit_state_ok(unit) is False
