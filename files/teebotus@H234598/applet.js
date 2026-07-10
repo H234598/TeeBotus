@@ -1225,6 +1225,10 @@ TeeBotusApplet.prototype = {
     if ((summary || {}).output_truncated === true) {
       derivedTotal = Math.max(derivedTotal, 1);
     }
+    let healthStatus = String((health || {}).status || "").trim().toLowerCase();
+    if (healthStatus === "broken" || healthStatus === "warning") {
+      derivedTotal = Math.max(derivedTotal, 1);
+    }
     return Math.max(derivedTotal, Math.max(0, textProblemTotal - qdrantRuntimeTotal));
   },
 

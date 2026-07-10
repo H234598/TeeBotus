@@ -1716,6 +1716,31 @@ def test_cinnamon_applet_menu_header_omits_zero_problem_total() -> None:
     assert "LLM-Routen: 0" in result["version"]
 
 
+def test_cinnamon_applet_status_summary_keeps_problem_count_for_empty_unhealthy_payload() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let payload = {
+            ok: false,
+            unit: {active_state: "unknown", sub_state: "unknown"},
+            health: {status: "broken", total_problem_count: 0},
+            runtime: {summary: {}, status_counts: {}},
+            qdrant: {collections: {}}
+          };
+          let broken = applet._statusSummary(payload);
+          payload.health.status = "warning";
+          let warning = applet._statusSummary(payload);
+          return {broken: broken, warning: warning};
+        })()
+        """
+    )
+
+    assert result["broken"].startswith("Probleme 1")
+    assert "Health defekt" in result["broken"]
+    assert result["warning"].startswith("Warnungen 1")
+    assert "Health Warnung" in result["warning"]
+
+
 def test_cinnamon_applet_menu_header_derives_total_from_command_and_qdrant_problems() -> None:
     result = _run_js_applet_expression(
         """
