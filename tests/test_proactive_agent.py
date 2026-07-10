@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+from typing import Any
 
 import pytest
 
@@ -885,6 +886,32 @@ def test_proactive_agent_health_reports_stale_queued_route(tmp_path) -> None:
     assert health.ok is False
     assert health.queued_count == 1
     assert health.review_pending_count == 0
+    assert "route is stale or not linked to account identity" in "\n".join(health.errors)
+
+
+def test_proactive_agent_health_rejects_invalid_queued_route_adapter_slot(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Magst du kurz berichten?",
+        reason_memory_ids=("mem_follow_up",),
+        due_at="2026-06-15T12:30:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    rows = account_store.read_proactive_outbox(account_id)
+    rows[0]["route"]["adapter_slot"] = "telegram:broken"
+    account_store.write_proactive_outbox(account_id, rows)
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert health.ok is False
     assert "route is stale or not linked to account identity" in "\n".join(health.errors)
 
 

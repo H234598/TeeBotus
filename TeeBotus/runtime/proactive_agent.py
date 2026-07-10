@@ -2265,17 +2265,23 @@ def _account_has_matching_proactive_route(account_store: AccountStore, account_i
             continue
         if str(current.get("chat_type") or "").strip().casefold() != "private":
             continue
-        if expected_slot is not None and _normalize_route_slot(current.get("adapter_slot")) != _normalize_route_slot(expected_slot):
-            continue
+        if expected_slot is not None:
+            normalized_expected_slot = _normalize_route_slot(expected_slot)
+            normalized_current_slot = _normalize_route_slot(current.get("adapter_slot"))
+            if normalized_expected_slot is None or normalized_current_slot is None or normalized_current_slot != normalized_expected_slot:
+                continue
         return True
     return False
 
 
-def _normalize_route_slot(value: Any) -> int:
+def _normalize_route_slot(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
     try:
-        return max(1, int(value))
+        slot = int(value)
     except (TypeError, ValueError):
-        return 1
+        return None
+    return slot if slot >= 1 else None
 
 
 def _proactive_daily_count(account_store: AccountStore, account_id: str, now: datetime, *, exclude_item_id: str = "") -> int:
