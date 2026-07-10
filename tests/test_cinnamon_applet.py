@@ -3063,6 +3063,21 @@ def test_cinnamon_applet_qdrant_point_count_closes_http_error_response(monkeypat
     assert error.closed is True
 
 
+def test_cinnamon_applet_run_redacts_stdout_before_truncating(monkeypatch) -> None:
+    secret = "sk-12345678901234567890"
+    stdout = "x" * (cinnamon_applet.MAX_CAPTURE_CHARS - len(secret) - 2) + " " + secret + "tail"
+
+    def fake_run(*_args, **_kwargs):
+        return subprocess.CompletedProcess(["demo"], 0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(cinnamon_applet.subprocess, "run", fake_run)
+
+    result = cinnamon_applet._run(["demo"])
+
+    assert secret not in result["stdout"]
+    assert "sk-" not in result["stdout"]
+
+
 def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_metadata() -> None:
     github_token = "ghp_" + "1234567890ABCDEFGHIJK"
     google_oauth_token = "ya29.a0AfH6SMabcdefghijklmnopqrstuvwxyz1234567890"

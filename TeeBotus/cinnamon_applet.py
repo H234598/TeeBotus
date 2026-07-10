@@ -680,7 +680,7 @@ def _run(argv: list[str], *, cwd: Path | None = None, timeout_seconds: int = 10)
         return {
             "argv": [shlex.quote(str(part)) for part in argv],
             "returncode": completed.returncode,
-            "stdout": _limit_text(completed.stdout, MAX_CAPTURE_CHARS),
+            "stdout": _limit_text(_redact(completed.stdout), MAX_CAPTURE_CHARS),
             "stderr": _limit_text(_redact(completed.stderr), MAX_ERROR_CHARS),
         }
     except Exception as exc:  # noqa: BLE001 - applet status should degrade to JSON, not crash.
