@@ -248,6 +248,8 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "Gio.SubprocessLauncher.new" in source
     assert "}, this._repoPath(), { timeoutMs:" in source
     assert "this._spawn(argv, (stdout, stderr, ok) => {" in source
+    assert "this._refreshMenuContents();" in source
+    assert "_refreshMenuContents: function()" in source
     assert "const TRUSTED_SPAWN_DIRS = " in source
     assert "const TRUSTED_USER_LOCAL_COMMANDS = " in source
     assert "_resolveSpawnArgv: function(argv)" in source
@@ -1418,6 +1420,36 @@ def test_cinnamon_applet_removal_terminates_running_helpers() -> None:
     )
 
     assert result == {"forced": 1, "remaining": 0, "removed": True, "generation": 1}
+
+
+def test_cinnamon_applet_refreshes_existing_menu_in_place() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let calls = [];
+          applet.menu = {};
+          applet.statusMenu = {};
+          applet.runtimeMenu = {};
+          applet.messengerMenu = {};
+          applet.llmMenu = {};
+          applet.apiMenu = {};
+          applet.memoryMenu = {};
+          applet.bibliothekarMenu = {};
+          applet.proactiveMenu = {};
+          applet.actionsMenu = {};
+          applet.quickCommandsMenu = {};
+          applet.projectMenu = {};
+          applet._populateStaticMenus = function() { calls.push("static"); };
+          applet._populateDynamicMenus = function() { calls.push("dynamic"); };
+          applet._updateHeader = function() { calls.push("header"); };
+          applet._buildMenu = function() { calls.push("rebuild"); };
+          applet._refreshMenuContents();
+          return calls;
+        })()
+        """
+    )
+
+    assert result == ["static", "dynamic", "header"]
 
 
 def test_cinnamon_applet_spawn_json_does_not_reinvoke_throwing_consumer() -> None:

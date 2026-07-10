@@ -256,6 +256,16 @@ TeeBotusApplet.prototype = {
     this.settings.bindProperty(Settings.BindingDirection.IN, "codex-usage-command", "codexUsageCommand", null, null);
   },
 
+  _refreshMenuContents: function() {
+    if (!this.menu || !this.statusMenu || !this.runtimeMenu || !this.messengerMenu || !this.llmMenu || !this.apiMenu || !this.memoryMenu || !this.bibliothekarMenu || !this.proactiveMenu || !this.actionsMenu || !this.quickCommandsMenu || !this.projectMenu) {
+      this._buildMenu();
+      return;
+    }
+    this._populateStaticMenus();
+    this._populateDynamicMenus();
+    this._updateHeader();
+  },
+
   _buildMenu: function() {
     this.menu.removeAll();
     this.headerItem = this._menuLine(_("TB"), false);
@@ -1109,7 +1119,7 @@ TeeBotusApplet.prototype = {
         this.lastError = "";
         this.statusText = this._statusSummary(payload);
       }
-      this._buildMenu();
+      this._refreshMenuContents();
       this._updatePanel();
       if (this.statusRefreshPending && !this.appletRemoved) {
         this.statusRefreshPending = false;
