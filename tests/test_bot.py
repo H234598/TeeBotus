@@ -2095,6 +2095,7 @@ class BotTests(unittest.TestCase):
     def test_legacy_handle_update_marks_codex_history_reply_acknowledged(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             api = FakeAPI()
+            api.adapter_slot = 2
             instructions = BotInstructions(user_memory_enabled=True, openai_enabled=False)
             memory_store = account_memory_store(directory, instance_name="Demo")
             account_id = memory_store.resolve_or_create_account(telegram_identity_key("456"), display_label="Ada")
@@ -2121,6 +2122,7 @@ class BotTests(unittest.TestCase):
                     "channel": "telegram",
                     "chat_id": "123",
                     "message_ref": "101",
+                    "adapter_slot": 2,
                     "summary_prefix": "v1.8.2 #0001",
                 },
             )
@@ -2149,6 +2151,26 @@ class BotTests(unittest.TestCase):
         self.assertEqual(persisted["status"], "acknowledged")
         self.assertEqual([row["status"] for row in dispatch_rows], ["accepted", "delivered", "acknowledged"])
         self.assertEqual(dispatch_rows[-1]["reply_message_ref"], "202")
+
+    def test_legacy_activity_profile_preserves_api_adapter_slot(self) -> None:
+        from TeeBotus.adapters.telegram_runtime import _record_telegram_activity
+
+        with tempfile.TemporaryDirectory() as directory:
+            store = account_memory_store(directory, instance_name="Depressionsbot")
+            account_id = store.resolve_or_create_account(telegram_identity_key("456"), display_label="Ada")
+            message = {
+                "message_id": 1,
+                "text": "Hallo",
+                "chat": {"id": 123, "type": "private"},
+                "from": {"id": 456, "first_name": "Ada"},
+            }
+
+            with patch("TeeBotus.adapters.telegram_runtime.proactive_agent_instance_enabled", return_value=True):
+                _record_telegram_activity(store, account_id, telegram_identity_key("456"), message, adapter_slot=2)
+
+            observations = store.read_agent_state(account_id)["activity_profile"]["observations"]
+
+        self.assertEqual(observations[-1]["route_key"], "telegram:2:123")
 
     def test_handle_update_with_runtime_context_propagates_action_dispatch_errors(self) -> None:
         from TeeBotus.runtime.actions import SendText

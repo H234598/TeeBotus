@@ -1677,7 +1677,7 @@ def handle_update(
             message,
             update=update,
             instance=instance_name,
-            adapter_slot=1,
+            adapter_slot=_telegram_api_adapter_slot(api),
         )
         if event is not None:
             status_auth = _telegram_status_auth_pre_gate(user_memory_store, event)
@@ -1734,7 +1734,7 @@ def handle_update(
             user_memory_store,
             instance_name=instance_name,
             account_id=_account_id_from_user_memory(user_memory),
-            adapter_slot=1,
+            adapter_slot=_telegram_api_adapter_slot(api),
             chat_id=str(chat_id),
             message_ref=str(_message_id_or_none(message) or ""),
             reply_text=text,
@@ -2694,7 +2694,13 @@ def _prepare_user_memory(
             chat_id=str(_message_chat_id(message) or ""),
             chat_type=_telegram_chat_type(message),
         )
-        _record_telegram_activity(user_memory_store, account_id, identity_key, message)
+        _record_telegram_activity(
+            user_memory_store,
+            account_id,
+            identity_key,
+            message,
+            adapter_slot=_telegram_api_adapter_slot(api),
+        )
         try:
             update_city_and_weather_context(user_memory_store, account_id, query_text)
         except (AccountStoreError, OSError, ValueError):
@@ -2730,7 +2736,14 @@ def _notify_user_memory_store_error(api: TelegramAPI | None, message: dict[str, 
         LOGGER.exception("Failed to notify user about user memory store error.")
 
 
-def _record_telegram_activity(account_store: AccountStore, account_id: str, identity_key: str, message: dict[str, Any]) -> None:
+def _record_telegram_activity(
+    account_store: AccountStore,
+    account_id: str,
+    identity_key: str,
+    message: dict[str, Any],
+    *,
+    adapter_slot: int = 1,
+) -> None:
     if not proactive_agent_instance_enabled(account_store.instance_name):
         return
     try:
@@ -2741,7 +2754,7 @@ def _record_telegram_activity(account_store: AccountStore, account_id: str, iden
                 event_id=f"telegram:{message.get('message_id', '')}",
                 instance=account_store.instance_name,
                 channel="telegram",
-                adapter_slot=1,
+                adapter_slot=adapter_slot,
                 account_id=account_id,
                 identity_key=identity_key,
                 chat_id=str(_message_chat_id(message) or ""),
@@ -4016,6 +4029,14 @@ def _telegram_slot_from_label(label: str) -> int:
     try:
         slot = int(text)
     except ValueError:
+        return 1
+    return slot if slot > 0 else 1
+
+
+def _telegram_api_adapter_slot(api: object) -> int:
+    try:
+        slot = int(getattr(api, "adapter_slot", 1))
+    except (TypeError, ValueError):
         return 1
     return slot if slot > 0 else 1
 
