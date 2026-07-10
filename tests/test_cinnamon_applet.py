@@ -3409,6 +3409,26 @@ def test_cinnamon_applet_qdrant_status_rejects_userinfo_and_params() -> None:
         assert status["collections"] == {}
 
 
+def test_cinnamon_applet_repo_status_does_not_fail_open_on_git_status(monkeypatch, tmp_path) -> None:
+    porcelain_result = {"returncode": 1, "stdout": "", "stderr": "not a git repository"}
+
+    def fake_run(argv: list[str], **_kwargs: object) -> dict[str, object]:
+        if argv[1] == "branch":
+            return {"returncode": 0, "stdout": "main\n", "stderr": ""}
+        if argv[1] == "rev-parse":
+            return {"returncode": 0, "stdout": "abcdef123456\n", "stderr": ""}
+        return porcelain_result
+
+    monkeypatch.setattr(cinnamon_applet, "_run", fake_run)
+
+    failed = cinnamon_applet._repo_status(tmp_path)
+    porcelain_result = {"returncode": 0, "stdout": "## main...origin/main\n<truncated>\n", "stderr": ""}
+    truncated = cinnamon_applet._repo_status(tmp_path)
+
+    assert failed["dirty"] is True
+    assert truncated["dirty"] is True
+
+
 def test_cinnamon_applet_qdrant_point_count_rejects_unexpected_success_payloads(monkeypatch) -> None:
     class FakeResponse:
         status = 200

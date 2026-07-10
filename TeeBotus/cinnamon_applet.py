@@ -792,8 +792,13 @@ def _repo_status(repo_root: Path) -> dict[str, Any]:
     status["branch"] = branch["stdout"].strip()
     status["commit"] = commit["stdout"].strip()
     status["short_commit"] = status["commit"][:7]
-    status["dirty"] = any(line and not line.startswith("## ") for line in porcelain["stdout"].splitlines())
-    first = next((line for line in porcelain["stdout"].splitlines() if line.startswith("## ")), "")
+    porcelain_lines = porcelain["stdout"].splitlines()
+    status["dirty"] = (
+        not _status_query_ok(porcelain)
+        or "<truncated>" in porcelain_lines
+        or any(line and not line.startswith("## ") for line in porcelain_lines)
+    )
+    first = next((line for line in porcelain_lines if line.startswith("## ")), "")
     status["ahead_behind"] = first[3:].strip()
     return status
 
