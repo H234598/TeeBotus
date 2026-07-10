@@ -594,6 +594,12 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
         except TypeError:
             raw = response.read()
     except HTTPError as exc:
+        close = getattr(exc, "close", None)
+        if callable(close):
+            try:
+                close()
+            except Exception:  # noqa: BLE001 - cleanup must not hide the HTTP status.
+                pass
         return {"status": "unreachable", "count": 0, "error": f"HTTP {exc.code}"}
     except (URLError, TimeoutError, OSError) as exc:
         return {"status": "unreachable", "count": 0, "error": _redact(str(getattr(exc, "reason", exc)))}

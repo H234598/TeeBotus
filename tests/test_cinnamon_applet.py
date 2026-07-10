@@ -3045,6 +3045,24 @@ def test_cinnamon_applet_qdrant_point_count_closes_response_when_read_fails(monk
     assert response.closed is True
 
 
+def test_cinnamon_applet_qdrant_point_count_closes_http_error_response(monkeypatch) -> None:
+    from urllib.error import HTTPError
+
+    class FakeHTTPError(HTTPError):
+        closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    error = FakeHTTPError("http://127.0.0.1:6333", 503, "unavailable", {}, None)
+    monkeypatch.setattr(cinnamon_applet, "urlopen", lambda _request, timeout: (_ for _ in ()).throw(error))
+
+    result = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
+
+    assert result == {"status": "unreachable", "count": 0, "error": "HTTP 503"}
+    assert error.closed is True
+
+
 def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_metadata() -> None:
     github_token = "ghp_" + "1234567890ABCDEFGHIJK"
     google_oauth_token = "ya29.a0AfH6SMabcdefghijklmnopqrstuvwxyz1234567890"
