@@ -1829,23 +1829,20 @@ TeeBotusApplet.prototype = {
       readStream("stdout");
       readStream("stderr");
       process.wait_async(null, (proc, result) => {
-        let successful = false;
         try {
           proc.wait_finish(result);
+          if (done) {
+            return;
+          }
+          processSuccessful = proc.get_successful();
+          processDone = true;
+          maybeFinish();
         } catch (err) {
           if (done) {
             return;
           }
           fail(err);
-          return;
         }
-        if (done) {
-          return;
-        }
-        successful = proc.get_successful();
-        processSuccessful = successful;
-        processDone = true;
-        maybeFinish();
       });
     } catch (err) {
       finish("", String(err), false);

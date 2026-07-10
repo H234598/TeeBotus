@@ -145,6 +145,73 @@ loop.run();
     return json.loads(completed.stdout)
 
 
+def _run_gjs_spawn_success_query_failure_smoke() -> dict[str, object]:
+    gjs = shutil.which("gjs")
+    if not gjs:
+        pytest.skip("gjs is not available for Gio subprocess behavior check")
+    source = (APPLET_DIR / "applet.js").read_text(encoding="utf-8")
+    script = f"""
+const GLib = imports.gi.GLib;
+function FakeBytes() {{}}
+FakeBytes.prototype.get_size = function() {{ return 0; }};
+function FakeStream() {{}}
+FakeStream.prototype.read_bytes_async = function(size, priority, cancellable, callback) {{
+  GLib.idle_add(GLib.PRIORITY_DEFAULT, function() {{
+    callback(this, {{}});
+    return false;
+  }}.bind(this));
+}};
+FakeStream.prototype.read_bytes_finish = function(result) {{ return new FakeBytes(); }};
+function FakeProcess() {{}}
+FakeProcess.prototype.get_stdout_pipe = function() {{ return new FakeStream(); }};
+FakeProcess.prototype.get_stderr_pipe = function() {{ return new FakeStream(); }};
+FakeProcess.prototype.get_if_exited = function() {{ return true; }};
+FakeProcess.prototype.force_exit = function() {{}};
+FakeProcess.prototype.wait_async = function(cancellable, callback) {{
+  GLib.idle_add(GLib.PRIORITY_DEFAULT, function() {{
+    callback(this, {{}});
+    return false;
+  }}.bind(this));
+}};
+FakeProcess.prototype.wait_finish = function(result) {{}};
+FakeProcess.prototype.get_successful = function() {{ throw new Error("success query failed"); }};
+function FakeLauncher() {{}}
+FakeLauncher.prototype.set_cwd = function(cwd) {{}};
+FakeLauncher.prototype.spawnv = function(argv) {{ return new FakeProcess(); }};
+const Gio = {{
+  SubprocessFlags: {{STDOUT_PIPE: 1, STDERR_PIPE: 2}},
+  SubprocessLauncher: {{new: function(flags) {{ return new FakeLauncher(); }}}}
+}};
+function load(fakeImports) {{
+  const imports = fakeImports;
+  eval({json.dumps(source)} + "\\nglobalThis.__TeeBotusApplet = TeeBotusApplet;");
+}}
+load({{
+  ui: {{applet: {{TextIconApplet: function() {{}}}}, modalDialog: {{}}, popupMenu: {{}}, settings: {{}}}},
+  gi: {{Clutter: {{}}, St: {{}}, Gio: Gio, GLib: GLib, Pango: {{EllipsizeMode: {{NONE: 0, END: 1}}, WrapMode: {{WORD_CHAR: 0}}}}}},
+  mainloop: {{source_remove: function() {{}}, timeout_add: function() {{return 0;}}, timeout_add_seconds: function() {{return 0;}}}}
+}});
+let applet = Object.create(globalThis.__TeeBotusApplet.prototype);
+applet._resolveSpawnArgv = function(argv) {{ return argv; }};
+applet.spawnGeneration = 0;
+applet.spawnProcesses = [];
+applet.appletRemoved = false;
+let loop = new GLib.MainLoop(null, false);
+applet._spawn(
+  ["fake"],
+  function(stdout, stderr, ok) {{
+    print(JSON.stringify({{ok: ok, stdout: stdout, stderr: stderr}}));
+    loop.quit();
+  }},
+  null,
+  {{}}
+);
+loop.run();
+"""
+    completed = subprocess.run([gjs, "-c", script], check=True, capture_output=True, text=True, timeout=10)
+    return json.loads(completed.stdout)
+
+
 def _run_js_parse_fields(line: str) -> dict[str, str]:
     return _run_js_applet_expression(f"applet._parseFields({json.dumps(line)})")  # type: ignore[return-value]
 
@@ -1382,6 +1449,14 @@ def test_cinnamon_applet_gio_spawn_stops_after_output_overflow() -> None:
     result = _run_gjs_spawn_smoke(child_code="import sys,time; sys.stdout.write('x'*4096); sys.stdout.flush(); time.sleep(30)")
 
     assert result == {"ok": False, "stdout": 0, "stderr": 7, "error": "bounded"}
+
+
+def test_cinnamon_applet_gio_spawn_reports_success_query_failure() -> None:
+    result = _run_gjs_spawn_success_query_failure_smoke()
+
+    assert result["ok"] is False
+    assert result["stdout"] == ""
+    assert "success query failed" in result["stderr"]
 
 
 def test_cinnamon_applet_status_refresh_accepts_escaped_payload_within_bound() -> None:
