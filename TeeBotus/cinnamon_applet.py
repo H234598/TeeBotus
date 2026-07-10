@@ -27,6 +27,7 @@ CONFIRMED_ACTIVE_SUBSTATES = frozenset({"active", "elapsed", "exited", "listenin
 MAX_CAPTURE_CHARS = 80_000
 MAX_ERROR_CHARS = 2_000
 MAX_QDRANT_COUNT_RESPONSE_BYTES = 64_000
+MAX_QDRANT_COUNT = 9_007_199_254_740_991
 SECRET_TOKEN_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{8,}\b"),
@@ -619,7 +620,7 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
         return {"status": "broken", "count": 0, "error": "Qdrant count response too large"}
     try:
         payload = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    except (UnicodeDecodeError, ValueError) as exc:
         return {"status": "broken", "count": 0, "error": f"invalid JSON: {type(exc).__name__}"}
     if not isinstance(payload, dict):
         return {"status": "broken", "count": 0, "error": "unexpected JSON payload"}
@@ -635,11 +636,20 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
     if isinstance(count, int):
         parsed_count = count
     elif isinstance(count, str) and re.fullmatch(r"[0-9]+", count.strip()):
-        parsed_count = int(count.strip())
+        normalized_count = count.strip()
+        canonical_count = normalized_count.lstrip("0") or "0"
+        if len(canonical_count) > len(str(MAX_QDRANT_COUNT)):
+            return {"status": "broken", "count": 0, "error": "unsafe Qdrant count result"}
+        try:
+            parsed_count = int(canonical_count)
+        except (ValueError, OverflowError):
+            return {"status": "broken", "count": 0, "error": "invalid Qdrant count result"}
     else:
         return {"status": "broken", "count": 0, "error": "invalid Qdrant count result"}
     if parsed_count < 0:
         return {"status": "broken", "count": 0, "error": "negative Qdrant count result"}
+    if parsed_count > MAX_QDRANT_COUNT:
+        return {"status": "broken", "count": 0, "error": "unsafe Qdrant count result"}
     return {"status": "ready", "count": parsed_count, "error": ""}
 
 

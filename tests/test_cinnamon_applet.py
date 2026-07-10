@@ -2998,6 +2998,52 @@ def test_cinnamon_applet_qdrant_point_count_rejects_non_integer_counts(monkeypat
     assert cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")["error"] == "invalid Qdrant count result"
 
 
+def test_cinnamon_applet_qdrant_point_count_rejects_unsafe_large_counts(monkeypatch) -> None:
+    class FakeResponse:
+        status = 200
+
+        def __init__(self, raw: bytes) -> None:
+            self.raw = raw
+
+        def read(self) -> bytes:
+            return self.raw
+
+        def close(self) -> None:
+            return None
+
+    payloads = [
+        {"status": "ok", "result": {"count": "9" * (len(str(cinnamon_applet.MAX_QDRANT_COUNT)) + 1)}},
+        {"status": "ok", "result": {"count": cinnamon_applet.MAX_QDRANT_COUNT + 1}},
+    ]
+
+    def fake_urlopen(_request: object, timeout: int) -> FakeResponse:
+        assert timeout == 2
+        return FakeResponse(json.dumps(payloads.pop(0)).encode("utf-8"))
+
+    monkeypatch.setattr(cinnamon_applet, "urlopen", fake_urlopen)
+
+    assert cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")["error"] == "unsafe Qdrant count result"
+    assert cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")["error"] == "unsafe Qdrant count result"
+
+
+def test_cinnamon_applet_qdrant_point_count_rejects_json_integer_limit_error(monkeypatch) -> None:
+    class FakeResponse:
+        status = 200
+
+        def read(self) -> bytes:
+            return (b'{"status":"ok","result":{"count":' + b"9" * 4301 + b"}}")
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr(cinnamon_applet, "urlopen", lambda _request, timeout: FakeResponse())
+
+    result = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
+
+    assert result["status"] == "broken"
+    assert result["error"].startswith("invalid JSON:")
+
+
 def test_cinnamon_applet_qdrant_point_count_rejects_oversized_response(monkeypatch) -> None:
     class FakeResponse:
         status = 200
