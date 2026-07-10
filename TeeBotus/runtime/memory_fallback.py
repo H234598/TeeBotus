@@ -16,7 +16,10 @@ class WarningFallbackAccountMemoryBackend:
         self.fallback = fallback
         self.label = label
         self._fallback_active = False
-        self._last_warning_at = 0.0
+        # ``time.monotonic()`` can be below the warning interval on a fresh
+        # CI/container boot. Start far enough in the past that the first
+        # primary-backend failure is never silently suppressed.
+        self._last_warning_at = -FALLBACK_WARNING_INTERVAL_SECONDS
         self._dirty_entries: set[str] = set()
         self._dirty_indexes: set[str] = set()
         self._dirty_collections: set[tuple[str, str]] = set()

@@ -9,6 +9,7 @@ from TeeBotus.runtime.action_buttons import NOTIFICATION_LOUDNESS_BUTTONS
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.activity_profile import contact_timing_decision
 from TeeBotus.runtime.events import IncomingEvent
+from TeeBotus.runtime.timezone import to_local
 
 NOTIFICATION_LOUDNESS_SYSTEM_ITEM = "notification_loudness"
 NOTIFICATION_LOUDNESS_INTENT = "notification_loudness_check"
@@ -431,11 +432,11 @@ def _already_prompted_in_wake_window(route_state: Mapping[str, Any], now: dateti
 
 
 def _wake_date_key(now: datetime) -> str:
-    return now.astimezone().date().isoformat()
+    return to_local(now).date().isoformat()
 
 
 def _wake_window_label(now: datetime) -> str:
-    local = now.astimezone()
+    local = to_local(now)
     start_hour, end_hour = NOTIFICATION_LOUDNESS_WAKE_HOURS
     if not _hour_in_window(local.hour, start_hour, end_hour):
         return ""

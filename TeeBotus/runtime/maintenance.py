@@ -485,7 +485,7 @@ def gzip_file(path: Path | str, *, expected_stat: os.stat_result | None = None) 
             _close_fd_quietly(source_fd)
         if temporary_fd is not None:
             _close_fd_quietly(temporary_fd)
-        if temporary is not None and temporary_stat is not None:
+        if temporary is not None and temporary_stat is not None and not temporary.is_symlink():
             _unlink_if_same_file(temporary, temporary_stat)
         raise
     _unlink_if_same_file(path, source_stat, require_unchanged=True)

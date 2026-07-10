@@ -23,6 +23,7 @@ from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import generated_file_to_outbox_payload, normalize_generated_file
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.notification_loudness import is_notification_loudness_outbox_item
+from TeeBotus.runtime.timezone import local_now, to_local
 
 PROACTIVE_COMMANDS = {"/proactive", "/agent", "/proaktiv"}
 PROACTIVE_ALLOWED_CATEGORIES = frozenset({"reminder", "task", "tip", "test", "image", "analysis", "reflection"})
@@ -324,7 +325,7 @@ def _adaptive_contact_status_line(account_store: AccountStore, account_id: str) 
     profiles = profile.get("profiles")
     if not isinstance(profiles, Mapping):
         return f"- adaptive Kontaktzeit: {decision.reason}"
-    day_key = "weekend" if datetime.now(timezone.utc).astimezone().weekday() >= 5 else "weekday"
+    day_key = "weekend" if local_now().weekday() >= 5 else "weekday"
     day_profile = profiles.get(day_key)
     if not isinstance(day_profile, Mapping) or not day_profile.get("sufficient_data"):
         day_profile = profiles.get("all")
@@ -930,7 +931,7 @@ def proactive_policy_decision(
         return ProactiveDecision(False, "no_private_route")
     if isinstance(item, Mapping) and item.get("user_requested_reminder") is True:
         return ProactiveDecision(True, "user_requested_reminder", route)
-    hour = resolved_now.astimezone().hour
+    hour = to_local(resolved_now).hour
     start_hour, end_hour = state["policy"]["allowed_hours"]
     if not _hour_in_window(hour, start_hour, end_hour):
         return ProactiveDecision(False, "outside_allowed_hours")
@@ -2290,7 +2291,7 @@ def _proactive_daily_count(account_store: AccountStore, account_id: str, now: da
         timestamp = _parse_proactive_datetime(str(item.get("sent_at") or item.get("due_at") or item.get("created_at") or ""))
         if timestamp is None:
             continue
-        if timestamp.astimezone().date() == now.astimezone().date():
+        if to_local(timestamp).date() == to_local(now).date():
             count += 1
     return count
 

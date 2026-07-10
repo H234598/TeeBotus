@@ -6,6 +6,7 @@ from typing import Any, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore
 from TeeBotus.runtime.events import IncomingEvent
+from TeeBotus.runtime.timezone import local_now, to_local
 
 ACTIVITY_PROFILE_SCHEMA_VERSION = 1
 ACTIVITY_HISTORY_LIMIT = 1000
@@ -35,7 +36,7 @@ def record_account_activity(
         return
     state = account_store.read_agent_state(account_id)
     profile = _ensure_activity_profile(state)
-    observed_at = _aware(now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+    observed_at = _aware(now or local_now()).isoformat(timespec="seconds")
     observations = profile.setdefault("observations", [])
     if not isinstance(observations, list):
         observations = []
@@ -49,9 +50,9 @@ def record_account_activity(
             "attachment_count": len(event.attachments),
         }
     )
-    profile["observations"] = _trim_observations(observations, now=_aware(now or datetime.now(timezone.utc)))
+    profile["observations"] = _trim_observations(observations, now=_aware(now or local_now()))
     profile["updated_at"] = observed_at
-    profile["derived"] = derive_activity_profile(profile["observations"], now=_aware(now or datetime.now(timezone.utc)))
+    profile["derived"] = derive_activity_profile(profile["observations"], now=_aware(now or local_now()))
     account_store.write_agent_state(account_id, state)
 
 
@@ -62,7 +63,7 @@ def contact_timing_decision(
     now: datetime | None = None,
     route: Mapping[str, Any] | None = None,
 ) -> ContactTimingDecision:
-    resolved_now = _aware(now or datetime.now(timezone.utc))
+    resolved_now = _aware(now or local_now())
     state = account_store.read_agent_state(account_id)
     profile = state.get("activity_profile")
     if not isinstance(profile, Mapping):
@@ -74,7 +75,7 @@ def contact_timing_decision(
     if not derived.get("sufficient_data"):
         return ContactTimingDecision(True, "activity_profile_insufficient", derived)
     day_profile = _day_profile(derived, resolved_now)
-    hour = resolved_now.astimezone().hour
+    hour = to_local(resolved_now).hour
     if hour in day_profile.get("recommended_contact_hours", []):
         return ContactTimingDecision(True, "adaptive_contact_hour", derived)
     if (
@@ -88,7 +89,7 @@ def contact_timing_decision(
 
 
 def derive_activity_profile(observations: list[Any], *, now: datetime | None = None) -> dict[str, Any]:
-    resolved_now = _aware(now or datetime.now(timezone.utc))
+    resolved_now = _aware(now or local_now())
     parsed = [_parse_observation(value, resolved_now) for value in observations]
     parsed = [value for value in parsed if value is not None]
     if len(parsed) < ACTIVITY_MIN_OBSERVATIONS:
@@ -146,7 +147,7 @@ def _parse_observation(value: Any, now: datetime) -> dict[str, Any] | None:
     observed_at = _parse_datetime(str(value.get("at") or ""))
     if observed_at is None or observed_at > now + timedelta(minutes=5):
         return None
-    local = observed_at.astimezone()
+    local = to_local(observed_at)
     age_days = max(0.0, (now - observed_at).total_seconds() / 86400)
     recency_weight = max(0.25, 1.0 - age_days / ACTIVITY_HISTORY_DAYS)
     text_length = _int_value(value.get("text_length"), default=0)
@@ -249,7 +250,7 @@ def _day_profile(derived: Mapping[str, Any], now: datetime) -> Mapping[str, Any]
     profiles = derived.get("profiles")
     if not isinstance(profiles, Mapping):
         return {}
-    key = "weekend" if now.astimezone().weekday() >= 5 else "weekday"
+    key = "weekend" if to_local(now).weekday() >= 5 else "weekday"
     profile = profiles.get(key)
     if isinstance(profile, Mapping) and profile.get("sufficient_data"):
         return profile
