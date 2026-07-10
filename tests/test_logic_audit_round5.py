@@ -9,7 +9,6 @@ import pytest
 from TeeBotus.adapters.signal import signal_context_to_event
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key, telegram_identity_key
 from TeeBotus.runtime.config import RuntimeConfigError, resolve_channels, resolve_openai_key, resolve_signal_accounts
-from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 
 

@@ -47,7 +47,7 @@ from TeeBotus.runtime.action_buttons import (
 )
 from TeeBotus.runtime.notification_loudness import maybe_handle_notification_loudness_response, maybe_notification_loudness_prompt_action
 from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder
-from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KINDS, ACCOUNT_MEMORY_TYPES, AccountMemorySelection, AccountStore, AccountStoreError, USER_HABITS_FILENAME, runtime_secret_provider, utc_now
+from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KINDS, ACCOUNT_MEMORY_TYPES, AccountMemorySelection, AccountStore, AccountStoreError, runtime_secret_provider, utc_now
 from TeeBotus.runtime.actions import DelaySeconds, ExportFile, MessageButton, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks, parse_generated_image_blocks
@@ -136,6 +136,7 @@ class EngineResult:
     account_id: str
     actions: list[OutgoingAction]
     handled: bool = False
+    suppress_notification_loudness_prompt: bool = False
 
 
 class TeeBotusEngine:
@@ -255,7 +256,12 @@ class TeeBotusEngine:
                 return EngineResult(result.account_id, admin_actions, handled=True)
             admin_text_auth_actions = self._free_text_admin_auth_actions(event, result.account_id, command)
             if admin_text_auth_actions is not None:
-                return EngineResult(result.account_id, admin_text_auth_actions, handled=True)
+                return EngineResult(
+                    result.account_id,
+                    admin_text_auth_actions,
+                    handled=True,
+                    suppress_notification_loudness_prompt=True,
+                )
         if result.handled or result.actions:
             return result
         instructions = self._current_instructions()
@@ -547,7 +553,7 @@ class TeeBotusEngine:
         return EngineResult(account_id, [], handled=False)
 
     def _with_notification_loudness_prompt(self, event: IncomingEvent, result: EngineResult) -> EngineResult:
-        if not result.account_id:
+        if not result.account_id or result.suppress_notification_loudness_prompt:
             return result
         prompt = maybe_notification_loudness_prompt_action(event.with_account(result.account_id), self.account_store, result.account_id)
         if prompt is None:
