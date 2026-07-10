@@ -149,6 +149,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
         print(f"TeeBotus runtime configuration error: {exc}", file=sys.stderr)
         return 2
     print("TeeBotus runtime configuration resolves.")
+    status_secret_provider = _runtime_status_secret_provider()
     _print_runtime_status_section(
         "Konfiguration",
         (
@@ -333,15 +334,24 @@ def _runtime_status(argv: Sequence[str]) -> int:
             continue
         tool_lines.append(_sanitize_status_text(mcp_tool_runtime_status_line(instance.instance_name, instructions.mcp_tools)))
     for instance_name in config.selected_instances:
-        for line in account_secret_health_lines(instance_name=instance_name, project_root=config.instances_dir.parent):
+        for line in account_secret_health_lines(
+            instance_name=instance_name,
+            project_root=config.instances_dir.parent,
+            secret_provider=status_secret_provider,
+        ):
             tool_lines.append(_sanitize_status_text(line))
-        for line in account_memory_index_health_lines(instance_name=instance_name, project_root=config.instances_dir.parent):
+        for line in account_memory_index_health_lines(
+            instance_name=instance_name,
+            project_root=config.instances_dir.parent,
+            secret_provider=status_secret_provider,
+        ):
             tool_lines.append(_sanitize_status_text(line))
         for line in account_identity_health_lines(
             instance_name=instance_name,
             project_root=config.instances_dir.parent,
             env=os.environ,
             runtime_channels=tuple(config.channels),
+            secret_provider=status_secret_provider,
         ):
             tool_lines.append(_sanitize_status_text(line))
         for line in admin_account_group_status_lines(
@@ -2121,16 +2131,32 @@ def _account_storage_preflight_broken_lines(config: Any) -> tuple[str, ...]:
     except Exception as exc:  # pragma: no cover - defensive only
         return (f"account_storage_preflight status=broken error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}",)
     project_root = config.instances_dir.parent
+    status_secret_provider = _runtime_status_secret_provider()
     broken: list[str] = []
     for instance_name in _account_storage_preflight_instance_names(config):
         for line in (
-            *account_secret_health_lines(instance_name=instance_name, project_root=project_root),
-            *account_memory_index_health_lines(instance_name=instance_name, project_root=project_root),
+            *account_secret_health_lines(
+                instance_name=instance_name,
+                project_root=project_root,
+                secret_provider=status_secret_provider,
+            ),
+            *account_memory_index_health_lines(
+                instance_name=instance_name,
+                project_root=project_root,
+                secret_provider=status_secret_provider,
+            ),
         ):
             sanitized = _sanitize_status_text(line)
             if _account_storage_health_line_is_broken(sanitized):
                 broken.append(sanitized)
     return tuple(broken)
+
+
+def _runtime_status_secret_provider() -> object:
+    """Share one read-only Secret Service cache across one status/preflight pass."""
+    from TeeBotus.core.status import SecretToolInstanceSecretProvider
+
+    return SecretToolInstanceSecretProvider(create_if_missing=False)
 
 
 def _account_storage_preflight_instance_names(config: Any) -> tuple[str, ...]:

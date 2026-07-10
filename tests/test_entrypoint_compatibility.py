@@ -378,11 +378,11 @@ def test_main_refuses_to_start_when_account_storage_preflight_is_broken(monkeypa
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.setattr(
         "TeeBotus.core.status.account_secret_health_lines",
-        lambda *, instance_name, project_root: [
+        lambda *, instance_name, project_root, **_kwargs: [
             f"account_crypto={instance_name} status=broken mapping=present memory=missing_required keyring=broken"
         ],
     )
-    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root, **_kwargs: [])
     monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
 
     assert bot.main([]) == 2
@@ -404,11 +404,11 @@ def test_main_account_storage_preflight_override_allows_start(monkeypatch, capsy
     monkeypatch.setenv("TEEBOTUS_ALLOW_BROKEN_ACCOUNT_MEMORY_START", "1")
     monkeypatch.setattr(
         "TeeBotus.core.status.account_secret_health_lines",
-        lambda *, instance_name, project_root: [
+        lambda *, instance_name, project_root, **_kwargs: [
             f"account_crypto={instance_name} status=broken mapping=present memory=missing_required keyring=broken"
         ],
     )
-    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root, **_kwargs: [])
     monkeypatch.setattr(bot, "_start_gemini_free_tier_limit_refresh", lambda _config: None)
     monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
 
@@ -417,6 +417,33 @@ def test_main_account_storage_preflight_override_allows_start(monkeypatch, capsy
     captured = capsys.readouterr()
     assert calls
     assert "TEEBOTUS_ALLOW_BROKEN_ACCOUNT_MEMORY_START=1 allows startup" in captured.err
+
+
+def test_account_storage_preflight_reuses_one_secret_provider(monkeypatch, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    config = SimpleNamespace(
+        instances_dir=tmp_path / "instances",
+        instances=(SimpleNamespace(instance_name="Demo", accounts=(object(),)),),
+        selected_instances=("Demo",),
+    )
+    shared_provider = object()
+    providers: list[object] = []
+
+    monkeypatch.setattr(bot, "_runtime_status_secret_provider", lambda: shared_provider)
+
+    def secret_health(*, instance_name, project_root, secret_provider):
+        providers.append(secret_provider)
+        return []
+
+    def memory_health(*, instance_name, project_root, secret_provider):
+        providers.append(secret_provider)
+        return []
+
+    monkeypatch.setattr("TeeBotus.core.status.account_secret_health_lines", secret_health)
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", memory_health)
+
+    assert bot._account_storage_preflight_broken_lines(config) == ()
+    assert providers == [shared_provider, shared_provider]
 
 
 def test_main_start_does_not_leak_loaded_default_environment(monkeypatch, tmp_path) -> None:
@@ -482,7 +509,7 @@ def test_main_all_preflight_skips_instances_without_runtime_accounts(monkeypatch
     monkeypatch.delenv("MATRIX_BOT_USER_ID_DEMOB", raising=False)
     monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_DEMOB", raising=False)
 
-    def secret_health(*, instance_name, project_root):
+    def secret_health(*, instance_name, project_root, **_kwargs):
         checked_instances.append(instance_name)
         if instance_name == "DemoB":
             return [
@@ -491,7 +518,7 @@ def test_main_all_preflight_skips_instances_without_runtime_accounts(monkeypatch
         return []
 
     monkeypatch.setattr("TeeBotus.core.status.account_secret_health_lines", secret_health)
-    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root, **_kwargs: [])
     monkeypatch.setattr(bot, "_start_gemini_free_tier_limit_refresh", lambda config: None)
     monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
 
@@ -555,7 +582,7 @@ def test_runtime_status_prints_account_memory_index_health(monkeypatch, capsys) 
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.setattr(
         "TeeBotus.core.status.account_memory_index_health_lines",
-        lambda *, instance_name, project_root: [f"account_memory={instance_name}/abc status=broken error=recent_ids missing entries: mem_missing"],
+        lambda *, instance_name, project_root, **_kwargs: [f"account_memory={instance_name}/abc status=broken error=recent_ids missing entries: mem_missing"],
     )
 
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
@@ -2617,7 +2644,7 @@ def test_runtime_status_redacts_helper_status_lines(monkeypatch, capsys) -> None
     )
     monkeypatch.setattr(
         "TeeBotus.core.status.account_memory_index_health_lines",
-        lambda *, instance_name, project_root: [f"account_memory={instance_name}/abc status=broken error=index leaked {hf_key}"],
+        lambda *, instance_name, project_root, **_kwargs: [f"account_memory={instance_name}/abc status=broken error=index leaked {hf_key}"],
     )
 
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
@@ -2837,11 +2864,11 @@ def test_explicit_missing_channel_error_precedes_account_storage_preflight(monke
     monkeypatch.delenv("SIGNAL_BOT_PHONE_NUMBER_DEMO", raising=False)
     monkeypatch.setattr(
         "TeeBotus.core.status.account_secret_health_lines",
-        lambda *, instance_name, project_root: [
+        lambda *, instance_name, project_root, **_kwargs: [
             f"account_crypto={instance_name} status=broken mapping=present memory=missing_required keyring=broken"
         ],
     )
-    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root, **_kwargs: [])
     monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(config) or 0)
 
     assert bot.main(["--channels", "telegram,signal"]) == 2
@@ -2902,11 +2929,11 @@ def test_default_auto_channels_report_missing_telegram_before_preflight(monkeypa
     monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", raising=False)
     monkeypatch.setattr(
         "TeeBotus.core.status.account_secret_health_lines",
-        lambda *, instance_name, project_root: [
+        lambda *, instance_name, project_root, **_kwargs: [
             f"account_crypto={instance_name} status=broken mapping=present memory=missing_required keyring=broken"
         ],
     )
-    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root, **_kwargs: [])
     monkeypatch.setattr(bot, "_run_telegram_runtime", lambda config: calls.append(("telegram", config)) or 0)
 
     assert bot.main([]) == 2
@@ -2954,11 +2981,11 @@ def test_default_auto_channels_run_signal_preflight_on_narrowed_config(monkeypat
     monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_DEMO", raising=False)
     monkeypatch.setattr(
         "TeeBotus.core.status.account_secret_health_lines",
-        lambda *, instance_name, project_root: [
+        lambda *, instance_name, project_root, **_kwargs: [
             f"account_crypto={instance_name} status=broken mapping=present memory=missing_required keyring=broken"
         ],
     )
-    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root, **_kwargs: [])
     monkeypatch.setattr(bot, "_start_gemini_free_tier_limit_refresh", lambda config: refresh_calls.append(config))
     monkeypatch.setattr(bot, "_run_signal_runtime", lambda config: calls.append(("signal", config)) or 0)
 
@@ -3000,7 +3027,7 @@ def test_default_auto_channels_signal_fallback_preflight_skips_empty_instances(m
     monkeypatch.delenv("MATRIX_BOT_USER_ID_TELEGRAMONLY", raising=False)
     monkeypatch.delenv("MATRIX_BOT_ACCESS_TOKEN_TELEGRAMONLY", raising=False)
 
-    def secret_health(*, instance_name, project_root):
+    def secret_health(*, instance_name, project_root, **_kwargs):
         checked_instances.append(instance_name)
         if instance_name == "TelegramOnly":
             return [
@@ -3009,7 +3036,7 @@ def test_default_auto_channels_signal_fallback_preflight_skips_empty_instances(m
         return []
 
     monkeypatch.setattr("TeeBotus.core.status.account_secret_health_lines", secret_health)
-    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root: [])
+    monkeypatch.setattr("TeeBotus.core.status.account_memory_index_health_lines", lambda *, instance_name, project_root, **_kwargs: [])
     monkeypatch.setattr(bot, "_start_gemini_free_tier_limit_refresh", lambda config: refresh_calls.append(config))
     monkeypatch.setattr(bot, "_run_signal_runtime", lambda config: calls.append(config) or 0)
 
