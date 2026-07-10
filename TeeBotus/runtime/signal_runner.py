@@ -12,7 +12,7 @@ import time
 from dataclasses import dataclass
 from inspect import isawaitable
 from pathlib import Path
-from typing import Any, Mapping, Sequence
+from typing import Any, Callable, Mapping, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import urlopen
@@ -296,7 +296,10 @@ class TeeBotusSignalCommand(_SignalBotCommand):
             if not receiver or self.bot is None:
                 continue
             try:
-                sent_ref = await _maybe_await(self.bot.send(receiver, action.text))
+                sent_ref = await _run_signal_operation_with_retry(
+                    lambda: self.bot.send(receiver, action.text),
+                    label="linked identity notification",
+                )
             except Exception:
                 LOGGER.exception(
                     "Signal linked identity notification failed instance=%s recipient=%s identity_key=%s.",
@@ -330,7 +333,10 @@ class TeeBotusSignalCommand(_SignalBotCommand):
         for action in actions:
             try:
                 sent_ref = run_background_coroutine(
-                    lambda action=action: sender({"adapter_slot": self.run_config.slot, "chat_id": event.chat_id}, action, {}),
+                    lambda action=action: _run_signal_operation_with_retry(
+                        lambda: sender({"adapter_slot": self.run_config.slot, "chat_id": event.chat_id}, action, {}),
+                        label="background action dispatch",
+                    ),
                     loop=self._dispatch_loop,
                     loop_thread_id=self._dispatch_loop_thread_id,
                     on_scheduled_result=lambda sent_ref, action=action: self._track_background_action(event, action, sent_ref),
@@ -511,23 +517,31 @@ class TeeBotusSignalCommand(_SignalBotCommand):
 
 
 async def _send_signal_actions_with_retry(context: Any, actions: list[Any]) -> list[Any]:
+    return await _run_signal_operation_with_retry(
+        lambda: send_signal_actions(context, actions),
+        label="action dispatch",
+    )
+
+
+async def _run_signal_operation_with_retry(operation: Callable[[], Any], *, label: str) -> Any:
     attempts = len(SIGNAL_ACTION_RETRY_DELAYS_SECONDS) + 1
     for attempt in range(attempts):
         try:
-            return await send_signal_actions(context, actions)
+            return await _maybe_await(operation())
         except Exception:
             if attempt >= attempts - 1:
                 raise
             delay = SIGNAL_ACTION_RETRY_DELAYS_SECONDS[attempt]
             LOGGER.warning(
-                "Signal action dispatch failed; retrying attempt=%s/%s in %ss.",
+                "Signal %s failed; retrying attempt=%s/%s in %ss.",
+                label,
                 attempt + 1,
                 attempts,
                 delay,
                 exc_info=True,
             )
             await asyncio.sleep(delay)
-    raise SignalRuntimeError("Signal action dispatch retry loop ended unexpectedly")
+    raise SignalRuntimeError(f"Signal {label} retry loop ended unexpectedly")
 
 
 class SharedSignalRouterCommand(_SignalBotCommand):

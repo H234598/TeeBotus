@@ -1375,7 +1375,7 @@ def test_signal_command_notifies_old_signal_identity_route(tmp_path) -> None:
     assert fake_bot.sent == [("+49999", "Ein neuer Kommunikationsweg wurde verbunden.")]
 
 
-def test_signal_command_logs_linked_identity_notification_failure(tmp_path, caplog) -> None:
+def test_signal_command_logs_linked_identity_notification_failure(tmp_path, caplog, monkeypatch) -> None:
     command = TeeBotusSignalCommand(
         run_config=AccountRunConfig(
             instance_name="Demo",
@@ -1410,7 +1410,11 @@ def test_signal_command_logs_linked_identity_notification_failure(tmp_path, capl
     async def failing_send(_receiver: str, _text: str):
         raise RuntimeError("send refused")
 
+    async def no_sleep(_delay):
+        return None
+
     command.bot = SimpleNamespace(send=failing_send)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.asyncio.sleep", no_sleep)
 
     with caplog.at_level(logging.ERROR, logger="TeeBotus.signal"):
         asyncio.run(command.handle(FakeSignalContext()))
@@ -1567,6 +1571,44 @@ def test_signal_background_dispatch_logs_failures(monkeypatch, tmp_path, caplog)
 
     assert "Signal background action dispatch failed" in caplog.text
     assert "action=SendText" in caplog.text
+
+
+def test_signal_background_dispatch_retries_transient_failure(monkeypatch, tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    command.bot = FakeSignalBot()
+    calls = 0
+
+    async def send_once_fails(_route, _action, _item):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("temporary background failure")
+        return 456789
+
+    async def no_sleep(_delay):
+        return None
+
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.signal_proactive_sender", lambda _bots: send_once_fails)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner.asyncio.sleep", no_sleep)
+    event = SimpleNamespace(instance="Demo", account_id="acc", chat_id="+491234", message_ref="123456")
+
+    command._dispatch_background_actions(event, [SendText("+491234", "hi")])
+
+    assert calls == 2
+    refs = command.message_tracker.pop_for_cleanup(instance_name="Demo", channel="signal", chat_id="+491234", count=1)
+    assert [ref.message_ref for ref in refs] == ["456789"]
 
 
 def test_signal_command_does_not_track_linked_identity_notification_without_timestamp(tmp_path) -> None:
