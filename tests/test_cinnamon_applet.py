@@ -4213,6 +4213,24 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert cinnamon_applet._redact("--password=-leading-secret") == "--password=<redacted>"
     assert cinnamon_applet._redact("--password -leading-secret") == "--password <redacted>"
     assert cinnamon_applet._redact("--password --api-key plain-secret") == "--password --api-key <redacted>"
+    pem = "-----BEGIN PRIVATE KEY-----\nMIIEplainsecret\n-----END PRIVATE KEY-----"
+    assert cinnamon_applet._redact(pem) == "<redacted-secret>"
+
+
+def test_cinnamon_applet_runtime_parser_redacts_multiline_pem_private_keys() -> None:
+    pem_body = "MIIEplainsecret"
+    parsed = parse_runtime_status(
+        "[Diagnose]\n"
+        "error=before\n"
+        "-----BEGIN RSA PRIVATE KEY-----\n"
+        f"{pem_body}\n"
+        "-----END RSA PRIVATE KEY-----\n"
+        "service=demo status=ready\n"
+    )
+
+    rendered = json.dumps(parsed, sort_keys=True)
+    assert pem_body not in rendered
+    assert "<redacted-secret>" in rendered
 
 
 def test_cinnamon_applet_redacted_argv_hides_dash_prefixed_values_without_swallowing_options() -> None:

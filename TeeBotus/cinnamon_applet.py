@@ -37,6 +37,10 @@ TELEGRAM_BOT_TOKEN_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?:bot)?\d{8,12}:[A-Za-z0-9_-]{30,}(?![A-Za-z0-9_-])",
     re.IGNORECASE,
 )
+PEM_PRIVATE_KEY_BLOCK_RE = re.compile(
+    r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|$)",
+    re.DOTALL,
+)
 SECRET_TOKEN_PATTERNS = (
     re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b"),
     re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{8,}\b"),
@@ -501,8 +505,9 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         "problem_statuses": "",
         "output_truncated": False,
     }
-    for raw_line in str(output or "").splitlines():
-        line = _redact(raw_line.strip())
+    redacted_output = _redact(str(output or ""))
+    for raw_line in redacted_output.splitlines():
+        line = raw_line.strip()
         if not line:
             continue
         if line.startswith("[") and line.endswith("]"):
@@ -1126,8 +1131,10 @@ def _redact(value: str) -> str:
         return text
     lowered = text.casefold()
     has_secret_token = any(hint in lowered for hint in SECRET_TOKEN_HINTS) or TELEGRAM_BOT_TOKEN_RE.search(text) is not None
+    has_pem_private_key = PEM_PRIVATE_KEY_BLOCK_RE.search(text) is not None
     if not (
         has_secret_token
+        or has_pem_private_key
         or any(hint in lowered for hint in URL_REDACTION_HINTS)
         or any(hint in lowered for hint in AUTHORIZATION_REDACTION_HINTS)
         or any(hint in lowered for hint in SECRET_OPTION_REDACTION_HINTS)
@@ -1153,6 +1160,8 @@ def _redact(value: str) -> str:
         text = QUOTED_SECRET_ASSIGNMENT_RE.sub(_redact_quoted_secret_assignment, text)
         text = SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, text)
         text = SECRET_ASSIGNMENT_FRAGMENT_RE.sub(_redact_secret_assignment_fragment, text)
+    if has_pem_private_key:
+        text = PEM_PRIVATE_KEY_BLOCK_RE.sub("<redacted-secret>", text)
     return text
 
 
