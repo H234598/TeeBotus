@@ -4646,6 +4646,30 @@ class BotTests(unittest.TestCase):
             {"chat_id": 123, "message_id": "88", "text": "<b>formatted</b>", "parse_mode": "HTML"},
         )
 
+    def test_run_polling_uses_explicit_instances_dir_for_update_offset(self) -> None:
+        api = OneUpdatePollingAPI()
+        runtime_context = SimpleNamespace(account_store=object(), bot_identity=BotIdentity())
+
+        with tempfile.TemporaryDirectory() as directory:
+            explicit_dir = Path(directory) / "configured-instances"
+            fallback_dir = Path(directory) / "env-instances"
+            with (
+                patch.dict("os.environ", {"TELEGRAM_BOT_INSTANCES_DIR": str(fallback_dir)}, clear=False),
+                patch("TeeBotus.adapters.telegram_runtime.handle_update"),
+            ):
+                run_polling(
+                    api,
+                    runtime_context=runtime_context,
+                    chat_state=ChatState(),
+                    youtube_job_runner=FakeJobRunner(),
+                    instance_name="Demo",
+                    instances_dir=explicit_dir,
+                )
+
+            expected = explicit_dir / "Demo" / "data" / "Telegram_GetUpdates_Offset_1.json"
+            self.assertTrue(expected.exists())
+            self.assertFalse((fallback_dir / "Demo" / "data" / expected.name).exists())
+
     def test_main_impl_loads_runtime_environment_before_configuring_logging(self) -> None:
         from TeeBotus import bot as bot_module
 

@@ -3559,6 +3559,7 @@ def run_polling(
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
     runtime_context: TelegramRuntimeContext | None = None,
     chat_state: ChatState | None = None,
+    instances_dir: str | Path | None = None,
 ) -> None:
     owns_youtube_job_runner = youtube_job_runner is None
     youtube_job_runner = youtube_job_runner or YouTubeTranscriptionJobRunner()
@@ -3604,7 +3605,7 @@ def run_polling(
         bot_identity.display_name or "unknown",
         bot_identity.mention or "unknown",
     )
-    offset_path = _telegram_update_offset_path(instance, token_label)
+    offset_path = _telegram_update_offset_path(instance, token_label, instances_dir=instances_dir)
     offset: int | None = _read_telegram_update_offset(offset_path)
     retry_delay = INITIAL_RETRY_DELAY_SECONDS
 
@@ -4066,10 +4067,16 @@ def _resolve_telegram_tokens(instance_name: str) -> list[str]:
     return _dedupe_tokens(candidates)
 
 
-def _telegram_update_offset_path(instance_name: str, token_label: str = "1") -> Path:
+def _telegram_update_offset_path(
+    instance_name: str,
+    token_label: str = "1",
+    *,
+    instances_dir: str | Path | None = None,
+) -> Path:
     suffix = str(token_label or "1").strip() or "1"
     filename = f"{Path(TELEGRAM_GET_UPDATES_OFFSET_FILENAME).stem}_{suffix}.json"
-    return _resolve_instances_dir() / instance_name / "data" / filename
+    root = Path(instances_dir) if instances_dir is not None else _resolve_instances_dir()
+    return root / instance_name / "data" / filename
 
 
 def _safe_telegram_update_id(update: dict[str, Any]) -> int | None:

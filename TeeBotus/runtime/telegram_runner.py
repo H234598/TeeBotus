@@ -124,6 +124,7 @@ class TelegramRuntimeBridge:
             youtube_job_runner=youtube_job_runner,
             runtime_context=self.context,
             chat_state=self.chat_state,
+            instances_dir=self.instances_dir,
         )
 
 
