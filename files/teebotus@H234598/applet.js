@@ -1341,20 +1341,22 @@ TeeBotusApplet.prototype = {
         callback(null, _("Helper JSON output too large"));
         return;
       }
+      let payload = null;
       try {
-        let payload = JSON.parse(text);
-        if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-          callback(null, _("Invalid JSON object from helper"));
-          return;
-        }
-        if (!this._isStatusPayload(payload)) {
-          callback(null, _("Invalid status payload from helper"));
-          return;
-        }
-        callback(payload, null);
+        payload = JSON.parse(text);
       } catch (err) {
         callback(null, _("Invalid JSON from helper: ") + String(err));
+        return;
       }
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        callback(null, _("Invalid JSON object from helper"));
+        return;
+      }
+      if (!this._isStatusPayload(payload)) {
+        callback(null, _("Invalid status payload from helper"));
+        return;
+      }
+      callback(payload, null);
     }, cwd, options);
   },
 

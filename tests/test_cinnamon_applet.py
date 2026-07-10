@@ -1390,6 +1390,33 @@ def test_cinnamon_applet_status_refresh_rejects_structurally_invalid_payload() -
     assert result["lastError"] == "Invalid status payload from helper"
 
 
+def test_cinnamon_applet_spawn_json_does_not_reinvoke_throwing_consumer() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let calls = [];
+          applet._spawn = function(argv, callback, cwd, options) {
+            callback(JSON.stringify({ok: true, repo: {}, unit: {}, health: {}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
+          };
+          try {
+            applet._spawnJson([], function(payload, error) {
+              calls.push({payload: Boolean(payload), error: error});
+              if (payload) {
+                throw new Error("consumer failed");
+              }
+            });
+          } catch (err) {
+            return {calls: calls, thrown: String(err)};
+          }
+          return {calls: calls, thrown: ""};
+        })()
+        """
+    )
+
+    assert result["thrown"] == "Error: consumer failed"
+    assert result["calls"] == [{"payload": True, "error": None}]
+
+
 def test_cinnamon_applet_local_status_text_updates_menu_header() -> None:
     result = _run_js_applet_expression(
         """
