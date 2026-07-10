@@ -29,6 +29,7 @@ LINK_NOTIFICATIONS_FILENAME = "Link_Notifications.json"
 LINK_NOTIFICATION_TTL_SECONDS = 15 * 60
 PREVIOUS_RESPONSE_PROVIDER_FIELD = "previous_response_provider"
 PREVIOUS_RESPONSE_MODEL_FIELD = "previous_response_model"
+PREVIOUS_RESPONSE_KEY_FIELD = "previous_response_key_fingerprint"
 
 
 @dataclass(frozen=True)
@@ -58,7 +59,7 @@ class RuntimeState:
     pending_flows: dict[tuple[str, str, str], dict[str, Any]] = field(default_factory=dict)
     link_notifications: dict[tuple[str, str, str], dict[str, str]] = field(default_factory=dict)
     previous_response_ids: dict[tuple[str, str], str] = field(default_factory=dict)
-    previous_response_scopes: dict[tuple[str, str], tuple[str, str]] = field(default_factory=dict)
+    previous_response_scopes: dict[tuple[str, str], tuple[str, str, str]] = field(default_factory=dict)
     security_events: list[dict[str, Any]] = field(default_factory=list)
 
     def set_pending_flow(self, instance_name: str, account_id: str, flow_type: str, payload: dict[str, Any]) -> None:
@@ -79,6 +80,7 @@ class RuntimeState:
         *,
         provider: str = "",
         model: str = "",
+        key_fingerprint: str = "",
     ) -> None:
         key = (instance_name, account_id)
         clean_response_id = str(response_id or "").strip()
@@ -86,8 +88,9 @@ class RuntimeState:
             self.previous_response_ids[key] = clean_response_id
             clean_provider = str(provider or "").strip().casefold()
             clean_model = str(model or "").strip()
+            clean_key_fingerprint = str(key_fingerprint or "").strip().casefold()
             if clean_provider and clean_model:
-                self.previous_response_scopes[key] = (clean_provider, clean_model)
+                self.previous_response_scopes[key] = (clean_provider, clean_model, clean_key_fingerprint)
             else:
                 # An unscoped ID is retained for backwards-compatible direct
                 # callers, but a provider-aware lookup must reject it.
@@ -103,6 +106,7 @@ class RuntimeState:
         *,
         provider: str = "",
         model: str = "",
+        key_fingerprint: str = "",
     ) -> str | None:
         key = (instance_name, account_id)
         response_id = self.previous_response_ids.get(key)
@@ -110,6 +114,7 @@ class RuntimeState:
             return None
         clean_provider = str(provider or "").strip().casefold()
         clean_model = str(model or "").strip()
+        clean_key_fingerprint = str(key_fingerprint or "").strip().casefold()
         if clean_provider or clean_model:
             stored_scope = self.previous_response_scopes.get(key)
             if stored_scope is None:
@@ -117,6 +122,8 @@ class RuntimeState:
             if clean_provider and stored_scope[0] != clean_provider:
                 return None
             if clean_model and stored_scope[1] != clean_model:
+                return None
+            if stored_scope[2] != clean_key_fingerprint:
                 return None
         return response_id
 
@@ -253,10 +260,24 @@ class RuntimeStateStore(RuntimeState):
         *,
         provider: str = "",
         model: str = "",
+        key_fingerprint: str = "",
     ) -> None:
-        super().set_previous_response_id(instance_name, account_id, response_id, provider=provider, model=model)
+        super().set_previous_response_id(
+            instance_name,
+            account_id,
+            response_id,
+            provider=provider,
+            model=model,
+            key_fingerprint=key_fingerprint,
+        )
         if response_id:
-            self._write_llm_previous_response_id(account_id, response_id, provider=provider, model=model)
+            self._write_llm_previous_response_id(
+                account_id,
+                response_id,
+                provider=provider,
+                model=model,
+                key_fingerprint=key_fingerprint,
+            )
         else:
             self._clear_llm_previous_response_id(account_id)
 
@@ -267,8 +288,15 @@ class RuntimeStateStore(RuntimeState):
         *,
         provider: str = "",
         model: str = "",
+        key_fingerprint: str = "",
     ) -> str | None:
-        cached = super().get_previous_response_id(instance_name, account_id, provider=provider, model=model)
+        cached = super().get_previous_response_id(
+            instance_name,
+            account_id,
+            provider=provider,
+            model=model,
+            key_fingerprint=key_fingerprint,
+        )
         if cached:
             return cached
         persisted, persisted_scope = self._read_llm_previous_response(account_id)
@@ -278,7 +306,13 @@ class RuntimeStateStore(RuntimeState):
             if persisted_scope is not None:
                 self.previous_response_scopes[key] = persisted_scope
             if provider or model:
-                return super().get_previous_response_id(instance_name, account_id, provider=provider, model=model)
+                return super().get_previous_response_id(
+                    instance_name,
+                    account_id,
+                    provider=provider,
+                    model=model,
+                    key_fingerprint=key_fingerprint,
+                )
         return persisted
 
     def reset_previous_response_id(self, instance_name: str, account_id: str) -> None:
@@ -380,19 +414,28 @@ class RuntimeStateStore(RuntimeState):
             except AccountStoreError as exc:
                 self._set_llm_state_persistence_error(str(exc))
 
-    def _read_llm_previous_response(self, account_id: str) -> tuple[str | None, tuple[str, str] | None]:
+    def _read_llm_previous_response(self, account_id: str) -> tuple[str | None, tuple[str, str, str] | None]:
         payload = self._read_llm_state(account_id)
         value = str(payload.get("previous_response_id") or "").strip()
         provider = str(payload.get(PREVIOUS_RESPONSE_PROVIDER_FIELD) or "").strip().casefold()
         model = str(payload.get(PREVIOUS_RESPONSE_MODEL_FIELD) or "").strip()
-        scope = (provider, model) if provider and model else None
+        key_fingerprint = str(payload.get(PREVIOUS_RESPONSE_KEY_FIELD) or "").strip().casefold()
+        scope = (provider, model, key_fingerprint) if provider and model else None
         return value or None, scope
 
     def _read_llm_previous_response_id(self, account_id: str) -> str | None:
         response_id, _scope = self._read_llm_previous_response(account_id)
         return response_id
 
-    def _write_llm_previous_response_id(self, account_id: str, response_id: str, *, provider: str = "", model: str = "") -> None:
+    def _write_llm_previous_response_id(
+        self,
+        account_id: str,
+        response_id: str,
+        *,
+        provider: str = "",
+        model: str = "",
+        key_fingerprint: str = "",
+    ) -> None:
         clean_response_id = str(response_id or "").strip()
         if not clean_response_id:
             return
@@ -401,12 +444,18 @@ class RuntimeStateStore(RuntimeState):
             payload["previous_response_id"] = clean_response_id
             clean_provider = str(provider or "").strip().casefold()
             clean_model = str(model or "").strip()
+            clean_key_fingerprint = str(key_fingerprint or "").strip().casefold()
             if clean_provider and clean_model:
                 payload[PREVIOUS_RESPONSE_PROVIDER_FIELD] = clean_provider
                 payload[PREVIOUS_RESPONSE_MODEL_FIELD] = clean_model
+                if clean_key_fingerprint:
+                    payload[PREVIOUS_RESPONSE_KEY_FIELD] = clean_key_fingerprint
+                else:
+                    payload.pop(PREVIOUS_RESPONSE_KEY_FIELD, None)
             else:
                 payload.pop(PREVIOUS_RESPONSE_PROVIDER_FIELD, None)
                 payload.pop(PREVIOUS_RESPONSE_MODEL_FIELD, None)
+                payload.pop(PREVIOUS_RESPONSE_KEY_FIELD, None)
             payload["updated_at"] = utc_now()
             self._write_llm_state(account_id, payload)
 
@@ -418,6 +467,7 @@ class RuntimeStateStore(RuntimeState):
             payload.pop("previous_response_id", None)
             payload.pop(PREVIOUS_RESPONSE_PROVIDER_FIELD, None)
             payload.pop(PREVIOUS_RESPONSE_MODEL_FIELD, None)
+            payload.pop(PREVIOUS_RESPONSE_KEY_FIELD, None)
             payload["updated_at"] = utc_now()
             self._write_llm_state(account_id, payload)
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 import os
@@ -159,6 +160,7 @@ class LiteLLMGeminiStatefulClient:
                 model=self.model,
                 service_tier=self.service_tier or None,
                 usage=usage,
+                state_key_fingerprint=_state_key_fingerprint(api_key),
             )
         detail = "; ".join(errors) if errors else "no keys attempted"
         raise LLMAPIError(f"LiteLLM Gemini Stateful interaction failed for all configured keys: {detail}")
@@ -529,6 +531,10 @@ def _litellm_response_cost(response: object) -> object | None:
 def _gemini_quota_owner(*, api_key: str, provider: str, model: str) -> str:
     owner_provider = "google_gemini_paid" if provider_is_paid_google_gemini(provider) else "google_gemini"
     return quota_owner_id(api_key=api_key, provider=owner_provider, model=model or provider)
+
+
+def _state_key_fingerprint(api_key: str) -> str:
+    return hashlib.sha256(str(api_key or "").encode("utf-8")).hexdigest()
 
 
 def _object_value(source: object, key: str) -> object:

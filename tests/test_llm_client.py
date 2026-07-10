@@ -1813,6 +1813,7 @@ def test_gemini_interactions_client_drops_previous_interaction_on_key_failover(m
 
     assert response.text == "Hallo vom zweiten Key"
     assert response.response_id == "interaction-2"
+    assert response.state_key_fingerprint == hashlib.sha256(b"gemini-b").hexdigest()
     assert keys == ["gemini-a", "gemini-b"]
     assert calls[0]["previous_interaction_id"] == "prev-from-gemini-a"
     assert "previous_interaction_id" not in calls[1]

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
+import hashlib
 import json
 import logging
 from pathlib import Path
@@ -1004,8 +1005,15 @@ class TeeBotusEngine:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         response_id = _persistable_previous_response_id(response)
         if response_id:
-            provider, model = _llm_state_scope(response, client=llm_client, instructions=instructions)
-            self.state.set_previous_response_id(event.instance, account_id, response_id, provider=provider, model=model)
+            provider, model, key_fingerprint = _llm_state_scope(response, client=llm_client, instructions=instructions)
+            self.state.set_previous_response_id(
+                event.instance,
+                account_id,
+                response_id,
+                provider=provider,
+                model=model,
+                key_fingerprint=key_fingerprint,
+            )
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
             LOGGER.warning("LLM action response empty instance=%s event_id=%s.", event.instance, event.event_id)
@@ -1599,8 +1607,15 @@ class TeeBotusEngine:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         response_id = _persistable_previous_response_id(response)
         if response_id:
-            provider, model = _llm_state_scope(response, client=self.llm_client, instructions=instructions)
-            self.state.set_previous_response_id(event.instance, account_id, response_id, provider=provider, model=model)
+            provider, model, key_fingerprint = _llm_state_scope(response, client=self.llm_client, instructions=instructions)
+            self.state.set_previous_response_id(
+                event.instance,
+                account_id,
+                response_id,
+                provider=provider,
+                model=model,
+                key_fingerprint=key_fingerprint,
+            )
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)
@@ -2814,7 +2829,7 @@ def _llm_state_scope(
     *,
     client: object | None = None,
     instructions: BotInstructions | None = None,
-) -> tuple[str, str]:
+) -> tuple[str, str, str]:
     provider = str(getattr(source, "provider", "") or getattr(source, "provider_name", "") or "").strip()
     model = str(getattr(source, "model", "") or getattr(source, "normalized_model", "") or "").strip()
     if not provider and client is not None:
@@ -2824,7 +2839,20 @@ def _llm_state_scope(
     if instructions is not None:
         provider = provider or str(getattr(instructions, "llm_provider", "") or "").strip()
         model = model or str(getattr(instructions, "llm_model", "") or getattr(instructions, "openai_model", "") or "").strip()
-    return normalize_llm_provider(provider), model
+    key_fingerprint = str(getattr(source, "state_key_fingerprint", "") or "").strip().casefold()
+    if not key_fingerprint and client is not None:
+        key_fingerprint = str(getattr(client, "state_key_fingerprint", "") or "").strip().casefold()
+    if not key_fingerprint and client is not None:
+        key_ring = getattr(client, "api_key_ring", None)
+        ordered_keys = getattr(key_ring, "ordered_keys", None)
+        candidate_keys = ordered_keys() if callable(ordered_keys) else ()
+        api_key = candidate_keys[0] if candidate_keys else getattr(client, "api_key", "")
+        if not api_key:
+            wrapped_client = getattr(client, "client", None)
+            api_key = getattr(wrapped_client, "api_key", "")
+        if api_key:
+            key_fingerprint = hashlib.sha256(str(api_key).encode("utf-8")).hexdigest()
+    return normalize_llm_provider(provider), model, key_fingerprint
 
 
 def _previous_response_id_for_client(
@@ -2837,8 +2865,14 @@ def _previous_response_id_for_client(
 ) -> str | None:
     if not _client_supports_previous_response_id(client):
         return None
-    provider, model = _llm_state_scope(client, instructions=instructions)
-    return state.get_previous_response_id(instance_name, account_id, provider=provider, model=model)
+    provider, model, key_fingerprint = _llm_state_scope(client, instructions=instructions)
+    return state.get_previous_response_id(
+        instance_name,
+        account_id,
+        provider=provider,
+        model=model,
+        key_fingerprint=key_fingerprint,
+    )
 
 
 def _client_supports_previous_response_id(client: object) -> bool:

@@ -101,15 +101,37 @@ def test_runtime_state_store_scopes_previous_response_to_provider_and_model(tmp_
     account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
     state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
 
-    state.set_previous_response_id("Bot", ACCOUNT_ID, "resp-openai", provider="openai", model="gpt-5.5")
+    key_fingerprint = "a" * 64
+    state.set_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        "resp-openai",
+        provider="openai",
+        model="gpt-5.5",
+        key_fingerprint=key_fingerprint,
+    )
     reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
 
-    assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID, provider="openai", model="gpt-5.5") == "resp-openai"
+    assert reloaded.get_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        provider="openai",
+        model="gpt-5.5",
+        key_fingerprint=key_fingerprint,
+    ) == "resp-openai"
+    assert reloaded.get_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        provider="openai",
+        model="gpt-5.5",
+        key_fingerprint="b" * 64,
+    ) is None
     assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID, provider="litellm_gemini_stateful", model="gemini/gemini-3.5-flash") is None
     assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID, provider="openai", model="gpt-5.4") is None
     persisted = account_store.read_llm_state(ACCOUNT_ID)
     assert persisted["previous_response_provider"] == "openai"
     assert persisted["previous_response_model"] == "gpt-5.5"
+    assert persisted["previous_response_key_fingerprint"] == key_fingerprint
 
 
 def test_runtime_state_store_does_not_use_legacy_unscoped_id_for_scoped_lookup(tmp_path):

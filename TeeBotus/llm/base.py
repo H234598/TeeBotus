@@ -23,6 +23,7 @@ class LLMResponse:
     service_tier: str | None = None
     usage: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] | None = None
+    state_key_fingerprint: str = ""
 
 
 @dataclass(frozen=True)
