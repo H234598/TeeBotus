@@ -16,6 +16,7 @@ const DEFAULT_UNIT = "teebotus.service";
 const DEFAULT_CHANNELS = "telegram,signal";
 const DEFAULT_QDRANT_UNIT = "teebotus-qdrant.service";
 const DEFAULT_QDRANT_URL = "http://127.0.0.1:6333";
+const REQUIRED_QDRANT_COLLECTIONS = ["teebotus_user_memory", "teebotus_bibliothekar_chunks"];
 const DEFAULT_CODEX_USAGE_PATH = GLib.build_filenamev([GLib.get_home_dir(), "codex-usage"]);
 const DEFAULT_CODEX_USAGE_COMMAND = "codex-usage";
 const DEFAULT_GITHUB_URL = "https://github.com/H234598/TeeBotus";
@@ -1421,6 +1422,9 @@ TeeBotusApplet.prototype = {
     if (payload.health.status === "ok" && !this._unitStateIsHealthy(payload.unit)) {
       return false;
     }
+    if (payload.health.status === "ok" && !this._qdrantCollectionsAreHealthy(payload.qdrant.collections)) {
+      return false;
+    }
     if (!this._isJsonObject(payload.qdrant.collections)) {
       return false;
     }
@@ -1444,6 +1448,16 @@ TeeBotusApplet.prototype = {
     let activeState = String((unit || {}).active_state || "").trim().toLowerCase();
     let subState = String((unit || {}).sub_state || "").trim().toLowerCase();
     return activeState === "active" && _hasOwn(CONFIRMED_ACTIVE_SUBSTATES, subState);
+  },
+
+  _qdrantCollectionsAreHealthy: function(collections) {
+    for (let name of REQUIRED_QDRANT_COLLECTIONS) {
+      let item = (collections || {})[name];
+      if (!this._isJsonObject(item) || String(item.status || "").trim().toLowerCase() !== "ready") {
+        return false;
+      }
+    }
+    return true;
   },
 
   _spawn: function(argv, callback, cwd, options) {

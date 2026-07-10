@@ -1198,7 +1198,7 @@ def test_cinnamon_applet_status_refresh_uses_bounded_spawn_timeout() -> None:
           applet._updatePanel = function() {};
           applet._spawn = function(argv, callback, cwd, options) {
             captured = {argv: argv, cwd: cwd, options: options, runningBeforeCallback: applet.statusRunning};
-            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {active_state: "active", sub_state: "running"}, health: {status: "ok", command_ok: true}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
+            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {active_state: "active", sub_state: "running"}, health: {status: "ok", command_ok: true}, qdrant: {collections: {teebotus_user_memory: {status: "ready", count: 0}, teebotus_bibliothekar_chunks: {status: "ready", count: 0}}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           applet._refreshStatus();
           return {
@@ -1347,7 +1347,7 @@ def test_cinnamon_applet_status_refresh_queues_changes_while_running() -> None:
               applet.repoPath = "/new-repo";
               applet._refreshStatus();
             }
-            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {active_state: "active", sub_state: "running"}, health: {status: "ok", command_ok: true}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
+            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {active_state: "active", sub_state: "running"}, health: {status: "ok", command_ok: true}, qdrant: {collections: {teebotus_user_memory: {status: "ready", count: 0}, teebotus_bibliothekar_chunks: {status: "ready", count: 0}}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           applet._refreshStatus();
           return {
@@ -1444,7 +1444,10 @@ def test_cinnamon_applet_status_payload_requires_healthy_unit_for_health_ok() ->
             repo: {},
             unit: {active_state: "active", sub_state: "running"},
             health: {status: "ok", command_ok: true},
-            qdrant: {collections: {}},
+            qdrant: {collections: {
+              teebotus_user_memory: {status: "ready", count: 0},
+              teebotus_bibliothekar_chunks: {status: "ready", count: 0}
+            }},
             runtime: {sections: {}, summary: {}, status_counts: {}}
           };
           let healthy = applet._isStatusPayload(payload);
@@ -1458,6 +1461,35 @@ def test_cinnamon_applet_status_payload_requires_healthy_unit_for_health_ok() ->
     )
 
     assert result == {"healthy": True, "failed": False, "unknown": False}
+
+
+def test_cinnamon_applet_status_payload_requires_ready_qdrant_collections_for_health_ok() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let payload = {
+            ok: true,
+            command_ok: true,
+            repo: {},
+            unit: {active_state: "active", sub_state: "running"},
+            health: {status: "ok", command_ok: true},
+            qdrant: {collections: {
+              teebotus_user_memory: {status: "ready", count: 0},
+              teebotus_bibliothekar_chunks: {status: "ready", count: 0}
+            }},
+            runtime: {sections: {}, summary: {}, status_counts: {}}
+          };
+          let healthy = applet._isStatusPayload(payload);
+          payload.qdrant.collections.teebotus_user_memory.status = "unreachable";
+          let failed = applet._isStatusPayload(payload);
+          delete payload.qdrant.collections.teebotus_user_memory;
+          let missing = applet._isStatusPayload(payload);
+          return {healthy: healthy, failed: failed, missing: missing};
+        })()
+        """
+    )
+
+    assert result == {"healthy": True, "failed": False, "missing": False}
 
 
 def test_cinnamon_applet_status_payload_rejects_ok_with_problem_counts() -> None:
@@ -1542,7 +1574,7 @@ def test_cinnamon_applet_spawn_json_does_not_reinvoke_throwing_consumer() -> Non
         (function() {
           let calls = [];
           applet._spawn = function(argv, callback, cwd, options) {
-            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {active_state: "active", sub_state: "running"}, health: {status: "ok", command_ok: true}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
+            callback(JSON.stringify({ok: true, command_ok: true, repo: {}, unit: {active_state: "active", sub_state: "running"}, health: {status: "ok", command_ok: true}, qdrant: {collections: {teebotus_user_memory: {status: "ready", count: 0}, teebotus_bibliothekar_chunks: {status: "ready", count: 0}}}, runtime: {sections: {}, summary: {}, status_counts: {}}}), "", true);
           };
           try {
             applet._spawnJson([], function(payload, error) {
