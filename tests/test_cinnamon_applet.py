@@ -3401,6 +3401,14 @@ def test_cinnamon_applet_qdrant_status_rejects_invalid_local_ports() -> None:
         assert status["collections"] == {}
 
 
+def test_cinnamon_applet_qdrant_status_rejects_userinfo_and_params() -> None:
+    for url in ("http://:@127.0.0.1:6333", "http://127.0.0.1:6333/;params"):
+        status = cinnamon_applet._qdrant_status(url)
+
+        assert status["error"] == "invalid local qdrant url"
+        assert status["collections"] == {}
+
+
 def test_cinnamon_applet_qdrant_point_count_rejects_unexpected_success_payloads(monkeypatch) -> None:
     class FakeResponse:
         status = 200
