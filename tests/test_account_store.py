@@ -3073,6 +3073,54 @@ def test_account_memory_fallback_retries_stale_collection_secondary_when_primary
     assert backend.last_fallback_sync_error == ""
 
 
+def test_account_memory_fallback_repairs_stale_append_collection_from_primary() -> None:
+    class Backend:
+        def __init__(self, *, fail_append: bool = False) -> None:
+            self.fail_append = fail_append
+            self.collections: dict[tuple[str, str], list[dict[str, str]]] = {}
+
+        def read_entries(self, _account_id: str) -> list[dict[str, str]]:
+            return []
+
+        def write_entries(self, _account_id: str, _rows: list[dict[str, str]]) -> None:
+            return None
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+        def read_collection(self, account_id: str, collection: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.collections.get((account_id, collection), [])]
+
+        def write_collection(self, account_id: str, collection: str, rows: list[dict[str, str]]) -> None:
+            self.collections[(account_id, collection)] = [dict(row) for row in rows]
+
+        def append_collection_items(self, account_id: str, collection: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_append:
+                raise OSError("fallback append unavailable")
+            self.collections.setdefault((account_id, collection), []).extend(dict(row) for row in rows)
+
+    account_id = "a" * 128
+    primary = Backend()
+    fallback = Backend(fail_append=True)
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    backend.append_collection_items(account_id, "codex_history_dispatch_results", [{"id": "row_1"}])
+    assert backend.stale_fallback_collection_account_ids == (account_id,)
+
+    fallback.fail_append = False
+    backend.append_collection_items(account_id, "codex_history_dispatch_results", [{"id": "row_2"}])
+
+    assert primary.collections[(account_id, "codex_history_dispatch_results")] == [{"id": "row_1"}, {"id": "row_2"}]
+    assert fallback.collections[(account_id, "codex_history_dispatch_results")] == [
+        {"id": "row_1"},
+        {"id": "row_2"},
+    ]
+    assert backend.stale_fallback_collection_account_ids == ()
+
+
 def test_account_store_sqlite_backend_skips_corrupt_rows(tmp_path, monkeypatch, caplog):
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")

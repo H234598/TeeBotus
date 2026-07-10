@@ -571,6 +571,12 @@ class WarningFallbackAccountMemoryBackend:
         collection: str,
         rows: list[dict[str, Any]],
     ) -> None:
+        stale_key = (account_id, collection)
+        if backend is self.fallback and (
+            stale_key in self._stale_fallback_collections or stale_key in self._fallback_sync_failed_collections
+        ):
+            self.fallback.write_collection(account_id, collection, list(self.primary.read_collection(account_id, collection)))
+            return
         append_collection_items = getattr(backend, "append_collection_items", None)
         if callable(append_collection_items):
             append_collection_items(account_id, collection, rows)
