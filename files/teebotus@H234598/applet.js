@@ -431,6 +431,8 @@ TeeBotusApplet.prototype = {
     let runtime = payload.runtime || {};
     let sections = runtime.sections || {};
     let summary = runtime.summary || {};
+    this.statusMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+    this._appendLines(this.statusMenu.menu, this._statusDetailLines(payload), this._dynamicEmptyText(_("Statusdaten werden geladen.")));
     let runtimeLines = [];
     if (summary.instances || summary.channels) {
       runtimeLines.push("Instanzen: " + String(summary.instances || "?") + " | Kanaele: " + String(summary.channels || this._channels()));
@@ -525,6 +527,49 @@ TeeBotusApplet.prototype = {
       this.proactiveMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
       this._appendLines(this.proactiveMenu.menu, sections["Agenten-Piloten"] || [], _("Keine Agenten-Pilot-Zeilen."));
     }
+  },
+
+  _statusDetailLines: function(payload) {
+    if (!this._isJsonObject(payload) || !this._isJsonObject(payload.health)) {
+      return [];
+    }
+    let health = payload.health;
+    let runtime = this._isJsonObject(payload.runtime) ? payload.runtime : {};
+    let summary = this._isJsonObject(runtime.summary) ? runtime.summary : {};
+    let counts = this._isJsonObject(runtime.status_counts) ? runtime.status_counts : {};
+    let unit = this._isJsonObject(payload.unit) ? payload.unit : {};
+    let qdrant = this._isJsonObject(payload.qdrant) ? payload.qdrant : {};
+    let repo = this._isJsonObject(payload.repo) ? payload.repo : {};
+    let lines = [];
+    lines.push("Health: " + this._statusWord(health.status || (payload.ok ? "ok" : "unknown")) + this._healthDetailText(health, summary, counts));
+    let unitName = String(unit.name || this._runtimeUnit() || "teebotus.service");
+    let unitReturncode = unit.returncode === undefined || unit.returncode === null ? "?" : String(unit.returncode);
+    lines.push("Unit: " + unitName + " " + String(unit.active_state || "unknown") + " / " + String(unit.sub_state || "unknown") + "; Returncode " + unitReturncode);
+    let collections = this._isJsonObject(qdrant.collections) ? qdrant.collections : {};
+    let readyCollections = 0;
+    let knownCollections = 0;
+    for (let name of REQUIRED_QDRANT_COLLECTIONS) {
+      if (!_hasOwn(collections, name)) {
+        continue;
+      }
+      knownCollections += 1;
+      let item = collections[name];
+      if (this._isJsonObject(item) && String(item.status || "").trim().toLowerCase() === "ready" && !String(item.error || "").trim()) {
+        readyCollections += 1;
+      }
+    }
+    let qdrantError = String(qdrant.error || "").trim();
+    let qdrantLine = "Qdrant: " + String(qdrant.url || this._qdrantUrl()) + "; Collections " + String(readyCollections) + "/" + String(knownCollections);
+    if (qdrantError) {
+      qdrantLine += "; Fehler " + this._shortText(qdrantError, 80);
+    }
+    lines.push(qdrantLine);
+    let instances = String(summary.instances || "?");
+    let channels = String(summary.channels || this._channels());
+    let version = String(payload.version || "?");
+    let commit = String(repo.short_commit || "?");
+    lines.push("Runtime: " + instances + " | Kanaele " + channels + " | Version " + version + " | Commit " + commit);
+    return lines;
   },
 
   _formatLines: function(lines, formatter) {

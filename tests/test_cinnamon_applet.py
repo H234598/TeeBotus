@@ -318,6 +318,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "teebotus-cinnamon-applet" not in source
     assert "TeeBotus.cinnamon_applet" in source
     assert 'this.statusMenu = new PopupMenu.PopupSubMenuMenuItem(_("Status & Diagnose"))' in source
+    assert "this._statusDetailLines(payload)" in source
     assert 'this.messengerMenu = new PopupMenu.PopupSubMenuMenuItem(_("Messenger"))' in source
     assert 'this.llmMenu = new PopupMenu.PopupSubMenuMenuItem(_("LLM & Dienste"))' in source
     assert 'this.apiMenu = new PopupMenu.PopupSubMenuMenuItem(_("API Keys & Usage"))' in source
@@ -1684,6 +1685,39 @@ def test_cinnamon_applet_menu_header_includes_health_details() -> None:
     assert "Kommando:1" in result["version"]
     assert "Qdrant Runtime:2, Service:1" in result["version"]
     assert "LLM-Routen: 2" in result["version"]
+
+
+def test_cinnamon_applet_status_menu_detail_lines_include_health_and_runtime_data() -> None:
+    result = _run_js_applet_expression(
+        """
+        applet._statusDetailLines({
+          ok: false,
+          version: "1.2.3",
+          repo: {short_commit: "abc1234"},
+          unit: {name: "teebotus.service", active_state: "active", sub_state: "running", returncode: 0},
+          health: {status: "broken", total_problem_count: 2, problem_statuses: "missing_key:2"},
+          qdrant: {
+            url: "http://127.0.0.1:6333",
+            error: "probe failed",
+            collections: {
+              teebotus_user_memory: {status: "ready", count: 162, error: ""},
+              teebotus_bibliothekar_chunks: {status: "unreachable", count: 0, error: "connection refused"}
+            }
+          },
+          runtime: {
+            summary: {instances: "Demo", channels: "telegram", problem_status_count: 2},
+            status_counts: {missing_key: 2}
+          }
+        })
+        """
+    )
+
+    assert result == [
+        "Health: defekt | Probleme 2 | Probleme Key fehlt:2",
+        "Unit: teebotus.service active / running; Returncode 0",
+        "Qdrant: http://127.0.0.1:6333; Collections 1/2; Fehler probe failed",
+        "Runtime: Demo | Kanaele telegram | Version 1.2.3 | Commit abc1234",
+    ]
 
 
 def test_cinnamon_applet_menu_header_omits_zero_problem_total() -> None:
