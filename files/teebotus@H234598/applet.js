@@ -205,6 +205,7 @@ TeeBotusApplet.prototype = {
     this.lastError = "";
     this.appletRemoved = false;
     this.spawnGeneration = 0;
+    this.spawnProcesses = [];
 
     this.set_applet_icon_path(this.metadata.path + "/icon.svg");
     this.set_applet_tooltip(_("TB"));
@@ -1396,6 +1397,12 @@ TeeBotusApplet.prototype = {
     let done = false;
     let timeoutId = 0;
     let process = null;
+    let untrackProcess = () => {
+      let index = applet.spawnProcesses.indexOf(process);
+      if (index >= 0) {
+        applet.spawnProcesses.splice(index, 1);
+      }
+    };
     let finish = function(stdout, stderr, ok) {
       if (done) {
         return;
@@ -1405,6 +1412,7 @@ TeeBotusApplet.prototype = {
         Mainloop.source_remove(timeoutId);
         timeoutId = 0;
       }
+      untrackProcess();
       if (applet.appletRemoved || applet.spawnGeneration !== spawnGeneration) {
         return;
       }
@@ -1417,6 +1425,7 @@ TeeBotusApplet.prototype = {
         launcher.set_cwd(String(cwd));
       }
       process = launcher.spawnv(resolvedArgv);
+      applet.spawnProcesses.push(process);
       let timeoutMs = Number(options.timeoutMs || 0);
       if (timeoutMs > 0) {
         timeoutId = Mainloop.timeout_add(Math.max(250, timeoutMs), () => {
@@ -2194,6 +2203,17 @@ TeeBotusApplet.prototype = {
   on_applet_removed_from_panel: function() {
     this.appletRemoved = true;
     this.spawnGeneration += 1;
+    let runningProcesses = this.spawnProcesses || [];
+    this.spawnProcesses = [];
+    for (let process of runningProcesses) {
+      try {
+        if (process && !process.get_if_exited()) {
+          process.force_exit();
+        }
+      } catch (err) {
+        global.logError(err);
+      }
+    }
     this.statusRunning = false;
     this.statusRefreshPending = false;
     if (this.statusTimer) {

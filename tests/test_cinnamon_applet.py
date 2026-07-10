@@ -269,6 +269,10 @@ def test_cinnamon_applet_files_are_present_and_wired() -> None:
     assert "item.label.clutter_text.ellipsize" in source
     assert "this.appletRemoved = false;" in source
     assert "this.spawnGeneration = 0;" in source
+    assert "this.spawnProcesses = [];" in source
+    assert "applet.spawnProcesses.push(process);" in source
+    assert "let runningProcesses = this.spawnProcesses || [];" in source
+    assert "process.force_exit();" in source
     assert "let spawnGeneration = this.spawnGeneration;" in source
     assert "if (applet.appletRemoved || applet.spawnGeneration !== spawnGeneration) {" in source
     assert "this.appletRemoved = true;" in source
@@ -1388,6 +1392,32 @@ def test_cinnamon_applet_status_refresh_rejects_structurally_invalid_payload() -
     assert result["statusPayload"] is None
     assert result["statusText"] == "Statusfehler: Invalid status payload from helper"
     assert result["lastError"] == "Invalid status payload from helper"
+
+
+def test_cinnamon_applet_removal_terminates_running_helpers() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let forced = 0;
+          applet.menu = null;
+          applet.statusTimer = 0;
+          applet.spawnGeneration = 0;
+          applet.spawnProcesses = [
+            {get_if_exited: function() { return false; }, force_exit: function() { forced += 1; }},
+            {get_if_exited: function() { return true; }, force_exit: function() { forced += 1; }}
+          ];
+          applet.on_applet_removed_from_panel();
+          return {
+            forced: forced,
+            remaining: applet.spawnProcesses.length,
+            removed: applet.appletRemoved,
+            generation: applet.spawnGeneration
+          };
+        })()
+        """
+    )
+
+    assert result == {"forced": 1, "remaining": 0, "removed": True, "generation": 1}
 
 
 def test_cinnamon_applet_spawn_json_does_not_reinvoke_throwing_consumer() -> None:
