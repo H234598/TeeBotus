@@ -3674,6 +3674,13 @@ def test_cinnamon_applet_runtime_parser_redacts_nested_key_and_cookie_headers() 
     assert "diagnostic:api_key=<redacted>" in rendered
     assert "Cookie: <redacted-secret>" in rendered
     assert '"cookie":"<redacted>"' in parsed["sections"]["Tools und Account-Memory"][1]
+    for prefix, secret in (
+        ("metadata.", "dot-secret-value"),
+        ("payload|", "pipe-secret-value"),
+        ("error=>", "angle-secret-value"),
+        ("env/", "slash-secret-value"),
+    ):
+        assert secret not in cinnamon_applet._redact(f"{prefix}api_key={secret}")
 
 
 def test_cinnamon_applet_runtime_parser_redacts_url_and_bearer_edge_cases() -> None:
