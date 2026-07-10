@@ -2570,6 +2570,16 @@ def test_cinnamon_applet_js_parser_normalizes_structured_status_case() -> None:
     assert result == {"problem": True, "word": "Warnung"}
 
 
+def test_cinnamon_applet_js_marks_ready_memory_lines_with_errors_as_problems() -> None:
+    result = _run_js_applet_expression(
+        "({qdrant: applet._lineHasProblemStatus(applet._parseFields('qdrant_collection=demo status=READY error=probe failed')), "
+        "semantic: applet._lineHasProblemStatus(applet._parseFields('memory_index=demo status=READY semantic=READY error=probe failed')), "
+        "healthy: applet._lineHasProblemStatus(applet._parseFields('memory_index=demo status=READY semantic=READY'))})"
+    )
+
+    assert result == {"qdrant": True, "semantic": True, "healthy": False}
+
+
 def test_cinnamon_applet_runtime_parser_counts_models_feed_secondary_status() -> None:
     parsed = parse_runtime_status(
         """

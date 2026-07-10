@@ -950,6 +950,9 @@ TeeBotusApplet.prototype = {
     if (this._codexUsageIsStale(values)) {
       return true;
     }
+    if (this._fieldsHaveReadyError(values)) {
+      return true;
+    }
     if (this._statusFieldHasProblem(values, "status")) {
       return true;
     }
@@ -969,6 +972,19 @@ TeeBotusApplet.prototype = {
       }
     }
     return false;
+  },
+
+  _fieldsHaveReadyError: function(fields) {
+    let values = fields || {};
+    if (!String(values.error || "").trim()) {
+      return false;
+    }
+    if (values.qdrant_collection) {
+      return String(values.status || "").trim().toLowerCase() === "ready";
+    }
+    return Boolean(values.memory_index)
+      && String(values.status || "").trim().toLowerCase() === "ready"
+      && String(values.semantic || "").trim().toLowerCase() === "ready";
   },
 
   _statusFlagIsSet: function(value) {
