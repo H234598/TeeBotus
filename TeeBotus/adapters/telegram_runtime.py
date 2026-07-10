@@ -1221,26 +1221,47 @@ def _record_codex_history_telegram_reply(
     event: IncomingEvent,
     message: dict[str, Any],
 ) -> None:
+    _record_codex_history_telegram_reply_for_account(
+        context.account_store,
+        instance_name=context.instance_name,
+        account_id=event.account_id,
+        chat_id=event.chat_id,
+        message_ref=event.message_ref,
+        reply_text=event.text,
+        message=message,
+    )
+
+
+def _record_codex_history_telegram_reply_for_account(
+    account_store: AccountStore,
+    *,
+    instance_name: str,
+    account_id: str,
+    chat_id: str,
+    message_ref: str,
+    reply_text: str,
+    message: dict[str, Any],
+) -> None:
     reply_to_message_ref = _telegram_reply_message_ref(message)
-    if not reply_to_message_ref:
+    if not reply_to_message_ref or not str(account_id or "").strip():
         return
     try:
         record_codex_history_reply(
-            context.account_store,
-            instance_name=context.instance_name,
+            account_store,
+            instance_name=instance_name,
             channel="telegram",
-            chat_id=event.chat_id,
-            account_id=event.account_id,
+            chat_id=chat_id,
+            account_id=account_id,
             reply_to_message_ref=reply_to_message_ref,
-            reply_message_ref=event.message_ref,
-            reply_text=event.text,
+            reply_message_ref=message_ref,
+            reply_text=reply_text,
         )
     except (AccountStoreError, OSError, ValueError, AttributeError):
         LOGGER.exception(
             "Telegram Codex-History reply tracking failed instance=%s chat_id=%s message_ref=%s reply_to=%s.",
-            context.instance_name,
-            event.chat_id,
-            event.message_ref,
+            instance_name,
+            chat_id,
+            message_ref,
             reply_to_message_ref,
         )
 
@@ -1666,6 +1687,16 @@ def handle_update(
         return
 
     user_memory = _prepare_user_memory(user_memory_store, message, instructions, text, api)
+    if user_memory_store is not None and user_memory is not None:
+        _record_codex_history_telegram_reply_for_account(
+            user_memory_store,
+            instance_name=instance_name,
+            account_id=_account_id_from_user_memory(user_memory),
+            chat_id=str(chat_id),
+            message_ref=str(_message_id_or_none(message) or ""),
+            reply_text=text,
+            message=message,
+        )
     _process_text_message(
         api,
         chat_state,

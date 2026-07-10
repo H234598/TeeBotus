@@ -2044,6 +2044,64 @@ class BotTests(unittest.TestCase):
         self.assertEqual(dispatch_rows[-1]["reply_message_ref"], "202")
         self.assertEqual(dispatch_rows[-1]["reply_text_preview"], "ok, gesehen")
 
+    def test_legacy_handle_update_marks_codex_history_reply_acknowledged(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            api = FakeAPI()
+            instructions = BotInstructions(user_memory_enabled=True, openai_enabled=False)
+            memory_store = account_memory_store(directory, instance_name="Demo")
+            account_id = memory_store.resolve_or_create_account(telegram_identity_key("456"), display_label="Ada")
+            item_id = memory_store.append_codex_history_item(
+                INSTANCE_STATE_ACCOUNT_ID,
+                {
+                    "kind": "codex_run_summary",
+                    "status": "accepted",
+                    "summary_prefix": "v1.8.2 #0001",
+                    "summary_number": 1,
+                    "summary": {"title": "Legacy Reply Ack"},
+                    "version": {"summary_prefix": "v1.8.2 #0001", "summary_number": 1},
+                    "delivery": {"accepted_at": "2026-06-19T12:00:00+00:00"},
+                    "status_history": [{"at": "2026-06-19T12:00:00+00:00", "status": "accepted", "reason": "accepted"}],
+                },
+            )
+            memory_store.append_codex_history_dispatch_result(
+                INSTANCE_STATE_ACCOUNT_ID,
+                {
+                    "codex_history_item_id": item_id,
+                    "account_id": account_id,
+                    "instance": "Demo",
+                    "status": "accepted",
+                    "channel": "telegram",
+                    "chat_id": "123",
+                    "message_ref": "101",
+                    "summary_prefix": "v1.8.2 #0001",
+                },
+            )
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "message_id": 202,
+                        "text": "ok, gesehen",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                        "reply_to_message": {"message_id": 101, "document": {"file_name": "Release.md"}},
+                    }
+                },
+                instructions,
+                None,
+                ChatState(),
+                memory_store,
+                BotIdentity(first_name="Mondbot", username="MondBot"),
+            )
+
+            persisted = memory_store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+            dispatch_rows = memory_store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+
+        self.assertEqual(persisted["status"], "acknowledged")
+        self.assertEqual([row["status"] for row in dispatch_rows], ["accepted", "delivered", "acknowledged"])
+        self.assertEqual(dispatch_rows[-1]["reply_message_ref"], "202")
+
     def test_handle_update_with_runtime_context_logs_action_dispatch_errors(self) -> None:
         from TeeBotus.runtime.actions import SendText
         from TeeBotus.runtime.engine import EngineResult
