@@ -319,6 +319,8 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "TeeBotus.cinnamon_applet" in source
     assert 'this.statusMenu = new PopupMenu.PopupSubMenuMenuItem(_("Status & Diagnose"))' in source
     assert "this._statusDetailLines(payload)" in source
+    assert "const MENU_LINE_WRAP_THRESHOLD = 110;" in source
+    assert "this._menuLine(values[i], false)" in source
     assert 'this.messengerMenu = new PopupMenu.PopupSubMenuMenuItem(_("Messenger"))' in source
     assert 'this.llmMenu = new PopupMenu.PopupSubMenuMenuItem(_("LLM & Dienste"))' in source
     assert 'this.apiMenu = new PopupMenu.PopupSubMenuMenuItem(_("API Keys & Usage"))' in source

@@ -38,6 +38,7 @@ const MENU_LABEL_WIDTH_EM = 42;
 const SUBMENU_MIN_WIDTH_EM = 44;
 const SUBMENU_LABEL_WIDTH_EM = 48;
 const MENU_LINE_LIMIT = 14;
+const MENU_LINE_WRAP_THRESHOLD = 110;
 const ALLOWED_CHANNELS = ["telegram", "signal", "matrix"];
 const SAFE_PYTHON_PREFIX_FLAGS = ["-B", "-u", "-I", "-S", "-E", "-s", "-q", "-O", "-OO"];
 const PROBLEM_STATUSES = [
@@ -1217,7 +1218,7 @@ TeeBotusApplet.prototype = {
       return;
     }
     for (let i = 0; i < values.length && i < MENU_LINE_LIMIT; i++) {
-      menu.addMenuItem(this._menuLine(this._shortText(values[i], 110), false));
+      menu.addMenuItem(this._menuLine(values[i], false));
     }
     if (values.length > MENU_LINE_LIMIT) {
       menu.addMenuItem(this._menuLine(_("Weitere Zeilen: ") + String(values.length - MENU_LINE_LIMIT), false));
@@ -1981,9 +1982,10 @@ TeeBotusApplet.prototype = {
   },
 
   _menuLine: function(label, reactive) {
+    let text = String(label || "");
     return this._styleMenuItemLabel(
-      new PopupMenu.PopupMenuItem(String(label || ""), { reactive: Boolean(reactive) }),
-      { maxWidthEm: SUBMENU_LABEL_WIDTH_EM }
+      new PopupMenu.PopupMenuItem(text, { reactive: Boolean(reactive) }),
+      { maxWidthEm: SUBMENU_LABEL_WIDTH_EM, wrap: text.length > MENU_LINE_WRAP_THRESHOLD }
     );
   },
 
