@@ -4065,10 +4065,10 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert cinnamon_applet._redact("Authorization: Bearer x") == "Authorization: Bearer <redacted-secret>"
     assert cinnamon_applet._redact('{"authorization":"Bearer x"}') == '{"authorization":"Bearer <redacted-secret>"}'
     assert cinnamon_applet._redact("command=tool --password plain-secret --api-key 'api secret' --token --verbose") == (
-        "command=tool --password <redacted> --api-key <redacted> --token --verbose"
+        "command=tool --password <redacted> --api-key <redacted> --token <redacted>"
     )
     assert cinnamon_applet._redact("command=tool -password plain-secret -api-key 'api secret' -token --verbose") == (
-        "command=tool -password <redacted> -api-key <redacted> -token --verbose"
+        "command=tool -password <redacted> -api-key <redacted> -token <redacted>"
     )
     assert cinnamon_applet._redact("command=tool --password=plain-secret -api-key='api secret' --token=--verbose") == (
         "command=tool --password=<redacted> -api-key=<redacted> --token=<redacted>"
@@ -4078,6 +4078,23 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     )
     assert cinnamon_applet._redact("--password secret,more;still-secret") == "--password <redacted>"
     assert cinnamon_applet._redact("--password=-leading-secret") == "--password=<redacted>"
+    assert cinnamon_applet._redact("--password -leading-secret") == "--password <redacted>"
+    assert cinnamon_applet._redact("--password --api-key plain-secret") == "--password --api-key <redacted>"
+
+
+def test_cinnamon_applet_redacted_argv_hides_dash_prefixed_values_without_swallowing_options() -> None:
+    assert cinnamon_applet._redacted_argv(["demo", "--api-key", "-leading-secret", "--verbose"]) == [
+        "demo",
+        "--api-key",
+        "'<redacted>'",
+        "--verbose",
+    ]
+    assert cinnamon_applet._redacted_argv(["demo", "--password", "--api-key", "plain-secret"]) == [
+        "demo",
+        "--password",
+        "--api-key",
+        "'<redacted>'",
+    ]
 
 
 def test_cinnamon_applet_runtime_parser_redacts_nested_key_and_cookie_headers() -> None:

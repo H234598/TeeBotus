@@ -65,7 +65,8 @@ QUOTED_AUTHORIZATION_TOKEN_RE = re.compile(
 )
 SECRET_OPTION_VALUE_RE = re.compile(
     r"(?<![A-Za-z0-9_-])(--?(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|cookie|token|secret|password))"
-    r"(\s+|=)((?:\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|(?!-)[^\s]+))",
+    r"(\s+|=)((?:\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|"
+    r"(?!--?(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|cookie|token|secret|password)(?=$|[\s=]))[^\s]+))",
     re.IGNORECASE,
 )
 SECRET_OPTION_EQUALS_VALUE_RE = re.compile(
@@ -860,7 +861,11 @@ def _redacted_argv(argv: list[str]) -> list[str]:
     while index < len(parts):
         part = parts[index]
         rendered.append(shlex.quote(_redact(part)))
-        if SECRET_OPTION_NAME_RE.fullmatch(part) and index + 1 < len(parts) and not parts[index + 1].startswith("-"):
+        if (
+            SECRET_OPTION_NAME_RE.fullmatch(part)
+            and index + 1 < len(parts)
+            and SECRET_OPTION_NAME_RE.fullmatch(parts[index + 1]) is None
+        ):
             rendered.append(shlex.quote("<redacted>"))
             index += 2
             continue
