@@ -1193,8 +1193,13 @@ TeeBotusApplet.prototype = {
 
   _healthProblemTotal: function(health, summary, counts) {
     let total = this._nonNegativeInt((health || {}).total_problem_count, null);
+    let qdrantRuntimeTotal = this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0);
+    let textProblemTotal = Math.max(
+      this._problemBreakdownCount((health || {}).problem_statuses),
+      this._problemBreakdownCount((summary || {}).problem_statuses)
+    );
     if (total !== null && total > 0) {
-      return total;
+      return Math.max(total, Math.max(0, textProblemTotal - qdrantRuntimeTotal));
     }
     let runtimeTotal = this._nonNegativeInt((health || {}).runtime_problem_count, null);
     let runtimeDerived = false;
@@ -1206,7 +1211,7 @@ TeeBotusApplet.prototype = {
       runtimeTotal = Math.max(runtimeTotal, this._problemStatusCount(counts));
     }
     if (runtimeDerived) {
-      runtimeTotal = Math.max(0, runtimeTotal - this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0));
+      runtimeTotal = Math.max(0, runtimeTotal - qdrantRuntimeTotal);
     }
     let commandTotal = this._nonNegativeInt((health || {}).command_problem_count, 0);
     let qdrantTotal = this._nonNegativeInt((health || {}).qdrant_problem_count, 0);
@@ -1220,7 +1225,7 @@ TeeBotusApplet.prototype = {
     if ((summary || {}).output_truncated === true) {
       derivedTotal = Math.max(derivedTotal, 1);
     }
-    return derivedTotal;
+    return Math.max(derivedTotal, Math.max(0, textProblemTotal - qdrantRuntimeTotal));
   },
 
   _problemBreakdownText: function(value) {
@@ -1249,6 +1254,21 @@ TeeBotusApplet.prototype = {
       rendered.push("+" + String(pairs.length - 4));
     }
     return " | Probleme " + rendered.join(", ");
+  },
+
+  _problemBreakdownCount: function(value) {
+    let total = 0;
+    for (let part of String(value || "").split(",")) {
+      let index = part.indexOf(":");
+      if (index < 1) {
+        continue;
+      }
+      let count = this._nonNegativeInt(part.slice(index + 1), 0);
+      if (count > 0) {
+        total += count;
+      }
+    }
+    return total;
   },
 
   _problemStatusesFromCounts: function(counts) {

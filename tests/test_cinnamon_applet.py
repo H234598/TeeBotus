@@ -1510,9 +1510,13 @@ def test_cinnamon_applet_status_payload_rejects_ok_with_problem_counts() -> None
     runtime_count = _run_js_applet_expression(
         "applet._isStatusPayload({ok: true, repo: {}, unit: {}, health: {status: 'ok'}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {broken: 1}}})"
     )
+    status_text = _run_js_applet_expression(
+        "applet._isStatusPayload({ok: true, command_ok: true, repo: {}, unit: {active_state: 'active', sub_state: 'running', returncode: 0}, health: {status: 'ok', command_ok: true, problem_statuses: 'broken:1'}, qdrant: {unit: {active_state: 'active', sub_state: 'running', returncode: 0}, collections: {teebotus_user_memory: {status: 'ready', count: 0}, teebotus_bibliothekar_chunks: {status: 'ready', count: 0}}}, runtime: {returncode: 0, sections: {}, summary: {}, status_counts: {}}})"
+    )
 
     assert explicit_total is False
     assert runtime_count is False
+    assert status_text is False
 
 
 def test_cinnamon_applet_status_payload_rejects_invalid_health_status() -> None:
