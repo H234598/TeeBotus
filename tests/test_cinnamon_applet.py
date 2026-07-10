@@ -3809,6 +3809,8 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert cinnamon_applet._redact('"api_key":"start-secret"') == '"api_key":"<redacted>"'
     assert cinnamon_applet._redact("'client_secret':'start secret'") == "'client_secret':'<redacted>'"
     assert cinnamon_applet._redact('"api_key_env":"GEMINI_API_KEY"') == '"api_key_env":"GEMINI_API_KEY"'
+    assert cinnamon_applet._redact("Authorization: Bearer x") == "Authorization: Bearer <redacted-secret>"
+    assert cinnamon_applet._redact('{"authorization":"Bearer x"}') == '{"authorization":"Bearer <redacted-secret>"}'
     assert cinnamon_applet._redact("command=tool --password plain-secret --api-key 'api secret' --token --verbose") == (
         "command=tool --password <redacted> --api-key <redacted> --token --verbose"
     )

@@ -47,7 +47,7 @@ URL_CREDENTIAL_RE = re.compile(
     re.IGNORECASE,
 )
 AUTHORIZATION_TOKEN_RE = re.compile(
-    r"\b((?:proxy-)?authorization\s*[:=]\s*)(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(?=$|[\s,;&)\]}>])",
+    r"\b((?:proxy-)?authorization\s*[:=]\s*)(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]+)(?=$|[\s,;&)\]}>])",
     re.IGNORECASE,
 )
 BARE_AUTHORIZATION_TOKEN_RE = re.compile(
@@ -56,7 +56,7 @@ BARE_AUTHORIZATION_TOKEN_RE = re.compile(
 )
 QUOTED_AUTHORIZATION_TOKEN_RE = re.compile(
     r"(^|[\s=;,&?(\[<{])([\"'])((?:proxy-)?authorization)\2(\s*[=:]\s*)([\"'])"
-    r"(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]{8,})(\5)",
+    r"(Bearer|Basic|ApiKey|Token)\s+([A-Za-z0-9._~+/=-]+)(\5)",
     re.IGNORECASE,
 )
 SECRET_OPTION_VALUE_RE = re.compile(
