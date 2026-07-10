@@ -68,6 +68,11 @@ SECRET_OPTION_VALUE_RE = re.compile(
     r"(\s+|=)((?:\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|(?!-)[^\s]+))",
     re.IGNORECASE,
 )
+SECRET_OPTION_EQUALS_VALUE_RE = re.compile(
+    r"(?<![A-Za-z0-9_-])(--?(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|cookie|token|secret|password))"
+    r"(=)((?:\"(?:\\.|[^\"\\\r\n])*\"|'(?:\\.|[^'\\\r\n])*'|`(?:\\.|[^`\\\r\n])*`|[^\s]+))",
+    re.IGNORECASE,
+)
 SECRET_OPTION_NAME_RE = re.compile(
     r"^--?(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|cookie|token|secret|password)$",
     re.IGNORECASE,
@@ -1042,6 +1047,7 @@ def _redact(value: str) -> str:
         text = BARE_AUTHORIZATION_TOKEN_RE.sub(r"\1 <redacted-secret>", text)
         text = QUOTED_AUTHORIZATION_TOKEN_RE.sub(_redact_quoted_authorization_token, text)
     if any(hint in lowered for hint in SECRET_OPTION_REDACTION_HINTS):
+        text = SECRET_OPTION_EQUALS_VALUE_RE.sub(_redact_secret_option_value, text)
         text = SECRET_OPTION_VALUE_RE.sub(_redact_secret_option_value, text)
     if "cookie" in lowered:
         text = COOKIE_HEADER_RE.sub(r"\1<redacted-secret>", text)
