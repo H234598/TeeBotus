@@ -318,7 +318,7 @@ def build_status_payload(
     qdrant_unit = _systemd_unit_status(qdrant_unit_name)
     qdrant = _qdrant_status(qdrant_url)
     repo = _repo_status(root)
-    runtime_output_ok = bool(str(runtime.get("stdout", "") or "").strip())
+    runtime_output_ok = _runtime_status_output_is_structured(runtime.get("stdout", ""))
     command_ok = (
         _status_query_ok(runtime)
         and runtime_output_ok
@@ -384,6 +384,22 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
         "total_problem_count": total_problem_count,
         "severe_status_count": severe_count,
     }
+
+
+def _runtime_status_output_is_structured(output: Any) -> bool:
+    has_section = False
+    has_status_field = False
+    for raw_line in str(output or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            has_section = True
+            continue
+        fields = _parse_status_fields(line)
+        if fields and "status" in fields:
+            has_status_field = True
+    return has_section and has_status_field
 
 
 def _unit_problem_count(unit: dict[str, Any]) -> int:
