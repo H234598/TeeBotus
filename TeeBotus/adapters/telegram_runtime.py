@@ -54,6 +54,7 @@ from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
 from TeeBotus.runtime.log_context import logging_context
 from TeeBotus.runtime.config import resolve_instances_dir
+from TeeBotus.runtime.dotenv import load_dotenv_defaults
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.adapters.telegram import (
@@ -2065,7 +2066,7 @@ def _handle_teladi_call_flow(
         return False
 
     command = _normalize_command(text)
-    now = time.time()
+    now = _now_epoch()
     if chat_state.has_pending_teladi_call(chat_id, teladi_key):
         return _handle_pending_teladi_call_message(api, chat_state, chat_id, message, instructions, first_contact, bot_identity, user_memory_store)
 
@@ -2089,7 +2090,7 @@ def _handle_pending_teladi_call_message(
         return False
 
     raw_text = str(message.get("text") or "")
-    now = time.time()
+    now = _now_epoch()
     if _normalize_command(raw_text) == "/call_a_teladi":
         return _start_teladi_call(api, chat_state, chat_id, message, instructions, teladi_key, now, first_contact, bot_identity)
 
@@ -2138,6 +2139,12 @@ def _start_teladi_call(
     reply = _with_first_contact_intro(instructions.teladi_call_prompt, first_contact, bot_identity)
     _send_tracked_message(api, chat_state, chat_id, reply)
     return True
+
+
+def _now_epoch() -> float:
+    """Read the bot clock without making tests patch the process-wide time module."""
+
+    return time.time()
 
 
 def _telegram_account_state_key(user_memory_store: AccountStore | None, message: dict[str, Any], *, create: bool) -> str:
@@ -3830,26 +3837,9 @@ def _resolve_instance_name() -> str:
 
 
 def _load_dotenv(path: Path) -> None:
-    if not path.exists():
-        return
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", maxsplit=1)
-        key = key.strip()
-        if not key:
-            continue
-        if key in os.environ:
-            continue
-        os.environ[key] = _clean_dotenv_value(value)
-
-
-def _clean_dotenv_value(value: str) -> str:
-    value = value.strip()
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
-        return value[1:-1]
-    return value
+    # Keep the legacy adapter entry point, but use the single parser shared by
+    # runtime-status, admin commands, and the proactive runtime.
+    load_dotenv_defaults(path)
 
 
 def _load_runtime_config_defaults(path: Path) -> None:

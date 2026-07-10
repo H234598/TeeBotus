@@ -886,6 +886,20 @@ class BotTests(unittest.TestCase):
                 self.assertEqual(os.environ["TELEGRAM_BOT_INSTANCE"], "Depressionsbot")
                 self.assertEqual(os.environ["TELEGRAM_BOT_TOKEN"], "quoted-token")
 
+    def test_dotenv_uses_shared_parser_for_export_and_inline_comments(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / ".env"
+            path.write_text(
+                "export TELEGRAM_BOT_INSTANCE=Depressionsbot\n"
+                "TELEGRAM_BOT_TOKEN=token-value # documentation comment\n",
+                encoding="utf-8",
+            )
+
+            with patch.dict("os.environ", {}, clear=True):
+                _load_dotenv(path)
+                self.assertEqual(os.environ["TELEGRAM_BOT_INSTANCE"], "Depressionsbot")
+                self.assertEqual(os.environ["TELEGRAM_BOT_TOKEN"], "token-value")
+
     def test_reads_runtime_config_defaults_from_all_bots_default_markdown(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "ALL_BOTS_DEFAULT.md"
@@ -1435,7 +1449,6 @@ class BotTests(unittest.TestCase):
             )
 
             memory_dir = account_memory_dir(memory_store, 456)
-            entries_path = memory_dir / "User_Memory_Entries.jsonl"
             habits_path = memory_dir / "User_Habbits_and_behave.md"
             habits_path.write_text("Ada mag knappe Antworten.", encoding="utf-8")
             self.assertEqual(api.sent_messages[-1], (123, instructions.user_memory_reset_confirm))
@@ -4215,7 +4228,7 @@ class BotTests(unittest.TestCase):
         chat_state = ChatState()
         instructions = BotInstructions()
 
-        with patch("TeeBotus.bot.time.time", side_effect=[1000.0, 1000.0, 4600.0, 87401.0]):
+        with patch("TeeBotus.adapters.telegram_runtime._now_epoch", side_effect=[1000.0, 1000.0, 4600.0, 87401.0]):
             handle_update(
                 api,
                 {"message": {"text": "/Call_a_Teladi", "message_id": 1, "chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}},
@@ -4263,7 +4276,7 @@ class BotTests(unittest.TestCase):
             _, secret = memory_store.register_account(account_id)
             memory_store.link_identity(telegram_identity_key("", username="ada_l"), account_id, secret, display_label="Ada")
 
-            with patch("TeeBotus.bot.time.time", side_effect=[1000.0, 1000.0, 4600.0]):
+            with patch("TeeBotus.adapters.telegram_runtime._now_epoch", side_effect=[1000.0, 1000.0, 4600.0]):
                 handle_update(
                     api,
                     {"message": {"text": "/Call_a_Teladi", "message_id": 1, "chat": {"id": 123}, "from": {"id": 456, "first_name": "Ada"}}},
