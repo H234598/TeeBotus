@@ -620,15 +620,17 @@ def record_codex_history_reply(
     normalized_chat_id = str(chat_id or "").strip()
     normalized_reply_to = str(reply_to_message_ref or "").strip()
     normalized_instance_name = str(instance_name or "").strip()
-    if not normalized_channel or not normalized_chat_id or not normalized_reply_to:
-        return {"ok": False, "status": "not_found", "reason": "missing_reply_target"}
+    normalized_account_id = str(account_id or "").strip().casefold()
+    if not normalized_channel or not normalized_chat_id or not normalized_reply_to or not normalized_account_id:
+        reason = "missing_account_id" if not normalized_account_id else "missing_reply_target"
+        return {"ok": False, "status": "not_found", "reason": reason}
     match = _find_codex_history_dispatch_for_message(
         store,
         instance_name=instance_name,
         channel=normalized_channel,
         chat_id=normalized_chat_id,
         message_ref=normalized_reply_to,
-        account_id=account_id,
+        account_id=normalized_account_id,
     )
     if match is None:
         return {"ok": False, "status": "not_found", "reason": "no_matching_dispatch"}
@@ -743,15 +745,17 @@ def record_codex_history_delivery_receipt(
     normalized_chat_id = str(chat_id or "").strip()
     normalized_message_ref = str(message_ref or "").strip()
     normalized_receipt_type = _normalize_delivery_receipt_type(receipt_type)
-    if not normalized_channel or not normalized_chat_id or not normalized_message_ref:
-        return {"ok": False, "status": "not_found", "reason": "missing_receipt_target"}
+    normalized_account_id = str(account_id or "").strip().casefold()
+    if not normalized_channel or not normalized_chat_id or not normalized_message_ref or not normalized_account_id:
+        reason = "missing_account_id" if not normalized_account_id else "missing_receipt_target"
+        return {"ok": False, "status": "not_found", "reason": reason}
     match = _find_codex_history_dispatch_for_message(
         store,
         instance_name=instance_name,
         channel=normalized_channel,
         chat_id=normalized_chat_id,
         message_ref=normalized_message_ref,
-        account_id=account_id,
+        account_id=normalized_account_id,
     )
     if match is None:
         return {"ok": False, "status": "not_found", "reason": "no_matching_dispatch"}
@@ -3897,7 +3901,7 @@ def _find_codex_history_dispatch_for_message(
     normalized_chat_id = str(chat_id or "").strip()
     normalized_message_ref = str(message_ref or "").strip()
     normalized_account_id = str(account_id or "").strip().casefold()
-    if not normalized_channel or not normalized_chat_id or not normalized_message_ref:
+    if not normalized_channel or not normalized_chat_id or not normalized_message_ref or not normalized_account_id:
         return None
     for row in reversed(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)):
         if not isinstance(row, Mapping):

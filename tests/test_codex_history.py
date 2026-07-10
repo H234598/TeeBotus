@@ -1513,6 +1513,39 @@ def test_record_codex_history_reply_without_reply_ref_is_idempotent(tmp_path: Pa
     assert len(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status_history"]) == 3
 
 
+def test_record_codex_history_reply_requires_account_id(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "reply-account-demo", version="1.8.4")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(42), display_label="Admin")
+    item = append_codex_history_summary(store, repo_root=repo, title="Reply Account", bullets=["Identitaet ist Pflicht."])
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item["id"],
+            "account_id": admin_id,
+            "instance": "Depressionsbot",
+            "status": "accepted",
+            "channel": "telegram",
+            "chat_id": "42",
+            "message_ref": "101",
+            "summary_prefix": item["summary_prefix"],
+        },
+    )
+
+    result = record_codex_history_reply(
+        store,
+        instance_name="Depressionsbot",
+        channel="telegram",
+        chat_id="42",
+        reply_to_message_ref="101",
+        reply_message_ref="202",
+    )
+
+    assert result == {"ok": False, "status": "not_found", "reason": "missing_account_id"}
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status"] == "queued"
+    assert len(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)) == 1
+
+
 def test_record_codex_history_delivery_receipt_marks_dispatch_delivered_only(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "receipt-demo", version="1.8.3")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
@@ -1633,6 +1666,38 @@ def test_record_codex_history_delivery_receipt_keeps_routes_separate(tmp_path: P
     assert {(row["channel"], row["chat_id"]) for row in delivered} == {("telegram", "42"), ("signal", "+491")}
 
 
+def test_record_codex_history_delivery_receipt_requires_account_id(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "receipt-account-demo", version="1.8.5")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(42), display_label="Admin")
+    item = append_codex_history_summary(store, repo_root=repo, title="Receipt Account", bullets=["Receipt braucht Identitaet."])
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item["id"],
+            "account_id": admin_id,
+            "instance": "Depressionsbot",
+            "status": "accepted",
+            "channel": "telegram",
+            "chat_id": "42",
+            "message_ref": "101",
+            "summary_prefix": item["summary_prefix"],
+        },
+    )
+
+    result = record_codex_history_delivery_receipt(
+        store,
+        instance_name="Depressionsbot",
+        channel="telegram",
+        chat_id="42",
+        message_ref="101",
+    )
+
+    assert result == {"ok": False, "status": "not_found", "reason": "missing_account_id"}
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status"] == "queued"
+    assert len(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)) == 1
+
+
 def test_record_codex_history_delivery_receipt_does_not_downgrade_acknowledged_item(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "receipt-after-ack-demo", version="1.8.4")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
@@ -1744,6 +1809,7 @@ def test_record_codex_history_reply_ignores_unmatched_message_ref(tmp_path: Path
         instance_name="Depressionsbot",
         channel="telegram",
         chat_id="42",
+        account_id="unknown-account",
         reply_to_message_ref="999",
         reply_message_ref="202",
         reply_text="ok",
