@@ -517,6 +517,12 @@ def test_openai_key_resolution_rejects_invalid_direct_slot_number():
         resolve_openai_key("Depressionsbot", "telegram", -1, env)
 
 
+@pytest.mark.parametrize("invalid_slot", [1.5, "1.5", True, None])
+def test_openai_key_resolution_rejects_non_integral_slot_number(invalid_slot):
+    with pytest.raises(RuntimeConfigError, match="OpenAI key slot must be a positive integer slot number"):
+        resolve_openai_key("Depressionsbot", "telegram", invalid_slot, {})
+
+
 def test_openai_key_resolution_rejects_unknown_direct_channel():
     with pytest.raises(RuntimeConfigError, match="unsupported OpenAI key channel"):
         resolve_openai_key("Depressionsbot", "irc", 1, {"OPENAI_API_KEY_DEPRESSIONSBOT": "sk-fallback"})

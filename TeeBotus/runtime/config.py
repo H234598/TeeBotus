@@ -224,10 +224,17 @@ def _instances_were_explicitly_selected(source: Mapping[str, str]) -> bool:
 
 
 def _validate_slot_number(slot: int, *, label: str) -> int:
-    try:
-        resolved = int(slot)
-    except (TypeError, ValueError) as exc:
-        raise RuntimeConfigError(f"{label} must be a positive integer slot number") from exc
+    if isinstance(slot, bool):
+        raise RuntimeConfigError(f"{label} must be a positive integer slot number")
+    if isinstance(slot, int):
+        resolved = slot
+    elif isinstance(slot, str):
+        text = slot.strip()
+        if not text.isdecimal():
+            raise RuntimeConfigError(f"{label} must be a positive integer slot number")
+        resolved = int(text)
+    else:
+        raise RuntimeConfigError(f"{label} must be a positive integer slot number")
     if resolved < 1:
         raise RuntimeConfigError(f"{label} must be >= 1")
     return resolved
