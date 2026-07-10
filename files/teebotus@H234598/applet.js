@@ -1217,6 +1217,9 @@ TeeBotusApplet.prototype = {
       this._nonNegativeInt((health || {}).qdrant_unit_problem_count, 0)
     );
     let derivedTotal = runtimeTotal + commandTotal + qdrantTotal;
+    if ((summary || {}).output_truncated === true) {
+      derivedTotal = Math.max(derivedTotal, 1);
+    }
     return derivedTotal;
   },
 
