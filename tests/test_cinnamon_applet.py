@@ -1404,6 +1404,14 @@ def test_cinnamon_applet_status_payload_requires_boolean_ok() -> None:
     assert result is False
 
 
+def test_cinnamon_applet_status_payload_rejects_invalid_health_status() -> None:
+    result = _run_js_applet_expression(
+        "applet._isStatusPayload({ok: true, repo: {}, unit: {}, health: {status: 'false'}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}})"
+    )
+
+    assert result is False
+
+
 def test_cinnamon_applet_removal_terminates_running_helpers() -> None:
     result = _run_js_applet_expression(
         """

@@ -1382,6 +1382,9 @@ TeeBotusApplet.prototype = {
     if (typeof payload.ok !== "boolean") {
       return false;
     }
+    if (payload.health && payload.health.status !== undefined && ["ok", "warning", "broken"].indexOf(payload.health.status) < 0) {
+      return false;
+    }
     for (let key of ["repo", "unit", "health", "qdrant", "runtime"]) {
       if (!this._isJsonObject(payload[key])) {
         return false;
