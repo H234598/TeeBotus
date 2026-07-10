@@ -2150,7 +2150,7 @@ class BotTests(unittest.TestCase):
         self.assertEqual([row["status"] for row in dispatch_rows], ["accepted", "delivered", "acknowledged"])
         self.assertEqual(dispatch_rows[-1]["reply_message_ref"], "202")
 
-    def test_handle_update_with_runtime_context_logs_action_dispatch_errors(self) -> None:
+    def test_handle_update_with_runtime_context_propagates_action_dispatch_errors(self) -> None:
         from TeeBotus.runtime.actions import SendText
         from TeeBotus.runtime.engine import EngineResult
 
@@ -2184,7 +2184,10 @@ class BotTests(unittest.TestCase):
             )
             context.engine.process_result = lambda event: EngineResult(event.account_id, [SendText(event.chat_id, "ok")], handled=True)  # type: ignore[method-assign]
 
-            with self.assertLogs("TeeBotus", level="ERROR") as logs:
+            with (
+                self.assertLogs("TeeBotus", level="ERROR") as logs,
+                self.assertRaisesRegex(TelegramAPIError, "send refused"),
+            ):
                 handle_update(
                     api,
                     {"message": {"message_id": 1, "text": "/ping", "chat": {"id": 123, "type": "private"}, "from": {"id": 456}}},
@@ -2192,7 +2195,7 @@ class BotTests(unittest.TestCase):
                     runtime_context=context,
                 )
 
-        self.assertIn("Telegram action dispatch failed", "\n".join(logs.output))
+        self.assertIn("Telegram action dispatch failed hard", "\n".join(logs.output))
 
     def test_handle_update_with_runtime_context_handles_account_store_errors(self) -> None:
         class InstructionBox:

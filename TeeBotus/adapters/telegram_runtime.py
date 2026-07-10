@@ -1146,6 +1146,7 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
             event.chat_id,
             tuple(type(action).__name__ for action in engine_result.actions),
         )
+        raise
     return bool(engine_result.handled or engine_result.actions)
 
 
@@ -1433,20 +1434,9 @@ def _dispatch_modern_telegram_actions(
         event.event_id,
         tuple(type(action).__name__ for action in actions),
     )
-    try:
-        _notify_telegram_linked_identities(api, message_tracker, account_store, actions, instance_name=instance_name)
-        _delete_tracked_telegram_messages(api, message_tracker, event, actions)
-        sent_refs = send_telegram_actions(api, actions)
-    except Exception:
-        LOGGER.exception(
-            "Telegram action dispatch failed instance=%s slot=%s event_id=%s chat_id=%s message_ref=%s.",
-            event.instance,
-            event.adapter_slot,
-            event.event_id,
-            event.chat_id,
-            event.message_ref,
-        )
-        return
+    _notify_telegram_linked_identities(api, message_tracker, account_store, actions, instance_name=instance_name)
+    _delete_tracked_telegram_messages(api, message_tracker, event, actions)
+    sent_refs = send_telegram_actions(api, actions)
     if len(sent_refs) != len(actions):
         LOGGER.warning(
             "Telegram action dispatch returned ref count mismatch instance=%s slot=%s event_id=%s expected=%s returned=%s",
