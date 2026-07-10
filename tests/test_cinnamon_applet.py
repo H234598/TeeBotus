@@ -498,6 +498,10 @@ def test_cinnamon_applet_js_parser_matches_python_parser_for_status_edges() -> N
         "message=Use option foo=bar only after login. "
         "action=First run /register, then confirm status=ok manually",
         "route_status=UNAVAILABLE status=WARNING semantic=READY",
+        "service=demo error=provider status=routable warning=retry",
+        "service=demo error=provider status=accepted warning=retry",
+        "service=demo error=provider status=queued warning=retry",
+        "service=demo error=provider status=skipped warning=retry",
     ]
 
     for line in lines:

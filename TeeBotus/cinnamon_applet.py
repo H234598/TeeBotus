@@ -138,6 +138,7 @@ SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"models_feed", "route_status", "sem
 STATUS_FIELD_BOUNDARY_KEYS = frozenset({"status"}) | SECONDARY_PROBLEM_STATUS_FIELDS
 STATUS_FIELD_BOUNDARY_VALUES = PROBLEM_STATUSES | frozenset(
     {
+        "accepted",
         "available",
         "configured",
         "disabled",
@@ -148,10 +149,13 @@ STATUS_FIELD_BOUNDARY_VALUES = PROBLEM_STATUSES | frozenset(
         "not_configured",
         "ok",
         "planned",
+        "queued",
         "reachable",
         "ready",
         "rebuilt",
         "registered",
+        "routable",
+        "skipped",
     }
 )
 SECTION_PROBLEM_SUMMARY_KEYS = {

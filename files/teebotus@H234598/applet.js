@@ -85,6 +85,7 @@ const STATUS_FIELD_BOUNDARY_KEYS = {
   semantic: true
 };
 const STATUS_FIELD_NEUTRAL_BOUNDARY_VALUES = {
+  accepted: true,
   available: true,
   configured: true,
   disabled: true,
@@ -95,10 +96,13 @@ const STATUS_FIELD_NEUTRAL_BOUNDARY_VALUES = {
   not_configured: true,
   ok: true,
   planned: true,
+  queued: true,
   reachable: true,
   ready: true,
   rebuilt: true,
-  registered: true
+  registered: true,
+  routable: true,
+  skipped: true
 };
 const FREE_TEXT_STATUS_FIELDS = {
   action: true,
