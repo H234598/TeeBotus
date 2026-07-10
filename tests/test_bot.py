@@ -4030,6 +4030,28 @@ class BotTests(unittest.TestCase):
         alerts = [text for chat_id, text in api.sent_messages if chat_id == TELADI_EMERGENCY_CHAT_ID]
         self.assertEqual(len(alerts), 2)
 
+    def test_depression_alert_retries_after_failed_dispatch(self) -> None:
+        from TeeBotus.adapters.telegram_runtime import _maybe_send_depression_alert
+        from TeeBotus.instructions import BotInstructions
+
+        api = FakeAPI()
+        chat_state = ChatState(instance_name="Depressionsbot")
+        message = {
+            "message_id": 77,
+            "text": "Ich will mich umbringen.",
+            "chat": {"id": 123},
+            "from": {"id": 456, "first_name": "Ada"},
+        }
+
+        with patch(
+            "TeeBotus.adapters.telegram_runtime._send_untracked_message",
+            side_effect=[TelegramAPIError("temporary failure"), None],
+        ) as send:
+            _maybe_send_depression_alert(api, chat_state, 123, message, BotInstructions(), message["text"], "Depressionsbot", "incoming")
+            _maybe_send_depression_alert(api, chat_state, 123, message, BotInstructions(), message["text"], "Depressionsbot", "incoming")
+
+        self.assertEqual(send.call_count, 2)
+
     def test_depression_alert_notifies_teladi_for_stress_level_ten(self) -> None:
         from TeeBotus.instructions import BotInstructions
 

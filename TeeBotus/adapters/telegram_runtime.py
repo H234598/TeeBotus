@@ -597,6 +597,10 @@ class ChatState:
             self.depression_alert_signatures.add(signature)
             return True
 
+    def release_depression_alert_signature(self, signature: str) -> None:
+        with self._lock:
+            self.depression_alert_signatures.discard(signature)
+
     def request_user_memory_reset(self, chat_id: int, sender_id: str) -> None:
         with self._lock:
             if sender_id:
@@ -2319,6 +2323,7 @@ def _maybe_send_depression_alert(
             _build_depression_alert_message(message, chat_id, text, reason, source),
         )
     except TelegramAPIError:
+        chat_state.release_depression_alert_signature(signature)
         LOGGER.exception("Failed to send Depressionsbot crisis alert.")
 
 
