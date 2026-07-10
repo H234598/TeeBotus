@@ -1754,6 +1754,22 @@ def test_cinnamon_applet_usage_formatters_keep_error_details() -> None:
     }
 
 
+def test_cinnamon_applet_status_formatters_keep_backend_and_budget_metadata() -> None:
+    result = _run_js_applet_expression(
+        """
+        ({
+          decision: applet._formatLlmLine("structured_decision=Demo status=enabled source=text_llm_enabled profile=hf_pool_structured provider=hf_pool model=pool:default#structured_decision route_status=unavailable fallback=local_ollama fallback_model=ollama_chat/llama3.2:3b"),
+          budget: applet._formatApiBudgetLine("api_budget=demo profile=gemini_flash_stateful provider=litellm_gemini_stateful model=gemini/gemini-3.5-flash status=configured key=configured key_env=GEMINI_API_KEY google_mode=stateful store=true billing=free-tier limits=on costs=local tokens=provider_usage_response max_output_tokens=700")
+        })
+        """
+    )
+
+    assert result == {
+        "decision": "Account-Entscheider Demo: aktiv; Quelle text_llm_enabled; Profil hf_pool_structured; Backend hf_pool / pool:default#structured_decision; Route nicht verfuegbar; Ersatz local_ollama -> ollama_chat/llama3.2:3b",
+        "budget": "Route demo: litellm_gemini_stateful / gemini/gemini-3.5-flash (konfiguriert); Profil gemini_flash_stateful; Key configured via GEMINI_API_KEY; Google stateful; Store ja; Abrechnung free-tier; Limits on; Kosten local; Tokens provider_usage_response; Max-Output 700",
+    }
+
+
 def test_cinnamon_applet_formats_runtime_directory_and_agent_pilot_lines() -> None:
     result = _run_js_applet_expression(
         """
@@ -1766,7 +1782,7 @@ def test_cinnamon_applet_formats_runtime_directory_and_agent_pilot_lines() -> No
 
     assert result == {
         "directory": "Instanzen-Verzeichnis: instances",
-        "pilot": "Agenten-Pilot source_quality_expedition: geplant; Abhaengigkeit fehlt; Standard false; Rollen harvester, formatter; Ablauf discover -> format",
+        "pilot": "Agenten-Pilot source_quality_expedition: geplant; Abhaengigkeit fehlt; Standard nein; Rollen harvester, formatter; Ablauf discover -> format",
     }
 
 

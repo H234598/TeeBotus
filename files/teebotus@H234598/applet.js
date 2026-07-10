@@ -631,7 +631,7 @@ TeeBotusApplet.prototype = {
       return line;
     }
     let dependency = fields.dependency ? "; Abhaengigkeit " + this._statusWord(fields.dependency) : "";
-    let enabled = fields.enabled_by_default ? "; Standard " + fields.enabled_by_default : "";
+    let enabled = fields.enabled_by_default ? "; Standard " + this._booleanWord(fields.enabled_by_default) : "";
     let roles = fields.roles ? "; Rollen " + fields.roles.replace(/,/g, ", ") : "";
     let workflow = fields.workflow ? "; Ablauf " + fields.workflow.replace(/,/g, " -> ") : "";
     return "Agenten-Pilot " + fields.crew_pilot + ": " + this._statusWord(fields.status) + dependency + enabled + roles + workflow + this._errorText(fields);
@@ -714,6 +714,9 @@ TeeBotusApplet.prototype = {
       return "Account-LLM " + fields.llm + ": " + String(fields.provider || "?") + " / " + String(fields.model || "?") + " (" + this._statusWord(fields.status) + ")" + this._errorText(fields);
     }
     if (fields.structured_decision) {
+      let source = fields.source ? "; Quelle " + fields.source : "";
+      let profile = fields.profile ? "; Profil " + fields.profile : "";
+      let backend = fields.provider || fields.model ? "; Backend " + String(fields.provider || "?") + " / " + String(fields.model || "?") : "";
       let routeStatus = fields.route_status ? "; Route " + this._statusWord(fields.route_status) : "";
       let fallbackName = fields.fallback_profile || fields.fallback || "";
       let fallbackModel = fields.fallback_model || "";
@@ -724,7 +727,7 @@ TeeBotusApplet.prototype = {
           fallback += " -> " + fallbackModel;
         }
       }
-      return "Account-Entscheider " + fields.structured_decision + ": " + this._statusWord(fields.status) + routeStatus + fallback + this._errorText(fields);
+      return "Account-Entscheider " + fields.structured_decision + ": " + this._statusWord(fields.status) + source + profile + backend + routeStatus + fallback + this._errorText(fields);
     }
     if (fields.local_transcription) {
       let backend = fields.backend ? "; Backend " + fields.backend : "";
@@ -745,6 +748,9 @@ TeeBotusApplet.prototype = {
     let fields = this._parseFields(line);
     if (fields.api_budget) {
       let text = "Route " + fields.api_budget + ": " + String(fields.provider || "?") + " / " + String(fields.model || "?") + " (" + this._statusWord(fields.status) + ")";
+      if (fields.profile) {
+        text += "; Profil " + fields.profile;
+      }
       text += "; Key " + String(fields.key || "?");
       if (fields.key_env) {
         text += " via " + fields.key_env;
@@ -758,11 +764,23 @@ TeeBotusApplet.prototype = {
       if (fields.google_mode) {
         text += "; Google " + fields.google_mode;
       }
+      if (fields.store) {
+        text += "; Store " + this._booleanWord(fields.store);
+      }
+      if (fields.billing) {
+        text += "; Abrechnung " + fields.billing;
+      }
       if (fields.limits) {
         text += "; Limits " + fields.limits;
       }
       if (fields.costs) {
         text += "; Kosten " + fields.costs;
+      }
+      if (fields.tokens) {
+        text += "; Tokens " + fields.tokens;
+      }
+      if (fields.max_output_tokens) {
+        text += "; Max-Output " + fields.max_output_tokens;
       }
       return text + this._errorText(fields);
     }
@@ -1076,6 +1094,17 @@ TeeBotusApplet.prototype = {
       warning: "Warnung"
     };
     return _hasOwn(labels, value) ? labels[value] : value;
+  },
+
+  _booleanWord: function(value) {
+    let normalized = String(value || "").trim().toLowerCase();
+    if (["1", "true", "yes", "on"].indexOf(normalized) >= 0) {
+      return "ja";
+    }
+    if (["0", "false", "no", "off"].indexOf(normalized) >= 0) {
+      return "nein";
+    }
+    return String(value || "?");
   },
 
   _appendCodexUsageActions: function() {
