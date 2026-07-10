@@ -184,17 +184,17 @@ SECRET_ASSIGNMENT_FRAGMENT_VALUE_PATTERN = (
     r"(?:(?!\s+[A-Za-z_][A-Za-z0-9_-]*\s*[=:])[^,;\r\n)&\]}>])+"
 )
 SECRET_ASSIGNMENT_RE = re.compile(
-    rf"(?<!\S)([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\s*([:=])\s*"
+    rf"(?<!\S)([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\s*(=>|[:=])\s*"
     rf"({SECRET_ASSIGNMENT_VALUE_PATTERN})",
     re.IGNORECASE,
 )
 SECRET_ASSIGNMENT_FRAGMENT_RE = re.compile(
-    rf"(^|[^A-Za-z0-9_-])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\s*([:=])\s*"
+    rf"(^|[^A-Za-z0-9_-])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\s*(=>|[:=])\s*"
     rf"({SECRET_ASSIGNMENT_FRAGMENT_VALUE_PATTERN})",
     re.IGNORECASE,
 )
 QUOTED_SECRET_ASSIGNMENT_RE = re.compile(
-    rf"(^|[^A-Za-z0-9_-])([\"'])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\2(\s*[=:]\s*)"
+    rf"(^|[^A-Za-z0-9_-])([\"'])([A-Za-z0-9_-]*{SENSITIVE_ASSIGNMENT_KEY_PATTERN}[A-Za-z0-9_-]*)\2(\s*(?:=>|[:=])\s*)"
     rf"({SECRET_ASSIGNMENT_FRAGMENT_VALUE_PATTERN})",
     re.IGNORECASE,
 )

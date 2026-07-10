@@ -4213,6 +4213,8 @@ def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_meta
     assert cinnamon_applet._redact("--password=-leading-secret") == "--password=<redacted>"
     assert cinnamon_applet._redact("--password -leading-secret") == "--password <redacted>"
     assert cinnamon_applet._redact("--password --api-key plain-secret") == "--password --api-key <redacted>"
+    assert cinnamon_applet._redact("api_key=>plain-secret") == "api_key=><redacted>"
+    assert cinnamon_applet._redact('"api_key"=>"plain-secret"') == '"api_key"=>"<redacted>"'
     pem = "-----BEGIN PRIVATE KEY-----\nMIIEplainsecret\n-----END PRIVATE KEY-----"
     assert cinnamon_applet._redact(pem) == "<redacted-secret>"
 
