@@ -2298,9 +2298,14 @@ def _normalize_proactive_route(route: Mapping[str, Any] | None) -> dict[str, Any
 def _normalize_route_slot(value: Any) -> int | None:
     if isinstance(value, bool):
         return None
-    try:
-        slot = int(value)
-    except (TypeError, ValueError):
+    if isinstance(value, int):
+        slot = value
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text.isdecimal():
+            return None
+        slot = int(text)
+    else:
         return None
     return slot if slot >= 1 else None
 

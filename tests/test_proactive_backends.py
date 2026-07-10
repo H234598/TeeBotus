@@ -345,3 +345,11 @@ def test_proactive_sender_rejects_invalid_slot() -> None:
 
     with pytest.raises(KeyError, match="invalid adapter slot"):
         sender({"adapter_slot": "broken"}, SendText("123", "hi"), {})
+
+
+@pytest.mark.parametrize("invalid_slot", [1.5, "1.5"])
+def test_proactive_sender_rejects_fractional_slot(invalid_slot) -> None:
+    sender = telegram_proactive_sender({1: object()})
+
+    with pytest.raises(KeyError, match="invalid adapter slot"):
+        sender({"adapter_slot": invalid_slot}, SendText("123", "hi"), {})

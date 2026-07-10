@@ -957,6 +957,22 @@ def test_select_proactive_route_rejects_invalid_adapter_slot(tmp_path, monkeypat
     assert select_proactive_route(account_store, account_id) is None
 
 
+@pytest.mark.parametrize("invalid_slot", [1.5, "1.5"])
+def test_select_proactive_route_rejects_fractional_adapter_slot(tmp_path, monkeypatch, invalid_slot) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+
+    monkeypatch.setattr(
+        account_store,
+        "get_identity_route",
+        lambda _identity: {"channel": "signal", "chat_id": "+491", "chat_type": "private", "adapter_slot": invalid_slot},
+    )
+
+    assert select_proactive_route(account_store, account_id) is None
+
+
 def test_proactive_policy_does_not_treat_missing_item_slot_as_current_slot(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
