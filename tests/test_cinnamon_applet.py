@@ -4,6 +4,7 @@ import json
 import re
 import shutil
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -3722,19 +3723,41 @@ def test_cinnamon_applet_qdrant_point_count_closes_http_error_response(monkeypat
     assert error.closed is True
 
 
-def test_cinnamon_applet_run_redacts_stdout_before_truncating(monkeypatch) -> None:
+def test_cinnamon_applet_run_redacts_stdout_before_truncating() -> None:
     secret = "sk-12345678901234567890"
     stdout = "x" * (cinnamon_applet.MAX_CAPTURE_CHARS - len(secret) - 2) + " " + secret + "tail"
 
-    def fake_run(*_args, **_kwargs):
-        return subprocess.CompletedProcess(["demo"], 0, stdout=stdout, stderr="")
-
-    monkeypatch.setattr(cinnamon_applet.subprocess, "run", fake_run)
-
-    result = cinnamon_applet._run(["demo"])
+    result = cinnamon_applet._run([sys.executable, "-c", f"import sys; sys.stdout.write({stdout!r})"])
 
     assert secret not in result["stdout"]
     assert "sk-" not in result["stdout"]
+
+
+def test_cinnamon_applet_run_bounds_child_output_before_returning() -> None:
+    result = cinnamon_applet._run(
+        [
+            sys.executable,
+            "-c",
+            f"import sys; output = 'x' * {cinnamon_applet.MAX_CAPTURE_CHARS * 2}; sys.stdout.write(output); sys.stderr.write(output)",
+        ]
+    )
+
+    assert result["returncode"] == 0
+    assert len(result["stdout"]) <= cinnamon_applet.MAX_CAPTURE_CHARS + len("\n<truncated>")
+    assert len(result["stderr"]) <= cinnamon_applet.MAX_ERROR_CHARS + len("\n<truncated>")
+    assert result["stdout"].endswith("<truncated>")
+    assert result["stderr"].endswith("<truncated>")
+
+
+def test_cinnamon_applet_run_terminates_timed_out_child() -> None:
+    result = cinnamon_applet._run([sys.executable, "-c", "import time; time.sleep(5)"], timeout_seconds=1)
+
+    assert result == {
+        "argv": [sys.executable, "-c", "'import time; time.sleep(5)'"],
+        "returncode": 124,
+        "stdout": "",
+        "stderr": "TimeoutExpired: command timed out after 1 seconds",
+    }
 
 
 def test_cinnamon_applet_runtime_parser_redacts_secrets_without_losing_safe_metadata() -> None:

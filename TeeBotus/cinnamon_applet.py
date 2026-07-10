@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
+import selectors
 import shlex
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any, Mapping, NamedTuple
 from urllib.error import HTTPError, URLError
@@ -27,6 +30,7 @@ CODEX_USAGE_STALE_WARNING_HOURS = 24
 CONFIRMED_ACTIVE_SUBSTATES = frozenset({"active", "elapsed", "exited", "listening", "mounted", "plugged", "running", "waiting"})
 MAX_CAPTURE_CHARS = 80_000
 MAX_ERROR_CHARS = 2_000
+MAX_REDACTION_GUARD_BYTES = 4_096
 MAX_QDRANT_COUNT_RESPONSE_BYTES = 64_000
 MAX_QDRANT_COUNT = 9_007_199_254_740_991
 SECRET_TOKEN_PATTERNS = (
@@ -65,6 +69,61 @@ SECRET_OPTION_VALUE_RE = re.compile(
     re.IGNORECASE,
 )
 COOKIE_HEADER_RE = re.compile(r"(?i)(?<![A-Za-z0-9_-])((?:set-cookie|cookie)\s*:\s*)[^\r\n]+")
+SECRET_TOKEN_HINTS = frozenset(
+    {
+        "sk-",
+        "ghp_",
+        "gho_",
+        "ghu_",
+        "ghs_",
+        "ghr_",
+        "github_pat_",
+        "hf_",
+        "syt_",
+        "glpat-",
+        "gsk_",
+        "aiza",
+        "ya29.",
+        "xox",
+    }
+)
+URL_REDACTION_HINTS = frozenset({"://", "target=", "base_url=", "url="})
+AUTHORIZATION_REDACTION_HINTS = frozenset({"authorization", "bearer", "basic", "apikey", "api_key", "api-key", "token "})
+SECRET_OPTION_REDACTION_HINTS = frozenset(
+    {
+        "--api",
+        "--private",
+        "--signing",
+        "--access",
+        "--auth",
+        "--bearer",
+        "--cookie",
+        "--token",
+        "--secret",
+        "--password",
+    }
+)
+SECRET_ASSIGNMENT_REDACTION_HINTS = frozenset(
+    {
+        "api_key",
+        "api-key",
+        "apikey",
+        "private_key",
+        "private-key",
+        "signing_key",
+        "signing-key",
+        "access_token",
+        "access-token",
+        "auth_token",
+        "auth-token",
+        "bearer_token",
+        "bearer-token",
+        "cookie",
+        "token",
+        "secret",
+        "password",
+    }
+)
 STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
 FREE_TEXT_STATUS_FIELDS = frozenset({"action", "command", "error", "message", "route_error"})
 FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
@@ -740,28 +799,102 @@ def _repo_status(repo_root: Path) -> dict[str, Any]:
 
 
 def _run(argv: list[str], *, cwd: Path | None = None, timeout_seconds: int = 10) -> dict[str, Any]:
+    quoted_argv = [shlex.quote(str(part)) for part in argv]
     try:
-        completed = subprocess.run(
+        bounded_timeout = max(1, int(timeout_seconds))
+        process = subprocess.Popen(
             argv,
             cwd=str(cwd) if cwd else None,
-            text=True,
-            capture_output=True,
-            timeout=max(1, int(timeout_seconds)),
-            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
+        stdout, stderr, returncode, timed_out = _collect_process_output(
+            process,
+            timeout_seconds=bounded_timeout,
+        )
+        if timed_out:
+            return {
+                "argv": quoted_argv,
+                "returncode": 124,
+                "stdout": "",
+                "stderr": _limit_text(_redact(f"TimeoutExpired: command timed out after {bounded_timeout} seconds"), MAX_ERROR_CHARS),
+            }
         return {
-            "argv": [shlex.quote(str(part)) for part in argv],
-            "returncode": completed.returncode,
-            "stdout": _limit_text(_redact(completed.stdout), MAX_CAPTURE_CHARS),
-            "stderr": _limit_text(_redact(completed.stderr), MAX_ERROR_CHARS),
+            "argv": quoted_argv,
+            "returncode": returncode,
+            "stdout": _limit_text(_redact(stdout.decode("utf-8", errors="replace")), MAX_CAPTURE_CHARS),
+            "stderr": _limit_text(_redact(stderr.decode("utf-8", errors="replace")), MAX_ERROR_CHARS),
         }
     except Exception as exc:  # noqa: BLE001 - applet status should degrade to JSON, not crash.
         return {
-            "argv": [shlex.quote(str(part)) for part in argv],
+            "argv": quoted_argv,
             "returncode": 124,
             "stdout": "",
             "stderr": _limit_text(_redact(f"{type(exc).__name__}: {exc}"), MAX_ERROR_CHARS),
         }
+
+
+def _collect_process_output(
+    process: subprocess.Popen[bytes],
+    *,
+    timeout_seconds: int,
+) -> tuple[bytes, bytes, int, bool]:
+    limits = {
+        "stdout": MAX_CAPTURE_CHARS + MAX_REDACTION_GUARD_BYTES,
+        "stderr": MAX_ERROR_CHARS + MAX_REDACTION_GUARD_BYTES,
+    }
+    buffers = {name: bytearray() for name in limits}
+    selector = selectors.DefaultSelector()
+    streams = {"stdout": process.stdout, "stderr": process.stderr}
+    deadline = time.monotonic() + timeout_seconds
+    timed_out = False
+    try:
+        for name, stream in streams.items():
+            if stream is not None:
+                selector.register(stream, selectors.EVENT_READ, name)
+        while selector.get_map():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                timed_out = True
+                break
+            events = selector.select(remaining)
+            if not events:
+                if process.poll() is None:
+                    timed_out = True
+                break
+            for key, _ in events:
+                stream = key.fileobj
+                chunk = os.read(stream.fileno(), 65_536)
+                if not chunk:
+                    selector.unregister(stream)
+                    stream.close()
+                    continue
+                buffer = buffers[key.data]
+                remaining_capacity = limits[key.data] - len(buffer)
+                if remaining_capacity > 0:
+                    buffer.extend(chunk[:remaining_capacity])
+    finally:
+        force_stop = timed_out or process.poll() is None
+        if force_stop:
+            try:
+                process.kill()
+            except (OSError, ProcessLookupError):
+                pass
+        try:
+            process.wait(timeout=1 if force_stop else max(1, int(timeout_seconds)))
+        except subprocess.TimeoutExpired:
+            try:
+                process.kill()
+            except (OSError, ProcessLookupError):
+                pass
+            process.wait(timeout=1)
+        for stream in streams.values():
+            if stream is not None and not stream.closed:
+                stream.close()
+        selector.close()
+
+    returncode = process.returncode if process.returncode is not None else 124
+    return bytes(buffers["stdout"]), bytes(buffers["stderr"]), int(returncode), timed_out
 
 
 def _parse_status_fields(line: str) -> dict[str, str]:
@@ -858,17 +991,35 @@ def _parse_key_value_lines(value: str) -> dict[str, str]:
 
 def _redact(value: str) -> str:
     text = str(value or "")
-    for pattern in SECRET_TOKEN_PATTERNS:
-        text = pattern.sub("<redacted-secret>", text)
-    text = URL_CREDENTIAL_RE.sub(_redact_url_credentials, text)
-    text = AUTHORIZATION_TOKEN_RE.sub(r"\1\2 <redacted-secret>", text)
-    text = BARE_AUTHORIZATION_TOKEN_RE.sub(r"\1 <redacted-secret>", text)
-    text = QUOTED_AUTHORIZATION_TOKEN_RE.sub(_redact_quoted_authorization_token, text)
-    text = SECRET_OPTION_VALUE_RE.sub(_redact_secret_option_value, text)
-    text = COOKIE_HEADER_RE.sub(r"\1<redacted-secret>", text)
-    text = QUOTED_SECRET_ASSIGNMENT_RE.sub(_redact_quoted_secret_assignment, text)
-    text = SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, text)
-    text = SECRET_ASSIGNMENT_FRAGMENT_RE.sub(_redact_secret_assignment_fragment, text)
+    if not text:
+        return text
+    lowered = text.casefold()
+    if not (
+        any(hint in lowered for hint in SECRET_TOKEN_HINTS)
+        or any(hint in lowered for hint in URL_REDACTION_HINTS)
+        or any(hint in lowered for hint in AUTHORIZATION_REDACTION_HINTS)
+        or any(hint in lowered for hint in SECRET_OPTION_REDACTION_HINTS)
+        or any(hint in lowered for hint in SECRET_ASSIGNMENT_REDACTION_HINTS)
+        or lowered.count(".") >= 2
+    ):
+        return text
+    if any(hint in lowered for hint in SECRET_TOKEN_HINTS) or lowered.count(".") >= 2:
+        for pattern in SECRET_TOKEN_PATTERNS:
+            text = pattern.sub("<redacted-secret>", text)
+    if any(hint in lowered for hint in URL_REDACTION_HINTS):
+        text = URL_CREDENTIAL_RE.sub(_redact_url_credentials, text)
+    if any(hint in lowered for hint in AUTHORIZATION_REDACTION_HINTS):
+        text = AUTHORIZATION_TOKEN_RE.sub(r"\1\2 <redacted-secret>", text)
+        text = BARE_AUTHORIZATION_TOKEN_RE.sub(r"\1 <redacted-secret>", text)
+        text = QUOTED_AUTHORIZATION_TOKEN_RE.sub(_redact_quoted_authorization_token, text)
+    if any(hint in lowered for hint in SECRET_OPTION_REDACTION_HINTS):
+        text = SECRET_OPTION_VALUE_RE.sub(_redact_secret_option_value, text)
+    if "cookie" in lowered:
+        text = COOKIE_HEADER_RE.sub(r"\1<redacted-secret>", text)
+    if any(hint in lowered for hint in SECRET_ASSIGNMENT_REDACTION_HINTS):
+        text = QUOTED_SECRET_ASSIGNMENT_RE.sub(_redact_quoted_secret_assignment, text)
+        text = SECRET_ASSIGNMENT_RE.sub(_redact_secret_assignment, text)
+        text = SECRET_ASSIGNMENT_FRAGMENT_RE.sub(_redact_secret_assignment_fragment, text)
     return text
 
 
