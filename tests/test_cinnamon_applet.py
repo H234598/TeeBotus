@@ -1858,7 +1858,7 @@ def test_cinnamon_applet_menu_header_uses_health_problem_count_when_runtime_summ
         """
     )
 
-    assert result["statusSummary"].startswith("Warnungen 4")
+    assert result["statusSummary"].startswith("Probleme 4")
     assert "Probleme defekt:4" in result["statusSummary"]
 
 

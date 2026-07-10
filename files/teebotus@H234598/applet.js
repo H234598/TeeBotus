@@ -1168,7 +1168,8 @@ TeeBotusApplet.prototype = {
     let commandBreakdown = this._commandProblemBreakdownText(health);
     let qdrantBreakdown = this._qdrantProblemBreakdownText(health);
     if (bad > 0) {
-      return "Warnungen " + String(bad) + breakdown + commandBreakdown + qdrantBreakdown + " | Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText;
+      let problemLabel = health.status === "broken" ? "Probleme " : "Warnungen ";
+      return problemLabel + String(bad) + breakdown + commandBreakdown + qdrantBreakdown + " | Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText;
     }
     return "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + breakdown + commandBreakdown + qdrantBreakdown;
   },
