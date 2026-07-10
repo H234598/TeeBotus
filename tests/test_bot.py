@@ -1851,6 +1851,14 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(client.previous_response_ids, [None, None, "resp_123"])
 
+    def test_chat_state_scopes_auto_voice_counter_inside_shared_group_chat(self) -> None:
+        chat_state = ChatState()
+
+        self.assertFalse(chat_state.should_send_auto_voice(123, 2, "account-a"))
+        self.assertFalse(chat_state.should_send_auto_voice(123, 2, "account-b"))
+        self.assertTrue(chat_state.should_send_auto_voice(123, 2, "account-a"))
+        self.assertTrue(chat_state.should_send_auto_voice(123, 2, "account-b"))
+
     def test_handle_update_with_runtime_context_uses_modern_engine(self) -> None:
         class FixedWakeDatetime(datetime):
             @classmethod

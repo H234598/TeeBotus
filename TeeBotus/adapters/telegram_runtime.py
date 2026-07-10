@@ -485,7 +485,7 @@ class ChatState:
         self.previous_response_ids: dict[tuple[int, str], str] = {}
         self.sent_message_ids: dict[int, list[int]] = {}
         self.recent_message_ids: dict[int, list[int]] = {}
-        self.auto_voice_eligible_counts: dict[int, int] = {}
+        self.auto_voice_eligible_counts: dict[tuple[int, str], int] = {}
         self.seen_sender_ids: set[str] = set()
         self.depression_alert_signatures: set[str] = set()
         self.pending_user_memory_resets: set[tuple[int, str]] = set()
@@ -571,12 +571,14 @@ class ChatState:
         message_ids.append(message_id)
         del message_ids[:-MAX_TRACKED_CHAT_MESSAGES]
 
-    def should_send_auto_voice(self, chat_id: int, every: int) -> bool:
+    def should_send_auto_voice(self, chat_id: int, every: int, scope_key: str = "") -> bool:
         if every < 1:
             return False
-        count = self.auto_voice_eligible_counts.get(chat_id, 0) + 1
-        self.auto_voice_eligible_counts[chat_id] = count
-        return count % every == 0
+        with self._lock:
+            state_key = _chat_state_response_key(chat_id, scope_key)
+            count = self.auto_voice_eligible_counts.get(state_key, 0) + 1
+            self.auto_voice_eligible_counts[state_key] = count
+            return count % every == 0
 
     def has_seen_sender(self, sender_id: str) -> bool:
         with self._lock:
@@ -2563,14 +2565,20 @@ def _is_negated_memory_reset_request(normalized_text: str) -> bool:
 
 
 def _has_memory_reset_memory_reference(normalized_text: str) -> bool:
-    if re.search(r"\b(memory|memories|erinnerung(?:en)?|gedaechtnis|speicher|daten)\b", normalized_text):
+    if re.search(
+        r"\b(memory|memories|erinnerung(?:en)?|gedaechtnis|(?:instanz|arbeits)gedaechtnis|speicher|daten)\b",
+        normalized_text,
+    ):
         return True
     return bool(re.search(r"\b(alles|all das)\b.*\b(ueber mich|von mir|zu mir|an mich|mich)\b", normalized_text))
 
 
 def _user_memory_reset_targets_forbidden(text: str, bot_identity: BotIdentity) -> bool:
     normalized = _normalize_memory_reset_text(text)
-    if re.search(r"\b(instanz|arbeitsgedaechtnis|working memory|global(?:e|en)?|alle user|alle nutzer|fremde|andere)\b", normalized):
+    if re.search(
+        r"\b(instanz|arbeitsgedaechtnis|(?:instanz|arbeits)gedaechtnis|working memory|global(?:e|en)?|alle user|alle nutzer|fremde|andere)\b",
+        normalized,
+    ):
         return True
 
     bot_username = bot_identity.username.strip().lstrip("@").casefold()
@@ -4373,6 +4381,7 @@ def _send_openai_response(
     if openai_client is not None and _should_consider_auto_voice(text, instructions) and chat_state.should_send_auto_voice(
         chat_id,
         instructions.openai_auto_voice_every,
+        _telegram_sender_state_key(message),
     ):
         try:
             api.send_chat_action(chat_id, "record_voice")
