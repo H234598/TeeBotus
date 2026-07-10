@@ -1467,6 +1467,52 @@ def test_record_codex_history_reply_marks_dispatch_delivered_and_acknowledged(tm
     assert len(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status_history"]) == 3
 
 
+def test_record_codex_history_reply_without_reply_ref_is_idempotent(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "reply-no-ref-demo", version="1.8.3")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(42), display_label="Admin")
+    item = append_codex_history_summary(store, repo_root=repo, title="Reply ohne Ref", bullets=["Adapter liefert keine Reply-ID."])
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item["id"],
+            "account_id": admin_id,
+            "instance": "Depressionsbot",
+            "status": "accepted",
+            "channel": "signal",
+            "chat_id": "+491",
+            "message_ref": "summary-1",
+            "summary_prefix": item["summary_prefix"],
+        },
+    )
+
+    first = record_codex_history_reply(
+        store,
+        instance_name="Depressionsbot",
+        channel="signal",
+        chat_id="+491",
+        account_id=admin_id,
+        reply_to_message_ref="summary-1",
+        reply_text="angekommen",
+        now=datetime(2026, 6, 19, 15, tzinfo=timezone.utc),
+    )
+    second = record_codex_history_reply(
+        store,
+        instance_name="Depressionsbot",
+        channel="signal",
+        chat_id="+491",
+        account_id=admin_id,
+        reply_to_message_ref="summary-1",
+        reply_text="erneut verarbeitet",
+        now=datetime(2026, 6, 19, 15, 1, tzinfo=timezone.utc),
+    )
+
+    assert first["idempotent"] is False
+    assert second["idempotent"] is True
+    assert len(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)) == 3
+    assert len(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status_history"]) == 3
+
+
 def test_record_codex_history_delivery_receipt_marks_dispatch_delivered_only(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "receipt-demo", version="1.8.3")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())

@@ -3929,7 +3929,7 @@ def _find_codex_history_reply_result(
     normalized_message_ref = str(message_ref or "").strip()
     normalized_reply_ref = str(reply_message_ref or "").strip()
     normalized_status = str(status or "").strip().casefold()
-    if not normalized_item_id or not normalized_account_id or not normalized_message_ref or not normalized_reply_ref or not normalized_status:
+    if not normalized_item_id or not normalized_account_id or not normalized_message_ref or not normalized_status:
         return None
     for row in reversed(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)):
         if not isinstance(row, Mapping):
@@ -3942,7 +3942,8 @@ def _find_codex_history_reply_result(
             continue
         if str(row.get("message_ref") or "").strip() != normalized_message_ref:
             continue
-        if str(row.get("reply_message_ref") or "").strip() != normalized_reply_ref:
+        stored_reply_ref = str(row.get("reply_message_ref") or "").strip()
+        if normalized_reply_ref and stored_reply_ref != normalized_reply_ref:
             continue
         if str(row.get("status") or "").strip().casefold() != normalized_status:
             continue
