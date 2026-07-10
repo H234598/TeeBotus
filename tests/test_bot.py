@@ -4680,6 +4680,16 @@ class BotTests(unittest.TestCase):
             self.assertEqual(_read_telegram_update_offset(path), 42)
             self.assertEqual(list(path.parent.glob(f".{path.name}.*.tmp")), [])
 
+    def test_local_json_state_write_is_atomic_and_cleans_temp_file(self) -> None:
+        from TeeBotus.adapters.telegram_runtime import _write_json_file
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.json"
+            _write_json_file(path, {"status": "ok"})
+
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"status": "ok"})
+            self.assertEqual(list(path.parent.glob(f".{path.name}.*.tmp")), [])
+
     def test_main_impl_loads_runtime_environment_before_configuring_logging(self) -> None:
         from TeeBotus import bot as bot_module
 
