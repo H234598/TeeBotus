@@ -4623,6 +4623,29 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(job_runner.shutdown_calls, [False])
 
+    def test_telegram_api_edit_message_text_uses_edit_endpoint(self) -> None:
+        api = TelegramAPI("telegram-token")
+        with patch.object(
+            api,
+            "request",
+            return_value={"ok": True, "result": {"message_id": 99}},
+        ) as request:
+            self.assertEqual(
+                api.edit_message_text(
+                    123,
+                    "88",
+                    "plain",
+                    text_mode="html",
+                    formatted_text="<b>formatted</b>",
+                ),
+                99,
+            )
+
+        request.assert_called_once_with(
+            "editMessageText",
+            {"chat_id": 123, "message_id": "88", "text": "<b>formatted</b>", "parse_mode": "HTML"},
+        )
+
     def test_main_impl_loads_runtime_environment_before_configuring_logging(self) -> None:
         from TeeBotus import bot as bot_module
 

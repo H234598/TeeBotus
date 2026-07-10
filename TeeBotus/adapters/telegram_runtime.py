@@ -421,6 +421,31 @@ class TelegramAPI:
         message_id = result.get("message_id")
         return int(message_id) if isinstance(message_id, int) else None
 
+    def edit_message_text(
+        self,
+        chat_id: int,
+        message_id: int | str,
+        text: str,
+        *,
+        text_mode: str = "",
+        formatted_text: str = "",
+    ) -> int | None:
+        parse_mode = _telegram_parse_mode(text_mode)
+        body = formatted_text if parse_mode and formatted_text else text
+        params: dict[str, Any] = {
+            "chat_id": chat_id,
+            "message_id": message_id,
+            "text": body,
+        }
+        if parse_mode:
+            params["parse_mode"] = parse_mode
+        payload = self.request("editMessageText", params)
+        result = payload.get("result")
+        if not isinstance(result, dict):
+            return None
+        edited_message_id = result.get("message_id")
+        return int(edited_message_id) if isinstance(edited_message_id, int) else None
+
     def get_file_path(self, file_id: str) -> str:
         payload = self.request("getFile", {"file_id": file_id})
         result = payload.get("result")
