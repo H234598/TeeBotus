@@ -613,7 +613,11 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
         try:
             raw = response.read(MAX_QDRANT_COUNT_RESPONSE_BYTES + 1)
         except TypeError:
-            raw = response.read()
+            return {
+                "status": "broken",
+                "count": 0,
+                "error": "Qdrant response reader does not support bounded reads",
+            }
     except HTTPError as exc:
         close = getattr(exc, "close", None)
         if callable(close):

@@ -3316,7 +3316,7 @@ def test_cinnamon_applet_qdrant_point_count_rejects_unexpected_success_payloads(
         def __init__(self, payload: object) -> None:
             self.payload = payload
 
-        def read(self) -> bytes:
+        def read(self, _size: int = -1) -> bytes:
             return json.dumps(self.payload).encode("utf-8")
 
         def close(self) -> None:
@@ -3359,7 +3359,7 @@ def test_cinnamon_applet_qdrant_point_count_rejects_non_integer_counts(monkeypat
         def __init__(self, payload: object) -> None:
             self.payload = payload
 
-        def read(self) -> bytes:
+        def read(self, _size: int = -1) -> bytes:
             return json.dumps(self.payload).encode("utf-8")
 
         def close(self) -> None:
@@ -3389,7 +3389,7 @@ def test_cinnamon_applet_qdrant_point_count_rejects_unsafe_large_counts(monkeypa
         def __init__(self, raw: bytes) -> None:
             self.raw = raw
 
-        def read(self) -> bytes:
+        def read(self, _size: int = -1) -> bytes:
             return self.raw
 
         def close(self) -> None:
@@ -3414,7 +3414,7 @@ def test_cinnamon_applet_qdrant_point_count_rejects_json_integer_limit_error(mon
     class FakeResponse:
         status = 200
 
-        def read(self) -> bytes:
+        def read(self, _size: int = -1) -> bytes:
             return (b'{"status":"ok","result":{"count":' + b"9" * 4301 + b"}}")
 
         def close(self) -> None:
@@ -3451,6 +3451,30 @@ def test_cinnamon_applet_qdrant_point_count_rejects_oversized_response(monkeypat
     result = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
 
     assert result == {"status": "broken", "count": 0, "error": "Qdrant count response too large"}
+    assert response.closed is True
+
+
+def test_cinnamon_applet_qdrant_point_count_rejects_unbounded_response_reader(monkeypatch) -> None:
+    class FakeResponse:
+        status = 200
+        closed = False
+
+        def read(self) -> bytes:
+            return b'{"status":"ok","result":{"count":1}}'
+
+        def close(self) -> None:
+            self.closed = True
+
+    response = FakeResponse()
+    monkeypatch.setattr(cinnamon_applet, "urlopen", lambda _request, timeout: response)
+
+    result = cinnamon_applet._qdrant_point_count("http://127.0.0.1:6333", "demo")
+
+    assert result == {
+        "status": "broken",
+        "count": 0,
+        "error": "Qdrant response reader does not support bounded reads",
+    }
     assert response.closed is True
 
 
