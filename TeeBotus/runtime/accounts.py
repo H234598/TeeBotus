@@ -40,6 +40,7 @@ TEEBOTUS_ENCRYPTION_MAGICS = {"TMBMAP1", "TMBMEM1", "TMBKEY1"}
 ACCOUNT_INDEX_FILENAME = "Account_Index.json"
 ACCOUNT_IDENTITIES_FILENAME = "Account_Identities.json"
 ACCOUNT_IDENTITIES_LOCK_FILENAME = ".Account_Identities.json.lock"
+ACCOUNT_MEMORY_LOCK_FILENAME = ".Account_Memory.lock"
 ACCOUNT_SECRETS_FILENAME = "Account_Secrets.json"
 ACCOUNT_KEYRING_FILENAME = "Account_Keyring.json"
 ACCOUNTS_DIRNAME = "accounts"
@@ -56,6 +57,8 @@ AGENT_STATE_COLLECTION = "agent_state"
 INSTANCE_STATE_ACCOUNT_ID = hashlib.sha512(b"TeeBotus:instance-state:v1").hexdigest()
 _ACCOUNT_IDENTITY_LOCK = threading.RLock()
 _ACCOUNT_IDENTITY_LOCK_STATE = threading.local()
+_ACCOUNT_MEMORY_LOCK = threading.RLock()
+_ACCOUNT_MEMORY_LOCK_STATE = threading.local()
 PROACTIVE_OUTBOX_FILENAME = "Proactive_Outbox.jsonl"
 PROACTIVE_AUDIT_FILENAME = "Proactive_Audit.jsonl"
 PROACTIVE_DISPATCH_RESULTS_FILENAME = "Proactive_Dispatch_Results.jsonl"
@@ -1049,6 +1052,15 @@ def _serialize_identity_map(method: Callable[..., Any]) -> Callable[..., Any]:
     return wrapped
 
 
+def _serialize_account_memory(method: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(method)
+    def wrapped(self: "AccountStore", account_id: str, *args: Any, **kwargs: Any) -> Any:
+        with self.account_memory_lock(account_id):
+            return method(self, account_id, *args, **kwargs)
+
+    return wrapped
+
+
 @dataclass
 class AccountStore:
     root: Path
@@ -1578,6 +1590,40 @@ class AccountStore:
             if not held_paths:
                 del _ACCOUNT_IDENTITY_LOCK_STATE.paths
 
+    @contextmanager
+    def account_memory_lock(self, account_id: str) -> Iterator[None]:
+        """Serialize per-account memory read-modify-write operations."""
+
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        account_dir = self.account_dir(account_id)
+        account_dir.mkdir(parents=True, exist_ok=True)
+        lock_path = account_dir / ACCOUNT_MEMORY_LOCK_FILENAME
+        lock_key = os.path.realpath(os.fspath(lock_path))
+        with _ACCOUNT_MEMORY_LOCK:
+            held_paths = getattr(_ACCOUNT_MEMORY_LOCK_STATE, "paths", None)
+            if held_paths is None:
+                held_paths = set()
+                _ACCOUNT_MEMORY_LOCK_STATE.paths = held_paths
+            if lock_key in held_paths:
+                yield
+                return
+            with lock_path.open("a+b") as handle:
+                try:
+                    os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
+                except OSError:
+                    pass
+                if fcntl is not None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                held_paths.add(lock_key)
+                try:
+                    yield
+                finally:
+                    held_paths.discard(lock_key)
+                    if fcntl is not None:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            if not held_paths:
+                del _ACCOUNT_MEMORY_LOCK_STATE.paths
+
     def account_id(self, identity_key: str, *, create: bool = False, display_label: str = "") -> str | None:
         if create:
             return self.resolve_or_create_account(identity_key, display_label=display_label)
@@ -1947,6 +1993,7 @@ class AccountStore:
             return backend.read_index(account_id)
         return self._read_json_with_fallback(self.account_dir(account_id) / USER_MEMORY_INDEX_FILENAME, {}, vault=self.account_memory_vault)
 
+    @_serialize_account_memory
     def write_memory_index(self, account_id: str, data: dict[str, Any]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         backend = self.account_memory_backend
@@ -1983,6 +2030,7 @@ class AccountStore:
         }
         return [entries_by_id[memory_id] for memory_id in requested_ids if memory_id in entries_by_id]
 
+    @_serialize_account_memory
     def write_memory_entries(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         backend = self.account_memory_backend
@@ -1991,11 +2039,13 @@ class AccountStore:
             return
         self.account_memory_vault.write_jsonl(self.account_dir(account_id) / USER_MEMORY_ENTRIES_FILENAME, rows)
 
+    @_serialize_account_memory
     def append_memory_entry(self, account_id: str, entry: dict[str, Any]) -> None:
         rows = self.read_memory_entries(account_id)
         rows.append(dict(entry))
         self.write_memory_entries(account_id, rows)
 
+    @_serialize_account_memory
     def append_structured_memory_entry(
         self,
         account_id: str,
@@ -2041,6 +2091,7 @@ class AccountStore:
         self.write_memory_index(account_id, index)
         return memory_id
 
+    @_serialize_account_memory
     def reset_structured_memory(self, account_id: str) -> None:
         self.write_memory_entries(account_id, [])
         reset_index = self._normalized_memory_index(
@@ -2104,6 +2155,7 @@ class AccountStore:
             self._write_account_profile(account_id, profile)
             self._upsert_account_index(profile)
 
+    @_serialize_account_memory
     def rebuild_structured_memory_index(self, account_id: str) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
@@ -2531,6 +2583,7 @@ class AccountStore:
             )
         return AccountMemorySelection("\n\n".join(part for part in parts if part).strip(), tuple(selected_ids))
 
+    @_serialize_account_memory
     def mark_structured_memory_accessed(self, account_id: str, memory_ids: list[str] | tuple[str, ...]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
@@ -2568,6 +2621,7 @@ class AccountStore:
         index["updated_at"] = timestamp
         self.write_memory_index(account_id, index)
 
+    @_serialize_account_memory
     def consolidate_structured_memory(self, account_id: str, *, max_new_entries: int = 8) -> tuple[str, ...]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
@@ -2626,6 +2680,7 @@ class AccountStore:
                 break
         return tuple(created)
 
+    @_serialize_account_memory
     def run_memory_maintenance(self, account_id: str) -> tuple[str, ...]:
         created = self.consolidate_structured_memory(account_id, max_new_entries=1)
         self.rebuild_structured_memory_index(account_id)

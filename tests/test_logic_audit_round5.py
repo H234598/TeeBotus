@@ -125,6 +125,42 @@ def test_account_identity_mutations_are_serialized_across_threads(tmp_path, monk
     assert first.get_account_for_identity(identities[1]) == target
 
 
+def test_account_memory_appends_are_serialized_per_account(tmp_path, monkeypatch):
+    root = tmp_path / "accounts"
+    first = AccountStore(root, "Depressionsbot", provider())
+    second = AccountStore(root, "Depressionsbot", provider())
+    account_id = first.resolve_or_create_account(telegram_identity_key(1))
+    original_read = AccountStore.read_memory_entries
+    errors: list[BaseException] = []
+
+    def slow_read(store, current_account_id):
+        rows = original_read(store, current_account_id)
+        time.sleep(0.03)
+        return rows
+
+    def append(store, entry):
+        try:
+            store.append_structured_memory_entry(account_id, entry)
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    monkeypatch.setattr(AccountStore, "read_memory_entries", slow_read)
+    entries = (
+        {"id": "mem_parallel_a", "user_text": "Parallel A"},
+        {"id": "mem_parallel_b", "user_text": "Parallel B"},
+    )
+    threads = [threading.Thread(target=append, args=(store, entry)) for store, entry in zip((first, second), entries)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    stored_ids = {str(row.get("id")) for row in first.read_memory_entries(account_id)}
+    assert stored_ids == {"mem_parallel_a", "mem_parallel_b"}
+    assert first.check_structured_memory_index(account_id).ok
+
+
 def test_tombstoned_account_cannot_receive_login_or_secret_rotation(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))
