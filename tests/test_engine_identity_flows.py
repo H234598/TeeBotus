@@ -1652,6 +1652,72 @@ def test_engine_does_not_reuse_previous_response_id_after_provider_switch(tmp_pa
     assert gemini.previous_ids == [None]
 
 
+def test_engine_recovers_once_from_stale_previous_openai_response_id(tmp_path):
+    provider = StaticSecretProvider(b"e" * 32)
+    data_dir = tmp_path / "Depressionsbot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Depressionsbot", provider)
+    state = RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    state.set_previous_response_id("Depressionsbot", account_id, "stale-response", provider="openai", model="gpt-5.5")
+
+    class RecoveringOpenAIClient:
+        def __init__(self) -> None:
+            self.previous_ids: list[str | None] = []
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            self.previous_ids.append(previous_response_id)
+            if previous_response_id:
+                raise OpenAIAPIError("OpenAI HTTP error 400: invalid previous_response_id: response not found")
+            return OpenAIResponse("Wiederhergestellt.", "fresh-response", None)
+
+    client = RecoveringOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        state=state,
+        instructions=BotInstructions(openai_enabled=True, llm_provider="openai", openai_model="gpt-5.5"),
+        openai_client=client,
+        llm_client=client,
+    )
+
+    engine.process(event(identity, "Hallo"))
+
+    assert client.previous_ids == ["stale-response", None]
+    assert state.get_previous_response_id("Depressionsbot", account_id) == "fresh-response"
+
+
+def test_engine_keeps_state_on_non_stale_llm_error(tmp_path):
+    provider = StaticSecretProvider(b"e" * 32)
+    data_dir = tmp_path / "Depressionsbot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Depressionsbot", provider)
+    state = RuntimeStateStore(data_dir, instance_name="Depressionsbot", secret_provider=provider)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    state.set_previous_response_id("Depressionsbot", account_id, "keep-response", provider="openai", model="gpt-5.5")
+
+    class FailingOpenAIClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def create_reply(self, _user_text, _instructions, _previous_response_id=None):
+            self.calls += 1
+            raise OpenAIAPIError("OpenAI network timeout")
+
+    client = FailingOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        state=state,
+        instructions=BotInstructions(openai_enabled=True, llm_provider="openai", openai_model="gpt-5.5"),
+        openai_client=client,
+        llm_client=client,
+    )
+
+    engine.process(event(identity, "Hallo"))
+
+    assert client.calls == 1
+    assert state.get_previous_response_id("Depressionsbot", account_id) == "keep-response"
+
+
 def test_engine_passes_previous_gemini_interaction_id_per_account_and_persists(tmp_path):
     class FakeGeminiClient:
         capabilities = GEMINI_INTERACTIONS_CAPABILITIES

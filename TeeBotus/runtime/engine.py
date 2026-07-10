@@ -954,19 +954,22 @@ class TeeBotusEngine:
                 len(library_context),
                 bool(previous_response_id),
             )
-            response = create_reply(
-                _build_openai_user_input(
-                    event,
-                    text,
-                    attachment_context,
-                    account_memory_context,
-                    working_memory_context,
-                    weather_context,
-                    library_context,
-                    require_library_citations=instructions.bibliothekar_require_citations,
-                ),
+            llm_input = _build_openai_user_input(
+                event,
+                text,
+                attachment_context,
+                account_memory_context,
+                working_memory_context,
+                weather_context,
+                library_context,
+                require_library_citations=instructions.bibliothekar_require_citations,
+            )
+            response = _create_reply_with_state_recovery(
+                create_reply,
+                llm_input,
                 instructions,
                 previous_response_id,
+                reset_state=lambda: self.state.reset_previous_response_id(event.instance, account_id),
             )
             response_text = str(getattr(response, "text", "") or "").strip()
             LOGGER.info(
@@ -989,10 +992,13 @@ class TeeBotusEngine:
                     exclude_ids=(*account_memory_selection.selected_ids, *page_request.exclude_ids),
                     max_prompt_chars=max(1000, min(instructions.user_memory_max_prompt_chars, 6000)),
                 )
-                response = create_reply(
-                    _build_active_memory_page_input(event, text, page_request, page_selection, weather_context=weather_context),
+                page_input = _build_active_memory_page_input(event, text, page_request, page_selection, weather_context=weather_context)
+                response = _create_reply_with_state_recovery(
+                    create_reply,
+                    page_input,
                     instructions,
                     first_response_id or previous_response_id,
+                    reset_state=lambda: self.state.reset_previous_response_id(event.instance, account_id),
                 )
         except (OpenAIAPIError, LLMAPIError) as exc:
             LOGGER.warning(
@@ -1552,25 +1558,29 @@ class TeeBotusEngine:
                 pipeline_text,
                 structured_decision_runner=self.structured_decision_runner,
             )
-            response = create_reply(
-                _build_openai_user_input(
-                    event.with_account(account_id),
-                    pipeline_text,
-                    "",
-                    account_memory_selection.prompt_text,
-                    working_memory_context,
-                    weather_context,
-                    library_context,
-                    require_library_citations=instructions.bibliothekar_require_citations,
-                ),
+            llm_input = _build_openai_user_input(
+                event.with_account(account_id),
+                pipeline_text,
+                "",
+                account_memory_selection.prompt_text,
+                working_memory_context,
+                weather_context,
+                library_context,
+                require_library_citations=instructions.bibliothekar_require_citations,
+            )
+            previous_response_id = _previous_response_id_for_client(
+                self.llm_client,
+                self.state,
+                event.instance,
+                account_id,
+                instructions=instructions,
+            )
+            response = _create_reply_with_state_recovery(
+                create_reply,
+                llm_input,
                 instructions,
-                _previous_response_id_for_client(
-                    self.llm_client,
-                    self.state,
-                    event.instance,
-                    account_id,
-                    instructions=instructions,
-                ),
+                previous_response_id,
+                reset_state=lambda: self.state.reset_previous_response_id(event.instance, account_id),
             )
             response_text = str(getattr(response, "text", "") or "").strip()
             page_request = _parse_memory_page_request(response_text)
@@ -1584,23 +1594,20 @@ class TeeBotusEngine:
                     exclude_ids=(*account_memory_selection.selected_ids, *page_request.exclude_ids),
                     max_prompt_chars=max(1000, min(instructions.user_memory_max_prompt_chars, 6000)),
                 )
-                response = create_reply(
-                    _build_active_memory_page_input(
-                        event.with_account(account_id),
-                        pipeline_text,
-                        page_request,
-                        page_selection,
-                        weather_context=weather_context,
-                    ),
+                page_input = _build_active_memory_page_input(
+                    event.with_account(account_id),
+                    pipeline_text,
+                    page_request,
+                    page_selection,
+                    weather_context=weather_context,
+                )
+                response = _create_reply_with_state_recovery(
+                    create_reply,
+                    page_input,
                     instructions,
                     first_response_id
-                    or _previous_response_id_for_client(
-                        self.llm_client,
-                        self.state,
-                        event.instance,
-                        account_id,
-                        instructions=instructions,
-                    ),
+                    or previous_response_id,
+                    reset_state=lambda: self.state.reset_previous_response_id(event.instance, account_id),
                 )
         except (OpenAIAPIError, LLMAPIError):
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)
@@ -2822,6 +2829,36 @@ def _persistable_previous_response_id(response: object) -> str | None:
     if provider in {"openai", "responses", "openai_responses"}:
         return response_id
     return response_id if provider_is_stateful_google_gemini(provider) else None
+
+
+def _create_reply_with_state_recovery(
+    create_reply: Callable[..., object],
+    user_text: str,
+    instructions: BotInstructions,
+    previous_response_id: str | None,
+    *,
+    reset_state: Callable[[], None],
+) -> object:
+    try:
+        return create_reply(user_text, instructions, previous_response_id)
+    except (OpenAIAPIError, LLMAPIError) as exc:
+        if not previous_response_id or not _is_stale_previous_response_error(exc):
+            raise
+        reset_state()
+        LOGGER.warning(
+            "Discarded stale stateful LLM context and retrying once without previous response: %s",
+            exc,
+        )
+        return create_reply(user_text, instructions, None)
+
+
+def _is_stale_previous_response_error(exc: BaseException) -> bool:
+    text = str(exc or "").casefold()
+    if "previous_response" in text or "previous response" in text or "previous_interaction" in text or "previous interaction" in text:
+        return True
+    if "interaction" not in text and "response" not in text:
+        return False
+    return any(marker in text for marker in ("not found", "expired", "does not exist", "invalid", "unknown"))
 
 
 def _llm_state_scope(
