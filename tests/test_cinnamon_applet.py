@@ -2237,12 +2237,13 @@ def test_cinnamon_applet_runtime_parser_classifies_qdrant_secondary_status() -> 
         """
         [Memory und semantische Suche]
         qdrant_collection=teebotus_user_memory status=ready semantic=unavailable
+        qdrant_collection=teebotus_bibliothekar_chunks status=unreachable semantic=unsupported
         """
     )
 
-    assert parsed["summary"]["qdrant_problem_status_count"] == 1
-    assert parsed["summary"]["problem_status_count"] == 1
-    assert parsed["summary"]["problem_statuses"] == "unavailable:1"
+    assert parsed["summary"]["qdrant_problem_status_count"] == 3
+    assert parsed["summary"]["problem_status_count"] == 3
+    assert parsed["summary"]["problem_statuses"] == "unavailable:1,unreachable:1,unsupported:1"
 
 
 def test_cinnamon_applet_runtime_parser_counts_models_feed_secondary_status() -> None:
