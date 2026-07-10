@@ -585,6 +585,10 @@ TeeBotusApplet.prototype = {
     let version = String(payload.version || "?");
     let commit = String(repo.short_commit || "?");
     lines.push("Runtime: " + instances + " | Kanaele " + channels + " | Version " + version + " | Commit " + commit);
+    let runtimeDiagnostics = this._runtimeDiagnosticsText(payload);
+    if (runtimeDiagnostics) {
+      lines.push(runtimeDiagnostics.slice(3));
+    }
     return lines;
   },
 
@@ -1346,12 +1350,13 @@ TeeBotusApplet.prototype = {
     let breakdown = this._problemBreakdownText(health.problem_statuses || summary.problem_statuses || this._problemStatusesFromCounts(counts || {}));
     let commandBreakdown = this._commandProblemBreakdownText(health);
     let qdrantBreakdown = this._qdrantProblemBreakdownText(health);
+    let runtimeDiagnostics = this._runtimeDiagnosticsText(payload);
     let result;
     if (bad > 0) {
       let problemLabel = health.status === "broken" ? "Probleme " : "Warnungen ";
-      result = problemLabel + String(bad) + breakdown + commandBreakdown + qdrantBreakdown + " | Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText;
+      result = problemLabel + String(bad) + breakdown + commandBreakdown + qdrantBreakdown + " | Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + runtimeDiagnostics;
     } else {
-      result = "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + breakdown + commandBreakdown + qdrantBreakdown;
+      result = "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + breakdown + commandBreakdown + qdrantBreakdown + runtimeDiagnostics;
     }
     return this._shortText(result, MAX_PANEL_STATUS_CHARS);
   },
@@ -1492,6 +1497,19 @@ TeeBotusApplet.prototype = {
     text += this._commandProblemBreakdownText(health);
     text += this._qdrantProblemBreakdownText(health);
     return text;
+  },
+
+  _runtimeDiagnosticsText: function(payload) {
+    let runtime = payload && payload.runtime && typeof payload.runtime === "object" ? payload.runtime : {};
+    let parts = [];
+    if (Object.prototype.hasOwnProperty.call(runtime, "returncode") && !this._returncodeIsSuccessful(runtime.returncode)) {
+      parts.push("Returncode " + this._shortText(String(runtime.returncode), 32));
+    }
+    let stderr = typeof runtime.stderr === "string" ? runtime.stderr.trim() : "";
+    if (stderr) {
+      parts.push("Meldung " + this._shortText(stderr, 120));
+    }
+    return parts.length > 0 ? " | Runtime " + parts.join("; ") : "";
   },
 
   _problemStatusCount: function(counts) {

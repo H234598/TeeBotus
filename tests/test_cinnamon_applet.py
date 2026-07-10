@@ -1571,6 +1571,39 @@ def test_cinnamon_applet_status_refresh_keeps_previous_payload_on_error() -> Non
     assert result["lastError"] == "timeout"
 
 
+def test_cinnamon_applet_status_displays_runtime_diagnostics() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let payload = {
+            ok: false,
+            version: "1.2.3",
+            repo: {short_commit: "abc1234"},
+            unit: {active_state: "active", sub_state: "running"},
+            health: {status: "broken", command_problem_count: 1},
+            qdrant: {collections: {}},
+            runtime: {
+              returncode: 124,
+              stderr: "TimeoutExpired: command timed out after 10 seconds",
+              summary: {instances: "Demo", channels: "telegram"},
+              status_counts: {},
+              sections: {}
+            }
+          };
+          return {
+            summary: applet._statusSummary(payload),
+            details: applet._statusDetailLines(payload)
+          };
+        })()
+        """
+    )
+
+    assert "Runtime Returncode 124" in result["summary"]
+    assert "TimeoutExpired" in result["summary"]
+    assert "Runtime Returncode 124" in result["details"][-1]
+    assert "TimeoutExpired" in result["details"][-1]
+
+
 def test_cinnamon_applet_status_refresh_queues_changes_while_running() -> None:
     result = _run_js_applet_expression(
         """
