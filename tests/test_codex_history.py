@@ -1737,6 +1737,43 @@ def test_record_codex_history_delivery_receipt_keeps_routes_separate(tmp_path: P
     assert {(row["channel"], row["chat_id"]) for row in delivered} == {("telegram", "42"), ("signal", "+491")}
 
 
+def test_record_codex_history_delivery_receipt_keeps_adapter_slots_separate(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "receipt-slot-demo", version="1.8.5")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(42), display_label="Admin")
+    first = append_codex_history_summary(store, repo_root=repo, title="Slot One", bullets=["Slot 1."])
+    second = append_codex_history_summary(store, repo_root=repo, title="Slot Two", bullets=["Slot 2."])
+    for item_id, adapter_slot in ((second["id"], 2), (first["id"], 1)):
+        store.append_codex_history_dispatch_result(
+            INSTANCE_STATE_ACCOUNT_ID,
+            {
+                "codex_history_item_id": item_id,
+                "account_id": admin_id,
+                "instance": "Depressionsbot",
+                "status": "accepted",
+                "channel": "telegram",
+                "chat_id": "42",
+                "message_ref": "101",
+                "adapter_slot": adapter_slot,
+            },
+        )
+
+    result = record_codex_history_delivery_receipt(
+        store,
+        instance_name="Depressionsbot",
+        channel="telegram",
+        chat_id="42",
+        account_id=admin_id,
+        adapter_slot=2,
+        message_ref="101",
+        now=datetime(2026, 6, 19, 16, tzinfo=timezone.utc),
+    )
+
+    assert result["item_id"] == second["id"]
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status"] == "queued"
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[1]["status"] == "delivered"
+
+
 def test_record_codex_history_delivery_receipt_requires_account_id(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "receipt-account-demo", version="1.8.5")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())

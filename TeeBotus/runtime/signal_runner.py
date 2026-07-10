@@ -432,6 +432,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 channel="signal",
                 chat_id=event.chat_id,
                 account_id=event.account_id,
+                adapter_slot=event.adapter_slot,
                 reply_to_message_ref=reply_to_ref,
                 reply_message_ref=event.message_ref,
                 reply_text=event.text,
@@ -478,6 +479,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                     channel="signal",
                     chat_id=chat_id,
                     account_id=account_id,
+                    adapter_slot=self.run_config.slot,
                     message_ref=message_ref,
                     receipt_type=receipt_type,
                 )

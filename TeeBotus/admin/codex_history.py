@@ -832,6 +832,7 @@ def record_codex_history_reply(
     chat_id: str,
     reply_to_message_ref: str,
     account_id: str = "",
+    adapter_slot: int | str | None = None,
     reply_message_ref: str = "",
     reply_text: str = "",
     now: datetime | None = None,
@@ -852,6 +853,7 @@ def record_codex_history_reply(
         channel=normalized_channel,
         chat_id=normalized_chat_id,
         message_ref=normalized_reply_to,
+        adapter_slot=adapter_slot,
         account_id=normalized_account_id,
     )
     if match is None:
@@ -862,6 +864,9 @@ def record_codex_history_reply(
         return {"ok": False, "status": "not_found", "reason": "missing_history_item", "item_id": item_id}
     timestamp = _iso_timestamp(now)
     route = {"channel": normalized_channel, "chat_id": normalized_chat_id}
+    normalized_adapter_slot = _normalize_codex_history_adapter_slot(adapter_slot)
+    if normalized_adapter_slot:
+        route["adapter_slot"] = int(normalized_adapter_slot)
     matched_account_id = str(match.get("account_id") or account_id or "").strip()
     normalized_reply_ref = str(reply_message_ref or "").strip()
     existing_acknowledged = _find_codex_history_reply_result(
@@ -872,6 +877,7 @@ def record_codex_history_reply(
         channel=normalized_channel,
         chat_id=normalized_chat_id,
         message_ref=normalized_reply_to,
+        adapter_slot=normalized_adapter_slot,
         reply_message_ref=normalized_reply_ref,
         status="acknowledged",
     )
@@ -891,6 +897,7 @@ def record_codex_history_reply(
         channel=normalized_channel,
         chat_id=normalized_chat_id,
         message_ref=normalized_reply_to,
+        adapter_slot=normalized_adapter_slot,
         reply_message_ref=normalized_reply_ref,
         status="delivered",
     )
@@ -958,6 +965,7 @@ def record_codex_history_delivery_receipt(
     chat_id: str,
     message_ref: str,
     account_id: str = "",
+    adapter_slot: int | str | None = None,
     receipt_type: str = "delivered",
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -977,6 +985,7 @@ def record_codex_history_delivery_receipt(
         channel=normalized_channel,
         chat_id=normalized_chat_id,
         message_ref=normalized_message_ref,
+        adapter_slot=adapter_slot,
         account_id=normalized_account_id,
     )
     if match is None:
@@ -987,6 +996,9 @@ def record_codex_history_delivery_receipt(
         return {"ok": False, "status": "not_found", "reason": "missing_history_item", "item_id": item_id}
     timestamp = _iso_timestamp(now)
     route = {"channel": normalized_channel, "chat_id": normalized_chat_id}
+    normalized_adapter_slot = _normalize_codex_history_adapter_slot(adapter_slot)
+    if normalized_adapter_slot:
+        route["adapter_slot"] = int(normalized_adapter_slot)
     matched_account_id = str(match.get("account_id") or account_id or "").strip()
     normalized_instance_name = str(instance_name or "").strip()
     existing_receipt = _find_codex_history_receipt_result(
@@ -997,6 +1009,7 @@ def record_codex_history_delivery_receipt(
         channel=normalized_channel,
         chat_id=normalized_chat_id,
         message_ref=normalized_message_ref,
+        adapter_slot=normalized_adapter_slot,
     )
     if existing_receipt is not None:
         existing_receipt_type = _normalize_delivery_receipt_type(existing_receipt.get("receipt_type"))
@@ -3706,6 +3719,9 @@ def _record_codex_history_dispatch_result(
         "created_at": now,
         "updated_at": now,
     }
+    normalized_adapter_slot = _normalize_codex_history_adapter_slot(route.get("adapter_slot"))
+    if normalized_adapter_slot:
+        row["adapter_slot"] = int(normalized_adapter_slot)
     normalized_reply_ref = str(reply_message_ref or "").strip()
     if normalized_reply_ref:
         row["reply_message_ref"] = normalized_reply_ref
@@ -3731,6 +3747,19 @@ def _normalize_delivery_receipt_type(value: str) -> str:
     if normalized in {"read", "viewed", "delivered"}:
         return normalized
     return "delivered"
+
+
+def _normalize_codex_history_adapter_slot(value: object) -> str:
+    if isinstance(value, bool):
+        return ""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        slot = int(text)
+    except (TypeError, ValueError):
+        return ""
+    return str(slot) if slot >= 0 else ""
 
 
 def _update_codex_history_item_status(
@@ -4117,14 +4146,17 @@ def _find_codex_history_dispatch_for_message(
     chat_id: str,
     message_ref: str,
     account_id: str = "",
+    adapter_slot: int | str | None = None,
 ) -> dict[str, Any] | None:
     normalized_instance = str(instance_name or "").strip()
     normalized_channel = str(channel or "").strip().casefold()
     normalized_chat_id = str(chat_id or "").strip()
     normalized_message_ref = str(message_ref or "").strip()
     normalized_account_id = str(account_id or "").strip().casefold()
+    normalized_adapter_slot = _normalize_codex_history_adapter_slot(adapter_slot)
     if not normalized_channel or not normalized_chat_id or not normalized_message_ref or not normalized_account_id:
         return None
+    legacy_match: dict[str, Any] | None = None
     for row in reversed(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)):
         if not isinstance(row, Mapping):
             continue
@@ -4141,8 +4173,15 @@ def _find_codex_history_dispatch_for_message(
         item_id = str(row.get("codex_history_item_id") or "").strip()
         if not item_id:
             continue
+        row_adapter_slot = _normalize_codex_history_adapter_slot(row.get("adapter_slot"))
+        if normalized_adapter_slot:
+            if row_adapter_slot == normalized_adapter_slot:
+                return dict(row)
+            if not row_adapter_slot and legacy_match is None:
+                legacy_match = dict(row)
+            continue
         return dict(row)
-    return None
+    return legacy_match
 
 
 def _find_codex_history_reply_result(
@@ -4154,6 +4193,7 @@ def _find_codex_history_reply_result(
     channel: str,
     chat_id: str,
     message_ref: str,
+    adapter_slot: int | str | None,
     reply_message_ref: str,
     status: str,
 ) -> dict[str, Any] | None:
@@ -4163,10 +4203,12 @@ def _find_codex_history_reply_result(
     normalized_channel = str(channel or "").strip().casefold()
     normalized_chat_id = str(chat_id or "").strip()
     normalized_message_ref = str(message_ref or "").strip()
+    normalized_adapter_slot = _normalize_codex_history_adapter_slot(adapter_slot)
     normalized_reply_ref = str(reply_message_ref or "").strip()
     normalized_status = str(status or "").strip().casefold()
     if not normalized_item_id or not normalized_account_id or not normalized_channel or not normalized_chat_id or not normalized_message_ref or not normalized_status:
         return None
+    legacy_match: dict[str, Any] | None = None
     for row in reversed(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)):
         if not isinstance(row, Mapping):
             continue
@@ -4187,8 +4229,15 @@ def _find_codex_history_reply_result(
             continue
         if str(row.get("status") or "").strip().casefold() != normalized_status:
             continue
+        row_adapter_slot = _normalize_codex_history_adapter_slot(row.get("adapter_slot"))
+        if normalized_adapter_slot:
+            if row_adapter_slot == normalized_adapter_slot:
+                return dict(row)
+            if not row_adapter_slot and legacy_match is None:
+                legacy_match = dict(row)
+            continue
         return dict(row)
-    return None
+    return legacy_match
 
 
 def _find_codex_history_receipt_result(
@@ -4200,6 +4249,7 @@ def _find_codex_history_receipt_result(
     channel: str,
     chat_id: str,
     message_ref: str,
+    adapter_slot: int | str | None,
 ) -> dict[str, Any] | None:
     normalized_item_id = str(item_id or "").strip()
     normalized_instance = str(instance_name or "").strip()
@@ -4207,8 +4257,10 @@ def _find_codex_history_receipt_result(
     normalized_channel = str(channel or "").strip().casefold()
     normalized_chat_id = str(chat_id or "").strip()
     normalized_message_ref = str(message_ref or "").strip()
+    normalized_adapter_slot = _normalize_codex_history_adapter_slot(adapter_slot)
     if not normalized_item_id or not normalized_account_id or not normalized_channel or not normalized_chat_id or not normalized_message_ref:
         return None
+    legacy_match: dict[str, Any] | None = None
     for row in reversed(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)):
         if not isinstance(row, Mapping):
             continue
@@ -4228,8 +4280,15 @@ def _find_codex_history_receipt_result(
             continue
         if not str(row.get("receipt_type") or "").strip():
             continue
+        row_adapter_slot = _normalize_codex_history_adapter_slot(row.get("adapter_slot"))
+        if normalized_adapter_slot:
+            if row_adapter_slot == normalized_adapter_slot:
+                return dict(row)
+            if not row_adapter_slot and legacy_match is None:
+                legacy_match = dict(row)
+            continue
         return dict(row)
-    return None
+    return legacy_match
 
 
 def _codex_session_title(final_text: str) -> str:
