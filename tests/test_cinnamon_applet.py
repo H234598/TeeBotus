@@ -1784,8 +1784,16 @@ def test_cinnamon_applet_history_status_labels_are_localized() -> None:
     result = _run_js_applet_expression(
         """
         ({
+          acknowledged: applet._statusWord("acknowledged"),
           accepted: applet._statusWord("accepted"),
+          cancelled: applet._statusWord("cancelled"),
+          delivered: applet._statusWord("delivered"),
+          dispatching: applet._statusWord("dispatching"),
+          duplicate: applet._statusWord("duplicate"),
+          imported: applet._statusWord("imported"),
+          mixed: applet._statusWord("mixed"),
           queued: applet._statusWord("queued"),
+          sent: applet._statusWord("sent"),
           skipped: applet._statusWord("skipped"),
           history: applet._formatProjectHistoryLine("codex_history_repo=Demo repo=TeeBotus status=warning queued=1 failed=0 total=2 latest_status=queued latest_kind=codex_run_summary")
         })
@@ -1793,8 +1801,16 @@ def test_cinnamon_applet_history_status_labels_are_localized() -> None:
     )
 
     assert result == {
+        "acknowledged": "bestaetigt",
         "accepted": "akzeptiert",
+        "cancelled": "abgebrochen",
+        "delivered": "zugestellt",
+        "dispatching": "wird gesendet",
+        "duplicate": "Duplikat",
+        "imported": "importiert",
+        "mixed": "gemischt",
         "queued": "wartet",
+        "sent": "gesendet",
         "skipped": "uebersprungen",
         "history": "Repo-History TeeBotus (Demo): Warnung; offen 1; fehlgeschlagen 0; gesamt 2; letzter Status wartet; Typ Run-Summary",
     }

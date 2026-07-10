@@ -1068,14 +1068,18 @@ TeeBotusApplet.prototype = {
   _statusWord: function(status) {
     let value = String(status || "unknown").trim().toLowerCase();
     let labels = {
+      acknowledged: "bestaetigt",
       accepted: "akzeptiert",
       available: "verfuegbar",
       broken: "defekt",
+      cancelled: "abgebrochen",
       configured: "konfiguriert",
       config_conflict: "Konfigurationskonflikt",
       cooldown: "Cooldown",
       degraded: "eingeschraenkt",
       disabled: "deaktiviert",
+      delivered: "zugestellt",
+      dispatching: "wird gesendet",
       enabled: "aktiv",
       empty: "leer",
       error: "Fehler",
@@ -1083,6 +1087,8 @@ TeeBotusApplet.prototype = {
       fallback_defaults: "konservative Ersatzwerte",
       healthy: "gesund",
       installed: "installiert",
+      duplicate: "Duplikat",
+      imported: "importiert",
       invalid: "ungueltig",
       missing_key: "Key fehlt",
       missing: "fehlt",
@@ -1094,6 +1100,7 @@ TeeBotusApplet.prototype = {
       none: "nicht vorhanden",
       ok: "ok",
       planned: "geplant",
+      mixed: "gemischt",
       partial: "teilweise",
       queued: "wartet",
       reachable: "erreichbar",
@@ -1102,12 +1109,16 @@ TeeBotusApplet.prototype = {
       registered: "registriert",
       routable: "routbar",
       schema_mismatch: "Schema passt nicht",
+      review_pending: "Pruefung offen",
+      sent: "gesendet",
       skipped: "uebersprungen",
       stale: "veraltet",
       unknown: "unbekannt",
       unavailable: "nicht verfuegbar",
       unreachable: "nicht erreichbar",
       unsupported: "nicht unterstuetzt",
+      unreadable: "nicht lesbar",
+      readable: "lesbar",
       warning: "Warnung"
     };
     return _hasOwn(labels, value) ? labels[value] : value;
