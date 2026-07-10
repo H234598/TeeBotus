@@ -765,6 +765,13 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
         if isinstance(status_value, bool) or not isinstance(status_value, int):
             raise ValueError("invalid Qdrant HTTP status")
         status_code = status_value
+        response_url_getter = getattr(response, "geturl", None)
+        try:
+            response_url = response_url_getter() if callable(response_url_getter) else getattr(response, "url", None)
+        except Exception as exc:  # noqa: BLE001 - malformed response metadata must not escape the status probe.
+            return {"status": "broken", "count": 0, "error": f"invalid Qdrant response URL: {type(exc).__name__}"}
+        if response_url is not None and not _qdrant_response_has_same_local_origin(url, response_url):
+            return {"status": "broken", "count": 0, "error": "Qdrant response redirected outside local origin"}
         try:
             raw = response.read(MAX_QDRANT_COUNT_RESPONSE_BYTES + 1)
         except TypeError:
@@ -795,13 +802,6 @@ def _qdrant_point_count(url: str, collection: str) -> dict[str, Any]:
                     pass
     if not 200 <= status_code < 300:
         return {"status": "unreachable", "count": 0, "error": f"HTTP {status_code}"}
-    response_url_getter = getattr(response, "geturl", None)
-    try:
-        response_url = response_url_getter() if callable(response_url_getter) else getattr(response, "url", None)
-    except Exception as exc:  # noqa: BLE001 - malformed response metadata must not escape the status probe.
-        return {"status": "broken", "count": 0, "error": f"invalid Qdrant response URL: {type(exc).__name__}"}
-    if response_url is not None and not _qdrant_response_has_same_local_origin(url, response_url):
-        return {"status": "broken", "count": 0, "error": "Qdrant response redirected outside local origin"}
     if not isinstance(raw, (bytes, bytearray)):
         return {"status": "broken", "count": 0, "error": "invalid Qdrant response body"}
     if len(raw) > MAX_QDRANT_COUNT_RESPONSE_BYTES:
