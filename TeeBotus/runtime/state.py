@@ -39,6 +39,7 @@ from TeeBotus.runtime.maintenance import (
 FlowType = Literal["teladi_emergency", "memory_reset", "youtube_options", "account_edit", "link_wtf"] | str
 LINK_NOTIFICATIONS_FILENAME = "Link_Notifications.json"
 LINK_NOTIFICATION_TTL_SECONDS = 15 * 60
+PENDING_FLOW_TTL_SECONDS = 30 * 60
 SECURITY_EVENTS_LOCK_FILENAME = ".Security_Events.jsonl.lock"
 PREVIOUS_RESPONSE_PROVIDER_FIELD = "previous_response_provider"
 PREVIOUS_RESPONSE_MODEL_FIELD = "previous_response_model"
@@ -75,6 +76,7 @@ class RuntimeState:
     """Small in-memory state container for pending account-scoped flows."""
 
     pending_flows: dict[tuple[str, str, str], dict[str, Any]] = field(default_factory=dict)
+    pending_flow_created_at: dict[tuple[str, str, str], float] = field(default_factory=dict)
     link_notifications: dict[tuple[str, str, str], dict[str, str]] = field(default_factory=dict)
     previous_response_ids: dict[tuple[str, str], str] = field(default_factory=dict)
     previous_response_scopes: dict[tuple[str, str], tuple[str, str, str]] = field(default_factory=dict)
@@ -83,14 +85,28 @@ class RuntimeState:
     security_events_persistence_error: str = ""
 
     def set_pending_flow(self, instance_name: str, account_id: str, flow_type: str, payload: dict[str, Any]) -> None:
-        self.pending_flows[(instance_name, account_id, flow_type)] = deepcopy(payload)
+        key = (instance_name, account_id, flow_type)
+        self.pending_flows[key] = deepcopy(payload)
+        self.pending_flow_created_at[key] = time.time()
 
     def pop_pending_flow(self, instance_name: str, account_id: str, flow_type: str) -> dict[str, Any] | None:
-        return self.pending_flows.pop((instance_name, account_id, flow_type), None)
+        self._purge_expired_pending_flows()
+        key = (instance_name, account_id, flow_type)
+        self.pending_flow_created_at.pop(key, None)
+        return self.pending_flows.pop(key, None)
 
     def get_pending_flow(self, instance_name: str, account_id: str, flow_type: str) -> dict[str, Any] | None:
-        payload = self.pending_flows.get((instance_name, account_id, flow_type))
+        self._purge_expired_pending_flows()
+        key = (instance_name, account_id, flow_type)
+        payload = self.pending_flows.get(key)
         return deepcopy(payload) if payload is not None else None
+
+    def _purge_expired_pending_flows(self) -> None:
+        now = time.time()
+        for key, created_at in list(self.pending_flow_created_at.items()):
+            if created_at <= 0 or now - created_at > PENDING_FLOW_TTL_SECONDS:
+                self.pending_flow_created_at.pop(key, None)
+                self.pending_flows.pop(key, None)
 
     def set_previous_response_id(
         self,
@@ -336,7 +352,7 @@ class RuntimeStateStore(RuntimeState):
             flow = args[0]
             self._ensure_instance_scope(flow.instance)
             with _PENDING_FLOW_LOCK:
-                self.pending_flows[(flow.instance, flow.account_id, flow.flow_type)] = flow.as_dict()
+                super().set_pending_flow(flow.instance, flow.account_id, flow.flow_type, flow.as_dict())
             return
         instance_name = args[0] if args else kwargs.get("instance_name", "")
         self._ensure_instance_scope(instance_name)

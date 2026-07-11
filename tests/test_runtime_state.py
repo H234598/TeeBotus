@@ -18,7 +18,7 @@ from TeeBotus.runtime.accounts import (
 )
 from TeeBotus.runtime.events import IncomingEvent, IncomingLinkPreview
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
-from TeeBotus.runtime.state import RuntimeState, RuntimeStateStore
+from TeeBotus.runtime.state import PENDING_FLOW_TTL_SECONDS, RuntimeState, RuntimeStateStore
 
 
 class BrokenProvider:
@@ -890,6 +890,20 @@ def test_runtime_state_store_isolates_nested_pending_flow_payloads(tmp_path):
         "nested": {"step": "start"},
         "items": ["one"],
     }
+
+
+def test_runtime_state_store_expires_stale_pending_flows(tmp_path, monkeypatch):
+    import TeeBotus.runtime.state as state_module
+
+    clock = [1000.0]
+    monkeypatch.setattr(state_module.time, "time", lambda: clock[0])
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    state.set_pending_flow("Bot", ACCOUNT_ID, "route", {"step": "start"})
+    clock[0] += PENDING_FLOW_TTL_SECONDS + 1
+
+    assert state.get_pending_flow("Bot", ACCOUNT_ID, "route") is None
+    assert ("Bot", ACCOUNT_ID, "route") not in state.pending_flows
+    assert ("Bot", ACCOUNT_ID, "route") not in state.pending_flow_created_at
 
 
 def test_runtime_state_store_scopes_key_fingerprint_only_lookup(tmp_path):
