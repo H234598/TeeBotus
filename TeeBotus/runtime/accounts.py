@@ -3692,9 +3692,11 @@ class AccountStore:
             values = keyword_index.get(keyword) if isinstance(keyword_index, dict) else None
             if not isinstance(values, list):
                 continue
+            seen_keyword_ids: set[str] = set()
             for memory_id in values:
                 resolved_id = str(memory_id or "").strip()
-                if resolved_id in entries_by_id:
+                if resolved_id in entries_by_id and resolved_id not in seen_keyword_ids:
+                    seen_keyword_ids.add(resolved_id)
                     scores[resolved_id] = scores.get(resolved_id, 0) + 10
         semantic_cache = nested_index.get("semantic_cache") if isinstance(nested_index.get("semantic_cache"), dict) else {}
         semantic_entries = semantic_cache.get("entries") if isinstance(semantic_cache.get("entries"), dict) else {}
@@ -3702,10 +3704,14 @@ class AccountStore:
         if semantic_enabled and query_keywords and isinstance(semantic_entries, dict):
             query_set = set(query_keywords)
             query_vector = _account_memory_embedding(query_text)
+            seen_semantic_ids: set[str] = set()
             for memory_id, metadata in semantic_entries.items():
                 resolved_id = str(memory_id or "").strip()
                 if resolved_id not in entries_by_id or not isinstance(metadata, dict):
                     continue
+                if resolved_id in seen_semantic_ids:
+                    continue
+                seen_semantic_ids.add(resolved_id)
                 signature = metadata.get("signature") if isinstance(metadata.get("signature"), list) else []
                 overlap = len(query_set.intersection(str(value) for value in signature))
                 if overlap:

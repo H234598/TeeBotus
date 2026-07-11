@@ -4357,6 +4357,28 @@ def test_memory_ranking_normalizes_legacy_id_whitespace(tmp_path):
     assert [entry["id"] for entry in ranked] == [" mem_legacy "]
 
 
+def test_memory_ranking_does_not_double_score_duplicate_index_ids(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+
+    ranked = store._rank_structured_memory_entries(
+        [
+            {"id": "mem_a", "user_text": "Mond", "keywords": ["mond"]},
+            {"id": "mem_b", "user_text": "Mond", "keywords": ["mond"]},
+        ],
+        {
+            "index": {
+                "recent_ids": ["mem_a", "mem_b"],
+                "accessed_ids": [],
+                "keywords": {"mond": ["mem_a", " mem_a ", "mem_b"]},
+                "semantic_cache": {"enabled": False, "entries": {}},
+            }
+        },
+        "mond",
+    )
+
+    assert [entry["id"] for entry in ranked] == ["mem_b", "mem_a"]
+
+
 def test_structured_account_memory_selection_can_exclude_loaded_ids(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
