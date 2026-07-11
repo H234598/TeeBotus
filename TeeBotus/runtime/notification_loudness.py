@@ -91,7 +91,18 @@ NOTIFICATION_LOUDNESS_STATUS_LEAD_TERMS = frozenset(
         "not",
     }
 )
-NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = ("erledigt", "gemacht", "eingeschaltet", "aktiviert", "laut gestellt")
+NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
+    "erledigt",
+    "gemacht",
+    "getan",
+    "fertig",
+    "done",
+    "completed",
+    "geschafft",
+    "eingeschaltet",
+    "aktiviert",
+    "laut gestellt",
+)
 NOTIFICATION_LOUDNESS_ACTION_WORDS = frozenset({"hab", "habe", "haben", "getan", "gemacht", "erledigt", "did", "done"})
 NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS = frozenset({"ja", "yes", "jep", "jo"})
 NOTIFICATION_LOUDNESS_NEGATION_REPLY_WORDS = frozenset({"nein", "no", "nee", "nop", "nope"})
@@ -372,6 +383,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "aktiviert",
         "erledigt",
         "gemacht",
+        "getan",
+        "fertig",
+        "done",
+        "completed",
+        "geschafft",
     )
     declined_needles = (
         "ablehnen",
@@ -421,10 +437,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and not (has_negated_mute or has_negated_off)
     ):
         return "declined"
-    if pending and any(
-        _contains_normalized_phrase(normalized, needle)
-        for needle in ("erledigt", "gemacht", "eingeschaltet", "aktiviert")
-    ):
+    if pending and any(_contains_normalized_phrase(normalized, needle) for needle in NOTIFICATION_LOUDNESS_COMPLETION_PHRASES):
         return "confirmed"
     if pending and normalized in {"nein", "no", "nee", "nop", "nope"}:
         return "declined"

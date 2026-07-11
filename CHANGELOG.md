@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.107 - 2026-07-12
+
+- Recognize completion synonyms in loudness replies.
+
 ## 1.9.106 - 2026-07-12
 
 - Recognize message and push context in loudness status replies.

@@ -1167,6 +1167,16 @@ def test_loudness_free_text_accepts_short_pending_action_replies() -> None:
     assert _notification_loudness_decision("nein habe ich nicht", pending=True) == "declined"
 
 
+def test_loudness_free_text_accepts_completion_synonyms() -> None:
+    assert _notification_loudness_decision("Ich habe es getan", pending=True) == "confirmed"
+    assert _notification_loudness_decision("fertig", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I am done", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I completed it", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich habe es geschafft", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich bin nicht fertig", pending=True) == "declined"
+    assert _notification_loudness_decision("I am not done", pending=True) == "declined"
+
+
 def test_loudness_free_text_keeps_negation_precedence_without_pending_state() -> None:
     assert _notification_loudness_decision("Benachrichtigungen sind deaktiviert", pending=False) == "declined"
     assert _notification_loudness_decision("Benachrichtigungen sind nicht aktiviert", pending=False) == "declined"
