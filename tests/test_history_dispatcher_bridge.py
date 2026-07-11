@@ -91,3 +91,18 @@ def test_bridge_spools_when_dispatcher_is_unavailable(tmp_path: Path) -> None:
     asyncio.run(run())
     assert len(spool.events()) == 1
 
+
+def test_bridge_keeps_spooled_event_when_inner_dispatcher_result_fails(tmp_path: Path) -> None:
+    spool = CallbackSpool(tmp_path / "spool")
+
+    class InnerFailureClient:
+        async def request_async(self, _operation: str, _body: object) -> dict[str, object]:
+            return {"ok": True, "data": {"ok": False, "error": "missing item"}}
+
+    bridge = HistoryDispatcherBridge(InnerFailureClient(), spool)  # type: ignore[arg-type]
+    spool.enqueue({"event_id": "event-inner-failure", "item_id": "missing", "recipient_id": "admin", "event_type": "sent"})
+
+    result = asyncio.run(bridge.flush_spool())
+
+    assert result == {"delivered": 0, "failed": 1}
+    assert len(spool.events()) == 1

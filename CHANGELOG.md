@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.5 - 2026-07-11
+
+- Keep callback spool files when the Dispatcher RPC succeeds transport-wise but
+  reports an inner delivery failure.
+
 ## 1.9.4 - 2026-07-11
 
 - Accept both `recipient_id` and legacy `account_id` fields when skipping

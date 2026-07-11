@@ -175,7 +175,11 @@ class HistoryDispatcherBridge:
         for path, event in self.spool.events():
             try:
                 response = await self.client.request_async("delivery.record", event)
-                if response.get("ok"):
+                data = response.get("data", response)
+                succeeded = bool(response.get("ok")) and (
+                    not isinstance(data, Mapping) or bool(data.get("ok", True))
+                )
+                if succeeded:
                     self.spool.discard(path)
                     delivered += 1
                 else:
@@ -184,4 +188,3 @@ class HistoryDispatcherBridge:
                 failed += 1
                 break
         return {"delivered": delivered, "failed": failed}
-
