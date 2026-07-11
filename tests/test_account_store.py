@@ -2941,6 +2941,30 @@ def test_account_memory_fallback_clear_resets_recovery_state() -> None:
     assert backend.last_fallback_sync_error == ""
 
 
+def test_account_memory_fallback_blocks_failover_when_secondary_clear_fails(caplog) -> None:
+    class Backend:
+        def __init__(self, *, fail_clear: bool = False) -> None:
+            self.fail_clear = fail_clear
+
+        def clear_account_unchecked(self, _account_id: str) -> None:
+            if self.fail_clear:
+                raise OSError("fallback clear unavailable")
+
+    account_id = "a" * 128
+    backend = WarningFallbackAccountMemoryBackend(Backend(), Backend(fail_clear=True), label="Demo:sqlite")
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        with pytest.raises(OSError, match="fallback clear unavailable"):
+            backend.clear_account_unchecked(account_id)
+
+    assert backend._fallback_active is True
+    assert account_id in backend._fallback_sync_failed_entries
+    assert account_id in backend._fallback_sync_failed_indexes
+    assert backend.stale_fallback_collection_account_ids == (account_id,)
+    assert backend._operation_has_unsafe_fallback("read_collection:codex_history_outbox", account_id) is True
+    assert "FAILOVER IS BLOCKED" in caplog.text
+
+
 def test_account_memory_fallback_retries_stale_secondary_when_primary_is_available() -> None:
     class Backend:
         def __init__(self, *, fail_write: bool = False) -> None:

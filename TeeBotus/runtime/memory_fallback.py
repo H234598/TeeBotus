@@ -168,11 +168,32 @@ class WarningFallbackAccountMemoryBackend:
             return tuple(getattr(self.fallback, "read_collection_names")(account_id))
 
     def clear_account_unchecked(self, account_id: str) -> None:
-        for backend in (self.primary, self.fallback):
-            clear = getattr(backend, "clear_account_unchecked", None)
-            if not callable(clear):
-                raise AttributeError(f"{type(backend).__name__} has no clear_account_unchecked")
-            clear(account_id)
+        primary_clear = getattr(self.primary, "clear_account_unchecked", None)
+        fallback_clear = getattr(self.fallback, "clear_account_unchecked", None)
+        if not callable(primary_clear):
+            raise AttributeError(f"{type(self.primary).__name__} has no clear_account_unchecked")
+        if not callable(fallback_clear):
+            raise AttributeError(f"{type(self.fallback).__name__} has no clear_account_unchecked")
+        primary_clear(account_id)
+        try:
+            fallback_clear(account_id)
+        except Exception as exc:  # noqa: BLE001 - a cleared primary must never fail over to uncleared data.
+            self._fallback_active = True
+            self._stale_fallback_entries.add(account_id)
+            self._stale_fallback_indexes.add(account_id)
+            self._stale_fallback_collections.add((account_id, "*"))
+            self._fallback_sync_failed_entries.add(account_id)
+            self._fallback_sync_failed_indexes.add(account_id)
+            self._fallback_sync_failed_collections.add((account_id, "*"))
+            self.last_fallback_sync_error = f"clear_account_unchecked: {exc}"
+            LOGGER.critical(
+                "ACCOUNT MEMORY FALLBACK CLEAR FAILED AFTER PRIMARY CLEAR. "
+                "FAILOVER IS BLOCKED TO PROTECT DELETED DATA. label=%s account_id=%s error=%s.",
+                self.label,
+                account_id,
+                exc,
+            )
+            raise
         self._dirty_entries.discard(account_id)
         self._dirty_indexes.discard(account_id)
         self._dirty_collections = {key for key in self._dirty_collections if key[0] != account_id}
@@ -495,7 +516,14 @@ class WarningFallbackAccountMemoryBackend:
 
     def _operation_has_unsafe_fallback(self, operation: str, account_id: str) -> bool:
         stale_key = self._operation_stale_key(operation, account_id)
-        return stale_key in self._fallback_sync_failed_set(operation) or stale_key in self._unrecoverable_fallback_set(operation)
+        sync_failed = self._fallback_sync_failed_set(operation)
+        unrecoverable = self._unrecoverable_fallback_set(operation)
+        if stale_key in sync_failed or stale_key in unrecoverable:
+            return True
+        if operation.startswith("read_collection:"):
+            wildcard_key = (account_id, "*")
+            return wildcard_key in sync_failed or wildcard_key in unrecoverable
+        return False
 
     def _read_diagnostic_failed(self, operation: str) -> bool:
         if operation == "read_entries":
