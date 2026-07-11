@@ -106,6 +106,26 @@ def test_runtime_state_store_refuses_in_root_link_notification_symlink(tmp_path)
     assert state.link_notifications_persistence_error
 
 
+def test_runtime_state_store_refuses_link_notification_hardlink(tmp_path):
+    data_dir = tmp_path / "Bot" / "data"
+    provider = StaticSecretProvider(b"s" * 32)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+    account_id = "a" * 128
+    state.record_link_notification(
+        instance_name="Bot",
+        account_id=account_id,
+        new_identity_key="signal:uuid:new",
+        old_identity_key="telegram:user:1",
+    )
+    alias = tmp_path / "link-notifications-alias.json"
+    os.link(state.link_notifications_path, alias)
+
+    reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert reloaded.link_notifications == {}
+    assert "unsafe link-notification path" in reloaded.link_notifications_persistence_error
+
+
 def test_runtime_state_store_keeps_link_notifications_in_memory_when_secret_backend_fails(tmp_path):
     state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=BrokenProvider())
 
