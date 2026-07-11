@@ -53,7 +53,9 @@ def record_account_activity(
             }
         )
         profile["observations"] = _trim_observations(observations, now=resolved_now)
-        profile["updated_at"] = observed_at
+        previous_updated_at = _parse_datetime(str(profile.get("updated_at") or ""))
+        if previous_updated_at is None or resolved_now >= previous_updated_at:
+            profile["updated_at"] = observed_at
         profile["derived"] = derive_activity_profile(profile["observations"], now=resolved_now)
         account_store.write_agent_state(account_id, state)
 
@@ -140,6 +142,7 @@ def _trim_observations(observations: list[Any], *, now: datetime) -> list[Any]:
         if observed_at is None or observed_at < cutoff:
             continue
         trimmed.append(dict(value))
+    trimmed.sort(key=lambda value: _parse_datetime(str(value.get("at") or "")) or datetime.min.replace(tzinfo=timezone.utc))
     return trimmed[-ACTIVITY_HISTORY_LIMIT:]
 
 

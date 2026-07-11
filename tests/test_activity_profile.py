@@ -5,7 +5,7 @@ import threading
 import time
 
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
-from TeeBotus.runtime.activity_profile import contact_timing_decision, derive_activity_profile, record_account_activity
+from TeeBotus.runtime.activity_profile import _trim_observations, contact_timing_decision, derive_activity_profile, record_account_activity
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.proactive_agent import enable_proactive_agent, proactive_policy_decision, set_proactive_allowed_hours
@@ -163,6 +163,43 @@ def test_activity_profile_ignores_observations_older_than_history_window() -> No
 
     assert profile["sufficient_data"] is False
     assert profile["observation_count"] == 0
+
+
+def test_activity_profile_trim_keeps_newest_timestamps_not_append_order() -> None:
+    now = datetime(2026, 6, 15, 12, 0, tzinfo=LOCAL)
+    newest = now - timedelta(minutes=1)
+    observations = [{"at": newest.isoformat(timespec="seconds")}]
+    observations.extend(
+        {"at": (now - timedelta(hours=index)).isoformat(timespec="seconds")}
+        for index in range(1, 1001)
+    )
+
+    trimmed = _trim_observations(observations, now=now)
+
+    timestamps = {observation["at"] for observation in trimmed}
+    assert len(trimmed) == 1000
+    assert newest.isoformat(timespec="seconds") in timestamps
+    assert (now - timedelta(hours=1000)).isoformat(timespec="seconds") not in timestamps
+
+
+def test_record_account_activity_does_not_move_profile_timestamp_backwards(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity, account_id = prepare_account(account_store)
+    record_account_activity(
+        account_store,
+        account_id,
+        event(identity),
+        now=datetime(2026, 6, 15, 10, 0, tzinfo=LOCAL),
+    )
+    record_account_activity(
+        account_store,
+        account_id,
+        event(identity),
+        now=datetime(2026, 6, 15, 9, 0, tzinfo=LOCAL),
+    )
+
+    profile = account_store.read_agent_state(account_id)["activity_profile"]
+    assert profile["updated_at"] == "2026-06-15T10:00:00+02:00"
 
 
 def test_contact_timing_uses_weekend_profile_for_irregular_weekends(tmp_path) -> None:
