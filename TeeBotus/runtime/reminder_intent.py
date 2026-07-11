@@ -100,6 +100,7 @@ def maybe_queue_natural_reminder(
         now=now,
         risk_gate="none",
         recurrence=intent.recurrence,
+        user_requested=True,
         planner={
             "source": "structured_reminder_decision" if intent.source == "model" else "natural_reminder_request",
             "subject": intent.subject,

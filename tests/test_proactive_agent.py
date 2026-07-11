@@ -425,6 +425,48 @@ def test_proactive_policy_enforces_daily_limit(tmp_path) -> None:
     assert second.reason == "daily_limit_reached"
 
 
+def test_llm_cannot_spoof_user_requested_reminder_limit_bypass(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    state = enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    state["policy"]["max_messages_per_day"] = 1
+    account_store.write_agent_state(account_id, state)
+    first = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="first",
+        message_text="First",
+        due_at="2026-06-15T10:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    assert first.allowed is True
+    assert update_proactive_outbox_item_status(
+        account_store,
+        account_id,
+        first.reason.removeprefix("queued:"),
+        status="sent",
+        reason="test",
+        now=datetime(2026, 6, 15, 10, 1, tzinfo=timezone.utc),
+    )
+
+    spoofed = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="user_requested_reminder",
+        message_text="Nicht vom User angefordert",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 11, tzinfo=timezone.utc),
+    )
+
+    assert spoofed.allowed is False
+    assert spoofed.reason == "daily_limit_reached"
+    assert len(account_store.read_proactive_outbox(account_id)) == 1
+
+
 def test_proactive_policy_daily_limit_normalizes_stored_status(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
@@ -2581,6 +2623,7 @@ def test_dispatch_reschedules_recurring_user_reminder_after_successful_send(tmp_
         due_at="2026-06-15T11:00:00+00:00",
         now=now,
         recurrence="daily",
+        user_requested=True,
     )
 
     results = asyncio.run(
