@@ -542,6 +542,22 @@ def test_runtime_state_store_reports_security_event_runtime_error(tmp_path, monk
     assert "security event open failed" in state.security_events_persistence_error
 
 
+def test_runtime_state_store_reports_security_lock_error(tmp_path):
+    data_dir = tmp_path / "Bot" / "data"
+    runtime_dir = data_dir / "runtime"
+    runtime_dir.mkdir(parents=True)
+    outside = tmp_path / "outside-security-lock"
+    lock_path = runtime_dir / ".Security_Events.jsonl.lock"
+    lock_path.symlink_to(outside)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    with pytest.raises(AccountStoreError, match="unsafe runtime lock path"):
+        state.append_security_event({"event": "lock-error"})
+
+    assert "unsafe runtime lock path" in state.security_events_persistence_error
+    assert not outside.exists()
+
+
 def test_runtime_state_store_refuses_runtime_lock_symlink(tmp_path):
     data_dir = tmp_path / "Bot" / "data"
     runtime_dir = data_dir / "runtime"

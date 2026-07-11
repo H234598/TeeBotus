@@ -490,21 +490,25 @@ class RuntimeStateStore(RuntimeState):
             return super().list_link_notifications(instance_name=instance_name, account_id=account_id)
 
     def append_security_event(self, event: dict[str, Any]) -> None:
-        with self._security_events_lock():
-            try:
-                serialized_event = json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
-                super().append_security_event(event)
-                rotate_runtime_text_file_if_needed(self.security_events_path)
-                handle = _open_append_text_no_follow(self.security_events_path)
-                if handle is None:
-                    raise AccountStoreError(f"refusing unavailable or unsafe security event path: {self.security_events_path}")
-                with handle:
-                    handle.write(serialized_event)
-                maintain_runtime_directory(self.runtime_dir)
-            except (AccountStoreError, OSError, RuntimeError, TypeError, ValueError) as exc:
-                self.security_events_persistence_error = str(exc)
-                raise
-            self.security_events_persistence_error = ""
+        try:
+            with self._security_events_lock():
+                try:
+                    serialized_event = json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
+                    super().append_security_event(event)
+                    rotate_runtime_text_file_if_needed(self.security_events_path)
+                    handle = _open_append_text_no_follow(self.security_events_path)
+                    if handle is None:
+                        raise AccountStoreError(f"refusing unavailable or unsafe security event path: {self.security_events_path}")
+                    with handle:
+                        handle.write(serialized_event)
+                    maintain_runtime_directory(self.runtime_dir)
+                except (AccountStoreError, OSError, RuntimeError, TypeError, ValueError) as exc:
+                    self.security_events_persistence_error = str(exc)
+                    raise
+                self.security_events_persistence_error = ""
+        except (AccountStoreError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            self.security_events_persistence_error = str(exc)
+            raise
 
     def _state_path(self, account_id: str, filename: str) -> Path:
         account = validate_sha512_token(account_id, field_name="account_id")
