@@ -70,6 +70,19 @@ def test_parse_reminder_does_not_queue_past_today_time() -> None:
     assert intent.due_at == ""
 
 
+def test_parse_reminder_rejects_invalid_clock_without_raising() -> None:
+    for text in (
+        "Erinnere mich morgen um 25 an den Termin",
+        "Erinnere mich am Montag um 25 an den Termin",
+        "Erinnere mich um 9:61 an den Termin",
+    ):
+        intent = parse_reminder_intent(text, now=fixed_now())
+
+        assert intent.is_request is True
+        assert intent.missing_time is True
+        assert intent.due_at == ""
+
+
 def test_parse_reminder_without_time_asks_for_missing_time() -> None:
     intent = parse_reminder_intent("Sag mir bitte Bescheid wegen dem Termin", now=fixed_now())
 

@@ -43,19 +43,27 @@ REMINDER_REQUEST_RE = re.compile(
     re.IGNORECASE,
 )
 
-TIME_RE = re.compile(r"\b(?:um|gegen)\s+(?P<hour>[0-2]?\d)(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?\b", re.IGNORECASE)
+_CLOCK_HOUR = r"(?:[01]?\d|2[0-3])"
+EXPLICIT_TIME_CANDIDATE_RE = re.compile(
+    r"\b(?:um|gegen)\s+(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?:uhr)?",
+    re.IGNORECASE,
+)
+TIME_RE = re.compile(
+    rf"\b(?:um|gegen)\s+(?P<hour>{_CLOCK_HOUR})(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?\b",
+    re.IGNORECASE,
+)
 RELATIVE_RE = re.compile(
     r"\bin\s+(?P<count>\d{1,3})\s*(?P<unit>min(?:ute)?n?|minuten?|std|stunden?|h|tage?n?|wochen?)\b",
     re.IGNORECASE,
 )
 DATE_RE = re.compile(
     r"\b(?:am\s+)?(?P<day>[0-3]?\d)[.](?P<month>[01]?\d)(?:[.](?P<year>\d{2,4}))?"
-    r"(?:\s+(?:um|gegen)?\s*(?P<hour>[0-2]?\d)(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?)?",
+    rf"(?:\s+(?:um|gegen)?\s*(?P<hour>{_CLOCK_HOUR})(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?)?",
     re.IGNORECASE,
 )
 ISO_RE = re.compile(
     r"\b(?P<year>20\d{2})-(?P<month>[01]\d)-(?P<day>[0-3]\d)"
-    r"(?:[T\s](?P<hour>[0-2]\d):(?P<minute>[0-5]\d))?",
+    rf"(?:[T\s](?P<hour>{_CLOCK_HOUR}):(?P<minute>[0-5]\d))?",
     re.IGNORECASE,
 )
 DAY_WORDS = {
@@ -69,7 +77,7 @@ DAY_WORDS = {
 }
 DAY_WORD_RE = re.compile(
     r"\b(?P<day>montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)"
-    r"(?:\s+(?:um|gegen)\s+(?P<hour>[0-2]?\d)(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?)?",
+    rf"(?:\s+(?:um|gegen)\s+(?P<hour>{_CLOCK_HOUR})(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?)?",
     re.IGNORECASE,
 )
 
@@ -221,6 +229,8 @@ def _normalized_categories(values: object) -> list[str]:
 
 def _parse_due_at(text: str, now: datetime) -> str:
     normalized_now = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
+    if _has_invalid_explicit_time(text):
+        return ""
     relative = RELATIVE_RE.search(_normalize(text))
     if relative:
         count = int(relative.group("count"))
@@ -300,6 +310,15 @@ def _time_in_text(text: str, *, default_hour: int) -> tuple[int, int]:
     if not match:
         return default_hour, 0
     return int(match.group("hour")), int(match.group("minute") or 0)
+
+
+def _has_invalid_explicit_time(text: str) -> bool:
+    match = EXPLICIT_TIME_CANDIDATE_RE.search(str(text or ""))
+    if not match:
+        return False
+    hour = int(match.group("hour"))
+    minute = int(match.group("minute") or 0)
+    return hour > 23 or minute > 59
 
 
 def _normalize_year(value: str | None, current_year: int) -> int:
