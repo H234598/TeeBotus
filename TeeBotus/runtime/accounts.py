@@ -2649,6 +2649,8 @@ class AccountStore:
     def consolidate_structured_memory(self, account_id: str, *, max_new_entries: int = 8) -> tuple[str, ...]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
+        if max_new_entries <= 0:
+            return ()
         rows = self.read_memory_entries(account_id)
         existing_fingerprints = {
             str(row.get("consolidation_fingerprint") or "")

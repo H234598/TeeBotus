@@ -3394,6 +3394,29 @@ def test_structured_account_memory_maintenance_consolidates_repeated_episodes(tm
     assert consolidated["supports"] == ["mem_episode_0", "mem_episode_1", "mem_episode_2"]
 
 
+def test_structured_account_memory_consolidation_zero_limit_is_a_noop(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    for index in range(3):
+        store.append_structured_memory_entry(
+            account_id,
+            {
+                "id": f"mem_episode_{index}",
+                "memory_type": "episodic",
+                "user_text": f"Spaziergang hilft gegen Druck {index}.",
+                "bot_text": "Notiert.",
+            },
+        )
+    before_entries = store.read_memory_entries(account_id)
+    before_index = store.read_memory_index(account_id)
+
+    created = store.consolidate_structured_memory(account_id, max_new_entries=0)
+
+    assert created == ()
+    assert store.read_memory_entries(account_id) == before_entries
+    assert store.read_memory_index(account_id) == before_index
+
+
 def test_rebuild_structured_account_memory_index_renames_duplicate_ids(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
