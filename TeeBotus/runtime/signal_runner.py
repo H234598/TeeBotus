@@ -471,33 +471,55 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 continue
             if account_id:
                 break
-        if not account_id:
+        matched_tracked_ref = False
+        for message_ref in message_refs:
+            tracked_refs = self.message_tracker.find_by_message_ref(
+                str(message_ref),
+                instance_name=self.run_config.instance_name,
+                channel="signal",
+                ref_kind="signal_timestamp",
+            )
+            matched_tracked_ref = matched_tracked_ref or bool(tracked_refs)
+            targets = tracked_refs or (
+                SentMessageRef(
+                    channel="signal",
+                    instance_name=self.run_config.instance_name,
+                    account_id=account_id,
+                    chat_id=str(chat_id),
+                    message_ref=str(message_ref),
+                    ref_kind="signal_timestamp",
+                ),
+            )
+            for tracked_ref in targets:
+                target_account_id = str(tracked_ref.account_id or account_id).strip()
+                target_chat_id = str(tracked_ref.chat_id or chat_id).strip()
+                if not target_account_id or not target_chat_id:
+                    continue
+                try:
+                    record_codex_history_delivery_receipt(
+                        self.account_store,
+                        instance_name=self.run_config.instance_name,
+                        channel="signal",
+                        chat_id=target_chat_id,
+                        account_id=target_account_id,
+                        adapter_slot=self.run_config.slot,
+                        message_ref=message_ref,
+                        receipt_type=receipt_type,
+                    )
+                except (AccountStoreError, OSError, ValueError, AttributeError):
+                    LOGGER.exception(
+                        "Signal Codex-History receipt tracking failed instance=%s recipient=%s message_ref=%s receipt_type=%s.",
+                        self.run_config.instance_name,
+                        target_chat_id,
+                        message_ref,
+                        receipt_type,
+                    )
+        if not account_id and not matched_tracked_ref:
             LOGGER.warning(
                 "Signal Codex-History receipt ignored without linked account instance=%s recipient=%s.",
                 self.run_config.instance_name,
                 chat_id,
             )
-            return True
-        for message_ref in message_refs:
-            try:
-                record_codex_history_delivery_receipt(
-                    self.account_store,
-                    instance_name=self.run_config.instance_name,
-                    channel="signal",
-                    chat_id=chat_id,
-                    account_id=account_id,
-                    adapter_slot=self.run_config.slot,
-                    message_ref=message_ref,
-                    receipt_type=receipt_type,
-                )
-            except (AccountStoreError, OSError, ValueError, AttributeError):
-                LOGGER.exception(
-                    "Signal Codex-History receipt tracking failed instance=%s recipient=%s message_ref=%s receipt_type=%s.",
-                    self.run_config.instance_name,
-                    chat_id,
-                    message_ref,
-                    receipt_type,
-                )
         return True
 
     async def _delete_local_attachments(self, context: Any) -> None:
@@ -834,6 +856,15 @@ def _signal_native_receipt(message: Any) -> dict[str, Any]:
 
 def _signal_receipt_message_refs(message: Any) -> list[str]:
     refs: list[str] = []
+    read_messages = getattr(message, "read_messages", None)
+    if isinstance(read_messages, Sequence) and not isinstance(read_messages, (str, bytes, bytearray)):
+        for read_message in read_messages:
+            if not isinstance(read_message, Mapping):
+                continue
+            for key in ("timestamp", "sentTimestamp", "targetSentTimestamp"):
+                value = str(read_message.get(key) or "").strip()
+                if value:
+                    refs.append(value)
     for attr in ("timestamps", "target_sent_timestamps", "target_timestamps", "sent_timestamps"):
         value = getattr(message, attr, None)
         if isinstance(value, Sequence) and not isinstance(value, (str, bytes, bytearray)):
@@ -1196,7 +1227,8 @@ def _wait_for_signal_cli_rest_api(
 
 
 def _signal_cli_rest_api_command(host: str, port: int) -> list[str]:
-    listen_host = "127.0.0.1" if host in {"localhost", "::1"} else host
+    # signal-cli-rest-api reads its bind port from the environment; the caller
+    # already restricts this auto-start path to local hosts.
     binary = shutil.which("signal-cli-rest-api")
     if binary is None:
         local_binary = Path.home() / ".local" / "bin" / "signal-cli-rest-api"

@@ -829,6 +829,86 @@ def test_signal_command_records_codex_history_native_read_receipts(tmp_path) -> 
     assert dispatch_rows[-1]["message_ref"] == "777777"
 
 
+def test_signal_command_records_codex_history_sync_read_messages(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    account_id = command.account_store.resolve_or_create_account("signal:uuid:signal-uuid")
+    item_id = command.account_store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "kind": "codex_run_summary",
+            "status": "accepted",
+            "summary_prefix": "v1.8.2 #0001",
+            "summary": {"title": "Signal Sync Read"},
+            "delivery": {"accepted_at": "2026-06-19T12:00:00+00:00"},
+        },
+    )
+    command.account_store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item_id,
+            "account_id": account_id,
+            "instance": "Demo",
+            "status": "accepted",
+            "channel": "signal",
+            "chat_id": "+491234",
+            "message_ref": "777777",
+            "summary_prefix": "v1.8.2 #0001",
+        },
+    )
+    command.message_tracker.record(
+        SentMessageRef(
+            channel="signal",
+            instance_name="Demo",
+            account_id=account_id,
+            chat_id="+491234",
+            message_ref="777777",
+            ref_kind="signal_timestamp",
+        )
+    )
+    context = FakeSignalContext()
+    context.message.text = ""
+    context.message.type = MessageType.READ_MESSAGE
+    context.message.source = "+own"
+    context.message.source_uuid = "own-uuid"
+    context.message.read_messages = [
+        {"sender": "+own", "senderNumber": "+own", "senderUuid": "own-uuid", "timestamp": 777777}
+    ]
+    context.message.raw_message = json.dumps(
+        {
+            "envelope": {
+                "source": "+own",
+                "sourceUuid": "own-uuid",
+                "syncMessage": {
+                    "readMessages": [
+                        {"sender": "+own", "senderNumber": "+own", "senderUuid": "own-uuid", "timestamp": 777777}
+                    ]
+                },
+            }
+        }
+    )
+
+    asyncio.run(command.handle(context))
+
+    persisted = command.account_store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    dispatch_rows = command.account_store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+    assert persisted["status"] == "delivered"
+    assert dispatch_rows[-1]["reason"] == "signal_read_receipt"
+    assert dispatch_rows[-1]["chat_id"] == "+491234"
+    assert dispatch_rows[-1]["message_ref"] == "777777"
+
+
 def test_signal_command_quotes_original_timestamp_for_edit_message(tmp_path, monkeypatch) -> None:
     instance_dir = tmp_path / "Demo"
     instance_dir.mkdir()
@@ -1070,7 +1150,7 @@ def test_shared_signal_router_private_alias_routes_linked_instance(tmp_path) -> 
         secret_provider=StaticSecretProvider(b"x" * 32),
     )
     for command in router.commands:
-        account_id = command.account_store.resolve_or_create_account("signal:uuid:signal-uuid")
+        command.account_store.resolve_or_create_account("signal:uuid:signal-uuid")
         command.engine.process_result = (  # type: ignore[method-assign]
             lambda event, instance=command.run_config.instance_name: EngineResult(
                 event.account_id,

@@ -73,3 +73,12 @@ def test_message_tracker_deduplicates_duplicate_rows_loaded_from_disk(tmp_path) 
     tracker = MessageTracker(path)
 
     assert tracker.list_for_chat("+491", instance_name="Demo", channel="signal") == [ref]
+
+
+def test_message_tracker_finds_ref_without_knowing_chat() -> None:
+    tracker = MessageTracker()
+    ref = _ref("123")
+    tracker.record(ref)
+
+    assert tracker.find_by_message_ref("123", instance_name="Demo", channel="signal") == [ref]
+    assert tracker.find_by_message_ref("missing", instance_name="Demo", channel="signal") == []

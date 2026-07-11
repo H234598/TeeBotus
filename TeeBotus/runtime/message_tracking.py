@@ -107,6 +107,37 @@ class MessageTracker:
                 selected.extend(values)
             return list(selected)
 
+    def find_by_message_ref(
+        self,
+        message_ref: str,
+        *,
+        instance_name: str | None = None,
+        channel: str | None = None,
+        ref_kind: RefKind | None = None,
+    ) -> list[SentMessageRef]:
+        """Find tracked messages without assuming the chat from the receipt.
+
+        Some transports, notably Signal sync read receipts, identify the original
+        message but do not expose the conversation as the current message recipient.
+        """
+        normalized_ref = str(message_ref or "").strip()
+        if not normalized_ref:
+            return []
+        with self._lock, self._storage_lock(exclusive=False):
+            self._reload_from_disk()
+            selected: list[SentMessageRef] = []
+            for (inst, ch, _chat_id), values in self.refs.items():
+                if instance_name is not None and inst != instance_name:
+                    continue
+                if channel is not None and ch != channel:
+                    continue
+                selected.extend(
+                    ref
+                    for ref in values
+                    if ref.message_ref == normalized_ref and (ref_kind is None or ref.ref_kind == ref_kind)
+                )
+            return selected
+
     def pop_for_chat(self, chat_id: str, count: int | str = "all", *, instance_name: str | None = None, channel: str | None = None) -> list[SentMessageRef]:
         with self._lock, self._storage_lock(exclusive=True):
             self._reload_from_disk()
