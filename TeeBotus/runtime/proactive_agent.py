@@ -1205,8 +1205,9 @@ def update_proactive_outbox_item_status(
         rows = account_store.read_proactive_outbox(account_id)
         changed = False
         timestamp = _resolve_proactive_now(now).isoformat(timespec="seconds")
+        normalized_item_id = str(item_id or "").strip()
         for item in rows:
-            if not isinstance(item, dict) or str(item.get("id") or "") != str(item_id or ""):
+            if not isinstance(item, dict) or str(item.get("id") or "").strip() != normalized_item_id:
                 continue
             current_status = str(item.get("status") or "queued").strip().casefold()
             if normalized_status not in PROACTIVE_STATUS_TRANSITIONS.get(current_status, ()):
