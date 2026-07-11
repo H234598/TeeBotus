@@ -74,6 +74,23 @@ def test_sqlite_backup_sync_refuses_unreadable_primary_without_overwriting_secon
     assert not list(accounts_root.glob(".pre-account-memory-backup-sync-*"))
 
 
+def test_sqlite_backup_sync_refuses_incomplete_primary_schema(tmp_path: Path) -> None:
+    primary = tmp_path / "primary.sqlite3"
+    secondary = tmp_path / "secondary.sqlite3"
+    sqlite3.connect(primary).close()
+
+    with pytest.raises(RuntimeError, match="primary_schema_missing:memory_entries"):
+        sqlite_backup_sync.sync_account_memory_sqlite_backup(
+            accounts_root=tmp_path,
+            primary=primary,
+            secondary=secondary,
+            provider=provider(),
+            decrypt_check=False,
+        )
+
+    assert not secondary.exists()
+
+
 def test_sqlite_backup_sync_checks_collection_payloads(tmp_path: Path) -> None:
     accounts_root = tmp_path / "instances" / "Depressionsbot" / "data" / "accounts"
     primary = accounts_root / "Account_Memory.sqlite3"

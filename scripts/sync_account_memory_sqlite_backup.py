@@ -26,6 +26,7 @@ from TeeBotus.runtime.sqlite_memory import (  # noqa: E402
     SQLITE_DEFAULT_FILENAME,
     SQLITE_FALLBACK_PATH_ENV,
     SQLITE_PATH_ENV,
+    SQLITE_REQUIRED_TABLES,
     SQLiteAccountMemoryBackend,
     SQLiteMemoryConfig,
     validate_distinct_sqlite_paths,
@@ -109,6 +110,7 @@ def sync_account_memory_sqlite_backup(
         raise IsADirectoryError(f"secondary_is_directory={secondary_path}")
 
     _quick_check(primary_path, label="primary")
+    _validate_schema_complete(primary_path, label="primary")
     payloads_checked = 0
     if decrypt_check:
         payloads_checked = _verify_payloads_decryptable(
@@ -127,6 +129,7 @@ def sync_account_memory_sqlite_backup(
             with sqlite3.connect(secondary_path) as target:
                 source.backup(target)
         _quick_check(secondary_path, label="secondary")
+        _validate_schema_complete(secondary_path, label="secondary")
         if decrypt_check:
             _verify_payloads_decryptable(
                 secondary_path,
@@ -155,6 +158,22 @@ def _quick_check(path: Path, *, label: str) -> None:
         raise RuntimeError(f"{label}_quick_check_failed:{path}:{exc}") from exc
     if not row or str(row[0]).casefold() != "ok":
         raise RuntimeError(f"{label}_quick_check_failed:{path}:{row[0] if row else 'no result'}")
+
+
+def _validate_schema_complete(path: Path, *, label: str) -> None:
+    try:
+        with sqlite3.connect(path) as connection:
+            tables = {
+                str(row[0])
+                for row in connection.execute(
+                    "SELECT name FROM sqlite_master WHERE type = 'table'"
+                ).fetchall()
+            }
+    except sqlite3.DatabaseError as exc:
+        raise RuntimeError(f"{label}_schema_check_failed:{path}:{exc}") from exc
+    missing = [table for table in SQLITE_REQUIRED_TABLES if table not in tables]
+    if missing:
+        raise RuntimeError(f"{label}_schema_missing:{','.join(missing)}:{path}")
 
 
 def _verify_payloads_decryptable(
