@@ -36,6 +36,7 @@ from TeeBotus.runtime.proactive_agent import (
     run_proactive_llm_planner,
     run_proactive_reflection_planner,
     select_proactive_route,
+    should_run_proactive_model_planner,
     set_proactive_allowed_hours,
     set_proactive_categories,
     set_proactive_min_interval_minutes,
@@ -1983,6 +1984,58 @@ def test_llm_planner_runner_uses_client_text_and_validates_before_applying(tmp_p
     assert "Gib ausschliesslich valides JSON" in client.prompts[0][0]
     assert "mem_goal" in client.prompts[0][0]
     assert account_store.read_proactive_outbox(account_id)[0]["planner"]["source"] == "llm"
+
+
+def test_disabled_proactive_account_skips_model_planner_before_provider_call(tmp_path) -> None:
+    class Client:
+        def create_reply(self, *_args):
+            raise AssertionError("disabled proactive account must not call the LLM")
+
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spazieren gehen."},
+    )
+
+    assert should_run_proactive_model_planner(account_store, account_id) == (False, "proactive_disabled")
+    result = run_proactive_llm_planner(
+        account_store,
+        account_id,
+        openai_client=Client(),
+        instructions=object(),
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ("proactive_disabled",)
+    assert account_store.read_memory_entries(account_id)[-1]["id"] == "mem_goal"
+    assert account_store.read_proactive_outbox(account_id) == []
+    assert account_store.read_proactive_audit(account_id)[0]["reason"] == "proactive_disabled"
+
+
+def test_disabled_proactive_account_blocks_safe_llm_memory_write(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {
+            "schema_version": 1,
+            "decisions": [
+                {
+                    "action": "memory",
+                    "kind": "reflection",
+                    "text": "Interne Reflexion darf nicht geschrieben werden.",
+                }
+            ],
+        },
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ("decision_0_proactive_disabled",)
+    assert result.created_memory_ids == ()
+    assert account_store.read_memory_entries(account_id) == []
 
 
 def test_llm_planner_prompt_has_schema_and_memory_context(tmp_path) -> None:

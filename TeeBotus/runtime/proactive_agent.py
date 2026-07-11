@@ -570,6 +570,23 @@ def apply_proactive_llm_plan_text(
     return apply_proactive_llm_plan(account_store, account_id, payload, now=now)
 
 
+def _proactive_planning_disabled_result(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    event_type: str,
+    now: datetime,
+) -> ProactiveLLMPlanningResult:
+    audit_id = _append_proactive_llm_audit_event(
+        account_store,
+        account_id,
+        event_type=event_type,
+        reason="proactive_disabled",
+        now=now,
+    )
+    return ProactiveLLMPlanningResult(account_id, errors=("proactive_disabled",), audit_event_ids=(audit_id,))
+
+
 def run_proactive_llm_planner(
     account_store: AccountStore,
     account_id: str,
@@ -579,9 +596,17 @@ def run_proactive_llm_planner(
     now: datetime | None = None,
     max_memory_chars: int = 6000,
 ) -> ProactiveLLMPlanningResult:
+    resolved_now = now or datetime.now(timezone.utc)
+    if not _normalized_agent_state(account_store.read_agent_state(account_id))["proactive"]["enabled"]:
+        return _proactive_planning_disabled_result(
+            account_store,
+            account_id,
+            event_type="llm_plan_skipped",
+            now=resolved_now,
+        )
     prompt = build_proactive_llm_planner_prompt(account_store, account_id, max_memory_chars=max_memory_chars)
     response = openai_client.create_reply(prompt, instructions)
-    return apply_proactive_llm_plan_text(account_store, account_id, str(getattr(response, "text", response) or ""), now=now)
+    return apply_proactive_llm_plan_text(account_store, account_id, str(getattr(response, "text", response) or ""), now=resolved_now)
 
 
 def run_proactive_tool_agent(
@@ -593,6 +618,14 @@ def run_proactive_tool_agent(
     now: datetime | None = None,
     max_memory_chars: int = 6000,
 ) -> ProactiveLLMPlanningResult:
+    resolved_now = now or datetime.now(timezone.utc)
+    if not _normalized_agent_state(account_store.read_agent_state(account_id))["proactive"]["enabled"]:
+        return _proactive_planning_disabled_result(
+            account_store,
+            account_id,
+            event_type="tool_agent_skipped",
+            now=resolved_now,
+        )
     prompt = build_proactive_tool_agent_prompt(account_store, account_id, max_memory_chars=max_memory_chars)
     tool_definitions = proactive_agent_tool_definitions()
     create_tool_calls = getattr(openai_client, "create_tool_calls", None)
@@ -602,7 +635,7 @@ def run_proactive_tool_agent(
             account_id,
             event_type="tool_agent_rejected",
             reason="client_missing_create_tool_calls",
-            now=now,
+            now=resolved_now,
         )
         return ProactiveLLMPlanningResult(account_id, errors=("client_missing_create_tool_calls",), audit_event_ids=(audit_id,))
     response = create_tool_calls(prompt, instructions, tool_definitions)
@@ -610,7 +643,7 @@ def run_proactive_tool_agent(
     if not tool_calls:
         plan_text = _response_output_text(response)
         if plan_text:
-            result = apply_proactive_llm_plan_text(account_store, account_id, plan_text, now=now)
+            result = apply_proactive_llm_plan_text(account_store, account_id, plan_text, now=resolved_now)
             if not result.errors:
                 return result
         audit_id = _append_proactive_llm_audit_event(
@@ -620,13 +653,15 @@ def run_proactive_tool_agent(
             reason="no_tool_calls",
             payload=_safe_tool_response_payload(response),
             plan_text=plan_text,
-            now=now,
+            now=resolved_now,
         )
         return ProactiveLLMPlanningResult(account_id, errors=("no_tool_calls",), audit_event_ids=(audit_id,))
-    return apply_proactive_agent_tool_calls(account_store, account_id, tool_calls, now=now)
+    return apply_proactive_agent_tool_calls(account_store, account_id, tool_calls, now=resolved_now)
 
 
 def should_run_proactive_model_planner(account_store: AccountStore, account_id: str) -> tuple[bool, str]:
+    if not _normalized_agent_state(account_store.read_agent_state(account_id))["proactive"]["enabled"]:
+        return False, "proactive_disabled"
     candidates = _proactive_planner_candidates(account_store, account_id)
     if candidates:
         return True, "planner_candidates"
@@ -1866,6 +1901,8 @@ def _apply_proactive_llm_memory_decision(
         return "error:missing_memory_text"
     if _text_has_unsafe_clinical_claim(text):
         return "error:unsafe_memory_text"
+    if not _normalized_agent_state(account_store.read_agent_state(account_id))["proactive"]["enabled"]:
+        return "error:proactive_disabled"
     source_ids = _valid_memory_ids(decision.get("source_memory_ids"), memory_ids)
     relations = [
         {
