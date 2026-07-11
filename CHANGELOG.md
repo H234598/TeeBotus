@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.31 - 2026-07-11
+
+- Use one consistent empty-state representation for Codex-History status.
+
 ## 1.9.30 - 2026-07-11
 
 - Normalize invalid identity health status tokens to unknown.

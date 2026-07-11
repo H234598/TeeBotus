@@ -5336,7 +5336,7 @@ def test_codex_history_status_lines_validates_and_normalizes_instance_name(tmp_p
     assert invalid == ["codex_history=../outside status=unknown error=invalid_instance_name"]
     assert normalized == [
         "codex_history=Demo status=ok queued=0 failed=0 total=0 latest_repo=<none> latest_prefix=<none> "
-        "latest_kind=codex_run_summary run_summaries=0 strategies=0 graphs=0 other=0",
+        "latest_kind=<none> run_summaries=0 strategies=0 graphs=0 other=0",
     ]
 
 

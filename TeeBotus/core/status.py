@@ -853,7 +853,7 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
     latest_prefix = redact_status_text(latest.get("summary_prefix") or "<none>") if isinstance(latest, Mapping) else "<none>"
     if not latest_prefix:
         latest_prefix = "<none>"
-    latest_kind = _codex_history_kind(latest) if isinstance(latest, Mapping) else "<none>"
+    latest_kind = _codex_history_kind(latest) if valid_rows else "<none>"
     kind_counts = _codex_history_kind_counts(valid_rows)
     return {
         "status": "warning" if queued or failed else "ok",
