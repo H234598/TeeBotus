@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.33 - 2026-07-11
+
+- Surface malformed Codex-History backend rows as warnings instead of silently
+  dropping them from totals.
+
 ## 1.9.32 - 2026-07-11
 
 - Mark skipped or otherwise non-successful Codex-History entries as status

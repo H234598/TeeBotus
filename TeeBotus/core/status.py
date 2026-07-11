@@ -840,6 +840,7 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
     except Exception as exc:  # noqa: BLE001 - status should diagnose unreadable history without crashing.
         return {"error": redact_status_text(f"{type(exc).__name__}: {exc}")}
     valid_rows = [row for row in rows if isinstance(row, Mapping)]
+    malformed_rows = max(0, len(rows) - len(valid_rows))
     status_counts: dict[str, int] = {}
     for row in valid_rows:
         status = str(row.get("status") or "unknown").strip().casefold() or "unknown"
@@ -856,12 +857,12 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
         latest_prefix = "<none>"
     latest_kind = _codex_history_kind(latest) if valid_rows else "<none>"
     kind_counts = _codex_history_kind_counts(valid_rows)
-    has_problem_status = any(status not in CODEX_HISTORY_SUCCESS_STATUSES for status in status_counts)
+    has_problem_status = malformed_rows > 0 or any(status not in CODEX_HISTORY_SUCCESS_STATUSES for status in status_counts)
     return {
         "status": "warning" if has_problem_status else "ok",
         "queued": queued,
         "failed": failed,
-        "total": len(valid_rows),
+        "total": len(rows),
         "latest_repo": latest_repo,
         "latest_prefix": latest_prefix,
         "latest_kind": latest_kind,

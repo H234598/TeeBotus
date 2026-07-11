@@ -5344,6 +5344,19 @@ def test_codex_history_status_warns_for_skipped_item(tmp_path: Path) -> None:
     assert lines[0].startswith("codex_history=Demo status=warning queued=0 failed=0 total=1")
 
 
+def test_codex_history_status_warns_for_malformed_backend_row() -> None:
+    class MalformedHistoryStore:
+        def read_codex_history_outbox(self, _account_id: str):
+            return [None]
+
+    lines = codex_history_status_lines(instance_name="Demo", account_store=MalformedHistoryStore())
+
+    assert lines == [
+        "codex_history=Demo status=warning queued=0 failed=0 total=1 latest_repo=<none> "
+        "latest_prefix=<none> latest_kind=<none> run_summaries=0 strategies=0 graphs=0 other=0"
+    ]
+
+
 def test_codex_history_status_lines_validates_and_normalizes_instance_name(tmp_path: Path) -> None:
     store = _store(tmp_path)
 
