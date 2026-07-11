@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.115 - 2026-07-12
+
+- Ignore notification-loudness requests as completed states.
+
 ## 1.9.114 - 2026-07-12
 
 - Recognize explicit English uncertainty markers in loudness replies.
