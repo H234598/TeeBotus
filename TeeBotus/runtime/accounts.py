@@ -2443,7 +2443,14 @@ class AccountStore:
         if not isinstance(index_entries, dict):
             errors.append("index.entries is not an object")
             index_entries = {}
-        missing_index_entry_ids = sorted(str(memory_id) for memory_id in index_entries if str(memory_id) not in entry_id_set)
+        if any(not str(memory_id or "").strip() for memory_id in index_entries):
+            errors.append("index.entries contains an empty id")
+        missing_index_entry_ids = sorted(
+            memory_id
+            for raw_memory_id in index_entries
+            if (memory_id := str(raw_memory_id or "").strip())
+            if memory_id not in entry_id_set
+        )
         if missing_index_entry_ids:
             errors.append(f"index.entries missing entries: {', '.join(missing_index_entry_ids)}")
         type_index = nested_index.get("types")
@@ -2455,7 +2462,14 @@ class AccountStore:
             if not isinstance(values, list):
                 errors.append(f"index.types.{memory_type} is not a list")
                 continue
-            missing_type_ids = sorted(str(value) for value in values if str(value) not in entry_id_set)
+            if any(not str(value or "").strip() for value in values):
+                errors.append(f"index.types.{memory_type} contains an empty id")
+            missing_type_ids = sorted(
+                memory_id
+                for value in values
+                if (memory_id := str(value or "").strip())
+                if memory_id not in entry_id_set
+            )
             if missing_type_ids:
                 errors.append(f"index.types.{memory_type} missing entries: {', '.join(missing_type_ids)}")
         missing_related_ids: list[str] = []
@@ -2587,7 +2601,12 @@ class AccountStore:
             semantic_entries = {}
         else:
             semantic_entries = semantic_entries_value
-        missing_semantic_ids = sorted(str(memory_id) for memory_id in semantic_entries if str(memory_id) not in entry_id_set)
+        missing_semantic_ids = sorted(
+            memory_id
+            for raw_memory_id in semantic_entries
+            if (memory_id := str(raw_memory_id or "").strip())
+            if memory_id not in entry_id_set
+        )
         if missing_semantic_ids:
             errors.append(f"semantic_cache entries missing entries: {', '.join(missing_semantic_ids)}")
         if semantic_cache and semantic_cache.get("rebuildable") is not True:
@@ -3565,8 +3584,17 @@ class AccountStore:
         if not isinstance(recent_ids, list):
             recent_ids = []
             nested_index["recent_ids"] = recent_ids
-        existing_ids = [str(row.get("id", "")) for row in rows if isinstance(row, dict) and str(row.get("id", ""))]
-        recent_ids[:] = [memory_id for memory_id in recent_ids if memory_id in existing_ids]
+        existing_ids = [
+            row_id
+            for row in rows
+            if isinstance(row, dict)
+            if (row_id := str(row.get("id") or "").strip())
+        ]
+        recent_ids[:] = [
+            normalized_id
+            for value in recent_ids
+            if (normalized_id := str(value or "").strip()) in existing_ids
+        ]
         if memory_id:
             if memory_id in recent_ids:
                 recent_ids.remove(memory_id)
@@ -3577,7 +3605,12 @@ class AccountStore:
         if not isinstance(type_index, dict):
             type_index = {memory_type: [] for memory_type in ACCOUNT_MEMORY_TYPES}
             nested_index["types"] = type_index
-        entries_by_id = {str(row.get("id", "")): row for row in rows if isinstance(row, dict) and str(row.get("id", ""))}
+        entries_by_id = {
+            row_id: row
+            for row in rows
+            if isinstance(row, dict)
+            if (row_id := str(row.get("id") or "").strip())
+        }
         for memory_type in ACCOUNT_MEMORY_TYPES:
             type_index[memory_type] = [
                 row_id
@@ -3595,7 +3628,11 @@ class AccountStore:
             if not isinstance(values, list):
                 keyword_index.pop(keyword, None)
                 continue
-            keyword_index[keyword] = [str(value) for value in values if str(value) in live_ids]
+            keyword_index[keyword] = [
+                value_id
+                for value in values
+                if (value_id := str(value or "").strip()) in live_ids
+            ]
             if not keyword_index[keyword]:
                 keyword_index.pop(keyword, None)
 
@@ -4740,7 +4777,12 @@ def _account_memory_retention_policy() -> dict[str, Any]:
 
 
 def _rebuild_account_memory_graph(nested_index: dict[str, Any], rows: list[dict[str, Any]]) -> None:
-    live_ids = {str(row.get("id", "")) for row in rows if isinstance(row, dict) and str(row.get("id", ""))}
+    live_ids = {
+        memory_id
+        for row in rows
+        if isinstance(row, dict)
+        if (memory_id := str(row.get("id") or "").strip())
+    }
     links = {link_type: {} for link_type in ACCOUNT_MEMORY_LINK_TYPES}
     relations: list[dict[str, Any]] = []
     for row in rows:
@@ -4796,7 +4838,11 @@ def _rebuild_account_memory_semantic_cache(nested_index: dict[str, Any], rows: l
         )
         return
     entries: dict[str, Any] = {}
-    live_rows = [row for row in rows if isinstance(row, dict) and str(row.get("id", ""))]
+    live_rows = [
+        row
+        for row in rows
+        if isinstance(row, dict) and str(row.get("id") or "").strip()
+    ]
     for row in live_rows[-ACCOUNT_MEMORY_SEMANTIC_CACHE_LIMIT:]:
         memory_id = str(row.get("id", "")).strip()
         entries[memory_id] = _account_memory_semantic_cache_entry(row)
@@ -4834,9 +4880,13 @@ def _update_account_memory_semantic_cache(nested_index: dict[str, Any], rows: li
         entries = {}
         semantic_cache["entries"] = entries
     live_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict) and str(row.get("id", "")).strip()}
-    for memory_id in list(entries):
-        if str(memory_id) not in live_ids:
-            entries.pop(memory_id, None)
+    for raw_memory_id in list(entries):
+        memory_id = str(raw_memory_id or "").strip()
+        if memory_id not in live_ids:
+            entries.pop(raw_memory_id, None)
+        elif raw_memory_id != memory_id:
+            metadata = entries.pop(raw_memory_id)
+            entries.setdefault(memory_id, metadata)
     memory_id = str(entry.get("id", "")).strip()
     if memory_id:
         entries.pop(memory_id, None)

@@ -4627,6 +4627,62 @@ def test_structured_account_memory_index_health_accepts_empty_account(tmp_path, 
     assert health.errors == ()
 
 
+def test_structured_memory_index_normalizes_legacy_id_whitespace(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_legacy", "user_text": "Mond", "keywords": ["mond"]},
+    )
+    entries = store.read_memory_entries(account_id)
+    entries[0]["id"] = " mem_legacy "
+    store.write_memory_entries(account_id, entries)
+    index = store.read_memory_index(account_id)
+    nested_index = index["index"]
+    nested_index["recent_ids"] = [" mem_legacy "]
+    nested_index["keywords"] = {"mond": [" mem_legacy "]}
+    nested_index["entries"] = {" mem_legacy ": nested_index["entries"]["mem_legacy"]}
+    nested_index["semantic_cache"]["entries"] = {
+        " mem_legacy ": nested_index["semantic_cache"]["entries"]["mem_legacy"]
+    }
+    store.write_memory_index(account_id, index)
+
+    new_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_new", "user_text": "Kaffee", "keywords": ["kaffee"]},
+    )
+    index = store.read_memory_index(account_id)["index"]
+
+    assert new_id == "mem_new"
+    assert set(index["entries"]) == {"mem_legacy", "mem_new"}
+    assert index["recent_ids"][-2:] == ["mem_legacy", "mem_new"]
+    assert set(index["semantic_cache"]["entries"]) == {"mem_legacy", "mem_new"}
+    assert all(not memory_id.startswith(" ") for memory_id in index["entries"])
+
+
+def test_structured_memory_index_health_normalizes_legacy_index_id_whitespace(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_live", "user_text": "Mond"})
+    index = store.read_memory_index(account_id)
+    nested_index = index["index"]
+    nested_index["recent_ids"] = [" mem_live "]
+    nested_index["accessed_ids"] = [" mem_live "]
+    nested_index["keywords"] = {"mond": [" mem_live "]}
+    nested_index["entries"] = {" mem_live ": nested_index["entries"]["mem_live"]}
+    for memory_type, values in nested_index["types"].items():
+        nested_index["types"][memory_type] = [" mem_live "] if values else []
+    nested_index["semantic_cache"]["entries"] = {
+        " mem_live ": nested_index["semantic_cache"]["entries"]["mem_live"]
+    }
+    store.write_memory_index(account_id, index)
+
+    health = store.check_structured_memory_index(account_id)
+
+    assert health.ok
+    assert health.errors == ()
+
+
 def test_structured_account_memory_index_health_reports_database_decryption_errors(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     first = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
