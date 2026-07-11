@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.47 - 2026-07-11
+
+- Preserve valid falsy MCP mappings in status output.
+
 ## 1.9.46 - 2026-07-11
 
 - Respect explicit empty environments in proactive status diagnostics.

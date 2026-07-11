@@ -337,6 +337,16 @@ def test_status_preserves_falsy_invalid_mcp_configuration(tmp_path: Path) -> Non
     assert "Konfiguration: ungueltig (Mapping erwartet)" in text
 
 
+def test_mcp_status_preserves_falsy_mapping_configuration() -> None:
+    class FalsyMapping(dict):
+        def __bool__(self) -> bool:
+            return False
+
+    lines = mcp_tool_status_lines(FalsyMapping({"bibliothekar.search": {"enabled": True}}))
+
+    assert "- Read-only allowlist: bibliothekar.search, memory.search (private)" in lines
+
+
 def test_mcp_status_reports_invalid_known_tool_configuration() -> None:
     assert mcp_tool_status_lines({"memory.search": None})[-1] == (
         "- Ungueltige Konfiguration: memory.search (Mapping erwartet)"
