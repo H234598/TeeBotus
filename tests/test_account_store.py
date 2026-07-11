@@ -2075,6 +2075,26 @@ def test_account_store_sqlite_backend_falls_back_to_secondary_with_warning(tmp_p
     assert "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in caplog.text
 
 
+def test_sqlite_memory_recreates_schema_after_database_file_is_deleted(tmp_path):
+    sqlite_path = tmp_path / "memory.sqlite3"
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=sqlite_path, fallback_path=None),
+    )
+    account_id = "a" * 128
+
+    backend.write_entries(account_id, [{"id": "before"}])
+    sqlite_path.unlink()
+    for sidecar in (sqlite_path.with_name(f"{sqlite_path.name}-wal"), sqlite_path.with_name(f"{sqlite_path.name}-shm")):
+        sidecar.unlink(missing_ok=True)
+
+    backend.write_entries(account_id, [{"id": "after"}])
+
+    assert backend.read_entries(account_id) == [{"id": "after"}]
+
+
 def test_account_memory_fallback_warning_rate_limit_is_scoped_per_account(caplog) -> None:
     backend = WarningFallbackAccountMemoryBackend(object(), object(), label="Demo:sqlite")
     account_a = "a" * 128

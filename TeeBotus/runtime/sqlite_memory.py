@@ -56,6 +56,7 @@ class SQLiteAccountMemoryBackend:
         self.purpose = purpose
         self.config = config
         self._initialized = False
+        self._schema_file_identity: tuple[int, int] | None = None
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
         self.last_index_read_error = ""
@@ -440,8 +441,10 @@ class SQLiteAccountMemoryBackend:
 
     def _ensure_schema(self) -> None:
         self.last_database_missing = False
-        if self._initialized:
+        current_identity = self._database_file_identity()
+        if self._initialized and current_identity == self._schema_file_identity:
             return
+        self._initialized = False
         with self._connect() as connection:
             connection.executescript(
                 """
@@ -498,6 +501,14 @@ class SQLiteAccountMemoryBackend:
                 """
             )
         self._initialized = True
+        self._schema_file_identity = self._database_file_identity()
+
+    def _database_file_identity(self) -> tuple[int, int] | None:
+        try:
+            stat_result = self.config.path.stat()
+        except FileNotFoundError:
+            return None
+        return (int(stat_result.st_dev), int(stat_result.st_ino))
 
     def _insert_entry(self, connection: sqlite3.Connection, account_id: str, row: dict[str, Any], ordinal: int) -> None:
         memory_id = str(row.get("id") or f"mem_{uuid.uuid4().hex}").strip()
