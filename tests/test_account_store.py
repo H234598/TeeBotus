@@ -2230,6 +2230,27 @@ def test_sqlite_memory_recreates_schema_after_database_file_is_deleted(tmp_path)
     assert backend.read_entries(account_id) == [{"id": "after"}]
 
 
+def test_sqlite_memory_recreates_schema_after_table_is_removed(tmp_path):
+    import sqlite3
+
+    sqlite_path = tmp_path / "memory.sqlite3"
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=sqlite_path, fallback_path=None),
+    )
+    account_id = "a" * 128
+    backend.write_entries(account_id, [{"id": "before"}])
+
+    with sqlite3.connect(sqlite_path) as connection:
+        connection.execute("DROP TABLE memory_entries")
+
+    backend.write_entries(account_id, [{"id": "after"}])
+
+    assert backend.read_entries(account_id) == [{"id": "after"}]
+
+
 def test_sqlite_memory_config_resolves_relative_paths_under_instance_root(tmp_path):
     root = tmp_path / "instance" / "data" / "accounts"
     config = SQLiteMemoryConfig.from_env(

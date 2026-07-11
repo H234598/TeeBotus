@@ -21,6 +21,12 @@ SQLITE_FALLBACK_PATH_ENV = "TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH"
 SQLITE_BACKEND_TOKENS = {"sqlite", "sqlite3"}
 SQLITE_DEFAULT_FILENAME = "Account_Memory.sqlite3"
 SQLITE_DEFAULT_FALLBACK_FILENAME = "Account_Memory.backup.sqlite3"
+SQLITE_REQUIRED_TABLES = (
+    "memory_entries",
+    "memory_keywords",
+    "memory_indexes",
+    "account_jsonl_collections",
+)
 
 
 @dataclass(frozen=True)
@@ -483,7 +489,11 @@ class SQLiteAccountMemoryBackend:
     def _ensure_schema(self) -> None:
         self.last_database_missing = False
         current_identity = self._database_file_identity()
-        if self._initialized and current_identity == self._schema_file_identity:
+        if (
+            self._initialized
+            and current_identity == self._schema_file_identity
+            and self._schema_is_complete()
+        ):
             return
         self._initialized = False
         with self._connect() as connection:
@@ -543,6 +553,13 @@ class SQLiteAccountMemoryBackend:
             )
         self._initialized = True
         self._schema_file_identity = self._database_file_identity()
+
+    def _schema_is_complete(self) -> bool:
+        try:
+            with self._connect_readonly() as connection:
+                return all(_table_exists(connection, table) for table in SQLITE_REQUIRED_TABLES)
+        except sqlite3.Error:
+            return False
 
     def _database_file_identity(self) -> tuple[int, int] | None:
         try:
