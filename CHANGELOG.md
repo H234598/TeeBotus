@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.126 - 2026-07-12
+
+- Normalize umlaut-bearing historical and habitual loudness markers.
+
 ## 1.9.125 - 2026-07-12
 
 - Reject non-private routes in notification-loudness outbox items.

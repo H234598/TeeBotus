@@ -1330,7 +1330,13 @@ def test_loudness_free_text_does_not_decide_habitual_status_as_current() -> None
     assert _notification_loudness_decision("I sometimes turn notifications off", pending=False) is None
     assert _notification_loudness_decision("I never turn notifications off", pending=True) is None
     assert _notification_loudness_decision("Normalerweise sind Benachrichtigungen an", pending=False) is None
+    assert _notification_loudness_decision("Häufig sind Benachrichtigungen an", pending=True) is None
+    assert _notification_loudness_decision("Grundsätzlich: Benachrichtigungen sind an", pending=True) is None
     assert _notification_loudness_decision("Aktuell sind Benachrichtigungen an", pending=True) == "confirmed"
+
+
+def test_loudness_free_text_normalizes_historical_markers_before_matching() -> None:
+    assert _notification_loudness_decision("Früher: Benachrichtigungen sind an", pending=True) is None
 
 
 def test_loudness_free_text_does_not_decide_no_longer_status_as_current() -> None:

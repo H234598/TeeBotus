@@ -1106,15 +1106,24 @@ def _notification_loudness_term_polarity(
 
 
 def _notification_loudness_has_uncertainty(normalized: str) -> bool:
-    return any(_contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES)
+    return any(
+        _contains_normalized_phrase(normalized, _normalize_text(phrase))
+        for phrase in NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES
+    )
 
 
 def _notification_loudness_has_historical_marker(normalized: str) -> bool:
-    return any(_contains_normalized_phrase(normalized, phrase.strip()) for phrase in NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES)
+    return any(
+        _contains_normalized_phrase(normalized, _normalize_text(phrase.strip()))
+        for phrase in NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES
+    )
 
 
 def _notification_loudness_has_habitual_marker(normalized: str) -> bool:
-    return any(_contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_HABITUAL_MARKERS)
+    return any(
+        _contains_normalized_phrase(normalized, _normalize_text(phrase))
+        for phrase in NOTIFICATION_LOUDNESS_HABITUAL_MARKERS
+    )
 
 
 def _notification_loudness_is_non_declarative(text: str, normalized: str) -> bool:
