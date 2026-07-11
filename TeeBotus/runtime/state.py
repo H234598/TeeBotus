@@ -18,6 +18,7 @@ except ImportError:  # pragma: no cover - fcntl is unavailable on non-POSIX plat
 
 from TeeBotus.runtime.accounts import (
     ACCOUNTS_DIRNAME,
+    ACCOUNT_MEMORY_LOCK_FILENAME,
     AccountStore,
     AccountStoreError,
     account_memory_lock_for_root,
@@ -641,6 +642,15 @@ class RuntimeStateStore(RuntimeState):
             account_dir = self.accounts_root / ACCOUNTS_DIRNAME / account_id
             if _has_symlink_parent(account_dir) or account_dir.is_symlink():
                 raise AccountStoreError(f"refusing unsafe account state directory: {account_dir}")
+            memory_lock_path = account_dir / ACCOUNT_MEMORY_LOCK_FILENAME
+            try:
+                memory_lock_stat = os.stat(memory_lock_path, follow_symlinks=False)
+            except FileNotFoundError:
+                memory_lock_stat = None
+            except OSError as exc:
+                raise AccountStoreError(f"could not inspect account memory lock: {memory_lock_path}") from exc
+            if memory_lock_stat is not None and (stat.S_ISLNK(memory_lock_stat.st_mode) or memory_lock_stat.st_nlink > 1):
+                raise AccountStoreError(f"refusing unsafe account memory lock: {memory_lock_path}")
             for filename in (LLM_STATE_FILENAME, OPENAI_STATE_FILENAME):
                 state_path = account_dir / filename
                 try:
