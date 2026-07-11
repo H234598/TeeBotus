@@ -443,7 +443,12 @@ class TeeBotusEngine:
                 return [SendText(event.chat_id, ADMIN_AUTH_NO_SECRET_CONFIGURED, track=False)]
             if secret_text:
                 return self._admin_authorize_actions(event, account_id, secret_text)
-            self.state.set_pending_flow(event.instance, account_id, ADMIN_AUTH_FLOW, {"chat_id": event.chat_id, "channel": event.channel})
+            self.state.set_pending_flow(
+                event.instance,
+                account_id,
+                ADMIN_AUTH_FLOW,
+                {"chat_id": event.chat_id, "channel": event.channel, "identity_key": event.identity_key},
+            )
             return [SendText(event.chat_id, ADMIN_AUTH_PROMPT, track=False)]
         if _admin_mode_is_no(mode):
             try:
@@ -508,6 +513,8 @@ class TeeBotusEngine:
             return EngineResult(account_id, [SendText(event.chat_id, PRIVATE_ONLY, track=False)], handled=True)
 
         pending_account_edit = self.state.get_pending_flow(event.instance, account_id, "account_edit")
+        if pending_account_edit is not None and not _pending_flow_matches_event(pending_account_edit, event):
+            pending_account_edit = None
         if pending_account_edit is not None and not event.is_private:
             return EngineResult(account_id, [SendText(event.chat_id, PRIVATE_ONLY, track=False)], handled=True)
 
@@ -538,7 +545,12 @@ class TeeBotusEngine:
                 )
             return self._handle_login(event, current_account_id=account_id, target_account_id=intent.account_id, secret=intent.account_secret)
         if intent.action == RegistrationAction.ACCOUNT_EDIT:
-            self.state.set_pending_flow(event.instance, account_id, "account_edit", {"step": "start"})
+            self.state.set_pending_flow(
+                event.instance,
+                account_id,
+                "account_edit",
+                {"step": "start", "chat_id": event.chat_id, "channel": event.channel, "identity_key": event.identity_key},
+            )
             return EngineResult(
                 account_id,
                 [
@@ -619,7 +631,7 @@ class TeeBotusEngine:
             event.instance,
             account_id,
             TELADI_EMERGENCY_FLOW,
-            {"channel": event.channel, "chat_id": event.chat_id, "created_at": utc_now()},
+            {"channel": event.channel, "chat_id": event.chat_id, "identity_key": event.identity_key, "created_at": utc_now()},
         )
         _mark_teladi_emergency_used(self.account_store, account_id)
         return [SendText(event.chat_id, instructions.teladi_call_prompt, track=False)]
@@ -634,7 +646,17 @@ class TeeBotusEngine:
             return EngineResult(account_id, [SendText(event.chat_id, "Okay, ich trenne nichts.", track=False)], handled=True)
         if step == "start":
             if text in {"unlink", "trennen", "kanal trennen", "diesen kanal trennen"}:
-                self.state.set_pending_flow(event.instance, account_id, "account_edit", {"step": "confirm_unlink"})
+                self.state.set_pending_flow(
+                    event.instance,
+                    account_id,
+                    "account_edit",
+                    {
+                        "step": "confirm_unlink",
+                        "chat_id": event.chat_id,
+                        "channel": event.channel,
+                        "identity_key": event.identity_key,
+                    },
+                )
                 return EngineResult(
                     account_id,
                     [
@@ -1238,7 +1260,7 @@ class TeeBotusEngine:
     def _memory_reset_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction] | None:
         pending = self.state.get_pending_flow(event.instance, account_id, "memory_reset")
         if pending is not None:
-            if str(pending.get("chat_id") or "") != event.chat_id or str(pending.get("channel") or "") != event.channel:
+            if not _pending_flow_matches_event(pending, event):
                 return []
             if _is_memory_reset_confirmation(event.text):
                 self.state.pop_pending_flow(event.instance, account_id, "memory_reset")
@@ -1344,7 +1366,7 @@ class TeeBotusEngine:
                 event.instance,
                 account_id,
                 YOUTUBE_LINK_FLOW,
-                {"chat_id": event.chat_id, "channel": event.channel},
+                {"chat_id": event.chat_id, "channel": event.channel, "identity_key": event.identity_key},
             )
             reply = "Schick mir bitte den YouTube-Link, den ich transkribieren soll."
             self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
@@ -2067,6 +2089,9 @@ def _pending_flow_matches_event(pending: dict[str, object], event: IncomingEvent
     if chat_id and chat_id != event.chat_id:
         return False
     if channel and channel != event.channel:
+        return False
+    identity_key = str(pending.get("identity_key") or "").strip()
+    if identity_key and identity_key != event.identity_key:
         return False
     return True
 

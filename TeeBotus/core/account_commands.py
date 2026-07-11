@@ -60,7 +60,17 @@ class AccountCommandHandler:
         if intent.action == RegistrationAction.UNLINK_THIS_CHANNEL:
             return self._unlink(event)
         if intent.action == RegistrationAction.ACCOUNT_EDIT:
-            self.state.set_pending_flow(event.instance, event.account_id, "account_edit", {"step": "start", "identity_key": event.identity_key, "chat_id": event.chat_id})
+            self.state.set_pending_flow(
+                event.instance,
+                event.account_id,
+                "account_edit",
+                {
+                    "step": "start",
+                    "identity_key": event.identity_key,
+                    "chat_id": event.chat_id,
+                    "channel": event.channel,
+                },
+            )
             return AccountCommandResult(True, (self._reply(event.chat_id, "Account-Bearbeitung gestartet. Welchen Kommunikationsweg möchtest du ändern?"),))
         if intent.action == RegistrationAction.LINKED_ACCOUNTS:
             return self._linked(event)

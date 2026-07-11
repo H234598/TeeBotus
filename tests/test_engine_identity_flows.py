@@ -26,7 +26,13 @@ from TeeBotus.runtime.accounts import (
 from TeeBotus.runtime.actions import DelaySeconds, DeleteTrackedMessages, ExportFile, SendAttachment, SendText, SendTyping
 from TeeBotus.runtime.admin_accounts import is_runtime_admin_account
 from TeeBotus.runtime.status_auth import authorize_status_recipient, status_auth_instance_protected, status_auth_state_authorized
-from TeeBotus.runtime.engine import MEMORY_PAGE_LIMIT_NOTE, TELADI_EMERGENCY_CHAT_ID, TeeBotusEngine, should_ignore_event_without_account
+from TeeBotus.runtime.engine import (
+    MEMORY_PAGE_LIMIT_NOTE,
+    TELADI_EMERGENCY_CHAT_ID,
+    TeeBotusEngine,
+    _pending_flow_matches_event,
+    should_ignore_event_without_account,
+)
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent, IncomingLinkPreview
 from TeeBotus.runtime.qdrant import QdrantError
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryResult
@@ -64,6 +70,17 @@ def event(
         attachments=attachments,
         link_previews=link_previews,
     )
+
+
+def test_pending_flow_match_requires_original_identity() -> None:
+    pending = {
+        "chat_id": "chat-1",
+        "channel": "telegram",
+        "identity_key": "telegram:user:original",
+    }
+
+    assert _pending_flow_matches_event(pending, event("telegram:user:original", "ja"))
+    assert not _pending_flow_matches_event(pending, event("telegram:user:other", "ja"))
 
 
 def matrix_group_event(text: str, raw: object) -> IncomingEvent:
@@ -3989,7 +4006,12 @@ def test_account_edit_sets_pending_flow(tmp_path):
 
     assert result.handled is True
     assert account_id is not None
-    assert engine.state.get_pending_flow("Depressionsbot", account_id, "account_edit") == {"step": "start"}
+    assert engine.state.get_pending_flow("Depressionsbot", account_id, "account_edit") == {
+        "step": "start",
+        "chat_id": "chat-1",
+        "channel": "telegram",
+        "identity_key": identity,
+    }
 
 
 def test_register_reports_real_store_error_separately_from_existing_secret():
