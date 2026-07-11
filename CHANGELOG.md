@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.77 - 2026-07-11
+
+- Fail closed on malformed legacy notification-loudness cooldown timestamps.
+
 ## 1.9.76 - 2026-07-11
 
 - Recognize natural muted notification-loudness replies.

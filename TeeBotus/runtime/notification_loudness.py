@@ -556,9 +556,11 @@ def _route_key_for_channel_chat(channel: Any, adapter_slot: Any, chat_id: Any) -
 def _notification_loudness_prompt_allowed(route_state: Mapping[str, Any], now: datetime, *, require_online: bool) -> bool:
     if _wake_window_label(now) == "":
         return False
-    next_check = _parse_datetime(str(route_state.get("next_check_at") or ""))
-    if next_check is not None and next_check > now:
-        return False
+    raw_next_check = route_state.get("next_check_at")
+    if raw_next_check not in (None, ""):
+        next_check = _parse_datetime(str(raw_next_check))
+        if next_check is None or next_check > now:
+            return False
     if _already_prompted_in_wake_window(route_state, now):
         return False
     if require_online:
