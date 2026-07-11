@@ -52,3 +52,13 @@ def test_message_tracker_merges_concurrent_persistent_writes(tmp_path) -> None:
     refs = reloaded.list_for_chat("+491", instance_name="Demo", channel="signal")
 
     assert {ref.message_ref for ref in refs} == {str(index) for index in range(20)}
+
+
+def test_message_tracker_zero_or_negative_limit_keeps_no_refs(tmp_path) -> None:
+    in_memory = MessageTracker(0)
+    in_memory.record(_ref("zero"))
+    assert in_memory.list_for_chat("+491", instance_name="Demo", channel="signal") == []
+
+    persisted = MessageTracker(tmp_path / "refs.json", max_refs_per_chat=-5)
+    persisted.record(_ref("negative"))
+    assert persisted.list_for_chat("+491", instance_name="Demo", channel="signal") == []

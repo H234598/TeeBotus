@@ -20,6 +20,13 @@ RefKind = Literal["telegram_message_id", "signal_timestamp", "matrix_event_id"]
 MESSAGE_TRACKER_FILENAME = "Sent_Message_Refs.json"
 
 
+def _normalize_max_refs(value: object) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return 100
+
+
 @dataclass(frozen=True)
 class SentMessageRef:
     channel: str
@@ -41,9 +48,9 @@ class MessageTracker:
     def __init__(self, root_or_max_refs: Path | str | int | None = None, max_refs_per_chat: int = 100) -> None:
         self.storage_path: Path | None = None
         if isinstance(root_or_max_refs, int):
-            self.max_refs_per_chat = root_or_max_refs
+            self.max_refs_per_chat = _normalize_max_refs(root_or_max_refs)
         else:
-            self.max_refs_per_chat = max_refs_per_chat
+            self.max_refs_per_chat = _normalize_max_refs(max_refs_per_chat)
             if root_or_max_refs is not None:
                 candidate = Path(root_or_max_refs)
                 self.storage_path = candidate if candidate.suffix else candidate / MESSAGE_TRACKER_FILENAME
@@ -60,7 +67,7 @@ class MessageTracker:
             if any((existing.account_id, existing.message_ref, existing.ref_kind) == ref_key for existing in values):
                 return
             values.append(ref)
-            del values[:-self.max_refs_per_chat]
+            self._trim_values(values)
             self._save()
 
     def restore_for_cleanup(self, refs: list[SentMessageRef]) -> None:
@@ -82,7 +89,7 @@ class MessageTracker:
                     values.append(ref)
                     existing.add(ref_key)
                     changed = True
-                del values[:-self.max_refs_per_chat]
+                self._trim_values(values)
             if changed:
                 self._save()
 
@@ -173,7 +180,13 @@ class MessageTracker:
             loaded.setdefault(key, []).append(ref)
         self.refs = loaded
         for values in self.refs.values():
-            del values[:-self.max_refs_per_chat]
+            self._trim_values(values)
+
+    def _trim_values(self, values: list[SentMessageRef]) -> None:
+        if self.max_refs_per_chat <= 0:
+            values.clear()
+            return
+        del values[:-self.max_refs_per_chat]
 
     def _save(self) -> None:
         path = self.storage_path
