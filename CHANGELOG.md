@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.110 - 2026-07-12
+
+- Reject negated positive notification status substrings.
+
 ## 1.9.109 - 2026-07-12
 
 - Prioritize explicit negated mute status over generic English refusals.

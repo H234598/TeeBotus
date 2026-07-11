@@ -411,6 +411,16 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "frag nicht",
         "nicht laut",
         "nicht auf laut",
+        "nicht an",
+        "not loud",
+        "not on",
+        "not enabled",
+        "aren t loud",
+        "isn t loud",
+        "aren t on",
+        "isn t on",
+        "aren t enabled",
+        "isn t enabled",
         "noch nicht",
         "nicht erledigt",
         "nicht gemacht",
@@ -440,6 +450,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "moechte ich nicht",
         "möchte ich nicht",
     )
+    has_negated_confirmed_phrase = _notification_loudness_has_negated_phrase(
+        polarity_normalized, confirmed_needles
+    )
     has_declined_phrase = any(
         _contains_normalized_phrase(normalized, needle)
         for needle in declined_needles
@@ -452,7 +465,13 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         }
         or not (has_negated_mute or has_negated_off)
     )
-    has_declined_phrase = has_declined_phrase or has_unnegated_mute or has_unnegated_off or has_negated_completion
+    has_declined_phrase = (
+        has_declined_phrase
+        or has_unnegated_mute
+        or has_unnegated_off
+        or has_negated_completion
+        or has_negated_confirmed_phrase
+    )
     if has_declined_phrase and (pending or has_notification_context):
         return "declined"
     if pending and (normalized in {"ja", "yes", "jep", "jo", "ok", "okay", "klar", "erledigt", "gemacht"} or words & {"ja", "yes"} and has_notification_context):
@@ -473,7 +492,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if pending and normalized in {"nein", "no", "nee", "nop", "nope"}:
         return "declined"
     if has_notification_context and (
-        any(_contains_normalized_phrase(normalized, needle) for needle in confirmed_needles)
+        (
+            any(_contains_normalized_phrase(normalized, needle) for needle in confirmed_needles)
+            and not has_negated_confirmed_phrase
+        )
         or has_negated_mute
         or has_negated_off
     ):
