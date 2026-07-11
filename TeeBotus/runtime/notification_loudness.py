@@ -867,11 +867,12 @@ def _refresh_route_state_from_account_routes(
     account_store: AccountStore, account_id: str, route_key: str, route_state: dict[str, Any]
 ) -> tuple[bool, bool]:
     identity_key = str(route_state.get("identity_key") or "").strip()
-    candidate_keys = [identity_key] if identity_key else []
     try:
-        candidate_keys.extend(identity for identity in account_store.list_identities_for_account(account_id) if identity not in candidate_keys)
+        account_identity_keys = [str(identity) for identity in account_store.list_identities_for_account(account_id)]
     except Exception:
-        pass
+        return False, False
+    candidate_keys = [identity_key] if identity_key and identity_key in account_identity_keys else []
+    candidate_keys.extend(identity for identity in account_identity_keys if identity not in candidate_keys)
     for candidate in candidate_keys:
         route = account_store.get_identity_route(candidate)
         if not _private_route(route):

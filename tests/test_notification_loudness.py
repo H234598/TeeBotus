@@ -300,6 +300,36 @@ def test_loudness_paths_recheck_account_ownership_inside_outbox_lock(tmp_path, m
     assert route_state["status"] == "pending"
 
 
+def test_loudness_route_refresh_rejects_foreign_identity_key(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_identity = telegram_identity_key(1)
+    foreign_identity = telegram_identity_key(2)
+    account_id = prepare_account_with_route(account_store, account_identity)
+    foreign_account_id = prepare_account_with_route(account_store, foreign_identity)
+    account_store.update_identity_route(account_identity, channel="telegram", chat_id="chat-2", chat_type="private", adapter_slot=1)
+    state = account_store.read_agent_state(account_id)
+    state["notification_loudness"] = {
+        "routes": {
+            "telegram:1:chat-1": {
+                "status": "pending",
+                "checks_active": True,
+                "identity_key": foreign_identity,
+                "route": {"channel": "telegram", "chat_id": "chat-1", "chat_type": "private", "adapter_slot": 1},
+            }
+        }
+    }
+    account_store.write_agent_state(account_id, state)
+    item = {
+        "status": "queued",
+        "system_item": NOTIFICATION_LOUDNESS_SYSTEM_ITEM,
+        "route_key": "telegram:1:chat-1",
+        "route": {"channel": "telegram", "chat_id": "chat-1", "chat_type": "private", "adapter_slot": 1},
+    }
+
+    assert notification_loudness_outbox_item_is_active(account_store, account_id, item) is False
+    assert account_store.get_account_for_identity(foreign_identity) == foreign_account_id
+
+
 def test_scheduler_persists_legacy_route_refresh_when_prompt_is_not_due(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

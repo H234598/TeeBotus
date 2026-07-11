@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.124 - 2026-07-12
+
+- Restrict loudness route refresh to account-owned identities.
+
 ## 1.9.123 - 2026-07-12
 
 - Ignore inverted loudness questions without question marks.
