@@ -1329,7 +1329,7 @@ def _runtime_status_count_label(value: Any) -> str:
         return "<none>"
     parts = []
     for key, item in sorted(value.items(), key=lambda pair: str(pair[0])):
-        name = str(key or "").strip()
+        name = redact_status_text(key)
         if not name:
             continue
         try:

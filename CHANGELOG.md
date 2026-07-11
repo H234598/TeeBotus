@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.42 - 2026-07-11
+
+- Sanitize runtime status counter labels before rendering them.
+
 ## 1.9.41 - 2026-07-11
 
 - Report malformed per-tool MCP configurations instead of silently applying

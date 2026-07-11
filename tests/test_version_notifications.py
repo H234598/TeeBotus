@@ -26,6 +26,7 @@ from TeeBotus.core.status import (
     codex_history_status_lines,
     github_commit_history_url,
     mcp_tool_status_lines,
+    _runtime_status_count_label,
 )
 from TeeBotus.runtime.accounts import (
     ACCOUNT_KEYRING_FILENAME,
@@ -339,6 +340,10 @@ def test_mcp_status_reports_invalid_known_tool_configuration() -> None:
     assert mcp_tool_status_lines({"memory.search": None})[-1] == (
         "- Ungueltige Konfiguration: memory.search (Mapping erwartet)"
     )
+
+
+def test_runtime_status_count_labels_redact_untrusted_names() -> None:
+    assert _runtime_status_count_label({"signal\nInjected": 1}) == "signal Injected:1"
 
 
 def test_account_secret_health_uses_normalized_instance_name(tmp_path: Path) -> None:
