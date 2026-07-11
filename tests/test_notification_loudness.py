@@ -1084,6 +1084,13 @@ def test_loudness_free_text_handles_negation_parity_and_explicit_status() -> Non
     assert _notification_loudness_decision("keine Benachrichtigungen sind stumm", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_does_not_leak_negation_across_clauses() -> None:
+    assert _notification_loudness_decision("nicht stumm, aber lautlos", pending=True) == "declined"
+    assert _notification_loudness_decision("not muted but silenced", pending=False) == "declined"
+    assert _notification_loudness_decision("nicht stumm und nicht lautlos", pending=True) == "confirmed"
+    assert _notification_loudness_decision("nicht ausgeschaltet, aber deaktiviert", pending=True) == "declined"
+
+
 def test_loudness_free_text_keeps_negation_precedence_without_pending_state() -> None:
     assert _notification_loudness_decision("Benachrichtigungen sind deaktiviert", pending=False) == "declined"
     assert _notification_loudness_decision("Benachrichtigungen sind nicht aktiviert", pending=False) == "declined"

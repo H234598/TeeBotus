@@ -24,6 +24,7 @@ NOTIFICATION_LOUDNESS_OFF_TERMS = frozenset({"ausgeschaltet", "deaktiviert", "ab
 NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset(
     {"nicht", "nie", "kein", "keine", "weder", "ohne", "not", "never", "neither", "without"}
 )
+NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES = frozenset({"aber", "jedoch", "sondern", "und", "oder", "but", "however", "or", "and"})
 
 NOTIFICATION_LOUDNESS_PROMPT = (
     "Bitte stell meine Nachrichten in diesem Chat auf laut, damit Erinnerungen, Termine und wichtige Hinweise nicht untergehen.\n"
@@ -761,7 +762,11 @@ def _notification_loudness_term_polarity(
     for index, token in enumerate(tokens):
         if token not in terms:
             continue
-        preceding = tokens[max(0, index - 3) : index]
+        preceding_start = max(0, index - 3)
+        for boundary_index in range(preceding_start, index):
+            if tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES:
+                preceding_start = boundary_index + 1
+        preceding = tokens[preceding_start:index]
         negation_count = sum(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in preceding)
         if negation_count % 2:
             has_negated = True

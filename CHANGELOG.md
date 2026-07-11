@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.97 - 2026-07-12
+
+- Prevent notification-loudness negation leakage across clauses.
+
 ## 1.9.96 - 2026-07-12
 
 - Fix notification-loudness negation precedence for compound status phrases.
