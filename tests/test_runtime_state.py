@@ -799,6 +799,41 @@ def test_runtime_state_store_recovers_local_response_after_failed_reset(tmp_path
     assert account_store.read_llm_state(ACCOUNT_ID)["previous_response_id"] == "resp-local-new"
 
 
+def test_runtime_state_store_serializes_set_and_reset_transitions(tmp_path, monkeypatch):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    write_entered = threading.Event()
+    release_write = threading.Event()
+    reset_finished = threading.Event()
+
+    def blocking_write(*_args, **_kwargs):
+        write_entered.set()
+        assert release_write.wait(timeout=2)
+        return True
+
+    monkeypatch.setattr(state, "_write_llm_previous_response_id", blocking_write)
+    setter = threading.Thread(
+        target=state.set_previous_response_id,
+        args=("Bot", ACCOUNT_ID, "response-id"),
+    )
+    setter.start()
+    assert write_entered.wait(timeout=2)
+
+    def reset() -> None:
+        state.reset_previous_response_id("Bot", ACCOUNT_ID)
+        reset_finished.set()
+
+    resetter = threading.Thread(target=reset)
+    resetter.start()
+    assert not reset_finished.wait(timeout=0.1)
+
+    release_write.set()
+    setter.join(timeout=2)
+    resetter.join(timeout=2)
+    assert not setter.is_alive()
+    assert not resetter.is_alive()
+    assert reset_finished.is_set()
+
+
 def test_runtime_state_store_set_none_clears_previous_llm_response_id(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"
