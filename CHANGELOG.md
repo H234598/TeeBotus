@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.19 - 2026-07-11
+
+- Treat malformed fallback-model configuration as an empty fallback list in
+  status output.
+
 ## 1.9.18 - 2026-07-11
 
 - Keep status output alive when optional LLM client attributes fail during

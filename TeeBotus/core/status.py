@@ -678,17 +678,19 @@ def _safe_status_value(value: str, *, default: str) -> str:
     return redact_status_text(text) if text else default
 
 
-def _fallback_model_count(value: tuple[str, ...] | list[str] | str) -> str:
+def _fallback_model_count(value: object) -> str:
     return str(len(_fallback_model_list(value)))
 
 
-def _fallback_model_list(value: tuple[str, ...] | list[str] | str) -> list[str]:
+def _fallback_model_list(value: object) -> list[str]:
     if isinstance(value, str):
         return [part.strip() for part in value.split(",") if part.strip()]
-    return [str(part or "").strip() for part in value if str(part or "").strip()]
+    if isinstance(value, (tuple, list, set)):
+        return [str(part or "").strip() for part in value if str(part or "").strip()]
+    return []
 
 
-def _fallback_model_status(value: tuple[str, ...] | list[str] | str) -> str:
+def _fallback_model_status(value: object) -> str:
     models = _fallback_model_list(value)
     if not models:
         return "keine (kein Ersatzmodell fuer Chat/Textantworten konfiguriert)"

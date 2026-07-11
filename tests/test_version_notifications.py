@@ -214,6 +214,16 @@ def test_status_does_not_crash_when_llm_client_attributes_fail(tmp_path: Path) -
     assert "- Ersatzmodelle: keine (kein aktiver Ersatz fuer Chat/Textantworten)" in text
 
 
+def test_status_does_not_crash_on_malformed_fallback_configuration(tmp_path: Path) -> None:
+    text = build_status_reply(
+        instance_name="Demo",
+        project_root=tmp_path,
+        llm_fallback_models=None,
+    )
+
+    assert "- Ersatzmodelle: keine (kein aktiver Ersatz fuer Chat/Textantworten)" in text
+
+
 def test_account_secret_health_uses_normalized_instance_name(tmp_path: Path) -> None:
     accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
     accounts_root.mkdir(parents=True)
