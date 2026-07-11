@@ -2463,6 +2463,34 @@ class AccountStore:
         for entry in entries:
             if not isinstance(entry, dict):
                 continue
+            entry_id = str(entry.get("id") or "<unknown>").strip()
+            for link_type in ("related_ids", *ACCOUNT_MEMORY_LINK_TYPES):
+                raw_links = entry.get(link_type)
+                if raw_links is None:
+                    continue
+                if not isinstance(raw_links, list):
+                    errors.append(f"entry {entry_id} {link_type} is not a list")
+                    continue
+                for raw_link in raw_links:
+                    if isinstance(raw_link, dict):
+                        raw_link_id = str(raw_link.get("id") or raw_link.get("target_id") or "").strip()
+                    else:
+                        raw_link_id = str(raw_link or "").strip()
+                    if not raw_link_id:
+                        errors.append(f"entry {entry_id} {link_type} contains an empty target")
+            raw_relations = entry.get("relations")
+            if raw_relations is not None:
+                if not isinstance(raw_relations, list):
+                    errors.append(f"entry {entry_id} relations is not a list")
+                else:
+                    for raw_relation in raw_relations:
+                        if not isinstance(raw_relation, dict):
+                            errors.append(f"entry {entry_id} relation is not an object")
+                            continue
+                        if not str(raw_relation.get("type") or raw_relation.get("relation") or "").strip():
+                            errors.append(f"entry {entry_id} relation type is empty")
+                        if not str(raw_relation.get("target_id") or raw_relation.get("id") or "").strip():
+                            errors.append(f"entry {entry_id} relation target_id is empty")
             for related_id in _normalize_account_memory_links(entry.get("related_ids")):
                 if related_id not in entry_id_set:
                     missing_related_ids.append(related_id)

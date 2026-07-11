@@ -4623,6 +4623,8 @@ def test_structured_account_memory_index_health_reports_broken_invariants(tmp_pa
     )
     entries = store.read_memory_entries(account_id)
     entries[0]["related_ids"] = ["mem_missing_related"]
+    entries[0]["supports"] = "invalid"
+    entries[0]["relations"] = [{}]
     store.write_memory_entries(account_id, entries)
 
     health = store.check_structured_memory_index(account_id)
@@ -4640,6 +4642,9 @@ def test_structured_account_memory_index_health_reports_broken_invariants(tmp_pa
     assert "index.entries missing entries: mem_missing_entry" in error_text
     assert "graph.links is not an object" in error_text
     assert "related_ids missing entries: mem_missing_related" in error_text
+    assert "entry mem_live supports is not a list" in error_text
+    assert "entry mem_live relation type is empty" in error_text
+    assert "entry mem_live relation target_id is empty" in error_text
 
 
 def test_structured_account_memory_index_health_reports_stale_semantic_cache(tmp_path):
