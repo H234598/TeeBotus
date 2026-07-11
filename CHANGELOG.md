@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.68 - 2026-07-11
+
+- Skip non-private routes before evaluating adaptive contact timing.
+
 ## 1.9.67 - 2026-07-11
 
 - Let terminal notification-loudness states win over duplicate route-key variants.

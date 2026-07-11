@@ -136,13 +136,13 @@ def _queue_due_notification_loudness_prompts_unlocked(
             continue
         state_changed = _refresh_route_state_from_account_routes(account_store, account_id, str(route_key), route_state) or state_changed
         route = route_state.get("route")
+        if not _private_route(route):
+            continue
         if isinstance(route, Mapping):
             adaptive_decision = contact_timing_decision(account_store, account_id, now=resolved_now, route=route)
             if not adaptive_decision.allowed:
                 continue
         if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=True):
-            continue
-        if not _private_route(route):
             continue
         if _has_queued_notification_loudness_item(account_store, account_id, route_key):
             continue

@@ -336,6 +336,34 @@ def test_scheduler_does_not_online_check_unknown_notification_loudness_routes(tm
     assert due == ()
 
 
+def test_scheduler_does_not_run_contact_timing_for_non_private_routes(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    state = account_store.read_agent_state(account_id)
+    state["notification_loudness"] = {
+        "schema_version": 1,
+        "routes": {
+            "telegram:1:group-1": {
+                "status": "pending",
+                "checks_active": True,
+                "route": {"channel": "telegram", "chat_id": "group-1", "chat_type": "group", "adapter_slot": 1},
+                "identity_key": identity,
+            }
+        },
+    }
+    account_store.write_agent_state(account_id, state)
+
+    def fail_contact_timing(*_args, **_kwargs):
+        raise AssertionError("group routes must not enter contact timing")
+
+    monkeypatch.setattr("TeeBotus.runtime.notification_loudness.contact_timing_decision", fail_contact_timing)
+
+    assert queue_due_notification_loudness_prompts(
+        account_store, account_id, now=datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    ) == ()
+
+
 def test_scheduler_queues_notification_loudness_follow_up_when_recently_active_in_next_wake_half(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)
