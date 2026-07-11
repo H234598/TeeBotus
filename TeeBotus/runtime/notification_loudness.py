@@ -269,7 +269,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "stumm lassen",
         "bleibt stumm",
     )
-    if pending and any(needle in normalized for needle in declined_needles):
+    has_declined_phrase = any(needle in normalized for needle in declined_needles)
+    if has_declined_phrase and (pending or has_notification_context):
         return "declined"
     if pending and (normalized in {"ja", "yes", "jep", "jo", "ok", "okay", "klar", "erledigt", "gemacht"} or words & {"ja", "yes"} and has_notification_context):
         return "confirmed"
@@ -279,7 +280,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return "declined"
     if has_notification_context and any(needle in normalized for needle in confirmed_needles):
         return "confirmed"
-    if has_notification_context and any(needle in normalized for needle in declined_needles):
+    if has_notification_context and has_declined_phrase:
         return "declined"
     return None
 

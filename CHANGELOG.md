@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.80 - 2026-07-11
+
+- Preserve notification-loudness negation precedence without pending state.
+
 ## 1.9.79 - 2026-07-11
 
 - Handle mixed-type notification-loudness prompt-window keys safely.
