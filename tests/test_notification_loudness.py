@@ -1097,6 +1097,14 @@ def test_loudness_free_text_preserves_punctuation_clause_boundaries() -> None:
     assert _notification_loudness_decision("nicht stumm; nicht lautlos", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_does_not_decide_uncertain_status_statements() -> None:
+    assert _notification_loudness_decision("Ich kann nicht sagen, ob die Benachrichtigungen an sind", pending=True) is None
+    assert _notification_loudness_decision("Keine Ahnung, ob die Nachrichten stumm sind", pending=True) is None
+    assert _notification_loudness_decision("Ich bin mir nicht sicher, ob die Nachrichten nicht lautlos sind", pending=False) is None
+    assert _notification_loudness_decision("I am not sure whether messages are muted", pending=True) is None
+    assert _notification_loudness_decision("Maybe notifications are on", pending=False) is None
+
+
 def test_loudness_free_text_keeps_negation_precedence_without_pending_state() -> None:
     assert _notification_loudness_decision("Benachrichtigungen sind deaktiviert", pending=False) == "declined"
     assert _notification_loudness_decision("Benachrichtigungen sind nicht aktiviert", pending=False) == "declined"

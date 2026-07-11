@@ -26,6 +26,26 @@ NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset(
 )
 NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES = frozenset({"aber", "jedoch", "sondern", "und", "oder", "but", "however", "or", "and"})
 NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN = "<clause>"
+NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
+    "weiss nicht",
+    "keine ahnung",
+    "nicht sicher",
+    "unsicher",
+    "vielleicht",
+    "wahrscheinlich",
+    "ich glaube",
+    "ich denke",
+    "kann nicht sagen",
+    "i don t know",
+    "not sure",
+    "uncertain",
+    "maybe",
+    "probably",
+    "i think",
+    "i believe",
+    "cannot say",
+    "can t say",
+)
 
 NOTIFICATION_LOUDNESS_PROMPT = (
     "Bitte stell meine Nachrichten in diesem Chat auf laut, damit Erinnerungen, Termine und wichtige Hinweise nicht untergehen.\n"
@@ -258,6 +278,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(
         polarity_normalized, NOTIFICATION_LOUDNESS_OFF_TERMS
     )
+    if has_notification_context and _notification_loudness_has_uncertainty(normalized):
+        return None
     confirmed_needles = (
         "ja laut",
         "laut gestellt",
@@ -791,6 +813,10 @@ def _notification_loudness_term_polarity(
         else:
             has_unnegated = True
     return has_unnegated, has_negated
+
+
+def _notification_loudness_has_uncertainty(normalized: str) -> bool:
+    return any(_contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES)
 
 
 def _normalize_channel(channel: Any) -> str:

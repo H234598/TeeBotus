@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.99 - 2026-07-12
+
+- Avoid deciding notification loudness from uncertain status statements.
+
 ## 1.9.98 - 2026-07-12
 
 - Preserve punctuation clause boundaries in loudness negation parsing.
