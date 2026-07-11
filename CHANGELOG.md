@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.98 - 2026-07-12
+
+- Preserve punctuation clause boundaries in loudness negation parsing.
+
 ## 1.9.97 - 2026-07-12
 
 - Prevent notification-loudness negation leakage across clauses.

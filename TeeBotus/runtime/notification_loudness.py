@@ -25,6 +25,7 @@ NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset(
     {"nicht", "nie", "kein", "keine", "weder", "ohne", "not", "never", "neither", "without"}
 )
 NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES = frozenset({"aber", "jedoch", "sondern", "und", "oder", "but", "however", "or", "and"})
+NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN = "<clause>"
 
 NOTIFICATION_LOUDNESS_PROMPT = (
     "Bitte stell meine Nachrichten in diesem Chat auf laut, damit Erinnerungen, Termine und wichtige Hinweise nicht untergehen.\n"
@@ -252,8 +253,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             *NOTIFICATION_LOUDNESS_MUTE_TERMS,
         )
     )
-    has_unnegated_mute, has_negated_mute = _notification_loudness_mute_polarity(normalized)
-    has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(normalized, NOTIFICATION_LOUDNESS_OFF_TERMS)
+    polarity_normalized = _normalize_text_for_polarity(text)
+    has_unnegated_mute, has_negated_mute = _notification_loudness_mute_polarity(polarity_normalized)
+    has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(
+        polarity_normalized, NOTIFICATION_LOUDNESS_OFF_TERMS
+    )
     confirmed_needles = (
         "ja laut",
         "laut gestellt",
@@ -734,8 +738,19 @@ def _resolve_loudness_now(value: datetime | None) -> datetime:
 
 
 def _normalize_text(text: str) -> str:
+    return _normalize_text_value(text, preserve_clause_boundaries=False)
+
+
+def _normalize_text_for_polarity(text: str) -> str:
+    return _normalize_text_value(text, preserve_clause_boundaries=True)
+
+
+def _normalize_text_value(text: str, *, preserve_clause_boundaries: bool) -> str:
     normalized = str(text or "").casefold().replace("ä", "ae").replace("ö", "oe").replace("ü", "ue").replace("ß", "ss")
-    for char in ",.;:!?()[]{}\"'":
+    for char in ",.;:!?":
+        replacement = f" {NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN} " if preserve_clause_boundaries else " "
+        normalized = normalized.replace(char, replacement)
+    for char in "()[]{}\"'":
         normalized = normalized.replace(char, " ")
     return " ".join(normalized.split())
 
@@ -764,7 +779,10 @@ def _notification_loudness_term_polarity(
             continue
         preceding_start = max(0, index - 3)
         for boundary_index in range(preceding_start, index):
-            if tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES:
+            if (
+                tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+            ):
                 preceding_start = boundary_index + 1
         preceding = tokens[preceding_start:index]
         negation_count = sum(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in preceding)
