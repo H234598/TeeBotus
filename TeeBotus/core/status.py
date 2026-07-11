@@ -1500,8 +1500,7 @@ def account_memory_payload_size(*, account_store: AccountStore | None, account_i
             index = account_store.read_memory_index(account_id)
         except (AccountStoreError, OSError):
             LOGGER.exception("Failed to read account memory payload size from store.")
-            if backend is not None:
-                return None
+            return None
         else:
             backend_error = ""
             if backend is not None:

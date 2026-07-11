@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.12 - 2026-07-11
+
+- Do not mask unreadable JSON account memory with its raw file size in
+  `/status`.
+
 ## 1.9.11 - 2026-07-11
 
 - Keep account-memory health diagnostics alive when fallback status resolution

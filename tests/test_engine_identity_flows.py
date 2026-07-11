@@ -1267,6 +1267,27 @@ def test_status_does_not_fallback_to_legacy_files_when_memory_backend_fails(tmp_
     assert "- Nutzermemory: 13 B" not in text
 
 
+def test_memory_payload_size_does_not_mask_unreadable_json_with_file_size(tmp_path):
+    class FailingJsonStore:
+        account_memory_backend = None
+
+        def read_memory_entries(self, _account_id):
+            raise AccountStoreError("invalid JSONL")
+
+        def read_memory_index(self, _account_id):
+            return {}
+
+    memory_dir = tmp_path / "account"
+    memory_dir.mkdir()
+    (memory_dir / "User_Memory_Entries.jsonl").write_text("unreadable payload", encoding="utf-8")
+
+    assert status_core.account_memory_payload_size(
+        account_store=FailingJsonStore(),
+        account_id="account",
+        fallback_directory=memory_dir,
+    ) is None
+
+
 def test_memory_encryption_status_diagnoses_backend_resolution_failure():
     class FailingStore:
         @property
