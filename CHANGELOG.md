@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.48 - 2026-07-11
+
+- Make set-valued status labels deterministic without reordering lists.
+
 ## 1.9.47 - 2026-07-11
 
 - Preserve valid falsy MCP mappings in status output.

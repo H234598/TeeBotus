@@ -652,7 +652,10 @@ def _first_status_attr(obj: object | None, *names: str) -> str:
         return ""
     for name in names:
         value = _status_object_attr(obj, name, "")
-        if isinstance(value, (tuple, list, set)):
+        if isinstance(value, set):
+            parts = sorted(value, key=lambda part: str(part or "").casefold())
+            text = ",".join(str(part or "").strip() for part in parts if str(part or "").strip())
+        elif isinstance(value, (tuple, list)):
             text = ",".join(str(part or "").strip() for part in value if str(part or "").strip())
         else:
             text = str(value or "").strip()
@@ -667,7 +670,9 @@ def _sequence_status_attr(obj: object | None, name: str) -> list[str]:
     value = _status_object_attr(obj, name, ())
     if isinstance(value, str):
         return [part.strip() for part in value.split(",") if part.strip()]
-    if isinstance(value, (tuple, list, set)):
+    if isinstance(value, set):
+        value = sorted(value, key=lambda part: str(part or "").casefold())
+    if isinstance(value, (tuple, list)):
         return [str(part or "").strip() for part in value if str(part or "").strip()]
     return []
 
@@ -698,7 +703,9 @@ def _fallback_model_count(value: object) -> str:
 def _fallback_model_list(value: object) -> list[str]:
     if isinstance(value, str):
         return [part.strip() for part in value.split(",") if part.strip()]
-    if isinstance(value, (tuple, list, set)):
+    if isinstance(value, set):
+        value = sorted(value, key=lambda part: str(part or "").casefold())
+    if isinstance(value, (tuple, list)):
         return [str(part or "").strip() for part in value if str(part or "").strip()]
     return []
 
@@ -1360,7 +1367,9 @@ def _health_status_token(value: object) -> str:
 def _runtime_status_sequence_label(value: Any) -> str:
     if isinstance(value, str):
         parts = [part.strip() for part in value.split(",") if part.strip()]
-    elif isinstance(value, (list, tuple, set)):
+    elif isinstance(value, set):
+        parts = [str(part or "").strip() for part in sorted(value, key=lambda part: str(part or "").casefold()) if str(part or "").strip()]
+    elif isinstance(value, (list, tuple)):
         parts = [str(part or "").strip() for part in value if str(part or "").strip()]
     else:
         parts = []

@@ -26,8 +26,11 @@ from TeeBotus.core.status import (
     codex_history_status_lines,
     github_commit_history_url,
     mcp_tool_status_lines,
+    _fallback_model_list,
     _proactive_agent_status_lines,
     _runtime_status_count_label,
+    _runtime_status_sequence_label,
+    _sequence_status_attr,
 )
 from TeeBotus.runtime.accounts import (
     ACCOUNT_KEYRING_FILENAME,
@@ -351,6 +354,16 @@ def test_mcp_status_reports_invalid_known_tool_configuration() -> None:
     assert mcp_tool_status_lines({"memory.search": None})[-1] == (
         "- Ungueltige Konfiguration: memory.search (Mapping erwartet)"
     )
+
+
+def test_status_sequence_helpers_sort_sets_but_preserve_ordered_values() -> None:
+    class Client:
+        fallback_models = {"model-z", "model-a"}
+
+    assert _sequence_status_attr(Client(), "fallback_models") == ["model-a", "model-z"]
+    assert _fallback_model_list({"model-z", "model-a"}) == ["model-a", "model-z"]
+    assert _runtime_status_sequence_label({"telegram:1", "signal:1"}) == "signal:1,telegram:1"
+    assert _runtime_status_sequence_label(["telegram:1", "signal:1"]) == "telegram:1,signal:1"
 
 
 def test_runtime_status_count_labels_redact_untrusted_names() -> None:
