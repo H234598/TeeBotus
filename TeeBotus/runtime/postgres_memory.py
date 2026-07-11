@@ -15,6 +15,7 @@ POSTGRES_BACKEND_ENV = "TEEBOTUS_ACCOUNT_MEMORY_BACKEND"
 POSTGRES_DSN_ENV = "TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN"
 POSTGRES_CONNECT_TIMEOUT_ENV = "TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_CONNECT_TIMEOUT"
 POSTGRES_BACKEND_TOKENS = {"postgres", "postgresql", "pg"}
+POSTGRES_READ_ENTRIES_BY_IDS_CHUNK_SIZE = 500
 LOGGER = logging.getLogger("TeeBotus")
 
 
@@ -150,17 +151,22 @@ class PostgresAccountMemoryBackend:
         if not requested_ids:
             return []
         self._ensure_schema()
-        placeholders = ",".join("%s" for _ in requested_ids)
+        rows: list[tuple[Any, ...]] = []
         with self._connect() as connection:
-            rows = connection.execute(
-                f"""
-                SELECT memory_id, payload_nonce, payload_ciphertext
-                FROM teebotus_memory_entries
-                WHERE instance_name = %s AND account_id = %s AND memory_id IN ({placeholders})
-                ORDER BY ordinal ASC, created_at ASC, memory_id ASC
-                """,
-                (self.instance_name, account_id, *requested_ids),
-            ).fetchall()
+            for offset in range(0, len(requested_ids), POSTGRES_READ_ENTRIES_BY_IDS_CHUNK_SIZE):
+                chunk = requested_ids[offset : offset + POSTGRES_READ_ENTRIES_BY_IDS_CHUNK_SIZE]
+                placeholders = ",".join("%s" for _ in chunk)
+                rows.extend(
+                    connection.execute(
+                        f"""
+                        SELECT memory_id, payload_nonce, payload_ciphertext
+                        FROM teebotus_memory_entries
+                        WHERE instance_name = %s AND account_id = %s AND memory_id IN ({placeholders})
+                        ORDER BY ordinal ASC, created_at ASC, memory_id ASC
+                        """,
+                        (self.instance_name, account_id, *chunk),
+                    ).fetchall()
+                )
         entries: list[dict[str, Any]] = []
         skipped = 0
         first_skipped_id = ""

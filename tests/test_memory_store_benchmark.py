@@ -71,6 +71,50 @@ def test_postgres_empty_entry_id_read_clears_previous_diagnostics() -> None:
     assert backend.last_entry_skipped == 0
 
 
+def test_postgres_entry_id_read_chunks_large_requests(monkeypatch) -> None:
+    class FakeResult:
+        def __init__(self, memory_ids: tuple[str, ...]) -> None:
+            self.memory_ids = memory_ids
+
+        def fetchall(self):
+            return [(memory_id, b"nonce", b"cipher") for memory_id in self.memory_ids]
+
+    class FakeConnection:
+        def __init__(self) -> None:
+            self.params: list[tuple[str, ...]] = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def execute(self, _sql: str, params: tuple[str, ...]) -> FakeResult:
+            self.params.append(params)
+            return FakeResult(tuple(params[2:]))
+
+    backend = PostgresAccountMemoryBackend(
+        instance_name="Bench",
+        provider=StaticSecretProvider(b"p" * 32),
+        purpose="account-structured-memory-key",
+        config=PostgresMemoryConfig(dsn="postgresql://unused"),
+    )
+    connection = FakeConnection()
+    monkeypatch.setattr(backend, "_ensure_schema", lambda: None)
+    monkeypatch.setattr(backend, "_connect", lambda: connection)
+    monkeypatch.setattr(
+        backend,
+        "_decrypt_json",
+        lambda _account_id, memory_id, _nonce, _ciphertext: {"id": memory_id},
+    )
+    requested_ids = [f"mem-{index:04d}" for index in reversed(range(1101))]
+
+    selected = backend.read_entries_by_ids("a" * 128, requested_ids)
+
+    assert [row["id"] for row in selected] == requested_ids
+    assert [len(params) - 2 for params in connection.params] == [500, 500, 101]
+
+
 def test_postgres_benchmark_success_path_uses_cleaned_tempdir(monkeypatch, tmp_path) -> None:
     entered: list[str] = []
     exited: list[str] = []
