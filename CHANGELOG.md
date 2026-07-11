@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.85 - 2026-07-12
+
+- Normalize notification-loudness system-item tokens case-insensitively.
+
 ## 1.9.84 - 2026-07-11
 
 - Recheck current notification-loudness routes inside serialized state updates.

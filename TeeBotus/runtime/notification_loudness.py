@@ -194,10 +194,10 @@ def _queue_due_notification_loudness_prompts_unlocked(
 def is_notification_loudness_outbox_item(item: Mapping[str, Any] | None) -> bool:
     if not isinstance(item, Mapping):
         return False
-    if str(item.get("system_item") or "").strip() == NOTIFICATION_LOUDNESS_SYSTEM_ITEM:
+    if str(item.get("system_item") or "").strip().casefold() == NOTIFICATION_LOUDNESS_SYSTEM_ITEM:
         return True
     planner = item.get("planner")
-    return isinstance(planner, Mapping) and str(planner.get("system_item") or "").strip() == NOTIFICATION_LOUDNESS_SYSTEM_ITEM
+    return isinstance(planner, Mapping) and str(planner.get("system_item") or "").strip().casefold() == NOTIFICATION_LOUDNESS_SYSTEM_ITEM
 
 
 def notification_loudness_outbox_item_is_active(account_store: AccountStore, account_id: str, item: Mapping[str, Any]) -> bool:

@@ -15,6 +15,7 @@ from TeeBotus.runtime.notification_loudness import (
     NOTIFICATION_LOUDNESS_SYSTEM_ITEM,
     maybe_handle_notification_loudness_response,
     maybe_notification_loudness_prompt_action,
+    is_notification_loudness_outbox_item,
     notification_loudness_outbox_item_is_active,
     queue_due_notification_loudness_prompts,
     _notification_loudness_decision,
@@ -659,6 +660,11 @@ def test_inconsistent_loudness_outbox_route_fails_closed(tmp_path) -> None:
     }
 
     assert notification_loudness_outbox_item_is_active(account_store, account_id, item) is False
+
+
+def test_loudness_outbox_system_item_token_is_case_insensitive() -> None:
+    assert is_notification_loudness_outbox_item({"system_item": "Notification_Loudness"}) is True
+    assert is_notification_loudness_outbox_item({"planner": {"system_item": "NOTIFICATION_LOUDNESS"}}) is True
 
 
 def test_loudness_route_slot_rejects_invalid_values() -> None:
