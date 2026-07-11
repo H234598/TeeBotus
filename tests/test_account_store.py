@@ -2062,8 +2062,7 @@ def test_account_store_sqlite_backend_falls_back_to_secondary_with_warning(tmp_p
     account_id = "a" * 128
     fallback_backend.write_entries(account_id, [{"id": "mem_backup", "user_text": "Backup"}])
     fallback_backend.write_index(account_id, {"index": {"entries": {"mem_backup": {}}}})
-    broken_primary_path = tmp_path / "broken-primary.sqlite3"
-    broken_primary_path.mkdir()
+    broken_primary_path = tmp_path / "missing-primary.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(broken_primary_path))
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", str(fallback_path))

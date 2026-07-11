@@ -61,6 +61,7 @@ class SQLiteAccountMemoryBackend:
         self.last_index_read_error = ""
         self.last_collection_read_error = ""
         self.last_collection_skipped = 0
+        self.last_database_missing = False
         self._cipher_key: bytes | None = None
         self._cipher: AESGCM | None = None
 
@@ -82,7 +83,10 @@ class SQLiteAccountMemoryBackend:
     def read_entries(self, account_id: str) -> list[dict[str, Any]]:
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
+        self.last_database_missing = False
         if not self.config.path.exists():
+            self.last_database_missing = True
+            self.last_entry_read_error = str(self._missing_database_error())
             return []
         with self._connect_readonly() as connection:
             if not _table_exists(connection, "memory_entries"):
@@ -128,7 +132,10 @@ class SQLiteAccountMemoryBackend:
             return []
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
+        self.last_database_missing = False
         if not self.config.path.exists():
+            self.last_database_missing = True
+            self.last_entry_read_error = str(self._missing_database_error())
             return []
         placeholders = ",".join("?" for _ in requested_ids)
         with self._connect_readonly() as connection:
@@ -193,7 +200,10 @@ class SQLiteAccountMemoryBackend:
 
     def read_index(self, account_id: str) -> dict[str, Any]:
         self.last_index_read_error = ""
+        self.last_database_missing = False
         if not self.config.path.exists():
+            self.last_database_missing = True
+            self.last_index_read_error = str(self._missing_database_error())
             return {}
         with self._connect_readonly() as connection:
             if not _table_exists(connection, "memory_indexes"):
@@ -242,7 +252,10 @@ class SQLiteAccountMemoryBackend:
         collection_name = _normalize_collection_name(collection)
         self.last_collection_read_error = ""
         self.last_collection_skipped = 0
+        self.last_database_missing = False
         if not self.config.path.exists():
+            self.last_database_missing = True
+            self.last_collection_read_error = str(self._missing_database_error())
             return []
         with self._connect_readonly() as connection:
             if not _table_exists(connection, "account_jsonl_collections"):
@@ -368,8 +381,10 @@ class SQLiteAccountMemoryBackend:
                 return int(updated.rowcount or 0) > 0
 
     def read_collection_names(self, account_id: str) -> tuple[str, ...]:
+        self.last_database_missing = False
         if not self.config.path.exists():
-            return ()
+            self.last_database_missing = True
+            raise self._missing_database_error()
         with self._connect_readonly() as connection:
             if not _table_exists(connection, "account_jsonl_collections"):
                 return ()
@@ -418,7 +433,13 @@ class SQLiteAccountMemoryBackend:
         connection.execute("PRAGMA foreign_keys=ON")
         return connection
 
+    def _missing_database_error(self) -> AccountStoreError:
+        error = AccountStoreError(f"SQLite account-memory database is missing: {self.config.path}")
+        LOGGER.critical("%s", error)
+        return error
+
     def _ensure_schema(self) -> None:
+        self.last_database_missing = False
         if self._initialized:
             return
         with self._connect() as connection:

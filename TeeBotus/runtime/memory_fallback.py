@@ -186,7 +186,20 @@ class WarningFallbackAccountMemoryBackend:
                     account_id,
                 )
                 raise AccountStoreError(self.last_fallback_sync_error) from exc
-            return tuple(getattr(self.fallback, "read_collection_names")(account_id))
+            try:
+                return tuple(getattr(self.fallback, "read_collection_names")(account_id))
+            except Exception:
+                if self._backend_database_missing(self.fallback):
+                    if self._backend_database_missing(self.primary):
+                        self.last_fallback_sync_error = (
+                            "read_collection_names: primary and fallback databases are not initialized"
+                        )
+                    else:
+                        self.last_fallback_sync_error = (
+                            "read_collection_names: fallback database is missing; no secondary data available"
+                        )
+                    return ()
+                raise
 
     def clear_account_unchecked(self, account_id: str) -> None:
         primary_clear = getattr(self.primary, "clear_account_unchecked", None)
@@ -432,7 +445,20 @@ class WarningFallbackAccountMemoryBackend:
         primary_index_read_error = self.last_index_read_error
         primary_collection_read_error = self.last_collection_read_error
         primary_collection_skipped = self.last_collection_skipped
+        primary_database_missing = self._backend_database_missing(self.primary)
         self._copy_diagnostics(self.fallback)
+        if self._backend_database_missing(self.fallback):
+            self.last_entry_read_error = primary_entry_read_error
+            self.last_entry_skipped = primary_entry_skipped
+            self.last_index_read_error = primary_index_read_error
+            self.last_collection_read_error = primary_collection_read_error
+            self.last_collection_skipped = primary_collection_skipped
+            if primary_database_missing:
+                self._clear_read_diagnostics(operation)
+                self.last_fallback_sync_error = f"{operation}: primary and fallback databases are not initialized"
+            else:
+                self.last_fallback_sync_error = f"{operation}: fallback database is missing; no secondary data available"
+            return result
         if self._fallback_result_is_empty_for_failed_read(
             operation,
             result,
@@ -836,6 +862,19 @@ class WarningFallbackAccountMemoryBackend:
         self.last_index_read_error = str(getattr(backend, "last_index_read_error", "") or "")
         self.last_collection_read_error = str(getattr(backend, "last_collection_read_error", "") or "")
         self.last_collection_skipped = int(getattr(backend, "last_collection_skipped", 0) or 0)
+
+    def _backend_database_missing(self, backend: Any) -> bool:
+        return bool(getattr(backend, "last_database_missing", False))
+
+    def _clear_read_diagnostics(self, operation: str) -> None:
+        if operation == "read_entries":
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+        elif operation == "read_index":
+            self.last_index_read_error = ""
+        elif operation.startswith("read_collection:"):
+            self.last_collection_read_error = ""
+            self.last_collection_skipped = 0
 
     @property
     def stale_fallback_entry_account_ids(self) -> tuple[str, ...]:
