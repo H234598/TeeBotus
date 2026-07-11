@@ -88,6 +88,27 @@ def test_parse_reminder_weekday_can_target_later_today() -> None:
     assert intent.due_at == "2026-06-15T09:00:00+00:00"
 
 
+def test_parse_reminder_next_weekday_skips_current_day() -> None:
+    now = datetime(2026, 6, 15, 8, 0, tzinfo=timezone.utc)
+
+    next_week = parse_reminder_intent("Erinnere mich nächsten Montag um 9 an die Therapie", now=now)
+    coming_week = parse_reminder_intent("Erinnere mich am kommenden Montag um 9 an die Therapie", now=now)
+
+    assert next_week.due_at == "2026-06-22T09:00:00+00:00"
+    assert coming_week.due_at == "2026-06-22T09:00:00+00:00"
+    assert next_week.subject == "die Therapie"
+    assert coming_week.subject == "die Therapie"
+
+
+def test_parse_reminder_date_without_year_rolls_to_next_occurrence() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich am 01.01. um 9 an den Geburtstag",
+        now=datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert intent.due_at == "2027-01-01T09:00:00+00:00"
+
+
 def test_parse_reminder_does_not_queue_past_today_time() -> None:
     intent = parse_reminder_intent(
         "Erinnere mich heute um 9 an den Termin",

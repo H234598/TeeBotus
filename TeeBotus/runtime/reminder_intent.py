@@ -279,6 +279,14 @@ def _parse_due_at(text: str, now: datetime) -> str:
     date = DATE_RE.search(text)
     if date:
         year = _normalize_year(date.group("year"), normalized_now.year)
+        if not date.group("year"):
+            return _next_annual_date(
+                normalized_now,
+                month=int(date.group("month")),
+                day=int(date.group("day")),
+                hour=int(date.group("hour") or 9),
+                minute=int(date.group("minute") or 0),
+            )
         return _build_datetime(
             normalized_now,
             year,
@@ -308,6 +316,8 @@ def _parse_due_at(text: str, now: datetime) -> str:
     if weekday:
         target_weekday = DAY_WORDS[weekday.group("day").casefold()]
         days = (target_weekday - normalized_now.weekday()) % 7
+        if days == 0 and re.search(rf"\b(?:naechsten|kommenden)\s+{weekday.group('day')}\b", lowered):
+            days = 7
         hour = int(weekday.group("hour") or 9)
         minute = int(weekday.group("minute") or 0)
         due = normalized_now + timedelta(days=days)
@@ -334,6 +344,25 @@ def _build_datetime(now: datetime, year: int, month: int, day: int, hour: int, m
     if due <= now:
         return ""
     return _iso(due)
+
+
+def _next_annual_date(now: datetime, *, month: int, day: int, hour: int, minute: int) -> str:
+    for year_offset in range(8):
+        try:
+            candidate = now.replace(
+                year=now.year + year_offset,
+                month=month,
+                day=day,
+                hour=hour,
+                minute=minute,
+                second=0,
+                microsecond=0,
+            )
+        except ValueError:
+            continue
+        if candidate > now:
+            return _iso(candidate)
+    return ""
 
 
 def _next_month_day(now: datetime, *, day: int, hour: int, minute: int) -> str:
@@ -452,7 +481,11 @@ def _reminder_subject(text: str) -> str:
     cleaned = DATE_RE.sub("", cleaned)
     cleaned = MONTH_DAY_RE.sub("", cleaned)
     cleaned = DAY_WORD_RE.sub("", cleaned)
-    cleaned = re.sub(r"(?i)\b(heute|morgen|uebermorgen|übermorgen|um|gegen|uhr|daran|dran|an|dass)\b", " ", cleaned)
+    cleaned = re.sub(
+        r"(?i)\b(heute|morgen|uebermorgen|übermorgen|naechsten|nächsten|kommenden|um|gegen|uhr|am|daran|dran|an|dass)\b",
+        " ",
+        cleaned,
+    )
     cleaned = re.sub(r"(?i)\b(?:erinnern|erinnerst|erinnere?)\b", " ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" .,:;!?-")
     return cleaned[:240] or "deinen Termin"
