@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.91 - 2026-07-12
+
+- Revalidate notification-loudness outbox routes before dispatch.
+
 ## 1.9.90 - 2026-07-12
 
 - Repair inconsistent terminal notification-loudness stop metadata.

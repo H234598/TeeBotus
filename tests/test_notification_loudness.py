@@ -1073,6 +1073,25 @@ def test_loudness_scheduler_does_not_duplicate_dispatching_prompt(tmp_path) -> N
     assert len(account_store.read_proactive_outbox(account_id)) == 1
 
 
+def test_loudness_outbox_item_is_inactive_after_account_route_changes(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    assert maybe_notification_loudness_prompt_action(
+        event(identity), account_store, account_id, now=datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    ) is not None
+
+    account_store.update_identity_route(identity, channel="telegram", chat_id="chat-2", chat_type="private", adapter_slot=1)
+
+    item = {
+        "status": "queued",
+        "system_item": NOTIFICATION_LOUDNESS_SYSTEM_ITEM,
+        "route_key": "telegram:1:chat-1",
+        "route": {"channel": "telegram", "chat_id": "chat-1", "chat_type": "private", "adapter_slot": 1},
+    }
+    assert notification_loudness_outbox_item_is_active(account_store, account_id, item) is False
+
+
 def test_inactive_pending_loudness_check_is_not_resurrected_by_incoming_message(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

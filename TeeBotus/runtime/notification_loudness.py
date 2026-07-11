@@ -221,7 +221,10 @@ def notification_loudness_outbox_item_is_active(account_store: AccountStore, acc
         return False
     if _normalized_route_status(route_state) != NOTIFICATION_LOUDNESS_PENDING_STATUS:
         return False
-    return _notification_loudness_checks_active(route_state)
+    if not _notification_loudness_checks_active(route_state):
+        return False
+    _, current_route_found = _refresh_route_state_from_account_routes(account_store, account_id, route_key, route_state)
+    return current_route_found
 
 
 def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
