@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.101 - 2026-07-12
+
+- Ignore notification-loudness questions and requests as confirmations.
+
 ## 1.9.100 - 2026-07-12
 
 - Do not treat loudness imperatives as completed confirmations.

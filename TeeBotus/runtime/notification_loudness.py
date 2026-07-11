@@ -46,6 +46,35 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "cannot say",
     "can t say",
 )
+NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
+    "sind ",
+    "ist ",
+    "are ",
+    "is ",
+    "sind die ",
+    "ist die ",
+    "are the ",
+    "is the ",
+    "stell ",
+    "stelle ",
+    "mach ",
+    "mache ",
+    "schalte ",
+    "aktiviere ",
+    "setze ",
+    "stell sicher ",
+    "stelle sicher ",
+    "bitte stell ",
+    "bitte stelle ",
+    "bitte mach ",
+    "bitte schalte ",
+    "kannst du ",
+    "koenntest du ",
+    "könntest du ",
+    "sag mir ",
+    "weisst du ",
+    "weißt du ",
+)
 
 NOTIFICATION_LOUDNESS_PROMPT = (
     "Bitte stell meine Nachrichten in diesem Chat auf laut, damit Erinnerungen, Termine und wichtige Hinweise nicht untergehen.\n"
@@ -279,6 +308,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         polarity_normalized, NOTIFICATION_LOUDNESS_OFF_TERMS
     )
     if has_notification_context and _notification_loudness_has_uncertainty(normalized):
+        return None
+    if has_notification_context and _notification_loudness_is_non_declarative(text, normalized):
         return None
     confirmed_needles = (
         "ja laut",
@@ -820,6 +851,12 @@ def _notification_loudness_term_polarity(
 
 def _notification_loudness_has_uncertainty(normalized: str) -> bool:
     return any(_contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES)
+
+
+def _notification_loudness_is_non_declarative(text: str, normalized: str) -> bool:
+    if "?" in str(text or ""):
+        return True
+    return normalized.startswith(NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS)
 
 
 def _normalize_channel(channel: Any) -> str:
