@@ -624,6 +624,23 @@ def test_runtime_state_store_rejects_symlinked_account_state_directory(tmp_path)
     assert not (outside / ".Account_Memory.lock").exists()
 
 
+def test_runtime_state_store_rejects_cross_account_llm_state_symlink(tmp_path):
+    data_dir = tmp_path / "Bot" / "data"
+    provider = StaticSecretProvider(b"s" * 32)
+    other_account_id = "b" * 128
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
+    account_store.write_llm_state(other_account_id, {"previous_response_id": "other-account-response"})
+    target_dir = account_store.account_dir(ACCOUNT_ID)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    (target_dir / LLM_STATE_FILENAME).symlink_to(account_store.account_dir(other_account_id) / LLM_STATE_FILENAME)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    with pytest.raises(AccountStoreError, match="unsafe account state file"):
+        state.get_previous_response_id("Bot", ACCOUNT_ID)
+
+    assert "unsafe account state file" in state.llm_state_persistence_error
+
+
 def test_runtime_state_store_refuses_runtime_lock_symlink(tmp_path):
     data_dir = tmp_path / "Bot" / "data"
     runtime_dir = data_dir / "runtime"

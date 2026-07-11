@@ -565,6 +565,10 @@ class RuntimeStateStore(RuntimeState):
             account_dir = self.accounts_root / ACCOUNTS_DIRNAME / account_id
             if _has_symlink_parent(account_dir) or account_dir.is_symlink():
                 raise AccountStoreError(f"refusing unsafe account state directory: {account_dir}")
+            for filename in (LLM_STATE_FILENAME, OPENAI_STATE_FILENAME):
+                state_path = account_dir / filename
+                if state_path.is_symlink():
+                    raise AccountStoreError(f"refusing unsafe account state file: {state_path}")
             return account_memory_lock_for_root(self.accounts_root, account_id)
         except (AccountStoreError, OSError, RuntimeError, TypeError, ValueError) as exc:
             self._set_llm_state_persistence_error(str(exc), account_id=account_id)
