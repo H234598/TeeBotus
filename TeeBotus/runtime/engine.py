@@ -287,7 +287,7 @@ class TeeBotusEngine:
             if command == "/cancel":
                 self.state.pop_pending_flow(event.instance, result.account_id, ROUTE_TO_FLOW)
                 return EngineResult(result.account_id, [SendText(event.chat_id, "RouteTo abgebrochen.", track=False)], handled=True)
-            if not command and text:
+            if not command and text and _route_to_pending_context_matches(pending_route_to, event):
                 self.state.pop_pending_flow(event.instance, result.account_id, ROUTE_TO_FLOW)
                 return EngineResult(
                     result.account_id,
@@ -1123,7 +1123,18 @@ class TeeBotusEngine:
                 event.instance,
                 account_id,
                 ROUTE_TO_FLOW,
-                {"target": target_name, "target_label": target.label, "provider": target.provider, "model": target.model},
+                {
+                    "target": target_name,
+                    "target_label": target.label,
+                    "provider": target.provider,
+                    "model": target.model,
+                    "context": {
+                        "channel": event.channel,
+                        "adapter_slot": event.adapter_slot,
+                        "chat_id": event.chat_id,
+                        "identity_key": event.identity_key,
+                    },
+                },
             )
             return [
                 SendText(
@@ -2946,6 +2957,22 @@ def _direct_route_to_instructions(instructions: BotInstructions) -> BotInstructi
         openai_web_search=False,
         openai_web_search_required=False,
         openai_image_enabled=False,
+    )
+
+
+def _route_to_pending_context_matches(pending: dict[str, Any], event: IncomingEvent) -> bool:
+    context = pending.get("context")
+    if not isinstance(context, dict):
+        return False
+    expected = {
+        "channel": event.channel,
+        "adapter_slot": event.adapter_slot,
+        "chat_id": event.chat_id,
+        "identity_key": event.identity_key,
+    }
+    return all(
+        key in context and str(context.get(key)) == str(value)
+        for key, value in expected.items()
     )
 
 

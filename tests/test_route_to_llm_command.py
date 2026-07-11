@@ -13,15 +13,23 @@ def _store(tmp_path, instance_name: str = "Depressionsbot") -> AccountStore:
     return AccountStore(tmp_path / "accounts", instance_name, StaticSecretProvider(b"r" * 32))
 
 
-def _event(identity_key: str, text: str, *, instance: str = "Depressionsbot") -> IncomingEvent:
+def _event(
+    identity_key: str,
+    text: str,
+    *,
+    instance: str = "Depressionsbot",
+    chat_id: str = "chat-1",
+    channel: str = "telegram",
+    adapter_slot: int = 1,
+) -> IncomingEvent:
     return IncomingEvent(
         event_id="telegram:1",
         instance=instance,
-        channel="telegram",
-        adapter_slot=1,
+        channel=channel,
+        adapter_slot=adapter_slot,
         account_id="",
         identity_key=identity_key,
-        chat_id="chat-1",
+        chat_id=chat_id,
         chat_type="private",
         sender_id=identity_key,
         sender_name="Admin",
@@ -188,3 +196,32 @@ def test_route_to_llm_without_prompt_routes_next_admin_message_once(tmp_path, mo
     assert prompts == ["direkt an hf bitte"]
     assert "naechste antwort" in routed[1].text
     assert engine.state.get_pending_flow("Depressionsbot", account_id, "llm_route_to") is None
+
+
+def test_route_to_llm_pending_prompt_is_bound_to_the_originating_chat(tmp_path, monkeypatch) -> None:
+    account_store = _store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    monkeypatch.setenv("TEEBOTUS_ADMIN_ACCOUNT_IDS_DEPRESSIONSBOT", account_id)
+    prompts: list[str] = []
+
+    class FakeClient:
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            prompts.append(user_text)
+            return LLMResponse("falscher chat", provider="fake", model="fake-model")
+
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(llm_enabled=True),
+        route_to_client_factory=lambda **_kwargs: FakeClient(),
+    )
+
+    armed = engine.process(_event(identity, "/RouteToHF", chat_id="chat-1"))
+    other_chat = engine.process(_event(identity, "nicht an den anderen chat", chat_id="chat-2"))
+
+    assert "Route bereit" in armed[0].text
+    assert prompts == []
+    assert "falscher chat" not in "\n".join(action.text for action in other_chat if hasattr(action, "text"))
+    pending = engine.state.get_pending_flow("Depressionsbot", account_id, "llm_route_to")
+    assert pending is not None
+    assert pending["context"]["chat_id"] == "chat-1"
