@@ -2805,13 +2805,24 @@ class AccountStore:
         if not isinstance(access_ids, list):
             access_ids = []
             nested_index["accessed_ids"] = access_ids
-        live_ids = {str(row.get("id", "")) for row in rows if isinstance(row, dict) and str(row.get("id", ""))}
-        access_ids[:] = [memory_id for memory_id in access_ids if memory_id in live_ids and memory_id not in requested]
+        live_ids = {
+            memory_id
+            for row in rows
+            if isinstance(row, dict)
+            if (memory_id := str(row.get("id") or "").strip())
+        }
+        access_ids[:] = [
+            normalized_id
+            for value in access_ids
+            if (normalized_id := str(value or "").strip()) in live_ids
+            and normalized_id not in requested
+        ]
         access_ids.extend(memory_id for memory_id in requested_ids if memory_id in live_ids)
         del access_ids[:-ACCOUNT_MEMORY_RECENT_LIMIT]
         for row in rows:
-            if isinstance(row, dict) and str(row.get("id") or "").strip() in requested:
-                nested_index.setdefault("entries", {})[str(row.get("id"))] = _account_memory_index_entry(row)
+            row_id = str(row.get("id") or "").strip() if isinstance(row, dict) else ""
+            if row_id in requested:
+                nested_index.setdefault("entries", {})[row_id] = _account_memory_index_entry(row)
         index["updated_at"] = timestamp
         self.write_memory_index(account_id, index)
 
@@ -3748,7 +3759,12 @@ class AccountStore:
                     ordered_ids.append(memory_id)
                     ordered_id_set.add(memory_id)
         if not ordered_ids:
-            ordered_ids = [str(entry.get("id", "")) for entry in reversed(entries) if isinstance(entry, dict) and str(entry.get("id", ""))]
+            ordered_ids = [
+                memory_id
+                for entry in reversed(entries)
+                if isinstance(entry, dict)
+                if (memory_id := str(entry.get("id") or "").strip())
+            ]
         return [entries_by_id[memory_id] for memory_id in ordered_ids if memory_id in entries_by_id]
 
     def _read_json_with_fallback(self, path: Path, default: dict[str, Any], *, vault: EncryptedJsonVault) -> dict[str, Any]:
@@ -4933,7 +4949,7 @@ def _clip_account_memory_text(text: str, max_chars: int) -> str:
 
 def _compact_account_memory_entry(entry: dict[str, Any], *, max_entry_chars: int) -> dict[str, Any]:
     return {
-        "id": str(entry.get("id", "")),
+        "id": str(entry.get("id") or "").strip(),
         "schema_version": ACCOUNT_MEMORY_SCHEMA_VERSION,
         "created_at": str(entry.get("created_at", "")),
         "updated_at": str(entry.get("updated_at", "")),
@@ -4950,11 +4966,11 @@ def _compact_account_memory_entry(entry: dict[str, Any], *, max_entry_chars: int
         "chat_type": str(entry.get("chat_type", "")),
         "source": entry.get("source", {}) if isinstance(entry.get("source"), dict) else {},
         "keywords": entry.get("keywords", []) if isinstance(entry.get("keywords"), list) else [],
-        "related_ids": _normalize_account_memory_links(entry.get("related_ids"), exclude_id=str(entry.get("id", ""))),
-        "supports": _normalize_account_memory_links(entry.get("supports"), exclude_id=str(entry.get("id", ""))),
-        "contradicts": _normalize_account_memory_links(entry.get("contradicts"), exclude_id=str(entry.get("id", ""))),
-        "supersedes": _normalize_account_memory_links(entry.get("supersedes"), exclude_id=str(entry.get("id", ""))),
-        "relations": _normalize_account_memory_relations(entry.get("relations"), exclude_id=str(entry.get("id", ""))),
+        "related_ids": _normalize_account_memory_links(entry.get("related_ids"), exclude_id=str(entry.get("id") or "").strip()),
+        "supports": _normalize_account_memory_links(entry.get("supports"), exclude_id=str(entry.get("id") or "").strip()),
+        "contradicts": _normalize_account_memory_links(entry.get("contradicts"), exclude_id=str(entry.get("id") or "").strip()),
+        "supersedes": _normalize_account_memory_links(entry.get("supersedes"), exclude_id=str(entry.get("id") or "").strip()),
+        "relations": _normalize_account_memory_relations(entry.get("relations"), exclude_id=str(entry.get("id") or "").strip()),
         "user_text": _clip_account_memory_text(str(entry.get("user_text", "")), max_entry_chars),
         "bot_text": _clip_account_memory_text(str(entry.get("bot_text", "")), max_entry_chars),
     }

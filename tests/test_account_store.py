@@ -4659,6 +4659,12 @@ def test_structured_memory_index_normalizes_legacy_id_whitespace(tmp_path):
     assert set(index["semantic_cache"]["entries"]) == {"mem_legacy", "mem_new"}
     assert all(not memory_id.startswith(" ") for memory_id in index["entries"])
 
+    store.mark_structured_memory_accessed(account_id, ["mem_legacy"])
+    index = store.read_memory_index(account_id)["index"]
+
+    assert index["accessed_ids"][-1] == "mem_legacy"
+    assert " mem_legacy " not in index["entries"]
+
 
 def test_structured_memory_index_health_normalizes_legacy_index_id_whitespace(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
