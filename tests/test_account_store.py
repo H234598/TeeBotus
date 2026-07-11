@@ -2230,6 +2230,22 @@ def test_sqlite_memory_recreates_schema_after_database_file_is_deleted(tmp_path)
     assert backend.read_entries(account_id) == [{"id": "after"}]
 
 
+def test_sqlite_memory_config_resolves_relative_paths_under_instance_root(tmp_path):
+    root = tmp_path / "instance" / "data" / "accounts"
+    config = SQLiteMemoryConfig.from_env(
+        root,
+        env={
+            "TEEBOTUS_ACCOUNT_MEMORY_BACKEND": "sqlite",
+            "TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH": "primary.sqlite3",
+            "TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH": "backups/secondary.sqlite3",
+        },
+    )
+
+    assert config is not None
+    assert config.path == root / "primary.sqlite3"
+    assert config.fallback_path == root / "backups" / "secondary.sqlite3"
+
+
 def test_account_memory_fallback_warning_rate_limit_is_scoped_per_account(caplog) -> None:
     backend = WarningFallbackAccountMemoryBackend(object(), object(), label="Demo:sqlite")
     account_a = "a" * 128

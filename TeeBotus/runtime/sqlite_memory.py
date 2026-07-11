@@ -36,9 +36,17 @@ class SQLiteMemoryConfig:
             return None
         configured_path = str(source.get(SQLITE_PATH_ENV, "") or "").strip()
         fallback_path = str(source.get(SQLITE_FALLBACK_PATH_ENV, "") or "").strip()
+        root_path = Path(root).expanduser()
+
+        def resolve_configured_path(value: str, default_filename: str) -> Path:
+            if not value:
+                return root_path / default_filename
+            configured = Path(value).expanduser()
+            return configured if configured.is_absolute() else root_path / configured
+
         return cls(
-            path=Path(configured_path).expanduser() if configured_path else Path(root) / SQLITE_DEFAULT_FILENAME,
-            fallback_path=Path(fallback_path).expanduser() if fallback_path else Path(root) / SQLITE_DEFAULT_FALLBACK_FILENAME,
+            path=resolve_configured_path(configured_path, SQLITE_DEFAULT_FILENAME),
+            fallback_path=resolve_configured_path(fallback_path, SQLITE_DEFAULT_FALLBACK_FILENAME),
         )
 
 
