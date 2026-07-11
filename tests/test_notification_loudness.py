@@ -16,6 +16,7 @@ from TeeBotus.runtime.notification_loudness import (
     maybe_notification_loudness_prompt_action,
     notification_loudness_outbox_item_is_active,
     queue_due_notification_loudness_prompts,
+    _route_slot,
 )
 from TeeBotus.runtime.proactive_agent import check_proactive_agent_account, dispatch_due_proactive_outbox_items
 
@@ -552,9 +553,24 @@ def test_queued_loudness_item_requires_explicit_pending_route_state(tmp_path) ->
     account_store.write_agent_state(account_id, state)
     assert notification_loudness_outbox_item_is_active(account_store, account_id, item) is False
 
+    state["notification_loudness"]["routes"]["telegram:1:chat-1"] = {
+        "status": "pending",
+        "checks_active": "false",
+    }
+    account_store.write_agent_state(account_id, state)
+    assert notification_loudness_outbox_item_is_active(account_store, account_id, item) is False
+
     state["notification_loudness"]["routes"]["telegram:1:chat-1"] = {"status": "pending"}
     account_store.write_agent_state(account_id, state)
     assert notification_loudness_outbox_item_is_active(account_store, account_id, item) is True
+
+
+def test_loudness_route_slot_rejects_invalid_values() -> None:
+    assert _route_slot(None) == 1
+    assert _route_slot(" 2 ") == 2
+    assert _route_slot(True) is None
+    assert _route_slot("invalid") is None
+    assert _route_slot(0) is None
 
 
 def test_concurrent_loudness_scheduler_runs_queue_only_one_prompt(tmp_path) -> None:

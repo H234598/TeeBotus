@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.60 - 2026-07-11
+
+- Fail closed on invalid loudness route slots and boolean state values.
+
 ## 1.9.59 - 2026-07-11
 
 - Canonicalize proactive dispatch route fields before sending.

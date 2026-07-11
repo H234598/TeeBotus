@@ -174,7 +174,7 @@ def notification_loudness_outbox_item_is_active(account_store: AccountStore, acc
         return False
     if _normalized_route_status(route_state) != NOTIFICATION_LOUDNESS_PENDING_STATUS:
         return False
-    return route_state.get("checks_active") is not False
+    return _normalize_bool(route_state.get("checks_active"), default=True)
 
 
 def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
@@ -359,7 +359,7 @@ def _account_proactive_outbox_lock(account_store: AccountStore, account_id: str)
 
 
 def _mark_notification_loudness_checks_stopped(route_state: dict[str, Any], reason: str) -> bool:
-    if route_state.get("checks_active") is False and route_state.get("checks_stop_reason"):
+    if not _normalize_bool(route_state.get("checks_active"), default=True) and route_state.get("checks_stop_reason"):
         return False
     route_state["checks_active"] = False
     route_state["checks_stopped_at"] = utc_now()
@@ -395,18 +395,34 @@ def _event_has_current_private_route(account_store: AccountStore, event: Incomin
         return False
     if not _is_private_chat_type(event.chat_type):
         return False
+    route_slot = _route_slot(route.get("adapter_slot"))
+    event_slot = _route_slot(event.adapter_slot)
+    if route_slot is None or event_slot is None:
+        return False
     return (
         str(route.get("channel") or "").strip().casefold() == str(event.channel or "").strip().casefold()
         and str(route.get("chat_id") or "").strip() == str(event.chat_id or "").strip()
-        and _route_slot(route.get("adapter_slot")) == int(event.adapter_slot or 1)
+        and route_slot == event_slot
     )
 
 
-def _route_slot(value: Any) -> int:
-    try:
-        return int(value or 1)
-    except (TypeError, ValueError):
+def _route_slot(value: Any) -> int | None:
+    if value is None:
         return 1
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        slot = value
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return 1
+        if not text.isdecimal():
+            return None
+        slot = int(text)
+    else:
+        return None
+    return slot if slot >= 1 else None
 
 
 def _refresh_route_state_from_account_routes(account_store: AccountStore, account_id: str, route_key: str, route_state: dict[str, Any]) -> bool:
@@ -458,7 +474,9 @@ def _route_key_from_route(route: Mapping[str, Any]) -> str:
 def _route_key_for_channel_chat(channel: Any, adapter_slot: Any, chat_id: Any) -> str:
     normalized_channel = str(channel or "").strip().casefold()
     normalized_chat_id = str(chat_id or "").strip()
-    return f"{normalized_channel}:{_route_slot(adapter_slot)}:{normalized_chat_id}"
+    normalized_slot = _route_slot(adapter_slot)
+    slot_label = str(normalized_slot) if normalized_slot is not None else "<invalid>"
+    return f"{normalized_channel}:{slot_label}:{normalized_chat_id}"
 
 
 def _notification_loudness_prompt_allowed(route_state: Mapping[str, Any], now: datetime, *, require_online: bool) -> bool:
@@ -553,3 +571,16 @@ def _normalize_chat_type(chat_type: Any) -> str:
 
 def _is_private_chat_type(chat_type: Any) -> bool:
     return _normalize_chat_type(chat_type) == "private"
+
+
+def _normalize_bool(value: Any, *, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    text = str(value).strip().casefold()
+    if text in {"1", "true", "yes", "on", "enabled", "ja", "an"}:
+        return True
+    if text in {"0", "false", "no", "off", "disabled", "nein", "aus"}:
+        return False
+    return default
