@@ -56,6 +56,21 @@ def test_postgres_benchmark_accepts_dsn_override(monkeypatch) -> None:
     assert "could not connect to PostgreSQL" in result["reason"]
 
 
+def test_postgres_empty_entry_id_read_clears_previous_diagnostics() -> None:
+    backend = PostgresAccountMemoryBackend(
+        instance_name="Bench",
+        provider=StaticSecretProvider(b"p" * 32),
+        purpose="account-structured-memory-key",
+        config=PostgresMemoryConfig(dsn="postgresql://unused"),
+    )
+    backend.last_entry_read_error = "stale error"
+    backend.last_entry_skipped = 2
+
+    assert backend.read_entries_by_ids("a" * 128, []) == []
+    assert backend.last_entry_read_error == ""
+    assert backend.last_entry_skipped == 0
+
+
 def test_postgres_benchmark_success_path_uses_cleaned_tempdir(monkeypatch, tmp_path) -> None:
     entered: list[str] = []
     exited: list[str] = []

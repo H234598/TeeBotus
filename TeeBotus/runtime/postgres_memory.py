@@ -144,11 +144,11 @@ class PostgresAccountMemoryBackend:
 
     @_retry_after_missing_schema
     def read_entries_by_ids(self, account_id: str, memory_ids: Iterable[str]) -> list[dict[str, Any]]:
+        self.last_entry_read_error = ""
+        self.last_entry_skipped = 0
         requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
         if not requested_ids:
             return []
-        self.last_entry_read_error = ""
-        self.last_entry_skipped = 0
         self._ensure_schema()
         placeholders = ",".join("%s" for _ in requested_ids)
         with self._connect() as connection:
