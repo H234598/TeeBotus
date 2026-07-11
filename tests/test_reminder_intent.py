@@ -48,6 +48,17 @@ def test_parse_reminder_with_relative_time_and_loose_wording() -> None:
     assert intent.subject == "Wasser zu trinken"
 
 
+def test_parse_reminder_accepts_daran_imperative() -> None:
+    intent = parse_reminder_intent(
+        "Denk bitte daran, morgen um 9 den Antrag abzuschicken",
+        now=fixed_now(),
+    )
+
+    assert intent.is_request is True
+    assert intent.due_at == "2026-06-16T09:00:00+00:00"
+    assert intent.subject == "den Antrag abzuschicken"
+
+
 def test_parse_reminder_relative_days_and_weeks_keep_explicit_clock() -> None:
     now = datetime(2026, 6, 15, 12, 34, tzinfo=timezone.utc)
 

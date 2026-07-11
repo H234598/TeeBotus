@@ -34,7 +34,7 @@ REMINDER_REQUEST_RE = re.compile(
     r"\b("
     r"erinner(?:e|st|n)?\s+(?:mich|mi|uns)|"
     r"erinnere?\s+(?:mich|mi|uns)|"
-    r"denk(?:e)?(?:\s+bitte)?(?:\s+(?:fuer\s+)?(?:mich|uns))?(?:\s+.{0,80}?)?\s+dran|"
+    r"denk(?:e)?(?:\s+bitte)?(?:\s+(?:fuer\s+)?(?:mich|uns))?(?:\s+.{0,80}?)?\s+(?:dran|daran)|"
     r"sag(?:e)?\s+(?:mir|uns)\s+(?:bitte\s+)?bescheid|"
     r"remind\s+(?:me|us)|"
     r"(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+(?!irgendwann\b)"
