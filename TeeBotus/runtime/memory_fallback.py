@@ -263,11 +263,27 @@ class WarningFallbackAccountMemoryBackend:
             result = callback(self.primary)
             self._copy_diagnostics(self.primary)
             if self._read_diagnostic_failed(operation):
-                fallback_result = callback(self.fallback)
-                if read_full_for_repair is not None:
-                    repair_data = read_full_for_repair(self.fallback)
-                else:
-                    repair_data = fallback_result
+                try:
+                    fallback_result = callback(self.fallback)
+                    if read_full_for_repair is not None:
+                        repair_data = read_full_for_repair(self.fallback)
+                    else:
+                        repair_data = fallback_result
+                except Exception as fallback_exc:  # noqa: BLE001
+                    self._copy_diagnostics(self.fallback)
+                    stale_key = self._operation_stale_key(operation, account_id)
+                    self._fallback_stale_set(operation).add(stale_key)
+                    self._fallback_sync_failed_set(operation).add(stale_key)
+                    self.last_fallback_sync_error = f"{operation}: fallback read failed: {fallback_exc}"
+                    LOGGER.critical(
+                        "ACCOUNT MEMORY FALLBACK READ FAILED AFTER PRIMARY DIAGNOSTIC FAILURE. "
+                        "FAILOVER IS BLOCKED UNTIL THE SECONDARY RECOVERS. label=%s operation=%s account_id=%s error=%s.",
+                        self.label,
+                        operation,
+                        account_id,
+                        fallback_exc,
+                    )
+                    raise AccountStoreError(self.last_fallback_sync_error) from fallback_exc
                 return self._recover_read_from_fallback(
                     operation,
                     account_id,
@@ -299,18 +315,34 @@ class WarningFallbackAccountMemoryBackend:
                     account_id,
                 )
                 raise AccountStoreError(self.last_fallback_sync_error) from exc
-            result = callback(self.fallback)
-            self._copy_diagnostics(self.fallback)
-            if self._fallback_result_is_empty_after_primary_exception(operation, result, partial_result):
+            try:
+                result = callback(self.fallback)
+                self._copy_diagnostics(self.fallback)
+                if self._fallback_result_is_empty_after_primary_exception(operation, result, partial_result):
+                    stale_key = self._operation_stale_key(operation, account_id)
+                    self._fallback_stale_set(operation).add(stale_key)
+                    self._unrecoverable_fallback_set(operation).add(stale_key)
+                    self.last_fallback_sync_error = f"{operation}: fallback has no recoverable data"
+                    return result
+                if read_full_for_repair is not None:
+                    recover_data = read_full_for_repair(self.fallback)
+                else:
+                    recover_data = result
+            except Exception as fallback_exc:  # noqa: BLE001
+                self._copy_diagnostics(self.fallback)
                 stale_key = self._operation_stale_key(operation, account_id)
                 self._fallback_stale_set(operation).add(stale_key)
-                self._unrecoverable_fallback_set(operation).add(stale_key)
-                self.last_fallback_sync_error = f"{operation}: fallback has no recoverable data"
-                return result
-            if read_full_for_repair is not None:
-                recover_data = read_full_for_repair(self.fallback)
-            else:
-                recover_data = result
+                self._fallback_sync_failed_set(operation).add(stale_key)
+                self.last_fallback_sync_error = f"{operation}: fallback read failed: {fallback_exc}"
+                LOGGER.critical(
+                    "ACCOUNT MEMORY FALLBACK READ FAILED AFTER PRIMARY EXCEPTION. "
+                    "FAILOVER IS BLOCKED UNTIL THE SECONDARY RECOVERS. label=%s operation=%s account_id=%s error=%s.",
+                    self.label,
+                    operation,
+                    account_id,
+                    fallback_exc,
+                )
+                raise AccountStoreError(self.last_fallback_sync_error) from fallback_exc
             return self._recover_read_from_fallback(
                 operation,
                 account_id,
@@ -378,7 +410,24 @@ class WarningFallbackAccountMemoryBackend:
                     account_id,
                 )
                 raise AccountStoreError(self.last_fallback_sync_error) from exc
-            callback(self.fallback)
+            try:
+                callback(self.fallback)
+            except Exception as fallback_exc:  # noqa: BLE001
+                self._copy_diagnostics(self.fallback)
+                stale_set = self._fallback_stale_set(operation)
+                sync_failed_set = self._fallback_sync_failed_set(operation)
+                stale_set.add(resolved_dirty_key)
+                sync_failed_set.add(resolved_dirty_key)
+                self.last_fallback_sync_error = f"{operation}: fallback write failed: {fallback_exc}"
+                LOGGER.critical(
+                    "ACCOUNT MEMORY FALLBACK WRITE FAILED AFTER PRIMARY FAILURE. "
+                    "FAILOVER IS BLOCKED UNTIL THE SECONDARY RECOVERS. label=%s operation=%s account_id=%s error=%s.",
+                    self.label,
+                    operation,
+                    account_id,
+                    fallback_exc,
+                )
+                raise AccountStoreError(self.last_fallback_sync_error) from fallback_exc
             self._copy_diagnostics(self.fallback)
             dirty_set.add(resolved_dirty_key)
             self._fallback_stale_set(operation).discard(resolved_dirty_key)

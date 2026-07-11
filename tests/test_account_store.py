@@ -2250,6 +2250,54 @@ def test_account_memory_fallback_warning_rate_limit_is_scoped_per_account(caplog
     assert len(warnings) == 3
 
 
+def test_account_memory_fallback_marks_both_read_failures_as_unsafe(caplog) -> None:
+    class Backend:
+        def __init__(self, *, fail_read: bool = False) -> None:
+            self.fail_read = fail_read
+
+        def read_entries(self, _account_id: str) -> list[dict[str, str]]:
+            if self.fail_read:
+                raise OSError("database unavailable")
+            return []
+
+        def write_entries(self, _account_id: str, _rows: list[dict[str, str]]) -> None:
+            return None
+
+    account_id = "a" * 128
+    backend = WarningFallbackAccountMemoryBackend(Backend(fail_read=True), Backend(fail_read=True), label="Demo:sqlite")
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        with pytest.raises(AccountStoreError, match="fallback read failed"):
+            backend.read_entries(account_id)
+
+    assert account_id in backend._stale_fallback_entries
+    assert account_id in backend._fallback_sync_failed_entries
+    assert backend.last_fallback_sync_error == "read_entries: fallback read failed: database unavailable"
+    assert "FAILOVER IS BLOCKED" in caplog.text
+
+
+def test_account_memory_fallback_marks_both_write_failures_as_unsafe(caplog) -> None:
+    class Backend:
+        def __init__(self, *, fail_write: bool = False) -> None:
+            self.fail_write = fail_write
+
+        def write_entries(self, _account_id: str, _rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise OSError("database unavailable")
+
+    account_id = "a" * 128
+    backend = WarningFallbackAccountMemoryBackend(Backend(fail_write=True), Backend(fail_write=True), label="Demo:sqlite")
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        with pytest.raises(AccountStoreError, match="fallback write failed"):
+            backend.write_entries(account_id, [{"id": "mem"}])
+
+    assert account_id in backend._stale_fallback_entries
+    assert account_id in backend._fallback_sync_failed_entries
+    assert backend.last_fallback_sync_error == "write_entries: fallback write failed: database unavailable"
+    assert "FAILOVER IS BLOCKED" in caplog.text
+
+
 def test_account_memory_fallback_syncs_dirty_entries_back_to_primary(caplog):
     class Backend:
         def __init__(self, *, fail_write: bool = False) -> None:
