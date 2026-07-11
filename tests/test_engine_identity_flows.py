@@ -1299,6 +1299,23 @@ def test_memory_payload_size_does_not_mask_unreadable_json_with_file_size(tmp_pa
     ) is None
 
 
+def test_memory_payload_size_reports_unavailable_for_unserializable_backend_data():
+    class UnserializableStore:
+        account_memory_backend = object()
+
+        def read_memory_entries(self, _account_id):
+            return [{"id": "mem", "invalid": {1, 2}}]
+
+        def read_memory_index(self, _account_id):
+            return {}
+
+    assert status_core.account_memory_payload_size(
+        account_store=UnserializableStore(),
+        account_id="account",
+        fallback_directory=None,
+    ) is None
+
+
 def test_memory_files_size_reports_unavailable_on_directory_read_error(tmp_path, monkeypatch):
     directory = tmp_path / "account"
     directory.mkdir()

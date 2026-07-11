@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.25 - 2026-07-11
+
+- Keep status memory-size diagnostics alive when backend data is not JSON
+  serializable.
+
 ## 1.9.24 - 2026-07-11
 
 - Distinguish unreadable memory files from readable unencrypted files in status
