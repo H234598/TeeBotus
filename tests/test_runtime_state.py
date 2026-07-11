@@ -712,6 +712,77 @@ def test_runtime_state_store_rejects_symlinked_account_memory_lock(tmp_path):
     assert not outside.exists()
 
 
+def test_account_store_rejects_symlinked_memory_store_root(tmp_path):
+    outside = tmp_path / "outside-memory-store"
+    outside.mkdir()
+    linked_root = tmp_path / "linked-memory-store"
+    linked_root.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(AccountStoreError, match="unsafe account memory store root"):
+        AccountStore(
+            linked_root,
+            "Bot",
+            secret_provider=StaticSecretProvider(b"s" * 32),
+            create_dirs=False,
+        )
+
+    assert not (outside / "accounts").exists()
+
+
+def test_account_store_memory_lock_rejects_symlinked_accounts_directory(tmp_path):
+    root = tmp_path / "store"
+    root.mkdir()
+    outside = tmp_path / "outside-accounts-directory"
+    outside.mkdir()
+    (root / "accounts").symlink_to(outside, target_is_directory=True)
+    store = AccountStore(root, "Bot", secret_provider=StaticSecretProvider(b"s" * 32), create_dirs=False)
+
+    with pytest.raises(AccountStoreError, match="unsafe account memory accounts directory"):
+        with store.account_memory_lock(ACCOUNT_ID):
+            pass
+
+    assert not (outside / ACCOUNT_ID).exists()
+
+
+def test_account_store_memory_lock_rejects_symlinked_account_directory(tmp_path):
+    root = tmp_path / "store"
+    account_root = root / "accounts"
+    account_root.mkdir(parents=True)
+    outside = tmp_path / "outside-account-directory"
+    outside.mkdir()
+    (account_root / ACCOUNT_ID).symlink_to(outside, target_is_directory=True)
+    store = AccountStore(root, "Bot", secret_provider=StaticSecretProvider(b"s" * 32), create_dirs=False)
+
+    with pytest.raises(AccountStoreError, match="unsafe account memory account directory"):
+        with store.account_memory_lock(ACCOUNT_ID):
+            pass
+
+    assert not (outside / ACCOUNT_MEMORY_LOCK_FILENAME).exists()
+
+
+def test_account_store_memory_lock_rejects_symlink_and_hardlink(tmp_path):
+    root = tmp_path / "store"
+    account_dir = root / "accounts" / ACCOUNT_ID
+    account_dir.mkdir(parents=True)
+    outside = tmp_path / "outside-lock-target"
+    outside.write_bytes(b"keep")
+    lock_path = account_dir / ACCOUNT_MEMORY_LOCK_FILENAME
+    lock_path.symlink_to(outside)
+    store = AccountStore(root, "Bot", secret_provider=StaticSecretProvider(b"s" * 32), create_dirs=False)
+
+    with pytest.raises(AccountStoreError, match="unsafe account memory lock"):
+        with store.account_memory_lock(ACCOUNT_ID):
+            pass
+
+    lock_path.unlink()
+    os.link(outside, lock_path)
+    with pytest.raises(AccountStoreError, match="unsafe account memory lock"):
+        with store.account_memory_lock(ACCOUNT_ID):
+            pass
+
+    assert outside.read_bytes() == b"keep"
+
+
 def test_runtime_state_store_rejects_cross_account_llm_state_symlink(tmp_path):
     data_dir = tmp_path / "Bot" / "data"
     provider = StaticSecretProvider(b"s" * 32)

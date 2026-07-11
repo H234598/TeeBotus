@@ -882,6 +882,54 @@ def _safe_account_filename(value: str) -> str:
     return filename
 
 
+def _absolute_without_symlink_resolution(path: Path) -> Path:
+    """Normalize a path lexically without following symlinks."""
+
+    expanded = Path(path).expanduser()
+    return Path(os.path.abspath(os.fspath(expanded)))
+
+
+def _has_symlink_ancestor(path: Path) -> bool:
+    """Return whether a path or one of its parents is a symlink."""
+
+    absolute = _absolute_without_symlink_resolution(path)
+    for candidate in (absolute, *absolute.parents):
+        try:
+            if candidate.is_symlink():
+                return True
+        except (OSError, ValueError):
+            return True
+    return False
+
+
+def _ensure_safe_account_memory_path(
+    path: Path,
+    *,
+    label: str,
+    require_directory: bool = False,
+    require_regular: bool = False,
+    reject_hardlink: bool = False,
+) -> None:
+    """Reject redirected account-memory paths before they are created or opened."""
+
+    if _has_symlink_ancestor(path):
+        raise AccountStoreError(f"refusing unsafe account memory {label}: {path}")
+    try:
+        path_stat = os.stat(path, follow_symlinks=False)
+    except FileNotFoundError:
+        return
+    except OSError as exc:
+        raise AccountStoreError(f"could not inspect account memory {label}: {path}") from exc
+    if stat.S_ISLNK(path_stat.st_mode):
+        raise AccountStoreError(f"refusing unsafe account memory {label}: {path}")
+    if reject_hardlink and path_stat.st_nlink > 1:
+        raise AccountStoreError(f"refusing unsafe account memory {label}: {path}")
+    if require_directory and not stat.S_ISDIR(path_stat.st_mode):
+        raise AccountStoreError(f"account memory {label} is not a directory: {path}")
+    if require_regular and not stat.S_ISREG(path_stat.st_mode):
+        raise AccountStoreError(f"account memory {label} is not a regular file: {path}")
+
+
 def _safe_rooted_path(path: Path, *, allowed_roots: Iterable[Path], operation: str = "file access") -> Path:
     if not path:
         raise AccountStoreError(f"{operation} path is not safe: {path}")
@@ -1067,11 +1115,23 @@ def _serialize_account_memory(method: Callable[..., Any]) -> Callable[..., Any]:
 def account_memory_lock_for_root(root: Path, account_id: str) -> Iterator[None]:
     """Serialize account-memory/state operations for an AccountStore root."""
 
-    root = Path(root).expanduser().resolve()
     account_id = validate_sha512_token(account_id, field_name="account_id")
+    raw_root = Path(root).expanduser()
+    _ensure_safe_account_memory_path(raw_root, label="store root", require_directory=True)
+    try:
+        root = raw_root.resolve()
+    except OSError as exc:
+        raise AccountStoreError(f"could not resolve account memory store root: {raw_root}") from exc
+    accounts_dir = root / ACCOUNTS_DIRNAME
+    _ensure_safe_account_memory_path(accounts_dir, label="accounts directory", require_directory=True)
+    accounts_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_safe_account_memory_path(accounts_dir, label="accounts directory", require_directory=True)
     account_dir = root / ACCOUNTS_DIRNAME / account_id
+    _ensure_safe_account_memory_path(account_dir, label="account directory", require_directory=True)
     account_dir.mkdir(parents=True, exist_ok=True)
+    _ensure_safe_account_memory_path(account_dir, label="account directory", require_directory=True)
     lock_path = account_dir / ACCOUNT_MEMORY_LOCK_FILENAME
+    _ensure_safe_account_memory_path(lock_path, label="lock", require_regular=True, reject_hardlink=True)
     lock_key = os.path.realpath(os.fspath(lock_path))
     with _ACCOUNT_MEMORY_LOCK:
         held_paths = getattr(_ACCOUNT_MEMORY_LOCK_STATE, "paths", None)
@@ -1081,9 +1141,17 @@ def account_memory_lock_for_root(root: Path, account_id: str) -> Iterator[None]:
         if lock_key in held_paths:
             yield
             return
-        with lock_path.open("a+b") as handle:
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            file_descriptor = os.open(lock_path, flags, 0o600)
+        except OSError as exc:
+            raise AccountStoreError(f"could not open account memory lock: {lock_path}") from exc
+        with os.fdopen(file_descriptor, "a+b") as handle:
+            handle_stat = os.fstat(handle.fileno())
+            if not stat.S_ISREG(handle_stat.st_mode) or handle_stat.st_nlink > 1:
+                raise AccountStoreError(f"refusing unsafe account memory lock: {lock_path}")
             try:
-                os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
+                os.fchmod(handle.fileno(), stat.S_IRUSR | stat.S_IWUSR)
             except OSError:
                 pass
             if fcntl is not None:
@@ -1111,7 +1179,12 @@ class AccountStore:
     _secret_guard_purpose_set: frozenset[str] | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
-        self.root = Path(self.root).expanduser().resolve()
+        raw_root = Path(self.root).expanduser()
+        _ensure_safe_account_memory_path(raw_root, label="store root", require_directory=True)
+        try:
+            self.root = raw_root.resolve()
+        except OSError as exc:
+            raise AccountStoreError(f"could not resolve account store root: {raw_root}") from exc
         if self.secret_guard_purposes is not None:
             normalized_purposes = tuple(
                 _normalize_secret_token(purpose, "purpose")
@@ -1120,7 +1193,9 @@ class AccountStore:
             self.secret_guard_purposes = normalized_purposes
             self._secret_guard_purpose_set = frozenset(normalized_purposes)
         if self.create_dirs:
+            _ensure_safe_account_memory_path(self.accounts_dir, label="accounts directory", require_directory=True)
             self.accounts_dir.mkdir(parents=True, exist_ok=True)
+            _ensure_safe_account_memory_path(self.accounts_dir, label="accounts directory", require_directory=True)
         if isinstance(self.secret_provider, SecretToolInstanceSecretProvider):
             self.secret_provider = _KeyringManifestSecretProvider(
                 instance_name=self.instance_name,
