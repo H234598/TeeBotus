@@ -1581,7 +1581,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
     lines: list[str] = []
     has_broken_memory = False
     has_broken_metadata = False
-    metadata_lines = _account_metadata_health_lines(store, account_dirs, instance_name=instance_name)
+    metadata_lines = _account_metadata_health_lines(store, account_dirs, instance_name=safe_instance_name)
     if metadata_lines:
         lines.extend(metadata_lines)
         has_broken_metadata = True
@@ -1619,7 +1619,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
                 lines.append(f"account_memory={safe_instance_name}/{account_id} status=broken error={profile_error}{fallback_warning}")
                 has_broken_memory = True
             else:
-                lines.append(f"account_memory={instance_name}/{account_id} status=ok{fallback_warning}")
+                lines.append(f"account_memory={safe_instance_name}/{account_id} status=ok{fallback_warning}")
         else:
             errors = list(health.errors)
             if profile_error:

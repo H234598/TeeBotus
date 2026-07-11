@@ -1308,6 +1308,20 @@ def test_status_memory_path_helpers_reject_traversal(tmp_path):
     ) is None
 
 
+def test_account_memory_health_uses_normalized_instance_name(tmp_path):
+    project_root = tmp_path / "TeeBotus"
+    account_root = project_root / "instances" / "Demo" / "data" / "accounts"
+    account_store = AccountStore(account_root, "Demo", secret_provider=StaticSecretProvider(b"c" * 32))
+    account_id = account_store.resolve_or_create_account(telegram_identity_key("sender"))
+    account_store.write_memory_entries(account_id, [])
+    account_store.write_memory_index(account_id, {})
+
+    lines = status_core.account_memory_index_health_lines(instance_name=" Demo ", project_root=project_root)
+
+    assert any(line.startswith(f"account_memory=Demo/{account_id} ") for line in lines)
+    assert not any(line.startswith(f"account_memory= Demo /{account_id} ") for line in lines)
+
+
 def test_memory_encryption_status_diagnoses_backend_resolution_failure():
     class FailingStore:
         @property

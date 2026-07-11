@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.14 - 2026-07-11
+
+- Use the validated instance name consistently in account-memory health output.
+
 ## 1.9.13 - 2026-07-11
 
 - Reject invalid instance and account identifiers before resolving status
