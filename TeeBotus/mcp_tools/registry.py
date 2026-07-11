@@ -132,7 +132,7 @@ def build_readonly_mcp_registry(
     tool_config: Mapping[str, Mapping[str, Any]] | None = None,
     private_chat: bool = False,
 ) -> MCPToolRegistry:
-    policies = resolve_mcp_tool_policies(tool_config or {})
+    policies = resolve_mcp_tool_policies({} if tool_config is None else tool_config)
     tools: dict[str, ToolCallable] = {}
     if bibliothekar_service is not None:
         tools["bibliothekar.search"] = lambda arguments: _bibliothekar_search_tool(bibliothekar_service, arguments)
@@ -150,7 +150,8 @@ def resolve_mcp_tool_policies(
     defaults: Mapping[str, MCPToolPolicy] = DEFAULT_MCP_TOOL_POLICIES,
 ) -> dict[str, MCPToolPolicy]:
     merged = dict(defaults)
-    for raw_name, raw_config in (overrides or {}).items():
+    override_source = {} if overrides is None else overrides
+    for raw_name, raw_config in override_source.items():
         name = str(raw_name or "").strip().casefold()
         if name not in defaults:
             continue

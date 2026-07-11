@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.51 - 2026-07-11
+
+- Preserve falsy MCP mappings in runtime policy resolution.
+
 ## 1.9.50 - 2026-07-11
 
 - Fail closed when a known MCP tool override has an invalid shape.

@@ -59,6 +59,16 @@ def test_mcp_policy_resolution_fails_closed_for_malformed_known_override() -> No
     assert policies["memory.search"].read_only is True
 
 
+def test_mcp_policy_resolution_preserves_falsy_mapping() -> None:
+    class FalsyMapping(dict):
+        def __bool__(self) -> bool:
+            return False
+
+    policies = resolve_mcp_tool_policies(FalsyMapping({"bibliothekar.search": {"enabled": True}}))
+
+    assert policies["bibliothekar.search"].enabled is True
+
+
 def test_mcp_status_separates_direct_allowlist_from_guarded_tools() -> None:
     lines = mcp_tool_status_lines(
         {
