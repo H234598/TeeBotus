@@ -623,7 +623,12 @@ class RuntimeStateStore(RuntimeState):
         if self.secret_provider is None:
             self.link_notifications_persistence_error = "link-notification persistence has no secret provider"
             return
-        if not self.link_notifications_path.exists():
+        try:
+            path_exists = self.link_notifications_path.exists()
+        except (OSError, ValueError) as exc:
+            self.link_notifications_persistence_error = str(exc)
+            return
+        if not path_exists:
             if self.link_notifications and self.link_notifications_persistence_error:
                 # A previous write may have failed while the notification was
                 # retained in memory. Retry it once the provider is available.

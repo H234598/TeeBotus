@@ -292,6 +292,17 @@ def test_runtime_state_store_reports_link_notification_read_error(tmp_path, monk
     assert "read blocked" in state.link_notifications_persistence_error
 
 
+def test_runtime_state_store_reports_link_notification_exists_error(tmp_path, monkeypatch):
+    def refuse_exists(_path):
+        raise OSError("exists blocked")
+
+    path_type = type(tmp_path / "Bot" / "data" / "runtime" / "Link_Notifications.json")
+    monkeypatch.setattr(path_type, "exists", refuse_exists)
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    assert "exists blocked" in state.link_notifications_persistence_error
+
+
 def test_runtime_state_store_uses_cache_when_llm_state_read_raises_oserror(tmp_path, monkeypatch):
     state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
     state.previous_response_ids[("Bot", ACCOUNT_ID)] = "cached-response"
