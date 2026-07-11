@@ -509,6 +509,7 @@ class RuntimeStateStore(RuntimeState):
                 self.link_notifications_path.unlink()
             except FileNotFoundError:
                 pass
+            self.link_notifications_persistence_error = ""
             return
         try:
             self._link_vault.write_json(self.link_notifications_path, {"notifications": notifications})
