@@ -585,6 +585,7 @@ class RuntimeStateStore(RuntimeState):
 
     def _load_persisted_link_notifications(self) -> None:
         if self.secret_provider is None:
+            self.link_notifications_persistence_error = "link-notification persistence has no secret provider"
             return
         if not self.link_notifications_path.exists():
             if not self.link_notifications or not self.link_notifications_persistence_error:
@@ -631,6 +632,7 @@ class RuntimeStateStore(RuntimeState):
 
     def _save_link_notifications(self) -> None:
         if self.secret_provider is None:
+            self.link_notifications_persistence_error = "link-notification persistence has no secret provider"
             return
         with self._link_notifications_lock():
             notifications = [

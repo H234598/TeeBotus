@@ -76,6 +76,21 @@ def test_runtime_state_store_keeps_link_notifications_in_memory_when_secret_back
     assert "secret backend unavailable" in state.link_notifications_persistence_error
 
 
+def test_runtime_state_store_reports_missing_link_secret_provider(tmp_path):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=None)
+    account_id = "a" * 128
+
+    state.record_link_notification(
+        instance_name="Bot",
+        account_id=account_id,
+        new_identity_key="signal:uuid:new",
+        old_identity_key="telegram:user:1",
+    )
+
+    assert state.list_link_notifications(instance_name="Bot", account_id=account_id)
+    assert "no secret provider" in state.link_notifications_persistence_error
+
+
 def test_runtime_state_store_clears_link_persistence_error_after_recovery(tmp_path):
     state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=BrokenProvider())
     account_id = "a" * 128
