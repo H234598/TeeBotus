@@ -1520,23 +1520,29 @@ def memory_encryption_status(directory: Path | None, *, account_store: AccountSt
 def account_memory_index_health_lines(*, instance_name: str, project_root: Path, secret_provider: object | None = None) -> list[str]:
     if not instance_name:
         return []
+    try:
+        safe_instance_name = _safe_instance_name_for_accounts(instance_name)
+    except ValueError:
+        return [
+            f"account_memory={redact_status_text(instance_name)} status=unknown error=invalid_instance_name"
+        ]
     project_root = project_root.resolve()
-    root = project_root / "instances" / instance_name / "data" / "accounts"
+    root = project_root / "instances" / safe_instance_name / "data" / "accounts"
     account_dirs = _account_memory_account_dirs(root / ACCOUNTS_DIRNAME)
     try:
         store = AccountStore(
             root,
-            instance_name,
+            safe_instance_name,
             secret_provider=secret_provider or SecretToolInstanceSecretProvider(create_if_missing=False),
             create_dirs=False,
             memory_backend_enabled=_status_memory_backend_enabled(root),
         )
     except Exception as exc:
         error = redact_status_text(f"{type(exc).__name__}: {exc}")
-        lines = [f"account_memory={instance_name} status=broken error={error}"]
+        lines = [f"account_memory={safe_instance_name} status=broken error={error}"]
         for account_dir in account_dirs:
-            lines.append(f"account_memory={instance_name}/{account_dir.name} status=broken error=account_store_unavailable:{error}")
-        lines.extend(_account_memory_recovery_lines(instance_name=instance_name, project_root=project_root))
+            lines.append(f"account_memory={safe_instance_name}/{account_dir.name} status=broken error=account_store_unavailable:{error}")
+        lines.extend(_account_memory_recovery_lines(instance_name=safe_instance_name, project_root=project_root))
         return lines
     lines: list[str] = []
     has_broken_memory = False
@@ -1547,9 +1553,9 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
         has_broken_metadata = True
     instance_fallback_warning = _account_memory_fallback_warning(store, INSTANCE_STATE_ACCOUNT_ID)
     if instance_fallback_warning:
-        lines.append(f"account_memory={instance_name}/__instance_state status=warning{instance_fallback_warning}")
+        lines.append(f"account_memory={safe_instance_name}/__instance_state status=warning{instance_fallback_warning}")
     if not account_dirs:
-        return lines or [f"account_memory={instance_name} status=none"]
+        return lines or [f"account_memory={safe_instance_name} status=none"]
     for account_dir in account_dirs:
         account_id = account_dir.name
         profile_error = ""
@@ -1566,17 +1572,17 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
             with _suppress_expected_account_memory_health_logs():
                 health = store.check_structured_memory_index(account_id, require_resolvable=require_resolvable and not profile_error)
         except AccountStoreError as exc:
-            lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
+            lines.append(f"account_memory={safe_instance_name}/{account_id} status=broken error={exc}")
             has_broken_memory = True
             continue
         except OSError as exc:
-            lines.append(f"account_memory={instance_name}/{account_id} status=broken error={exc}")
+            lines.append(f"account_memory={safe_instance_name}/{account_id} status=broken error={exc}")
             has_broken_memory = True
             continue
         fallback_warning = _account_memory_fallback_warning(store, account_id)
         if health.ok:
             if profile_error:
-                lines.append(f"account_memory={instance_name}/{account_id} status=broken error={profile_error}{fallback_warning}")
+                lines.append(f"account_memory={safe_instance_name}/{account_id} status=broken error={profile_error}{fallback_warning}")
                 has_broken_memory = True
             else:
                 lines.append(f"account_memory={instance_name}/{account_id} status=ok{fallback_warning}")
@@ -1585,11 +1591,11 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
             if profile_error:
                 errors.insert(0, profile_error)
             lines.append(
-                f"account_memory={instance_name}/{account_id} status=broken error={'; '.join(errors)}{fallback_warning}"
+                f"account_memory={safe_instance_name}/{account_id} status=broken error={'; '.join(errors)}{fallback_warning}"
             )
             has_broken_memory = True
     if has_broken_memory or has_broken_metadata:
-        lines.extend(_account_memory_recovery_lines(instance_name=instance_name, project_root=project_root))
+        lines.extend(_account_memory_recovery_lines(instance_name=safe_instance_name, project_root=project_root))
     return lines
 
 

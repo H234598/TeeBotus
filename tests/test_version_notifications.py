@@ -5179,6 +5179,16 @@ def test_account_memory_index_health_sqlite_env_does_not_create_missing_database
     assert not fallback.exists()
 
 
+def test_account_memory_index_health_rejects_instance_path_traversal(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "accounts").write_text("must not be inspected", encoding="utf-8")
+
+    lines = account_memory_index_health_lines(instance_name="../outside", project_root=tmp_path)
+
+    assert lines == ["account_memory=../outside status=unknown error=invalid_instance_name"]
+
+
 def test_account_memory_index_health_uses_database_when_profile_envelope_is_stale(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"x" * 32))

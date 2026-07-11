@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.8 - 2026-07-11
+
+- Reject path-traversal instance names in account-memory health checks.
+
 ## 1.9.7 - 2026-07-11
 
 - Fail closed when callback spool delivery responses lack a valid inner
