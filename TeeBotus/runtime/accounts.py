@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from contextlib import contextmanager
+from collections import Counter
 from functools import wraps
 import hashlib
 import hmac
@@ -2374,7 +2375,7 @@ class AccountStore:
             if memory_id:
                 entry_ids.append(memory_id)
         entry_id_set = set(entry_ids)
-        duplicate_entry_ids = sorted(memory_id for memory_id in set(entry_ids) if entry_ids.count(memory_id) > 1)
+        duplicate_entry_ids = sorted(memory_id for memory_id, count in Counter(entry_ids).items() if count > 1)
         if duplicate_entry_ids:
             errors.append(f"duplicate entry ids: {', '.join(duplicate_entry_ids)}")
 
@@ -2404,7 +2405,7 @@ class AccountStore:
             errors.append("index.recent_ids is not a list")
             recent_ids = []
         normalized_recent_ids = [str(value or "").strip() for value in recent_ids if str(value or "").strip()]
-        duplicate_recent_ids = sorted(memory_id for memory_id in set(normalized_recent_ids) if normalized_recent_ids.count(memory_id) > 1)
+        duplicate_recent_ids = sorted(memory_id for memory_id, count in Counter(normalized_recent_ids).items() if count > 1)
         if duplicate_recent_ids:
             errors.append(f"duplicate recent_ids: {', '.join(duplicate_recent_ids)}")
         missing_recent_ids = sorted(memory_id for memory_id in set(normalized_recent_ids) if memory_id not in entry_id_set)
@@ -2415,7 +2416,7 @@ class AccountStore:
             errors.append("index.accessed_ids is not a list")
             accessed_ids = []
         normalized_accessed_ids = [str(value or "").strip() for value in accessed_ids if str(value or "").strip()]
-        duplicate_accessed_ids = sorted(memory_id for memory_id in set(normalized_accessed_ids) if normalized_accessed_ids.count(memory_id) > 1)
+        duplicate_accessed_ids = sorted(memory_id for memory_id, count in Counter(normalized_accessed_ids).items() if count > 1)
         if duplicate_accessed_ids:
             errors.append(f"duplicate accessed_ids: {', '.join(duplicate_accessed_ids)}")
         missing_accessed_ids = sorted(memory_id for memory_id in set(normalized_accessed_ids) if memory_id not in entry_id_set)
