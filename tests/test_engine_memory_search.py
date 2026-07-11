@@ -55,3 +55,42 @@ def test_select_account_memory_falls_back_to_local_when_semantic_provider_would_
     selection = _select_account_memory(store, account_id, instructions, "Schlafroutine")
 
     assert "Lokale Transkription und Schlafroutine" in selection.prompt_text
+
+
+def test_select_account_memory_honors_zero_source_limits(tmp_path, monkeypatch) -> None:
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    account_id = store.resolve_or_create_account(telegram_identity_key(1234), display_label="Test")
+    store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_sleep",
+            "kind": "preference",
+            "memory_type": "semantic",
+            "user_text": "Schlaf und Abendroutine sind wichtig.",
+            "keywords": ["schlaf", "abendroutine"],
+        },
+    )
+    calls: list[str] = []
+
+    class _UnexpectedQdrantCall:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        def search(self, **_kwargs):  # pragma: no cover - zero limit must short-circuit first
+            calls.append("search")
+            raise AssertionError("zero semantic limit must not query Qdrant")
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.QdrantMemoryIndex", _UnexpectedQdrantCall)
+    instructions = BotInstructions(
+        user_memory_enabled=True,
+        memory_search_semantic_enabled=True,
+        memory_search_semantic_backend="qdrant",
+        memory_search_embedding_provider="hash",
+        memory_search_local_limit=0,
+        memory_search_semantic_limit=0,
+    )
+
+    selection = _select_account_memory(store, account_id, instructions, "Schlaf")
+
+    assert selection.prompt_text == ""
+    assert calls == []

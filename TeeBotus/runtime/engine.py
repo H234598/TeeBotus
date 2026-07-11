@@ -2299,8 +2299,8 @@ def _select_account_memory(
                 config = MemorySearchConfig(
                     semantic_enabled=True,
                     semantic_backend=instructions.memory_search_semantic_backend,
-                    local_limit=max(1, instructions.memory_search_local_limit),
-                    semantic_limit=max(1, instructions.memory_search_semantic_limit),
+                    local_limit=max(0, instructions.memory_search_local_limit),
+                    semantic_limit=max(0, instructions.memory_search_semantic_limit),
                 )
                 service = MemorySearchService(
                     account_store=account_store,
