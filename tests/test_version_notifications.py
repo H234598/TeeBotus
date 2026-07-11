@@ -309,6 +309,12 @@ def test_mcp_status_reports_invalid_configuration() -> None:
     ]
 
 
+def test_status_preserves_falsy_invalid_mcp_configuration(tmp_path: Path) -> None:
+    text = build_status_reply(instance_name="Demo", project_root=tmp_path, mcp_tools=[])
+
+    assert "Konfiguration: ungueltig (Mapping erwartet)" in text
+
+
 def test_account_secret_health_uses_normalized_instance_name(tmp_path: Path) -> None:
     accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
     accounts_root.mkdir(parents=True)

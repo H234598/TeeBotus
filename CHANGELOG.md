@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.38 - 2026-07-11
+
+- Preserve falsy malformed MCP configurations for status validation.
+
 ## 1.9.37 - 2026-07-11
 
 - Reject invalid account-memory backend payload shapes in status size

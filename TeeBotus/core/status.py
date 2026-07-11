@@ -191,7 +191,7 @@ def build_status_reply(
             "",
             *_codex_history_chat_status_lines(account_store=account_store),
             "",
-            *mcp_tool_status_lines(mcp_tools or {}),
+            *mcp_tool_status_lines(mcp_tools),
             "",
             *_proactive_agent_status_lines(
                 account_store=account_store,
