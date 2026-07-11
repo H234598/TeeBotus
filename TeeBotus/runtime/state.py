@@ -387,6 +387,27 @@ class RuntimeStateStore(RuntimeState):
                 )
             if key in self.pending_previous_response_resets:
                 stale_response_id = self.pending_previous_response_resets[key]
+                current_response_id = self.previous_response_ids.get(key)
+                if current_response_id and current_response_id != stale_response_id and (
+                    not persisted or stale_response_id is None or persisted == stale_response_id
+                ):
+                    current_scope = self.previous_response_scopes.get(key)
+                    persisted_current = self._write_llm_previous_response_id(
+                        account_id,
+                        current_response_id,
+                        provider=current_scope[0] if current_scope else "",
+                        model=current_scope[1] if current_scope else "",
+                        key_fingerprint=current_scope[2] if current_scope else "",
+                    )
+                    if persisted_current:
+                        self.pending_previous_response_resets.pop(key, None)
+                    return super().get_previous_response_id(
+                        instance_name,
+                        account_id,
+                        provider=provider,
+                        model=model,
+                        key_fingerprint=key_fingerprint,
+                    )
                 if not persisted or stale_response_id is None or persisted == stale_response_id:
                     if not persisted or self._clear_llm_previous_response_id(account_id):
                         self.pending_previous_response_resets.pop(key, None)
