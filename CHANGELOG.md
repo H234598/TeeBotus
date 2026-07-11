@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.58 - 2026-07-11
+
+- Normalize padded IDs in proactive planner and limit helpers.
+
 ## 1.9.57 - 2026-07-11
 
 - Normalize padded proactive outbox IDs during worker claims.

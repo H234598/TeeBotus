@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import pytest
@@ -41,6 +41,10 @@ from TeeBotus.runtime.proactive_agent import (
     set_proactive_categories,
     set_proactive_min_interval_minutes,
     update_proactive_outbox_item_status,
+    _proactive_daily_count,
+    _proactive_last_sent_within,
+    _queued_proactive_outbox_item_exists,
+    _update_proactive_outbox_item_due_at,
 )
 
 
@@ -461,6 +465,37 @@ def test_proactive_worker_claim_normalizes_item_id_whitespace(tmp_path) -> None:
         now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
     ) is True
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "dispatching"
+
+
+def test_proactive_outbox_helpers_normalize_item_id_whitespace(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    account_store.write_proactive_outbox(
+        account_id,
+        [
+            {
+                "id": " item_padded ",
+                "status": "queued",
+                "sent_at": now.isoformat(timespec="seconds"),
+                "updated_at": now.isoformat(timespec="seconds"),
+                "due_at": now.isoformat(timespec="seconds"),
+            }
+        ],
+    )
+
+    assert _queued_proactive_outbox_item_exists(account_store, account_id, " item_padded ") is True
+    assert _proactive_daily_count(account_store, account_id, now, exclude_item_id="item_padded") == 0
+    assert _proactive_last_sent_within(account_store, account_id, now, timedelta(minutes=5), exclude_item_id="item_padded") is False
+    assert _update_proactive_outbox_item_due_at(
+        account_store,
+        account_id,
+        " item_padded ",
+        due_at="2026-06-16T12:00:00+00:00",
+        reason="test",
+        now=now,
+    ) is True
+    assert account_store.read_proactive_outbox(account_id)[0]["due_at"] == "2026-06-16T12:00:00+00:00"
 
 
 def test_proactive_status_text_normalizes_stored_status_counts(tmp_path) -> None:

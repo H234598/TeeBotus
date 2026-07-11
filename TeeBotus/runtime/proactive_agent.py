@@ -2269,10 +2269,11 @@ def _apply_proactive_llm_snooze_decision(
 
 
 def _queued_proactive_outbox_item_exists(account_store: AccountStore, account_id: str, item_id: str) -> bool:
+    normalized_item_id = str(item_id or "").strip()
     for item in account_store.read_proactive_outbox(account_id):
         if not isinstance(item, dict):
             continue
-        if str(item.get("id") or "").strip() != item_id:
+        if str(item.get("id") or "").strip() != normalized_item_id:
             continue
         return str(item.get("status") or "queued").strip().casefold() == "queued"
     return False
@@ -2290,9 +2291,10 @@ def _update_proactive_outbox_item_due_at(
     with _account_proactive_outbox_lock(account_store, account_id):
         rows = account_store.read_proactive_outbox(account_id)
         timestamp = now.isoformat(timespec="seconds")
+        normalized_item_id = str(item_id or "").strip()
         changed = False
         for item in rows:
-            if not isinstance(item, dict) or str(item.get("id") or "").strip() != item_id:
+            if not isinstance(item, dict) or str(item.get("id") or "").strip() != normalized_item_id:
                 continue
             if str(item.get("status") or "queued").strip().casefold() != "queued":
                 return False
@@ -2581,10 +2583,11 @@ def _normalize_route_slot(value: Any) -> int | None:
 
 def _proactive_daily_count(account_store: AccountStore, account_id: str, now: datetime, *, exclude_item_id: str = "") -> int:
     count = 0
+    normalized_exclude_item_id = str(exclude_item_id or "").strip()
     for item in account_store.read_proactive_outbox(account_id):
         if not isinstance(item, dict):
             continue
-        if exclude_item_id and str(item.get("id") or "") == exclude_item_id:
+        if normalized_exclude_item_id and str(item.get("id") or "").strip() == normalized_exclude_item_id:
             continue
         status = str(item.get("status") or "queued").strip().casefold()
         if status not in {"queued", "dispatching", "sent"}:
@@ -2599,10 +2602,11 @@ def _proactive_daily_count(account_store: AccountStore, account_id: str, now: da
 
 def _proactive_last_sent_within(account_store: AccountStore, account_id: str, now: datetime, interval: timedelta, *, exclude_item_id: str = "") -> bool:
     threshold = now - interval
+    normalized_exclude_item_id = str(exclude_item_id or "").strip()
     for item in account_store.read_proactive_outbox(account_id):
         if not isinstance(item, dict):
             continue
-        if exclude_item_id and str(item.get("id") or "") == exclude_item_id:
+        if normalized_exclude_item_id and str(item.get("id") or "").strip() == normalized_exclude_item_id:
             continue
         status = str(item.get("status") or "").strip().casefold()
         if status not in {"sent", "dispatching"} and not str(item.get("sent_at") or "").strip():
