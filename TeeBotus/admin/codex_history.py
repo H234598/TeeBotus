@@ -668,7 +668,15 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                 continue
             item = _history_dispatcher_item_to_legacy(raw_item)
             item_id = str(item.get("id") or "")
-            existing_results = [dict(result) for result in raw_item.get("recipient_results", []) if isinstance(result, Mapping)]
+            existing_results: list[dict[str, Any]] = []
+            for raw_result in raw_item.get("recipient_results", []):
+                if not isinstance(raw_result, Mapping):
+                    continue
+                result = dict(raw_result)
+                recipient_id = str(result.get("recipient_id") or result.get("account_id") or "").strip()
+                if recipient_id:
+                    result["account_id"] = recipient_id
+                existing_results.append(result)
             successful_accounts = {
                 str(result.get("recipient_id") or "").strip()
                 for result in existing_results

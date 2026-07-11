@@ -1333,6 +1333,58 @@ def test_codex_history_dispatch_bridge_claims_sends_and_completes_only_open_reci
     assert [row["recipient_id"] for row in complete_body["recipient_results"]] == ["open"]
 
 
+def test_codex_history_dispatch_bridge_preserves_already_delivered_recipients(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            calls.append((operation, dict(body or {})))
+            if operation == "dispatch.claim":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "hd-item-already-delivered",
+                            "payload": {"summary": {"text": "Already delivered"}},
+                            "recipient_results": [{"recipient_id": "already", "status": "delivered"}],
+                        }],
+                    },
+                }
+            if operation == "dispatch.complete":
+                return {"ok": True, "data": {"ok": True, "status": "delivered"}}
+            raise AssertionError(operation)
+
+    async def unexpected_send(*_args, **_kwargs):
+        raise AssertionError("an already delivered recipient must not be sent again")
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_account_ids", lambda *args, **kwargs: ("already",))
+    monkeypatch.setattr(codex_history_module, "_dispatch_codex_history_item_to_account", unexpected_send)
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            object(),
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+        )
+    )
+
+    assert result["status_counts"] == {"delivered": 1}
+    assert [operation for operation, _body in calls] == ["dispatch.claim", "dispatch.complete"]
+    assert calls[-1][1]["recipient_results"] == [{
+        "recipient_id": "already",
+        "status": "delivered",
+        "channel": "",
+        "message_ref": "",
+        "reason": "",
+        "possible_duplicate": False,
+    }]
+
+
 def test_codex_history_shadow_append_mirrors_after_legacy_write(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

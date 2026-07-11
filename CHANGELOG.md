@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.3 - 2026-07-11
+
+- Preserve already delivered History-Dispatcher recipients when a bridge claim
+  has no remaining open recipient.
+
 ## 1.9.2 - 2026-07-11
 
 - Preserve the documented `dispatch-limit 0` semantics across the
