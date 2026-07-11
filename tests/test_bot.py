@@ -4550,8 +4550,16 @@ class BotTests(unittest.TestCase):
     def test_run_polling_logs_network_errors_without_traceback(self) -> None:
         api = FlakyPollingAPI()
 
-        with patch("TeeBotus.bot.time.sleep") as sleep, self.assertLogs("TeeBotus", level="WARNING") as logs:
-            run_polling(api, FakeInstructionStore(), youtube_job_runner=FakeJobRunner())
+        with tempfile.TemporaryDirectory() as directory:
+            with patch("TeeBotus.bot.time.sleep") as sleep, self.assertLogs("TeeBotus", level="WARNING") as logs:
+                run_polling(
+                    api,
+                    FakeInstructionStore(),
+                    instance_name="TestPolling",
+                    instances_dir=directory,
+                    secret_provider=StaticSecretProvider(b"t" * 32),
+                    youtube_job_runner=FakeJobRunner(),
+                )
 
         sleep.assert_any_call(5)
         self.assertEqual(api.calls, 2)

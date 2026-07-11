@@ -46,7 +46,7 @@ from TeeBotus.handlers import build_reply, is_admin_help_request, should_use_ope
 from TeeBotus.instructions import BotInstructions, InstructionStore, format_help_text_html, render_template
 from TeeBotus.llm.base import LLMAPIError
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, runtime_secret_provider, telegram_identity_key
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, runtime_secret_provider, telegram_identity_key
 from TeeBotus.runtime.action_buttons import LEGAL_CONSENT_BUTTONS, MEMORY_RESET_BUTTONS, YOUTUBE_LOCAL_OPTIONS_BUTTONS
 from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, MessageButton, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.admin_accounts import is_runtime_admin_account
@@ -3598,6 +3598,7 @@ def run_polling(
     runtime_context: TelegramRuntimeContext | None = None,
     chat_state: ChatState | None = None,
     instances_dir: str | Path | None = None,
+    secret_provider: InstanceSecretProvider | None = None,
 ) -> None:
     owns_youtube_job_runner = youtube_job_runner is None
     youtube_job_runner = youtube_job_runner or YouTubeTranscriptionJobRunner()
@@ -3614,11 +3615,12 @@ def run_polling(
             api=api,
             instance_name=instance,
             adapter_slot=adapter_slot,
-            instances_dir=_resolve_instances_dir(),
+            instances_dir=instances_dir or _resolve_instances_dir(),
             instruction_store=instruction_store,
             openai_api_key=resolved_openai_api_key,
             youtube_job_runner=youtube_job_runner,
             bot_identity=bot_identity,
+            secret_provider=secret_provider,
         )
         runtime_context = bridge.context
         openai_client = bridge.openai_client
