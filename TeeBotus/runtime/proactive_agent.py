@@ -2548,9 +2548,12 @@ def _account_has_matching_proactive_route(account_store: AccountStore, account_i
 def _normalize_proactive_route(route: Mapping[str, Any] | None) -> dict[str, Any] | None:
     if not isinstance(route, Mapping):
         return None
-    if str(route.get("chat_type") or "").strip().casefold() != "private":
+    normalized_chat_type = str(route.get("chat_type") or "").strip().casefold()
+    if normalized_chat_type != "private":
         return None
-    if not str(route.get("channel") or "").strip() or not str(route.get("chat_id") or "").strip():
+    normalized_channel = str(route.get("channel") or "").strip().casefold()
+    normalized_chat_id = str(route.get("chat_id") or "").strip()
+    if not normalized_channel or not normalized_chat_id:
         return None
     if "adapter_slot" in route:
         raw_slot = route.get("adapter_slot")
@@ -2562,6 +2565,9 @@ def _normalize_proactive_route(route: Mapping[str, Any] | None) -> dict[str, Any
     if normalized_slot is None:
         return None
     normalized = dict(route)
+    normalized["channel"] = normalized_channel
+    normalized["chat_id"] = normalized_chat_id
+    normalized["chat_type"] = normalized_chat_type
     normalized["adapter_slot"] = normalized_slot
     return normalized
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.59 - 2026-07-11
+
+- Canonicalize proactive dispatch route fields before sending.
+
 ## 1.9.58 - 2026-07-11
 
 - Normalize padded IDs in proactive planner and limit helpers.

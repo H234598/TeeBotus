@@ -44,6 +44,7 @@ from TeeBotus.runtime.proactive_agent import (
     _proactive_daily_count,
     _proactive_last_sent_within,
     _queued_proactive_outbox_item_exists,
+    _normalize_proactive_route,
     _update_proactive_outbox_item_due_at,
 )
 
@@ -496,6 +497,23 @@ def test_proactive_outbox_helpers_normalize_item_id_whitespace(tmp_path) -> None
         now=now,
     ) is True
     assert account_store.read_proactive_outbox(account_id)[0]["due_at"] == "2026-06-16T12:00:00+00:00"
+
+
+def test_proactive_route_normalizes_dispatch_fields() -> None:
+    route = _normalize_proactive_route(
+        {
+            "channel": " Telegram ",
+            "chat_id": " 123 ",
+            "chat_type": " Private ",
+            "adapter_slot": "2",
+        }
+    )
+
+    assert route is not None
+    assert route["channel"] == "telegram"
+    assert route["chat_id"] == "123"
+    assert route["chat_type"] == "private"
+    assert route["adapter_slot"] == 2
 
 
 def test_proactive_status_text_normalizes_stored_status_counts(tmp_path) -> None:
@@ -1430,8 +1448,8 @@ def test_select_proactive_route_accepts_case_variant_route_fields(tmp_path, monk
     route = select_proactive_route(account_store, account_id)
 
     assert route is not None
-    assert route["channel"] == "Signal"
-    assert route["chat_type"] == "Private"
+    assert route["channel"] == "signal"
+    assert route["chat_type"] == "private"
 
 
 def test_check_proactive_agent_account_allows_uppercase_route_values_in_outbox(tmp_path) -> None:
