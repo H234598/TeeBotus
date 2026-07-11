@@ -2276,6 +2276,30 @@ def test_account_memory_fallback_marks_both_read_failures_as_unsafe(caplog) -> N
     assert "FAILOVER IS BLOCKED" in caplog.text
 
 
+def test_account_memory_fallback_preserves_diagnostic_secondary_read_failure(caplog) -> None:
+    class PrimaryBackend:
+        last_entry_read_error = "corrupt primary row"
+        last_entry_skipped = 1
+
+        def read_entries(self, _account_id: str) -> list[dict[str, str]]:
+            return [{"id": "partial"}]
+
+    class FailingFallbackBackend:
+        def read_entries(self, _account_id: str) -> list[dict[str, str]]:
+            raise OSError("secondary unavailable")
+
+    account_id = "a" * 128
+    backend = WarningFallbackAccountMemoryBackend(PrimaryBackend(), FailingFallbackBackend(), label="Demo:sqlite")
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        with pytest.raises(AccountStoreError, match="fallback read failed"):
+            backend.read_entries(account_id)
+
+    assert account_id in backend._stale_fallback_entries
+    assert account_id in backend._fallback_sync_failed_entries
+    assert backend.last_fallback_sync_error == "read_entries: fallback read failed: secondary unavailable"
+
+
 def test_account_memory_fallback_marks_both_write_failures_as_unsafe(caplog) -> None:
     class Backend:
         def __init__(self, *, fail_write: bool = False) -> None:

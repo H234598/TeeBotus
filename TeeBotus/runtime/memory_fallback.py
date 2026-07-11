@@ -10,6 +10,10 @@ LOGGER = logging.getLogger("TeeBotus")
 FALLBACK_WARNING_INTERVAL_SECONDS = 300
 
 
+class _FallbackReadFailure(AccountStoreError):
+    """Preserve a secondary-read failure across the outer primary error handler."""
+
+
 class WarningFallbackAccountMemoryBackend:
     def __init__(self, primary: Any, fallback: Any, *, label: str) -> None:
         self.primary = primary
@@ -283,7 +287,7 @@ class WarningFallbackAccountMemoryBackend:
                         account_id,
                         fallback_exc,
                     )
-                    raise AccountStoreError(self.last_fallback_sync_error) from fallback_exc
+                    raise _FallbackReadFailure(self.last_fallback_sync_error) from fallback_exc
                 return self._recover_read_from_fallback(
                     operation,
                     account_id,
@@ -300,6 +304,8 @@ class WarningFallbackAccountMemoryBackend:
             self._warn_if_fallback_repair_pending(operation, account_id)
             self._clear_recovered_if_clean(operation, account_id)
             return result
+        except _FallbackReadFailure:
+            raise
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
             self._warn(operation, account_id, exc)
