@@ -461,6 +461,7 @@ class RuntimeStateStore(RuntimeState):
             )
 
     def record_link_notification(self, *, instance_name: str, account_id: str, new_identity_key: str, old_identity_key: str) -> None:
+        self._ensure_instance_scope(instance_name)
         try:
             with self._link_notifications_lock():
                 self._refresh_persisted_link_notifications()
@@ -476,6 +477,7 @@ class RuntimeStateStore(RuntimeState):
             raise
 
     def pop_link_notification(self, *, instance_name: str, account_id: str, old_identity_key: str = "") -> dict[str, str] | None:
+        self._ensure_instance_scope(instance_name)
         try:
             with self._link_notifications_lock():
                 self._refresh_persisted_link_notifications()
@@ -492,6 +494,7 @@ class RuntimeStateStore(RuntimeState):
             raise
 
     def clear_link_notifications_for_new_identity(self, *, instance_name: str, account_id: str, new_identity_key: str) -> int:
+        self._ensure_instance_scope(instance_name)
         try:
             with self._link_notifications_lock():
                 self._refresh_persisted_link_notifications()
@@ -514,6 +517,7 @@ class RuntimeStateStore(RuntimeState):
             self._save_link_notifications()
 
     def list_link_notifications(self, *, instance_name: str, account_id: str) -> list[dict[str, str]]:
+        self._ensure_instance_scope(instance_name)
         try:
             with self._link_notifications_lock():
                 self._refresh_persisted_link_notifications()

@@ -814,6 +814,18 @@ def test_runtime_state_store_rejects_persisted_state_for_wrong_instance(tmp_path
         state.get_previous_response_id("OtherBot", ACCOUNT_ID)
 
 
+def test_runtime_state_store_rejects_link_notification_for_wrong_instance(tmp_path):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    with pytest.raises(AccountStoreError, match="runtime state instance mismatch"):
+        state.record_link_notification(
+            instance_name="OtherBot",
+            account_id=ACCOUNT_ID,
+            new_identity_key="signal:uuid:new",
+            old_identity_key="telegram:user:1",
+        )
+
+
 def test_runtime_state_store_scopes_key_fingerprint_only_lookup(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"
