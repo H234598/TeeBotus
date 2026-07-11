@@ -232,6 +232,7 @@ class RuntimeStateStore(RuntimeState):
         self.link_notifications_persistence_error = ""
         self.llm_state_persistence_error = ""
         self.openai_state_persistence_error = ""
+        self._llm_state_persistence_errors: dict[str, str] = {}
         self._account_store_secret_guard_checked = False
         self._llm_account_store: AccountStore | None = None
         with self._link_notifications_lock():
@@ -476,7 +477,14 @@ class RuntimeStateStore(RuntimeState):
     def _openai_state_path(self, account_id: str) -> Path:
         return self._state_path(account_id, OPENAI_STATE_FILENAME)
 
-    def _set_llm_state_persistence_error(self, error: str) -> None:
+    def _set_llm_state_persistence_error(self, error: str, *, account_id: str = "") -> None:
+        account = str(account_id or "").strip()
+        if account:
+            if error:
+                self._llm_state_persistence_errors[account] = error
+            else:
+                self._llm_state_persistence_errors.pop(account, None)
+            error = next(iter(self._llm_state_persistence_errors.values()), "")
         self.llm_state_persistence_error = error
         self.openai_state_persistence_error = error
 
@@ -493,21 +501,21 @@ class RuntimeStateStore(RuntimeState):
         with self._llm_state_lock(account_id):
             try:
                 selected = self._account_store_for_llm_state().read_llm_state(account_id)
-                self._set_llm_state_persistence_error("")
+                self._set_llm_state_persistence_error("", account_id=account_id)
                 return selected, ""
             except AccountStoreError as exc:
                 error = str(exc)
-                self._set_llm_state_persistence_error(error)
+                self._set_llm_state_persistence_error(error, account_id=account_id)
                 return {}, error
 
     def _write_llm_state(self, account_id: str, payload: dict[str, Any]) -> bool:
         with self._llm_state_lock(account_id):
             try:
                 self._account_store_for_llm_state().write_llm_state(account_id, payload)
-                self._set_llm_state_persistence_error("")
+                self._set_llm_state_persistence_error("", account_id=account_id)
                 return True
             except AccountStoreError as exc:
-                self._set_llm_state_persistence_error(str(exc))
+                self._set_llm_state_persistence_error(str(exc), account_id=account_id)
                 return False
 
     def _read_llm_previous_response(self, account_id: str) -> tuple[str | None, tuple[str, str, str] | None, str]:

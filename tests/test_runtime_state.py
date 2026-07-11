@@ -452,6 +452,23 @@ def test_runtime_state_store_does_not_overwrite_llm_state_after_read_failure(tmp
     assert state.llm_state_persistence_error == "LLM state read failed"
 
 
+def test_runtime_state_store_aggregates_persistence_errors_per_account(tmp_path):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    account_a = "a" * 128
+    account_b = "b" * 128
+
+    state._set_llm_state_persistence_error("account A failed", account_id=account_a)
+    state._set_llm_state_persistence_error("", account_id=account_b)
+
+    assert state.llm_state_persistence_error == "account A failed"
+    assert state.openai_state_persistence_error == "account A failed"
+
+    state._set_llm_state_persistence_error("", account_id=account_a)
+
+    assert state.llm_state_persistence_error == ""
+    assert state.openai_state_persistence_error == ""
+
+
 def test_runtime_state_store_migrates_previous_response_id_from_legacy_openai_state(tmp_path, monkeypatch):
     monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
     monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", raising=False)
