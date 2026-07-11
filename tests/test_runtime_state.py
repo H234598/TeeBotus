@@ -49,6 +49,19 @@ def test_runtime_state_store_falls_back_to_memory_on_corrupt_persisted_link_noti
     assert state.link_notifications_persistence_error
 
 
+def test_runtime_state_store_clears_removed_corrupt_link_notification_error(tmp_path):
+    runtime_dir = tmp_path / "Bot" / "data" / "runtime"
+    runtime_dir.mkdir(parents=True)
+    corrupted = runtime_dir / "Link_Notifications.json"
+    corrupted.write_text("{not-json", encoding="utf-8")
+
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    corrupted.unlink()
+
+    assert state.list_link_notifications(instance_name="Bot", account_id="a" * 128) == []
+    assert state.link_notifications_persistence_error == ""
+
+
 def test_runtime_state_store_keeps_link_notifications_in_memory_when_secret_backend_fails(tmp_path):
     state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=BrokenProvider())
 

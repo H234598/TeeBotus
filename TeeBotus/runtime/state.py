@@ -587,8 +587,9 @@ class RuntimeStateStore(RuntimeState):
         if self.secret_provider is None:
             return
         if not self.link_notifications_path.exists():
-            if not self.link_notifications_persistence_error:
+            if not self.link_notifications or not self.link_notifications_persistence_error:
                 self.link_notifications = {}
+                self.link_notifications_persistence_error = ""
             return
         existing = dict(self.link_notifications)
         had_persistence_error = bool(self.link_notifications_persistence_error)
