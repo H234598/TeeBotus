@@ -11,7 +11,6 @@ import math
 import os
 import re
 import secrets
-import signal
 import shutil
 import stat
 import subprocess
@@ -544,15 +543,10 @@ class SecretToolInstanceSecretProvider:
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                start_new_session=True,
             )
             try:
                 stdout, stderr = process.communicate(timeout=self.timeout_seconds)
             except subprocess.TimeoutExpired as exc:
-                try:
-                    os.killpg(process.pid, signal.SIGKILL)
-                except (ProcessLookupError, PermissionError):
-                    pass
                 try:
                     process.kill()
                 except ProcessLookupError:

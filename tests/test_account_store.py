@@ -147,18 +147,14 @@ def test_secret_tool_provider_times_out_hung_secret_tool(monkeypatch) -> None:
 
     def fake_popen(command: list[str], **kwargs: object) -> FakeProcess:
         calls["command"] = command
-        calls["start_new_session"] = kwargs.get("start_new_session")
         return FakeProcess(command)
 
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
-    monkeypatch.setattr("TeeBotus.runtime.accounts.os.killpg", lambda _pid, _signal: calls.setdefault("killpg", True))
 
     with pytest.raises(AccountStoreError, match="timed out"):
         provider_instance._run(["lookup", "application", "TeeBotus"])
 
     assert timeouts[0] == 0.25
-    assert calls["start_new_session"] is True
-    assert calls["killpg"] is True
 
 
 def test_secret_tool_provider_short_circuits_after_service_timeout(monkeypatch) -> None:
@@ -184,7 +180,6 @@ def test_secret_tool_provider_short_circuits_after_service_timeout(monkeypatch) 
 
     monkeypatch.setattr(provider_instance, "_secret_tool", lambda: "/usr/bin/secret-tool")
     monkeypatch.setattr(subprocess, "Popen", fake_popen)
-    monkeypatch.setattr("TeeBotus.runtime.accounts.os.killpg", lambda _pid, _signal: None)
 
     with pytest.raises(AccountStoreError, match="timed out"):
         provider_instance._run(["lookup", "application", "TeeBotus"])
