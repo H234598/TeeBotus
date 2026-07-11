@@ -3323,6 +3323,21 @@ class BotTests(unittest.TestCase):
         self.assertIn("- bot_name: Bote der Wahrheit", openai_input)
         self.assertIn("- bot_username: @BoteDerWahrheitBot", openai_input)
 
+    def test_openai_input_includes_telegram_reply_context(self) -> None:
+        openai_input = _build_openai_user_input(
+            {
+                "text": "Was meinst du damit?",
+                "chat": {"id": 123, "type": "private"},
+                "from": {"id": 456, "first_name": "Ada"},
+                "reply_to_message": {"message_id": 41, "text": "Die referenzierte Nachricht."},
+            },
+            "Was meinst du damit?",
+        )
+
+        self.assertIn("Telegram-Antwortbezug:", openai_input)
+        self.assertIn("Die referenzierte Nachricht.", openai_input)
+        self.assertTrue(openai_input.endswith("Nachricht:\nWas meinst du damit?"))
+
     def test_openai_input_includes_sender_context_for_group_messages(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
