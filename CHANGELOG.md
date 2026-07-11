@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.111 - 2026-07-12
+
+- Recognize affirmation variants with explicit notification context.
+
 ## 1.9.110 - 2026-07-12
 
 - Reject negated positive notification status substrings.

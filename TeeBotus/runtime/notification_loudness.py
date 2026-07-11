@@ -119,7 +119,7 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "laut gestellt",
 )
 NOTIFICATION_LOUDNESS_ACTION_WORDS = frozenset({"hab", "habe", "haben", "getan", "gemacht", "erledigt", "did", "done"})
-NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS = frozenset({"ja", "yes", "jep", "jo"})
+NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS = frozenset({"ja", "yes", "jep", "jo", "ok", "okay", "klar"})
 NOTIFICATION_LOUDNESS_NEGATION_REPLY_WORDS = frozenset({"nein", "no", "nee", "nop", "nope"})
 
 NOTIFICATION_LOUDNESS_PROMPT = (
@@ -477,6 +477,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if pending and (normalized in {"ja", "yes", "jep", "jo", "ok", "okay", "klar", "erledigt", "gemacht"} or words & {"ja", "yes"} and has_notification_context):
         return "confirmed"
     if pending and words & NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS and words & NOTIFICATION_LOUDNESS_ACTION_WORDS:
+        return "confirmed"
+    if pending and words & NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS and has_notification_context:
         return "confirmed"
     if (
         pending

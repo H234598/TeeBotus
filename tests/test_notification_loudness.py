@@ -1201,6 +1201,13 @@ def test_loudness_free_text_rejects_negated_positive_status_substrings() -> None
     assert _notification_loudness_decision("I don't have notifications enabled", pending=False) == "declined"
 
 
+def test_loudness_free_text_accepts_affirmation_variants_with_context() -> None:
+    assert _notification_loudness_decision("jo, laut", pending=True) == "confirmed"
+    assert _notification_loudness_decision("jep, Nachrichten sind an", pending=True) == "confirmed"
+    assert _notification_loudness_decision("okay, laut", pending=True) == "confirmed"
+    assert _notification_loudness_decision("klar, messages are loud", pending=True) == "confirmed"
+
+
 def test_loudness_free_text_keeps_negation_precedence_without_pending_state() -> None:
     assert _notification_loudness_decision("Benachrichtigungen sind deaktiviert", pending=False) == "declined"
     assert _notification_loudness_decision("Benachrichtigungen sind nicht aktiviert", pending=False) == "declined"
