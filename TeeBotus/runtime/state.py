@@ -295,6 +295,8 @@ class RuntimeStateStore(RuntimeState):
     def _link_vault(self) -> EncryptedJsonVault:
         if self.secret_provider is None:
             raise AccountStoreError("link-notification persistence has no secret provider")
+        if _has_symlink_parent(self.link_notifications_path) or self.link_notifications_path.is_symlink():
+            raise AccountStoreError(f"refusing unsafe link-notification path: {self.link_notifications_path}")
         self._guard_account_store_secrets()
         return EncryptedJsonVault(self.instance_name, self.secret_provider, root=self.runtime_dir)
 
