@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import re
 import uuid
 from dataclasses import dataclass
@@ -396,8 +397,10 @@ def _validate_vector(vector: list[float], *, expected_dimensions: int) -> None:
     if not isinstance(vector, list) or len(vector) != expected_dimensions:
         raise ValueError("Embedding vector dimensions do not match provider dimensions.")
     for value in vector:
-        if not isinstance(value, (int, float)):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
             raise ValueError("Embedding vector must contain numbers only.")
+        if not math.isfinite(float(value)):
+            raise ValueError("Embedding vector must contain finite numbers only.")
 
 
 def _qdrant_request_error(exc: BaseException) -> str:

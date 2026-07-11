@@ -225,6 +225,20 @@ def test_qdrant_memory_search_clamps_over_returned_results() -> None:
     assert len(results) == 1
 
 
+def test_qdrant_memory_rejects_nonfinite_embedding_vectors() -> None:
+    class _NonfiniteEmbeddingProvider:
+        model_name = USER_MEMORY_QDRANT_EMBEDDING_MODEL
+        dimensions = 2
+
+        def embed_text(self, _text: str) -> list[float]:
+            return [float("nan"), 0.0]
+
+    index = QdrantMemoryIndex(embedding_provider=_NonfiniteEmbeddingProvider())
+
+    with pytest.raises(ValueError, match="finite numbers"):
+        index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "mem_nan"})
+
+
 def test_qdrant_memory_search_filters_stale_vectors_after_embedding_model_change() -> None:
     fake_qdrant = _FakeQdrant()
     old_index = QdrantMemoryIndex(

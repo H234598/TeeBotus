@@ -209,6 +209,20 @@ def test_qdrant_bibliothekar_search_clamps_over_returned_results() -> None:
     assert len(results) == 1
 
 
+def test_qdrant_bibliothekar_rejects_nonfinite_embedding_vectors() -> None:
+    class _NonfiniteEmbeddingProvider:
+        model_name = "nonfinite"
+        dimensions = 2
+
+        def embed_text(self, _text: str) -> list[float]:
+            return [float("inf"), 0.0]
+
+    index = QdrantBibliothekarIndex(embedding_provider=_NonfiniteEmbeddingProvider())
+
+    with pytest.raises(ValueError, match="finite numbers"):
+        index.index_chunks(instance_name="Depressionsbot", chunks=[_chunk("chunk_inf", text="Schlaf")])
+
+
 def test_bge_m3_embedding_provider_is_prepared_but_not_default() -> None:
     provider = bge_m3_embedding_provider()
 
