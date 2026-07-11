@@ -9,6 +9,7 @@ from TeeBotus.embedding import FakeEmbeddingProvider
 from TeeBotus.runtime.qdrant_bibliothekar import (
     BGE_M3_EMBEDDING_DIMENSIONS,
     BGE_M3_EMBEDDING_MODEL,
+    QDRANT_BIBLIOTHEKAR_PAYLOAD_SCHEMA,
     QdrantBibliothekarIndex,
     bge_m3_embedding_provider,
     qdrant_bibliothekar_point_id,
@@ -127,7 +128,31 @@ def test_qdrant_bibliothekar_search_is_scoped_by_instance() -> None:
 
     assert [result.chunk_id for result in results] == ["chunk_a"]
     search_body = fake_qdrant.calls[-1]["body"]
-    assert search_body["filter"]["must"] == [{"key": "instance_name", "match": {"value": "Depressionsbot"}}]
+    assert search_body["filter"]["must"] == [
+        {"key": "instance_name", "match": {"value": "Depressionsbot"}},
+        {"key": "schema", "match": {"value": QDRANT_BIBLIOTHEKAR_PAYLOAD_SCHEMA}},
+        {"key": "embedding_model", "match": {"value": "teebotus-fake-hash-embedding-v1"}},
+        {"key": "embedding_dimensions", "match": {"value": 16}},
+    ]
+
+
+def test_qdrant_bibliothekar_search_excludes_stale_embedding_metadata() -> None:
+    fake_qdrant = _FakeQdrant()
+    old_index = QdrantBibliothekarIndex(
+        url="http://127.0.0.1:6333",
+        opener=fake_qdrant,
+        embedding_provider=FakeEmbeddingProvider(model_name="old-bibliothekar-model", dimensions=16),
+    )
+    new_index = QdrantBibliothekarIndex(
+        url="http://127.0.0.1:6333",
+        opener=fake_qdrant,
+        embedding_provider=FakeEmbeddingProvider(model_name="new-bibliothekar-model", dimensions=16),
+    )
+    old_index.index_chunks(instance_name="Depressionsbot", chunks=[_chunk("old", text="Schlaf")])
+
+    results = new_index.search(instance_name="Depressionsbot", query="Schlaf", limit=10)
+
+    assert results == ()
 
 
 def test_qdrant_bibliothekar_delete_instance_removes_only_matching_chunks() -> None:

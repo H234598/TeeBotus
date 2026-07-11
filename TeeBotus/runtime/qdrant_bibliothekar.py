@@ -91,8 +91,10 @@ class QdrantBibliothekarIndex:
         limit_value = min(50, int(limit))
         if limit_value < 1:
             return ()
+        embedding_model = str(self.embedding_provider.model_name or "")
+        embedding_dimensions = int(self.embedding_provider.dimensions)
         vector = self.embedding_provider.embed_text(query)
-        _validate_vector(vector, expected_dimensions=int(self.embedding_provider.dimensions))
+        _validate_vector(vector, expected_dimensions=embedding_dimensions)
         response = self._request_json(
             "POST",
             f"/collections/{quote(_validate_collection(self.collection), safe='')}/points/search",
@@ -100,7 +102,14 @@ class QdrantBibliothekarIndex:
                 "vector": vector,
                 "limit": limit_value,
                 "with_payload": True,
-                "filter": {"must": [{"key": "instance_name", "match": {"value": instance}}]},
+                "filter": {
+                    "must": [
+                        {"key": "instance_name", "match": {"value": instance}},
+                        {"key": "schema", "match": {"value": QDRANT_BIBLIOTHEKAR_PAYLOAD_SCHEMA}},
+                        {"key": "embedding_model", "match": {"value": embedding_model}},
+                        {"key": "embedding_dimensions", "match": {"value": embedding_dimensions}},
+                    ]
+                },
             },
         )
         raw_results = response.get("result")
@@ -113,7 +122,12 @@ class QdrantBibliothekarIndex:
             if not isinstance(item, dict):
                 continue
             payload = item.get("payload") if isinstance(item.get("payload"), dict) else {}
-            if payload.get("instance_name") != instance:
+            if (
+                payload.get("instance_name") != instance
+                or payload.get("schema") != QDRANT_BIBLIOTHEKAR_PAYLOAD_SCHEMA
+                or payload.get("embedding_model") != embedding_model
+                or payload.get("embedding_dimensions") != embedding_dimensions
+            ):
                 continue
             chunk_id = str(payload.get("chunk_id") or "").strip()
             if not chunk_id:
