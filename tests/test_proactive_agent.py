@@ -1443,6 +1443,50 @@ def test_reflection_planner_is_idempotent_per_source_memory(tmp_path) -> None:
     assert len([entry for entry in account_store.read_memory_entries(account_id) if entry.get("proactive_plan_fingerprint")]) == 9
 
 
+def test_reflection_planner_does_not_write_memories_when_route_policy_blocks(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_goal",
+            "kind": "therapy_goal",
+            "user_text": "Spaziergang planen.",
+            "created_at": "2026-06-15T08:00:00+00:00",
+            "updated_at": "2026-06-15T08:00:00+00:00",
+        },
+    )
+
+    result = run_proactive_reflection_planner(
+        account_store,
+        account_id,
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.skipped_reason == "no_private_route"
+    assert result.created_memory_ids == ()
+    assert result.queued_item_ids == ()
+    assert [entry["id"] for entry in account_store.read_memory_entries(account_id)] == ["mem_goal"]
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
+def test_reflection_planner_honors_zero_max_items_without_writes(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.append_structured_memory_entry(account_id, {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spaziergang planen."})
+
+    result = run_proactive_reflection_planner(account_store, account_id, max_items=0, now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))
+
+    assert result.skipped_reason == "max_items_reached"
+    assert result.created_memory_ids == ()
+    assert result.queued_item_ids == ()
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
 def test_reflection_planner_skips_when_risk_memory_is_active(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

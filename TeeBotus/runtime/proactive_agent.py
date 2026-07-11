@@ -492,6 +492,8 @@ def run_proactive_reflection_planner(
 ) -> ProactivePlanningResult:
     resolved_now = now or datetime.now(timezone.utc)
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
+    if max_items <= 0:
+        return ProactivePlanningResult(account_id, skipped_reason="max_items_reached")
     if not state["proactive"]["enabled"]:
         return ProactivePlanningResult(account_id, skipped_reason="proactive_disabled")
     if active_proactive_risk_memory_ids(account_store, account_id, now=resolved_now):
@@ -506,6 +508,15 @@ def run_proactive_reflection_planner(
         fingerprint = _proactive_plan_fingerprint(account_id, source)
         if fingerprint in existing_fingerprints:
             continue
+        preflight = proactive_policy_decision(
+            account_store,
+            account_id,
+            category="reminder",
+            now=resolved_now,
+            item={"risk_gate": "none"},
+        )
+        if not preflight.allowed:
+            return ProactivePlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids), preflight.reason)
         plan_memory_ids = _append_proactive_planner_memory_entries(
             account_store,
             account_id,
