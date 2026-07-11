@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+from contextlib import nullcontext
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -84,7 +85,8 @@ def status_auth_state_authorized(account_store: AccountStore, account_id: str) -
     if TOKEN_HEX_RE.fullmatch(str(account_id or "").strip().casefold()) is None:
         return False
     try:
-        state = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
+        with _status_auth_lock(account_store, account_id):
+            state = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
     except (AccountStoreError, OSError, ValueError):
         return False
     return bool(state.get("authorized") is True)
@@ -94,7 +96,8 @@ def status_auth_state_admin_opted_out(account_store: AccountStore, account_id: s
     if TOKEN_HEX_RE.fullmatch(str(account_id or "").strip().casefold()) is None:
         return False
     try:
-        state = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
+        with _status_auth_lock(account_store, account_id):
+            state = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
     except (AccountStoreError, OSError, ValueError):
         return False
     return bool(state.get("admin_opt_out") is True)
@@ -148,27 +151,28 @@ def authorize_status_recipient(
     source: str = "runtime_code",
 ) -> dict[str, Any]:
     timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
-    try:
-        current = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
-    except (AccountStoreError, OSError, ValueError):
-        current = {}
-    state = dict(current)
-    state.update(
-        {
-            "schema_version": 1,
-            "authorized": True,
-            "authorized_at": state.get("authorized_at") or timestamp,
-            "updated_at": timestamp,
-            "source": source,
-            "admin_opt_out": False,
-            "last_identity_key": event.identity_key,
-            "last_channel": event.channel,
-            "last_chat_id": event.chat_id,
-            "last_chat_type": event.chat_type,
-            "last_adapter_slot": event.adapter_slot,
-        }
-    )
-    account_store.write_status_auth_state(account_id, state)
+    with _status_auth_lock(account_store, account_id):
+        try:
+            current = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
+        except (AccountStoreError, OSError, ValueError):
+            current = {}
+        state = dict(current)
+        state.update(
+            {
+                "schema_version": 1,
+                "authorized": True,
+                "authorized_at": state.get("authorized_at") or timestamp,
+                "updated_at": timestamp,
+                "source": source,
+                "admin_opt_out": False,
+                "last_identity_key": event.identity_key,
+                "last_channel": event.channel,
+                "last_chat_id": event.chat_id,
+                "last_chat_type": event.chat_type,
+                "last_adapter_slot": event.adapter_slot,
+            }
+        )
+        account_store.write_status_auth_state(account_id, state)
     return state
 
 
@@ -181,27 +185,28 @@ def deauthorize_status_recipient(
     source: str = "runtime_admin_command",
 ) -> dict[str, Any]:
     timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
-    try:
-        current = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
-    except (AccountStoreError, OSError, ValueError):
-        current = {}
-    state = dict(current)
-    state.update(
-        {
-            "schema_version": 1,
-            "authorized": False,
-            "admin_opt_out": True,
-            "deauthorized_at": timestamp,
-            "updated_at": timestamp,
-            "source": source,
-            "last_identity_key": event.identity_key,
-            "last_channel": event.channel,
-            "last_chat_id": event.chat_id,
-            "last_chat_type": event.chat_type,
-            "last_adapter_slot": event.adapter_slot,
-        }
-    )
-    account_store.write_status_auth_state(account_id, state)
+    with _status_auth_lock(account_store, account_id):
+        try:
+            current = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
+        except (AccountStoreError, OSError, ValueError):
+            current = {}
+        state = dict(current)
+        state.update(
+            {
+                "schema_version": 1,
+                "authorized": False,
+                "admin_opt_out": True,
+                "deauthorized_at": timestamp,
+                "updated_at": timestamp,
+                "source": source,
+                "last_identity_key": event.identity_key,
+                "last_channel": event.channel,
+                "last_chat_id": event.chat_id,
+                "last_chat_type": event.chat_type,
+                "last_adapter_slot": event.adapter_slot,
+            }
+        )
+        account_store.write_status_auth_state(account_id, state)
     return state
 
 
@@ -229,3 +234,8 @@ def _normalize_chat_type(chat_type: Any) -> str:
 
 def _is_private_chat_type(chat_type: Any) -> bool:
     return _normalize_chat_type(chat_type) == "private"
+
+
+def _status_auth_lock(account_store: AccountStore, account_id: str):
+    lock = getattr(account_store, "account_memory_lock", None)
+    return lock(account_id) if callable(lock) else nullcontext()
