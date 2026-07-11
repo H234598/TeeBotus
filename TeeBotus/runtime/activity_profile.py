@@ -67,6 +67,17 @@ def contact_timing_decision(
     now: datetime | None = None,
     route: Mapping[str, Any] | None = None,
 ) -> ContactTimingDecision:
+    with account_store.account_memory_lock(account_id):
+        return _contact_timing_decision_unlocked(account_store, account_id, now=now, route=route)
+
+
+def _contact_timing_decision_unlocked(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    now: datetime | None = None,
+    route: Mapping[str, Any] | None = None,
+) -> ContactTimingDecision:
     resolved_now = _aware(now or local_now())
     state = account_store.read_agent_state(account_id)
     profile = state.get("activity_profile")

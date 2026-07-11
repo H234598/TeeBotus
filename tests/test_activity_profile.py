@@ -148,6 +148,60 @@ def test_record_account_activity_serializes_concurrent_state_updates(tmp_path, m
     }
 
 
+def test_contact_timing_reads_profile_under_account_lock(tmp_path, monkeypatch) -> None:
+    first = store(tmp_path)
+    second = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    identity = signal_identity_key(source_uuid="timing-lock")
+    account_id = first.resolve_or_create_account(identity)
+    state = {"active": 0, "maximum": 0}
+    state_lock = threading.Lock()
+    errors: list[BaseException] = []
+    original_read = AccountStore.read_agent_state
+
+    def slow_read(account_store, current_account_id):
+        with state_lock:
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+        try:
+            time.sleep(0.03)
+            return original_read(account_store, current_account_id)
+        finally:
+            with state_lock:
+                state["active"] -= 1
+
+    monkeypatch.setattr(AccountStore, "read_agent_state", slow_read)
+
+    def record() -> None:
+        try:
+            record_account_activity(
+                first,
+                account_id,
+                event(identity),
+                now=datetime(2026, 6, 15, 9, 0, tzinfo=LOCAL),
+            )
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    def decide() -> None:
+        try:
+            contact_timing_decision(
+                second,
+                account_id,
+                now=datetime(2026, 6, 15, 9, 0, tzinfo=LOCAL),
+            )
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    threads = [threading.Thread(target=record), threading.Thread(target=decide)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert state["maximum"] == 1
+
+
 def test_activity_profile_ignores_observations_older_than_history_window() -> None:
     now = datetime(2026, 6, 15, 12, 0, tzinfo=LOCAL)
     observations = [
