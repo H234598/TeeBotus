@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from TeeBotus.decisions.reminder import ReminderDecision
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
@@ -30,6 +30,18 @@ def test_parse_reminder_with_relative_time_and_loose_wording() -> None:
     assert intent.is_request is True
     assert intent.due_at == "2026-06-15T12:30:00+00:00"
     assert intent.subject == "Wasser zu trinken"
+
+
+def test_parse_reminder_default_now_uses_configured_local_timezone(monkeypatch) -> None:
+    local = timezone(timedelta(hours=2))
+    monkeypatch.setattr(
+        "TeeBotus.runtime.reminder_intent.local_now",
+        lambda: datetime(2026, 6, 15, 12, tzinfo=local),
+    )
+
+    intent = parse_reminder_intent("Erinnere mich morgen um 9 an den Termin")
+
+    assert intent.due_at == "2026-06-16T09:00:00+02:00"
 
 
 def test_parse_reminder_without_time_asks_for_missing_time() -> None:

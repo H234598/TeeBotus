@@ -15,6 +15,7 @@ from TeeBotus.runtime.proactive_agent import (
     queue_proactive_message,
     set_proactive_categories,
 )
+from TeeBotus.runtime.timezone import local_now
 
 StructuredReminderRunner = Callable[[str, type[Any]], Any]
 
@@ -121,7 +122,7 @@ def parse_reminder_intent(text: str, *, now: datetime | None = None) -> Reminder
     raw = str(text or "").strip()
     if not raw or not REMINDER_REQUEST_RE.search(_normalize(raw)):
         return ReminderIntent(False)
-    resolved_now = now or datetime.now(timezone.utc).astimezone()
+    resolved_now = now or local_now()
     due_at = _parse_due_at(raw, resolved_now)
     subject = _reminder_subject(raw)
     return ReminderIntent(True, due_at=due_at, subject=subject, missing_time=not bool(due_at))
