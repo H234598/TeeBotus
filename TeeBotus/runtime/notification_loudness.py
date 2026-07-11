@@ -110,6 +110,25 @@ NOTIFICATION_LOUDNESS_NON_ASSERTIVE_STARTS = (
     "sofern ",
     "angenommen ",
 )
+NOTIFICATION_LOUDNESS_HABITUAL_MARKERS = (
+    "usually",
+    "always",
+    "normally",
+    "generally",
+    "typically",
+    "regularly",
+    "often",
+    "sometimes",
+    "never",
+    "meistens",
+    "normalerweise",
+    "immer",
+    "häufig",
+    "oft",
+    "manchmal",
+    "nie",
+    "grundsätzlich",
+)
 NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "stell ",
     "stelle ",
@@ -470,6 +489,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if has_notification_context and _notification_loudness_has_uncertainty(normalized):
         return None
     if has_notification_context and _notification_loudness_has_historical_marker(normalized):
+        return None
+    if has_notification_context and _notification_loudness_has_habitual_marker(normalized):
         return None
     if has_notification_context and normalized.startswith(NOTIFICATION_LOUDNESS_NON_ASSERTIVE_STARTS):
         return None
@@ -1075,6 +1096,10 @@ def _notification_loudness_has_uncertainty(normalized: str) -> bool:
 
 def _notification_loudness_has_historical_marker(normalized: str) -> bool:
     return any(_contains_normalized_phrase(normalized, phrase.strip()) for phrase in NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES)
+
+
+def _notification_loudness_has_habitual_marker(normalized: str) -> bool:
+    return any(_contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_HABITUAL_MARKERS)
 
 
 def _notification_loudness_is_non_declarative(text: str, normalized: str) -> bool:

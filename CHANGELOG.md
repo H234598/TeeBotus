@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.121 - 2026-07-12
+
+- Ignore habitual notification-loudness statements as current state.
+
 ## 1.9.120 - 2026-07-12
 
 - Ignore negated keep/leave requests as completed loudness states.
