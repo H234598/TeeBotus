@@ -4338,6 +4338,25 @@ def test_memory_ranking_uses_entry_order_as_recent_fallback(tmp_path):
     assert store.rank_structured_memory_ids(account_id, query_text="mond", limit=2) == ("mem_second", "mem_first")
 
 
+def test_memory_ranking_normalizes_legacy_id_whitespace(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+
+    ranked = store._rank_structured_memory_entries(
+        [{"id": " mem_legacy ", "user_text": "Mond", "keywords": ["mond"]}],
+        {
+            "index": {
+                "recent_ids": ["mem_legacy"],
+                "accessed_ids": [],
+                "keywords": {"mond": ["mem_legacy"]},
+                "semantic_cache": {"enabled": False, "entries": {}},
+            }
+        },
+        "mond",
+    )
+
+    assert [entry["id"] for entry in ranked] == [" mem_legacy "]
+
+
 def test_structured_account_memory_selection_can_exclude_loaded_ids(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

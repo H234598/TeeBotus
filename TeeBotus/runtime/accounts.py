@@ -3609,14 +3609,25 @@ class AccountStore:
         index_doc: dict[str, Any],
         query_text: str,
     ) -> list[dict[str, Any]]:
-        entries_by_id = {str(entry.get("id", "")): entry for entry in entries if isinstance(entry, dict) and str(entry.get("id", ""))}
+        entries_by_id = {
+            memory_id: entry
+            for entry in entries
+            if isinstance(entry, dict)
+            for memory_id in [str(entry.get("id") or "").strip()]
+            if memory_id
+        }
         nested_index = index_doc.get("index") if isinstance(index_doc.get("index"), dict) else {}
         recent_values = nested_index.get("recent_ids") if isinstance(nested_index.get("recent_ids"), list) else []
-        recent_ids = [str(value or "") for value in recent_values if str(value or "")]
+        recent_ids = [memory_id for value in recent_values if (memory_id := str(value or "").strip())]
         accessed_values = nested_index.get("accessed_ids") if isinstance(nested_index.get("accessed_ids"), list) else []
-        accessed_ids = [str(value or "") for value in accessed_values if str(value or "")]
+        accessed_ids = [memory_id for value in accessed_values if (memory_id := str(value or "").strip())]
         if not recent_ids:
-            recent_ids = [str(entry.get("id", "")) for entry in entries if isinstance(entry, dict) and str(entry.get("id", ""))]
+            recent_ids = [
+                memory_id
+                for entry in entries
+                if isinstance(entry, dict)
+                if (memory_id := str(entry.get("id") or "").strip())
+            ]
         accessed_positions: dict[str, int] = {}
         for position, memory_id in enumerate(accessed_ids):
             accessed_positions.setdefault(memory_id, position)
@@ -3631,7 +3642,7 @@ class AccountStore:
             if not isinstance(values, list):
                 continue
             for memory_id in values:
-                resolved_id = str(memory_id or "")
+                resolved_id = str(memory_id or "").strip()
                 if resolved_id in entries_by_id:
                     scores[resolved_id] = scores.get(resolved_id, 0) + 10
         semantic_cache = nested_index.get("semantic_cache") if isinstance(nested_index.get("semantic_cache"), dict) else {}
@@ -3641,7 +3652,7 @@ class AccountStore:
             query_set = set(query_keywords)
             query_vector = _account_memory_embedding(query_text)
             for memory_id, metadata in semantic_entries.items():
-                resolved_id = str(memory_id or "")
+                resolved_id = str(memory_id or "").strip()
                 if resolved_id not in entries_by_id or not isinstance(metadata, dict):
                     continue
                 signature = metadata.get("signature") if isinstance(metadata.get("signature"), list) else []
