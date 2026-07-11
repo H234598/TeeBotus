@@ -242,6 +242,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_plan2_optional_extras.py",
     "tests/test_youtube_parser_stats.py",
     "tests/test_youtube_parser_misses_report.py",
+    "tests/test_local_transcription.py",
 )
 LEGACY_IMPORT_TEST_PATTERNS: tuple[str, ...] = ("tests/test_legacy_user_memory_import.py",)
 PLAN2_DEFAULT_INSTANCE_NAMES: tuple[str, ...] = ("Bote_der_Wahrheit", "Depressionsbot")
