@@ -700,6 +700,8 @@ def _fallback_model_status(value: object) -> str:
 
 
 def mcp_tool_status_lines(mcp_tools: Mapping[str, Mapping[str, Any]] | None = None) -> list[str]:
+    if mcp_tools is not None and not isinstance(mcp_tools, Mapping):
+        return ["MCP Tools", "- Konfiguration: ungueltig (Mapping erwartet)"]
     configured = {str(name or "").strip().casefold(): config for name, config in (mcp_tools or {}).items() if str(name or "").strip()}
     allowed: list[str] = []
     guarded: list[str] = []

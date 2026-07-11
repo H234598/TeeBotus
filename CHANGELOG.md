@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.27 - 2026-07-11
+
+- Diagnose malformed MCP status configuration instead of raising during
+  status formatting.
+
 ## 1.9.26 - 2026-07-11
 
 - Redact secrets and credentials from account-memory health error lines.

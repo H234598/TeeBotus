@@ -25,6 +25,7 @@ from TeeBotus.core.status import (
     build_status_reply,
     codex_history_status_lines,
     github_commit_history_url,
+    mcp_tool_status_lines,
 )
 from TeeBotus.runtime.accounts import (
     ACCOUNT_KEYRING_FILENAME,
@@ -222,6 +223,13 @@ def test_status_does_not_crash_on_malformed_fallback_configuration(tmp_path: Pat
     )
 
     assert "- Ersatzmodelle: keine (kein aktiver Ersatz fuer Chat/Textantworten)" in text
+
+
+def test_mcp_status_reports_invalid_configuration() -> None:
+    assert mcp_tool_status_lines(["not", "a", "mapping"]) == [
+        "MCP Tools",
+        "- Konfiguration: ungueltig (Mapping erwartet)",
+    ]
 
 
 def test_account_secret_health_uses_normalized_instance_name(tmp_path: Path) -> None:
