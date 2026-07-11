@@ -1,26 +1,19 @@
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from TeeBotus.bot import _resolve_instance_name, _resolve_instruction_path, _resolve_openai_api_key
-from TeeBotus.instructions import load_instructions
-from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
+from TeeBotus.bot import _resolve_instance_name, _resolve_instruction_path, _resolve_openai_api_key  # noqa: E402
+from TeeBotus.instructions import load_instructions  # noqa: E402
+from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient  # noqa: E402
+from TeeBotus.runtime.dotenv import load_dotenv_defaults  # noqa: E402
 
 
 def load_dotenv(path: Path) -> None:
-    if not path.exists():
-        return
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", maxsplit=1)
-        os.environ.setdefault(key.strip(), value.strip())
+    load_dotenv_defaults(path)
 
 
 def main() -> int:

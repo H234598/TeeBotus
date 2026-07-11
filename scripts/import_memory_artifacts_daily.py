@@ -16,6 +16,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from TeeBotus.runtime.accounts import USER_MEMORY_ENTRIES_FILENAME  # noqa: E402
+from TeeBotus.runtime.dotenv import load_dotenv_defaults  # noqa: E402
 from scripts.import_legacy_user_memory import import_legacy_user_memory  # noqa: E402
 from scripts.migrate_account_memory_to_database import (  # noqa: E402
     _apply_backend_overrides,
@@ -383,23 +384,7 @@ def _render_markdown_report(report: dict[str, Any]) -> str:
 
 
 def _load_dotenv(path: Path) -> None:
-    if not path.exists():
-        return
-    for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if not key or key in os.environ:
-            continue
-        os.environ[key] = _dotenv_value(value.strip())
-
-
-def _dotenv_value(value: str) -> str:
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        return value[1:-1]
-    return value
+    load_dotenv_defaults(path)
 
 
 def _normalize_instance_selection(values: Iterable[str]) -> tuple[str, ...]:

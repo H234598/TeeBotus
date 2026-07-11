@@ -15,6 +15,7 @@ if str(REPO_ROOT) not in sys.path:
 
 from TeeBotus.benchmarks.reporting import render_markdown  # noqa: E402
 from TeeBotus.artifact_outputs import obsidian_incoming_path  # noqa: E402
+from TeeBotus.runtime.dotenv import load_dotenv_defaults  # noqa: E402
 from TeeBotus.benchmarks.suite import (  # noqa: E402,F401
     BENCHMARK_CONTEXT_DEPENDENCIES,
     BENCHMARK_RANKING_NAME_SETS,
@@ -179,24 +180,8 @@ def _resolved_instances_dir(env: Mapping[str, str]) -> Path:
 
 def _env_with_dotenv_defaults(env: Mapping[str, str], path: Path) -> dict[str, str]:
     merged = dict(env)
-    if not path.exists():
-        return merged
-    for raw_line in path.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
-            continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        if not key or key in merged:
-            continue
-        merged[key] = _clean_dotenv_value(value.strip())
+    load_dotenv_defaults(path, environ=merged)
     return merged
-
-
-def _clean_dotenv_value(value: str) -> str:
-    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"'", '"'}:
-        return value[1:-1]
-    return value
 
 
 if __name__ == "__main__":

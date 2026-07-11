@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import builtins
+import os
 
+from scripts import rewrite_codex_history_times
 from TeeBotus.admin.accounts_report import runtime_report_env
 from TeeBotus.runtime.dotenv import load_dotenv_defaults, load_project_dotenv_for_instances, project_root_for_instances_dir
 
@@ -129,3 +131,14 @@ def test_runtime_report_env_loads_project_dotenv_as_defaults(tmp_path) -> None:
 
     assert env["TEEBOTUS_RUNTIME_CHANNELS"] == "telegram,signal"
     assert env["PRESERVE_ME"] == "from_process"
+
+
+def test_codex_history_rewrite_keeps_process_secrets_over_dotenv(tmp_path, monkeypatch) -> None:
+    dotenv_path = tmp_path / ".env"
+    dotenv_path.write_text("OPENAI_API_KEY=stale-dotenv-key\nNEW_SETTING=from-dotenv\n", encoding="utf-8")
+    monkeypatch.setenv("OPENAI_API_KEY", "process-key")
+
+    rewrite_codex_history_times._load_dotenv(dotenv_path)
+
+    assert os.environ["OPENAI_API_KEY"] == "process-key"
+    assert os.environ["NEW_SETTING"] == "from-dotenv"
