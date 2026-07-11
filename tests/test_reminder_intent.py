@@ -44,6 +44,24 @@ def test_parse_reminder_default_now_uses_configured_local_timezone(monkeypatch) 
     assert intent.due_at == "2026-06-16T09:00:00+02:00"
 
 
+def test_parse_reminder_weekday_can_target_later_today() -> None:
+    now = datetime(2026, 6, 15, 8, 0, tzinfo=timezone.utc)
+
+    intent = parse_reminder_intent("Erinnere mich am Montag um 9 an den Termin", now=now)
+
+    assert intent.due_at == "2026-06-15T09:00:00+00:00"
+
+
+def test_parse_reminder_does_not_queue_past_today_time() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich heute um 9 an den Termin",
+        now=datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc),
+    )
+
+    assert intent.missing_time is True
+    assert intent.due_at == ""
+
+
 def test_parse_reminder_without_time_asks_for_missing_time() -> None:
     intent = parse_reminder_intent("Sag mir bitte Bescheid wegen dem Termin", now=fixed_now())
 

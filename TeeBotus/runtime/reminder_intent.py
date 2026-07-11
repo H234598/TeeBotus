@@ -219,15 +219,21 @@ def _parse_due_at(text: str, now: datetime) -> str:
         if re.search(rf"\b{word}\b", lowered):
             hour, minute = _time_in_text(text, default_hour=9)
             due = normalized_now + timedelta(days=offset)
-            return _iso(due.replace(hour=hour, minute=minute, second=0, microsecond=0))
+            candidate = due.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            if candidate <= normalized_now:
+                return ""
+            return _iso(candidate)
     weekday = DAY_WORD_RE.search(lowered)
     if weekday:
         target_weekday = DAY_WORDS[weekday.group("day").casefold()]
-        days = (target_weekday - normalized_now.weekday()) % 7 or 7
+        days = (target_weekday - normalized_now.weekday()) % 7
         hour = int(weekday.group("hour") or 9)
         minute = int(weekday.group("minute") or 0)
         due = normalized_now + timedelta(days=days)
-        return _iso(due.replace(hour=hour, minute=minute, second=0, microsecond=0))
+        candidate = due.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        if candidate <= normalized_now:
+            candidate += timedelta(days=7)
+        return _iso(candidate)
     time_match = TIME_RE.search(text)
     if time_match:
         hour = int(time_match.group("hour"))
