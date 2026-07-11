@@ -1739,7 +1739,11 @@ def _account_memory_fallback_warning(store: AccountStore, account_id: str) -> st
         stale_parts.append("collections")
     if not stale_parts:
         return ""
-    error = redact_status_text(getattr(backend, "last_fallback_sync_error", "") or "")
+    error_for_account = getattr(backend, "fallback_sync_error_for_account", None)
+    if callable(error_for_account):
+        error = redact_status_text(str(error_for_account(account_id) or ""))
+    else:
+        error = redact_status_text(getattr(backend, "last_fallback_sync_error", "") or "")
     suffix = f":{error}" if error else ""
     return f" warning=fallback_sync_stale:{'+'.join(stale_parts)}{suffix}"
 

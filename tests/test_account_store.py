@@ -2430,6 +2430,58 @@ def test_account_memory_fallback_marks_both_read_failures_as_unsafe(caplog) -> N
     assert "FAILOVER IS BLOCKED" in caplog.text
 
 
+def test_account_memory_fallback_keeps_sync_errors_separate_per_account() -> None:
+    class Backend:
+        def __init__(self) -> None:
+            self.errors: dict[str, str] = {}
+            self.entries: dict[str, list[dict[str, str]]] = {}
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            error = self.errors.get(account_id)
+            if error:
+                raise OSError(error)
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            self.entries[account_id] = [dict(row) for row in rows]
+
+    account_a = "a" * 128
+    account_b = "b" * 128
+    primary = Backend()
+    fallback = Backend()
+    primary.errors.update({account_a: "primary A", account_b: "primary B"})
+    fallback.errors.update({account_a: "fallback A", account_b: "fallback B"})
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    with pytest.raises(AccountStoreError, match="fallback A"):
+        backend.read_entries(account_a)
+    with pytest.raises(AccountStoreError, match="fallback B"):
+        backend.read_entries(account_b)
+
+    assert "fallback A" in backend.fallback_sync_error_for_account(account_a)
+    assert "fallback B" in backend.fallback_sync_error_for_account(account_b)
+    assert "fallback B" in backend.last_fallback_sync_error
+
+    primary.errors.pop(account_a)
+    fallback.errors.pop(account_a)
+    backend.read_entries(account_a)
+
+    assert backend.fallback_sync_error_for_account(account_a) == ""
+    assert "fallback B" in backend.fallback_sync_error_for_account(account_b)
+
+
+def test_account_memory_fallback_keeps_read_and_write_errors_separate() -> None:
+    account_id = "a" * 128
+    backend = WarningFallbackAccountMemoryBackend(object(), object(), label="Demo:sqlite")
+
+    backend._set_fallback_sync_error("read_entries", account_id, "read failed")
+    backend._set_fallback_sync_error("write_entries", account_id, "write failed")
+    backend._clear_fallback_sync_error("read_entries", account_id)
+
+    assert backend.fallback_sync_error_for_account(account_id) == "write failed"
+    assert backend.last_fallback_sync_error == "write failed"
+
+
 def test_account_memory_fallback_preserves_diagnostic_secondary_read_failure(caplog) -> None:
     class PrimaryBackend:
         last_entry_read_error = "corrupt primary row"

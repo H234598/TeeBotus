@@ -5312,6 +5312,42 @@ def test_account_memory_index_health_reports_stale_fallback_sync(tmp_path: Path,
     ]
 
 
+def test_account_memory_index_health_uses_account_specific_fallback_error(tmp_path: Path, monkeypatch) -> None:
+    account_a = "a" * 128
+    account_b = "b" * 128
+    for account_id in (account_a, account_b):
+        (tmp_path / "instances" / "Demo" / "data" / "accounts" / "accounts" / account_id).mkdir(parents=True)
+
+    class Backend:
+        stale_fallback_entry_account_ids = (account_a, account_b)
+        stale_fallback_index_account_ids: tuple[str, ...] = ()
+        stale_fallback_collection_account_ids: tuple[str, ...] = ()
+
+        def fallback_sync_error_for_account(self, account_id: str) -> str:
+            return f"error-{account_id[0]}"
+
+    class FakeStore:
+        account_memory_backend = Backend()
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def _read_account_profile(self, _account_id: str) -> dict[str, object]:
+            return {"status": "active"}
+
+        def check_structured_memory_index(self, _account_id: str, *, require_resolvable: bool = True) -> object:
+            return SimpleNamespace(ok=True, errors=())
+
+    monkeypatch.setattr("TeeBotus.core.status.AccountStore", FakeStore)
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        f"account_memory=Demo/{account_a} status=ok warning=fallback_sync_stale:entries:error-a",
+        f"account_memory=Demo/{account_b} status=ok warning=fallback_sync_stale:entries:error-b",
+    ]
+
+
 def test_account_memory_index_health_reports_stale_instance_collection_sync(tmp_path: Path, monkeypatch) -> None:
     account_id = "a" * 128
     account_dir = tmp_path / "instances" / "Demo" / "data" / "accounts" / "accounts" / account_id
