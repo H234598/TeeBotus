@@ -834,7 +834,11 @@ def apply_proactive_llm_plan(
     if not isinstance(payload, Mapping):
         audit_id = _append_proactive_llm_audit_event(account_store, account_id, event_type="llm_plan_rejected", reason="payload_not_object", payload=payload, now=resolved_now)
         return ProactiveLLMPlanningResult(account_id, errors=("payload_not_object",), audit_event_ids=(audit_id,))
-    if int(payload.get("schema_version") or 0) != PROACTIVE_LLM_PLAN_SCHEMA_VERSION:
+    try:
+        schema_version = int(payload.get("schema_version") or 0)
+    except (TypeError, ValueError):
+        schema_version = 0
+    if schema_version != PROACTIVE_LLM_PLAN_SCHEMA_VERSION:
         audit_id = _append_proactive_llm_audit_event(account_store, account_id, event_type="llm_plan_rejected", reason="unsupported_schema_version", payload=payload, now=resolved_now)
         return ProactiveLLMPlanningResult(account_id, errors=("unsupported_schema_version",), audit_event_ids=(audit_id,))
     decisions = payload.get("decisions")

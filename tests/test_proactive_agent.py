@@ -1716,6 +1716,24 @@ def test_llm_plan_validator_rejects_malformed_json_without_mutation(tmp_path) ->
     assert audit[0]["reason"].startswith("invalid_json:")
 
 
+@pytest.mark.parametrize("schema_version", ["invalid", {}, []])
+def test_llm_plan_rejects_non_numeric_schema_version_without_crashing(tmp_path, schema_version) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {"schema_version": schema_version, "decisions": []},
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ("unsupported_schema_version",)
+    assert len(result.audit_event_ids) == 1
+    assert account_store.read_proactive_outbox(account_id) == []
+    assert account_store.read_proactive_audit(account_id)[0]["reason"] == "unsupported_schema_version"
+
+
 def test_llm_plan_validator_rejects_unsafe_message_and_queues_review_gate(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
