@@ -676,5 +676,5 @@ class RuntimeStateStore(RuntimeState):
             try:
                 self._link_vault.write_json(self.link_notifications_path, {"notifications": notifications})
                 self.link_notifications_persistence_error = ""
-            except AccountStoreError as exc:
+            except (AccountStoreError, OSError, TypeError, ValueError) as exc:
                 self.link_notifications_persistence_error = str(exc)
