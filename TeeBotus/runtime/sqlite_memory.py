@@ -57,6 +57,22 @@ class SQLiteMemoryConfig:
             raise AccountStoreError(
                 f"{SQLITE_PATH_ENV} and {SQLITE_FALLBACK_PATH_ENV} must point to different files"
             )
+        if path.exists() and resolved_fallback_path.exists():
+            try:
+                path_identity = path.stat()
+                fallback_identity = resolved_fallback_path.stat()
+            except OSError:
+                path_identity = fallback_identity = None
+            if path_identity is not None and fallback_identity is not None and (
+                path_identity.st_dev,
+                path_identity.st_ino,
+            ) == (
+                fallback_identity.st_dev,
+                fallback_identity.st_ino,
+            ):
+                raise AccountStoreError(
+                    f"{SQLITE_PATH_ENV} and {SQLITE_FALLBACK_PATH_ENV} must not be hardlinks to the same file"
+                )
         return cls(path=path, fallback_path=resolved_fallback_path)
 
 
