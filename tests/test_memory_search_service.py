@@ -34,6 +34,22 @@ def test_merge_memory_candidates_deduplicates_and_prefers_multi_source_hits() ->
     assert merged[0].score > 0.8
 
 
+def test_memory_search_limits_zero_return_no_results_without_access(tmp_path) -> None:
+    store, account_id = _store_with_entries(tmp_path)
+    service = MemorySearchService(account_store=store, instance_name="Depressionsbot")
+
+    result = service.search(account_id, "Schlaf", limit=0)
+
+    assert result.entries == ()
+    assert result.candidates == ()
+    entries = {entry["id"]: entry for entry in store.read_memory_entries(account_id)}
+    assert entries["mem_sleep"].get("access_count") in (None, 0)
+
+
+def test_merge_memory_candidates_limit_zero_returns_no_results() -> None:
+    assert merge_memory_candidates([MemoryCandidate("mem_a", 1.0)], limit=0) == ()
+
+
 def test_memory_search_service_uses_local_search_by_default(tmp_path) -> None:
     store, account_id = _store_with_entries(tmp_path)
     service = MemorySearchService(account_store=store, instance_name="Depressionsbot")
@@ -185,6 +201,26 @@ def test_qdrant_memory_search_wraps_semantic_results_and_respects_excludes(tmp_p
     assert [candidate.memory_id for candidate in candidates] == ["mem_plan"]
     assert candidates[0].sources == ("qdrant",)
     assert semantic_index.calls == [("Depressionsbot", account_id, "Tagesstruktur", 5)]
+
+
+def test_qdrant_memory_search_normalizes_ids_before_excluding(tmp_path) -> None:
+    _store, account_id = _store_with_entries(tmp_path)
+    semantic_index = _FakeSemanticIndex(
+        [
+            QdrantMemoryResult(
+                memory_id=" mem_sleep ",
+                account_id=account_id,
+                instance_name="Depressionsbot",
+                score=1.5,
+                payload={},
+            )
+        ]
+    )
+    search = QdrantMemorySearch(semantic_index, "Depressionsbot")
+
+    candidates = search.search(account_id, "Schlaf", limit=5, exclude_ids=("mem_sleep",))
+
+    assert candidates == ()
 
 
 def test_memory_search_service_falls_back_to_local_when_qdrant_fails(tmp_path) -> None:

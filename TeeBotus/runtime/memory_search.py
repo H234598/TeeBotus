@@ -54,8 +54,11 @@ class KeywordMemorySearch:
         exclude_ids: Iterable[str] = (),
     ) -> tuple[MemoryCandidate, ...]:
         account = validate_sha512_token(account_id, field_name="account_id")
+        search_limit = _nonnegative_int(limit, default=8)
+        if search_limit == 0:
+            return ()
         excluded = {str(memory_id or "").strip() for memory_id in exclude_ids if str(memory_id or "").strip()}
-        ranked_ids = self.account_store.rank_structured_memory_ids(account, query_text=query_text, limit=limit, exclude_ids=excluded)
+        ranked_ids = self.account_store.rank_structured_memory_ids(account, query_text=query_text, limit=search_limit, exclude_ids=excluded)
         total = max(1, len(ranked_ids))
         return tuple(
             MemoryCandidate(memory_id=memory_id, score=1.0 - (index / (total + 1)), sources=("local",))
@@ -77,16 +80,19 @@ class QdrantMemorySearch:
         exclude_ids: Iterable[str] = (),
     ) -> tuple[MemoryCandidate, ...]:
         account = validate_sha512_token(account_id, field_name="account_id")
+        search_limit = _nonnegative_int(limit, default=8)
+        if search_limit == 0:
+            return ()
         excluded = {str(memory_id or "").strip() for memory_id in exclude_ids if str(memory_id or "").strip()}
         return tuple(
-            MemoryCandidate(memory_id=result.memory_id, score=result.score, sources=("qdrant",))
+            MemoryCandidate(memory_id=memory_id, score=result.score, sources=("qdrant",))
             for result in self.qdrant_index.search(
                 instance_name=self.instance_name,
                 account_id=account,
                 query=query_text,
-                limit=limit,
+                limit=search_limit,
             )
-            if result.memory_id not in excluded
+            if (memory_id := str(result.memory_id or "").strip()) and memory_id not in excluded
         )
 
 
@@ -106,7 +112,9 @@ class MemorySearchService:
         exclude_ids: Iterable[str] = (),
     ) -> MemorySearchResult:
         account = validate_sha512_token(account_id, field_name="account_id")
-        max_results = _positive_int(limit, default=8)
+        max_results = _nonnegative_int(limit, default=8)
+        if max_results == 0:
+            return MemorySearchResult(entries=(), candidates=())
         excluded = {str(memory_id or "").strip() for memory_id in exclude_ids if str(memory_id or "").strip()}
         local_candidates = KeywordMemorySearch(self.account_store).search(account, query_text, limit=self.config.local_limit, exclude_ids=excluded)
         semantic_candidates: tuple[MemoryCandidate, ...] = ()
@@ -144,7 +152,9 @@ class MemorySearchService:
 
 
 def merge_memory_candidates(*candidate_groups: Iterable[MemoryCandidate], limit: int = 8) -> tuple[MemoryCandidate, ...]:
-    max_results = _positive_int(limit, default=8)
+    max_results = _nonnegative_int(limit, default=8)
+    if max_results == 0:
+        return ()
     merged: dict[str, MemoryCandidate] = {}
     order: dict[str, int] = {}
     counter = 0
@@ -179,3 +189,11 @@ def _positive_int(value: Any, *, default: int) -> int:
     except (TypeError, ValueError):
         parsed = default
     return max(1, parsed)
+
+
+def _nonnegative_int(value: Any, *, default: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        parsed = default
+    return max(0, parsed)
