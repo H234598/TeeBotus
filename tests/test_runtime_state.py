@@ -163,6 +163,32 @@ def test_runtime_state_store_does_not_use_legacy_unscoped_id_for_scoped_lookup(t
     assert state.get_previous_response_id("Bot", ACCOUNT_ID) == "resp-legacy"
 
 
+def test_runtime_state_store_scopes_key_fingerprint_only_lookup(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    state.set_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        "resp-scoped",
+        provider="openai",
+        model="gpt-5.5",
+        key_fingerprint="a" * 64,
+    )
+    reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID, key_fingerprint="a" * 64) == "resp-scoped"
+    assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID, key_fingerprint="b" * 64) is None
+    assert reloaded.get_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        provider="openai",
+        model="gpt-5.5",
+        key_fingerprint="b" * 64,
+    ) is None
+
+
 def test_runtime_state_store_migrates_previous_response_id_from_legacy_openai_state(tmp_path, monkeypatch):
     monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
     monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", raising=False)

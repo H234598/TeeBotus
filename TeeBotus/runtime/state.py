@@ -113,7 +113,7 @@ class RuntimeState:
         clean_provider = str(provider or "").strip().casefold()
         clean_model = str(model or "").strip()
         clean_key_fingerprint = str(key_fingerprint or "").strip().casefold()
-        if clean_provider or clean_model:
+        if clean_provider or clean_model or clean_key_fingerprint:
             stored_scope = self.previous_response_scopes.get(key)
             if stored_scope is None:
                 return None
@@ -303,7 +303,7 @@ class RuntimeStateStore(RuntimeState):
             self.previous_response_ids[key] = persisted
             if persisted_scope is not None:
                 self.previous_response_scopes[key] = persisted_scope
-            if provider or model:
+            if provider or model or key_fingerprint:
                 return super().get_previous_response_id(
                     instance_name,
                     account_id,
