@@ -18,7 +18,7 @@ from urllib.parse import urlparse
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
-from TeeBotus.artifact_outputs import DEFAULT_OBSIDIAN_INCOMING_DIR, obsidian_incoming_path
+from TeeBotus.artifact_outputs import DEFAULT_OBSIDIAN_INCOMING_DIR, obsidian_incoming_path  # noqa: E402
 _BENCHMARK_CORE_SPEC = importlib.util.spec_from_file_location(
     "teebotus_benchmark_core_for_plan2_acceptance",
     REPO_ROOT / "TeeBotus" / "benchmarks" / "core.py",
@@ -203,6 +203,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_tts_dialect.py",
     "tests/test_version_notifications.py",
     "tests/test_weather_context.py",
+    "tests/test_timezone.py",
     "tests/test_working_memory.py",
     "tests/test_llm_config.py",
     "tests/test_llm_client.py",
