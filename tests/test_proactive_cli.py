@@ -536,7 +536,7 @@ def test_proactive_cycle_tool_plan_skips_model_when_account_is_idle(tmp_path) ->
     )
 
     account = report["instances"][0]["accounts"][0]
-    assert account["tool_planning"] == {"skipped_reason": "model_planner_idle:no_candidates_or_pending_outbox"}
+    assert account["tool_planning"] == {"skipped_reason": "model_planner_idle:proactive_disabled"}
     assert account["due_items"] == []
 
 
