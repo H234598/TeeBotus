@@ -3615,6 +3615,12 @@ class AccountStore:
         recent_ids = [str(value or "") for value in recent_values if str(value or "")]
         accessed_values = nested_index.get("accessed_ids") if isinstance(nested_index.get("accessed_ids"), list) else []
         accessed_ids = [str(value or "") for value in accessed_values if str(value or "")]
+        accessed_positions: dict[str, int] = {}
+        for position, memory_id in enumerate(accessed_ids):
+            accessed_positions.setdefault(memory_id, position)
+        recent_positions: dict[str, int] = {}
+        for position, memory_id in enumerate(recent_ids):
+            recent_positions.setdefault(memory_id, position)
         if not recent_ids:
             recent_ids = [str(entry.get("id", "")) for entry in entries if isinstance(entry, dict) and str(entry.get("id", ""))]
         scores: dict[str, int] = {}
@@ -3668,8 +3674,8 @@ class AccountStore:
                     _normalize_account_memory_salience(entries_by_id[memory_id].get("salience"), entries_by_id[memory_id]),
                     _normalize_account_memory_importance(entries_by_id[memory_id].get("importance")),
                     _normalize_nonnegative_int(entries_by_id[memory_id].get("access_count")),
-                    accessed_ids.index(memory_id) if memory_id in accessed_ids else -1,
-                    recent_ids.index(memory_id) if memory_id in recent_ids else -1,
+                    accessed_positions.get(memory_id, -1),
+                    recent_positions.get(memory_id, -1),
                 ),
                 reverse=True,
             )
