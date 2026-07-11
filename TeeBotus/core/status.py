@@ -728,18 +728,18 @@ def codex_history_status_lines(
     project_root: Path | None = None,
     secret_provider: object | None = None,
 ) -> list[str]:
+    if account_store is None and project_root is None:
+        return []
+    try:
+        safe_instance_name = _safe_instance_name_for_accounts(instance_name)
+    except ValueError:
+        return [f"codex_history={_status_field_value(instance_name)} status=unknown error=invalid_instance_name"]
     if account_store is None:
-        if project_root is None:
-            return []
-        try:
-            safe_instance_name = _safe_instance_name_for_accounts(instance_name)
-        except ValueError:
-            return [f"codex_history={_status_field_value(instance_name)} status=unknown error=invalid_instance_name"]
         root = project_root.resolve() / "instances" / safe_instance_name / "data" / "accounts"
         if not root.exists():
             return [
                 (
-                    f"codex_history={_status_field_value(instance_name)} status=ok "
+                    f"codex_history={_status_field_value(safe_instance_name)} status=ok "
                     "queued=0 failed=0 total=0 latest_repo=<none> latest_prefix=<none> latest_kind=<none> "
                     "run_summaries=0 strategies=0 graphs=0 other=0"
                 )
@@ -754,7 +754,7 @@ def codex_history_status_lines(
         except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose store/key mismatches.
             return [
                 (
-                    f"codex_history={_status_field_value(instance_name)} status=unknown "
+                    f"codex_history={_status_field_value(safe_instance_name)} status=unknown "
                     f"error={_status_field_value(f'{type(exc).__name__}: {exc}')}"
                 )
             ]
@@ -762,13 +762,13 @@ def codex_history_status_lines(
     if summary.get("error"):
         return [
             (
-                f"codex_history={_status_field_value(instance_name)} status=unknown "
+                f"codex_history={_status_field_value(safe_instance_name)} status=unknown "
                 f"error={_status_field_value(summary['error'])}"
             )
         ]
     lines = [
         (
-            f"codex_history={_status_field_value(instance_name)} status={summary['status']} "
+            f"codex_history={_status_field_value(safe_instance_name)} status={summary['status']} "
             f"queued={summary['queued']} failed={summary['failed']} total={summary['total']} "
             f"latest_repo={_status_field_value(summary['latest_repo'])} "
             f"latest_prefix={_status_field_value(summary['latest_prefix'])} "
@@ -782,7 +782,7 @@ def codex_history_status_lines(
             continue
         lines.append(
             (
-                f"codex_history_repo={_status_field_value(instance_name)} "
+                f"codex_history_repo={_status_field_value(safe_instance_name)} "
                 f"repo={_status_field_value(repo.get('repo_name', '<none>'))} "
                 f"status={repo.get('status', 'unknown')} "
                 f"queued={repo.get('queued', 0)} failed={repo.get('failed', 0)} total={repo.get('total', 0)} "

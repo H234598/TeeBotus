@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.16 - 2026-07-11
+
+- Validate and normalize instance names in Codex-History status diagnostics.
+
 ## 1.9.15 - 2026-07-11
 
 - Validate and normalize instance names consistently in identity and secret

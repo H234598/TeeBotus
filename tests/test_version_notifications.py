@@ -5141,6 +5141,19 @@ def test_codex_history_status_lines_report_counts_and_latest(tmp_path: Path) -> 
     ]
 
 
+def test_codex_history_status_lines_validates_and_normalizes_instance_name(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+
+    invalid = codex_history_status_lines(instance_name="../outside", account_store=store)
+    normalized = codex_history_status_lines(instance_name=" Demo ", account_store=store)
+
+    assert invalid == ["codex_history=../outside status=unknown error=invalid_instance_name"]
+    assert normalized == [
+        "codex_history=Demo status=ok queued=0 failed=0 total=0 latest_repo=<none> latest_prefix=<none> "
+        "latest_kind=codex_run_summary run_summaries=0 strategies=0 graphs=0 other=0",
+    ]
+
+
 def test_account_memory_index_health_lines_report_broken_account(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"x" * 32))
     store = _store(tmp_path)
