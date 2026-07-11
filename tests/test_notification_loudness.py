@@ -242,6 +242,41 @@ def test_response_ignores_private_route_that_is_no_longer_current(tmp_path) -> N
     assert route_state["status"] == "pending"
 
 
+def test_scheduler_persists_legacy_route_refresh_when_prompt_is_not_due(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    set_identity_last_seen(account_store, identity, now - timedelta(hours=1))
+    state = account_store.read_agent_state(account_id)
+    state["notification_loudness"] = {
+        "schema_version": 1,
+        "routes": {
+            "TeLegram:1:chat-1": {
+                "status": "pending",
+                "route_key": "TeLegram:1:chat-1",
+                "route": {
+                    "channel": "TeLegram",
+                    "chat_id": "chat-1",
+                    "chat_type": "Private",
+                    "adapter_slot": 1,
+                    "last_seen_at": (now - timedelta(hours=1)).isoformat(timespec="seconds"),
+                },
+                "identity_key": identity,
+            }
+        },
+    }
+    account_store.write_agent_state(account_id, state)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.notification_loudness.contact_timing_decision",
+        lambda *_args, **_kwargs: type("Decision", (), {"allowed": True, "reason": "test", "profile": {}})(),
+    )
+
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=now) == ()
+    stored_route = account_store.read_agent_state(account_id)["notification_loudness"]["routes"]["TeLegram:1:chat-1"]["route"]
+    assert stored_route["channel"] == "telegram"
+
+
 def test_prompt_does_not_resurrect_case_variant_terminal_route(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

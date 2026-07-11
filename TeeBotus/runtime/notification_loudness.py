@@ -111,7 +111,7 @@ def _queue_due_notification_loudness_prompts_unlocked(
             continue
         if status != NOTIFICATION_LOUDNESS_PENDING_STATUS:
             continue
-        _refresh_route_state_from_account_routes(account_store, account_id, str(route_key), route_state)
+        state_changed = _refresh_route_state_from_account_routes(account_store, account_id, str(route_key), route_state) or state_changed
         route = route_state.get("route")
         if isinstance(route, Mapping):
             adaptive_decision = contact_timing_decision(account_store, account_id, now=resolved_now, route=route)
@@ -407,7 +407,7 @@ def _route_slot(value: Any) -> int:
         return 1
 
 
-def _refresh_route_state_from_account_routes(account_store: AccountStore, account_id: str, route_key: str, route_state: dict[str, Any]) -> None:
+def _refresh_route_state_from_account_routes(account_store: AccountStore, account_id: str, route_key: str, route_state: dict[str, Any]) -> bool:
     identity_key = str(route_state.get("identity_key") or "").strip()
     candidate_keys = [identity_key] if identity_key else []
     try:
@@ -420,9 +420,11 @@ def _refresh_route_state_from_account_routes(account_store: AccountStore, accoun
             continue
         if _route_key_from_route(route) != _normalize_route_key(route_key):
             continue
+        changed = route_state.get("identity_key") != candidate or route_state.get("route") != route
         route_state["identity_key"] = candidate
         route_state["route"] = route
-        return
+        return changed
+    return False
 
 
 def _find_route_state(routes: Mapping[str, Any], route_key: Any) -> dict[str, Any] | None:
