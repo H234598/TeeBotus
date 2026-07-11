@@ -554,6 +554,7 @@ def test_runtime_state_store_refuses_security_event_hardlink(tmp_path):
         state.append_security_event({"event": "must-not-follow"})
 
     assert outside.read_text(encoding="utf-8") == "sentinel\n"
+    assert state.security_events == []
     assert state.security_events_persistence_error
 
 
