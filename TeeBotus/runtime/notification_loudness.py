@@ -47,14 +47,6 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "can t say",
 )
 NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
-    "sind ",
-    "ist ",
-    "are ",
-    "is ",
-    "sind die ",
-    "ist die ",
-    "are the ",
-    "is the ",
     "stell ",
     "stelle ",
     "mach ",
@@ -74,6 +66,30 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "sag mir ",
     "weisst du ",
     "weißt du ",
+)
+NOTIFICATION_LOUDNESS_STATUS_LEAD_TERMS = frozenset(
+    {
+        "laut",
+        "loud",
+        "auf",
+        "an",
+        "on",
+        "aus",
+        "off",
+        "stumm",
+        "lautlos",
+        "stummgeschaltet",
+        "lautlosgeschaltet",
+        "muted",
+        "silenced",
+        "silent",
+        "ausgeschaltet",
+        "deaktiviert",
+        "abgeschaltet",
+        "disabled",
+        "nicht",
+        "not",
+    }
 )
 
 NOTIFICATION_LOUDNESS_PROMPT = (
@@ -856,6 +872,9 @@ def _notification_loudness_has_uncertainty(normalized: str) -> bool:
 def _notification_loudness_is_non_declarative(text: str, normalized: str) -> bool:
     if "?" in str(text or ""):
         return True
+    tokens = normalized.split()
+    if tokens and tokens[0] in {"sind", "ist", "are", "is"}:
+        return len(tokens) > 1 and tokens[1] not in NOTIFICATION_LOUDNESS_STATUS_LEAD_TERMS
     return normalized.startswith(NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS)
 
 

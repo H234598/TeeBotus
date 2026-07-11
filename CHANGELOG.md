@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.102 - 2026-07-12
+
+- Distinguish status fragments from inverted loudness questions.
+
 ## 1.9.101 - 2026-07-12
 
 - Ignore notification-loudness questions and requests as confirmations.
