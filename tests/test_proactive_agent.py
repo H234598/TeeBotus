@@ -1167,6 +1167,28 @@ def test_proactive_agent_route_matching_uses_normalized_channel_and_chat_type(tm
     assert route["chat_type"] == "private"
 
 
+def test_select_proactive_route_prefers_recent_activity_over_channel_priority(tmp_path) -> None:
+    account_store = store(tmp_path)
+    signal_identity = signal_identity_key(source_uuid="signal-user")
+    telegram_identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(signal_identity)
+    account_store.link_identity_to_account(telegram_identity, account_id)
+    account_store.update_identity_route(signal_identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    account_store.update_identity_route(telegram_identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+
+    identities = account_store._load_identities()
+    identities[signal_identity]["last_route"]["last_seen_at"] = "2026-06-15T10:00:00+00:00"
+    identities[signal_identity]["last_seen_at"] = "2026-06-15T10:00:00+00:00"
+    identities[telegram_identity]["last_route"]["last_seen_at"] = "2026-06-15T11:00:00+00:00"
+    identities[telegram_identity]["last_seen_at"] = "2026-06-15T11:00:00+00:00"
+    account_store._save_identities(identities)
+
+    route = select_proactive_route(account_store, account_id)
+
+    assert route is not None
+    assert route["channel"] == "telegram"
+
+
 def test_select_proactive_route_rejects_invalid_adapter_slot(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

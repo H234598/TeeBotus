@@ -2419,7 +2419,13 @@ def select_proactive_route(account_store: AccountStore, account_id: str) -> dict
         routes.append(normalized_route)
     if not routes:
         return None
-    return sorted(routes, key=lambda route: (preferred_order.get(str(route.get("channel") or "").strip().casefold(), 99), -_route_seen_timestamp(route)))[0]
+    return sorted(
+        routes,
+        key=lambda route: (
+            -_route_seen_timestamp(route),
+            preferred_order.get(str(route.get("channel") or "").strip().casefold(), 99),
+        ),
+    )[0]
 
 
 def _account_has_matching_proactive_route(account_store: AccountStore, account_id: str, route: Mapping[str, Any]) -> bool:
