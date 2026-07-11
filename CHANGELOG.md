@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.76 - 2026-07-11
+
+- Recognize natural muted notification-loudness replies.
+
 ## 1.9.75 - 2026-07-11
 
 - Recognize natural notification-loudness completion and negation phrases.

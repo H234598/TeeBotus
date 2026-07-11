@@ -799,6 +799,12 @@ def test_loudness_free_text_accepts_natural_completion_phrases() -> None:
     assert _notification_loudness_decision("Noch nicht aktiviert", pending=True) == "declined"
 
 
+def test_loudness_free_text_accepts_natural_mute_phrases() -> None:
+    assert _notification_loudness_decision("Die Nachrichten sind stumm", pending=True) == "declined"
+    assert _notification_loudness_decision("Benachrichtigungen sind ausgeschaltet", pending=True) == "declined"
+    assert _notification_loudness_decision("Keine Benachrichtigungen", pending=True) == "declined"
+
+
 def test_loudness_scheduler_does_not_duplicate_dispatching_prompt(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

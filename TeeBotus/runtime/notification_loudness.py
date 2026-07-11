@@ -222,6 +222,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             "notification",
             "notifications",
             "stumm",
+            "lautlos",
         )
     )
     confirmed_needles = (
@@ -250,6 +251,13 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "nicht gemacht",
         "nicht eingeschaltet",
         "nicht aktiviert",
+        "keine benachrichtigung",
+        "keine benachrichtigungen",
+        "benachrichtigungen aus",
+        "ausgeschaltet",
+        "deaktiviert",
+        "lautlos",
+        "stumm",
         "kann ich nicht",
         "will nicht",
         "moechte nicht",
