@@ -22,7 +22,43 @@ NOTIFICATION_LOUDNESS_MUTE_TERMS = frozenset(
 )
 NOTIFICATION_LOUDNESS_OFF_TERMS = frozenset({"ausgeschaltet", "deaktiviert", "abgeschaltet", "off", "disabled"})
 NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset(
-    {"nicht", "nie", "kein", "keine", "nichts", "nix", "weder", "ohne", "not", "never", "nothing", "neither", "without"}
+    {
+        "nicht",
+        "nie",
+        "kein",
+        "keine",
+        "keiner",
+        "keinem",
+        "keinen",
+        "keines",
+        "keinerlei",
+        "nichts",
+        "nix",
+        "weder",
+        "ohne",
+        "no",
+        "none",
+        "not",
+        "never",
+        "nothing",
+        "neither",
+        "without",
+    }
+)
+NOTIFICATION_LOUDNESS_QUANTIFIER_TERMS = frozenset(
+    {
+        "kein",
+        "keine",
+        "keiner",
+        "keinem",
+        "keinen",
+        "keines",
+        "keinerlei",
+        "nichts",
+        "no",
+        "none",
+        "nothing",
+    }
 )
 NOTIFICATION_LOUDNESS_NEGATION_PHRASES = (
     "don t",
@@ -1128,8 +1164,7 @@ def _notification_loudness_term_polarity(
                 or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
             ):
                 preceding_start = boundary_index + 1
-        preceding = tokens[preceding_start:index]
-        negation_count = _notification_loudness_negation_count(preceding)
+        negation_count = _notification_loudness_scoped_negation_count(tokens, preceding_start, index)
         if negation_count % 2:
             has_negated = True
         else:
@@ -1198,8 +1233,7 @@ def _notification_loudness_has_negated_phrase(normalized: str, phrases: tuple[st
                     or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
                 ):
                     preceding_start = boundary_index + 1
-            preceding = tokens[preceding_start:index]
-            if _notification_loudness_negation_count(preceding) % 2:
+            if _notification_loudness_scoped_negation_count(tokens, preceding_start, index) % 2:
                 return True
     return False
 
@@ -1210,6 +1244,21 @@ def _notification_loudness_negation_count(tokens: list[str]) -> int:
         phrase_tokens = phrase.split()
         width = len(phrase_tokens)
         count += sum(tokens[index : index + width] == phrase_tokens for index in range(len(tokens) - width + 1))
+    return count
+
+
+def _notification_loudness_scoped_negation_count(tokens: list[str], start: int, end: int) -> int:
+    count = _notification_loudness_negation_count(tokens[start:end])
+    clause_start = 0
+    for boundary_index in range(end - 1, -1, -1):
+        if (
+            tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+            or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+        ):
+            clause_start = boundary_index + 1
+            break
+    if clause_start < start:
+        count += sum(token in NOTIFICATION_LOUDNESS_QUANTIFIER_TERMS for token in tokens[clause_start:start])
     return count
 
 

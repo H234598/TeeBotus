@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.132 - 2026-07-12
+
+- Extend loudness negation scope to clause-bound quantifiers.
+
 ## 1.9.131 - 2026-07-12
 
 - Ignore unscoped loudness and off-state subject statements.
