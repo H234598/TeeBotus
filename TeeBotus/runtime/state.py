@@ -438,15 +438,16 @@ class RuntimeStateStore(RuntimeState):
             return nullcontext()
         return account_memory_lock_for_root(self.accounts_root, account_id)
 
-    def _read_llm_state(self, account_id: str) -> dict[str, Any]:
+    def _read_llm_state(self, account_id: str) -> tuple[dict[str, Any], str]:
         with self._llm_state_lock(account_id):
             try:
                 selected = self._account_store_for_llm_state().read_llm_state(account_id)
                 self._set_llm_state_persistence_error("")
-                return selected
+                return selected, ""
             except AccountStoreError as exc:
-                self._set_llm_state_persistence_error(str(exc))
-                return {}
+                error = str(exc)
+                self._set_llm_state_persistence_error(error)
+                return {}, error
 
     def _write_llm_state(self, account_id: str, payload: dict[str, Any]) -> None:
         with self._llm_state_lock(account_id):
@@ -457,8 +458,7 @@ class RuntimeStateStore(RuntimeState):
                 self._set_llm_state_persistence_error(str(exc))
 
     def _read_llm_previous_response(self, account_id: str) -> tuple[str | None, tuple[str, str, str] | None, str]:
-        payload = self._read_llm_state(account_id)
-        persistence_error = self.llm_state_persistence_error
+        payload, persistence_error = self._read_llm_state(account_id)
         value = str(payload.get("previous_response_id") or "").strip()
         provider = str(payload.get(PREVIOUS_RESPONSE_PROVIDER_FIELD) or "").strip().casefold()
         model = str(payload.get(PREVIOUS_RESPONSE_MODEL_FIELD) or "").strip()
@@ -483,7 +483,7 @@ class RuntimeStateStore(RuntimeState):
         if not clean_response_id:
             return
         with self._llm_state_lock(account_id):
-            payload = self._read_llm_state(account_id)
+            payload, _persistence_error = self._read_llm_state(account_id)
             payload["previous_response_id"] = clean_response_id
             clean_provider = str(provider or "").strip().casefold()
             clean_model = str(model or "").strip()
@@ -504,7 +504,7 @@ class RuntimeStateStore(RuntimeState):
 
     def _clear_llm_previous_response_id(self, account_id: str) -> None:
         with self._llm_state_lock(account_id):
-            payload = self._read_llm_state(account_id)
+            payload, _persistence_error = self._read_llm_state(account_id)
             state_fields = {
                 "previous_response_id",
                 PREVIOUS_RESPONSE_PROVIDER_FIELD,

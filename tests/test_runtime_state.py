@@ -336,18 +336,16 @@ def test_runtime_state_store_keeps_persistence_error_local_to_parallel_reads(tmp
     results: dict[str, str | None] = {}
     errors: list[BaseException] = []
 
-    def fake_read(account_id: str) -> tuple[str | None, tuple[str, str, str] | None, str]:
+    def fake_read(account_id: str) -> tuple[dict[str, str], str]:
         if account_id == account_a:
-            state._set_llm_state_persistence_error("account A unavailable")
             a_started.set()
             if not release_a.wait(timeout=2):
                 raise RuntimeError("account A read was not released")
-            return None, None, "account A unavailable"
-        state._set_llm_state_persistence_error("")
+            return {}, "account A unavailable"
         b_read.set()
-        return "persisted-b", None, ""
+        return {"previous_response_id": "persisted-b"}, ""
 
-    monkeypatch.setattr(state, "_read_llm_previous_response", fake_read)
+    monkeypatch.setattr(state, "_read_llm_state", fake_read)
 
     def read_a() -> None:
         try:
