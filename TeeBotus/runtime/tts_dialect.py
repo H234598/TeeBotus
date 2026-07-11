@@ -412,24 +412,26 @@ def tts_voice_for_account(account_store: AccountStore | None, account_id: str, i
 
 
 def set_tts_voice_preference(account_store: AccountStore, account_id: str, voice: str, *, provider: str = "openai") -> None:
-    state = account_store.read_agent_state(account_id)
-    state[TTS_VOICE_STATE_KEY] = {
-        "schema_version": 1,
-        "provider": provider,
-        "voice": voice,
-        "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-        "docs_url": OPENAI_TTS_VOICE_DOCS_URL,
-    }
-    account_store.write_agent_state(account_id, state)
+    with account_store.account_memory_lock(account_id):
+        state = account_store.read_agent_state(account_id)
+        state[TTS_VOICE_STATE_KEY] = {
+            "schema_version": 1,
+            "provider": provider,
+            "voice": voice,
+            "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "docs_url": OPENAI_TTS_VOICE_DOCS_URL,
+        }
+        account_store.write_agent_state(account_id, state)
 
 
 def clear_tts_voice_preference(account_store: AccountStore, account_id: str) -> bool:
-    state = account_store.read_agent_state(account_id)
-    if TTS_VOICE_STATE_KEY not in state:
-        return False
-    state.pop(TTS_VOICE_STATE_KEY, None)
-    account_store.write_agent_state(account_id, state)
-    return True
+    with account_store.account_memory_lock(account_id):
+        state = account_store.read_agent_state(account_id)
+        if TTS_VOICE_STATE_KEY not in state:
+            return False
+        state.pop(TTS_VOICE_STATE_KEY, None)
+        account_store.write_agent_state(account_id, state)
+        return True
 
 
 def normalize_openai_tts_voice(value: str) -> str | None:

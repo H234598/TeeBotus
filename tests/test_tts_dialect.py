@@ -11,6 +11,8 @@ from TeeBotus.runtime.tts_dialect import (
     handle_tts_mimic_voice_command,
     maybe_update_tts_dialect_preference,
     record_tts_voice_style_observation,
+    set_tts_voice_preference,
+    clear_tts_voice_preference,
     tts_dialect_city,
     tts_mimic_voice_profile,
     voice_instructions_for_account,
@@ -192,6 +194,50 @@ def test_mimic_command_and_observation_share_account_lock(tmp_path, monkeypatch)
     assert errors == []
     assert state["maximum"] == 1
     assert first.read_agent_state(account_id)["tts_mimic_voice"]["enabled"] is True
+
+
+def test_voice_preference_writes_are_serialized_per_account(tmp_path, monkeypatch) -> None:
+    first = store(tmp_path)
+    second = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"d" * 32))
+    account_id = first.resolve_or_create_account(signal_identity_key(source_uuid="voice-lock"))
+    original_read = AccountStore.read_agent_state
+    state = {"active": 0, "maximum": 0}
+    state_lock = threading.Lock()
+    errors: list[BaseException] = []
+
+    def slow_read(account_store, current_account_id):
+        with state_lock:
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+        try:
+            time.sleep(0.03)
+            return original_read(account_store, current_account_id)
+        finally:
+            with state_lock:
+                state["active"] -= 1
+
+    monkeypatch.setattr(AccountStore, "read_agent_state", slow_read)
+
+    def set_voice(account_store, voice: str) -> None:
+        try:
+            set_tts_voice_preference(account_store, account_id, voice)
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=set_voice, args=(first, "onyx")),
+        threading.Thread(target=set_voice, args=(second, "nova")),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert state["maximum"] == 1
+    assert first.read_agent_state(account_id)["tts_voice"]["voice"] in {"onyx", "nova"}
+    assert clear_tts_voice_preference(second, account_id) is True
+    assert "tts_voice" not in first.read_agent_state(account_id)
 
 
 def test_voice_style_observations_are_serialized_per_account(tmp_path, monkeypatch) -> None:
