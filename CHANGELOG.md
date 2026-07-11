@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.87 - 2026-07-12
+
+- Fail closed on malformed notification-loudness outbox statuses.
+
 ## 1.9.86 - 2026-07-12
 
 - Restrict active notification-loudness outbox items to live statuses.

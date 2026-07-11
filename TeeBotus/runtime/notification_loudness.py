@@ -202,7 +202,7 @@ def is_notification_loudness_outbox_item(item: Mapping[str, Any] | None) -> bool
 
 def notification_loudness_outbox_item_is_active(account_store: AccountStore, account_id: str, item: Mapping[str, Any]) -> bool:
     """Return whether a queued loudness prompt still belongs to an open check."""
-    item_status = str(item.get("status") or "queued").strip().casefold()
+    item_status = _notification_loudness_outbox_status(item)
     if item_status not in {"queued", "dispatching"}:
         return False
     if not _outbox_route_is_consistent(item):
@@ -398,7 +398,7 @@ def _cancel_pending_notification_loudness_items(account_store: AccountStore, acc
                 continue
             if _outbox_route_key(item) != _normalize_route_key(route_key):
                 continue
-            if str(item.get("status") or "queued").strip().casefold() not in {"queued", "dispatching"}:
+            if _notification_loudness_outbox_status(item) not in {"queued", "dispatching"}:
                 continue
             item["status"] = "cancelled"
             item["updated_at"] = timestamp
@@ -418,7 +418,7 @@ def _has_queued_notification_loudness_item(account_store: AccountStore, account_
             continue
         if _outbox_route_key(item) != _normalize_route_key(route_key):
             continue
-        if str(item.get("status") or "queued").strip().casefold() in {"queued", "dispatching"}:
+        if _notification_loudness_outbox_status(item) in {"queued", "dispatching"}:
             return True
     return False
 
@@ -428,6 +428,15 @@ def _account_proactive_outbox_lock(account_store: AccountStore, account_id: str)
     if callable(lock):
         return lock(account_id)
     return nullcontext()
+
+
+def _notification_loudness_outbox_status(item: Mapping[str, Any]) -> str | None:
+    if "status" not in item:
+        return "queued"
+    value = item.get("status")
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return value.strip().casefold()
 
 
 def _mark_notification_loudness_checks_stopped(route_state: dict[str, Any], reason: str) -> bool:
