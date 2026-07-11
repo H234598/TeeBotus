@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
@@ -98,8 +98,41 @@ def test_city_change_is_persisted_even_when_weather_check_is_rate_limited(tmp_pa
     result = update_city_and_weather_context(account_store, account_id, "Ich wohne in Potsdam.", now=datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc), provider=provider)
 
     assert result.skipped_reason == "rate_limited"
+    assert result.weather_text == ""
     assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "Potsdam"
+    assert weather_context_text(account_store, account_id) == ""
     assert calls == ["Berlin"]
+
+
+def test_weather_provider_error_does_not_expose_stale_summary(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: f"{city}: 12 C",
+    )
+
+    def failing_provider(_city: str) -> str:
+        raise RuntimeError("offline")
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Hallo.",
+        now=datetime(2026, 6, 15, 11, 1, tzinfo=timezone.utc),
+        provider=failing_provider,
+    )
+
+    assert result.checked is True
+    assert result.skipped_reason == "weather_error"
+    assert weather_context_text(account_store, account_id) == ""
+    weather_state = account_store.read_agent_state(account_id)["weather_context"]
+    assert weather_state["summary"] == ""
+    assert "offline" in weather_state["last_error"]
 
 
 def test_engine_adds_cached_weather_context_to_openai_prompt(tmp_path, monkeypatch) -> None:

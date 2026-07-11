@@ -58,6 +58,10 @@ def update_city_and_weather_context(
         weather_state["city"] = city
         weather_state["city_updated_at"] = resolved_now.isoformat(timespec="seconds")
         if city_changed:
+            # A cached summary belongs to the previous city and must not be
+            # presented as current weather while the global check window is active.
+            weather_state["summary"] = ""
+            weather_state["last_error"] = ""
             _append_city_memory(account_store, account_id, city, resolved_now)
     current_city = str(weather_state.get("city") or "").strip()
     if not current_city:
@@ -76,6 +80,7 @@ def update_city_and_weather_context(
     try:
         summary = weather_provider(current_city).strip()
     except Exception as exc:
+        weather_state["summary"] = ""
         weather_state["last_error"] = f"{type(exc).__name__}: {exc}"[:240]
         weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
         account_store.write_agent_state(account_id, state)
@@ -116,7 +121,8 @@ def weather_context_text(account_store: AccountStore, account_id: str) -> str:
     city = str(weather_state.get("city") or "").strip()
     summary = str(weather_state.get("summary") or "").strip()
     checked_at = str(weather_state.get("last_checked_at") or "").strip()
-    if not city or not summary:
+    last_error = str(weather_state.get("last_error") or "").strip()
+    if not city or not summary or last_error:
         return ""
     return f"Stadt/Wohnort: {city}\nLetzter Wettercheck: {checked_at or 'unbekannt'}\nKurz-Wetter: {summary}"
 
