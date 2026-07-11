@@ -44,10 +44,13 @@ class SQLiteMemoryConfig:
             configured = Path(value).expanduser()
             return configured if configured.is_absolute() else root_path / configured
 
-        return cls(
-            path=resolve_configured_path(configured_path, SQLITE_DEFAULT_FILENAME),
-            fallback_path=resolve_configured_path(fallback_path, SQLITE_DEFAULT_FALLBACK_FILENAME),
-        )
+        path = resolve_configured_path(configured_path, SQLITE_DEFAULT_FILENAME)
+        resolved_fallback_path = resolve_configured_path(fallback_path, SQLITE_DEFAULT_FALLBACK_FILENAME)
+        if path.resolve() == resolved_fallback_path.resolve():
+            raise AccountStoreError(
+                f"{SQLITE_PATH_ENV} and {SQLITE_FALLBACK_PATH_ENV} must point to different files"
+            )
+        return cls(path=path, fallback_path=resolved_fallback_path)
 
 
 class SQLiteAccountMemoryBackend:

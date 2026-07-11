@@ -2246,6 +2246,18 @@ def test_sqlite_memory_config_resolves_relative_paths_under_instance_root(tmp_pa
     assert config.fallback_path == root / "backups" / "secondary.sqlite3"
 
 
+def test_sqlite_memory_config_rejects_identical_primary_and_fallback(tmp_path):
+    with pytest.raises(AccountStoreError, match="must point to different files"):
+        SQLiteMemoryConfig.from_env(
+            tmp_path,
+            env={
+                "TEEBOTUS_ACCOUNT_MEMORY_BACKEND": "sqlite",
+                "TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH": "same.sqlite3",
+                "TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH": "same.sqlite3",
+            },
+        )
+
+
 def test_account_memory_fallback_warning_rate_limit_is_scoped_per_account(caplog) -> None:
     backend = WarningFallbackAccountMemoryBackend(object(), object(), label="Demo:sqlite")
     account_a = "a" * 128
