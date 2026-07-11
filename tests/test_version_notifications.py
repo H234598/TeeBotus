@@ -506,7 +506,7 @@ def test_account_memory_health_redacts_backend_errors(tmp_path: Path, monkeypatc
             return None
 
         def _read_account_profile(self, _account_id: str) -> None:
-            raise AccountStoreError("token=sk-profile-secret123")
+            raise AccountStoreError("token=sk-profile-test-token")
 
         def check_structured_memory_index(self, _account_id: str, *, require_resolvable: bool):
             raise AccountStoreError("dsn=postgres://user:password@example.invalid/db")
@@ -516,7 +516,7 @@ def test_account_memory_health_redacts_backend_errors(tmp_path: Path, monkeypatc
     lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
     joined = "\n".join(lines)
 
-    assert "sk-profile-secret123" not in joined
+    assert "sk-profile-test-token" not in joined
     assert "password@example.invalid" not in joined
     assert "sk-<redacted>" in joined or "postgres://" in joined
 
