@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import threading
+
 import pytest
 
 from TeeBotus.runtime.accounts import (
@@ -86,6 +88,81 @@ def test_runtime_state_store_refreshes_link_notifications_between_bridges(tmp_pa
         old_identity_key="telegram:user:1",
     ) is not None
     assert first.list_link_notifications(instance_name="Bot", account_id=account_id) == []
+
+
+def test_runtime_state_store_serializes_concurrent_link_notification_writes(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    account_id = "a" * 128
+    first = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+    second = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+    first_entered = threading.Event()
+    second_attempted = threading.Event()
+    second_entered = threading.Event()
+    release_first = threading.Event()
+    errors: list[BaseException] = []
+
+    original_first_refresh = first._refresh_persisted_link_notifications
+
+    def blocking_first_refresh() -> None:
+        first_entered.set()
+        if not release_first.wait(timeout=2):
+            raise RuntimeError("first link-notification operation did not get released")
+        original_first_refresh()
+
+    original_second_refresh = second._refresh_persisted_link_notifications
+
+    def observed_second_refresh() -> None:
+        second_entered.set()
+        original_second_refresh()
+
+    first._refresh_persisted_link_notifications = blocking_first_refresh
+    second._refresh_persisted_link_notifications = observed_second_refresh
+
+    def run_first() -> None:
+        try:
+            first.record_link_notification(
+                instance_name="Bot",
+                account_id=account_id,
+                new_identity_key="signal:uuid:first",
+                old_identity_key="telegram:user:first",
+            )
+        except BaseException as exc:  # pragma: no cover - assertion below reports the error.
+            errors.append(exc)
+
+    def run_second() -> None:
+        second_attempted.set()
+        try:
+            second.record_link_notification(
+                instance_name="Bot",
+                account_id=account_id,
+                new_identity_key="signal:uuid:second",
+                old_identity_key="telegram:user:second",
+            )
+        except BaseException as exc:  # pragma: no cover - assertion below reports the error.
+            errors.append(exc)
+
+    first_thread = threading.Thread(target=run_first)
+    second_thread = threading.Thread(target=run_second)
+    first_thread.start()
+    assert first_entered.wait(timeout=1)
+    second_thread.start()
+    assert second_attempted.wait(timeout=1)
+    try:
+        assert not second_entered.wait(timeout=0.1)
+    finally:
+        release_first.set()
+        first_thread.join(timeout=2)
+        second_thread.join(timeout=2)
+
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+    assert errors == []
+    refreshed = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+    assert {item["old_identity_key"] for item in refreshed.list_link_notifications(instance_name="Bot", account_id=account_id)} == {
+        "telegram:user:first",
+        "telegram:user:second",
+    }
 
 
 def test_runtime_state_store_refuses_to_autocreate_llm_state_secret_for_existing_sqlite_memory(tmp_path, monkeypatch):

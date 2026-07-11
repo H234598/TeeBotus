@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 import json
+import os
+import stat
+import threading
 import time
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Iterator, Literal
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - fcntl is unavailable on non-POSIX platforms.
+    fcntl = None  # type: ignore[assignment]
 
 from TeeBotus.runtime.accounts import (
     ACCOUNTS_DIRNAME,
@@ -28,6 +36,10 @@ LINK_NOTIFICATION_TTL_SECONDS = 15 * 60
 PREVIOUS_RESPONSE_PROVIDER_FIELD = "previous_response_provider"
 PREVIOUS_RESPONSE_MODEL_FIELD = "previous_response_model"
 PREVIOUS_RESPONSE_KEY_FIELD = "previous_response_key_fingerprint"
+LINK_NOTIFICATIONS_LOCK_FILENAME = ".Link_Notifications.json.lock"
+
+_LINK_NOTIFICATIONS_THREAD_LOCK = threading.RLock()
+_LINK_NOTIFICATIONS_LOCK_STATE = threading.local()
 
 
 @dataclass(frozen=True)
@@ -215,7 +227,38 @@ class RuntimeStateStore(RuntimeState):
         self.openai_state_persistence_error = ""
         self._account_store_secret_guard_checked = False
         self._llm_account_store: AccountStore | None = None
-        self._load_persisted_link_notifications()
+        with self._link_notifications_lock():
+            self._load_persisted_link_notifications()
+
+    @contextmanager
+    def _link_notifications_lock(self) -> Iterator[None]:
+        lock_path = self.runtime_dir / LINK_NOTIFICATIONS_LOCK_FILENAME
+        with _LINK_NOTIFICATIONS_THREAD_LOCK:
+            held_paths = getattr(_LINK_NOTIFICATIONS_LOCK_STATE, "paths", None)
+            if held_paths is None:
+                held_paths = set()
+                _LINK_NOTIFICATIONS_LOCK_STATE.paths = held_paths
+            lock_key = os.path.realpath(os.fspath(lock_path))
+            if lock_key in held_paths:
+                yield
+                return
+            lock_path.parent.mkdir(parents=True, exist_ok=True)
+            with lock_path.open("a+b") as handle:
+                try:
+                    os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
+                except OSError:
+                    pass
+                if fcntl is not None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                held_paths.add(lock_key)
+                try:
+                    yield
+                finally:
+                    held_paths.discard(lock_key)
+                    if fcntl is not None:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            if not held_paths:
+                del _LINK_NOTIFICATIONS_LOCK_STATE.paths
 
     @property
     def _link_vault(self) -> EncryptedJsonVault:
@@ -318,36 +361,39 @@ class RuntimeStateStore(RuntimeState):
         self._clear_llm_previous_response_id(account_id)
 
     def record_link_notification(self, *, instance_name: str, account_id: str, new_identity_key: str, old_identity_key: str) -> None:
-        self._refresh_persisted_link_notifications()
-        super().record_link_notification(
-            instance_name=instance_name,
-            account_id=account_id,
-            new_identity_key=new_identity_key,
-            old_identity_key=old_identity_key,
-        )
-        self._save_link_notifications()
+        with self._link_notifications_lock():
+            self._refresh_persisted_link_notifications()
+            super().record_link_notification(
+                instance_name=instance_name,
+                account_id=account_id,
+                new_identity_key=new_identity_key,
+                old_identity_key=old_identity_key,
+            )
+            self._save_link_notifications()
 
     def pop_link_notification(self, *, instance_name: str, account_id: str, old_identity_key: str = "") -> dict[str, str] | None:
-        self._refresh_persisted_link_notifications()
-        notification = super().pop_link_notification(
-            instance_name=instance_name,
-            account_id=account_id,
-            old_identity_key=old_identity_key,
-        )
-        if notification is not None:
-            self._save_link_notifications()
-        return notification
+        with self._link_notifications_lock():
+            self._refresh_persisted_link_notifications()
+            notification = super().pop_link_notification(
+                instance_name=instance_name,
+                account_id=account_id,
+                old_identity_key=old_identity_key,
+            )
+            if notification is not None:
+                self._save_link_notifications()
+            return notification
 
     def clear_link_notifications_for_new_identity(self, *, instance_name: str, account_id: str, new_identity_key: str) -> int:
-        self._refresh_persisted_link_notifications()
-        removed = super().clear_link_notifications_for_new_identity(
-            instance_name=instance_name,
-            account_id=account_id,
-            new_identity_key=new_identity_key,
-        )
-        if removed:
-            self._save_link_notifications()
-        return removed
+        with self._link_notifications_lock():
+            self._refresh_persisted_link_notifications()
+            removed = super().clear_link_notifications_for_new_identity(
+                instance_name=instance_name,
+                account_id=account_id,
+                new_identity_key=new_identity_key,
+            )
+            if removed:
+                self._save_link_notifications()
+            return removed
 
     def _purge_expired_link_notifications(self) -> None:
         before = len(self.link_notifications)
@@ -356,8 +402,9 @@ class RuntimeStateStore(RuntimeState):
             self._save_link_notifications()
 
     def list_link_notifications(self, *, instance_name: str, account_id: str) -> list[dict[str, str]]:
-        self._refresh_persisted_link_notifications()
-        return super().list_link_notifications(instance_name=instance_name, account_id=account_id)
+        with self._link_notifications_lock():
+            self._refresh_persisted_link_notifications()
+            return super().list_link_notifications(instance_name=instance_name, account_id=account_id)
 
     def append_security_event(self, event: dict[str, Any]) -> None:
         super().append_security_event(event)
@@ -516,24 +563,25 @@ class RuntimeStateStore(RuntimeState):
     def _save_link_notifications(self) -> None:
         if self.secret_provider is None:
             return
-        notifications = [
-            {
-                "instance": instance,
-                "account_id": account_id,
-                "old_identity_key": old_identity_key,
-                **dict(payload),
-            }
-            for (instance, account_id, old_identity_key), payload in sorted(self.link_notifications.items())
-        ]
-        if not notifications:
+        with self._link_notifications_lock():
+            notifications = [
+                {
+                    "instance": instance,
+                    "account_id": account_id,
+                    "old_identity_key": old_identity_key,
+                    **dict(payload),
+                }
+                for (instance, account_id, old_identity_key), payload in sorted(self.link_notifications.items())
+            ]
+            if not notifications:
+                try:
+                    self.link_notifications_path.unlink()
+                except FileNotFoundError:
+                    pass
+                self.link_notifications_persistence_error = ""
+                return
             try:
-                self.link_notifications_path.unlink()
-            except FileNotFoundError:
-                pass
-            self.link_notifications_persistence_error = ""
-            return
-        try:
-            self._link_vault.write_json(self.link_notifications_path, {"notifications": notifications})
-            self.link_notifications_persistence_error = ""
-        except AccountStoreError as exc:
-            self.link_notifications_persistence_error = str(exc)
+                self._link_vault.write_json(self.link_notifications_path, {"notifications": notifications})
+                self.link_notifications_persistence_error = ""
+            except AccountStoreError as exc:
+                self.link_notifications_persistence_error = str(exc)
