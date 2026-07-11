@@ -26,6 +26,7 @@ from TeeBotus.runtime.sqlite_memory import (  # noqa: E402
     SQLITE_DEFAULT_FILENAME,
     SQLITE_FALLBACK_PATH_ENV,
     SQLITE_PATH_ENV,
+    SQLITE_REQUIRED_COLUMNS,
     SQLITE_REQUIRED_TABLES,
     SQLiteAccountMemoryBackend,
     SQLiteMemoryConfig,
@@ -169,9 +170,22 @@ def _validate_schema_complete(path: Path, *, label: str) -> None:
                     "SELECT name FROM sqlite_master WHERE type = 'table'"
                 ).fetchall()
             }
+            missing: list[str] = []
+            for table in SQLITE_REQUIRED_TABLES:
+                if table not in tables:
+                    missing.append(table)
+                    continue
+                columns = {
+                    str(row[1])
+                    for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+                }
+                missing.extend(
+                    f"{table}.{column}"
+                    for column in SQLITE_REQUIRED_COLUMNS[table]
+                    if column not in columns
+                )
     except sqlite3.DatabaseError as exc:
         raise RuntimeError(f"{label}_schema_check_failed:{path}:{exc}") from exc
-    missing = [table for table in SQLITE_REQUIRED_TABLES if table not in tables]
     if missing:
         raise RuntimeError(f"{label}_schema_missing:{','.join(missing)}:{path}")
 

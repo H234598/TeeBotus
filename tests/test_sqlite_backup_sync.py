@@ -91,6 +91,22 @@ def test_sqlite_backup_sync_refuses_incomplete_primary_schema(tmp_path: Path) ->
     assert not secondary.exists()
 
 
+def test_sqlite_backup_sync_refuses_missing_required_column(tmp_path: Path) -> None:
+    primary = tmp_path / "primary.sqlite3"
+    write_sqlite_memory(primary)
+    with sqlite3.connect(primary) as connection:
+        connection.execute("ALTER TABLE memory_entries DROP COLUMN last_accessed_at")
+
+    with pytest.raises(RuntimeError, match="primary_schema_missing:memory_entries.last_accessed_at"):
+        sqlite_backup_sync.sync_account_memory_sqlite_backup(
+            accounts_root=tmp_path,
+            primary=primary,
+            secondary=tmp_path / "secondary.sqlite3",
+            provider=provider(),
+            decrypt_check=False,
+        )
+
+
 def test_sqlite_backup_sync_checks_collection_payloads(tmp_path: Path) -> None:
     accounts_root = tmp_path / "instances" / "Depressionsbot" / "data" / "accounts"
     primary = accounts_root / "Account_Memory.sqlite3"

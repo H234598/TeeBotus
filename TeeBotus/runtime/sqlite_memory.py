@@ -27,6 +27,37 @@ SQLITE_REQUIRED_TABLES = (
     "memory_indexes",
     "account_jsonl_collections",
 )
+SQLITE_REQUIRED_COLUMNS = {
+    "memory_entries": (
+        "instance_name",
+        "account_id",
+        "memory_id",
+        "ordinal",
+        "kind",
+        "memory_type",
+        "importance",
+        "salience",
+        "access_count",
+        "created_at",
+        "updated_at",
+        "last_accessed_at",
+        "payload_nonce",
+        "payload_ciphertext",
+    ),
+    "memory_keywords": ("instance_name", "account_id", "keyword", "memory_id"),
+    "memory_indexes": ("instance_name", "account_id", "payload_nonce", "payload_ciphertext", "updated_at"),
+    "account_jsonl_collections": (
+        "instance_name",
+        "account_id",
+        "collection",
+        "ordinal",
+        "item_key",
+        "created_at",
+        "updated_at",
+        "payload_nonce",
+        "payload_ciphertext",
+    ),
+}
 SQLITE_READ_ENTRIES_BY_IDS_CHUNK_SIZE = 500
 
 
@@ -575,6 +606,12 @@ class SQLiteAccountMemoryBackend:
                 )
                 LOGGER.critical("%s", error)
                 raise error
+            if "." in missing_table:
+                error = AccountStoreError(
+                    f"SQLite account-memory schema column is missing: {missing_table} ({self.config.path})"
+                )
+                LOGGER.critical("%s", error)
+                raise error
             raise self._missing_table_error(missing_table)
         current_identity = self._database_file_identity()
         if (
@@ -651,6 +688,13 @@ class SQLiteAccountMemoryBackend:
                 for table in SQLITE_REQUIRED_TABLES:
                     if not _table_exists(connection, table):
                         return table
+                    columns = {
+                        str(row[1])
+                        for row in connection.execute(f"PRAGMA table_info({table})").fetchall()
+                    }
+                    for column in SQLITE_REQUIRED_COLUMNS[table]:
+                        if column not in columns:
+                            return f"{table}.{column}"
         except sqlite3.Error:
             return "<unreadable>"
         return None

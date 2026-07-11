@@ -4161,6 +4161,43 @@ def test_sqlite_write_refuses_primary_creation_when_secondary_exists(tmp_path):
     assert secondary.read_entries(account_id) == [{"id": "from-secondary", "user_text": "Backup"}]
 
 
+def test_sqlite_write_refuses_missing_required_column_when_secondary_exists(tmp_path):
+    import sqlite3
+
+    primary_path = tmp_path / "primary.sqlite3"
+    secondary_path = tmp_path / "secondary.sqlite3"
+    account_id = "a" * 128
+    primary_without_fallback = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary_path, fallback_path=None),
+    )
+    primary_without_fallback.write_entries(account_id, [{"id": "primary"}])
+    with sqlite3.connect(primary_path) as connection:
+        connection.execute("ALTER TABLE memory_entries DROP COLUMN last_accessed_at")
+    secondary = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=secondary_path, fallback_path=None),
+    )
+    secondary.write_entries(account_id, [{"id": "from-secondary"}])
+    primary = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary_path, fallback_path=secondary_path),
+    )
+
+    with pytest.raises(AccountStoreError, match="schema column is missing: memory_entries.last_accessed_at"):
+        primary.write_entries(account_id, [{"id": "new"}])
+
+    with sqlite3.connect(primary_path) as connection:
+        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(memory_entries)")}
+    assert "last_accessed_at" not in columns
+
+
 def test_structured_account_memory_semantic_cache_boosts_synced_signature(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
