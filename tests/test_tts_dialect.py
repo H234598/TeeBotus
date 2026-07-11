@@ -23,6 +23,8 @@ def store(tmp_path) -> AccountStore:
 
 def test_extract_birth_and_lifetime_city_phrases() -> None:
     assert extract_birth_city("Ich bin in Nürnberg geboren.") == "Nürnberg"
+    assert extract_birth_city("Ich wurde in Dresden geboren.") == "Dresden"
+    assert extract_birth_city("Geboren wurde ich in Leipzig.") == "Leipzig"
     assert extract_birth_city("Meine Geburtsstadt ist München.") == "München"
     assert extract_lifetime_city("Ich habe den größten Teil meines Lebens in Hamburg verbracht.") == "Hamburg"
     assert extract_birth_city("Meine Geburtsstadt ist nicht München.") == ""

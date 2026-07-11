@@ -47,6 +47,8 @@ OPENAI_TTS_VOICE_ALIASES = {
 _CITY_PATTERN = r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})"
 _BIRTH_CITY_PATTERNS = (
     re.compile(rf"\b(?:ich\s+bin|bin)\s+in\s+{_CITY_PATTERN}\s+geboren\b", re.IGNORECASE),
+    re.compile(rf"\b(?:ich\s+wurde|wurde\s+ich)\s+in\s+{_CITY_PATTERN}\s+geboren\b", re.IGNORECASE),
+    re.compile(rf"\bgeboren\s+wurde\s+ich\s+(?:in|bei)\s+{_CITY_PATTERN}", re.IGNORECASE),
     re.compile(rf"\b(?:geboren|geb\.)\s+(?:in|bei)\s+{_CITY_PATTERN}", re.IGNORECASE),
     re.compile(rf"\b(?:meine\s+geburtsstadt|mein\s+geburtsort)\s+(?:ist|heisst|heißt|war)\s+{_CITY_PATTERN}", re.IGNORECASE),
 )
