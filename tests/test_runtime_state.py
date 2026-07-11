@@ -65,6 +65,29 @@ def test_runtime_state_store_clears_link_persistence_error_after_recovery(tmp_pa
     assert state.link_notifications_persistence_error == ""
 
 
+def test_runtime_state_store_refreshes_link_notifications_between_bridges(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    account_id = "a" * 128
+    first = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+    second = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    first.record_link_notification(
+        instance_name="Bot",
+        account_id=account_id,
+        new_identity_key="signal:uuid:new",
+        old_identity_key="telegram:user:1",
+    )
+
+    assert second.list_link_notifications(instance_name="Bot", account_id=account_id)
+    assert second.pop_link_notification(
+        instance_name="Bot",
+        account_id=account_id,
+        old_identity_key="telegram:user:1",
+    ) is not None
+    assert first.list_link_notifications(instance_name="Bot", account_id=account_id) == []
+
+
 def test_runtime_state_store_refuses_to_autocreate_llm_state_secret_for_existing_sqlite_memory(tmp_path, monkeypatch):
     data_dir = tmp_path / "Bot" / "data"
     accounts_root = data_dir / "accounts"

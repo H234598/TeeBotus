@@ -318,6 +318,7 @@ class RuntimeStateStore(RuntimeState):
         self._clear_llm_previous_response_id(account_id)
 
     def record_link_notification(self, *, instance_name: str, account_id: str, new_identity_key: str, old_identity_key: str) -> None:
+        self._refresh_persisted_link_notifications()
         super().record_link_notification(
             instance_name=instance_name,
             account_id=account_id,
@@ -327,6 +328,7 @@ class RuntimeStateStore(RuntimeState):
         self._save_link_notifications()
 
     def pop_link_notification(self, *, instance_name: str, account_id: str, old_identity_key: str = "") -> dict[str, str] | None:
+        self._refresh_persisted_link_notifications()
         notification = super().pop_link_notification(
             instance_name=instance_name,
             account_id=account_id,
@@ -337,6 +339,7 @@ class RuntimeStateStore(RuntimeState):
         return notification
 
     def clear_link_notifications_for_new_identity(self, *, instance_name: str, account_id: str, new_identity_key: str) -> int:
+        self._refresh_persisted_link_notifications()
         removed = super().clear_link_notifications_for_new_identity(
             instance_name=instance_name,
             account_id=account_id,
@@ -351,6 +354,10 @@ class RuntimeStateStore(RuntimeState):
         super()._purge_expired_link_notifications()
         if len(self.link_notifications) != before and hasattr(self, "link_notifications_path"):
             self._save_link_notifications()
+
+    def list_link_notifications(self, *, instance_name: str, account_id: str) -> list[dict[str, str]]:
+        self._refresh_persisted_link_notifications()
+        return super().list_link_notifications(instance_name=instance_name, account_id=account_id)
 
     def append_security_event(self, event: dict[str, Any]) -> None:
         super().append_security_event(event)
@@ -462,8 +469,14 @@ class RuntimeStateStore(RuntimeState):
             self._write_llm_state(account_id, payload)
 
     def _load_persisted_link_notifications(self) -> None:
-        if self.secret_provider is None or not self.link_notifications_path.exists():
+        if self.secret_provider is None:
             return
+        if not self.link_notifications_path.exists():
+            if not self.link_notifications_persistence_error:
+                self.link_notifications = {}
+            return
+        existing = dict(self.link_notifications)
+        had_persistence_error = bool(self.link_notifications_persistence_error)
         try:
             payload = self._link_vault.read_json(self.link_notifications_path, {"notifications": []})
             notifications = payload.get("notifications", []) if isinstance(payload, dict) else []
@@ -487,10 +500,18 @@ class RuntimeStateStore(RuntimeState):
                 }
         except AccountStoreError as exc:
             self.link_notifications_persistence_error = str(exc)
-            self.link_notifications = {}
+            self.link_notifications = existing
             return
+        if had_persistence_error:
+            loaded.update(existing)
         self.link_notifications = loaded
+        self.link_notifications_persistence_error = ""
         self._purge_expired_link_notifications()
+
+    def _refresh_persisted_link_notifications(self) -> None:
+        """Refresh link notifications written by another runtime bridge."""
+
+        self._load_persisted_link_notifications()
 
     def _save_link_notifications(self) -> None:
         if self.secret_provider is None:
