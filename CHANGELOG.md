@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.53 - 2026-07-11
+
+- Prevent string false values from bypassing proactive contact policies.
+
 ## 1.9.52 - 2026-07-11
 
 - Parse persisted proactive boolean values instead of treating false strings as true.

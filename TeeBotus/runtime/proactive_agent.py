@@ -375,7 +375,7 @@ def queue_proactive_message(
     normalized_category = str(category or "").strip().casefold()
     normalized_risk_gate = _normalize_risk_gate(risk_gate)
     policy_item = {"risk_gate": "none"} if normalized_risk_gate in PROACTIVE_RISK_REVIEW_GATES else {"risk_gate": normalized_risk_gate}
-    is_user_requested_reminder = bool(user_requested) and str(intent or "").strip() == "user_requested_reminder"
+    is_user_requested_reminder = _normalize_bool(user_requested, default=False) and str(intent or "").strip() == "user_requested_reminder"
     if is_user_requested_reminder:
         policy_item["user_requested_reminder"] = True
     decision = proactive_policy_decision(account_store, account_id, category=normalized_category, now=resolved_now, item=policy_item)

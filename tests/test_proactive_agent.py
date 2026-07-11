@@ -95,6 +95,38 @@ def test_proactive_state_string_booleans_do_not_enable_agent(tmp_path) -> None:
     assert decision.reason == "proactive_disabled"
 
 
+def test_string_false_cannot_bypass_proactive_time_policy(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="1", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 22, tzinfo=timezone.utc)
+
+    denied = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="user_requested_reminder",
+        message_text="Nicht umgehen",
+        now=now,
+        user_requested="false",  # type: ignore[arg-type]
+    )
+    allowed = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="user_requested_reminder",
+        message_text="Ausdrücklich gewünscht",
+        now=now,
+        user_requested="true",  # type: ignore[arg-type]
+    )
+
+    assert denied.allowed is False
+    assert denied.reason == "outside_allowed_hours"
+    assert allowed.allowed is True
+
+
 def test_proactive_message_is_queued_only_after_consent_and_private_route(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
