@@ -43,6 +43,12 @@ def maybe_handle_notification_loudness_response(
         route_status = _route_status(account_store, account_id, event)
         if route_status in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
             return None
+        state = account_store.read_agent_state(account_id)
+        notification_state = state.get("notification_loudness") if isinstance(state, dict) else None
+        routes = notification_state.get("routes") if isinstance(notification_state, dict) else None
+        route_state = _find_route_state(routes, _route_key(event)) if isinstance(routes, Mapping) else None
+        if isinstance(route_state, Mapping) and not _normalize_bool(route_state.get("checks_active"), default=True):
+            return None
         decision = _notification_loudness_decision(event.text, pending=route_status == "pending")
         if decision is None:
             return None
@@ -69,6 +75,8 @@ def maybe_notification_loudness_prompt_action(
             return None
         route_state = _ensure_route_state(state, event)
         if _normalized_route_status(route_state) in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
+            return None
+        if not _normalize_bool(route_state.get("checks_active"), default=True):
             return None
         resolved_now = _resolve_loudness_now(now)
         if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=False):

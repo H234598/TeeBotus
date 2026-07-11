@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.66 - 2026-07-11
+
+- Prevent incoming messages from resurrecting inactive notification-loudness checks.
+
 ## 1.9.65 - 2026-07-11
 
 - Avoid duplicate notification-loudness prompts while one is dispatching.
