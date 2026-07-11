@@ -14,6 +14,7 @@ from TeeBotus.runtime.notification_loudness import (
     NOTIFICATION_LOUDNESS_PROMPT,
     maybe_handle_notification_loudness_response,
     maybe_notification_loudness_prompt_action,
+    notification_loudness_outbox_item_is_active,
     queue_due_notification_loudness_prompts,
 )
 from TeeBotus.runtime.proactive_agent import check_proactive_agent_account, dispatch_due_proactive_outbox_items
@@ -444,6 +445,31 @@ def test_terminal_loudness_route_blocks_legacy_queued_prompt(tmp_path) -> None:
     assert result[0].status == "skipped"
     assert result[0].reason == "notification_loudness_decided"
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "skipped"
+
+
+def test_queued_loudness_item_requires_explicit_pending_route_state(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    item = {"route_key": "telegram:1:chat-1"}
+
+    assert notification_loudness_outbox_item_is_active(account_store, account_id, item) is False
+
+    state = account_store.read_agent_state(account_id)
+    state["notification_loudness"] = {"routes": {"telegram:1:chat-1": {"status": "unknown"}}}
+    account_store.write_agent_state(account_id, state)
+    assert notification_loudness_outbox_item_is_active(account_store, account_id, item) is False
+
+    state["notification_loudness"]["routes"]["telegram:1:chat-1"] = {
+        "status": "pending",
+        "checks_active": False,
+    }
+    account_store.write_agent_state(account_id, state)
+    assert notification_loudness_outbox_item_is_active(account_store, account_id, item) is False
+
+    state["notification_loudness"]["routes"]["telegram:1:chat-1"] = {"status": "pending"}
+    account_store.write_agent_state(account_id, state)
+    assert notification_loudness_outbox_item_is_active(account_store, account_id, item) is True
 
 
 def test_concurrent_loudness_scheduler_runs_queue_only_one_prompt(tmp_path) -> None:

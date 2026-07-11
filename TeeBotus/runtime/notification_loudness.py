@@ -163,16 +163,18 @@ def notification_loudness_outbox_item_is_active(account_store: AccountStore, acc
     """Return whether a queued loudness prompt still belongs to an open check."""
     route_key = _normalize_route_key(item.get("route_key"))
     if not route_key:
-        return True
+        return False
     state = account_store.read_agent_state(account_id)
     notification_state = state.get("notification_loudness") if isinstance(state, dict) else None
     routes = notification_state.get("routes") if isinstance(notification_state, dict) else None
     if not isinstance(routes, dict):
-        return True
+        return False
     route_state = _find_route_state(routes, route_key)
     if not isinstance(route_state, dict):
-        return True
-    return str(route_state.get("status") or "unknown").strip().casefold() not in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES
+        return False
+    if _normalized_route_status(route_state) != NOTIFICATION_LOUDNESS_PENDING_STATUS:
+        return False
+    return route_state.get("checks_active") is not False
 
 
 def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
