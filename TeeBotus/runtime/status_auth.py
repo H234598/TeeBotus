@@ -89,7 +89,9 @@ def status_auth_state_authorized(account_store: AccountStore, account_id: str) -
             state = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
     except (AccountStoreError, OSError, ValueError):
         return False
-    return bool(state.get("authorized") is True)
+    # A stale or manually merged state may contain both flags. Opt-out wins so
+    # a contradictory record cannot silently restore status/admin access.
+    return bool(state.get("authorized") is True and state.get("admin_opt_out") is not True)
 
 
 def status_auth_state_admin_opted_out(account_store: AccountStore, account_id: str) -> bool:

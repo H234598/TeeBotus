@@ -314,6 +314,21 @@ def test_status_auth_state_authorized_tolerates_non_mapping_state(tmp_path, monk
     assert status_auth_state_authorized(account_store, account_id) is False
 
 
+def test_status_auth_opt_out_wins_over_contradictory_authorized_state(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
+    account_store.write_status_auth_state(
+        account_id,
+        {
+            "schema_version": 1,
+            "authorized": True,
+            "admin_opt_out": True,
+        },
+    )
+
+    assert status_auth_state_authorized(account_store, account_id) is False
+
+
 def test_authorize_status_recipient_overwrites_non_mapping_state(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)
