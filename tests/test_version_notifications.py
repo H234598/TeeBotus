@@ -5327,6 +5327,23 @@ def test_codex_history_status_lines_report_counts_and_latest(tmp_path: Path) -> 
     ]
 
 
+def test_codex_history_status_warns_for_skipped_item(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "skipped",
+            "summary_prefix": "v1.8.0 #0001",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "Keine Empfaenger"},
+        },
+    )
+
+    lines = codex_history_status_lines(instance_name="Demo", account_store=store)
+
+    assert lines[0].startswith("codex_history=Demo status=warning queued=0 failed=0 total=1")
+
+
 def test_codex_history_status_lines_validates_and_normalizes_instance_name(tmp_path: Path) -> None:
     store = _store(tmp_path)
 

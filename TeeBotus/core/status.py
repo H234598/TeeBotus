@@ -92,6 +92,7 @@ STATUS_SECRET_REDACTIONS = (
 STATUS_URL_CREDENTIAL_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?:[A-Za-z][A-Za-z0-9+.-]*://)?[^/\s:@]+:[^/\s@]+@(?=[^\s]+)"
 )
+CODEX_HISTORY_SUCCESS_STATUSES = frozenset({"accepted", "acknowledged", "delivered", "sent"})
 
 
 def build_status_reply(
@@ -855,8 +856,9 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
         latest_prefix = "<none>"
     latest_kind = _codex_history_kind(latest) if valid_rows else "<none>"
     kind_counts = _codex_history_kind_counts(valid_rows)
+    has_problem_status = any(status not in CODEX_HISTORY_SUCCESS_STATUSES for status in status_counts)
     return {
-        "status": "warning" if queued or failed else "ok",
+        "status": "warning" if has_problem_status else "ok",
         "queued": queued,
         "failed": failed,
         "total": len(valid_rows),
@@ -892,9 +894,12 @@ def _codex_history_repo_summaries(rows: Sequence[Mapping[str, Any]]) -> list[dic
                 "strategies": 0,
                 "graphs": 0,
                 "other": 0,
+                "problem": False,
             },
         )
         entry["total"] += 1
+        if status not in CODEX_HISTORY_SUCCESS_STATUSES:
+            entry["problem"] = True
         if status == "queued":
             entry["queued"] += 1
         elif status == "failed":
@@ -917,7 +922,7 @@ def _codex_history_repo_summaries(rows: Sequence[Mapping[str, Any]]) -> list[dic
         entry["latest_title"] = redact_status_text(summary.get("title") or "<none>") or "<none>"
     result = []
     for entry in grouped.values():
-        entry["status"] = "warning" if entry["queued"] or entry["failed"] else "ok"
+        entry["status"] = "warning" if entry.pop("problem", False) else "ok"
         result.append(entry)
     return sorted(result, key=lambda item: str(item.get("repo_name") or "").casefold())
 

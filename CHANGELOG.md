@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.32 - 2026-07-11
+
+- Mark skipped or otherwise non-successful Codex-History entries as status
+  warnings.
+
 ## 1.9.31 - 2026-07-11
 
 - Use one consistent empty-state representation for Codex-History status.
