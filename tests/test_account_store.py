@@ -2268,6 +2268,23 @@ def test_sqlite_empty_entry_id_read_clears_previous_diagnostics(tmp_path):
     assert backend.last_database_missing is False
 
 
+def test_sqlite_entry_id_read_chunks_large_requests(tmp_path):
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=tmp_path / "memory.sqlite3", fallback_path=None),
+    )
+    account_id = "a" * 128
+    rows = [{"id": f"mem-{index:04d}", "user_text": str(index)} for index in range(1100)]
+    backend.write_entries(account_id, rows)
+    requested_ids = [f"mem-{index:04d}" for index in reversed(range(1100))]
+
+    selected = backend.read_entries_by_ids(account_id, requested_ids)
+
+    assert [row["id"] for row in selected] == requested_ids
+
+
 def test_sqlite_memory_config_resolves_relative_paths_under_instance_root(tmp_path):
     root = tmp_path / "instance" / "data" / "accounts"
     config = SQLiteMemoryConfig.from_env(

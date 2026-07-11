@@ -27,6 +27,7 @@ SQLITE_REQUIRED_TABLES = (
     "memory_indexes",
     "account_jsonl_collections",
 )
+SQLITE_READ_ENTRIES_BY_IDS_CHUNK_SIZE = 500
 
 
 @dataclass(frozen=True)
@@ -173,21 +174,26 @@ class SQLiteAccountMemoryBackend:
             self.last_database_missing = True
             self.last_entry_read_error = str(self._missing_database_error())
             return []
-        placeholders = ",".join("?" for _ in requested_ids)
         with self._connect_readonly() as connection:
             if not _table_exists(connection, "memory_entries"):
                 if self._secondary_database_exists():
                     self.last_entry_read_error = str(self._missing_table_error("memory_entries"))
                 return []
-            rows = connection.execute(
-                f"""
-                SELECT memory_id, payload_nonce, payload_ciphertext
-                FROM memory_entries
-                WHERE instance_name = ? AND account_id = ? AND memory_id IN ({placeholders})
-                ORDER BY ordinal ASC, created_at ASC, memory_id ASC
-                """,
-                (self.instance_name, account_id, *requested_ids),
-            ).fetchall()
+            rows: list[tuple[Any, ...]] = []
+            for offset in range(0, len(requested_ids), SQLITE_READ_ENTRIES_BY_IDS_CHUNK_SIZE):
+                chunk = requested_ids[offset : offset + SQLITE_READ_ENTRIES_BY_IDS_CHUNK_SIZE]
+                placeholders = ",".join("?" for _ in chunk)
+                rows.extend(
+                    connection.execute(
+                        f"""
+                        SELECT memory_id, payload_nonce, payload_ciphertext
+                        FROM memory_entries
+                        WHERE instance_name = ? AND account_id = ? AND memory_id IN ({placeholders})
+                        ORDER BY ordinal ASC, created_at ASC, memory_id ASC
+                        """,
+                        (self.instance_name, account_id, *chunk),
+                    ).fetchall()
+                )
         entries: list[dict[str, Any]] = []
         skipped = 0
         first_skipped_id = ""
