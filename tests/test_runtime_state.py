@@ -138,6 +138,16 @@ def test_runtime_state_store_rechecks_secret_guard_after_provider_kind_swap(tmp_
     assert guard_calls == ["checked"]
 
 
+def test_runtime_state_store_treats_existing_dotted_instance_directory_as_directory(tmp_path):
+    instance_dir = tmp_path / "Bot.v2"
+    instance_dir.mkdir()
+
+    state = RuntimeStateStore(instance_dir, secret_provider=StaticSecretProvider(b"s" * 32))
+
+    assert state.instance_name == "Bot.v2"
+    assert state.runtime_dir == instance_dir / "data" / "runtime"
+
+
 def test_runtime_state_store_clears_link_persistence_error_after_recovery(tmp_path):
     state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=BrokenProvider())
     account_id = "a" * 128

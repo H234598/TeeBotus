@@ -212,15 +212,18 @@ class RuntimeStateStore(RuntimeState):
     ) -> None:
         super().__init__()
         self.instance_dir = Path(instance_dir)
-        if self.instance_dir.suffix:
-            self.runtime_dir = self.instance_dir.parent
-            inferred_instance_dir = self.runtime_dir.parent.parent if self.runtime_dir.name == "runtime" else self.runtime_dir.parent
-        elif self.instance_dir.name == "data":
+        if self.instance_dir.name == "data":
             self.runtime_dir = self.instance_dir / "runtime"
             inferred_instance_dir = self.instance_dir.parent
         elif self.instance_dir.name == "runtime":
             self.runtime_dir = self.instance_dir
             inferred_instance_dir = self.instance_dir.parent.parent if self.instance_dir.parent.name == "data" else self.instance_dir.parent
+        elif self.instance_dir.is_dir():
+            self.runtime_dir = self.instance_dir / "data" / "runtime"
+            inferred_instance_dir = self.instance_dir
+        elif self.instance_dir.suffix:
+            self.runtime_dir = self.instance_dir.parent
+            inferred_instance_dir = self.runtime_dir.parent.parent if self.runtime_dir.name == "runtime" else self.runtime_dir.parent
         else:
             self.runtime_dir = self.instance_dir / "data" / "runtime"
             inferred_instance_dir = self.instance_dir
