@@ -37,6 +37,8 @@ REMINDER_REQUEST_RE = re.compile(
     r"denk(?:e)?(?:\s+bitte)?(?:\s+(?:fuer\s+)?(?:mich|uns))?(?:\s+.{0,80}?)?\s+dran|"
     r"sag(?:e)?\s+(?:mir|uns)\s+(?:bitte\s+)?bescheid|"
     r"remind\s+(?:me|us)|"
+    r"(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+(?!irgendwann\b)"
+    r"(?:(?!\berinner(?:n|en)?\b).){0,120}\berinner(?:n|en)?|"
     r"(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+(?:bitte\s+)?(?!irgendwann\b)"
     r"(?:(?!\b(?:an|daran)\b).){0,80}\b(?:an|daran)\b\s+.{1,120}\berinner(?:n|en)?"
     r")\b",
@@ -482,6 +484,7 @@ def _reminder_subject(text: str) -> str:
         "",
         cleaned,
     )
+    cleaned = re.sub(r"(?i)\b(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+", "", cleaned)
     cleaned = RECURRENCE_MARKER_RE.sub(" ", cleaned)
     cleaned = re.sub(r"(?i)\b(bit+e|bitte|please)\b", "", cleaned)
     cleaned = RELATIVE_RE.sub("", cleaned)
