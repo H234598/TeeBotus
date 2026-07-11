@@ -18,7 +18,7 @@ NOTIFICATION_LOUDNESS_WAKE_HOURS = (8, 22)
 NOTIFICATION_LOUDNESS_PENDING_STATUS = "pending"
 NOTIFICATION_LOUDNESS_TERMINAL_STATUSES = frozenset({"confirmed", "declined"})
 NOTIFICATION_LOUDNESS_MUTE_TERMS = frozenset(
-    {"stumm", "lautlos", "stummgeschaltet", "lautlosgeschaltet", "muted", "silenced", "silent"}
+    {"stumm", "lautlos", "stummgeschaltet", "lautlosgeschaltet", "mute", "muted", "silence", "silenced", "silent"}
 )
 NOTIFICATION_LOUDNESS_OFF_TERMS = frozenset({"ausgeschaltet", "deaktiviert", "abgeschaltet", "off", "disabled"})
 NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset(
@@ -443,7 +443,13 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_declined_phrase = any(
         _contains_normalized_phrase(normalized, needle)
         for needle in declined_needles
-        if needle not in {"keine benachrichtigung", "keine benachrichtigungen"}
+        if needle not in {
+            "keine benachrichtigung",
+            "keine benachrichtigungen",
+            "did not",
+            "didn t",
+            "haven t",
+        }
         or not (has_negated_mute or has_negated_off)
     )
     has_declined_phrase = has_declined_phrase or has_unnegated_mute or has_unnegated_off or has_negated_completion

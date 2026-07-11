@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.109 - 2026-07-12
+
+- Prioritize explicit negated mute status over generic English refusals.
+
 ## 1.9.108 - 2026-07-12
 
 - Handle contracted English negations in loudness replies.

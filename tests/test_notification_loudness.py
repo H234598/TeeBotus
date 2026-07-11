@@ -1186,6 +1186,9 @@ def test_loudness_free_text_respects_contracted_english_negations() -> None:
     assert _notification_loudness_decision("No, not yet", pending=True) == "declined"
     assert _notification_loudness_decision("Nein, ich habe es getan", pending=True) == "confirmed"
     assert _notification_loudness_decision("Nein, ich habe es nicht getan", pending=True) == "declined"
+    assert _notification_loudness_decision("I haven't muted the messages", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I didn't mute notifications", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I haven't disabled notifications", pending=False) == "confirmed"
 
 
 def test_loudness_free_text_keeps_negation_precedence_without_pending_state() -> None:
