@@ -120,18 +120,21 @@ class MemorySearchService:
         semantic_candidates: tuple[MemoryCandidate, ...] = ()
         semantic_used = False
         semantic_error = ""
-        if self.config.semantic_enabled and self.config.semantic_backend == "qdrant" and self.qdrant_index is not None:
-            semantic_used = True
-            try:
-                semantic_candidates = QdrantMemorySearch(self.qdrant_index, self.instance_name).search(
-                    account,
-                    query_text,
-                    limit=self.config.semantic_limit,
-                    exclude_ids=excluded,
-                )
-            except (QdrantError, ValueError, RuntimeError) as exc:
-                semantic_error = str(exc)
-                semantic_candidates = ()
+        if self.config.semantic_enabled and self.config.semantic_backend == "qdrant":
+            if self.qdrant_index is None:
+                semantic_error = "qdrant index unavailable"
+            else:
+                semantic_used = True
+                try:
+                    semantic_candidates = QdrantMemorySearch(self.qdrant_index, self.instance_name).search(
+                        account,
+                        query_text,
+                        limit=self.config.semantic_limit,
+                        exclude_ids=excluded,
+                    )
+                except (QdrantError, ValueError, RuntimeError) as exc:
+                    semantic_error = str(exc)
+                    semantic_candidates = ()
         merged = merge_memory_candidates(
             local_candidates,
             semantic_candidates,

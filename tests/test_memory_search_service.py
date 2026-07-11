@@ -63,6 +63,21 @@ def test_memory_search_service_uses_local_search_by_default(tmp_path) -> None:
     assert result.candidates[0].sources == ("local",)
 
 
+def test_memory_search_service_reports_missing_enabled_qdrant_index(tmp_path) -> None:
+    store, account_id = _store_with_entries(tmp_path)
+    service = MemorySearchService(
+        account_store=store,
+        instance_name="Depressionsbot",
+        config=MemorySearchConfig(semantic_enabled=True, semantic_backend="qdrant"),
+    )
+
+    result = service.search(account_id, "Schlaf", limit=2)
+
+    assert result.semantic_used is False
+    assert result.semantic_error == "qdrant index unavailable"
+    assert result.entries[0]["id"] == "mem_sleep"
+
+
 def test_keyword_memory_search_returns_local_candidates_without_decrypting_qdrant(tmp_path) -> None:
     store, account_id = _store_with_entries(tmp_path)
     search = KeywordMemorySearch(store)
