@@ -235,6 +235,7 @@ class RuntimeStateStore(RuntimeState):
         self._llm_state_persistence_errors: dict[str, str] = {}
         self._account_store_secret_guard_checked = False
         self._llm_account_store: AccountStore | None = None
+        self._llm_account_store_secret_provider: object | None = None
         with self._link_notifications_lock():
             self._load_persisted_link_notifications()
 
@@ -302,13 +303,14 @@ class RuntimeStateStore(RuntimeState):
     def _account_store_for_llm_state(self) -> AccountStore:
         if self.secret_provider is None:
             raise AccountStoreError("LLM state persistence has no secret provider")
-        if self._llm_account_store is None:
+        if self._llm_account_store is None or self._llm_account_store_secret_provider is not self.secret_provider:
             self._llm_account_store = AccountStore(
                 self.accounts_root,
                 self.instance_name,
                 self.secret_provider,
                 create_dirs=False,
             )
+            self._llm_account_store_secret_provider = self.secret_provider
         return self._llm_account_store
 
     def set_pending_flow(self, *args, **kwargs) -> None:  # type: ignore[override]

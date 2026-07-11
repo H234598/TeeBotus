@@ -91,6 +91,19 @@ def test_runtime_state_store_reports_missing_link_secret_provider(tmp_path):
     assert "no secret provider" in state.link_notifications_persistence_error
 
 
+def test_runtime_state_store_rebuilds_cached_account_store_after_provider_swap(tmp_path):
+    secret = b"s" * 32
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=StaticSecretProvider(secret))
+    account_store.write_llm_state(ACCOUNT_ID, {"previous_response_id": "resp-recovered"})
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=BrokenProvider())
+
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID) is None
+    state.secret_provider = StaticSecretProvider(secret)
+
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID) == "resp-recovered"
+
+
 def test_runtime_state_store_clears_link_persistence_error_after_recovery(tmp_path):
     state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=BrokenProvider())
     account_id = "a" * 128
