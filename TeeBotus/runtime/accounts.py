@@ -4053,7 +4053,11 @@ def _merge_account_jsonl_rows(primary_rows: list[dict[str, Any]], legacy_rows: l
         if row_id and row_id in id_index:
             index = id_index[row_id]
             merged[index] = _choose_newer_state(row, merged[index])
-            seen_payloads.add(json.dumps(merged[index], ensure_ascii=False, sort_keys=True, separators=(",", ":")))
+            seen_payloads.clear()
+            seen_payloads.update(
+                json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+                for item in merged
+            )
             return
         if payload_key in seen_payloads:
             return

@@ -23,6 +23,7 @@ from TeeBotus.runtime.accounts import (
     OPENAI_STATE_FILENAME,
     SecretToolInstanceSecretProvider,
     StaticSecretProvider,
+    _merge_account_jsonl_rows,
     matrix_identity_key,
     runtime_secret_provider,
     signal_identity_key,
@@ -3415,6 +3416,19 @@ def test_structured_account_memory_consolidation_zero_limit_is_a_noop(tmp_path):
     assert created == ()
     assert store.read_memory_entries(account_id) == before_entries
     assert store.read_memory_index(account_id) == before_index
+
+
+def test_account_memory_merge_keeps_distinct_row_after_duplicate_id_replacement():
+    merged = _merge_account_jsonl_rows(
+        [{"id": "mem_same", "updated_at": "2026-07-01T10:00:00+00:00", "text": "alt"}],
+        [
+            {"id": "mem_same", "updated_at": "2026-07-01T11:00:00+00:00", "text": "neu"},
+            {"id": "mem_other", "updated_at": "2026-07-01T12:00:00+00:00", "text": "alt"},
+        ],
+    )
+
+    assert [row["id"] for row in merged] == ["mem_same", "mem_other"]
+    assert merged[0]["text"] == "neu"
 
 
 def test_rebuild_structured_account_memory_index_renames_duplicate_ids(tmp_path):
