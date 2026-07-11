@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 from copy import copy
 from dataclasses import dataclass
@@ -336,7 +337,7 @@ def _record_tts_voice_style_observation_unlocked(
     mimic_state.setdefault("schema_version", 1)
     mimic_state.setdefault("enabled", False)
     mimic_state.setdefault("position", TTS_MIMIC_POSITION_AFTER_DIALECT)
-    mimic_state["observations_count"] = int(mimic_state.get("observations_count") or 0) + 1
+    mimic_state["observations_count"] = _safe_nonnegative_int(mimic_state.get("observations_count")) + 1
     mimic_state["updated_at"] = now
     mimic_state["last_observed_at"] = now
     label_counts = mimic_state.setdefault("label_counts", {})
@@ -344,11 +345,11 @@ def _record_tts_voice_style_observation_unlocked(
         label_counts = {}
         mimic_state["label_counts"] = label_counts
     for label in analysis["labels"]:
-        label_counts[label] = int(label_counts.get(label) or 0) + 1
+        label_counts[label] = _safe_nonnegative_int(label_counts.get(label)) + 1
     if analysis.get("words_per_minute") is not None:
-        previous = mimic_state.get("avg_words_per_minute")
+        previous = _safe_finite_float(mimic_state.get("avg_words_per_minute"))
         wpm = float(analysis["words_per_minute"])
-        mimic_state["avg_words_per_minute"] = round(wpm if previous is None else (float(previous) * 0.7 + wpm * 0.3), 1)
+        mimic_state["avg_words_per_minute"] = round(wpm if previous is None else (previous * 0.7 + wpm * 0.3), 1)
     mimic_state["last_analysis"] = {
         "labels": analysis["labels"],
         "word_count": analysis["word_count"],
@@ -367,7 +368,7 @@ def tts_mimic_voice_profile(account_store: AccountStore | None, account_id: str)
     except (AccountStoreError, OSError, ValueError):
         return "", TTS_MIMIC_POSITION_AFTER_DIALECT
     mimic_state = state.get(TTS_MIMIC_VOICE_STATE_KEY)
-    if not isinstance(mimic_state, dict) or not mimic_state.get("enabled"):
+    if not isinstance(mimic_state, dict) or not _coerce_bool(mimic_state.get("enabled")):
         return "", TTS_MIMIC_POSITION_AFTER_DIALECT
     return _mimic_profile_from_state(mimic_state), _normalize_mimic_position(str(mimic_state.get("position") or "")) or TTS_MIMIC_POSITION_AFTER_DIALECT
 
@@ -473,7 +474,7 @@ def _mimic_state(state: dict[str, Any]) -> dict[str, Any]:
         mimic_state = {}
         state[TTS_MIMIC_VOICE_STATE_KEY] = mimic_state
     mimic_state.setdefault("schema_version", 1)
-    mimic_state.setdefault("enabled", False)
+    mimic_state["enabled"] = _coerce_bool(mimic_state.get("enabled"))
     mimic_state.setdefault("position", TTS_MIMIC_POSITION_AFTER_DIALECT)
     return mimic_state
 
@@ -498,13 +499,13 @@ def _mimic_profile_from_state(mimic_state: dict[str, Any]) -> str:
     label_counts = mimic_state.get("label_counts")
     labels: list[str] = []
     if isinstance(label_counts, dict):
-        labels = [
+            labels = [
             str(label)
             for label, _count in sorted(
                 label_counts.items(),
-                key=lambda item: (-int(item[1] or 0), str(item[0])),
+                key=lambda item: (-_safe_nonnegative_int(item[1]), str(item[0])),
             )
-            if str(label).strip()
+            if str(label).strip() and _safe_nonnegative_int(_count) > 0
         ][:5]
     if not labels:
         last_analysis = mimic_state.get("last_analysis")
@@ -512,10 +513,35 @@ def _mimic_profile_from_state(mimic_state: dict[str, Any]) -> str:
             raw_labels = last_analysis.get("labels")
             if isinstance(raw_labels, list):
                 labels = [str(label) for label in raw_labels if str(label).strip()][:5]
-    avg_wpm = mimic_state.get("avg_words_per_minute")
+    avg_wpm = _safe_finite_float(mimic_state.get("avg_words_per_minute"))
     if avg_wpm is not None and not any("spricht" in label for label in labels):
-        labels.insert(0, _speed_label(float(avg_wpm)))
+        labels.insert(0, _speed_label(avg_wpm))
     return "; ".join(dict.fromkeys(labels))
+
+
+def _coerce_bool(value: Any) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().casefold() in {"1", "true", "yes", "on", "ein", "aktiv"}
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value == 1
+    return False
+
+
+def _safe_nonnegative_int(value: Any) -> int:
+    try:
+        return max(0, int(value or 0))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def _safe_finite_float(value: Any) -> float | None:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return parsed if math.isfinite(parsed) else None
 
 
 def _analyze_voice_style(transcript: str, *, duration_seconds: float | int | None = None) -> dict[str, Any]:

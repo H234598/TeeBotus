@@ -120,6 +120,30 @@ def test_voice_style_observations_are_serialized_per_account(tmp_path, monkeypat
     assert first.read_agent_state(account_id)["tts_mimic_voice"]["observations_count"] == 2
 
 
+def test_corrupt_mimic_state_fails_closed_and_recovers_on_observation(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="mimic-corrupt"))
+    state = account_store.read_agent_state(account_id)
+    state["tts_mimic_voice"] = {
+        "enabled": "false",
+        "observations_count": "kaputt",
+        "label_counts": {"spricht schnell": "kaputt"},
+        "avg_words_per_minute": "kaputt",
+    }
+    account_store.write_agent_state(account_id, state)
+
+    profile, position = tts_mimic_voice_profile(account_store, account_id)
+    status = handle_tts_mimic_voice_command(account_store, account_id, "/mimic_voice", BotInstructions())
+    changed = record_tts_voice_style_observation(account_store, account_id, "Ich rede schnell und ruhig.", duration_seconds=3)
+
+    assert (profile, position) == ("", "after_dialect")
+    assert status.enabled is False
+    assert changed is True
+    repaired = account_store.read_agent_state(account_id)["tts_mimic_voice"]
+    assert repaired["observations_count"] == 1
+    assert repaired["label_counts"]
+
+
 def test_voice_style_observation_builds_mimic_profile_without_raw_transcript(tmp_path) -> None:
     account_store = store(tmp_path)
     account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="mimic"))
