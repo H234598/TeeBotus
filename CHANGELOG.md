@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.61 - 2026-07-11
+
+- Normalize naive notification-loudness timestamps as UTC.
+
 ## 1.9.60 - 2026-07-11
 
 - Fail closed on invalid loudness route slots and boolean state values.

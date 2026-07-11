@@ -66,7 +66,7 @@ def maybe_notification_loudness_prompt_action(
         route_state = _ensure_route_state(state, event)
         if _normalized_route_status(route_state) in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
             return None
-        resolved_now = now or datetime.now(timezone.utc)
+        resolved_now = _resolve_loudness_now(now)
         if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=False):
             account_store.write_agent_state(account_id, state)
             return None
@@ -99,7 +99,7 @@ def _queue_due_notification_loudness_prompts_unlocked(
     routes = notification_state.get("routes")
     if not isinstance(routes, dict):
         return ()
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_loudness_now(now)
     queued_ids: list[str] = []
     state_changed = False
     for route_key, route_state in list(routes.items()):
@@ -237,7 +237,7 @@ def _set_notification_loudness_status(
 ) -> None:
     state = account_store.read_agent_state(account_id)
     route_state = _ensure_route_state(state, event)
-    timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+    timestamp = _resolve_loudness_now(now).isoformat(timespec="seconds")
     route_state["status"] = status
     route_state["decided_at"] = timestamp
     route_state["updated_at"] = timestamp
@@ -530,7 +530,7 @@ def _route_recently_seen(route: Mapping[str, Any], now: datetime) -> bool:
     last_seen = _parse_datetime(str(route.get("last_seen_at") or ""))
     if last_seen is None:
         return False
-    age = now - last_seen
+    age = _resolve_loudness_now(now) - last_seen
     return timedelta(0) <= age <= NOTIFICATION_LOUDNESS_ONLINE_WINDOW
 
 
@@ -552,6 +552,14 @@ def _parse_datetime(value: str) -> datetime | None:
     if parsed.tzinfo is None:
         return parsed.replace(tzinfo=timezone.utc)
     return parsed
+
+
+def _resolve_loudness_now(value: datetime | None) -> datetime:
+    if value is None:
+        return datetime.now(timezone.utc)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
 
 
 def _normalize_text(text: str) -> str:
