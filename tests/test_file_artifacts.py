@@ -74,6 +74,17 @@ def test_parse_generated_file_blocks_preserves_safe_content_type_parameters() ->
     assert files[0].content_type == "text/calendar; charset=utf-8"
 
 
+def test_parse_generated_file_blocks_falls_back_instead_of_truncating_long_content_type() -> None:
+    content_type = 'text/plain; name="' + ("a" * 180) + '"; charset=utf-8'
+    visible, files = parse_generated_file_blocks(
+        f'Datei.\n[[TEE_FILE filename="notiz.txt" content_type="{content_type}"]]\nHallo\n[[/TEE_FILE]]'
+    )
+
+    assert visible == "Datei."
+    assert len(files) == 1
+    assert files[0].content_type == "text/plain; charset=utf-8"
+
+
 def test_parse_generated_image_blocks_extracts_safe_image_request() -> None:
     visible, images = parse_generated_image_blocks(
         'Schau mal.\n[[TEE_IMAGE filename="../wetter.svg" caption="Morgenbild" purpose="weather_encouragement"]]\n'

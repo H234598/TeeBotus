@@ -255,8 +255,8 @@ def _generated_file_secret_value_is_env_reference(key: object, value: object) ->
 
 def _safe_content_type(value: str, filename: str) -> str:
     normalized = str(value or "").strip()
-    if normalized and _content_type_is_safe(normalized):
-        return normalized[:160]
+    if normalized and len(normalized) <= 160 and _content_type_is_safe(normalized):
+        return normalized
     return _guess_generated_file_content_type(filename)
 
 
