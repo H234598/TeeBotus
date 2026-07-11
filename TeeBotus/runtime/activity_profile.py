@@ -34,26 +34,28 @@ def record_account_activity(
 ) -> None:
     if not account_id or not event.is_private:
         return
-    state = account_store.read_agent_state(account_id)
-    profile = _ensure_activity_profile(state)
-    observed_at = _aware(now or local_now()).isoformat(timespec="seconds")
-    observations = profile.setdefault("observations", [])
-    if not isinstance(observations, list):
-        observations = []
-        profile["observations"] = observations
-    observations.append(
-        {
-            "at": observed_at,
-            "channel": event.channel,
-            "route_key": f"{event.channel}:{event.adapter_slot}:{event.chat_id}",
-            "text_length": min(4000, len(str(event.text or ""))),
-            "attachment_count": len(event.attachments),
-        }
-    )
-    profile["observations"] = _trim_observations(observations, now=_aware(now or local_now()))
-    profile["updated_at"] = observed_at
-    profile["derived"] = derive_activity_profile(profile["observations"], now=_aware(now or local_now()))
-    account_store.write_agent_state(account_id, state)
+    with account_store.account_memory_lock(account_id):
+        state = account_store.read_agent_state(account_id)
+        profile = _ensure_activity_profile(state)
+        resolved_now = _aware(now or local_now())
+        observed_at = resolved_now.isoformat(timespec="seconds")
+        observations = profile.setdefault("observations", [])
+        if not isinstance(observations, list):
+            observations = []
+            profile["observations"] = observations
+        observations.append(
+            {
+                "at": observed_at,
+                "channel": event.channel,
+                "route_key": f"{event.channel}:{event.adapter_slot}:{event.chat_id}",
+                "text_length": min(4000, len(str(event.text or ""))),
+                "attachment_count": len(event.attachments),
+            }
+        )
+        profile["observations"] = _trim_observations(observations, now=resolved_now)
+        profile["updated_at"] = observed_at
+        profile["derived"] = derive_activity_profile(profile["observations"], now=resolved_now)
+        account_store.write_agent_state(account_id, state)
 
 
 def contact_timing_decision(

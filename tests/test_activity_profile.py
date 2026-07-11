@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import threading
+import time
 
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
 from TeeBotus.runtime.activity_profile import contact_timing_decision, record_account_activity
@@ -91,6 +93,59 @@ def test_engine_records_private_activity_observations(tmp_path, monkeypatch) -> 
     assert len(observations) == 1
     assert observations[0]["channel"] == "signal"
     assert observations[0]["text_length"] == len("/status")
+
+
+def test_record_account_activity_serializes_concurrent_state_updates(tmp_path, monkeypatch) -> None:
+    root = tmp_path / "accounts"
+    first = store(tmp_path)
+    second = AccountStore(root, "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = first.resolve_or_create_account(identity)
+    original_read = AccountStore.read_agent_state
+    state = {"active": 0, "maximum": 0}
+    state_lock = threading.Lock()
+    errors: list[BaseException] = []
+
+    def slow_read(account_store, current_account_id):
+        with state_lock:
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+        try:
+            time.sleep(0.03)
+            return original_read(account_store, current_account_id)
+        finally:
+            with state_lock:
+                state["active"] -= 1
+
+    monkeypatch.setattr(AccountStore, "read_agent_state", slow_read)
+
+    def record(account_store, hour: int) -> None:
+        try:
+            record_account_activity(
+                account_store,
+                account_id,
+                event(identity),
+                now=datetime(2026, 6, 15, hour, 0, tzinfo=LOCAL),
+            )
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=record, args=(first, 9)),
+        threading.Thread(target=record, args=(second, 10)),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    observations = first.read_agent_state(account_id)["activity_profile"]["observations"]
+    assert errors == []
+    assert state["maximum"] == 1
+    assert {observation["at"] for observation in observations} == {
+        "2026-06-15T09:00:00+02:00",
+        "2026-06-15T10:00:00+02:00",
+    }
 
 
 def test_contact_timing_uses_weekend_profile_for_irregular_weekends(tmp_path) -> None:
