@@ -641,6 +641,8 @@ class RuntimeStateStore(RuntimeState):
         self.link_notifications = loaded
         self.link_notifications_persistence_error = ""
         self._purge_expired_link_notifications()
+        if had_persistence_error and not self.link_notifications_persistence_error:
+            self._save_link_notifications()
 
     def _refresh_persisted_link_notifications(self) -> None:
         """Refresh link notifications written by another runtime bridge."""

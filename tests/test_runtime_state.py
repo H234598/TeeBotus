@@ -203,6 +203,37 @@ def test_runtime_state_store_persists_link_notifications_after_recovery(tmp_path
     assert reloaded.list_link_notifications(instance_name="Bot", account_id=account_id)
 
 
+def test_runtime_state_store_persists_merged_notifications_after_recovery(tmp_path):
+    data_dir = tmp_path / "Bot" / "data"
+    account_id = "a" * 128
+    provider = StaticSecretProvider(b"s" * 32)
+    initial = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+    initial.record_link_notification(
+        instance_name="Bot",
+        account_id=account_id,
+        new_identity_key="signal:uuid:old",
+        old_identity_key="telegram:user:old",
+    )
+
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=BrokenProvider())
+    state.record_link_notification(
+        instance_name="Bot",
+        account_id=account_id,
+        new_identity_key="signal:uuid:new",
+        old_identity_key="telegram:user:new",
+    )
+    state.secret_provider = provider
+
+    notifications = state.list_link_notifications(instance_name="Bot", account_id=account_id)
+    assert {item["old_identity_key"] for item in notifications} == {"telegram:user:old", "telegram:user:new"}
+
+    reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+    assert {item["old_identity_key"] for item in reloaded.list_link_notifications(instance_name="Bot", account_id=account_id)} == {
+        "telegram:user:old",
+        "telegram:user:new",
+    }
+
+
 def test_runtime_state_store_refreshes_link_notifications_between_bridges(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"
