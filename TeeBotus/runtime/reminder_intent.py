@@ -167,9 +167,12 @@ def parse_reminder_intent(text: str, *, now: datetime | None = None) -> Reminder
     if not raw or not REMINDER_REQUEST_RE.search(_normalize(raw)):
         return ReminderIntent(False)
     resolved_now = now or local_now()
-    due_at = _parse_due_at(raw, resolved_now)
-    subject = _reminder_subject(raw)
+    normalized_now = resolved_now if resolved_now.tzinfo else resolved_now.replace(tzinfo=timezone.utc)
     recurrence = _parse_recurrence(raw)
+    due_at = _parse_due_at(raw, resolved_now)
+    if not due_at and recurrence.startswith("every ") and not _has_invalid_explicit_time(raw):
+        due_at = _initial_interval_due(normalized_now, recurrence)
+    subject = _reminder_subject(raw)
     return ReminderIntent(True, due_at=due_at, subject=subject, recurrence=recurrence, missing_time=not bool(due_at))
 
 
@@ -430,6 +433,23 @@ def _parse_recurrence(text: str) -> str:
     else:
         return ""
     return f"every {count} {normalized_unit}"
+
+
+def _initial_interval_due(now: datetime, recurrence: str) -> str:
+    match = re.fullmatch(r"every\s+(?P<count>\d{1,3})\s+(?P<unit>minutes|hours|days|weeks)", recurrence)
+    if not match:
+        return ""
+    count = int(match.group("count"))
+    unit = match.group("unit")
+    if unit == "minutes":
+        due = now + timedelta(minutes=count)
+    elif unit == "hours":
+        due = now + timedelta(hours=count)
+    elif unit == "days":
+        due = now + timedelta(days=count)
+    else:
+        due = now + timedelta(weeks=count)
+    return _iso(due)
 
 
 def _apply_explicit_time(value: datetime, text: str) -> datetime:

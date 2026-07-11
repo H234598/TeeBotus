@@ -87,6 +87,16 @@ def test_parse_reminder_extracts_supported_recurrence_rules() -> None:
     )
 
 
+def test_parse_reminder_interval_recurrence_starts_from_now() -> None:
+    now = datetime(2026, 6, 15, 12, 34, tzinfo=timezone.utc)
+
+    hours = parse_reminder_intent("Erinnere mich alle 2 Stunden an Wasser", now=now)
+    days = parse_reminder_intent("Erinnere mich alle 2 Tage an Wasser", now=now)
+
+    assert (hours.due_at, hours.recurrence) == ("2026-06-15T14:34:00+00:00", "every 2 hours")
+    assert (days.due_at, days.recurrence) == ("2026-06-17T12:34:00+00:00", "every 2 days")
+
+
 def test_parse_reminder_default_now_uses_configured_local_timezone(monkeypatch) -> None:
     local = timezone(timedelta(hours=2))
     monkeypatch.setattr(
