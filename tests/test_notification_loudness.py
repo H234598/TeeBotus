@@ -11,6 +11,7 @@ from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.notification_loudness import (
     NOTIFICATION_LOUDNESS_PROMPT,
+    maybe_handle_notification_loudness_response,
     maybe_notification_loudness_prompt_action,
     queue_due_notification_loudness_prompts,
 )
@@ -373,3 +374,30 @@ def test_concurrent_incoming_messages_prompt_only_once(tmp_path) -> None:
     route_state = account_store.read_agent_state(account_id)["notification_loudness"]["routes"]["telegram:1:chat-1"]
     assert route_state["status"] == "pending"
     assert route_state["prompted_windows_by_date"]["2026-06-15"] == ["second"]
+
+
+def test_concurrent_loudness_confirmations_reply_only_once(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    incoming_event = event(identity, "ja, laut")
+    assert maybe_notification_loudness_prompt_action(
+        event(identity), account_store, account_id, now=datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    ) is not None
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                lambda _: maybe_handle_notification_loudness_response(
+                    incoming_event,
+                    account_store,
+                    account_id,
+                    now=datetime(2026, 6, 15, 15, tzinfo=timezone.utc),
+                ),
+                (1, 2),
+            )
+        )
+
+    assert sum(result is not None for result in results) == 1
+    route_state = account_store.read_agent_state(account_id)["notification_loudness"]["routes"]["telegram:1:chat-1"]
+    assert route_state["status"] == "confirmed"

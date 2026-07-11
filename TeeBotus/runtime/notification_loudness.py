@@ -35,13 +35,17 @@ def maybe_handle_notification_loudness_response(
 ) -> tuple[SendText, ...] | None:
     if not _is_private_chat_type(event.chat_type):
         return None
-    decision = _notification_loudness_decision(event.text, pending=_route_status(account_store, account_id, event) == "pending")
-    if decision is None:
-        return None
-    _set_notification_loudness_status(account_store, account_id, event, decision, now=now)
-    _cancel_queued_notification_loudness_items(account_store, account_id, event)
-    text = NOTIFICATION_LOUDNESS_CONFIRMED_REPLY if decision == "confirmed" else NOTIFICATION_LOUDNESS_DECLINED_REPLY
-    return (SendText(event.chat_id, text, track=False),)
+    with _account_proactive_outbox_lock(account_store, account_id):
+        route_status = _route_status(account_store, account_id, event)
+        if route_status in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
+            return None
+        decision = _notification_loudness_decision(event.text, pending=route_status == "pending")
+        if decision is None:
+            return None
+        _set_notification_loudness_status(account_store, account_id, event, decision, now=now)
+        _cancel_queued_notification_loudness_items(account_store, account_id, event)
+        text = NOTIFICATION_LOUDNESS_CONFIRMED_REPLY if decision == "confirmed" else NOTIFICATION_LOUDNESS_DECLINED_REPLY
+        return (SendText(event.chat_id, text, track=False),)
 
 
 def maybe_notification_loudness_prompt_action(
