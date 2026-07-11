@@ -979,6 +979,28 @@ def test_status_api_budget_accepts_gemini_key_ring_without_single_key(tmp_path):
     assert "Key: GEMINI_API_KEY fehlt" not in text
 
 
+def test_status_api_budget_prefers_gemini_key_ring_when_single_key_is_also_set(tmp_path):
+    class GeminiClient:
+        provider_name = "litellm_gemini_stateless"
+        model = "gemini/gemini-3.5-flash"
+
+    text = build_status_reply(
+        sender_id="1",
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        llm_enabled=True,
+        llm_client=GeminiClient(),
+        bibliothekar_enabled=False,
+        env={
+            "GEMINI_API_KEY": "single-key",
+            "GEMINI_API_KEYS_ACCOUNT_1": "ring-a,ring-b",
+        },
+    )
+
+    assert "Key: Gemini-Keyring gesetzt (2)" in text
+    assert "Key: GEMINI_API_KEY gesetzt" not in text
+
+
 def test_status_omits_stateful_gemini_retention_warning_when_free_tier_guard_is_off(tmp_path):
     class StatefulGeminiClient:
         provider_name = "litellm_gemini_stateful"

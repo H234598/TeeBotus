@@ -477,12 +477,19 @@ def _api_key_status_label(key_env: str, *, env: Mapping[str, str], provider: str
         return "nicht noetig"
     if provider == "hf_pool":
         return "ueber Pool/Target"
-    if key_env and str(env.get(key_env, "") or "").strip():
-        return f"{key_env} gesetzt"
     if _model_uses_google(provider, model):
         key_ring_size = _gemini_key_ring_size(env, instance_name=instance_name)
+        if key_ring_size > 1:
+            return f"Gemini-Keyring gesetzt ({key_ring_size})"
+        if key_env and str(env.get(key_env, "") or "").strip():
+            return f"{key_env} gesetzt"
+        if str(env.get("GOOGLE_API_KEY", "") or "").strip():
+            return "GOOGLE_API_KEY gesetzt"
         if key_ring_size:
             return f"Gemini-Keyring gesetzt ({key_ring_size})"
+        return f"{key_env} fehlt" if key_env else "providerabhaengig"
+    if key_env and str(env.get(key_env, "") or "").strip():
+        return f"{key_env} gesetzt"
     if not key_env:
         return "providerabhaengig"
     return f"{key_env} fehlt"
