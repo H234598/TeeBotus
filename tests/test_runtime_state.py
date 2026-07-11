@@ -578,6 +578,35 @@ def test_runtime_state_store_reports_link_lock_error_after_initialization(tmp_pa
     assert not outside.exists()
 
 
+def test_runtime_state_store_rejects_symlinked_account_state_root(tmp_path):
+    data_dir = tmp_path / "Bot" / "data"
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    outside = tmp_path / "outside-account-root"
+    outside.mkdir()
+    accounts_root = data_dir / "accounts"
+    accounts_root.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(AccountStoreError, match="unsafe account state root"):
+        state.set_previous_response_id("Bot", ACCOUNT_ID, "response-id")
+
+    assert not (outside / "accounts" / ACCOUNT_ID).exists()
+
+
+def test_runtime_state_store_rejects_symlinked_account_directory_root(tmp_path):
+    data_dir = tmp_path / "Bot" / "data"
+    accounts_root = data_dir / "accounts"
+    accounts_root.mkdir(parents=True)
+    outside = tmp_path / "outside-account-directory-root"
+    outside.mkdir()
+    (accounts_root / "accounts").symlink_to(outside, target_is_directory=True)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    with pytest.raises(AccountStoreError, match="unsafe account state root"):
+        state.set_previous_response_id("Bot", ACCOUNT_ID, "response-id")
+
+    assert not (outside / ACCOUNT_ID).exists()
+
+
 def test_runtime_state_store_refuses_runtime_lock_symlink(tmp_path):
     data_dir = tmp_path / "Bot" / "data"
     runtime_dir = data_dir / "runtime"

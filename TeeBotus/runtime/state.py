@@ -313,6 +313,7 @@ class RuntimeStateStore(RuntimeState):
     def _account_store_for_llm_state(self) -> AccountStore:
         if self.secret_provider is None:
             raise AccountStoreError("LLM state persistence has no secret provider")
+        self._ensure_safe_accounts_root()
         if self._llm_account_store is None or self._llm_account_store_secret_provider is not self.secret_provider:
             self._llm_account_store = AccountStore(
                 self.accounts_root,
@@ -322,6 +323,11 @@ class RuntimeStateStore(RuntimeState):
             )
             self._llm_account_store_secret_provider = self.secret_provider
         return self._llm_account_store
+
+    def _ensure_safe_accounts_root(self) -> None:
+        for root in (self.accounts_root, self.accounts_root / ACCOUNTS_DIRNAME):
+            if _has_symlink_parent(root) or root.is_symlink():
+                raise AccountStoreError(f"refusing unsafe account state root: {root}")
 
     def set_pending_flow(self, *args, **kwargs) -> None:  # type: ignore[override]
         if len(args) == 1 and isinstance(args[0], PendingFlow):
@@ -554,6 +560,7 @@ class RuntimeStateStore(RuntimeState):
             # Keep the legacy in-memory behavior for invalid IDs; the actual
             # state-path validation below still records the persistence error.
             return nullcontext()
+        self._ensure_safe_accounts_root()
         return account_memory_lock_for_root(self.accounts_root, account_id)
 
     def _read_llm_state(self, account_id: str) -> tuple[dict[str, Any], str]:
