@@ -3057,6 +3057,102 @@ def test_account_memory_fallback_retries_secondary_clear_before_collection_names
     assert backend.last_fallback_sync_error == ""
 
 
+def test_account_memory_fallback_blocks_writes_until_secondary_clear_succeeds() -> None:
+    class Backend:
+        def __init__(self, *, fail_clear: bool = False) -> None:
+            self.fail_clear = fail_clear
+            self.entries: dict[str, list[dict[str, str]]] = {}
+
+        def clear_account_unchecked(self, account_id: str) -> None:
+            if self.fail_clear:
+                raise OSError("fallback clear unavailable")
+            self.entries.pop(account_id, None)
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            self.entries[account_id] = [dict(row) for row in rows]
+
+    account_id = "a" * 128
+    primary = Backend()
+    fallback = Backend(fail_clear=True)
+    primary.entries[account_id] = [{"id": "old_primary"}]
+    fallback.entries[account_id] = [{"id": "old_fallback"}]
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    with pytest.raises(OSError, match="fallback clear unavailable"):
+        backend.clear_account_unchecked(account_id)
+    with pytest.raises(AccountStoreError, match="fallback account clear is pending"):
+        backend.write_entries(account_id, [{"id": "new"}])
+
+    assert primary.entries.get(account_id) is None
+    assert fallback.entries[account_id] == [{"id": "old_fallback"}]
+
+    fallback.fail_clear = False
+    backend.write_entries(account_id, [{"id": "new"}])
+
+    assert primary.entries[account_id] == [{"id": "new"}]
+    assert fallback.entries[account_id] == [{"id": "new"}]
+    assert backend.stale_fallback_collection_account_ids == ()
+    assert backend.last_fallback_sync_error == ""
+
+
+def test_account_memory_fallback_retries_full_secondary_clear_on_primary_read() -> None:
+    class Backend:
+        def __init__(self, *, fail_clear: bool = False) -> None:
+            self.fail_clear = fail_clear
+            self.entries: dict[str, list[dict[str, str]]] = {}
+            self.indexes: dict[str, dict[str, object]] = {}
+            self.collections: dict[tuple[str, str], list[dict[str, str]]] = {}
+
+        def clear_account_unchecked(self, account_id: str) -> None:
+            if self.fail_clear:
+                raise OSError("fallback clear unavailable")
+            self.entries.pop(account_id, None)
+            self.indexes.pop(account_id, None)
+            self.collections = {
+                key: rows for key, rows in self.collections.items() if key[0] != account_id
+            }
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, account_id: str) -> dict[str, object]:
+            return dict(self.indexes.get(account_id, {}))
+
+        def write_index(self, account_id: str, data: dict[str, object]) -> None:
+            self.indexes[account_id] = dict(data)
+
+        def read_collection(self, account_id: str, collection: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.collections.get((account_id, collection), [])]
+
+        def write_collection(self, account_id: str, collection: str, rows: list[dict[str, str]]) -> None:
+            self.collections[(account_id, collection)] = [dict(row) for row in rows]
+
+    account_id = "a" * 128
+    primary = Backend()
+    fallback = Backend(fail_clear=True)
+    fallback.entries[account_id] = [{"id": "old_entry"}]
+    fallback.indexes[account_id] = {"index": {"entries": {"old_entry": {}}}}
+    fallback.collections[(account_id, "version_notifications")] = [{"id": "old_notification"}]
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    with pytest.raises(OSError, match="fallback clear unavailable"):
+        backend.clear_account_unchecked(account_id)
+    fallback.fail_clear = False
+
+    assert backend.read_entries(account_id) == []
+    assert account_id not in fallback.entries
+    assert account_id not in fallback.indexes
+    assert not any(key[0] == account_id for key in fallback.collections)
+    assert backend.stale_fallback_collection_account_ids == ()
+    assert backend.last_fallback_sync_error == ""
+
+
 def test_account_memory_fallback_retries_stale_secondary_when_primary_is_available() -> None:
     class Backend:
         def __init__(self, *, fail_write: bool = False) -> None:

@@ -311,6 +311,21 @@ class WarningFallbackAccountMemoryBackend:
         dirty_key: Any | None = None,
     ) -> None:
         resolved_dirty_key = account_id if dirty_key is None else dirty_key
+        if self._collection_clear_pending(account_id):
+            self._repair_cleared_fallback_account(account_id)
+            if self._collection_clear_pending(account_id):
+                self._fallback_active = True
+                self.last_fallback_sync_error = (
+                    f"{operation}: write blocked because fallback account clear is pending"
+                )
+                LOGGER.critical(
+                    "ACCOUNT MEMORY WRITE BLOCKED. FALLBACK ACCOUNT CLEAR IS PENDING; NEW DATA MUST NOT BE WRITTEN "
+                    "UNTIL THE SECONDARY RESET IS COMPLETE. label=%s operation=%s account_id=%s.",
+                    self.label,
+                    operation,
+                    account_id,
+                )
+                raise AccountStoreError(self.last_fallback_sync_error)
         if self._account_has_unrecoverable_fallback(account_id):
             self._fallback_active = True
             self.last_fallback_sync_error = (
@@ -475,7 +490,7 @@ class WarningFallbackAccountMemoryBackend:
         return False
 
     def _repair_unrecoverable_fallback_from_primary(self, operation: str, account_id: str, result: Any) -> None:
-        if operation.startswith("read_collection:") and self._collection_clear_pending(account_id):
+        if self._collection_clear_pending(account_id):
             self._repair_cleared_fallback_account(account_id)
             return
         stale_key = self._operation_stale_key(operation, account_id)
@@ -555,8 +570,7 @@ class WarningFallbackAccountMemoryBackend:
 
     def _fallback_repair_pending(self, operation: str, account_id: str) -> bool:
         stale_key = self._operation_stale_key(operation, account_id)
-        collection_clear_pending = operation.startswith("read_collection:") and self._collection_clear_pending(account_id)
-        return collection_clear_pending or (
+        return self._collection_clear_pending(account_id) or (
             stale_key in self._fallback_stale_set(operation)
             or stale_key in self._fallback_sync_failed_set(operation)
             or stale_key in self._unrecoverable_fallback_set(operation)
