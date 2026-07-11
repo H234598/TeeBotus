@@ -61,6 +61,7 @@ def transcribe_local_audio(
                 audio_path,
                 workdir,
                 str(model or "tiny").strip() or "tiny",
+                language=language,
                 instance_name=instance_name,
             )
         if shutil.which("whisper") is None:

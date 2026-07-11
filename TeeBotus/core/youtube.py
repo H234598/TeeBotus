@@ -361,7 +361,7 @@ def _parse_youtube_llm_option(normalized_text: str) -> bool | None:
         return True
     if re.search(rf"\b{llm_actions}\b.{{0,100}}\b(?:danach|dann|anschlie(?:ß|ss)end|hinterher|nachher|am\s+ende|nach\s+der\s+transkription)\b", normalized_text):
         return True
-    if re.search(rf"\b(?:lass|laß)\b.{{0,80}}\b(?:ki|ai|gpt|chatgpt|openai|modell|model)\b.{{0,80}}\b(?:drüber|drueber|drauf|darauf|damit)\b", normalized_text):
+    if re.search(r"\b(?:lass|laß)\b.{0,80}\b(?:ki|ai|gpt|chatgpt|openai|modell|model)\b.{0,80}\b(?:drüber|drueber|drauf|darauf|damit)\b", normalized_text):
         return True
     if re.search(r"\b(?:danach|anschlie(?:ß|ss)end|hinterher|nachher|am\s+ende)\b.{0,80}\b(?:an\s+dich|zu\s+dir|dir\s+geben|gib\s+dir|schick\s+dir)\b", normalized_text):
         return True
@@ -754,6 +754,7 @@ def _transcribe_audio_with_faster_whisper_model(
     workdir: Path,
     model_name: str,
     live_callback=None,
+    language: str = "",
     instance_name: str = "",
 ) -> str:
     code = """
@@ -765,8 +766,10 @@ audio_path = Path(sys.argv[1])
 model_name = sys.argv[2]
 compute_type = sys.argv[3]
 cpu_threads = int(sys.argv[4])
+language = sys.argv[5].strip()
 model = WhisperModel(model_name, device="cpu", compute_type=compute_type, cpu_threads=cpu_threads, num_workers=1)
-segments, _ = model.transcribe(str(audio_path))
+transcribe_kwargs = {"language": language} if language else {}
+segments, _ = model.transcribe(str(audio_path), **transcribe_kwargs)
 for segment in segments:
     text = segment.text.strip()
     if text:
@@ -780,6 +783,7 @@ for segment in segments:
         model_name,
         YOUTUBE_FASTER_WHISPER_COMPUTE_TYPE,
         str(YOUTUBE_FASTER_WHISPER_CPU_THREADS),
+        str(language or "").strip(),
     ]
     result = _run_local_command_streaming(
         command,
