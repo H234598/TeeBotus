@@ -193,7 +193,7 @@ def is_notification_loudness_outbox_item(item: Mapping[str, Any] | None) -> bool
 
 def notification_loudness_outbox_item_is_active(account_store: AccountStore, account_id: str, item: Mapping[str, Any]) -> bool:
     """Return whether a queued loudness prompt still belongs to an open check."""
-    route_key = _normalize_route_key(item.get("route_key"))
+    route_key = _outbox_route_key(item)
     if not route_key:
         return False
     state = account_store.read_agent_state(account_id)
@@ -366,7 +366,7 @@ def _cancel_pending_notification_loudness_items(account_store: AccountStore, acc
         for item in rows:
             if not isinstance(item, dict) or not is_notification_loudness_outbox_item(item):
                 continue
-            if _normalize_route_key(item.get("route_key")) != _normalize_route_key(route_key):
+            if _outbox_route_key(item) != _normalize_route_key(route_key):
                 continue
             if str(item.get("status") or "queued").strip().casefold() not in {"queued", "dispatching"}:
                 continue
@@ -386,7 +386,7 @@ def _has_queued_notification_loudness_item(account_store: AccountStore, account_
     for item in account_store.read_proactive_outbox(account_id):
         if not isinstance(item, dict) or not is_notification_loudness_outbox_item(item):
             continue
-        if _normalize_route_key(item.get("route_key")) != _normalize_route_key(route_key):
+        if _outbox_route_key(item) != _normalize_route_key(route_key):
             continue
         if str(item.get("status") or "queued").strip().casefold() in {"queued", "dispatching"}:
             return True
@@ -519,6 +519,14 @@ def _normalize_route_key(route_key: Any) -> str:
 
 def _route_key_from_route(route: Mapping[str, Any]) -> str:
     return _route_key_for_channel_chat(route.get("channel"), route.get("adapter_slot"), route.get("chat_id"))
+
+
+def _outbox_route_key(item: Mapping[str, Any]) -> str:
+    route_key = _normalize_route_key(item.get("route_key"))
+    if route_key:
+        return route_key
+    route = item.get("route")
+    return _route_key_from_route(route) if isinstance(route, Mapping) else ""
 
 
 def _route_key_for_channel_chat(channel: Any, adapter_slot: Any, chat_id: Any) -> str:

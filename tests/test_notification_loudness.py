@@ -670,6 +670,31 @@ def test_malformed_explicit_loudness_active_flag_fails_closed(tmp_path) -> None:
     ) is False
 
 
+def test_legacy_loudness_outbox_route_fallback_prevents_duplicate_and_cancels(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    assert maybe_notification_loudness_prompt_action(
+        event(identity), account_store, account_id, now=now - timedelta(hours=7)
+    ) is not None
+    set_identity_last_seen(account_store, identity, now - timedelta(minutes=2))
+    account_store.append_proactive_outbox_item(
+        account_id,
+        {
+            "status": "queued",
+            "system_item": "notification_loudness",
+            "route": {"channel": "telegram", "chat_id": "chat-1", "chat_type": "private", "adapter_slot": 1},
+        },
+    )
+
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=now) == ()
+    assert maybe_handle_notification_loudness_response(
+        event(identity, "ja, laut"), account_store, account_id, now=now
+    ) is not None
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "cancelled"
+
+
 def test_loudness_scheduler_does_not_queue_when_checks_are_inactive(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

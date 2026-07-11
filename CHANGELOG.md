@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.71 - 2026-07-11
+
+- Derive legacy notification-loudness outbox route keys from stored routes.
+
 ## 1.9.70 - 2026-07-11
 
 - Fail closed on malformed explicit notification-loudness activation flags.
