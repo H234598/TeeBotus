@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.84 - 2026-07-11
+
+- Recheck current notification-loudness routes inside serialized state updates.
+
 ## 1.9.83 - 2026-07-11
 
 - Do not queue notification-loudness prompts for stale identity routes.

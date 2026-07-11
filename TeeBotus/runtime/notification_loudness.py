@@ -39,6 +39,8 @@ def maybe_handle_notification_loudness_response(
         if not _event_has_current_private_route(account_store, event):
             return None
         with _account_proactive_outbox_lock(account_store, account_id):
+            if not _event_has_current_private_route(account_store, event):
+                return None
             if not isinstance(account_store.read_agent_state(account_id), dict):
                 return None
             route_status = _route_status(account_store, account_id, event)
@@ -74,6 +76,8 @@ def maybe_notification_loudness_prompt_action(
         if not _event_has_current_private_route(account_store, event):
             return None
         with _account_proactive_outbox_lock(account_store, account_id):
+            if not _event_has_current_private_route(account_store, event):
+                return None
             state = account_store.read_agent_state(account_id)
             if not isinstance(state, dict):
                 return None

@@ -247,6 +247,21 @@ def test_response_ignores_private_route_that_is_no_longer_current(tmp_path) -> N
     assert route_state["status"] == "pending"
 
 
+def test_loudness_paths_recheck_current_route_inside_outbox_lock(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    incoming_event = event(identity, "ja, laut")
+    checks = iter((True, False, True, False))
+    monkeypatch.setattr(
+        "TeeBotus.runtime.notification_loudness._event_has_current_private_route",
+        lambda *_args: next(checks),
+    )
+
+    assert maybe_handle_notification_loudness_response(incoming_event, account_store, account_id) is None
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id) is None
+
+
 def test_scheduler_persists_legacy_route_refresh_when_prompt_is_not_due(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)
