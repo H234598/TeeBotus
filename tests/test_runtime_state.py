@@ -287,6 +287,13 @@ def test_runtime_state_store_refuses_security_event_symlink_target(tmp_path):
 
     assert security_path.is_symlink()
     assert not outside.exists()
+    assert state.security_events_persistence_error
+
+    security_path.unlink()
+    state.append_security_event({"event": "recovered"})
+
+    assert state.security_events_persistence_error == ""
+    assert json.loads(security_path.read_text(encoding="utf-8"))["event"] == "recovered"
 
 
 def test_runtime_state_store_refuses_runtime_lock_symlink(tmp_path):

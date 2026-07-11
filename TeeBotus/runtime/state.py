@@ -78,6 +78,7 @@ class RuntimeState:
     previous_response_scopes: dict[tuple[str, str], tuple[str, str, str]] = field(default_factory=dict)
     pending_previous_response_resets: dict[tuple[str, str], str | None] = field(default_factory=dict)
     security_events: list[dict[str, Any]] = field(default_factory=list)
+    security_events_persistence_error: str = ""
 
     def set_pending_flow(self, instance_name: str, account_id: str, flow_type: str, payload: dict[str, Any]) -> None:
         self.pending_flows[(instance_name, account_id, flow_type)] = dict(payload)
@@ -459,15 +460,18 @@ class RuntimeStateStore(RuntimeState):
     def append_security_event(self, event: dict[str, Any]) -> None:
         with self._security_events_lock():
             super().append_security_event(event)
-            rotate_runtime_text_file_if_needed(self.security_events_path)
-            handle = _open_append_text_no_follow(self.security_events_path)
-            if handle is None:
-                raise AccountStoreError(f"refusing unavailable or unsafe security event path: {self.security_events_path}")
             try:
-                handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-            finally:
-                handle.close()
-            maintain_runtime_directory(self.runtime_dir)
+                rotate_runtime_text_file_if_needed(self.security_events_path)
+                handle = _open_append_text_no_follow(self.security_events_path)
+                if handle is None:
+                    raise AccountStoreError(f"refusing unavailable or unsafe security event path: {self.security_events_path}")
+                with handle:
+                    handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
+                maintain_runtime_directory(self.runtime_dir)
+            except (AccountStoreError, OSError, TypeError, ValueError) as exc:
+                self.security_events_persistence_error = str(exc)
+                raise
+            self.security_events_persistence_error = ""
 
     def _state_path(self, account_id: str, filename: str) -> Path:
         account = validate_sha512_token(account_id, field_name="account_id")
