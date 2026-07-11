@@ -321,8 +321,15 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             "loud",
             "benachrichtigung",
             "benachrichtigungen",
+            "nachricht",
+            "nachrichten",
             "notification",
             "notifications",
+            "message",
+            "messages",
+            "push",
+            "alert",
+            "alerts",
             *NOTIFICATION_LOUDNESS_MUTE_TERMS,
         )
     )

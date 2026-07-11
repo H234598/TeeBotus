@@ -1142,6 +1142,15 @@ def test_loudness_free_text_does_not_decide_questions_or_requests() -> None:
     assert _notification_loudness_decision("Is muted", pending=True) == "declined"
 
 
+def test_loudness_free_text_recognizes_message_and_push_context() -> None:
+    assert _notification_loudness_decision("Die Nachrichten sind ausgeschaltet", pending=False) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind nicht ausgeschaltet", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Messages are disabled", pending=False) == "declined"
+    assert _notification_loudness_decision("Messages are not disabled", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Push ist ausgeschaltet", pending=False) == "declined"
+    assert _notification_loudness_decision("Push ist nicht ausgeschaltet", pending=False) == "confirmed"
+
+
 def test_loudness_free_text_respects_negated_completion_phrases() -> None:
     assert _notification_loudness_decision("Ich habe noch nichts gemacht", pending=True) == "declined"
     assert _notification_loudness_decision("Ich habe nichts erledigt", pending=True) == "declined"
