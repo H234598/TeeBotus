@@ -39,8 +39,23 @@ def prepare_account(account_store: AccountStore) -> tuple[str, str]:
 
 def test_extract_residence_city_from_common_german_phrases() -> None:
     assert extract_residence_city("Ich wohne in Berlin und bin heute muede.") == "Berlin"
+    assert extract_residence_city("Ich lebe jetzt in Hamburg.") == "Hamburg"
     assert extract_residence_city("Mein Wohnort ist München.") == "München"
-    assert extract_residence_city("Ich komme aus Hamburg, aber bin unterwegs.") == "Hamburg"
+    assert extract_residence_city("Ich komme aus Hamburg, aber bin unterwegs.") == ""
+
+
+def test_extract_residence_city_rejects_negated_or_non_city_phrases() -> None:
+    for text in (
+        "Ich wohne in keiner Stadt, sondern auf dem Land.",
+        "Ich wohne bei meiner Mutter.",
+        "Mein Wohnort ist nicht Berlin.",
+        "Ich wohne in Berlin nicht mehr.",
+    ):
+        assert extract_residence_city(text) == ""
+
+
+def test_extract_residence_city_prefers_explicit_current_residence_after_origin() -> None:
+    assert extract_residence_city("Ich komme aus Deutschland und lebe jetzt in Berlin.") == "Berlin"
 
 
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:

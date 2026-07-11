@@ -17,9 +17,13 @@ WEATHER_TIMEOUT_SECONDS = 2.5
 MAX_CITY_LENGTH = 80
 
 CITY_PATTERNS = (
-    re.compile(r"\b(?:ich\s+wohne|ich\s+lebe|wohn(?:e)?|lebe)\s+(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})", re.IGNORECASE),
+    re.compile(
+        r"\b(?:ich\s+wohne|ich\s+lebe|wohn(?:e)?|lebe)\s+"
+        r"(?:(?:jetzt|aktuell|derzeit)\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
     re.compile(r"\b(?:meine\s+stadt|mein\s+wohnort|mein\s+ort)\s+(?:ist|heisst|heißt)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})", re.IGNORECASE),
-    re.compile(r"\b(?:ich\s+bin|komme)\s+aus\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})", re.IGNORECASE),
 )
 CITY_TRAILING_STOP_RE = re.compile(
     r"\s+(?:und|aber|weil|wenn|falls|seit|mit|bei|heute|morgen|gestern|gerade|aktuell|\.|,|;|:|!|\?).*$",
@@ -186,6 +190,8 @@ def _clean_city(value: str) -> str:
     if not city or len(city) > MAX_CITY_LENGTH:
         return ""
     if any(char.isdigit() for char in city):
+        return ""
+    if re.search(r"(?i)\b(?:nicht(?:\s+mehr)?|kein(?:e|er|em|en)?|mein(?:e|er|em|en)?|ein(?:e|er|em|en)?)\b", city):
         return ""
     return city
 
