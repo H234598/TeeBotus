@@ -717,6 +717,11 @@ def mcp_tool_status_lines(mcp_tools: Mapping[str, Mapping[str, Any]] | None = No
     allowed: list[str] = []
     guarded: list[str] = []
     disabled: list[str] = []
+    invalid = sorted(
+        name
+        for name, config in configured.items()
+        if name in DEFAULT_MCP_TOOL_POLICIES and not isinstance(config, Mapping)
+    )
     resolved = resolve_mcp_tool_policies(configured)
     for name, policy in sorted(resolved.items()):
         if _mcp_policy_directly_callable(policy):
@@ -738,6 +743,8 @@ def mcp_tool_status_lines(mcp_tools: Mapping[str, Mapping[str, Any]] | None = No
         lines.append(f"- Deaktiviert: {', '.join(disabled)}")
     if ignored:
         lines.append(f"- Ignoriert: {', '.join(ignored)}")
+    if invalid:
+        lines.append(f"- Ungueltige Konfiguration: {', '.join(invalid)} (Mapping erwartet)")
     return lines
 
 

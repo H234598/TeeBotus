@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.41 - 2026-07-11
+
+- Report malformed per-tool MCP configurations instead of silently applying
+  defaults.
+
 ## 1.9.40 - 2026-07-11
 
 - Reject non-finite memory values when estimating JSON payload size.
