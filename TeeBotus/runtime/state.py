@@ -501,7 +501,7 @@ class RuntimeStateStore(RuntimeState):
                 with handle:
                     handle.write(serialized_event)
                 maintain_runtime_directory(self.runtime_dir)
-            except (AccountStoreError, OSError, TypeError, ValueError) as exc:
+            except (AccountStoreError, OSError, RuntimeError, TypeError, ValueError) as exc:
                 self.security_events_persistence_error = str(exc)
                 raise
             self.security_events_persistence_error = ""

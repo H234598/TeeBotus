@@ -527,6 +527,21 @@ def test_runtime_state_store_does_not_cache_unserializable_security_event(tmp_pa
     assert state.security_events_persistence_error
 
 
+def test_runtime_state_store_reports_security_event_runtime_error(tmp_path, monkeypatch):
+    import TeeBotus.runtime.state as state_module
+
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    def refuse_open(_path):
+        raise RuntimeError("security event open failed")
+
+    monkeypatch.setattr(state_module, "_open_append_text_no_follow", refuse_open)
+    with pytest.raises(RuntimeError, match="security event open failed"):
+        state.append_security_event({"event": "runtime-error"})
+
+    assert "security event open failed" in state.security_events_persistence_error
+
+
 def test_runtime_state_store_refuses_runtime_lock_symlink(tmp_path):
     data_dir = tmp_path / "Bot" / "data"
     runtime_dir = data_dir / "runtime"
