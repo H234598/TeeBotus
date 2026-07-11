@@ -15,6 +15,7 @@ from TeeBotus.runtime.accounts import (
     ACCOUNT_MEMORY_KEY_PURPOSE,
     CODEX_HISTORY_OUTBOX_FILENAME,
     PROACTIVE_OUTBOX_FILENAME,
+    STATUS_AUTH_STATE_FILENAME,
     STATUS_OUTBOX_FILENAME,
     INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_PEPPER_PURPOSE,
@@ -1513,6 +1514,46 @@ def test_atomic_write_rejects_symlinked_parent(tmp_path):
         _atomic_write_text(linked_parent / "payload.txt", "must not escape")
 
     assert not (outside / "payload.txt").exists()
+
+
+def test_account_json_document_falls_back_on_sql_diagnostics(tmp_path):
+    class CorruptReadCollectionBackend:
+        last_collection_read_error = "payload could not be decrypted"
+        last_collection_skipped = 1
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            return []
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            raise AssertionError("diagnostic fallback must not rewrite collection")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store._account_memory_backend = CorruptReadCollectionBackend()
+    legacy_path = store.account_dir(account_id) / STATUS_AUTH_STATE_FILENAME
+    store.account_memory_vault.write_json(legacy_path, {"schema_version": 1, "authorized": True})
+
+    assert store.read_status_auth_state(account_id) == {"schema_version": 1, "authorized": True}
+    assert legacy_path.exists()
+
+
+def test_account_json_document_refuses_sql_diagnostics_without_legacy(tmp_path):
+    class CorruptReadCollectionBackend:
+        last_collection_read_error = "payload could not be decrypted"
+        last_collection_skipped = 1
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            return []
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            raise AssertionError("diagnostic failure must not rewrite collection")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store._account_memory_backend = CorruptReadCollectionBackend()
+
+    with pytest.raises(AccountStoreError, match="status_auth"):
+        store.read_status_auth_state(account_id)
 
 
 def test_account_store_sqlite_backend_keeps_newer_legacy_jsonl_row_for_same_id(tmp_path, monkeypatch):

@@ -2965,10 +2965,11 @@ class AccountStore:
                 if fallback_to_legacy_on_read_error and path.exists():
                     return self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
                 raise _AccountCollectionReadError(str(exc)) from exc
-            if not fallback_to_legacy_on_read_error:
-                detail = self._collection_read_diagnostic_error(backend)
-                if detail:
-                    raise _AccountCollectionReadError(f"account memory SQL collection {collection} could not be read: {detail}")
+            detail = self._collection_read_diagnostic_error(backend)
+            if detail:
+                if fallback_to_legacy_on_read_error and path.exists():
+                    return self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
+                raise _AccountCollectionReadError(f"account memory SQL collection {collection} could not be read: {detail}")
             data = _merge_json_document_rows(rows, dict(default))
             should_compact = len(rows) > 1
             should_unlink_legacy = False
