@@ -1199,6 +1199,8 @@ def update_proactive_outbox_item_status(
             if not isinstance(item, dict) or str(item.get("id") or "") != str(item_id or ""):
                 continue
             current_status = str(item.get("status") or "queued").strip().casefold()
+            if current_status not in PROACTIVE_OUTBOX_STATUSES or current_status in PROACTIVE_TERMINAL_STATUSES:
+                return False
             if expected and current_status != expected:
                 return False
             item["status"] = normalized_status

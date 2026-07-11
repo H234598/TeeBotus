@@ -305,6 +305,35 @@ def test_due_proactive_outbox_items_filters_future_and_terminal_items(tmp_path) 
     assert due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 15, 14, tzinfo=timezone.utc))[0]["intent"] == "future"
 
 
+def test_terminal_proactive_outbox_item_cannot_be_reactivated(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id)
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="terminal",
+        message_text="Terminal",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    assert update_proactive_outbox_item_status(account_store, account_id, item_id, status="cancelled", reason="test", now=now)
+    history_before = account_store.read_proactive_outbox(account_id)[0]["status_history"]
+
+    assert not update_proactive_outbox_item_status(account_store, account_id, item_id, status="queued", reason="reactivate", now=now)
+    assert not update_proactive_outbox_item_status(account_store, account_id, item_id, status="sent", reason="resend", now=now)
+
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "cancelled"
+    assert item["status_history"] == history_before
+    assert due_proactive_outbox_items(account_store, account_id, now=now) == ()
+
+
 def test_due_proactive_outbox_items_normalizes_stored_status(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
