@@ -1616,6 +1616,8 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
     if instance_fallback_warning:
         lines.append(f"account_memory={safe_instance_name}/__instance_state status=warning{instance_fallback_warning}")
     if not account_dirs:
+        if has_broken_metadata:
+            lines.extend(_account_memory_recovery_lines(instance_name=safe_instance_name, project_root=project_root))
         return lines or [f"account_memory={safe_instance_name} status=none"]
     for account_dir in account_dirs:
         account_id = account_dir.name

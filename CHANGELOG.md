@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.21 - 2026-07-11
+
+- Include the memory recovery command when account metadata is broken before
+  any account directory exists.
+
 ## 1.9.20 - 2026-07-11
 
 - Do not treat invalid explicit account IDs as resolved in status output.

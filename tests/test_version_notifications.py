@@ -257,6 +257,21 @@ def test_account_memory_index_health_uses_read_only_secret_provider(tmp_path: Pa
     assert all(kwargs.get("create_if_missing") is False for kwargs in provider_kwargs)
 
 
+def test_account_memory_health_includes_recovery_for_broken_metadata_without_accounts(tmp_path: Path) -> None:
+    accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
+    accounts_root.mkdir(parents=True)
+    (accounts_root / "Account_Index.json").write_text("not encrypted JSON", encoding="utf-8")
+
+    lines = account_memory_index_health_lines(
+        instance_name="Demo",
+        project_root=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+
+    assert any(line.startswith("account_memory_metadata=Demo status=broken") for line in lines)
+    assert any(line.startswith("account_memory_recovery=Demo status=needed") for line in lines)
+
+
 def test_account_secret_health_reports_missing_required_memory_secret(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     store = _store(tmp_path)
