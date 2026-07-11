@@ -580,6 +580,21 @@ def test_loudness_online_check_accepts_naive_utc_now() -> None:
     assert _route_recently_seen(route, datetime(2026, 6, 15, 12, 4)) is True
 
 
+def test_loudness_scheduler_fails_closed_on_invalid_agent_state(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+
+    original_read = account_store.read_agent_state
+    account_store.read_agent_state = lambda _account_id: []  # type: ignore[method-assign]
+
+    assert queue_due_notification_loudness_prompts(account_store, account_id) == ()
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id) is None
+    assert maybe_handle_notification_loudness_response(event(identity, "ja, laut"), account_store, account_id) is None
+
+    account_store.read_agent_state = original_read  # type: ignore[method-assign]
+
+
 def test_concurrent_loudness_scheduler_runs_queue_only_one_prompt(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

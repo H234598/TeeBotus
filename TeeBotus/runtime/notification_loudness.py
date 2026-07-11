@@ -38,6 +38,8 @@ def maybe_handle_notification_loudness_response(
     if not _event_has_current_private_route(account_store, event):
         return None
     with _account_proactive_outbox_lock(account_store, account_id):
+        if not isinstance(account_store.read_agent_state(account_id), dict):
+            return None
         route_status = _route_status(account_store, account_id, event)
         if route_status in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
             return None
@@ -63,6 +65,8 @@ def maybe_notification_loudness_prompt_action(
         return None
     with _account_proactive_outbox_lock(account_store, account_id):
         state = account_store.read_agent_state(account_id)
+        if not isinstance(state, dict):
+            return None
         route_state = _ensure_route_state(state, event)
         if _normalized_route_status(route_state) in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
             return None
@@ -92,6 +96,8 @@ def _queue_due_notification_loudness_prompts_unlocked(
     now: datetime | None = None,
 ) -> tuple[str, ...]:
     state = account_store.read_agent_state(account_id)
+    if not isinstance(state, dict):
+        return ()
     state.setdefault("schema_version", 1)
     notification_state = state.get("notification_loudness")
     if not isinstance(notification_state, dict):
@@ -251,7 +257,7 @@ def _set_notification_loudness_status(
 
 def _route_status(account_store: AccountStore, account_id: str, event: IncomingEvent) -> str:
     state = account_store.read_agent_state(account_id)
-    notification_state = state.get("notification_loudness")
+    notification_state = state.get("notification_loudness") if isinstance(state, dict) else None
     if not isinstance(notification_state, dict):
         return "unknown"
     routes = notification_state.get("routes")

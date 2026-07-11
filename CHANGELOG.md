@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.62 - 2026-07-11
+
+- Fail closed on malformed notification-loudness state payloads.
+
 ## 1.9.61 - 2026-07-11
 
 - Normalize naive notification-loudness timestamps as UTC.
