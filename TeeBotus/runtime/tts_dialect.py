@@ -240,6 +240,16 @@ def handle_tts_mimic_voice_command(
     text: str,
     instructions: BotInstructions,
 ) -> TtsMimicVoiceCommandResult:
+    with account_store.account_memory_lock(account_id):
+        return _handle_tts_mimic_voice_command_unlocked(account_store, account_id, text, instructions)
+
+
+def _handle_tts_mimic_voice_command_unlocked(
+    account_store: AccountStore,
+    account_id: str,
+    text: str,
+    instructions: BotInstructions,
+) -> TtsMimicVoiceCommandResult:
     del instructions
     parts = str(text or "").strip().split(maxsplit=1)
     argument = re.sub(r"[^a-zA-Z0-9_äöüÄÖÜß-]+", "", parts[1].strip().casefold()) if len(parts) > 1 else ""
