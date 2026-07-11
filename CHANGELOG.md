@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.82 - 2026-07-11
+
+- Fail closed on inconsistent notification-loudness outbox routes.
+
 ## 1.9.81 - 2026-07-11
 
 - Fall back from malformed notification-loudness outbox route keys to valid routes.
