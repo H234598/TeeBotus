@@ -192,6 +192,68 @@ def test_scheduler_refreshes_route_state_for_legacy_channel_case(tmp_path, monke
     assert route_state["route"]["channel"] == "telegram"
 
 
+def test_response_normalizes_legacy_route_key_and_status(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=now) is not None
+
+    state = account_store.read_agent_state(account_id)
+    route_state = state["notification_loudness"]["routes"].pop("telegram:1:chat-1")
+    route_state["route_key"] = "TeLegram:1:chat-1"
+    route_state["route"]["channel"] = "TeLegram"
+    route_state["status"] = "PENDING"
+    state["notification_loudness"]["routes"]["TeLegram:1:chat-1"] = route_state
+    account_store.write_agent_state(account_id, state)
+    account_store.append_proactive_outbox_item(
+        account_id,
+        {
+            "status": "queued",
+            "category": "system",
+            "intent": "notification_loudness_check",
+            "message_text": NOTIFICATION_LOUDNESS_PROMPT,
+            "system_item": "notification_loudness",
+            "route_key": "TeLegram:1:chat-1",
+            "route": {"channel": "TeLegram", "chat_id": "chat-1", "chat_type": "Private", "adapter_slot": 1},
+            "due_at": now.isoformat(timespec="seconds"),
+        },
+    )
+
+    actions = maybe_handle_notification_loudness_response(event(identity, "ja"), account_store, account_id, now=now)
+
+    assert actions is not None
+    assert actions[0].text == "Danke, ich frage deswegen nicht weiter nach."
+    stored_route = account_store.read_agent_state(account_id)["notification_loudness"]["routes"]["TeLegram:1:chat-1"]
+    assert stored_route["status"] == "confirmed"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "cancelled"
+
+
+def test_prompt_does_not_resurrect_case_variant_terminal_route(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    state = account_store.read_agent_state(account_id)
+    state["notification_loudness"] = {
+        "schema_version": 1,
+        "routes": {
+            "TeLegram:1:chat-1": {
+                "status": "DECLINED",
+                "route_key": "TeLegram:1:chat-1",
+                "route": {"channel": "TeLegram", "chat_id": "chat-1", "chat_type": "Private", "adapter_slot": 1},
+                "identity_key": identity,
+            }
+        },
+    }
+    account_store.write_agent_state(account_id, state)
+
+    assert maybe_notification_loudness_prompt_action(
+        event(identity), account_store, account_id, now=datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    ) is None
+    stored_route = account_store.read_agent_state(account_id)["notification_loudness"]["routes"]["TeLegram:1:chat-1"]
+    assert stored_route["status"] == "DECLINED"
+
+
 def test_scheduler_does_not_online_check_unknown_notification_loudness_routes(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

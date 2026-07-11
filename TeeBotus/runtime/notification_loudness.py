@@ -62,7 +62,7 @@ def maybe_notification_loudness_prompt_action(
     with _account_proactive_outbox_lock(account_store, account_id):
         state = account_store.read_agent_state(account_id)
         route_state = _ensure_route_state(state, event)
-        if str(route_state.get("status") or "unknown") in {"confirmed", "declined"}:
+        if _normalized_route_status(route_state) in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
             return None
         resolved_now = now or datetime.now(timezone.utc)
         if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=False):
@@ -159,7 +159,7 @@ def is_notification_loudness_outbox_item(item: Mapping[str, Any] | None) -> bool
 
 def notification_loudness_outbox_item_is_active(account_store: AccountStore, account_id: str, item: Mapping[str, Any]) -> bool:
     """Return whether a queued loudness prompt still belongs to an open check."""
-    route_key = str(item.get("route_key") or "").strip().casefold()
+    route_key = _normalize_route_key(item.get("route_key"))
     if not route_key:
         return True
     state = account_store.read_agent_state(account_id)
@@ -167,16 +167,7 @@ def notification_loudness_outbox_item_is_active(account_store: AccountStore, acc
     routes = notification_state.get("routes") if isinstance(notification_state, dict) else None
     if not isinstance(routes, dict):
         return True
-    route_state = routes.get(route_key)
-    if not isinstance(route_state, dict):
-        route_state = next(
-            (
-                candidate
-                for key, candidate in routes.items()
-                if str(key or "").strip().casefold() == route_key and isinstance(candidate, dict)
-            ),
-            None,
-        )
+    route_state = _find_route_state(routes, route_key)
     if not isinstance(route_state, dict):
         return True
     return str(route_state.get("status") or "unknown").strip().casefold() not in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES
@@ -262,10 +253,10 @@ def _route_status(account_store: AccountStore, account_id: str, event: IncomingE
     routes = notification_state.get("routes")
     if not isinstance(routes, dict):
         return "unknown"
-    route_state = routes.get(_route_key(event))
+    route_state = _find_route_state(routes, _route_key(event))
     if not isinstance(route_state, dict):
         return "unknown"
-    return str(route_state.get("status") or "unknown").strip()
+    return _normalized_route_status(route_state)
 
 
 def _ensure_route_state(state: dict[str, Any], event: IncomingEvent) -> dict[str, Any]:
@@ -280,8 +271,8 @@ def _ensure_route_state(state: dict[str, Any], event: IncomingEvent) -> dict[str
         routes = {}
         notification_state["routes"] = routes
     route_key = _route_key(event)
-    route_state = routes.setdefault(route_key, {})
-    if not isinstance(route_state, dict):
+    route_state = _find_route_state(routes, route_key)
+    if route_state is None:
         route_state = {}
         routes[route_key] = route_state
     route_state.setdefault("status", "unknown")
@@ -329,7 +320,7 @@ def _cancel_queued_notification_loudness_items(account_store: AccountStore, acco
         for item in rows:
             if not isinstance(item, dict) or not is_notification_loudness_outbox_item(item):
                 continue
-            if str(item.get("route_key") or "") != route_key:
+            if _normalize_route_key(item.get("route_key")) != _normalize_route_key(route_key):
                 continue
             if str(item.get("status") or "queued").strip().casefold() != "queued":
                 continue
@@ -349,7 +340,7 @@ def _has_queued_notification_loudness_item(account_store: AccountStore, account_
     for item in account_store.read_proactive_outbox(account_id):
         if not isinstance(item, dict) or not is_notification_loudness_outbox_item(item):
             continue
-        if str(item.get("route_key") or "") != str(route_key):
+        if _normalize_route_key(item.get("route_key")) != _normalize_route_key(route_key):
             continue
         if str(item.get("status") or "queued").strip().casefold() == "queued":
             return True
@@ -430,6 +421,21 @@ def _refresh_route_state_from_account_routes(account_store: AccountStore, accoun
         route_state["identity_key"] = candidate
         route_state["route"] = route
         return
+
+
+def _find_route_state(routes: Mapping[str, Any], route_key: Any) -> dict[str, Any] | None:
+    direct = routes.get(route_key) if isinstance(route_key, str) else None
+    if isinstance(direct, dict):
+        return direct
+    normalized_key = _normalize_route_key(route_key)
+    for candidate_key, candidate in routes.items():
+        if isinstance(candidate, dict) and _normalize_route_key(candidate_key) == normalized_key:
+            return candidate
+    return None
+
+
+def _normalized_route_status(route_state: Mapping[str, Any]) -> str:
+    return str(route_state.get("status") or "unknown").strip().casefold()
 
 
 def _normalize_route_key(route_key: Any) -> str:
