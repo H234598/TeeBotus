@@ -522,8 +522,9 @@ def _normalized_route_status(route_state: Mapping[str, Any]) -> str:
 
 
 def _notification_loudness_checks_active(route_state: Mapping[str, Any]) -> bool:
-    value = route_state.get("checks_active")
-    return _normalize_bool(value, default=value is None)
+    if "checks_active" not in route_state:
+        return True
+    return _normalize_bool(route_state.get("checks_active"), default=False)
 
 
 def _normalize_route_key(route_key: Any) -> str:

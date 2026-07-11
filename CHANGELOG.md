@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.78 - 2026-07-11
+
+- Treat explicit null notification-loudness activation flags as inactive.
+
 ## 1.9.77 - 2026-07-11
 
 - Fail closed on malformed legacy notification-loudness cooldown timestamps.

@@ -669,6 +669,10 @@ def test_malformed_explicit_loudness_active_flag_fails_closed(tmp_path) -> None:
         account_store, account_id, {"route_key": "telegram:1:chat-1"}
     ) is False
 
+    state["notification_loudness"]["routes"]["telegram:1:chat-1"]["checks_active"] = None
+    account_store.write_agent_state(account_id, state)
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=now) == ()
+
 
 def test_legacy_loudness_outbox_route_fallback_prevents_duplicate_and_cancels(tmp_path) -> None:
     account_store = store(tmp_path)
