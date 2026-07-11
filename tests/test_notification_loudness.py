@@ -1256,6 +1256,17 @@ def test_loudness_free_text_does_not_decide_future_intentions_as_completed() -> 
     assert _notification_loudness_decision("I just turned notifications on", pending=False) == "confirmed"
 
 
+def test_loudness_free_text_does_not_decide_historical_status_as_current() -> None:
+    assert _notification_loudness_decision("I used to have notifications on", pending=True) is None
+    assert _notification_loudness_decision("I formerly had notifications on", pending=False) is None
+    assert _notification_loudness_decision("I previously had notifications on", pending=True) is None
+    assert _notification_loudness_decision("I had notifications on yesterday", pending=False) is None
+    assert _notification_loudness_decision("Die Nachrichten waren vorher nicht stumm", pending=True) is None
+    assert _notification_loudness_decision("Gestern waren die Nachrichten laut", pending=False) is None
+    assert _notification_loudness_decision("I have notifications on now", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are on now", pending=False) == "confirmed"
+
+
 def test_loudness_free_text_does_not_decide_present_actions_as_completed() -> None:
     assert _notification_loudness_decision("I turn notifications on", pending=True) is None
     assert _notification_loudness_decision("I switch notifications on", pending=False) is None

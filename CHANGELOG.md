@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.118 - 2026-07-12
+
+- Avoid treating historical notification status as current.
+
 ## 1.9.117 - 2026-07-12
 
 - Distinguish present notification actions from completed states.

@@ -72,6 +72,31 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "cannot say",
     "can t say",
 )
+NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES = (
+    "used to",
+    "formerly",
+    "previously",
+    "yesterday",
+    "earlier",
+    "before",
+    "last night",
+    "last week",
+    "i had ",
+    "i was ",
+    "i were ",
+    "ich hatte ",
+    "ich war ",
+    "früher",
+    "vorher",
+    "gestern",
+    "damals",
+    "war ",
+    "waren ",
+    "hatte ",
+    "had ",
+    "was ",
+    "were ",
+)
 NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "stell ",
     "stelle ",
@@ -421,6 +446,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         polarity_normalized, NOTIFICATION_LOUDNESS_COMPLETION_PHRASES
     )
     if has_notification_context and _notification_loudness_has_uncertainty(normalized):
+        return None
+    if has_notification_context and _notification_loudness_has_historical_marker(normalized):
         return None
     if has_notification_context and _notification_loudness_is_non_declarative(text, normalized):
         return None
@@ -1020,6 +1047,10 @@ def _notification_loudness_term_polarity(
 
 def _notification_loudness_has_uncertainty(normalized: str) -> bool:
     return any(_contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES)
+
+
+def _notification_loudness_has_historical_marker(normalized: str) -> bool:
+    return any(_contains_normalized_phrase(normalized, phrase.strip()) for phrase in NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES)
 
 
 def _notification_loudness_is_non_declarative(text: str, normalized: str) -> bool:
