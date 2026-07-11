@@ -115,6 +115,37 @@ def test_postgres_entry_id_read_chunks_large_requests(monkeypatch) -> None:
     assert [len(params) - 2 for params in connection.params] == [500, 500, 101]
 
 
+def test_postgres_collection_name_read_clears_previous_diagnostics(monkeypatch) -> None:
+    class FakeResult:
+        def fetchall(self):
+            return [("proactive_outbox",)]
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def execute(self, _sql: str, _params: tuple[str, ...]) -> FakeResult:
+            return FakeResult()
+
+    backend = PostgresAccountMemoryBackend(
+        instance_name="Bench",
+        provider=StaticSecretProvider(b"p" * 32),
+        purpose="account-structured-memory-key",
+        config=PostgresMemoryConfig(dsn="postgresql://unused"),
+    )
+    backend.last_collection_read_error = "stale error"
+    backend.last_collection_skipped = 2
+    monkeypatch.setattr(backend, "_ensure_schema", lambda: None)
+    monkeypatch.setattr(backend, "_connect", lambda: FakeConnection())
+
+    assert backend.read_collection_names("a" * 128) == ("proactive_outbox",)
+    assert backend.last_collection_read_error == ""
+    assert backend.last_collection_skipped == 0
+
+
 def test_postgres_benchmark_success_path_uses_cleaned_tempdir(monkeypatch, tmp_path) -> None:
     entered: list[str] = []
     exited: list[str] = []

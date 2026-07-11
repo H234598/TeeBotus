@@ -395,6 +395,8 @@ class PostgresAccountMemoryBackend:
 
     @_retry_after_missing_schema
     def read_collection_names(self, account_id: str) -> tuple[str, ...]:
+        self.last_collection_read_error = ""
+        self.last_collection_skipped = 0
         self._ensure_schema()
         with self._connect() as connection:
             rows = connection.execute(
