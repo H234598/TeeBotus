@@ -55,9 +55,11 @@ NOTIFICATION_LOUDNESS_QUANTIFIER_TERMS = frozenset(
         "keines",
         "keinerlei",
         "nichts",
+        "weder",
         "no",
         "none",
         "nothing",
+        "neither",
     }
 )
 NOTIFICATION_LOUDNESS_NEGATION_PHRASES = (

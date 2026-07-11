@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.133 - 2026-07-12
+
+- Treat neither/weder as clause-wide loudness quantifiers.
+
 ## 1.9.132 - 2026-07-12
 
 - Extend loudness negation scope to clause-bound quantifiers.
