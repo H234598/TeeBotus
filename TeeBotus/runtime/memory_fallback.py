@@ -469,7 +469,7 @@ class WarningFallbackAccountMemoryBackend:
             return
         rows = self.fallback.read_entries(account_id)
         self._ensure_clean_fallback_read("read_entries", account_id)
-        self.primary.write_entries(account_id, rows)
+        self._repair_primary_from_verified_fallback("read_entries", account_id, rows)
         self._dirty_entries.discard(account_id)
 
     def _sync_index_from_fallback(self, account_id: str) -> None:
@@ -477,7 +477,7 @@ class WarningFallbackAccountMemoryBackend:
             return
         data = self.fallback.read_index(account_id)
         self._ensure_clean_fallback_read("read_index", account_id)
-        self.primary.write_index(account_id, data)
+        self._repair_primary_from_verified_fallback("read_index", account_id, data)
         self._dirty_indexes.discard(account_id)
 
     def _sync_collection_from_fallback(self, account_id: str, collection: str) -> None:
@@ -486,8 +486,39 @@ class WarningFallbackAccountMemoryBackend:
             return
         rows = self.fallback.read_collection(account_id, collection)
         self._ensure_clean_fallback_read(f"read_collection:{collection}", account_id)
-        self.primary.write_collection(account_id, collection, rows)
+        self._repair_primary_from_verified_fallback(f"read_collection:{collection}", account_id, rows, collection=collection)
         self._dirty_collections.discard(key)
+
+    def _repair_primary_from_verified_fallback(
+        self,
+        operation: str,
+        account_id: str,
+        data: Any,
+        *,
+        collection: str | None = None,
+    ) -> None:
+        if operation == "read_entries":
+            repair = getattr(self.primary, "_repair_entries_from_verified_fallback", None)
+            if callable(repair):
+                repair(account_id, data)
+            else:
+                self.primary.write_entries(account_id, data)
+            return
+        if operation == "read_index":
+            repair = getattr(self.primary, "_repair_index_from_verified_fallback", None)
+            if callable(repair):
+                repair(account_id, data)
+            else:
+                self.primary.write_index(account_id, data)
+            return
+        if operation.startswith("read_collection:"):
+            if collection is None:
+                collection = self._operation_collection(operation)
+            repair = getattr(self.primary, "_repair_collection_from_verified_fallback", None)
+            if callable(repair):
+                repair(account_id, collection, data)
+            else:
+                self.primary.write_collection(account_id, collection, data)
 
     def _ensure_clean_fallback_read(self, operation: str, account_id: str) -> None:
         self._copy_diagnostics(self.fallback)
@@ -561,13 +592,13 @@ class WarningFallbackAccountMemoryBackend:
             raise self._fallback_diagnostics_error(operation, account_id)
         try:
             if operation == "read_entries":
-                self.primary.write_entries(account_id, repair_data)
+                self._repair_primary_from_verified_fallback(operation, account_id, repair_data)
                 self._dirty_entries.discard(account_id)
                 self._stale_fallback_entries.discard(account_id)
                 self._fallback_sync_failed_entries.discard(account_id)
                 self._unrecoverable_fallback_entries.discard(account_id)
             elif operation == "read_index":
-                self.primary.write_index(account_id, repair_data)
+                self._repair_primary_from_verified_fallback(operation, account_id, repair_data)
                 self._dirty_indexes.discard(account_id)
                 self._stale_fallback_indexes.discard(account_id)
                 self._fallback_sync_failed_indexes.discard(account_id)
@@ -575,7 +606,7 @@ class WarningFallbackAccountMemoryBackend:
             elif operation.startswith("read_collection:"):
                 collection = self._operation_collection(operation)
                 key = (account_id, collection)
-                self.primary.write_collection(account_id, collection, repair_data)
+                self._repair_primary_from_verified_fallback(operation, account_id, repair_data, collection=collection)
                 self._dirty_collections.discard(key)
                 self._stale_fallback_collections.discard(key)
                 self._fallback_sync_failed_collections.discard(key)

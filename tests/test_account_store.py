@@ -4103,6 +4103,39 @@ def test_sqlite_missing_primary_schema_recovers_from_secondary(tmp_path):
     assert primary.read_entries(account_id) == [{"id": "from-secondary", "user_text": "Backup"}]
 
 
+def test_sqlite_write_refuses_schema_repair_when_secondary_exists(tmp_path):
+    import sqlite3
+
+    primary_path = tmp_path / "primary.sqlite3"
+    secondary_path = tmp_path / "secondary.sqlite3"
+    sqlite3.connect(primary_path).close()
+    account_id = "a" * 128
+    secondary = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=secondary_path, fallback_path=None),
+    )
+    secondary.write_entries(account_id, [{"id": "from-secondary", "user_text": "Backup"}])
+    primary = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary_path, fallback_path=secondary_path),
+    )
+
+    with pytest.raises(AccountStoreError, match="schema table is missing"):
+        primary.write_entries(account_id, [{"id": "new"}])
+
+    with sqlite3.connect(primary_path) as connection:
+        tables = {
+            str(row[0])
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'")
+        }
+    assert "memory_entries" not in tables
+    assert secondary.read_entries(account_id) == [{"id": "from-secondary", "user_text": "Backup"}]
+
+
 def test_structured_account_memory_semantic_cache_boosts_synced_signature(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

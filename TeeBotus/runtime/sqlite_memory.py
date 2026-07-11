@@ -247,7 +247,19 @@ class SQLiteAccountMemoryBackend:
         return [entries_by_id[memory_id] for memory_id in requested_ids if memory_id in entries_by_id]
 
     def write_entries(self, account_id: str, rows: Iterable[dict[str, Any]]) -> None:
-        self._ensure_schema()
+        self._write_entries(account_id, rows, allow_incomplete_schema=False)
+
+    def _repair_entries_from_verified_fallback(self, account_id: str, rows: Iterable[dict[str, Any]]) -> None:
+        self._write_entries(account_id, rows, allow_incomplete_schema=True)
+
+    def _write_entries(
+        self,
+        account_id: str,
+        rows: Iterable[dict[str, Any]],
+        *,
+        allow_incomplete_schema: bool,
+    ) -> None:
+        self._ensure_schema(allow_incomplete_schema=allow_incomplete_schema)
         normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
         with self._connect() as connection:
             with connection:
@@ -298,7 +310,19 @@ class SQLiteAccountMemoryBackend:
             return {}
 
     def write_index(self, account_id: str, data: dict[str, Any]) -> None:
-        self._ensure_schema()
+        self._write_index(account_id, data, allow_incomplete_schema=False)
+
+    def _repair_index_from_verified_fallback(self, account_id: str, data: dict[str, Any]) -> None:
+        self._write_index(account_id, data, allow_incomplete_schema=True)
+
+    def _write_index(
+        self,
+        account_id: str,
+        data: dict[str, Any],
+        *,
+        allow_incomplete_schema: bool,
+    ) -> None:
+        self._ensure_schema(allow_incomplete_schema=allow_incomplete_schema)
         nonce, ciphertext = self._encrypt_json(account_id, "index", dict(data))
         with self._connect() as connection:
             with connection:
@@ -367,7 +391,25 @@ class SQLiteAccountMemoryBackend:
 
     def write_collection(self, account_id: str, collection: str, rows: Iterable[dict[str, Any]]) -> None:
         collection_name = _normalize_collection_name(collection)
-        self._ensure_schema()
+        self._write_collection(account_id, collection_name, rows, allow_incomplete_schema=False)
+
+    def _repair_collection_from_verified_fallback(
+        self,
+        account_id: str,
+        collection: str,
+        rows: Iterable[dict[str, Any]],
+    ) -> None:
+        self._write_collection(account_id, collection, rows, allow_incomplete_schema=True)
+
+    def _write_collection(
+        self,
+        account_id: str,
+        collection_name: str,
+        rows: Iterable[dict[str, Any]],
+        *,
+        allow_incomplete_schema: bool,
+    ) -> None:
+        self._ensure_schema(allow_incomplete_schema=allow_incomplete_schema)
         normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
         with self._connect() as connection:
             with connection:
@@ -513,13 +555,23 @@ class SQLiteAccountMemoryBackend:
         LOGGER.critical("%s", error)
         return error
 
-    def _ensure_schema(self) -> None:
+    def _ensure_schema(self, *, allow_incomplete_schema: bool = False) -> None:
         self.last_database_missing = False
+        existing_database = self.config.path.exists()
+        missing_table = self._missing_schema_table() if existing_database else None
+        if missing_table is not None and self._secondary_database_exists() and not allow_incomplete_schema:
+            if missing_table == "<unreadable>":
+                error = AccountStoreError(
+                    f"SQLite account-memory schema is unreadable; refusing automatic repair while fallback exists ({self.config.path})"
+                )
+                LOGGER.critical("%s", error)
+                raise error
+            raise self._missing_table_error(missing_table)
         current_identity = self._database_file_identity()
         if (
             self._initialized
             and current_identity == self._schema_file_identity
-            and self._schema_is_complete()
+            and missing_table is None
         ):
             return
         self._initialized = False
@@ -582,11 +634,17 @@ class SQLiteAccountMemoryBackend:
         self._schema_file_identity = self._database_file_identity()
 
     def _schema_is_complete(self) -> bool:
+        return self._missing_schema_table() is None
+
+    def _missing_schema_table(self) -> str | None:
         try:
             with self._connect_readonly() as connection:
-                return all(_table_exists(connection, table) for table in SQLITE_REQUIRED_TABLES)
+                for table in SQLITE_REQUIRED_TABLES:
+                    if not _table_exists(connection, table):
+                        return table
         except sqlite3.Error:
-            return False
+            return "<unreadable>"
+        return None
 
     def _database_file_identity(self) -> tuple[int, int] | None:
         try:
