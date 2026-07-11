@@ -124,20 +124,41 @@ def test_secret_tool_provider_keeps_explicit_zero_timeout(monkeypatch) -> None:
 def test_secret_tool_provider_times_out_hung_secret_tool(monkeypatch) -> None:
     provider_instance = SecretToolInstanceSecretProvider(timeout_seconds=0.25)
     calls: dict[str, object] = {}
+    timeouts: list[object] = []
 
     monkeypatch.setattr(provider_instance, "_secret_tool", lambda: "/usr/bin/secret-tool")
 
-    def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
-        calls["command"] = command
-        calls["timeout"] = kwargs.get("timeout")
-        raise subprocess.TimeoutExpired(command, kwargs.get("timeout"))
+    class FakeProcess:
+        pid = 12345
+        returncode = -9
 
-    monkeypatch.setattr(subprocess, "run", fake_run)
+        def __init__(self, command):
+            self.command = command
+
+        def communicate(self, *, input=None, timeout=None):
+            calls["timeout"] = timeout
+            timeouts.append(timeout)
+            if timeout is not None:
+                raise subprocess.TimeoutExpired(self.command, timeout)
+            return "", ""
+
+        def kill(self) -> None:
+            calls["kill"] = True
+
+    def fake_popen(command: list[str], **kwargs: object) -> FakeProcess:
+        calls["command"] = command
+        calls["start_new_session"] = kwargs.get("start_new_session")
+        return FakeProcess(command)
+
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    monkeypatch.setattr("TeeBotus.runtime.accounts.os.killpg", lambda _pid, _signal: calls.setdefault("killpg", True))
 
     with pytest.raises(AccountStoreError, match="timed out"):
         provider_instance._run(["lookup", "application", "TeeBotus"])
 
-    assert calls["timeout"] == 0.25
+    assert timeouts[0] == 0.25
+    assert calls["start_new_session"] is True
+    assert calls["killpg"] is True
 
 
 def test_secret_tool_provider_retries_transient_missing_lookup(monkeypatch) -> None:

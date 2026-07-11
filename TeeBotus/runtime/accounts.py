@@ -11,6 +11,7 @@ import math
 import os
 import re
 import secrets
+import signal
 import shutil
 import stat
 import subprocess
@@ -526,24 +527,37 @@ class SecretToolInstanceSecretProvider:
         ]
 
     def _run(self, args: list[str], *, input_text: str = "") -> subprocess.CompletedProcess[str]:
+        command = [self._secret_tool(), *args]
         try:
-            return subprocess.run(
-                [self._secret_tool(), *args],
-                input=input_text,
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                capture_output=True,
-                check=False,
-                timeout=self.timeout_seconds,
+                start_new_session=True,
             )
-        except subprocess.TimeoutExpired as exc:
-            operation = args[0] if args else "command"
-            timeout = f"{self.timeout_seconds:g}s" if self.timeout_seconds is not None else "configured timeout"
-            raise AccountStoreError(
-                f"secret-tool {operation} timed out after {timeout}; "
-                "Secret Service may be locked, unavailable, or waiting for a graphical prompt"
-            ) from exc
+            try:
+                stdout, stderr = process.communicate(timeout=self.timeout_seconds)
+            except subprocess.TimeoutExpired as exc:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except (ProcessLookupError, PermissionError):
+                    pass
+                try:
+                    process.kill()
+                except ProcessLookupError:
+                    pass
+                process.communicate()
+                operation = args[0] if args else "command"
+                timeout = f"{self.timeout_seconds:g}s" if self.timeout_seconds is not None else "configured timeout"
+                raise AccountStoreError(
+                    f"secret-tool {operation} timed out after {timeout}; "
+                    "Secret Service may be locked, unavailable, or waiting for a graphical prompt"
+                ) from exc
+            return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
         except OSError as exc:
             raise AccountStoreError("secret-tool could not be started") from exc
 
