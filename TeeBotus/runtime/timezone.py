@@ -23,7 +23,10 @@ def configured_timezone() -> tzinfo:
     try:
         return ZoneInfo(name)
     except (ZoneInfoNotFoundError, ValueError):
-        return datetime.now().astimezone().tzinfo or timezone.utc
+        try:
+            return ZoneInfo(DEFAULT_TIMEZONE_NAME)
+        except (ZoneInfoNotFoundError, ValueError):
+            return timezone.utc
 
 
 def local_now() -> datetime:
