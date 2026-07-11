@@ -2497,7 +2497,14 @@ class AccountStore:
         else:
             graph_links = graph_links_value
         for link_type in ACCOUNT_MEMORY_LINK_TYPES:
-            typed_links = graph_links.get(link_type) if isinstance(graph_links.get(link_type), dict) else {}
+            typed_links_value = graph_links.get(link_type)
+            if typed_links_value is None:
+                typed_links: dict[str, Any] = {}
+            elif not isinstance(typed_links_value, dict):
+                errors.append(f"graph.links.{link_type} is not an object")
+                typed_links = {}
+            else:
+                typed_links = typed_links_value
             for source_id, target_ids in typed_links.items():
                 source = str(source_id or "").strip()
                 if source and source not in entry_id_set:
@@ -2521,8 +2528,22 @@ class AccountStore:
                 errors.append(f"graph relation source missing entry: {source_id}")
             if target_id and target_id not in entry_id_set:
                 errors.append(f"graph relation target missing entry: {target_id}")
-        semantic_cache = nested_index.get("semantic_cache") if isinstance(nested_index.get("semantic_cache"), dict) else {}
-        semantic_entries = semantic_cache.get("entries") if isinstance(semantic_cache.get("entries"), dict) else {}
+        semantic_cache_value = nested_index.get("semantic_cache")
+        if semantic_cache_value is None:
+            semantic_cache: dict[str, Any] = {}
+        elif not isinstance(semantic_cache_value, dict):
+            errors.append("index.semantic_cache is not an object")
+            semantic_cache = {}
+        else:
+            semantic_cache = semantic_cache_value
+        semantic_entries_value = semantic_cache.get("entries")
+        if semantic_entries_value is None:
+            semantic_entries: dict[str, Any] = {}
+        elif not isinstance(semantic_entries_value, dict):
+            errors.append("semantic_cache.entries is not an object")
+            semantic_entries = {}
+        else:
+            semantic_entries = semantic_entries_value
         missing_semantic_ids = sorted(str(memory_id) for memory_id in semantic_entries if str(memory_id) not in entry_id_set)
         if missing_semantic_ids:
             errors.append(f"semantic_cache entries missing entries: {', '.join(missing_semantic_ids)}")
