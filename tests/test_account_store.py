@@ -2251,6 +2251,23 @@ def test_sqlite_memory_recreates_schema_after_table_is_removed(tmp_path):
     assert backend.read_entries(account_id) == [{"id": "after"}]
 
 
+def test_sqlite_empty_entry_id_read_clears_previous_diagnostics(tmp_path):
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=tmp_path / "memory.sqlite3", fallback_path=None),
+    )
+    backend.last_entry_read_error = "stale error"
+    backend.last_entry_skipped = 2
+    backend.last_database_missing = True
+
+    assert backend.read_entries_by_ids("a" * 128, []) == []
+    assert backend.last_entry_read_error == ""
+    assert backend.last_entry_skipped == 0
+    assert backend.last_database_missing is False
+
+
 def test_sqlite_memory_config_resolves_relative_paths_under_instance_root(tmp_path):
     root = tmp_path / "instance" / "data" / "accounts"
     config = SQLiteMemoryConfig.from_env(

@@ -163,12 +163,12 @@ class SQLiteAccountMemoryBackend:
         return entries
 
     def read_entries_by_ids(self, account_id: str, memory_ids: Iterable[str]) -> list[dict[str, Any]]:
-        requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
-        if not requested_ids:
-            return []
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
         self.last_database_missing = False
+        requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
+        if not requested_ids:
+            return []
         if not self.config.path.exists():
             self.last_database_missing = True
             self.last_entry_read_error = str(self._missing_database_error())
