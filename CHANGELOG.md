@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.92 - 2026-07-12
+
+- Distinguish negated mute phrases in notification-loudness replies.
+
 ## 1.9.91 - 2026-07-12
 
 - Revalidate notification-loudness outbox routes before dispatch.

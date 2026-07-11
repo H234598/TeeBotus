@@ -17,6 +17,8 @@ NOTIFICATION_LOUDNESS_ONLINE_WINDOW = timedelta(minutes=5)
 NOTIFICATION_LOUDNESS_WAKE_HOURS = (8, 22)
 NOTIFICATION_LOUDNESS_PENDING_STATUS = "pending"
 NOTIFICATION_LOUDNESS_TERMINAL_STATUSES = frozenset({"confirmed", "declined"})
+NOTIFICATION_LOUDNESS_MUTE_TERMS = frozenset({"stumm", "lautlos", "stummgeschaltet", "lautlosgeschaltet"})
+NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset({"nicht", "nie", "kein", "keine", "weder", "ohne"})
 
 NOTIFICATION_LOUDNESS_PROMPT = (
     "Bitte stell meine Nachrichten in diesem Chat auf laut, damit Erinnerungen, Termine und wichtige Hinweise nicht untergehen.\n"
@@ -233,16 +235,17 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     words = set(normalized.split())
     has_notification_context = any(
-        needle in normalized
+        _contains_normalized_phrase(normalized, needle)
         for needle in (
             "laut",
             "benachrichtigung",
+            "benachrichtigungen",
             "notification",
             "notifications",
-            "stumm",
-            "lautlos",
+            *NOTIFICATION_LOUDNESS_MUTE_TERMS,
         )
     )
+    has_unnegated_mute, has_negated_mute = _notification_loudness_mute_polarity(normalized)
     confirmed_needles = (
         "ja laut",
         "laut gestellt",
@@ -274,8 +277,6 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "benachrichtigungen aus",
         "ausgeschaltet",
         "deaktiviert",
-        "lautlos",
-        "stumm",
         "kann ich nicht",
         "will nicht",
         "moechte nicht",
@@ -284,19 +285,23 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "will ich nicht",
         "moechte ich nicht",
         "möchte ich nicht",
-        "stumm lassen",
-        "bleibt stumm",
     )
-    has_declined_phrase = any(needle in normalized for needle in declined_needles)
+    has_declined_phrase = any(_contains_normalized_phrase(normalized, needle) for needle in declined_needles)
+    has_declined_phrase = has_declined_phrase or has_unnegated_mute
     if has_declined_phrase and (pending or has_notification_context):
         return "declined"
     if pending and (normalized in {"ja", "yes", "jep", "jo", "ok", "okay", "klar", "erledigt", "gemacht"} or words & {"ja", "yes"} and has_notification_context):
         return "confirmed"
-    if pending and any(needle in normalized for needle in ("erledigt", "gemacht", "eingeschaltet", "aktiviert")):
+    if pending and any(
+        _contains_normalized_phrase(normalized, needle)
+        for needle in ("erledigt", "gemacht", "eingeschaltet", "aktiviert")
+    ):
         return "confirmed"
     if pending and normalized in {"nein", "no", "nee", "nop", "nope"}:
         return "declined"
-    if has_notification_context and any(needle in normalized for needle in confirmed_needles):
+    if has_notification_context and (
+        any(_contains_normalized_phrase(normalized, needle) for needle in confirmed_needles) or has_negated_mute
+    ):
         return "confirmed"
     if has_notification_context and has_declined_phrase:
         return "declined"
@@ -705,6 +710,30 @@ def _normalize_text(text: str) -> str:
     for char in ",.;:!?()[]{}\"'":
         normalized = normalized.replace(char, " ")
     return " ".join(normalized.split())
+
+
+def _contains_normalized_phrase(normalized: str, phrase: str) -> bool:
+    phrase_tokens = str(phrase or "").split()
+    if not phrase_tokens:
+        return False
+    tokens = normalized.split()
+    width = len(phrase_tokens)
+    return any(tokens[index : index + width] == phrase_tokens for index in range(len(tokens) - width + 1))
+
+
+def _notification_loudness_mute_polarity(normalized: str) -> tuple[bool, bool]:
+    tokens = normalized.split()
+    has_unnegated = False
+    has_negated = False
+    for index, token in enumerate(tokens):
+        if token not in NOTIFICATION_LOUDNESS_MUTE_TERMS:
+            continue
+        preceding = tokens[max(0, index - 3) : index]
+        if any(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in preceding):
+            has_negated = True
+        else:
+            has_unnegated = True
+    return has_unnegated, has_negated
 
 
 def _normalize_channel(channel: Any) -> str:
