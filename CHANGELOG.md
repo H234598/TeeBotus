@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.100 - 2026-07-12
+
+- Do not treat loudness imperatives as completed confirmations.
+
 ## 1.9.99 - 2026-07-12
 
 - Avoid deciding notification loudness from uncertain status statements.

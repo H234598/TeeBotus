@@ -283,7 +283,6 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     confirmed_needles = (
         "ja laut",
         "laut gestellt",
-        "auf laut",
         "benachrichtigungen an",
         "benachrichtigung an",
         "notifications on",
@@ -294,6 +293,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "not off",
         "ist laut",
         "sind laut",
+        "ist auf laut",
+        "sind auf laut",
+        "steht auf laut",
+        "stehen auf laut",
         "are loud",
         "wieder laut",
         "ist an",
