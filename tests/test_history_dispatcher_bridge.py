@@ -117,3 +117,19 @@ def test_bridge_keeps_spooled_event_when_inner_dispatcher_result_fails(tmp_path:
 
     assert result == {"delivered": 0, "failed": 1}
     assert len(spool.events()) == 1
+
+
+def test_bridge_keeps_spooled_event_when_dispatcher_response_has_no_data(tmp_path: Path) -> None:
+    spool = CallbackSpool(tmp_path / "spool")
+
+    class EmptyResponseClient:
+        async def request_async(self, _operation: str, _body: object) -> dict[str, object]:
+            return {"ok": True, "data": None}
+
+    bridge = HistoryDispatcherBridge(EmptyResponseClient(), spool)  # type: ignore[arg-type]
+    spool.enqueue({"event_id": "event-empty-response", "item_id": "item", "recipient_id": "admin", "event_type": "sent"})
+
+    result = asyncio.run(bridge.flush_spool())
+
+    assert result == {"delivered": 0, "failed": 1}
+    assert len(spool.events()) == 1

@@ -178,9 +178,7 @@ class HistoryDispatcherBridge:
             try:
                 response = await self.client.request_async("delivery.record", event)
                 data = response.get("data", response)
-                succeeded = bool(response.get("ok")) and (
-                    not isinstance(data, Mapping) or bool(data.get("ok", True))
-                )
+                succeeded = response.get("ok") is True and isinstance(data, Mapping) and data.get("ok") is True
                 if succeeded:
                     self.spool.discard(path)
                     delivered += 1

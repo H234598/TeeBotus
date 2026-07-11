@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.7 - 2026-07-11
+
+- Fail closed when callback spool delivery responses lack a valid inner
+  success object.
+
 ## 1.9.6 - 2026-07-11
 
 - Persist generated callback event IDs inside spool payloads so retries retain
