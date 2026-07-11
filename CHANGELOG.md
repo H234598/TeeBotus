@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.134 - 2026-07-12
+
+- Recognize completed English enabled-notification statements.
+
 ## 1.9.133 - 2026-07-12
 
 - Treat neither/weder as clause-wide loudness quantifiers.
