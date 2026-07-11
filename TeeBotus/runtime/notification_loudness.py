@@ -111,6 +111,8 @@ def maybe_handle_notification_loudness_response(
     if not account_id or not _is_private_chat_type(event.chat_type):
         return None
     try:
+        if not _event_belongs_to_account(account_store, event, account_id):
+            return None
         if not _event_has_current_private_route(account_store, event):
             return None
         with _account_proactive_outbox_lock(account_store, account_id):
@@ -148,6 +150,8 @@ def maybe_notification_loudness_prompt_action(
     if not _is_private_chat_type(event.chat_type) or not account_id:
         return None
     try:
+        if not _event_belongs_to_account(account_store, event, account_id):
+            return None
         if not _event_has_current_private_route(account_store, event):
             return None
         with _account_proactive_outbox_lock(account_store, account_id):
@@ -609,6 +613,10 @@ def _event_has_current_private_route(account_store: AccountStore, event: Incomin
         and str(route.get("chat_id") or "").strip() == str(event.chat_id or "").strip()
         and route_slot == event_slot
     )
+
+
+def _event_belongs_to_account(account_store: AccountStore, event: IncomingEvent, account_id: str) -> bool:
+    return account_store.get_account_for_identity(event.identity_key) == account_id
 
 
 def _route_slot(value: Any) -> int | None:

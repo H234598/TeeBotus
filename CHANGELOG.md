@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.104 - 2026-07-12
+
+- Enforce account ownership for notification-loudness events.
+
 ## 1.9.103 - 2026-07-12
 
 - Respect negated loudness completion phrases.
