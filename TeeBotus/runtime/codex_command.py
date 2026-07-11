@@ -208,13 +208,22 @@ def resolve_codex_session_target(
         repo_name = history_target.repo_name if history_target and history_target.repo_name else ""
         session = _latest_session_for_repo(sessions, repo_root) if repo_root else None
         if session is None and history_target and history_target.session_id:
-            session = _session_by_id(sessions, history_target.session_id)
+            candidate = _session_by_id(sessions, history_target.session_id)
+            if candidate is not None and _session_matches_requested_target(
+                candidate,
+                repo_root=repo_root,
+                project_filter=project_filter,
+                repo_filter=repo_filter,
+            ):
+                session = candidate
     else:
         repo_root = history_target.repo_root if history_target and history_target.repo_root else str(project_root)
         repo_name = history_target.repo_name if history_target and history_target.repo_name else Path(repo_root).name
         session = _latest_session_for_repo(sessions, repo_root)
         if session is None and history_target and history_target.session_id:
-            session = _session_by_id(sessions, history_target.session_id)
+            candidate = _session_by_id(sessions, history_target.session_id)
+            if candidate is not None and _session_matches_requested_target(candidate, repo_root=repo_root):
+                session = candidate
     if session is None and (project_filter or repo_filter):
         session = _latest_session_matching_filters(sessions, project_filter=project_filter, repo_filter=repo_filter)
         if session is not None:
@@ -452,12 +461,24 @@ def _latest_session_matching_filters(
     matches = [
         session
         for session in sessions
-        if _matches_any(project_filter, (Path(session.cwd).name, session.cwd))
-        and _matches_any(repo_filter, (Path(session.cwd).name, session.cwd))
+        if _session_matches_requested_target(session, project_filter=project_filter, repo_filter=repo_filter)
     ]
     if not matches:
         return None
     return sorted(matches, key=lambda session: (session.mtime, session.path.as_posix()))[-1]
+
+
+def _session_matches_requested_target(
+    session: _CodexSessionInfo,
+    *,
+    repo_root: str = "",
+    project_filter: str = "",
+    repo_filter: str = "",
+) -> bool:
+    if repo_root and _normalized_path(session.cwd) != _normalized_path(repo_root):
+        return False
+    values = (Path(session.cwd).name, session.cwd)
+    return _matches_any(project_filter, values) and _matches_any(repo_filter, values)
 
 
 def _session_by_id(sessions: Sequence[_CodexSessionInfo], session_id: str) -> _CodexSessionInfo | None:

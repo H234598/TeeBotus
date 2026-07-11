@@ -93,6 +93,30 @@ def test_resolve_codex_session_target_honors_explicit_filters_without_history(tm
     assert target.repo_root == str(target_repo)
 
 
+def test_resolve_codex_session_target_rejects_history_session_from_other_repo(tmp_path: Path) -> None:
+    current_repo = tmp_path / "current-repo"
+    target_repo = tmp_path / "target-repo"
+    current_repo.mkdir()
+    target_repo.mkdir()
+    session_root = tmp_path / ".codex" / "sessions"
+    current_session = _write_session(session_root, "55555555-5555-5555-5555-555555555555", current_repo, mtime=20)
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    store.write_codex_history_outbox(
+        INSTANCE_STATE_ACCOUNT_ID,
+        [_history_item("hist", "target-repo", target_repo, current_session, "2026-06-19T12:00:00+00:00")],
+    )
+
+    target = resolve_codex_session_target(
+        store,
+        project_root=current_repo,
+        project_filter="target-repo",
+        repo_filter="target-repo",
+        session_roots=(session_root,),
+    )
+
+    assert target is None
+
+
 def test_execute_codex_admin_command_resumes_selected_session_via_stdin(tmp_path: Path, monkeypatch) -> None:
     repo_a = tmp_path / "repo-a"
     repo_b = tmp_path / "repo-b"
