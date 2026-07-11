@@ -284,6 +284,37 @@ def test_account_memory_health_reports_unreadable_account_directory(tmp_path: Pa
     assert any(line.startswith("account_memory_recovery=Demo status=needed") for line in lines)
 
 
+def test_account_memory_health_redacts_backend_errors(tmp_path: Path, monkeypatch) -> None:
+    account_id = "a" * 128
+    account_dir = tmp_path / "instances" / "Demo" / "data" / "accounts" / "accounts" / account_id
+    account_dir.mkdir(parents=True)
+
+    class FakeStore:
+        def __init__(self, root: Path, *_args, **_kwargs) -> None:
+            self.root = Path(root)
+            self.accounts_dir = self.root / "accounts"
+            self.vault = None
+
+        @property
+        def account_memory_backend(self):
+            return None
+
+        def _read_account_profile(self, _account_id: str) -> None:
+            raise AccountStoreError("token=sk-profile-secret123")
+
+        def check_structured_memory_index(self, _account_id: str, *, require_resolvable: bool):
+            raise AccountStoreError("dsn=postgres://user:password@example.invalid/db")
+
+    monkeypatch.setattr("TeeBotus.core.status.AccountStore", FakeStore)
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+    joined = "\n".join(lines)
+
+    assert "sk-profile-secret123" not in joined
+    assert "password@example.invalid" not in joined
+    assert "sk-<redacted>" in joined or "postgres://" in joined
+
+
 def test_account_secret_health_reports_missing_required_memory_secret(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     store = _store(tmp_path)

@@ -89,7 +89,9 @@ STATUS_SECRET_REDACTIONS = (
         r"\1\2<redacted>",
     ),
 )
-STATUS_URL_CREDENTIAL_RE = re.compile(r"(?<!\S)(?:[A-Za-z][A-Za-z0-9+.-]*://)?[^/\s:@]+:[^/\s@]+@(?=[^\s]+)")
+STATUS_URL_CREDENTIAL_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:[A-Za-z][A-Za-z0-9+.-]*://)?[^/\s:@]+:[^/\s@]+@(?=[^\s]+)"
+)
 
 
 def build_status_reply(
@@ -1644,20 +1646,26 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
         try:
             store._read_account_profile(account_id)
         except AccountStoreError as exc:
-            profile_error = f"profile_unreadable:{exc}"
+            profile_error = f"profile_unreadable:{redact_status_text(exc)}"
             has_broken_metadata = True
         except OSError as exc:
-            profile_error = f"profile_unreadable:{exc}"
+            profile_error = f"profile_unreadable:{redact_status_text(exc)}"
             has_broken_metadata = True
         try:
             with _suppress_expected_account_memory_health_logs():
                 health = store.check_structured_memory_index(account_id, require_resolvable=require_resolvable and not profile_error)
         except AccountStoreError as exc:
-            lines.append(f"account_memory={safe_instance_name}/{account_id} status=broken error={exc}")
+            lines.append(
+                f"account_memory={safe_instance_name}/{account_id} status=broken "
+                f"error={redact_status_text(exc)}"
+            )
             has_broken_memory = True
             continue
         except OSError as exc:
-            lines.append(f"account_memory={safe_instance_name}/{account_id} status=broken error={exc}")
+            lines.append(
+                f"account_memory={safe_instance_name}/{account_id} status=broken "
+                f"error={redact_status_text(exc)}"
+            )
             has_broken_memory = True
             continue
         fallback_warning = _account_memory_fallback_warning(store, account_id)
@@ -1672,7 +1680,8 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
             if profile_error:
                 errors.insert(0, profile_error)
             lines.append(
-                f"account_memory={safe_instance_name}/{account_id} status=broken error={'; '.join(errors)}{fallback_warning}"
+                f"account_memory={safe_instance_name}/{account_id} status=broken "
+                f"error={redact_status_text('; '.join(errors))}{fallback_warning}"
             )
             has_broken_memory = True
     if has_broken_memory or has_broken_metadata:

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.26 - 2026-07-11
+
+- Redact secrets and credentials from account-memory health error lines.
+
 ## 1.9.25 - 2026-07-11
 
 - Keep status memory-size diagnostics alive when backend data is not JSON
