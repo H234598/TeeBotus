@@ -202,12 +202,19 @@ def resolve_codex_session_target(
     session_roots: Sequence[str | Path] | None = None,
 ) -> CodexSessionTarget | None:
     history_target = _latest_history_target(account_store, project_filter=project_filter, repo_filter=repo_filter)
-    repo_root = history_target.repo_root if history_target and history_target.repo_root else str(project_root)
-    repo_name = history_target.repo_name if history_target and history_target.repo_name else Path(repo_root).name
     sessions = _discover_codex_sessions(session_roots)
-    session = _latest_session_for_repo(sessions, repo_root)
-    if session is None and history_target and history_target.session_id:
-        session = _session_by_id(sessions, history_target.session_id)
+    if project_filter or repo_filter:
+        repo_root = history_target.repo_root if history_target and history_target.repo_root else ""
+        repo_name = history_target.repo_name if history_target and history_target.repo_name else ""
+        session = _latest_session_for_repo(sessions, repo_root) if repo_root else None
+        if session is None and history_target and history_target.session_id:
+            session = _session_by_id(sessions, history_target.session_id)
+    else:
+        repo_root = history_target.repo_root if history_target and history_target.repo_root else str(project_root)
+        repo_name = history_target.repo_name if history_target and history_target.repo_name else Path(repo_root).name
+        session = _latest_session_for_repo(sessions, repo_root)
+        if session is None and history_target and history_target.session_id:
+            session = _session_by_id(sessions, history_target.session_id)
     if session is None and (project_filter or repo_filter):
         session = _latest_session_matching_filters(sessions, project_filter=project_filter, repo_filter=repo_filter)
         if session is not None:
