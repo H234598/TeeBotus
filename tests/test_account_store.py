@@ -4617,6 +4617,7 @@ def test_structured_account_memory_index_health_reports_broken_invariants(tmp_pa
                 "accessed_ids": ["mem_live", "mem_live", "mem_missing_accessed"],
                 "keywords": {"mond": ["mem_live", "mem_missing_keyword"]},
                 "entries": {"mem_live": {}, "mem_missing_entry": {}},
+                "graph": {"links": "invalid", "relations": []},
             },
         },
     )
@@ -4637,6 +4638,7 @@ def test_structured_account_memory_index_health_reports_broken_invariants(tmp_pa
     assert "accessed_ids missing entries: mem_missing_accessed" in error_text
     assert "keyword ids missing entries: mem_missing_keyword" in error_text
     assert "index.entries missing entries: mem_missing_entry" in error_text
+    assert "graph.links is not an object" in error_text
     assert "related_ids missing entries: mem_missing_related" in error_text
 
 

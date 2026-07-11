@@ -2484,8 +2484,18 @@ class AccountStore:
                     missing_relation_ids.append(relation["target_id"])
         if missing_relation_ids:
             errors.append(f"relations missing entries: {', '.join(sorted(set(missing_relation_ids)))}")
-        graph = nested_index.get("graph") if isinstance(nested_index.get("graph"), dict) else {}
-        graph_links = graph.get("links") if isinstance(graph.get("links"), dict) else {}
+        graph_value = nested_index.get("graph")
+        if not isinstance(graph_value, dict):
+            errors.append("index.graph is not an object")
+            graph: dict[str, Any] = {}
+        else:
+            graph = graph_value
+        graph_links_value = graph.get("links")
+        if not isinstance(graph_links_value, dict):
+            errors.append("graph.links is not an object")
+            graph_links: dict[str, Any] = {}
+        else:
+            graph_links = graph_links_value
         for link_type in ACCOUNT_MEMORY_LINK_TYPES:
             typed_links = graph_links.get(link_type) if isinstance(graph_links.get(link_type), dict) else {}
             for source_id, target_ids in typed_links.items():
