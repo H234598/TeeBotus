@@ -1244,8 +1244,8 @@ def _account_secret_mapping_required(root: Path) -> bool:
     if accounts_dir.exists():
         try:
             account_dirs = [path for path in accounts_dir.iterdir() if path.is_dir()]
-        except OSError:
-            account_dirs = []
+        except OSError as exc:
+            raise AccountStoreError(f"could not inspect account directories: {exc}") from exc
         for account_dir in account_dirs:
             paths.extend(
                 [

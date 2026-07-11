@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.45 - 2026-07-11
+
+- Report unreadable account directories instead of treating them as empty.
+
 ## 1.9.44 - 2026-07-11
 
 - Keep account-memory health diagnostics available when fallback metadata fails.

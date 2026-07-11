@@ -362,6 +362,30 @@ def test_account_secret_health_uses_normalized_instance_name(tmp_path: Path) -> 
     assert lines == ["account_crypto=Demo status=ok mapping=not_required memory=not_required pepper=not_required keyring=not_required"]
 
 
+def test_account_secret_health_reports_unreadable_account_directory(tmp_path: Path, monkeypatch) -> None:
+    accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
+    accounts_root.mkdir(parents=True)
+    (accounts_root / "accounts").mkdir()
+    original_iterdir = Path.iterdir
+
+    def fail_accounts_dir(path: Path):
+        if path == accounts_root / "accounts":
+            raise OSError("permission denied")
+        return original_iterdir(path)
+
+    monkeypatch.setattr(Path, "iterdir", fail_accounts_dir)
+
+    lines = account_secret_health_lines(
+        instance_name="Demo",
+        project_root=tmp_path,
+        secret_provider=FakeSecretStatusProvider(),
+    )
+
+    assert lines == [
+        "account_crypto=Demo status=broken error=AccountStoreError: could not inspect account directories: permission denied"
+    ]
+
+
 def test_account_memory_index_health_uses_read_only_secret_provider(tmp_path: Path, monkeypatch) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
