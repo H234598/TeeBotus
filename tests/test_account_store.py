@@ -2004,6 +2004,49 @@ def test_instance_json_state_reads_legacy_file_when_collection_read_fails(tmp_pa
     assert legacy_path.exists()
 
 
+def test_instance_json_state_reads_legacy_file_when_sql_diagnostics_fail(tmp_path):
+    class CorruptReadCollectionBackend:
+        last_collection_read_error = "payload could not be decrypted"
+        last_collection_skipped = 1
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            return []
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            raise AssertionError("diagnostic fallback must not rewrite collection")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    store._account_memory_backend = CorruptReadCollectionBackend()
+    legacy_path = tmp_path / "Version_Notifications.json"
+    store.account_memory_vault.write_json(
+        legacy_path,
+        {"versions": {"1.0.3": {"sent_identities": ["telegram:user:111"]}}},
+    )
+
+    state = store.read_instance_json_state("Version_Notifications.json", "version_notifications", {"versions": {}})
+
+    assert state["versions"]["1.0.3"]["sent_identities"] == ["telegram:user:111"]
+    assert legacy_path.exists()
+
+
+def test_instance_json_state_refuses_sql_diagnostics_without_legacy_file(tmp_path):
+    class CorruptReadCollectionBackend:
+        last_collection_read_error = "payload could not be decrypted"
+        last_collection_skipped = 1
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            return []
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            raise AssertionError("diagnostic failure must not write collection")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    store._account_memory_backend = CorruptReadCollectionBackend()
+
+    with pytest.raises(AccountStoreError, match="version_notifications"):
+        store.read_instance_json_state("Version_Notifications.json", "version_notifications", {"versions": {}})
+
+
 def test_account_json_state_reads_legacy_file_when_collection_read_fails(tmp_path):
     class FailingReadCollectionBackend:
         def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
