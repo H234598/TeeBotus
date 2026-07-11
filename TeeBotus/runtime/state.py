@@ -33,13 +33,14 @@ from TeeBotus.runtime.maintenance import maintain_runtime_directory, rotate_runt
 FlowType = Literal["teladi_emergency", "memory_reset", "youtube_options", "account_edit", "link_wtf"] | str
 LINK_NOTIFICATIONS_FILENAME = "Link_Notifications.json"
 LINK_NOTIFICATION_TTL_SECONDS = 15 * 60
+SECURITY_EVENTS_LOCK_FILENAME = ".Security_Events.jsonl.lock"
 PREVIOUS_RESPONSE_PROVIDER_FIELD = "previous_response_provider"
 PREVIOUS_RESPONSE_MODEL_FIELD = "previous_response_model"
 PREVIOUS_RESPONSE_KEY_FIELD = "previous_response_key_fingerprint"
 LINK_NOTIFICATIONS_LOCK_FILENAME = ".Link_Notifications.json.lock"
 
-_LINK_NOTIFICATIONS_THREAD_LOCK = threading.RLock()
-_LINK_NOTIFICATIONS_LOCK_STATE = threading.local()
+_RUNTIME_FILE_THREAD_LOCK = threading.RLock()
+_RUNTIME_FILE_LOCK_STATE = threading.local()
 
 
 @dataclass(frozen=True)
@@ -232,13 +233,13 @@ class RuntimeStateStore(RuntimeState):
             self._load_persisted_link_notifications()
 
     @contextmanager
-    def _link_notifications_lock(self) -> Iterator[None]:
-        lock_path = self.runtime_dir / LINK_NOTIFICATIONS_LOCK_FILENAME
-        with _LINK_NOTIFICATIONS_THREAD_LOCK:
-            held_paths = getattr(_LINK_NOTIFICATIONS_LOCK_STATE, "paths", None)
+    def _runtime_file_lock(self, lock_filename: str) -> Iterator[None]:
+        lock_path = self.runtime_dir / lock_filename
+        with _RUNTIME_FILE_THREAD_LOCK:
+            held_paths = getattr(_RUNTIME_FILE_LOCK_STATE, "paths", None)
             if held_paths is None:
                 held_paths = set()
-                _LINK_NOTIFICATIONS_LOCK_STATE.paths = held_paths
+                _RUNTIME_FILE_LOCK_STATE.paths = held_paths
             lock_key = os.path.realpath(os.fspath(lock_path))
             if lock_key in held_paths:
                 yield
@@ -259,7 +260,17 @@ class RuntimeStateStore(RuntimeState):
                     if fcntl is not None:
                         fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
             if not held_paths:
-                del _LINK_NOTIFICATIONS_LOCK_STATE.paths
+                del _RUNTIME_FILE_LOCK_STATE.paths
+
+    @contextmanager
+    def _link_notifications_lock(self) -> Iterator[None]:
+        with self._runtime_file_lock(LINK_NOTIFICATIONS_LOCK_FILENAME):
+            yield
+
+    @contextmanager
+    def _security_events_lock(self) -> Iterator[None]:
+        with self._runtime_file_lock(SECURITY_EVENTS_LOCK_FILENAME):
+            yield
 
     @property
     def _link_vault(self) -> EncryptedJsonVault:
@@ -431,11 +442,12 @@ class RuntimeStateStore(RuntimeState):
             return super().list_link_notifications(instance_name=instance_name, account_id=account_id)
 
     def append_security_event(self, event: dict[str, Any]) -> None:
-        super().append_security_event(event)
-        rotate_runtime_text_file_if_needed(self.security_events_path)
-        with self.security_events_path.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
-        maintain_runtime_directory(self.runtime_dir)
+        with self._security_events_lock():
+            super().append_security_event(event)
+            rotate_runtime_text_file_if_needed(self.security_events_path)
+            with self.security_events_path.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
+            maintain_runtime_directory(self.runtime_dir)
 
     def _state_path(self, account_id: str, filename: str) -> Path:
         account = validate_sha512_token(account_id, field_name="account_id")

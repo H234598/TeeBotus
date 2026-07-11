@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 
 import pytest
@@ -174,6 +175,61 @@ def test_runtime_state_store_serializes_concurrent_link_notification_writes(tmp_
         "telegram:user:first",
         "telegram:user:second",
     }
+
+
+def test_runtime_state_store_serializes_security_event_rotation_and_append(tmp_path, monkeypatch):
+    import TeeBotus.runtime.state as state_module
+
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    first = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+    second = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+    first_rotate_entered = threading.Event()
+    release_first = threading.Event()
+    second_done = threading.Event()
+    errors: list[BaseException] = []
+    original_rotate = state_module.rotate_runtime_text_file_if_needed
+
+    def blocking_rotate(path):
+        if not first_rotate_entered.is_set():
+            first_rotate_entered.set()
+            if not release_first.wait(timeout=2):
+                raise RuntimeError("first security-event append was not released")
+        return original_rotate(path)
+
+    monkeypatch.setattr(state_module, "rotate_runtime_text_file_if_needed", blocking_rotate)
+
+    def run_first() -> None:
+        try:
+            first.append_security_event({"event": "first"})
+        except BaseException as exc:  # pragma: no cover - assertion below reports the error.
+            errors.append(exc)
+
+    def run_second() -> None:
+        try:
+            second.append_security_event({"event": "second"})
+        except BaseException as exc:  # pragma: no cover - assertion below reports the error.
+            errors.append(exc)
+        finally:
+            second_done.set()
+
+    first_thread = threading.Thread(target=run_first)
+    second_thread = threading.Thread(target=run_second)
+    first_thread.start()
+    assert first_rotate_entered.wait(timeout=1)
+    second_thread.start()
+    try:
+        assert not second_done.wait(timeout=0.1)
+    finally:
+        release_first.set()
+        first_thread.join(timeout=2)
+        second_thread.join(timeout=2)
+
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+    assert errors == []
+    events = [json.loads(line)["event"] for line in first.security_events_path.read_text(encoding="utf-8").splitlines()]
+    assert events == ["first", "second"]
 
 
 def test_runtime_state_store_refuses_to_autocreate_llm_state_secret_for_existing_sqlite_memory(tmp_path, monkeypatch):
