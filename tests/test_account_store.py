@@ -3166,6 +3166,58 @@ def test_account_memory_fallback_repairs_stale_append_collection_from_primary() 
     assert backend.stale_fallback_collection_account_ids == ()
 
 
+def test_account_memory_fallback_repairs_stale_replace_collection_from_primary() -> None:
+    class Backend:
+        def __init__(self, *, fail_write: bool = False) -> None:
+            self.fail_write = fail_write
+            self.collections: dict[tuple[str, str], list[dict[str, str]]] = {}
+
+        def read_entries(self, _account_id: str) -> list[dict[str, str]]:
+            return []
+
+        def write_entries(self, _account_id: str, _rows: list[dict[str, str]]) -> None:
+            return None
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+        def read_collection(self, account_id: str, collection: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.collections.get((account_id, collection), [])]
+
+        def write_collection(self, account_id: str, collection: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise OSError("fallback unavailable")
+            self.collections[(account_id, collection)] = [dict(row) for row in rows]
+
+        def replace_collection_item(self, account_id: str, collection: str, item_key: str, row: dict[str, str]) -> bool:
+            existing_rows = self.collections.get((account_id, collection), [])
+            for index, existing in enumerate(existing_rows):
+                if str(existing.get("id") or "").strip() == item_key:
+                    existing_rows[index] = dict(row)
+                    return True
+            return False
+
+    account_id = "a" * 128
+    collection = "codex_history_dispatch_results"
+    primary = Backend()
+    fallback = Backend()
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    backend.write_collection(account_id, collection, [{"id": "row_1"}])
+    fallback.fail_write = True
+    backend.write_collection(account_id, collection, [{"id": "row_1"}, {"id": "row_2"}])
+    assert backend.stale_fallback_collection_account_ids == (account_id,)
+    fallback.fail_write = False
+
+    assert backend.replace_collection_item(account_id, collection, "row_2", {"id": "row_2", "status": "sent"})
+
+    assert fallback.collections[(account_id, collection)] == primary.collections[(account_id, collection)]
+    assert backend.stale_fallback_collection_account_ids == ()
+
+
 def test_account_store_sqlite_backend_skips_corrupt_rows(tmp_path, monkeypatch, caplog):
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")

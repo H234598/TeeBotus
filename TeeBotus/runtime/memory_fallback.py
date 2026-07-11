@@ -621,6 +621,12 @@ class WarningFallbackAccountMemoryBackend:
         item_key: str,
         row: dict[str, Any],
     ) -> bool:
+        stale_key = (account_id, collection)
+        if backend is self.fallback and (
+            stale_key in self._stale_fallback_collections or stale_key in self._fallback_sync_failed_collections
+        ):
+            self.fallback.write_collection(account_id, collection, list(self.primary.read_collection(account_id, collection)))
+            return True
         replace_collection_item = getattr(backend, "replace_collection_item", None)
         if callable(replace_collection_item):
             return bool(replace_collection_item(account_id, collection, item_key, row))
