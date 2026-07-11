@@ -48,7 +48,7 @@ def maybe_handle_notification_loudness_response(
             notification_state = state.get("notification_loudness") if isinstance(state, dict) else None
             routes = notification_state.get("routes") if isinstance(notification_state, dict) else None
             route_state = _find_route_state(routes, _route_key(event)) if isinstance(routes, Mapping) else None
-            if isinstance(route_state, Mapping) and not _normalize_bool(route_state.get("checks_active"), default=True):
+            if isinstance(route_state, Mapping) and not _notification_loudness_checks_active(route_state):
                 return None
             decision = _notification_loudness_decision(event.text, pending=route_status == "pending")
             if decision is None:
@@ -80,7 +80,7 @@ def maybe_notification_loudness_prompt_action(
             route_state = _ensure_route_state(state, event)
             if _normalized_route_status(route_state) in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
                 return None
-            if not _normalize_bool(route_state.get("checks_active"), default=True):
+            if not _notification_loudness_checks_active(route_state):
                 return None
             resolved_now = _resolve_loudness_now(now)
             if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=False):
@@ -141,7 +141,7 @@ def _queue_due_notification_loudness_prompts_unlocked(
             continue
         if status != NOTIFICATION_LOUDNESS_PENDING_STATUS:
             continue
-        if not _normalize_bool(route_state.get("checks_active"), default=True):
+        if not _notification_loudness_checks_active(route_state):
             continue
         state_changed = _refresh_route_state_from_account_routes(account_store, account_id, str(route_key), route_state) or state_changed
         route = route_state.get("route")
@@ -206,7 +206,7 @@ def notification_loudness_outbox_item_is_active(account_store: AccountStore, acc
         return False
     if _normalized_route_status(route_state) != NOTIFICATION_LOUDNESS_PENDING_STATUS:
         return False
-    return _normalize_bool(route_state.get("checks_active"), default=True)
+    return _notification_loudness_checks_active(route_state)
 
 
 def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
@@ -401,7 +401,7 @@ def _account_proactive_outbox_lock(account_store: AccountStore, account_id: str)
 
 
 def _mark_notification_loudness_checks_stopped(route_state: dict[str, Any], reason: str) -> bool:
-    if not _normalize_bool(route_state.get("checks_active"), default=True) and route_state.get("checks_stop_reason"):
+    if not _notification_loudness_checks_active(route_state) and route_state.get("checks_stop_reason"):
         return False
     route_state["checks_active"] = False
     route_state["checks_stopped_at"] = utc_now()
@@ -503,6 +503,11 @@ def _find_route_state(routes: Mapping[str, Any], route_key: Any) -> dict[str, An
 
 def _normalized_route_status(route_state: Mapping[str, Any]) -> str:
     return str(route_state.get("status") or "unknown").strip().casefold()
+
+
+def _notification_loudness_checks_active(route_state: Mapping[str, Any]) -> bool:
+    value = route_state.get("checks_active")
+    return _normalize_bool(value, default=value is None)
 
 
 def _normalize_route_key(route_key: Any) -> str:

@@ -643,6 +643,33 @@ def test_loudness_paths_fail_closed_when_agent_state_storage_is_unavailable(tmp_
     account_store.read_agent_state = original_read  # type: ignore[method-assign]
 
 
+def test_malformed_explicit_loudness_active_flag_fails_closed(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    set_identity_last_seen(account_store, identity, now - timedelta(minutes=2))
+    state = account_store.read_agent_state(account_id)
+    state["notification_loudness"] = {
+        "schema_version": 1,
+        "routes": {
+            "telegram:1:chat-1": {
+                "status": "pending",
+                "checks_active": "maybe",
+                "route": {"channel": "telegram", "chat_id": "chat-1", "chat_type": "private", "adapter_slot": 1},
+                "identity_key": identity,
+            }
+        },
+    }
+    account_store.write_agent_state(account_id, state)
+
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=now) == ()
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=now) is None
+    assert notification_loudness_outbox_item_is_active(
+        account_store, account_id, {"route_key": "telegram:1:chat-1"}
+    ) is False
+
+
 def test_loudness_scheduler_does_not_queue_when_checks_are_inactive(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

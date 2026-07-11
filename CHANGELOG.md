@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.70 - 2026-07-11
+
+- Fail closed on malformed explicit notification-loudness activation flags.
+
 ## 1.9.69 - 2026-07-11
 
 - Fail closed when notification-loudness account state storage is unavailable.
