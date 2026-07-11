@@ -364,7 +364,7 @@ def _has_queued_notification_loudness_item(account_store: AccountStore, account_
             continue
         if _normalize_route_key(item.get("route_key")) != _normalize_route_key(route_key):
             continue
-        if str(item.get("status") or "queued").strip().casefold() == "queued":
+        if str(item.get("status") or "queued").strip().casefold() in {"queued", "dispatching"}:
             return True
     return False
 

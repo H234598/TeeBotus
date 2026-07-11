@@ -12,6 +12,7 @@ from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.notification_loudness import (
     NOTIFICATION_LOUDNESS_PROMPT,
+    NOTIFICATION_LOUDNESS_SYSTEM_ITEM,
     maybe_handle_notification_loudness_response,
     maybe_notification_loudness_prompt_action,
     notification_loudness_outbox_item_is_active,
@@ -631,6 +632,29 @@ def test_loudness_free_text_prioritizes_explicit_negation() -> None:
     ) == "declined"
     assert _notification_loudness_decision("noch nicht", pending=True) == "declined"
     assert _notification_loudness_decision("ja, laut gestellt", pending=True) == "confirmed"
+
+
+def test_loudness_scheduler_does_not_duplicate_dispatching_prompt(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    assert maybe_notification_loudness_prompt_action(
+        event(identity), account_store, account_id, now=now - timedelta(hours=7)
+    ) is not None
+    set_identity_last_seen(account_store, identity, now - timedelta(minutes=4))
+    account_store.append_proactive_outbox_item(
+        account_id,
+        {
+            "status": "dispatching",
+            "system_item": NOTIFICATION_LOUDNESS_SYSTEM_ITEM,
+            "route_key": "telegram:1:chat-1",
+            "route": {"channel": "telegram", "chat_id": "chat-1", "chat_type": "private", "adapter_slot": 1},
+        },
+    )
+
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=now) == ()
+    assert len(account_store.read_proactive_outbox(account_id)) == 1
 
 
 def test_concurrent_loudness_scheduler_runs_queue_only_one_prompt(tmp_path) -> None:

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.65 - 2026-07-11
+
+- Avoid duplicate notification-loudness prompts while one is dispatching.
+
 ## 1.9.64 - 2026-07-11
 
 - Prioritize explicit negations in notification-loudness free-text replies.
