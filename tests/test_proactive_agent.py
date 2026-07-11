@@ -2796,6 +2796,42 @@ def test_dispatch_reschedules_recurring_user_reminder_after_successful_send(tmp_
     assert due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 16, 11, tzinfo=timezone.utc))[0]["id"] == item_id
 
 
+def test_dispatch_reschedules_month_interval_recurring_reminder(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 1, 31, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="user_requested_reminder",
+        message_text="Abrechnung",
+        due_at="2026-01-31T11:00:00+00:00",
+        now=now,
+        recurrence="every 2 months",
+        user_requested=True,
+    )
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda _route, _action, _item: "123456789"},
+            now=now,
+        )
+    )
+
+    item_id = queued.reason.removeprefix("queued:")
+    assert results[0].status == "sent"
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["id"] == item_id
+    assert item["recurrence"] == "every 2 months"
+    assert item["due_at"] == "2026-03-31T11:00:00+00:00"
+
+
 def test_dispatch_expires_stale_queued_items_before_sending(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

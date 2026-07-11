@@ -76,6 +76,7 @@ def test_parse_reminder_extracts_supported_recurrence_rules() -> None:
     weekly = parse_reminder_intent("Erinnere mich jeden Montag um 9 an die Therapie", now=now)
     every = parse_reminder_intent("Erinnere mich alle 2 Tage um 9 an Wasser", now=now)
     monthly = parse_reminder_intent("Erinnere mich monatlich am 1. um 10 an die Abrechnung", now=now)
+    every_months = parse_reminder_intent("Erinnere mich alle 2 Monate am 1. um 10 an die Abrechnung", now=now)
 
     assert (daily.recurrence, daily.subject) == ("daily", "die Medikamente")
     assert (weekly.recurrence, weekly.subject) == ("weekly", "die Therapie")
@@ -85,6 +86,7 @@ def test_parse_reminder_extracts_supported_recurrence_rules() -> None:
         "2026-07-01T10:00:00+00:00",
         "die Abrechnung",
     )
+    assert (every_months.recurrence, every_months.due_at) == ("every 2 months", "2026-07-01T10:00:00+00:00")
 
 
 def test_parse_reminder_interval_recurrence_starts_from_now() -> None:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import calendar
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import re
@@ -397,6 +398,14 @@ def _next_month_day(now: datetime, *, day: int, hour: int, minute: int) -> str:
     return ""
 
 
+def _add_calendar_months(value: datetime, count: int) -> datetime:
+    month_index = value.year * 12 + value.month - 1 + count
+    year, zero_based_month = divmod(month_index, 12)
+    month = zero_based_month + 1
+    day = min(value.day, calendar.monthrange(year, month)[1])
+    return value.replace(year=year, month=month, day=day)
+
+
 def _time_in_text(text: str, *, default_hour: int) -> tuple[int, int]:
     match = TIME_RE.search(text)
     if not match:
@@ -428,15 +437,15 @@ def _parse_recurrence(text: str) -> str:
         normalized_unit = "days"
     elif unit in {"w", "week"} or unit.startswith(("woche", "week")):
         normalized_unit = "weeks"
-    elif count == 1 and unit.startswith(("monat", "month")):
-        return "monthly"
+    elif unit.startswith(("monat", "month")):
+        normalized_unit = "months"
     else:
         return ""
     return f"every {count} {normalized_unit}"
 
 
 def _initial_interval_due(now: datetime, recurrence: str) -> str:
-    match = re.fullmatch(r"every\s+(?P<count>\d{1,3})\s+(?P<unit>minutes|hours|days|weeks)", recurrence)
+    match = re.fullmatch(r"every\s+(?P<count>\d{1,3})\s+(?P<unit>minutes|hours|days|weeks|months)", recurrence)
     if not match:
         return ""
     count = int(match.group("count"))
@@ -447,8 +456,10 @@ def _initial_interval_due(now: datetime, recurrence: str) -> str:
         due = now + timedelta(hours=count)
     elif unit == "days":
         due = now + timedelta(days=count)
-    else:
+    elif unit == "weeks":
         due = now + timedelta(weeks=count)
+    else:
+        due = _add_calendar_months(now, count)
     return _iso(due)
 
 

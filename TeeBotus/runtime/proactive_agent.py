@@ -2607,7 +2607,7 @@ def _normalize_recurrence_rule(value: object) -> str:
     if raw in aliases:
         return aliases[raw]
     match = re.fullmatch(
-        r"(?:every|alle|jede[nrms]?)\s+(?P<count>\d{1,3})?\s*(?P<unit>minute|minuten|minutes|hour|hours|stunde|stunden|day|days|tag|tage|week|weeks|woche|wochen)",
+        r"(?:every|alle|jede[nrms]?)\s+(?P<count>\d{1,3})?\s*(?P<unit>minute|minuten|minutes|hour|hours|stunde|stunden|day|days|tag|tage|week|weeks|woche|wochen|month|months|monat|monate|monaten)",
         raw,
     )
     if not match:
@@ -2622,6 +2622,8 @@ def _normalize_recurrence_rule(value: object) -> str:
         normalized_unit = "hours"
     elif unit in {"day", "days", "tag", "tage"}:
         normalized_unit = "days"
+    elif unit in {"month", "months", "monat", "monate", "monaten"}:
+        normalized_unit = "months"
     else:
         normalized_unit = "weeks"
     return f"every {count} {normalized_unit}"
@@ -2652,7 +2654,7 @@ def _advance_recurrence_due_at(base: datetime, recurrence: str) -> datetime | No
         return base + timedelta(weeks=1)
     if recurrence == "monthly":
         return _add_month(base)
-    match = re.fullmatch(r"every\s+(?P<count>\d{1,3})\s+(?P<unit>minutes|hours|days|weeks)", recurrence)
+    match = re.fullmatch(r"every\s+(?P<count>\d{1,3})\s+(?P<unit>minutes|hours|days|weeks|months)", recurrence)
     if not match:
         return None
     count = int(match.group("count"))
@@ -2663,11 +2665,13 @@ def _advance_recurrence_due_at(base: datetime, recurrence: str) -> datetime | No
         return base + timedelta(hours=count)
     if unit == "days":
         return base + timedelta(days=count)
-    return base + timedelta(weeks=count)
+    if unit == "weeks":
+        return base + timedelta(weeks=count)
+    return _add_month(base, count)
 
 
-def _add_month(value: datetime) -> datetime:
-    month = value.month + 1
+def _add_month(value: datetime, count: int = 1) -> datetime:
+    month = value.month + count
     year = value.year + (month - 1) // 12
     month = ((month - 1) % 12) + 1
     day = min(value.day, calendar.monthrange(year, month)[1])
