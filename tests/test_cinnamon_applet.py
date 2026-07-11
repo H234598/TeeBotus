@@ -4235,6 +4235,22 @@ def test_cinnamon_applet_run_terminates_timed_out_child() -> None:
     }
 
 
+def test_cinnamon_applet_run_timeout_kills_child_process_group(tmp_path) -> None:
+    child_pid_file = tmp_path / "child.pid"
+    script = (
+        "import pathlib, subprocess, sys, time; "
+        f"pathlib.Path({str(child_pid_file)!r}).write_text(str(subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(30)']).pid)); "
+        "time.sleep(30)"
+    )
+
+    result = cinnamon_applet._run([sys.executable, "-c", script], timeout_seconds=1)
+
+    assert result["returncode"] == 124
+    child_pid = int(child_pid_file.read_text())
+    with pytest.raises(ProcessLookupError):
+        os.kill(child_pid, 0)
+
+
 def test_cinnamon_applet_redaction_does_not_backtrack_on_large_url_without_credentials() -> None:
     value = "url=" + ("x" * cinnamon_applet.MAX_CAPTURE_CHARS)
 

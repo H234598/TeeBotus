@@ -6,6 +6,7 @@ import os
 import re
 import selectors
 import shlex
+import signal
 import subprocess
 import sys
 import time
@@ -910,6 +911,7 @@ def _run(argv: list[str], *, cwd: Path | None = None, timeout_seconds: int = 10)
             cwd=str(cwd) if cwd else None,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            start_new_session=True,
         )
         stdout, stderr, returncode, timed_out, stdout_truncated, stderr_truncated = _collect_process_output(
             process,
@@ -1009,17 +1011,11 @@ def _collect_process_output(
     finally:
         force_stop = timed_out or process.poll() is None
         if force_stop:
-            try:
-                process.kill()
-            except (OSError, ProcessLookupError):
-                pass
+            _kill_process_group(process)
         try:
             process.wait(timeout=1 if force_stop else max(1, int(timeout_seconds)))
         except subprocess.TimeoutExpired:
-            try:
-                process.kill()
-            except (OSError, ProcessLookupError):
-                pass
+            _kill_process_group(process)
             process.wait(timeout=1)
         for stream in streams.values():
             if stream is not None and not stream.closed:
@@ -1035,6 +1031,17 @@ def _collect_process_output(
         truncated["stdout"],
         truncated["stderr"],
     )
+
+
+def _kill_process_group(process: subprocess.Popen[bytes]) -> None:
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except (OSError, ProcessLookupError):
+        pass
+    try:
+        process.kill()
+    except (OSError, ProcessLookupError):
+        pass
 
 
 def _parse_status_fields(line: str) -> dict[str, str]:

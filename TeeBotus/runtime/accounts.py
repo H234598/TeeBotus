@@ -89,6 +89,7 @@ SECRET_TOOL_TIMEOUT_SECONDS_ENV = "TEEBOTUS_SECRET_TOOL_TIMEOUT_SECONDS"
 DEFAULT_RUNTIME_SECRET_TOOL_LOOKUP_RETRIES = 6
 DEFAULT_RUNTIME_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS = 2.0
 DEFAULT_RUNTIME_SECRET_TOOL_TIMEOUT_SECONDS = 5.0
+SECRET_TOOL_FAILURE_COOLDOWN_SECONDS = 30.0
 INSTANCE_KEY_SIZE_BYTES = 32
 INSTANCE_SECRET_SERVICE = "TeeBotus"
 INSTANCE_PEPPER_PURPOSE = "account-secret-pepper"
@@ -439,6 +440,8 @@ class SecretToolInstanceSecretProvider:
         self.timeout_seconds = None if timeout_seconds is None else max(0.0, float(timeout_seconds))
         self._sleep = time.sleep if sleep is None else sleep
         self._cache: dict[tuple[str, str], bytes] = {}
+        self._service_unavailable_until = 0.0
+        self._service_unavailable_error = ""
 
     def get_secret(self, instance_name: str, purpose: str) -> bytes:
         instance = _normalize_secret_token(instance_name, "instance")
@@ -527,6 +530,10 @@ class SecretToolInstanceSecretProvider:
         ]
 
     def _run(self, args: list[str], *, input_text: str = "") -> subprocess.CompletedProcess[str]:
+        if self._service_unavailable_until > time.monotonic():
+            raise AccountStoreError(self._service_unavailable_error)
+        self._service_unavailable_until = 0.0
+        self._service_unavailable_error = ""
         command = [self._secret_tool(), *args]
         try:
             process = subprocess.Popen(
@@ -553,13 +560,21 @@ class SecretToolInstanceSecretProvider:
                 process.communicate()
                 operation = args[0] if args else "command"
                 timeout = f"{self.timeout_seconds:g}s" if self.timeout_seconds is not None else "configured timeout"
-                raise AccountStoreError(
+                error = (
                     f"secret-tool {operation} timed out after {timeout}; "
                     "Secret Service may be locked, unavailable, or waiting for a graphical prompt"
-                ) from exc
+                )
+                self._mark_service_unavailable(error)
+                raise AccountStoreError(error) from exc
             return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
         except OSError as exc:
-            raise AccountStoreError("secret-tool could not be started") from exc
+            error = "secret-tool could not be started"
+            self._mark_service_unavailable(error)
+            raise AccountStoreError(error) from exc
+
+    def _mark_service_unavailable(self, error: str) -> None:
+        self._service_unavailable_error = str(error or "Secret Service unavailable")
+        self._service_unavailable_until = time.monotonic() + SECRET_TOOL_FAILURE_COOLDOWN_SECONDS
 
     def _lookup(self, instance_name: str, purpose: str) -> bytes | None:
         result = self._run(["lookup", *self._attrs(instance_name, purpose)])

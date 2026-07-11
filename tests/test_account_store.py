@@ -161,6 +161,39 @@ def test_secret_tool_provider_times_out_hung_secret_tool(monkeypatch) -> None:
     assert calls["killpg"] is True
 
 
+def test_secret_tool_provider_short_circuits_after_service_timeout(monkeypatch) -> None:
+    provider_instance = SecretToolInstanceSecretProvider(timeout_seconds=0.25)
+    popen_calls = 0
+
+    class FakeProcess:
+        pid = 12345
+        returncode = -9
+
+        def communicate(self, *, input=None, timeout=None):
+            if timeout is not None:
+                raise subprocess.TimeoutExpired(["secret-tool"], timeout)
+            return "", ""
+
+        def kill(self) -> None:
+            return None
+
+    def fake_popen(_command: list[str], **_kwargs: object) -> FakeProcess:
+        nonlocal popen_calls
+        popen_calls += 1
+        return FakeProcess()
+
+    monkeypatch.setattr(provider_instance, "_secret_tool", lambda: "/usr/bin/secret-tool")
+    monkeypatch.setattr(subprocess, "Popen", fake_popen)
+    monkeypatch.setattr("TeeBotus.runtime.accounts.os.killpg", lambda _pid, _signal: None)
+
+    with pytest.raises(AccountStoreError, match="timed out"):
+        provider_instance._run(["lookup", "application", "TeeBotus"])
+    with pytest.raises(AccountStoreError, match="timed out"):
+        provider_instance._run(["lookup", "application", "TeeBotus"])
+
+    assert popen_calls == 1
+
+
 def test_secret_tool_provider_retries_transient_missing_lookup(monkeypatch) -> None:
     calls = 0
     provider_instance = SecretToolInstanceSecretProvider(
