@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import threading
+from typing import Any
 
 import pytest
 
@@ -17,7 +18,7 @@ from TeeBotus.runtime.accounts import (
 )
 from TeeBotus.runtime.events import IncomingEvent, IncomingLinkPreview
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
-from TeeBotus.runtime.state import RuntimeStateStore
+from TeeBotus.runtime.state import RuntimeState, RuntimeStateStore
 
 
 class BrokenProvider:
@@ -833,6 +834,44 @@ def test_runtime_state_store_rejects_pending_flow_for_wrong_instance(tmp_path):
         state.set_pending_flow("OtherBot", ACCOUNT_ID, "route", {"step": "start"})
     with pytest.raises(AccountStoreError, match="runtime state instance mismatch"):
         state.get_pending_flow("OtherBot", ACCOUNT_ID, "route")
+
+
+def test_runtime_state_store_serializes_pending_flow_transitions(tmp_path, monkeypatch):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    entered = threading.Event()
+    release = threading.Event()
+    pop_finished = threading.Event()
+    original_set = RuntimeState.set_pending_flow
+
+    def blocking_set(self, *args, **kwargs):
+        entered.set()
+        assert release.wait(timeout=2)
+        return original_set(self, *args, **kwargs)
+
+    monkeypatch.setattr(RuntimeState, "set_pending_flow", blocking_set)
+    setter = threading.Thread(
+        target=state.set_pending_flow,
+        args=("Bot", ACCOUNT_ID, "route", {"step": "start"}),
+    )
+    setter.start()
+    assert entered.wait(timeout=2)
+
+    popped: list[dict[str, Any] | None] = []
+
+    def pop() -> None:
+        popped.append(state.pop_pending_flow("Bot", ACCOUNT_ID, "route"))
+        pop_finished.set()
+
+    popper = threading.Thread(target=pop)
+    popper.start()
+    assert not pop_finished.wait(timeout=0.1)
+
+    release.set()
+    setter.join(timeout=2)
+    popper.join(timeout=2)
+    assert not setter.is_alive()
+    assert not popper.is_alive()
+    assert popped == [{"step": "start"}]
 
 
 def test_runtime_state_store_scopes_key_fingerprint_only_lookup(tmp_path):

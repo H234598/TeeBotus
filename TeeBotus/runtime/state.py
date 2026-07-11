@@ -46,6 +46,7 @@ LINK_NOTIFICATIONS_LOCK_FILENAME = ".Link_Notifications.json.lock"
 
 _RUNTIME_FILE_THREAD_LOCK = threading.RLock()
 _RUNTIME_FILE_LOCK_STATE = threading.local()
+_PENDING_FLOW_LOCK = threading.RLock()
 
 
 @dataclass(frozen=True)
@@ -333,19 +334,23 @@ class RuntimeStateStore(RuntimeState):
         if len(args) == 1 and isinstance(args[0], PendingFlow):
             flow = args[0]
             self._ensure_instance_scope(flow.instance)
-            self.pending_flows[(flow.instance, flow.account_id, flow.flow_type)] = flow.as_dict()
+            with _PENDING_FLOW_LOCK:
+                self.pending_flows[(flow.instance, flow.account_id, flow.flow_type)] = flow.as_dict()
             return
         instance_name = args[0] if args else kwargs.get("instance_name", "")
         self._ensure_instance_scope(instance_name)
-        return super().set_pending_flow(*args, **kwargs)
+        with _PENDING_FLOW_LOCK:
+            return super().set_pending_flow(*args, **kwargs)
 
     def pop_pending_flow(self, instance_name: str, account_id: str, flow_type: str) -> dict[str, Any] | None:
         self._ensure_instance_scope(instance_name)
-        return super().pop_pending_flow(instance_name, account_id, flow_type)
+        with _PENDING_FLOW_LOCK:
+            return super().pop_pending_flow(instance_name, account_id, flow_type)
 
     def get_pending_flow(self, instance_name: str, account_id: str, flow_type: str) -> dict[str, Any] | None:
         self._ensure_instance_scope(instance_name)
-        return super().get_pending_flow(instance_name, account_id, flow_type)
+        with _PENDING_FLOW_LOCK:
+            return super().get_pending_flow(instance_name, account_id, flow_type)
 
     def set_previous_response_id(
         self,
