@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.22 - 2026-07-11
+
+- Report unreadable account directories as broken instead of treating them as
+  an empty memory store.
+
 ## 1.9.21 - 2026-07-11
 
 - Include the memory recovery command when account metadata is broken before

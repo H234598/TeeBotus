@@ -1589,7 +1589,14 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
         ]
     project_root = project_root.resolve()
     root = project_root / "instances" / safe_instance_name / "data" / "accounts"
-    account_dirs = _account_memory_account_dirs(root / ACCOUNTS_DIRNAME)
+    try:
+        account_dirs = _account_memory_account_dirs(root / ACCOUNTS_DIRNAME)
+    except (AccountStoreError, OSError) as exc:
+        error = redact_status_text(f"{type(exc).__name__}: {exc}")
+        return [
+            f"account_memory={safe_instance_name} status=broken error=account_directories_unreadable:{error}",
+            *_account_memory_recovery_lines(instance_name=safe_instance_name, project_root=project_root),
+        ]
     try:
         store = AccountStore(
             root,
@@ -1834,21 +1841,21 @@ def _suppress_expected_account_memory_health_logs():
 
 
 def _account_memory_account_dirs(accounts_dir: Path) -> list[Path]:
-    if not accounts_dir.exists():
-        return []
     try:
+        if not accounts_dir.exists():
+            return []
         children = list(accounts_dir.iterdir())
-    except OSError:
+        return sorted(
+            path
+            for path in children
+            if path.is_dir()
+            and TOKEN_HEX_RE.fullmatch(path.name)
+            and not (path / "Account_Tombstone.json").exists()
+            and not _account_memory_account_dir_is_stale(path)
+        )
+    except OSError as exc:
         LOGGER.exception("Failed to list account memory directories.")
-        return []
-    return sorted(
-        path
-        for path in children
-        if path.is_dir()
-        and TOKEN_HEX_RE.fullmatch(path.name)
-        and not (path / "Account_Tombstone.json").exists()
-        and not _account_memory_account_dir_is_stale(path)
-    )
+        raise AccountStoreError(f"could not list account memory directories: {exc}") from exc
 
 
 def _account_memory_account_dir_is_stale(account_dir: Path) -> bool:

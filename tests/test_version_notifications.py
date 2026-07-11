@@ -272,6 +272,18 @@ def test_account_memory_health_includes_recovery_for_broken_metadata_without_acc
     assert any(line.startswith("account_memory_recovery=Demo status=needed") for line in lines)
 
 
+def test_account_memory_health_reports_unreadable_account_directory(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "TeeBotus.core.status._account_memory_account_dirs",
+        lambda _path: (_ for _ in ()).throw(OSError("permission denied")),
+    )
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines[0] == "account_memory=Demo status=broken error=account_directories_unreadable:OSError: permission denied"
+    assert any(line.startswith("account_memory_recovery=Demo status=needed") for line in lines)
+
+
 def test_account_secret_health_reports_missing_required_memory_secret(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     store = _store(tmp_path)
