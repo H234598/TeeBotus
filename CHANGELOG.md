@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.35 - 2026-07-11
+
+- Keep identity status diagnostics alive when the report lacks an instances
+  list.
+
 ## 1.9.34 - 2026-07-11
 
 - Sanitize the visible status heading before rendering it.

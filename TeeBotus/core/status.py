@@ -983,7 +983,8 @@ def account_identity_health_lines(
         )
     except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose identity health failures.
         return [f"account_identity={safe_instance_name} status=unknown error={redact_status_text(f'{type(exc).__name__}: {exc}')}"]
-    instances = report.get("instances", []) if isinstance(report, Mapping) else []
+    raw_instances = report.get("instances", []) if isinstance(report, Mapping) else []
+    instances = raw_instances if isinstance(raw_instances, (list, tuple)) else []
     instance_report = next(
         (
             item
