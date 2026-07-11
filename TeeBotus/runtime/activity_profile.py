@@ -155,7 +155,7 @@ def _parse_observation(value: Any, now: datetime) -> dict[str, Any] | None:
     local = to_local(observed_at)
     age_days = max(0.0, (now - observed_at).total_seconds() / 86400)
     recency_weight = max(0.25, 1.0 - age_days / ACTIVITY_HISTORY_DAYS)
-    text_length = _int_value(value.get("text_length"), default=0)
+    text_length = max(0, min(1200, _int_value(value.get("text_length"), default=0)))
     weight = recency_weight * (1.0 + min(text_length, 1200) / 2400)
     if _int_value(value.get("attachment_count"), default=0) > 0:
         weight += 0.2

@@ -202,6 +202,23 @@ def test_record_account_activity_does_not_move_profile_timestamp_backwards(tmp_p
     assert profile["updated_at"] == "2026-06-15T10:00:00+02:00"
 
 
+def test_activity_profile_clamps_corrupt_negative_text_lengths() -> None:
+    now = datetime(2026, 6, 15, 12, 0, tzinfo=LOCAL)
+    observations = [
+        {
+            "at": (now - timedelta(hours=index)).isoformat(timespec="seconds"),
+            "text_length": -100000,
+            "attachment_count": -1,
+        }
+        for index in range(6)
+    ]
+
+    profile = derive_activity_profile(observations, now=now)
+
+    assert profile["sufficient_data"] is True
+    assert profile["observation_count"] == 6
+
+
 def test_contact_timing_uses_weekend_profile_for_irregular_weekends(tmp_path) -> None:
     account_store = store(tmp_path)
     identity, account_id = prepare_account(account_store)
