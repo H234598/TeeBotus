@@ -2330,6 +2330,22 @@ def test_sqlite_memory_config_rejects_hardlinked_primary_and_fallback(tmp_path):
         )
 
 
+def test_sqlite_backend_rejects_direct_hardlinked_config(tmp_path):
+    primary_path = tmp_path / "primary.sqlite3"
+    fallback_path = tmp_path / "backup.sqlite3"
+    primary_path.write_bytes(b"sqlite-placeholder")
+    fallback_path.hardlink_to(primary_path)
+    config = SQLiteMemoryConfig(path=primary_path, fallback_path=fallback_path)
+
+    with pytest.raises(AccountStoreError, match="must not be hardlinks"):
+        SQLiteAccountMemoryBackend(
+            instance_name="Depressionsbot",
+            provider=provider(),
+            purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+            config=config,
+        )
+
+
 def test_account_memory_fallback_warning_rate_limit_is_scoped_per_account(caplog) -> None:
     backend = WarningFallbackAccountMemoryBackend(object(), object(), label="Demo:sqlite")
     account_a = "a" * 128

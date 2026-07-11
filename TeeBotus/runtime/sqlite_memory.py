@@ -30,6 +30,29 @@ SQLITE_REQUIRED_TABLES = (
 SQLITE_READ_ENTRIES_BY_IDS_CHUNK_SIZE = 500
 
 
+def _validate_distinct_sqlite_paths(path: Path, fallback_path: Path | None) -> None:
+    if fallback_path is None:
+        return
+    if path.resolve() == fallback_path.resolve():
+        raise AccountStoreError(
+            f"{SQLITE_PATH_ENV} and {SQLITE_FALLBACK_PATH_ENV} must point to different files"
+        )
+    if not path.exists() or not fallback_path.exists():
+        return
+    try:
+        path_identity = path.stat()
+        fallback_identity = fallback_path.stat()
+    except OSError:
+        return
+    if (path_identity.st_dev, path_identity.st_ino) == (
+        fallback_identity.st_dev,
+        fallback_identity.st_ino,
+    ):
+        raise AccountStoreError(
+            f"{SQLITE_PATH_ENV} and {SQLITE_FALLBACK_PATH_ENV} must not be hardlinks to the same file"
+        )
+
+
 @dataclass(frozen=True)
 class SQLiteMemoryConfig:
     path: Path
@@ -53,26 +76,7 @@ class SQLiteMemoryConfig:
 
         path = resolve_configured_path(configured_path, SQLITE_DEFAULT_FILENAME)
         resolved_fallback_path = resolve_configured_path(fallback_path, SQLITE_DEFAULT_FALLBACK_FILENAME)
-        if path.resolve() == resolved_fallback_path.resolve():
-            raise AccountStoreError(
-                f"{SQLITE_PATH_ENV} and {SQLITE_FALLBACK_PATH_ENV} must point to different files"
-            )
-        if path.exists() and resolved_fallback_path.exists():
-            try:
-                path_identity = path.stat()
-                fallback_identity = resolved_fallback_path.stat()
-            except OSError:
-                path_identity = fallback_identity = None
-            if path_identity is not None and fallback_identity is not None and (
-                path_identity.st_dev,
-                path_identity.st_ino,
-            ) == (
-                fallback_identity.st_dev,
-                fallback_identity.st_ino,
-            ):
-                raise AccountStoreError(
-                    f"{SQLITE_PATH_ENV} and {SQLITE_FALLBACK_PATH_ENV} must not be hardlinks to the same file"
-                )
+        _validate_distinct_sqlite_paths(path, resolved_fallback_path)
         return cls(path=path, fallback_path=resolved_fallback_path)
 
 
@@ -85,6 +89,7 @@ class SQLiteAccountMemoryBackend:
         purpose: str,
         config: SQLiteMemoryConfig,
     ) -> None:
+        _validate_distinct_sqlite_paths(config.path, config.fallback_path)
         self.instance_name = instance_name
         self.provider = provider
         self.purpose = purpose
