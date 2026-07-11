@@ -160,6 +160,7 @@ class MessageTracker:
         if not isinstance(rows, list):
             return
         loaded: dict[tuple[str, str, str], list[SentMessageRef]] = {}
+        seen_by_chat: dict[tuple[str, str, str], set[tuple[str, str, str]]] = {}
         for row in rows:
             if not isinstance(row, dict):
                 continue
@@ -177,6 +178,11 @@ class MessageTracker:
             if ref.ref_kind not in {"telegram_message_id", "signal_timestamp", "matrix_event_id"}:
                 continue
             key = (ref.instance_name, ref.channel, ref.chat_id)
+            ref_key = (ref.account_id, ref.message_ref, ref.ref_kind)
+            seen = seen_by_chat.setdefault(key, set())
+            if ref_key in seen:
+                continue
+            seen.add(ref_key)
             loaded.setdefault(key, []).append(ref)
         self.refs = loaded
         for values in self.refs.values():
