@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.93 - 2026-07-12
+
+- Recognize natural on/off and loud notification status replies.
+
 ## 1.9.92 - 2026-07-12
 
 - Distinguish negated mute phrases in notification-loudness replies.
