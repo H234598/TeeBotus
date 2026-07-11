@@ -142,6 +142,33 @@ def test_runtime_profile_client_uses_gemini_key_ring_for_stateless_gemini_profil
     assert client.api_key_ring.keys == ("a1", "b1", "c1", "a2", "b2", "c2")
 
 
+def test_runtime_gemini_profile_does_not_reuse_openai_default_key() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        default_api_key="openai-runtime-key",
+        profile="gemini_flash_stateless",
+        env={},
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.api_key == ""
+
+
+def test_runtime_direct_gemini_route_does_not_reuse_openai_default_key() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        default_api_key="openai-runtime-key",
+        provider="litellm_gemini_stateless",
+        model="gemini/gemini-3.5-flash",
+        env={},
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.api_key == ""
+
+
 def test_runtime_profile_client_uses_gemini_key_ring_for_stateful_gemini_profile(monkeypatch) -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(),

@@ -120,12 +120,12 @@ def build_runtime_text_llm_client(
             instance_name=instance_name,
             openai_client_factory=openai_client_factory,
         )
-    resolved_api_key = str(api_key or "").strip() or default_api_key
+    resolved_api_key = str(api_key or "").strip() or _compatible_default_api_key(resolved_provider, resolved_model, default_api_key)
     resolved_openai_client = openai_client
     return build_text_llm_client(
         instructions=instructions,
         openai_client=resolved_openai_client,
-        default_api_key=default_api_key,
+        default_api_key=resolved_api_key,
         provider=resolved_provider,
         model=resolved_model,
         fallback_models=filter_runtime_fallback_models(
@@ -288,7 +288,7 @@ def _build_route_client(
     return build_text_llm_client(
         instructions=instructions,
         openai_client=resolved_openai_client,
-        default_api_key=resolved_api_key or default_api_key,
+        default_api_key=resolved_api_key or _compatible_default_api_key(route.provider, route.model, default_api_key),
         provider=route.provider,
         model=route.model,
         fallback_models=resolved_fallback_models,
@@ -357,12 +357,11 @@ def _build_profile_client(
     profile_api_key = source.get(profile.api_key_env, "").strip() if profile.api_key_env else ""
     resolved_api_key = str(override_api_key or "").strip() or profile_api_key
     resolved_api_base = str(api_base or "").strip() or profile.base_url
-    resolved_provider = normalize_llm_provider(profile.provider)
     resolved_openai_client = openai_client
     return build_text_llm_client(
         instructions=instructions,
         openai_client=resolved_openai_client,
-        default_api_key=resolved_api_key or default_api_key,
+        default_api_key=resolved_api_key or _compatible_default_api_key(profile.provider, profile.model, default_api_key),
         provider=profile.provider,
         model=profile.model,
         fallback_models=filter_runtime_fallback_models(
@@ -483,6 +482,18 @@ def _uses_local_ollama(provider: str, model: str) -> bool:
     normalized_provider = normalize_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
     return normalized_provider == "ollama" or normalized_model.startswith(("ollama/", "ollama_chat/"))
+
+
+def _compatible_default_api_key(provider: str, model: str, default_api_key: str) -> str:
+    """Keep an OpenAI runtime key away from non-OpenAI provider routes."""
+    value = str(default_api_key or "").strip()
+    if not value:
+        return ""
+    normalized_provider = normalize_llm_provider(provider)
+    normalized_model = str(model or "").strip().casefold()
+    if normalized_provider == "openai" or normalized_model.startswith("openai/"):
+        return value
+    return ""
 
 
 def _first_instance_env(env: Mapping[str, str], base_key: str, instance_name: str) -> str:
