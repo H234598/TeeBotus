@@ -185,6 +185,24 @@ def test_runtime_state_store_clears_link_persistence_error_after_recovery(tmp_pa
     assert state.link_notifications_persistence_error == ""
 
 
+def test_runtime_state_store_persists_link_notifications_after_recovery(tmp_path):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=BrokenProvider())
+    account_id = "a" * 128
+    state.record_link_notification(
+        instance_name="Bot",
+        account_id=account_id,
+        new_identity_key="signal:uuid:new",
+        old_identity_key="telegram:user:1",
+    )
+    state.secret_provider = StaticSecretProvider(b"s" * 32)
+
+    assert state.list_link_notifications(instance_name="Bot", account_id=account_id)
+    assert state.link_notifications_persistence_error == ""
+
+    reloaded = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    assert reloaded.list_link_notifications(instance_name="Bot", account_id=account_id)
+
+
 def test_runtime_state_store_refreshes_link_notifications_between_bridges(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"
