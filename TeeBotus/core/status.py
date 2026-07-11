@@ -1522,8 +1522,14 @@ def account_memory_payload_size(*, account_store: AccountStore | None, account_i
 
 
 def memory_encryption_status(directory: Path | None, *, account_store: AccountStore | None = None, account_id: str = "") -> str:
-    if account_store is not None and account_id and account_store.account_memory_backend is not None:
-        return "Datenbank-Backend, Payloads verschluesselt"
+    if account_store is not None and account_id:
+        try:
+            backend = account_store.account_memory_backend
+        except (AccountStoreError, OSError):
+            LOGGER.exception("Failed to resolve account memory backend encryption status.")
+            return "Datenbank-Backend nicht verfuegbar"
+        if backend is not None:
+            return "Datenbank-Backend, Payloads verschluesselt"
     if directory is None or not directory.exists():
         return "kein Account-Memory gefunden"
     structured_files = [directory / USER_MEMORY_INDEX_FILENAME, directory / USER_MEMORY_ENTRIES_FILENAME]

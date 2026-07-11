@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.10 - 2026-07-11
+
+- Keep `/status` diagnostic when account-memory backend resolution fails.
+
 ## 1.9.9 - 2026-07-11
 
 - Do not report legacy JSON sizes when the configured account-memory backend is

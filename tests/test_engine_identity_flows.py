@@ -1267,6 +1267,15 @@ def test_status_does_not_fallback_to_legacy_files_when_memory_backend_fails(tmp_
     assert "- Nutzermemory: 13 B" not in text
 
 
+def test_memory_encryption_status_diagnoses_backend_resolution_failure():
+    class FailingStore:
+        @property
+        def account_memory_backend(self):
+            raise AccountStoreError("postgres DSN missing")
+
+    assert status_core.memory_encryption_status(None, account_store=FailingStore(), account_id="account") == "Datenbank-Backend nicht verfuegbar"
+
+
 def test_engine_proactive_command_requires_instance_enablement(tmp_path, monkeypatch):
     monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", raising=False)
     monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_DEPRESSIONSBOT", raising=False)
