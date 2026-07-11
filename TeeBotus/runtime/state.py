@@ -573,6 +573,14 @@ class RuntimeStateStore(RuntimeState):
                 try:
                     serialized_event = json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n"
                     super().append_security_event(event)
+                    try:
+                        security_stat = os.stat(self.security_events_path, follow_symlinks=False)
+                    except FileNotFoundError:
+                        security_stat = None
+                    except OSError as exc:
+                        raise AccountStoreError(f"could not inspect security event path: {self.security_events_path}") from exc
+                    if security_stat is not None and (stat.S_ISLNK(security_stat.st_mode) or security_stat.st_nlink > 1):
+                        raise AccountStoreError(f"refusing unsafe security event path: {self.security_events_path}")
                     rotate_runtime_text_file_if_needed(self.security_events_path)
                     handle = _open_append_text_no_follow(self.security_events_path)
                     if handle is None:
