@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.23 - 2026-07-11
+
+- Report unavailable memory-file sizes instead of crashing or returning partial
+  totals when directory reads fail.
+
 ## 1.9.22 - 2026-07-11
 
 - Report unreadable account directories as broken instead of treating them as

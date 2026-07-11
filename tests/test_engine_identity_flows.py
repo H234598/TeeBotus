@@ -1299,6 +1299,18 @@ def test_memory_payload_size_does_not_mask_unreadable_json_with_file_size(tmp_pa
     ) is None
 
 
+def test_memory_files_size_reports_unavailable_on_directory_read_error(tmp_path, monkeypatch):
+    directory = tmp_path / "account"
+    directory.mkdir()
+
+    def broken_rglob(_self, _pattern):
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr(type(directory), "rglob", broken_rglob)
+
+    assert status_core.memory_files_size(directory) is None
+
+
 def test_status_memory_path_helpers_reject_traversal(tmp_path):
     account_id = "a" * 128
 

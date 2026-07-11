@@ -1511,17 +1511,22 @@ def account_memory_dir_for_sender(sender_id: str, *, instance_name: str, project
     return account_memory_dir_for_account(account_id, instance_name=safe_instance_name, project_root=project_root)
 
 
-def memory_files_size(directory: Path | None) -> int:
+def memory_files_size(directory: Path | None) -> int | None:
     if directory is None or not directory.exists():
         return 0
     total = 0
-    for path in directory.rglob("*"):
-        if not path.is_file() or path.name not in ACCOUNT_MEMORY_FILENAMES:
-            continue
-        try:
-            total += path.stat().st_size
-        except OSError:
-            LOGGER.exception("Failed to stat user memory file %s.", path)
+    try:
+        for path in directory.rglob("*"):
+            try:
+                if not path.is_file() or path.name not in ACCOUNT_MEMORY_FILENAMES:
+                    continue
+                total += path.stat().st_size
+            except OSError:
+                LOGGER.exception("Failed to inspect user memory file %s.", path)
+                return None
+    except OSError:
+        LOGGER.exception("Failed to list user memory files in %s.", directory)
+        return None
     return total
 
 
