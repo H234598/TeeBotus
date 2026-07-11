@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.30 - 2026-07-11
+
+- Normalize invalid identity health status tokens to unknown.
+
 ## 1.9.29 - 2026-07-11
 
 - Keep null and empty status counters distinguishable from a real numeric zero.

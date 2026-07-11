@@ -994,7 +994,11 @@ def account_identity_health_lines(
     if isinstance(store_report, Mapping) and store_report.get("errors"):
         errors = "; ".join(str(error or "").strip() for error in store_report.get("errors", []) if str(error or "").strip())
         return [f"account_identity={safe_instance_name} status=broken error={redact_status_text(errors)}"]
-    status = str(identity_health.get("status") or "unknown") if isinstance(identity_health, Mapping) else "unknown"
+    status = (
+        _health_status_token(identity_health.get("status"))
+        if isinstance(identity_health, Mapping)
+        else "unknown"
+    )
     warning_count = (
         _status_integer_label(identity_health.get("warning_count", 0))
         if isinstance(identity_health, Mapping)
@@ -1312,6 +1316,11 @@ def _status_integer_label(value: object) -> str:
         return str(max(0, int(value)))
     except (TypeError, ValueError, OverflowError):
         return "unknown"
+
+
+def _health_status_token(value: object) -> str:
+    token = str(value or "").strip().casefold()
+    return token if token in {"ok", "warning", "broken", "unknown"} else "unknown"
 
 
 def _runtime_status_sequence_label(value: Any) -> str:
