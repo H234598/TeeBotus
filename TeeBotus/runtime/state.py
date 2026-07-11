@@ -446,12 +446,13 @@ class RuntimeStateStore(RuntimeState):
             if key in self.pending_previous_response_resets:
                 stale_response_id = self.pending_previous_response_resets[key]
                 current_response_id = self.previous_response_ids.get(key)
+                current_scope = self.previous_response_scopes.get(key)
+                scope_changed = current_scope != persisted_scope
                 if current_response_id and (
-                    current_response_id != stale_response_id or not persisted
+                    current_response_id != stale_response_id or not persisted or scope_changed
                 ) and (
                     not persisted or stale_response_id is None or persisted == stale_response_id
                 ):
-                    current_scope = self.previous_response_scopes.get(key)
                     persisted_current = self._write_llm_previous_response_id(
                         account_id,
                         current_response_id,
