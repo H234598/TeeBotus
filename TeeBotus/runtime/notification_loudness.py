@@ -1074,7 +1074,7 @@ def _normalize_text_value(text: str, *, preserve_clause_boundaries: bool) -> str
     for char in ",.;:!?":
         replacement = f" {NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN} " if preserve_clause_boundaries else " "
         normalized = normalized.replace(char, replacement)
-    for char in "()[]{}\"'":
+    for char in "()[]{}\"'’‘":
         normalized = normalized.replace(char, " ")
     return " ".join(normalized.split())
 
