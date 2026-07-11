@@ -158,10 +158,14 @@ class WarningFallbackAccountMemoryBackend:
 
     def read_collection_names(self, account_id: str) -> tuple[str, ...]:
         try:
-            if any(key[0] == account_id for key in self._dirty_collections):
+            dirty_collection_names = {
+                collection for item_account_id, collection in self._dirty_collections if item_account_id == account_id
+            }
+            if dirty_collection_names:
                 primary_names = set(getattr(self.primary, "read_collection_names")(account_id))
                 fallback_names = set(getattr(self.fallback, "read_collection_names")(account_id))
-                for collection in sorted(fallback_names - primary_names):
+                collections_to_sync = dirty_collection_names | (fallback_names - primary_names)
+                for collection in sorted(collections_to_sync):
                     self._sync_collection_from_fallback(account_id, collection)
             names = tuple(getattr(self.primary, "read_collection_names")(account_id))
             self._repair_cleared_fallback_account(account_id)

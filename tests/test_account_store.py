@@ -2211,6 +2211,45 @@ def test_account_memory_fallback_syncs_dirty_collection_back_to_primary(caplog):
     assert "primary backend recovered" in caplog.text
 
 
+def test_account_memory_fallback_collection_names_sync_dirty_deletion() -> None:
+    class Backend:
+        def __init__(self, *, fail_write: bool = False) -> None:
+            self.fail_write = fail_write
+            self.collections: dict[tuple[str, str], list[dict[str, str]]] = {}
+
+        def read_collection(self, account_id: str, collection: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.collections.get((account_id, collection), [])]
+
+        def write_collection(self, account_id: str, collection: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise OSError("primary unavailable")
+            self.collections[(account_id, collection)] = [dict(row) for row in rows]
+
+        def read_collection_names(self, account_id: str) -> tuple[str, ...]:
+            return tuple(
+                sorted(
+                    collection
+                    for (item_account_id, collection), rows in self.collections.items()
+                    if item_account_id == account_id and rows
+                )
+            )
+
+    account_id = "a" * 128
+    collection = "version_notifications"
+    primary = Backend(fail_write=True)
+    fallback = Backend()
+    primary.collections[(account_id, collection)] = [{"id": "old"}]
+    fallback.collections[(account_id, collection)] = [{"id": "old"}]
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    backend.write_collection(account_id, collection, [])
+    primary.fail_write = False
+
+    assert backend.read_collection_names(account_id) == ()
+    assert primary.collections[(account_id, collection)] == []
+    assert (account_id, collection) not in backend._dirty_collections
+
+
 def test_account_memory_fallback_replace_reports_success_from_fallback() -> None:
     class Backend:
         def __init__(self, *, fail_replace: bool = False) -> None:
