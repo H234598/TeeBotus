@@ -240,9 +240,9 @@ def _parse_due_at(text: str, now: datetime) -> str:
         if unit in {"h", "std"} or unit.startswith("stunde"):
             return _iso(normalized_now + timedelta(hours=count))
         if unit.startswith("tag"):
-            return _iso(normalized_now + timedelta(days=count))
+            return _iso(_apply_explicit_time(normalized_now + timedelta(days=count), text))
         if unit.startswith("woche"):
-            return _iso(normalized_now + timedelta(weeks=count))
+            return _iso(_apply_explicit_time(normalized_now + timedelta(weeks=count), text))
     iso = ISO_RE.search(text)
     if iso:
         return _build_datetime(
@@ -310,6 +310,18 @@ def _time_in_text(text: str, *, default_hour: int) -> tuple[int, int]:
     if not match:
         return default_hour, 0
     return int(match.group("hour")), int(match.group("minute") or 0)
+
+
+def _apply_explicit_time(value: datetime, text: str) -> datetime:
+    match = TIME_RE.search(text)
+    if not match:
+        return value
+    return value.replace(
+        hour=int(match.group("hour")),
+        minute=int(match.group("minute") or 0),
+        second=0,
+        microsecond=0,
+    )
 
 
 def _has_invalid_explicit_time(text: str) -> bool:

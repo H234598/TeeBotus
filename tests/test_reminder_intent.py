@@ -40,6 +40,16 @@ def test_parse_reminder_with_relative_time_and_loose_wording() -> None:
     assert intent.subject == "Wasser zu trinken"
 
 
+def test_parse_reminder_relative_days_and_weeks_keep_explicit_clock() -> None:
+    now = datetime(2026, 6, 15, 12, 34, tzinfo=timezone.utc)
+
+    in_days = parse_reminder_intent("Erinnere mich in 2 Tagen um 9 an den Termin", now=now)
+    in_weeks = parse_reminder_intent("Erinnere mich in 2 Wochen gegen 8:15 an den Termin", now=now)
+
+    assert in_days.due_at == "2026-06-17T09:00:00+00:00"
+    assert in_weeks.due_at == "2026-06-29T08:15:00+00:00"
+
+
 def test_parse_reminder_default_now_uses_configured_local_timezone(monkeypatch) -> None:
     local = timezone(timedelta(hours=2))
     monkeypatch.setattr(
