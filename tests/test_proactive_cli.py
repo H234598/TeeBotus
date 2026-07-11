@@ -698,6 +698,19 @@ def test_proactive_cycle_expires_stale_items_before_due_selection(tmp_path) -> N
         now=datetime(2026, 6, 1, 10, tzinfo=timezone.utc),
     )
 
+    dry_report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        )
+    )
+    dry_account = dry_report["instances"][0]["accounts"][0]
+    assert "expired_item_ids" not in dry_account
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "queued"
+
     report = asyncio.run(
         run_proactive_agent_cycle(
             instances_dir=tmp_path / "instances",
@@ -705,6 +718,8 @@ def test_proactive_cycle_expires_stale_items_before_due_selection(tmp_path) -> N
             env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
             store_factory=lambda _root, _instance: account_store,
             now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            dispatch=True,
+            sender_factory=lambda _instance, _store: {},
         )
     )
 
@@ -732,10 +747,10 @@ def test_proactive_cycle_reports_account_store_errors_without_crashing(tmp_path)
         accounts_dir = instance_dir / "data" / "accounts" / "accounts"
 
         def read_agent_state(self, _account_id: str) -> dict:
-            raise AccountStoreError("boom")
+            return {}
 
         def read_proactive_outbox(self, _account_id: str) -> list:
-            return []
+            raise AccountStoreError("boom")
 
     report = asyncio.run(
         run_proactive_agent_cycle(

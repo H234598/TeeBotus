@@ -556,9 +556,10 @@ async def run_proactive_agent_cycle(
                     tool_plan=tool_plan,
                     planner_resolver=planner_resolver,
                 )
-                notification_prompt_ids = queue_due_notification_loudness_prompts(store, account_id, now=resolved_now)
-                if notification_prompt_ids:
-                    account_report["notification_loudness_prompt_ids"] = list(notification_prompt_ids)
+                if dispatch:
+                    notification_prompt_ids = queue_due_notification_loudness_prompts(store, account_id, now=resolved_now)
+                    if notification_prompt_ids:
+                        account_report["notification_loudness_prompt_ids"] = list(notification_prompt_ids)
                 if plan:
                     planning = run_proactive_reflection_planner(store, account_id, now=resolved_now)
                     account_report["planning"] = {
@@ -627,9 +628,9 @@ async def run_proactive_agent_cycle(
                     recovered_item_ids = recover_stale_proactive_dispatching_items(store, account_id, now=resolved_now)
                     if recovered_item_ids:
                         account_report["recovered_dispatching_item_ids"] = list(recovered_item_ids)
-                expired_item_ids = expire_stale_proactive_outbox_items(store, account_id, now=resolved_now)
-                if expired_item_ids:
-                    account_report["expired_item_ids"] = list(expired_item_ids)
+                    expired_item_ids = expire_stale_proactive_outbox_items(store, account_id, now=resolved_now)
+                    if expired_item_ids:
+                        account_report["expired_item_ids"] = list(expired_item_ids)
                 items: list[dict[str, Any]] = []
                 for item in due_proactive_outbox_items(store, account_id, now=resolved_now):
                     category = str(item.get("category") or "")
