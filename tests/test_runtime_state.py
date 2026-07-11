@@ -826,6 +826,15 @@ def test_runtime_state_store_rejects_link_notification_for_wrong_instance(tmp_pa
         )
 
 
+def test_runtime_state_store_rejects_pending_flow_for_wrong_instance(tmp_path):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    with pytest.raises(AccountStoreError, match="runtime state instance mismatch"):
+        state.set_pending_flow("OtherBot", ACCOUNT_ID, "route", {"step": "start"})
+    with pytest.raises(AccountStoreError, match="runtime state instance mismatch"):
+        state.get_pending_flow("OtherBot", ACCOUNT_ID, "route")
+
+
 def test_runtime_state_store_scopes_key_fingerprint_only_lookup(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"

@@ -332,9 +332,20 @@ class RuntimeStateStore(RuntimeState):
     def set_pending_flow(self, *args, **kwargs) -> None:  # type: ignore[override]
         if len(args) == 1 and isinstance(args[0], PendingFlow):
             flow = args[0]
+            self._ensure_instance_scope(flow.instance)
             self.pending_flows[(flow.instance, flow.account_id, flow.flow_type)] = flow.as_dict()
             return
+        instance_name = args[0] if args else kwargs.get("instance_name", "")
+        self._ensure_instance_scope(instance_name)
         return super().set_pending_flow(*args, **kwargs)
+
+    def pop_pending_flow(self, instance_name: str, account_id: str, flow_type: str) -> dict[str, Any] | None:
+        self._ensure_instance_scope(instance_name)
+        return super().pop_pending_flow(instance_name, account_id, flow_type)
+
+    def get_pending_flow(self, instance_name: str, account_id: str, flow_type: str) -> dict[str, Any] | None:
+        self._ensure_instance_scope(instance_name)
+        return super().get_pending_flow(instance_name, account_id, flow_type)
 
     def set_previous_response_id(
         self,
