@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.56 - 2026-07-11
+
+- Report malformed proactive health payloads instead of crashing.
+
 ## 1.9.55 - 2026-07-11
 
 - Fail loudness dispatches visibly when post-claim state cannot be read.

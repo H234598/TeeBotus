@@ -721,6 +721,31 @@ def test_proactive_agent_health_reports_invalid_queued_items(tmp_path) -> None:
     assert "risk_gate blocks proactive dispatch: needs_review" in joined
 
 
+def test_proactive_agent_health_reports_invalid_state_payload_shape() -> None:
+    class Store:
+        def read_agent_state(self, _account_id: str):
+            return ["not", "an", "object"]
+
+    health = check_proactive_agent_account(Store(), "account")
+
+    assert health.ok is False
+    assert health.errors == ("agent_state is not an object",)
+
+
+def test_proactive_agent_health_reports_invalid_outbox_payload_shape() -> None:
+    class Store:
+        def read_agent_state(self, _account_id: str):
+            return {}
+
+        def read_proactive_outbox(self, _account_id: str):
+            return {"not": "a list"}
+
+    health = check_proactive_agent_account(Store(), "account")
+
+    assert health.ok is False
+    assert health.errors == ("proactive_outbox is not a list",)
+
+
 def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

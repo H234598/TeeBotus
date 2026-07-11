@@ -1652,6 +1652,8 @@ def check_proactive_agent_account(
         state = account_store.read_agent_state(account_id)
     except (AccountStoreError, OSError, ValueError) as exc:
         return ProactiveAgentHealth(account_id, False, (f"agent_state read failed: {_health_exception_name(exc)}: {exc}",), 0, 0, 0)
+    if not isinstance(state, Mapping):
+        return ProactiveAgentHealth(account_id, False, ("agent_state is not an object",), 0, 0, 0)
     if state:
         if state.get("schema_version") != 1:
             errors.append("agent_state schema_version is not 1")
@@ -1665,6 +1667,8 @@ def check_proactive_agent_account(
         outbox = account_store.read_proactive_outbox(account_id)
     except (AccountStoreError, OSError, ValueError) as exc:
         return ProactiveAgentHealth(account_id, False, (f"proactive_outbox read failed: {_health_exception_name(exc)}: {exc}",), 0, 0, 0)
+    if not isinstance(outbox, list):
+        return ProactiveAgentHealth(account_id, False, ("proactive_outbox is not a list",), 0, 0, 0)
     seen_ids: set[str] = set()
     consented_categories = set(normalized_state["consent"]["categories"])
     for index, item in enumerate(outbox):
