@@ -48,6 +48,10 @@ PROACTIVE_RISK_MEMORY_KINDS = frozenset(
 PROACTIVE_RISK_BLOCK_GATES = frozenset({"blocked", "crisis", "red", "acute", "unsafe"})
 PROACTIVE_RISK_REVIEW_GATES = frozenset({"needs_review", "review", "human_review"})
 PROACTIVE_RISK_LOOKBACK_DAYS = 30
+# A worker crash after claiming an item must not turn the reminder into a
+# permanently invisible `dispatching` row.  Recovery is deliberately delayed
+# so a slow sender is not reclaimed while it is still active.
+PROACTIVE_DISPATCH_LEASE_MINUTES = 30
 PROACTIVE_UNSAFE_TEXT_PATTERNS = (
     re.compile(r"\bdu\s+(?:hast|leidest\s+an)\s+(?:eine[rmn]?\s+)?(?:depression|angststoerung|ptbs|borderline|bipolare\s+stoerung)\b"),
     re.compile(r"\b(?:ich\s+)?diagnostiziere\b"),
@@ -110,6 +114,7 @@ class ProactiveAgentHealth:
     errors: tuple[str, ...] = ()
     queued_count: int = 0
     review_pending_count: int = 0
+    dispatching_count: int = 0
 
 
 @dataclass(frozen=True)
@@ -297,6 +302,7 @@ def proactive_status_text(account_store: AccountStore, account_id: str) -> str:
     outbox = account_store.read_proactive_outbox(account_id)
     queued = sum(1 for item in outbox if isinstance(item, dict) and _proactive_item_status(item) == "queued")
     review_pending = sum(1 for item in outbox if isinstance(item, dict) and _proactive_item_status(item) == "review_pending")
+    dispatching = sum(1 for item in outbox if isinstance(item, dict) and _proactive_item_status(item) == "dispatching")
     enabled = "ja" if state["proactive"]["enabled"] else "nein"
     paused = "ja" if state["proactive"]["paused"] else "nein"
     categories = ", ".join(state["consent"]["categories"]) or "keine"
@@ -312,6 +318,7 @@ def proactive_status_text(account_store: AccountStore, account_id: str) -> str:
             contact_line,
             f"- queued_outbox_items: {queued}",
             f"- review_pending_items: {review_pending}",
+            f"- dispatching_outbox_items: {dispatching}",
         ]
     )
 
@@ -1044,6 +1051,72 @@ def expire_stale_proactive_outbox_items(account_store: AccountStore, account_id:
         return tuple(expired_ids)
 
 
+def recover_stale_proactive_dispatching_items(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    now: datetime | None = None,
+    lease_minutes: int = PROACTIVE_DISPATCH_LEASE_MINUTES,
+) -> tuple[str, ...]:
+    """Requeue claims left behind by a crashed proactive worker.
+
+    Sending is intentionally at-least-once: if a provider accepted a message
+    immediately before the worker died, recovery may send it again.  That is
+    preferable to losing a requested reminder forever.  The status history and
+    attempt counter make this recovery visible for later deduplication/audit.
+    """
+    timeout_minutes = max(1, _normalize_int(lease_minutes, default=PROACTIVE_DISPATCH_LEASE_MINUTES))
+    resolved_now = now or datetime.now(timezone.utc)
+    cutoff = resolved_now - timedelta(minutes=timeout_minutes)
+    timestamp = resolved_now.isoformat(timespec="seconds")
+    recovered_ids: list[str] = []
+    with _account_proactive_outbox_lock(account_store, account_id):
+        rows = account_store.read_proactive_outbox(account_id)
+        for item in rows:
+            if not isinstance(item, dict) or _proactive_item_status(item) != "dispatching":
+                continue
+            claimed_at = _proactive_dispatch_claimed_at(item)
+            if claimed_at is None or claimed_at > cutoff:
+                continue
+            item_id = str(item.get("id") or "").strip()
+            if not item_id:
+                continue
+            item["status"] = "queued"
+            item["updated_at"] = timestamp
+            item.pop("dispatching_at", None)
+            history = item.setdefault("status_history", [])
+            if not isinstance(history, list):
+                history = []
+                item["status_history"] = history
+            history.append(
+                {
+                    "at": timestamp,
+                    "status": "queued",
+                    "reason": f"stale_dispatch_reclaimed_after_{timeout_minutes}_minutes",
+                }
+            )
+            recovered_ids.append(item_id)
+        if recovered_ids:
+            account_store.write_proactive_outbox(account_id, rows)
+    return tuple(recovered_ids)
+
+
+def _proactive_dispatch_claimed_at(item: Mapping[str, Any]) -> datetime | None:
+    for key in ("dispatching_at", "updated_at"):
+        parsed = _parse_proactive_datetime(str(item.get(key) or ""))
+        if parsed is not None:
+            return parsed
+    history = item.get("status_history")
+    if isinstance(history, list):
+        for entry in reversed(history):
+            if not isinstance(entry, Mapping) or str(entry.get("status") or "").strip().casefold() != "dispatching":
+                continue
+            parsed = _parse_proactive_datetime(str(entry.get("at") or ""))
+            if parsed is not None:
+                return parsed
+    return None
+
+
 def update_proactive_outbox_item_status(
     account_store: AccountStore,
     account_id: str,
@@ -1073,6 +1146,11 @@ def update_proactive_outbox_item_status(
                 return False
             item["status"] = normalized_status
             item["updated_at"] = timestamp
+            if normalized_status == "dispatching":
+                item["dispatching_at"] = timestamp
+                item["dispatch_attempts"] = _normalize_int(item.get("dispatch_attempts"), default=0) + 1
+            else:
+                item.pop("dispatching_at", None)
             if normalized_status == "sent":
                 item["sent_at"] = timestamp
                 item["last_sent_at"] = timestamp
@@ -1121,6 +1199,7 @@ async def dispatch_due_proactive_outbox_items(
     instance_name: str = "",
 ) -> tuple[ProactiveDispatchResult, ...]:
     resolved_now = now or datetime.now(timezone.utc)
+    recover_stale_proactive_dispatching_items(account_store, account_id, now=resolved_now)
     expire_stale_proactive_outbox_items(account_store, account_id, now=resolved_now)
     invalid_due_item_ids = fail_invalid_due_proactive_outbox_items(account_store, account_id, now=resolved_now)
     results: list[ProactiveDispatchResult] = []
@@ -1407,10 +1486,11 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
     errors: list[str] = []
     queued_count = 0
     review_pending_count = 0
+    dispatching_count = 0
     try:
         state = account_store.read_agent_state(account_id)
     except (AccountStoreError, OSError, ValueError) as exc:
-        return ProactiveAgentHealth(account_id, False, (f"agent_state read failed: {_health_exception_name(exc)}: {exc}",), 0, 0)
+        return ProactiveAgentHealth(account_id, False, (f"agent_state read failed: {_health_exception_name(exc)}: {exc}",), 0, 0, 0)
     if state:
         if state.get("schema_version") != 1:
             errors.append("agent_state schema_version is not 1")
@@ -1423,7 +1503,7 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
     try:
         outbox = account_store.read_proactive_outbox(account_id)
     except (AccountStoreError, OSError, ValueError) as exc:
-        return ProactiveAgentHealth(account_id, False, (f"proactive_outbox read failed: {_health_exception_name(exc)}: {exc}",), 0, 0)
+        return ProactiveAgentHealth(account_id, False, (f"proactive_outbox read failed: {_health_exception_name(exc)}: {exc}",), 0, 0, 0)
     seen_ids: set[str] = set()
     consented_categories = set(normalized_state["consent"]["categories"])
     for index, item in enumerate(outbox):
@@ -1442,6 +1522,8 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
             queued_count += 1
         elif status == "review_pending":
             review_pending_count += 1
+        elif status == "dispatching":
+            dispatching_count += 1
         if status not in PROACTIVE_OUTBOX_STATUSES:
             errors.append(f"outbox item {item_id or index} has unsupported status: {status}")
         errors.extend(_proactive_outbox_status_history_errors(item, item_id or str(index), current_status=status))
@@ -1488,7 +1570,7 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
                 else:
                     if not route_matches:
                         errors.append(f"{status} outbox item {item_id or index} route is stale or not linked to account identity")
-    return ProactiveAgentHealth(account_id, not errors, tuple(errors), queued_count, review_pending_count)
+    return ProactiveAgentHealth(account_id, not errors, tuple(errors), queued_count, review_pending_count, dispatching_count)
 
 
 def _proactive_outbox_item_has_provenance(item: Mapping[str, Any]) -> bool:

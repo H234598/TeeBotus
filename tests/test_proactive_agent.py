@@ -18,6 +18,7 @@ from TeeBotus.runtime.proactive_agent import (
     build_proactive_llm_planner_prompt,
     extract_proactive_agent_tool_calls,
     check_proactive_agent_account,
+    claim_proactive_worker_job,
     disable_proactive_agent,
     dispatch_due_proactive_outbox_items,
     due_proactive_outbox_items,
@@ -28,6 +29,7 @@ from TeeBotus.runtime.proactive_agent import (
     proactive_status_text,
     proactive_policy_decision,
     queue_proactive_message,
+    recover_stale_proactive_dispatching_items,
     reject_proactive_review_item,
     resume_proactive_agent,
     run_proactive_tool_agent,
@@ -2213,6 +2215,8 @@ def test_dispatch_due_proactive_items_sends_with_mocked_channel_and_tracks_ref(t
     assert sent_item["status"] == "sent"
     assert sent_item["dispatch"]["channel"] == "signal"
     assert sent_item["dispatch"]["message_ref"] == "123456789"
+    assert sent_item["dispatch_attempts"] == 1
+    assert "dispatching_at" not in sent_item
     assert [entry["status"] for entry in sent_item["status_history"]] == ["queued", "dispatching", "sent"]
     refs = tracker.list_for_chat("+491", instance_name="Depressionsbot", channel="signal")
     assert len(refs) == 1
@@ -2271,6 +2275,84 @@ def test_dispatch_claim_prevents_nested_worker_from_sending_same_item(tmp_path) 
     item = account_store.read_proactive_outbox(account_id)[0]
     assert item["status"] == "sent"
     assert [entry["status"] for entry in item["status_history"]] == ["queued", "dispatching", "sent"]
+
+
+def test_fresh_proactive_dispatch_claim_is_not_recovered(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    claimed_at = datetime(2026, 6, 15, 11, 59, tzinfo=timezone.utc)
+
+    assert claim_proactive_worker_job(account_store, account_id, item_id, now=claimed_at)
+    assert recover_stale_proactive_dispatching_items(
+        account_store,
+        account_id,
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    ) == ()
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "dispatching"
+    assert item["dispatching_at"] == "2026-06-15T11:59:00+00:00"
+    assert item["dispatch_attempts"] == 1
+
+
+def test_dispatch_recovers_stale_claim_after_worker_crash(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="crash_recovery",
+        message_text="Bitte nicht verlieren",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    assert claim_proactive_worker_job(
+        account_store,
+        account_id,
+        item_id,
+        now=datetime(2026, 6, 15, 11, tzinfo=timezone.utc),
+    )
+    calls = []
+
+    async def sender(route: dict, action: SendText, item: dict) -> str:
+        calls.append((route, action, item))
+        return "recovered-ref"
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=datetime(2026, 6, 15, 11, 31, tzinfo=timezone.utc),
+        )
+    )
+
+    assert len(calls) == 1
+    assert results[0].status == "sent"
+    assert results[0].message_ref == "recovered-ref"
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "sent"
+    assert item["dispatch_attempts"] == 2
+    assert "dispatching_at" not in item
+    assert [entry["status"] for entry in item["status_history"]] == ["queued", "dispatching", "queued", "dispatching", "sent"]
+    assert item["status_history"][2]["reason"] == "stale_dispatch_reclaimed_after_30_minutes"
 
 
 def test_dispatch_reschedules_recurring_user_reminder_after_successful_send(tmp_path) -> None:
