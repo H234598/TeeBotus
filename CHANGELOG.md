@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.95 - 2026-07-12
+
+- Preserve negation when parsing disabled notification statuses.
+
 ## 1.9.94 - 2026-07-12
 
 - Recognize English notification status and mute replies.

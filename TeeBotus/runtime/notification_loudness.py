@@ -20,6 +20,7 @@ NOTIFICATION_LOUDNESS_TERMINAL_STATUSES = frozenset({"confirmed", "declined"})
 NOTIFICATION_LOUDNESS_MUTE_TERMS = frozenset(
     {"stumm", "lautlos", "stummgeschaltet", "lautlosgeschaltet", "muted", "silenced", "silent"}
 )
+NOTIFICATION_LOUDNESS_OFF_TERMS = frozenset({"ausgeschaltet", "deaktiviert", "abgeschaltet", "off", "disabled"})
 NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset(
     {"nicht", "nie", "kein", "keine", "weder", "ohne", "not", "never", "neither", "without"}
 )
@@ -251,6 +252,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         )
     )
     has_unnegated_mute, has_negated_mute = _notification_loudness_mute_polarity(normalized)
+    has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(normalized, NOTIFICATION_LOUDNESS_OFF_TERMS)
     confirmed_needles = (
         "ja laut",
         "laut gestellt",
@@ -261,6 +263,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "notification on",
         "notifications enabled",
         "notification enabled",
+        "nicht aus",
+        "not off",
         "ist laut",
         "sind laut",
         "are loud",
@@ -291,14 +295,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "benachrichtigungen aus",
         "notifications off",
         "notification off",
-        "notifications disabled",
-        "notification disabled",
         "ist aus",
         "sind aus",
-        "are off",
-        "are disabled",
-        "ausgeschaltet",
-        "deaktiviert",
         "kann ich nicht",
         "will nicht",
         "moechte nicht",
@@ -309,7 +307,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "möchte ich nicht",
     )
     has_declined_phrase = any(_contains_normalized_phrase(normalized, needle) for needle in declined_needles)
-    has_declined_phrase = has_declined_phrase or has_unnegated_mute
+    has_declined_phrase = has_declined_phrase or has_unnegated_mute or has_unnegated_off
     if has_declined_phrase and (pending or has_notification_context):
         return "declined"
     if pending and (normalized in {"ja", "yes", "jep", "jo", "ok", "okay", "klar", "erledigt", "gemacht"} or words & {"ja", "yes"} and has_notification_context):
@@ -322,7 +320,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if pending and normalized in {"nein", "no", "nee", "nop", "nope"}:
         return "declined"
     if has_notification_context and (
-        any(_contains_normalized_phrase(normalized, needle) for needle in confirmed_needles) or has_negated_mute
+        any(_contains_normalized_phrase(normalized, needle) for needle in confirmed_needles)
+        or has_negated_mute
+        or has_negated_off
     ):
         return "confirmed"
     if has_notification_context and has_declined_phrase:
@@ -744,11 +744,17 @@ def _contains_normalized_phrase(normalized: str, phrase: str) -> bool:
 
 
 def _notification_loudness_mute_polarity(normalized: str) -> tuple[bool, bool]:
+    return _notification_loudness_term_polarity(normalized, NOTIFICATION_LOUDNESS_MUTE_TERMS)
+
+
+def _notification_loudness_term_polarity(
+    normalized: str, terms: frozenset[str]
+) -> tuple[bool, bool]:
     tokens = normalized.split()
     has_unnegated = False
     has_negated = False
     for index, token in enumerate(tokens):
-        if token not in NOTIFICATION_LOUDNESS_MUTE_TERMS:
+        if token not in terms:
             continue
         preceding = tokens[max(0, index - 3) : index]
         if any(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in preceding):
