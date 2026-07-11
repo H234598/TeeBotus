@@ -1323,10 +1323,12 @@ def test_codex_history_dispatch_bridge_claims_sends_and_completes_only_open_reci
             object(),
             instance_name="TeeBotus_Logger",
             env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+            limit=0,
         )
     )
     assert result["mode"] == "history-dispatcher"
     assert [operation for operation, _body in calls] == ["dispatch.claim", "dispatch.complete"]
+    assert calls[0][1]["limit"] == 0
     complete_body = calls[-1][1]
     assert [row["recipient_id"] for row in complete_body["recipient_results"]] == ["open"]
 

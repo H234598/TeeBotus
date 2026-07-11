@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.9.2 - 2026-07-11
+
+- Preserve the documented `dispatch-limit 0` semantics across the
+  History-Dispatcher bridge so all queued history entries can be queried and
+  claimed.
+
 ## 1.9.1 - 2026-07-10
 
 - Made scheduling, activity profiles, and notification wake windows use one

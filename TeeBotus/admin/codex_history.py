@@ -640,7 +640,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
     )
     try:
         if dry_run:
-            response = client.request("history.query", {"status": "queued", "limit": max(1, min(int(limit or 100), 100))})
+            response = client.request("history.query", {"status": "queued", "limit": max(0, int(limit))})
             if not response.get("ok"):
                 raise HistoryDispatcherError(str(response.get("error") or "History-Dispatcher query failed"))
             rows: list[dict[str, Any]] = []
@@ -658,7 +658,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
             }
         claimed = client.request("dispatch.claim", {
             "worker_id": f"teebotus:{os.getpid()}:{_codex_history_instance_token(instance_name)}",
-            "limit": max(1, min(int(limit or 100), 100)),
+            "limit": max(0, int(limit)),
         })
         if not claimed.get("ok"):
             raise HistoryDispatcherError(str(claimed.get("error") or "History-Dispatcher claim failed"))
