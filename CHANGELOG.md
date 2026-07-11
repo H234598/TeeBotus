@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.96 - 2026-07-12
+
+- Fix notification-loudness negation precedence for compound status phrases.
+
 ## 1.9.95 - 2026-07-12
 
 - Preserve negation when parsing disabled notification statuses.

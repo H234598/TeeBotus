@@ -306,7 +306,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "moechte ich nicht",
         "möchte ich nicht",
     )
-    has_declined_phrase = any(_contains_normalized_phrase(normalized, needle) for needle in declined_needles)
+    has_declined_phrase = any(
+        _contains_normalized_phrase(normalized, needle)
+        for needle in declined_needles
+        if needle not in {"keine benachrichtigung", "keine benachrichtigungen"}
+        or not (has_negated_mute or has_negated_off)
+    )
     has_declined_phrase = has_declined_phrase or has_unnegated_mute or has_unnegated_off
     if has_declined_phrase and (pending or has_notification_context):
         return "declined"
@@ -757,7 +762,8 @@ def _notification_loudness_term_polarity(
         if token not in terms:
             continue
         preceding = tokens[max(0, index - 3) : index]
-        if any(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in preceding):
+        negation_count = sum(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in preceding)
+        if negation_count % 2:
             has_negated = True
         else:
             has_unnegated = True
