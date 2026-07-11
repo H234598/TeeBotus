@@ -947,39 +947,43 @@ def account_identity_health_lines(
     if not instance_name:
         return []
     try:
+        safe_instance_name = _safe_instance_name_for_accounts(instance_name)
+    except ValueError:
+        return [f"account_identity={redact_status_text(instance_name)} status=unknown error=invalid_instance_name"]
+    try:
         from TeeBotus.admin.accounts_report import build_accounts_admin_report
 
         report = build_accounts_admin_report(
             instances_dir=project_root.resolve() / "instances",
-            instances=(instance_name,),
+            instances=(safe_instance_name,),
             provider=secret_provider or SecretToolInstanceSecretProvider(create_if_missing=False),
             env=os.environ if env is None else env,
             runtime_channels=runtime_channels,
         )
     except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose identity health failures.
-        return [f"account_identity={instance_name} status=unknown error={redact_status_text(f'{type(exc).__name__}: {exc}')}"]
+        return [f"account_identity={safe_instance_name} status=unknown error={redact_status_text(f'{type(exc).__name__}: {exc}')}"]
     instances = report.get("instances", []) if isinstance(report, Mapping) else []
     instance_report = next(
         (
             item
             for item in instances
-            if isinstance(item, Mapping) and str(item.get("instance") or "") == instance_name
+            if isinstance(item, Mapping) and str(item.get("instance") or "") == safe_instance_name
         ),
         None,
     )
     if not isinstance(instance_report, Mapping):
-        return [f"account_identity={instance_name} status=none"]
+        return [f"account_identity={safe_instance_name} status=none"]
     store_report = instance_report.get("account_store", {})
     runtime_slots = instance_report.get("runtime_slots", {})
     identity_health = instance_report.get("identity_health", {})
     if isinstance(store_report, Mapping) and store_report.get("errors"):
         errors = "; ".join(str(error or "").strip() for error in store_report.get("errors", []) if str(error or "").strip())
-        return [f"account_identity={instance_name} status=broken error={redact_status_text(errors)}"]
+        return [f"account_identity={safe_instance_name} status=broken error={redact_status_text(errors)}"]
     status = str(identity_health.get("status") or "unknown") if isinstance(identity_health, Mapping) else "unknown"
     warning_count = int(identity_health.get("warning_count", 0) or 0) if isinstance(identity_health, Mapping) else 0
     lines = [
         (
-            f"account_identity={instance_name} status={status} "
+            f"account_identity={safe_instance_name} status={status} "
             f"identity_warnings={warning_count} "
             f"runtime_slots={_runtime_status_count_label(runtime_slots.get('configured_channels', {}) if isinstance(runtime_slots, Mapping) else {})} "
             f"identities={_runtime_status_count_label(store_report.get('identities_by_channel', {}) if isinstance(store_report, Mapping) else {})}"
@@ -991,7 +995,7 @@ def account_identity_health_lines(
                 continue
             lines.append(
                 (
-                    f"account_identity_warning={instance_name} "
+                    f"account_identity_warning={safe_instance_name} "
                     f"code={redact_status_text(warning.get('code', 'unknown'))} "
                     f"channel={redact_status_text(warning.get('channel', '<none>'))} "
                     f"configured_runtime_slots={redact_status_text(warning.get('configured_runtime_slots', '<none>'))} "
@@ -1010,10 +1014,10 @@ def account_secret_health_lines(*, instance_name: str, project_root: Path, secre
     try:
         safe_instance_name = _safe_instance_name_for_accounts(instance_name)
     except ValueError:
-        return [f"account_crypto={instance_name} status=none"]
+        return [f"account_crypto={redact_status_text(instance_name)} status=unknown error=invalid_instance_name"]
     root = project_root.resolve() / "instances" / safe_instance_name / "data" / "accounts"
     if not root.exists():
-        return [f"account_crypto={instance_name} status=none"]
+        return [f"account_crypto={safe_instance_name} status=none"]
     provider = secret_provider or SecretToolInstanceSecretProvider(create_if_missing=False)
     presence: dict[str, bool | None] = {}
     presence_errors: dict[str, str] = {}
@@ -1024,20 +1028,20 @@ def account_secret_health_lines(*, instance_name: str, project_root: Path, secre
     )
     for label, purpose in purposes:
         try:
-            presence[label] = _account_secret_provider_has_secret(provider, instance_name, purpose)
+            presence[label] = _account_secret_provider_has_secret(provider, safe_instance_name, purpose)
         except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose secret-service failures.
             presence[label] = None
             presence_errors[label] = redact_status_text(f"{type(exc).__name__}: {exc}")
     try:
         required = {
             "mapping": _account_secret_mapping_required(root),
-            "memory": _account_secret_memory_required(root, instance_name),
-            "pepper": _account_secret_pepper_required(root, instance_name, provider, mapping_present=presence.get("mapping") is True),
+            "memory": _account_secret_memory_required(root, safe_instance_name),
+            "pepper": _account_secret_pepper_required(root, safe_instance_name, provider, mapping_present=presence.get("mapping") is True),
         }
     except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose secret-health failures.
-        return [f"account_crypto={instance_name} status=broken error={redact_status_text(f'{type(exc).__name__}: {exc}')}"]
-    _confirm_required_secret_presence(provider, instance_name, purposes, presence, required)
-    keyring_label, keyring_errors = _account_secret_keyring_health(root, instance_name, provider, required=required)
+        return [f"account_crypto={safe_instance_name} status=broken error={redact_status_text(f'{type(exc).__name__}: {exc}')}"]
+    _confirm_required_secret_presence(provider, safe_instance_name, purposes, presence, required)
+    keyring_label, keyring_errors = _account_secret_keyring_health(root, safe_instance_name, provider, required=required)
     labels: dict[str, str] = {}
     errors: list[str] = list(keyring_errors)
     for label, _purpose in purposes:
@@ -1054,7 +1058,7 @@ def account_secret_health_lines(*, instance_name: str, project_root: Path, secre
             labels[label] = "not_required"
     status = "broken" if errors else "ok"
     line = (
-        f"account_crypto={instance_name} status={status} "
+        f"account_crypto={safe_instance_name} status={status} "
         f"mapping={labels['mapping']} memory={labels['memory']} pepper={labels['pepper']} keyring={keyring_label}"
     )
     if errors:

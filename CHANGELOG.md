@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.15 - 2026-07-11
+
+- Validate and normalize instance names consistently in identity and secret
+  health diagnostics.
+
 ## 1.9.14 - 2026-07-11
 
 - Use the validated instance name consistently in account-memory health output.

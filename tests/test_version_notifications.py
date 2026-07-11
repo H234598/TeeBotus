@@ -158,6 +158,28 @@ def test_account_identity_health_is_ok_when_signal_identity_is_linked(tmp_path: 
     ]
 
 
+def test_account_identity_health_rejects_invalid_instance_name(tmp_path: Path) -> None:
+    lines = account_identity_health_lines(instance_name="../outside", project_root=tmp_path)
+
+    assert lines == ["account_identity=../outside status=unknown error=invalid_instance_name"]
+
+
+def test_account_secret_health_uses_normalized_instance_name(tmp_path: Path) -> None:
+    accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
+    accounts_root.mkdir(parents=True)
+    seen_instances: list[str] = []
+
+    class Provider:
+        def has_secret(self, instance_name: str, _purpose: str) -> bool:
+            seen_instances.append(instance_name)
+            return False
+
+    lines = account_secret_health_lines(instance_name=" Demo ", project_root=tmp_path, secret_provider=Provider())
+
+    assert seen_instances == ["Demo", "Demo", "Demo"]
+    assert lines == ["account_crypto=Demo status=ok mapping=not_required memory=not_required pepper=not_required keyring=not_required"]
+
+
 def test_account_memory_index_health_uses_read_only_secret_provider(tmp_path: Path, monkeypatch) -> None:
     store = _store(tmp_path)
     store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
