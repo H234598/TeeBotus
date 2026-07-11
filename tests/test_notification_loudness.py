@@ -625,6 +625,24 @@ def test_loudness_scheduler_fails_closed_on_invalid_agent_state(tmp_path) -> Non
     account_store.read_agent_state = original_read  # type: ignore[method-assign]
 
 
+def test_loudness_paths_fail_closed_when_agent_state_storage_is_unavailable(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    original_read = account_store.read_agent_state
+
+    def unavailable(_account_id):
+        raise AccountStoreError("agent state unavailable")
+
+    account_store.read_agent_state = unavailable  # type: ignore[method-assign]
+
+    assert queue_due_notification_loudness_prompts(account_store, account_id) == ()
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id) is None
+    assert maybe_handle_notification_loudness_response(event(identity, "ja, laut"), account_store, account_id) is None
+
+    account_store.read_agent_state = original_read  # type: ignore[method-assign]
+
+
 def test_loudness_scheduler_does_not_queue_when_checks_are_inactive(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

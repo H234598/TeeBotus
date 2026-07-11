@@ -4,7 +4,7 @@ from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
-from TeeBotus.runtime.accounts import AccountStore, utc_now
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, utc_now
 from TeeBotus.runtime.action_buttons import NOTIFICATION_LOUDNESS_BUTTONS
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.activity_profile import contact_timing_decision
@@ -35,27 +35,30 @@ def maybe_handle_notification_loudness_response(
 ) -> tuple[SendText, ...] | None:
     if not account_id or not _is_private_chat_type(event.chat_type):
         return None
-    if not _event_has_current_private_route(account_store, event):
+    try:
+        if not _event_has_current_private_route(account_store, event):
+            return None
+        with _account_proactive_outbox_lock(account_store, account_id):
+            if not isinstance(account_store.read_agent_state(account_id), dict):
+                return None
+            route_status = _route_status(account_store, account_id, event)
+            if route_status in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
+                return None
+            state = account_store.read_agent_state(account_id)
+            notification_state = state.get("notification_loudness") if isinstance(state, dict) else None
+            routes = notification_state.get("routes") if isinstance(notification_state, dict) else None
+            route_state = _find_route_state(routes, _route_key(event)) if isinstance(routes, Mapping) else None
+            if isinstance(route_state, Mapping) and not _normalize_bool(route_state.get("checks_active"), default=True):
+                return None
+            decision = _notification_loudness_decision(event.text, pending=route_status == "pending")
+            if decision is None:
+                return None
+            _set_notification_loudness_status(account_store, account_id, event, decision, now=now)
+            _cancel_pending_notification_loudness_items(account_store, account_id, event)
+            text = NOTIFICATION_LOUDNESS_CONFIRMED_REPLY if decision == "confirmed" else NOTIFICATION_LOUDNESS_DECLINED_REPLY
+            return (SendText(event.chat_id, text, track=False),)
+    except (AccountStoreError, OSError, ValueError):
         return None
-    with _account_proactive_outbox_lock(account_store, account_id):
-        if not isinstance(account_store.read_agent_state(account_id), dict):
-            return None
-        route_status = _route_status(account_store, account_id, event)
-        if route_status in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
-            return None
-        state = account_store.read_agent_state(account_id)
-        notification_state = state.get("notification_loudness") if isinstance(state, dict) else None
-        routes = notification_state.get("routes") if isinstance(notification_state, dict) else None
-        route_state = _find_route_state(routes, _route_key(event)) if isinstance(routes, Mapping) else None
-        if isinstance(route_state, Mapping) and not _normalize_bool(route_state.get("checks_active"), default=True):
-            return None
-        decision = _notification_loudness_decision(event.text, pending=route_status == "pending")
-        if decision is None:
-            return None
-        _set_notification_loudness_status(account_store, account_id, event, decision, now=now)
-        _cancel_pending_notification_loudness_items(account_store, account_id, event)
-        text = NOTIFICATION_LOUDNESS_CONFIRMED_REPLY if decision == "confirmed" else NOTIFICATION_LOUDNESS_DECLINED_REPLY
-        return (SendText(event.chat_id, text, track=False),)
 
 
 def maybe_notification_loudness_prompt_action(
@@ -67,24 +70,27 @@ def maybe_notification_loudness_prompt_action(
 ) -> SendText | None:
     if not _is_private_chat_type(event.chat_type) or not account_id:
         return None
-    if not _event_has_current_private_route(account_store, event):
-        return None
-    with _account_proactive_outbox_lock(account_store, account_id):
-        state = account_store.read_agent_state(account_id)
-        if not isinstance(state, dict):
+    try:
+        if not _event_has_current_private_route(account_store, event):
             return None
-        route_state = _ensure_route_state(state, event)
-        if _normalized_route_status(route_state) in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
-            return None
-        if not _normalize_bool(route_state.get("checks_active"), default=True):
-            return None
-        resolved_now = _resolve_loudness_now(now)
-        if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=False):
+        with _account_proactive_outbox_lock(account_store, account_id):
+            state = account_store.read_agent_state(account_id)
+            if not isinstance(state, dict):
+                return None
+            route_state = _ensure_route_state(state, event)
+            if _normalized_route_status(route_state) in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
+                return None
+            if not _normalize_bool(route_state.get("checks_active"), default=True):
+                return None
+            resolved_now = _resolve_loudness_now(now)
+            if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=False):
+                account_store.write_agent_state(account_id, state)
+                return None
+            _mark_notification_loudness_prompted(route_state, event, resolved_now)
             account_store.write_agent_state(account_id, state)
-            return None
-        _mark_notification_loudness_prompted(route_state, event, resolved_now)
-        account_store.write_agent_state(account_id, state)
-        return SendText(event.chat_id, NOTIFICATION_LOUDNESS_PROMPT, track=False, buttons=NOTIFICATION_LOUDNESS_BUTTONS)
+            return SendText(event.chat_id, NOTIFICATION_LOUDNESS_PROMPT, track=False, buttons=NOTIFICATION_LOUDNESS_BUTTONS)
+    except (AccountStoreError, OSError, ValueError):
+        return None
 
 
 def queue_due_notification_loudness_prompts(
@@ -93,8 +99,11 @@ def queue_due_notification_loudness_prompts(
     *,
     now: datetime | None = None,
 ) -> tuple[str, ...]:
-    with _account_proactive_outbox_lock(account_store, account_id):
-        return _queue_due_notification_loudness_prompts_unlocked(account_store, account_id, now=now)
+    try:
+        with _account_proactive_outbox_lock(account_store, account_id):
+            return _queue_due_notification_loudness_prompts_unlocked(account_store, account_id, now=now)
+    except (AccountStoreError, OSError, ValueError):
+        return ()
 
 
 def _queue_due_notification_loudness_prompts_unlocked(

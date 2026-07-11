@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.69 - 2026-07-11
+
+- Fail closed when notification-loudness account state storage is unavailable.
+
 ## 1.9.68 - 2026-07-11
 
 - Skip non-private routes before evaluating adaptive contact timing.
