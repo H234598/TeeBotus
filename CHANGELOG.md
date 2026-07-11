@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.13 - 2026-07-11
+
+- Reject invalid instance and account identifiers before resolving status
+  memory paths.
+
 ## 1.9.12 - 2026-07-11
 
 - Do not mask unreadable JSON account memory with its raw file size in

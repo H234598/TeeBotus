@@ -1450,7 +1450,14 @@ def github_release_log_url(project_root: Path | None = None) -> str:
 def account_memory_dir_for_account(account_id: str, *, instance_name: str, project_root: Path) -> Path | None:
     if not account_id or not instance_name:
         return None
-    account_dir = project_root / "instances" / instance_name / "data" / "accounts" / "accounts" / account_id
+    try:
+        safe_instance_name = _safe_instance_name_for_accounts(instance_name)
+    except ValueError:
+        return None
+    safe_account_id = str(account_id or "").strip()
+    if not TOKEN_HEX_RE.fullmatch(safe_account_id):
+        return None
+    account_dir = project_root / "instances" / safe_instance_name / "data" / "accounts" / "accounts" / safe_account_id
     return account_dir if account_dir.is_dir() else None
 
 
@@ -1458,9 +1465,13 @@ def account_memory_dir_for_sender(sender_id: str, *, instance_name: str, project
     if not sender_id or not instance_name:
         return None
     try:
+        safe_instance_name = _safe_instance_name_for_accounts(instance_name)
+    except ValueError:
+        return None
+    try:
         store = AccountStore(
-            project_root / "instances" / instance_name / "data" / "accounts",
-            instance_name,
+            project_root / "instances" / safe_instance_name / "data" / "accounts",
+            safe_instance_name,
             secret_provider=SecretToolInstanceSecretProvider(create_if_missing=False),
             create_dirs=False,
         )
@@ -1470,8 +1481,7 @@ def account_memory_dir_for_sender(sender_id: str, *, instance_name: str, project
         return None
     if not account_id:
         return None
-    account_dir = project_root / "instances" / instance_name / "data" / "accounts" / "accounts" / account_id
-    return account_dir if account_dir.is_dir() else None
+    return account_memory_dir_for_account(account_id, instance_name=safe_instance_name, project_root=project_root)
 
 
 def memory_files_size(directory: Path | None) -> int:

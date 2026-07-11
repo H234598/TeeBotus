@@ -1288,6 +1288,26 @@ def test_memory_payload_size_does_not_mask_unreadable_json_with_file_size(tmp_pa
     ) is None
 
 
+def test_status_memory_path_helpers_reject_traversal(tmp_path):
+    account_id = "a" * 128
+
+    assert status_core.account_memory_dir_for_account(
+        account_id,
+        instance_name="../outside",
+        project_root=tmp_path,
+    ) is None
+    assert status_core.account_memory_dir_for_account(
+        "../outside",
+        instance_name="Demo",
+        project_root=tmp_path,
+    ) is None
+    assert status_core.account_memory_dir_for_sender(
+        "sender",
+        instance_name="../outside",
+        project_root=tmp_path,
+    ) is None
+
+
 def test_memory_encryption_status_diagnoses_backend_resolution_failure():
     class FailingStore:
         @property
