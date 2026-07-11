@@ -730,6 +730,19 @@ def test_runtime_state_store_rejects_cross_account_llm_state_hardlink(tmp_path):
     assert "unsafe account state file" in state.llm_state_persistence_error
 
 
+def test_runtime_state_store_secures_existing_llm_state_file(tmp_path):
+    data_dir = tmp_path / "Bot" / "data"
+    provider = StaticSecretProvider(b"s" * 32)
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
+    account_store.write_llm_state(ACCOUNT_ID, {"previous_response_id": "response"})
+    state_path = account_store.account_dir(ACCOUNT_ID) / LLM_STATE_FILENAME
+    os.chmod(state_path, 0o644)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID) == "response"
+    assert stat_module.S_IMODE(state_path.stat().st_mode) == 0o600
+
+
 def test_runtime_state_store_refuses_runtime_lock_symlink(tmp_path):
     data_dir = tmp_path / "Bot" / "data"
     runtime_dir = data_dir / "runtime"

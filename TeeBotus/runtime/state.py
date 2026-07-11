@@ -651,6 +651,11 @@ class RuntimeStateStore(RuntimeState):
                     raise AccountStoreError(f"could not inspect account state file: {state_path}") from exc
                 if stat.S_ISLNK(state_stat.st_mode) or state_stat.st_nlink > 1:
                     raise AccountStoreError(f"refusing unsafe account state file: {state_path}")
+                if stat.S_ISREG(state_stat.st_mode):
+                    try:
+                        os.chmod(state_path, stat.S_IRUSR | stat.S_IWUSR)
+                    except OSError as exc:
+                        raise AccountStoreError(f"could not secure account state file: {state_path}") from exc
             return account_memory_lock_for_root(self.accounts_root, account_id)
         except (AccountStoreError, OSError, RuntimeError, TypeError, ValueError) as exc:
             self._set_llm_state_persistence_error(str(exc), account_id=account_id)
