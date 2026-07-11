@@ -233,6 +233,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "notifications on",
         "notification on",
         "ist laut",
+        "eingeschaltet",
+        "aktiviert",
         "erledigt",
         "gemacht",
     )
@@ -245,6 +247,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "nicht auf laut",
         "noch nicht",
         "nicht erledigt",
+        "nicht gemacht",
+        "nicht eingeschaltet",
+        "nicht aktiviert",
         "kann ich nicht",
         "will nicht",
         "moechte nicht",
@@ -259,6 +264,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if pending and any(needle in normalized for needle in declined_needles):
         return "declined"
     if pending and (normalized in {"ja", "yes", "jep", "jo", "ok", "okay", "klar", "erledigt", "gemacht"} or words & {"ja", "yes"} and has_notification_context):
+        return "confirmed"
+    if pending and any(needle in normalized for needle in ("erledigt", "gemacht", "eingeschaltet", "aktiviert")):
         return "confirmed"
     if pending and normalized in {"nein", "no", "nee", "nop", "nope"}:
         return "declined"

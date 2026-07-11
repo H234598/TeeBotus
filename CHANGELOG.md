@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.75 - 2026-07-11
+
+- Recognize natural notification-loudness completion and negation phrases.
+
 ## 1.9.74 - 2026-07-11
 
 - Reject notification-loudness routes with invalid adapter slots.
