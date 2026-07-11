@@ -285,6 +285,12 @@ def test_status_does_not_crash_on_malformed_fallback_configuration(tmp_path: Pat
     assert "- Ersatzmodelle: keine (kein aktiver Ersatz fuer Chat/Textantworten)" in text
 
 
+def test_status_display_name_cannot_break_status_lines(tmp_path: Path) -> None:
+    text = build_status_reply(instance_name="Demo\nInjected", project_root=tmp_path)
+
+    assert text.splitlines()[0] == "Demo Injected Status:"
+
+
 def test_mcp_status_reports_invalid_configuration() -> None:
     assert mcp_tool_status_lines(["not", "a", "mapping"]) == [
         "MCP Tools",

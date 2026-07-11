@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.34 - 2026-07-11
+
+- Sanitize the visible status heading before rendering it.
+
 ## 1.9.33 - 2026-07-11
 
 - Surface malformed Codex-History backend rows as warnings instead of silently

@@ -1374,7 +1374,7 @@ def _mcp_policy_directly_callable(policy: MCPToolPolicy) -> bool:
 
 
 def _status_display_name(instance_name: str) -> str:
-    return str(instance_name or "").strip() or "TeeBotus"
+    return redact_status_text(instance_name) or "TeeBotus"
 
 
 def _safe_instance_name_for_accounts(instance_name: str) -> str:
