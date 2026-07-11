@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.81 - 2026-07-11
+
+- Fall back from malformed notification-loudness outbox route keys to valid routes.
+
 ## 1.9.80 - 2026-07-11
 
 - Preserve notification-loudness negation precedence without pending state.

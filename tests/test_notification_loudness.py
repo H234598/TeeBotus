@@ -691,12 +691,21 @@ def test_legacy_loudness_outbox_route_fallback_prevents_duplicate_and_cancels(tm
             "route": {"channel": "telegram", "chat_id": "chat-1", "chat_type": "private", "adapter_slot": 1},
         },
     )
+    account_store.append_proactive_outbox_item(
+        account_id,
+        {
+            "status": "queued",
+            "system_item": "notification_loudness",
+            "route_key": "malformed-route-key",
+            "route": {"channel": "telegram", "chat_id": "chat-1", "chat_type": "private", "adapter_slot": 1},
+        },
+    )
 
     assert queue_due_notification_loudness_prompts(account_store, account_id, now=now) == ()
     assert maybe_handle_notification_loudness_response(
         event(identity, "ja, laut"), account_store, account_id, now=now
     ) is not None
-    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "cancelled"
+    assert [item["status"] for item in account_store.read_proactive_outbox(account_id)] == ["cancelled", "cancelled"]
 
 
 def test_legacy_next_check_at_blocks_loudness_prompt_until_due(tmp_path, monkeypatch) -> None:

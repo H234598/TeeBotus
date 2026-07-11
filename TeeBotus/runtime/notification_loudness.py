@@ -540,11 +540,19 @@ def _route_key_from_route(route: Mapping[str, Any]) -> str:
 
 
 def _outbox_route_key(item: Mapping[str, Any]) -> str:
-    route_key = _normalize_route_key(item.get("route_key"))
+    route_key = _canonical_outbox_route_key(item.get("route_key"))
     if route_key:
         return route_key
     route = item.get("route")
-    return _route_key_from_route(route) if isinstance(route, Mapping) else ""
+    return _canonical_outbox_route_key(_route_key_from_route(route)) if isinstance(route, Mapping) else ""
+
+
+def _canonical_outbox_route_key(route_key: Any) -> str:
+    normalized = _normalize_route_key(route_key)
+    parts = normalized.split(":", 2)
+    if len(parts) != 3 or not parts[0] or not parts[2] or _route_slot(parts[1]) is None:
+        return ""
+    return normalized
 
 
 def _route_key_for_channel_chat(channel: Any, adapter_slot: Any, chat_id: Any) -> str:
