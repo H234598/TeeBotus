@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.83 - 2026-07-11
+
+- Do not queue notification-loudness prompts for stale identity routes.
+
 ## 1.9.82 - 2026-07-11
 
 - Fail closed on inconsistent notification-loudness outbox routes.

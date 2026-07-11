@@ -282,6 +282,36 @@ def test_scheduler_persists_legacy_route_refresh_when_prompt_is_not_due(tmp_path
     assert stored_route["channel"] == "telegram"
 
 
+def test_scheduler_does_not_queue_stale_identity_route(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    state = account_store.read_agent_state(account_id)
+    state["notification_loudness"] = {
+        "schema_version": 1,
+        "routes": {
+            "telegram:1:chat-1": {
+                "status": "pending",
+                "checks_active": True,
+                "route": {
+                    "channel": "telegram",
+                    "chat_id": "chat-1",
+                    "chat_type": "private",
+                    "adapter_slot": 1,
+                    "last_seen_at": (now - timedelta(minutes=2)).isoformat(timespec="seconds"),
+                },
+                "identity_key": identity,
+            }
+        },
+    }
+    account_store.write_agent_state(account_id, state)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="chat-2", chat_type="private", adapter_slot=1)
+
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=now) == ()
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
 def test_prompt_does_not_resurrect_case_variant_terminal_route(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

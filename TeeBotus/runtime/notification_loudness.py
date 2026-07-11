@@ -143,7 +143,12 @@ def _queue_due_notification_loudness_prompts_unlocked(
             continue
         if not _notification_loudness_checks_active(route_state):
             continue
-        state_changed = _refresh_route_state_from_account_routes(account_store, account_id, str(route_key), route_state) or state_changed
+        route_state_changed, current_route_found = _refresh_route_state_from_account_routes(
+            account_store, account_id, str(route_key), route_state
+        )
+        state_changed = route_state_changed or state_changed
+        if not current_route_found:
+            continue
         route = route_state.get("route")
         if not _private_route(route):
             continue
@@ -486,7 +491,9 @@ def _route_slot(value: Any) -> int | None:
     return slot if slot >= 1 else None
 
 
-def _refresh_route_state_from_account_routes(account_store: AccountStore, account_id: str, route_key: str, route_state: dict[str, Any]) -> bool:
+def _refresh_route_state_from_account_routes(
+    account_store: AccountStore, account_id: str, route_key: str, route_state: dict[str, Any]
+) -> tuple[bool, bool]:
     identity_key = str(route_state.get("identity_key") or "").strip()
     candidate_keys = [identity_key] if identity_key else []
     try:
@@ -502,8 +509,8 @@ def _refresh_route_state_from_account_routes(account_store: AccountStore, accoun
         changed = route_state.get("identity_key") != candidate or route_state.get("route") != route
         route_state["identity_key"] = candidate
         route_state["route"] = route
-        return changed
-    return False
+        return changed, True
+    return False, False
 
 
 def _find_route_state(routes: Mapping[str, Any], route_key: Any) -> dict[str, Any] | None:
