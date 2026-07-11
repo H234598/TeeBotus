@@ -1267,6 +1267,34 @@ def test_status_does_not_fallback_to_legacy_files_when_memory_backend_fails(tmp_
     assert "- Nutzermemory: 13 B" not in text
 
 
+def test_status_handles_memory_backend_diagnostic_property_failure(tmp_path):
+    class BrokenDiagnosticsBackend:
+        @property
+        def last_entry_read_error(self):
+            raise RuntimeError("diagnostics unavailable")
+
+        last_index_read_error = ""
+
+        def read_entries(self, _account_id):
+            return [{"id": "mem_db", "user_text": "Mond"}]
+
+        def read_index(self, _account_id):
+            return {}
+
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
+    account_store._account_memory_backend = BrokenDiagnosticsBackend()
+
+    text = build_status_reply(
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        account_store=account_store,
+    )
+
+    assert "- Nutzermemory: nicht verfuegbar (Memory-Backend-Fehler)" in text
+
+
 def test_status_does_not_treat_invalid_explicit_account_id_as_resolved(tmp_path):
     text = build_status_reply(
         account_id="../outside",

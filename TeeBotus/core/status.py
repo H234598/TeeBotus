@@ -1591,13 +1591,17 @@ def account_memory_payload_size(*, account_store: AccountStore | None, account_i
             ):
                 LOGGER.error("Account memory backend returned an invalid payload shape for status size.")
                 return None
-            backend_error = ""
-            if backend is not None:
-                backend_error = str(
-                    getattr(backend, "last_entry_read_error", "")
-                    or getattr(backend, "last_index_read_error", "")
-                    or ""
-                ).strip()
+            try:
+                backend_error = ""
+                if backend is not None:
+                    backend_error = str(
+                        getattr(backend, "last_entry_read_error", "")
+                        or getattr(backend, "last_index_read_error", "")
+                        or ""
+                    ).strip()
+            except Exception:  # noqa: BLE001 - a broken diagnostic property must not break /status.
+                LOGGER.exception("Failed to read account memory backend diagnostics for status size.")
+                return None
             if backend_error:
                 LOGGER.error("Account memory backend returned partial data for status size: %s", backend_error)
                 return None

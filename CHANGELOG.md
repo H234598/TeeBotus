@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.43 - 2026-07-11
+
+- Keep status output available when a memory backend diagnostic property fails.
+
 ## 1.9.42 - 2026-07-11
 
 - Sanitize runtime status counter labels before rendering them.
