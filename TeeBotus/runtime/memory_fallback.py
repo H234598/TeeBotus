@@ -191,6 +191,7 @@ class WarningFallbackAccountMemoryBackend:
         self.last_collection_read_error = ""
         self.last_collection_skipped = 0
         self.last_fallback_sync_error = ""
+        self._fallback_active = False
 
     def _read(
         self,

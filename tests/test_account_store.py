@@ -2921,6 +2921,26 @@ def test_account_memory_fallback_warns_when_secondary_mirror_write_fails(caplog)
     assert "FALLBACK MAY BE STALE" in caplog.text
 
 
+def test_account_memory_fallback_clear_resets_recovery_state() -> None:
+    class Backend:
+        def clear_account_unchecked(self, _account_id: str) -> None:
+            return None
+
+    account_id = "a" * 128
+    backend = WarningFallbackAccountMemoryBackend(Backend(), Backend(), label="Demo:sqlite")
+    backend._fallback_active = True
+    backend._stale_fallback_entries.add(account_id)
+    backend._fallback_sync_failed_indexes.add(account_id)
+    backend.last_fallback_sync_error = "fallback unavailable"
+
+    backend.clear_account_unchecked(account_id)
+
+    assert backend._fallback_active is False
+    assert backend.stale_fallback_entry_account_ids == ()
+    assert backend.stale_fallback_index_account_ids == ()
+    assert backend.last_fallback_sync_error == ""
+
+
 def test_account_memory_fallback_retries_stale_secondary_when_primary_is_available() -> None:
     class Backend:
         def __init__(self, *, fail_write: bool = False) -> None:
