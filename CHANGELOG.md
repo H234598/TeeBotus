@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.24 - 2026-07-11
+
+- Distinguish unreadable memory files from readable unencrypted files in status
+  diagnostics.
+
 ## 1.9.23 - 2026-07-11
 
 - Report unavailable memory-file sizes instead of crashing or returning partial

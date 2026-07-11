@@ -1575,10 +1575,12 @@ def memory_encryption_status(directory: Path | None, *, account_store: AccountSt
         return "kein Account-Memory gefunden"
     structured_files = [directory / USER_MEMORY_INDEX_FILENAME, directory / USER_MEMORY_ENTRIES_FILENAME]
     existing_structured = [path for path in structured_files if path.exists()]
-    encrypted_structured = [path for path in existing_structured if looks_like_encrypted_payload(path)]
     if not existing_structured:
         return "keine strukturierten Userfiles"
-    if len(encrypted_structured) == len(existing_structured):
+    states = [_encrypted_payload_state(path) for path in existing_structured]
+    if any(state is None for state in states):
+        return "Userfiles nicht verfuegbar (Lesefehler)"
+    if all(state is True for state in states):
         return "Userfiles verschluesselt"
     return "Userfiles nicht vollstaendig verschluesselt"
 
@@ -2029,10 +2031,14 @@ def _requested_backup_priority(name: str) -> int:
 
 
 def looks_like_encrypted_payload(path: Path) -> bool:
+    return _encrypted_payload_state(path) is True
+
+
+def _encrypted_payload_state(path: Path) -> bool | None:
     try:
         raw = path.read_bytes()
     except OSError:
-        return False
+        return None
     if not raw.lstrip().startswith(b"{"):
         return False
     try:

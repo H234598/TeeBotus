@@ -1354,6 +1354,19 @@ def test_memory_encryption_status_diagnoses_backend_resolution_failure():
     assert status_core.memory_encryption_status(None, account_store=FailingStore(), account_id="account") == "Datenbank-Backend nicht verfuegbar"
 
 
+def test_memory_encryption_status_diagnoses_unreadable_userfiles(tmp_path, monkeypatch):
+    directory = tmp_path / "account"
+    directory.mkdir()
+    (directory / "User_Memory_Index.json").write_text("payload", encoding="utf-8")
+
+    def broken_read_bytes(_self):
+        raise PermissionError("permission denied")
+
+    monkeypatch.setattr(type(directory / "User_Memory_Index.json"), "read_bytes", broken_read_bytes)
+
+    assert status_core.memory_encryption_status(directory) == "Userfiles nicht verfuegbar (Lesefehler)"
+
+
 def test_memory_fallback_status_diagnoses_backend_resolution_failure():
     class FailingStore:
         @property
