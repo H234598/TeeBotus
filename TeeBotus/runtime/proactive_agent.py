@@ -1258,6 +1258,29 @@ def claim_proactive_worker_job(account_store: AccountStore, account_id: str, ite
     )
 
 
+def _claim_proactive_worker_job_if_allowed(
+    account_store: AccountStore,
+    account_id: str,
+    item_id: str,
+    *,
+    category: str,
+    item: Mapping[str, Any],
+    now: datetime,
+) -> tuple[ProactiveDecision, bool]:
+    with _account_proactive_outbox_lock(account_store, account_id):
+        decision = proactive_policy_decision(
+            account_store,
+            account_id,
+            category=category,
+            now=now,
+            exclude_item_id=item_id,
+            item=item,
+        )
+        if not decision.allowed:
+            return decision, False
+        return decision, claim_proactive_worker_job(account_store, account_id, item_id, now=now)
+
+
 async def dispatch_due_proactive_outbox_items(
     account_store: AccountStore,
     account_id: str,
@@ -1378,7 +1401,35 @@ async def dispatch_due_proactive_outbox_items(
             update_proactive_outbox_item_status(account_store, account_id, item_id, status="failed", reason="invalid_file", now=resolved_now, expected_status="queued")
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_file", channel))
             continue
-        if not claim_proactive_worker_job(account_store, account_id, item_id, now=resolved_now):
+        claim_decision, claimed = _claim_proactive_worker_job_if_allowed(
+            account_store,
+            account_id,
+            item_id,
+            category=category,
+            item=item,
+            now=resolved_now,
+        )
+        if not claim_decision.allowed:
+            update_proactive_outbox_item_status(
+                account_store,
+                account_id,
+                item_id,
+                status="skipped",
+                reason=f"policy:{claim_decision.reason}",
+                now=resolved_now,
+                expected_status="queued",
+            )
+            _append_proactive_safety_audit_event(
+                account_store,
+                account_id,
+                item=item,
+                reason=claim_decision.reason,
+                now=resolved_now,
+            )
+            results.append(ProactiveDispatchResult(account_id, item_id, "skipped", claim_decision.reason, channel))
+            continue
+        decision = claim_decision
+        if not claimed:
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "worker_claim_failed", channel))
             continue
         if is_notification_loudness_outbox_item(item) and not notification_loudness_outbox_item_is_active(account_store, account_id, item):
@@ -2508,7 +2559,7 @@ def _proactive_daily_count(account_store: AccountStore, account_id: str, now: da
         if exclude_item_id and str(item.get("id") or "") == exclude_item_id:
             continue
         status = str(item.get("status") or "queued").strip().casefold()
-        if status not in {"queued", "sent"}:
+        if status not in {"queued", "dispatching", "sent"}:
             continue
         timestamp = _parse_proactive_datetime(str(item.get("sent_at") or item.get("due_at") or item.get("created_at") or ""))
         if timestamp is None:
@@ -2526,9 +2577,11 @@ def _proactive_last_sent_within(account_store: AccountStore, account_id: str, no
         if exclude_item_id and str(item.get("id") or "") == exclude_item_id:
             continue
         status = str(item.get("status") or "").strip().casefold()
-        if status != "sent" and not str(item.get("sent_at") or "").strip():
+        if status not in {"sent", "dispatching"} and not str(item.get("sent_at") or "").strip():
             continue
-        sent_at = _parse_proactive_datetime(str(item.get("sent_at") or item.get("updated_at") or ""))
+        sent_at = _parse_proactive_datetime(
+            str(item.get("sent_at") or item.get("dispatching_at") or item.get("updated_at") or "")
+        )
         if sent_at is not None and threshold <= sent_at <= now:
             return True
     return False

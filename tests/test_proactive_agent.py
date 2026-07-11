@@ -480,6 +480,43 @@ def test_proactive_policy_enforces_daily_limit(tmp_path) -> None:
     assert second.reason == "daily_limit_reached"
 
 
+def test_proactive_policy_counts_dispatching_job_as_daily_reservation(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    state = enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    state["policy"]["max_messages_per_day"] = 2
+    account_store.write_agent_state(account_id, state)
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    first = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="first",
+        message_text="First",
+        due_at="2026-06-15T12:00:00+00:00",
+        now=now,
+    )
+    state = account_store.read_agent_state(account_id)
+    state["policy"]["max_messages_per_day"] = 1
+    account_store.write_agent_state(account_id, state)
+    assert claim_proactive_worker_job(account_store, account_id, first.reason.removeprefix("queued:"), now=now)
+
+    second = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="second",
+        message_text="Second",
+        due_at="2026-06-15T13:00:00+00:00",
+        now=now,
+    )
+
+    assert second.allowed is False
+    assert second.reason == "daily_limit_reached"
+
+
 def test_llm_cannot_spoof_user_requested_reminder_limit_bypass(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
