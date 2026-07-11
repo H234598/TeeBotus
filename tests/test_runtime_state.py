@@ -232,6 +232,21 @@ def test_runtime_state_store_serializes_security_event_rotation_and_append(tmp_p
     assert events == ["first", "second"]
 
 
+def test_runtime_state_store_refuses_security_event_symlink_target(tmp_path):
+    data_dir = tmp_path / "Bot" / "data"
+    runtime_dir = data_dir / "runtime"
+    runtime_dir.mkdir(parents=True)
+    outside = tmp_path / "outside-security-events.jsonl"
+    security_path = runtime_dir / "Security_Events.jsonl"
+    security_path.symlink_to(outside)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    state.append_security_event({"event": "must-not-follow"})
+
+    assert security_path.is_symlink()
+    assert not outside.exists()
+
+
 def test_runtime_state_store_refuses_to_autocreate_llm_state_secret_for_existing_sqlite_memory(tmp_path, monkeypatch):
     data_dir = tmp_path / "Bot" / "data"
     accounts_root = data_dir / "accounts"

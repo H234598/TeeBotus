@@ -28,7 +28,11 @@ from TeeBotus.runtime.accounts import (
     utc_now,
     validate_sha512_token,
 )
-from TeeBotus.runtime.maintenance import maintain_runtime_directory, rotate_runtime_text_file_if_needed
+from TeeBotus.runtime.maintenance import (
+    _open_append_text_no_follow,
+    maintain_runtime_directory,
+    rotate_runtime_text_file_if_needed,
+)
 
 FlowType = Literal["teladi_emergency", "memory_reset", "youtube_options", "account_edit", "link_wtf"] | str
 LINK_NOTIFICATIONS_FILENAME = "Link_Notifications.json"
@@ -445,8 +449,13 @@ class RuntimeStateStore(RuntimeState):
         with self._security_events_lock():
             super().append_security_event(event)
             rotate_runtime_text_file_if_needed(self.security_events_path)
-            with self.security_events_path.open("a", encoding="utf-8") as handle:
+            handle = _open_append_text_no_follow(self.security_events_path)
+            if handle is None:
+                return
+            try:
                 handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
+            finally:
+                handle.close()
             maintain_runtime_directory(self.runtime_dir)
 
     def _state_path(self, account_id: str, filename: str) -> Path:
