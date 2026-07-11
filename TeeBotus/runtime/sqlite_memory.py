@@ -558,6 +558,9 @@ class SQLiteAccountMemoryBackend:
     def _ensure_schema(self, *, allow_incomplete_schema: bool = False) -> None:
         self.last_database_missing = False
         existing_database = self.config.path.exists()
+        if not existing_database and self._secondary_database_exists() and not allow_incomplete_schema:
+            self.last_database_missing = True
+            raise self._missing_database_error()
         missing_table = self._missing_schema_table() if existing_database else None
         if missing_table is not None and self._secondary_database_exists() and not allow_incomplete_schema:
             if missing_table == "<unreadable>":
