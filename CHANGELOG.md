@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.6 - 2026-07-11
+
+- Persist generated callback event IDs inside spool payloads so retries retain
+  delivery idempotency.
+
 ## 1.9.5 - 2026-07-11
 
 - Keep callback spool files when the Dispatcher RPC succeeds transport-wise but

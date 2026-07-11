@@ -96,12 +96,14 @@ class CallbackSpool:
         os.chmod(self.root, 0o700)
 
     def enqueue(self, event: Mapping[str, Any]) -> Path:
-        raw = json.dumps(dict(event), ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        if len(raw) > MAX_SPOOL_EVENT_BYTES:
-            raise ValueError("dispatcher callback event exceeds spool limit")
-        event_id = str(event.get("event_id") or uuid.uuid4().hex)
+        event_data = dict(event)
+        event_id = str(event_data.get("event_id") or uuid.uuid4().hex)
         if not event_id or any(char not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_." for char in event_id):
             raise ValueError("invalid dispatcher callback event id")
+        event_data["event_id"] = event_id
+        raw = json.dumps(event_data, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        if len(raw) > MAX_SPOOL_EVENT_BYTES:
+            raise ValueError("dispatcher callback event exceeds spool limit")
         target = self.root / f"{event_id}.json"
         temporary = self.root / f".{event_id}.{os.getpid()}.tmp"
         with temporary.open("wb") as handle:
@@ -167,8 +169,8 @@ class HistoryDispatcherBridge:
             response = await self.client.request_async("delivery.record", event_data)
             return response.get("data", response)
         except HistoryDispatcherError:
-            self.spool.enqueue(event_data)
-            return {"ok": False, "spooled": True, "event_id": event_data.get("event_id", "")}
+            spool_path = self.spool.enqueue(event_data)
+            return {"ok": False, "spooled": True, "event_id": str(event_data.get("event_id") or spool_path.stem)}
 
     async def flush_spool(self) -> dict[str, int]:
         delivered = failed = 0

@@ -92,6 +92,17 @@ def test_bridge_spools_when_dispatcher_is_unavailable(tmp_path: Path) -> None:
     assert len(spool.events()) == 1
 
 
+def test_callback_spool_persists_generated_event_id(tmp_path: Path) -> None:
+    spool = CallbackSpool(tmp_path / "spool")
+
+    path = spool.enqueue({"item_id": "item-3", "recipient_id": "recipient-3", "event_type": "sent"})
+
+    events = spool.events()
+    assert len(events) == 1
+    assert events[0][0] == path
+    assert events[0][1]["event_id"] == path.stem
+
+
 def test_bridge_keeps_spooled_event_when_inner_dispatcher_result_fails(tmp_path: Path) -> None:
     spool = CallbackSpool(tmp_path / "spool")
 
