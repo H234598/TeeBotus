@@ -1091,6 +1091,19 @@ def test_resolve_proactive_role_llm_settings_keeps_role_keys_separate() -> None:
     assert worker["api_key"] == "worker-key"
 
 
+def test_resolve_proactive_role_llm_settings_does_not_inherit_normal_instance_settings() -> None:
+    env = {
+        "TEEBOTUS_LLM_PROFILE_DEPRESSIONSBOT": "gemini_flash_stateful",
+        "TEEBOTUS_LLM_PROVIDER_DEPRESSIONSBOT": "litellm",
+        "TEEBOTUS_LLM_MODEL_DEPRESSIONSBOT": "gemini/gemini-3.5-flash",
+        "TEEBOTUS_LLM_ENABLED": "true",
+    }
+
+    for role in ("plan", "decision", "worker"):
+        settings = resolve_proactive_role_llm_settings("Depressionsbot", role, env)
+        assert all(not value for value in settings.values())
+
+
 def test_runtime_proactive_role_llm_factory_builds_non_openai_clients_with_role_keys(tmp_path, monkeypatch) -> None:
     instances_dir = tmp_path / "instances"
     instance_dir = instances_dir / "Depressionsbot"

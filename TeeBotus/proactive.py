@@ -15,7 +15,7 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, TOKEN_HEX
 from TeeBotus.adapters.telegram_runtime import TelegramAPI
 from TeeBotus.instructions import load_instructions
 from TeeBotus.openai_client import OpenAIClient
-from TeeBotus.runtime.config import AccountRunConfig, build_runtime_config, resolve_llm_setting, resolve_openai_key
+from TeeBotus.runtime.config import AccountRunConfig, build_runtime_config, normalize_instance_env_token, resolve_openai_key
 from TeeBotus.runtime.dotenv import load_dotenv_defaults, load_project_dotenv_for_instances, project_root_for_instances_dir
 from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
 from TeeBotus.runtime.message_tracking import MessageTracker
@@ -213,7 +213,7 @@ def resolve_proactive_role_llm_settings(instance_name: str, role: str, env: Mapp
     normalized_role = _normalize_proactive_role(role)
     channel = PROACTIVE_ROLE_LLM_CHANNELS[normalized_role]
     return {
-        name.casefold(): resolve_llm_setting(instance_name, channel, 1, name, source)
+        name.casefold(): _resolve_proactive_role_llm_setting(instance_name, channel, 1, name, source)
         for name in PROACTIVE_ROLE_LLM_SETTING_NAMES
     }
 
@@ -230,6 +230,27 @@ def _normalize_proactive_role(role: str) -> str:
     if normalized_role not in PROACTIVE_ROLE_LLM_CHANNELS:
         raise ValueError(f"unsupported proactive LLM role: {role}")
     return normalized_role
+
+
+def _resolve_proactive_role_llm_setting(
+    instance_name: str,
+    channel: str,
+    slot: int,
+    name: str,
+    env: Mapping[str, str],
+) -> str:
+    setting = "_".join(part for part in str(name or "").strip().upper().split("_") if part)
+    instance_token = normalize_instance_env_token(instance_name)
+    channel_token = str(channel or "").strip().upper()
+    candidates = (
+        f"TEEBOTUS_LLM_{setting}_{instance_token}_{channel_token}_{slot}",
+        f"TEEBOTUS_LLM_{setting}_{instance_token}_{channel_token}",
+    )
+    for key in candidates:
+        value = str(env.get(key, "") or "").strip()
+        if value:
+            return value
+    return ""
 
 
 def _proactive_role_llm_settings_configured(settings: Mapping[str, str]) -> bool:
