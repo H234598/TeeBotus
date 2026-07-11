@@ -54,6 +54,8 @@ class WarningFallbackAccountMemoryBackend:
     def read_entries_by_ids(self, account_id: str, memory_ids: list[str]) -> list[dict[str, Any]]:
         requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
         if not requested_ids:
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
             return []
 
         def callback(backend: Any) -> list[dict[str, Any]]:

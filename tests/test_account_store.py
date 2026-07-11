@@ -2268,6 +2268,16 @@ def test_sqlite_empty_entry_id_read_clears_previous_diagnostics(tmp_path):
     assert backend.last_database_missing is False
 
 
+def test_account_memory_fallback_empty_entry_id_read_clears_previous_diagnostics() -> None:
+    backend = WarningFallbackAccountMemoryBackend(object(), object(), label="Demo:sqlite")
+    backend.last_entry_read_error = "stale error"
+    backend.last_entry_skipped = 2
+
+    assert backend.read_entries_by_ids("a" * 128, []) == []
+    assert backend.last_entry_read_error == ""
+    assert backend.last_entry_skipped == 0
+
+
 def test_sqlite_entry_id_read_chunks_large_requests(tmp_path):
     backend = SQLiteAccountMemoryBackend(
         instance_name="Depressionsbot",
