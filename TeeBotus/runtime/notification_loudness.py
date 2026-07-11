@@ -94,40 +94,41 @@ def queue_due_notification_loudness_prompts(
             continue
         if status != NOTIFICATION_LOUDNESS_PENDING_STATUS:
             continue
-        _refresh_route_state_from_account_routes(account_store, account_id, str(route_key), route_state)
-        route = route_state.get("route")
-        if isinstance(route, Mapping):
-            adaptive_decision = contact_timing_decision(account_store, account_id, now=resolved_now, route=route)
-            if not adaptive_decision.allowed:
+        with _account_proactive_outbox_lock(account_store, account_id):
+            _refresh_route_state_from_account_routes(account_store, account_id, str(route_key), route_state)
+            route = route_state.get("route")
+            if isinstance(route, Mapping):
+                adaptive_decision = contact_timing_decision(account_store, account_id, now=resolved_now, route=route)
+                if not adaptive_decision.allowed:
+                    continue
+            if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=True):
                 continue
-        if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=True):
-            continue
-        if not _private_route(route):
-            continue
-        if _has_queued_notification_loudness_item(account_store, account_id, route_key):
-            continue
-        _mark_route_state_prompted(route_state, resolved_now)
-        queued_ids.append(
-            account_store.append_proactive_outbox_item(
-                account_id,
-                {
-                    "status": "queued",
-                    "category": "system",
-                    "intent": NOTIFICATION_LOUDNESS_INTENT,
-                    "message_text": NOTIFICATION_LOUDNESS_PROMPT,
-                    "reason_memory_ids": [],
-                    "due_at": resolved_now.isoformat(timespec="seconds"),
-                    "risk_gate": "none",
-                    "planner": {"source": "system", "system_item": NOTIFICATION_LOUDNESS_SYSTEM_ITEM},
-                    "policy_result": "allowed",
-                    "policy_reason": "system_notification_loudness_prompt",
-                    "route": dict(route),
-                    "system_item": NOTIFICATION_LOUDNESS_SYSTEM_ITEM,
-                    "route_key": str(route_key),
-                    "status_history": [{"at": utc_now(), "status": "queued", "reason": "created"}],
-                },
+            if not _private_route(route):
+                continue
+            if _has_queued_notification_loudness_item(account_store, account_id, route_key):
+                continue
+            _mark_route_state_prompted(route_state, resolved_now)
+            queued_ids.append(
+                account_store.append_proactive_outbox_item(
+                    account_id,
+                    {
+                        "status": "queued",
+                        "category": "system",
+                        "intent": NOTIFICATION_LOUDNESS_INTENT,
+                        "message_text": NOTIFICATION_LOUDNESS_PROMPT,
+                        "reason_memory_ids": [],
+                        "due_at": resolved_now.isoformat(timespec="seconds"),
+                        "risk_gate": "none",
+                        "planner": {"source": "system", "system_item": NOTIFICATION_LOUDNESS_SYSTEM_ITEM},
+                        "policy_result": "allowed",
+                        "policy_reason": "system_notification_loudness_prompt",
+                        "route": dict(route),
+                        "system_item": NOTIFICATION_LOUDNESS_SYSTEM_ITEM,
+                        "route_key": str(route_key),
+                        "status_history": [{"at": utc_now(), "status": "queued", "reason": "created"}],
+                    },
+                )
             )
-        )
     if queued_ids or state_changed:
         account_store.write_agent_state(account_id, state)
     return tuple(queued_ids)
