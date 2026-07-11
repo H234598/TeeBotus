@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.90 - 2026-07-12
+
+- Repair inconsistent terminal notification-loudness stop metadata.
+
 ## 1.9.89 - 2026-07-12
 
 - Repair malformed activation flags on terminal notification-loudness states.

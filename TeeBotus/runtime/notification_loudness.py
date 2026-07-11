@@ -441,7 +441,13 @@ def _notification_loudness_outbox_status(item: Mapping[str, Any]) -> str | None:
 
 
 def _mark_notification_loudness_checks_stopped(route_state: dict[str, Any], reason: str) -> bool:
-    if route_state.get("checks_active") is False and route_state.get("checks_stop_reason"):
+    stopped_at = route_state.get("checks_stopped_at")
+    if (
+        route_state.get("checks_active") is False
+        and route_state.get("checks_stop_reason") == reason
+        and isinstance(stopped_at, str)
+        and _parse_datetime(stopped_at) is not None
+    ):
         return False
     route_state["checks_active"] = False
     route_state["checks_stopped_at"] = utc_now()
