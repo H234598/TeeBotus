@@ -124,6 +124,8 @@ def test_parse_reminder_rejects_invalid_clock_without_raising() -> None:
         "Erinnere mich morgen um 25 an den Termin",
         "Erinnere mich am Montag um 25 an den Termin",
         "Erinnere mich um 9:61 an den Termin",
+        "Erinnere mich am 2026-06-16T25:00 an den Termin",
+        "Erinnere mich am 16.06.2026 25:00 an den Termin",
     ):
         intent = parse_reminder_intent(text, now=fixed_now())
 

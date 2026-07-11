@@ -48,6 +48,11 @@ EXPLICIT_TIME_CANDIDATE_RE = re.compile(
     r"\b(?:um|gegen)\s+(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?:uhr)?",
     re.IGNORECASE,
 )
+DATE_TIME_CANDIDATE_RE = re.compile(
+    r"\b(?:20\d{2}-\d{1,2}-\d{1,2}|\d{1,2}\.\d{1,2}(?:\.\d{2,4})?)"
+    r"\s*(?:T|\s+)\s*(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?",
+    re.IGNORECASE,
+)
 TIME_RE = re.compile(
     rf"\b(?:um|gegen)\s+(?P<hour>{_CLOCK_HOUR})(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?\b",
     re.IGNORECASE,
@@ -438,12 +443,16 @@ def _apply_explicit_time(value: datetime, text: str) -> datetime:
 
 
 def _has_invalid_explicit_time(text: str) -> bool:
-    match = EXPLICIT_TIME_CANDIDATE_RE.search(str(text or ""))
-    if not match:
-        return False
-    hour = int(match.group("hour"))
-    minute = int(match.group("minute") or 0)
-    return hour > 23 or minute > 59
+    raw = str(text or "")
+    for pattern in (EXPLICIT_TIME_CANDIDATE_RE, DATE_TIME_CANDIDATE_RE):
+        match = pattern.search(raw)
+        if match is None:
+            continue
+        hour = int(match.group("hour"))
+        minute = int(match.group("minute") or 0)
+        if hour > 23 or minute > 59:
+            return True
+    return False
 
 
 def _normalize_year(value: str | None, current_year: int) -> int:
