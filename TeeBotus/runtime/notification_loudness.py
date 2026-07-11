@@ -503,6 +503,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             "laut",
             "loud",
             *NOTIFICATION_LOUDNESS_MUTE_TERMS,
+            *NOTIFICATION_LOUDNESS_OFF_TERMS,
         )
     )
     polarity_normalized = _normalize_text_for_polarity(text)
@@ -1165,18 +1166,7 @@ def _notification_loudness_has_question_tail(normalized: str) -> bool:
 
 
 def _notification_loudness_has_unscoped_subject_status(normalized: str) -> bool:
-    subject_starts = (
-        "ich ",
-        "i ",
-        "das ",
-        "der ",
-        "die ",
-        "the ",
-        "mein ",
-        "meine ",
-        "my ",
-    )
-    if not normalized.startswith(subject_starts):
+    if normalized.startswith(("bin ", "ist ", "sind ", "am ", "is ", "are ")):
         return False
     return any(
         _contains_normalized_phrase(normalized, copula)

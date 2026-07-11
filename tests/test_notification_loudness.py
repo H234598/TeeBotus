@@ -1233,6 +1233,8 @@ def test_loudness_free_text_ignores_unrelated_loudness_subjects() -> None:
     assert _notification_loudness_decision("Das Radio ist laut", pending=True) is None
     assert _notification_loudness_decision("I am not loud", pending=True) is None
     assert _notification_loudness_decision("The phone is muted", pending=True) is None
+    assert _notification_loudness_decision("Phone is muted", pending=True) is None
+    assert _notification_loudness_decision("My phone is off", pending=True) is None
     assert _notification_loudness_decision("Die Nachrichten sind laut", pending=True) == "confirmed"
 
 

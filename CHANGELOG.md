@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.131 - 2026-07-12
+
+- Ignore unscoped loudness and off-state subject statements.
+
 ## 1.9.130 - 2026-07-12
 
 - Ignore unrelated loudness statements without notification context.
