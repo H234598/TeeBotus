@@ -36,6 +36,12 @@ PROACTIVE_STATUS_TRANSITIONS = {
     "queued": frozenset({"dispatching", "sent", "skipped", "failed", "cancelled", "expired"}),
     "dispatching": frozenset({"sent", "failed", "cancelled"}),
 }
+PROACTIVE_STATUS_HISTORY_TRANSITIONS = {
+    "queued": frozenset({"queued", "dispatching", "sent", "skipped", "failed", "cancelled", "expired"}),
+    "review_pending": frozenset({"queued", "cancelled"}),
+    "dispatching": frozenset({"queued", "sent", "failed", "cancelled"}),
+    "sent": frozenset({"queued"}),
+}
 PROACTIVE_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_AGENT_INSTANCES"
 PROACTIVE_INSTANCE_FLAG_PREFIX = "TEEBOTUS_PROACTIVE_AGENT_"
 PROACTIVE_RISK_BLOCK_CATEGORIES = frozenset({"analysis", "reflection", "test", "image"})
@@ -1678,6 +1684,11 @@ def _proactive_outbox_status_history_errors(item: Mapping[str, Any], item_label:
         if entry_status not in PROACTIVE_OUTBOX_STATUSES:
             errors.append(f"outbox item {item_label} status_history[{index}] has unsupported status: {entry_status}")
         elif entry_status:
+            if last_status and entry_status not in PROACTIVE_STATUS_HISTORY_TRANSITIONS.get(last_status, ()):
+                errors.append(
+                    f"outbox item {item_label} status_history[{index}] transition is not allowed: "
+                    f"{last_status} -> {entry_status}"
+                )
             last_status = entry_status
         at = str(entry.get("at") or "").strip()
         if not at:

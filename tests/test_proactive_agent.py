@@ -1029,6 +1029,36 @@ def test_proactive_agent_health_reports_invalid_status_history(tmp_path) -> None
     assert "last status sent does not match current status queued" in joined
 
 
+def test_proactive_agent_health_reports_terminal_status_reactivation_history(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="history_reactivation",
+        message_text="Historie",
+        reason_memory_ids=("mem_history",),
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    rows = account_store.read_proactive_outbox(account_id)
+    rows[0]["status"] = "queued"
+    rows[0]["status_history"] = [
+        {"at": "2026-06-15T12:00:00+00:00", "status": "queued", "reason": "created"},
+        {"at": "2026-06-15T12:01:00+00:00", "status": "cancelled", "reason": "cancelled"},
+        {"at": "2026-06-15T12:02:00+00:00", "status": "queued", "reason": "reactivated"},
+    ]
+    account_store.write_proactive_outbox(account_id, rows)
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert health.ok is False
+    assert "transition is not allowed: cancelled -> queued" in "\n".join(health.errors)
+
+
 def test_proactive_agent_health_accepts_string_adapter_slot_in_queued_route(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
