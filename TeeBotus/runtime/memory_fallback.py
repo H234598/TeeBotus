@@ -170,7 +170,7 @@ class WarningFallbackAccountMemoryBackend:
             names = tuple(getattr(self.primary, "read_collection_names")(account_id))
             self._repair_cleared_fallback_account(account_id)
             self._warn_if_fallback_repair_pending("read_collection:*", account_id)
-            self._clear_recovered_if_clean("read_collection_names")
+            self._clear_recovered_if_clean("read_collection_names", account_id)
             return names
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
@@ -245,7 +245,7 @@ class WarningFallbackAccountMemoryBackend:
         self.last_index_read_error = ""
         self.last_collection_read_error = ""
         self.last_collection_skipped = 0
-        self._clear_recovered_if_clean("clear_account_unchecked")
+        self._clear_recovered_if_clean("clear_account_unchecked", account_id)
 
     def _read(
         self,
@@ -282,7 +282,7 @@ class WarningFallbackAccountMemoryBackend:
             else:
                 self._repair_unrecoverable_fallback_from_primary(operation, account_id, result)
             self._warn_if_fallback_repair_pending(operation, account_id)
-            self._clear_recovered_if_clean(operation)
+            self._clear_recovered_if_clean(operation, account_id)
             return result
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
@@ -362,7 +362,7 @@ class WarningFallbackAccountMemoryBackend:
             self._copy_diagnostics(self.primary)
             dirty_set.discard(resolved_dirty_key)
             self._mirror_write(operation, account_id, callback)
-            self._clear_recovered_if_clean(operation)
+            self._clear_recovered_if_clean(operation, account_id)
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
             self._warn(operation, account_id, exc)
@@ -511,7 +511,7 @@ class WarningFallbackAccountMemoryBackend:
                 account_id,
                 exc,
             )
-        self._clear_recovered_if_clean(operation)
+        self._clear_recovered_if_clean(operation, account_id)
         return result
 
     def _fallback_result_is_empty_for_failed_read(
@@ -700,7 +700,11 @@ class WarningFallbackAccountMemoryBackend:
             return self.last_collection_read_error or f"skipped={self.last_collection_skipped}"
         return "read diagnostic failed"
 
-    def _clear_recovered_if_clean(self, operation: str) -> None:
+    def _clear_recovered_if_clean(self, operation: str, account_id: str | None = None) -> None:
+        if account_id is not None:
+            warning_keys = [key for key in self._last_warning_at if key[2] == account_id]
+            for key in warning_keys:
+                self._last_warning_at.pop(key, None)
         if (
             self._dirty_entries
             or self._dirty_indexes

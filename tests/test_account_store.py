@@ -2103,6 +2103,8 @@ def test_account_memory_fallback_warning_rate_limit_is_scoped_per_account(caplog
     with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
         backend._warn("read_entries", account_a, RuntimeError("primary A unavailable"))
         backend._warn("read_entries", account_a, RuntimeError("primary A still unavailable"))
+        backend._clear_recovered_if_clean("read_entries", account_a)
+        backend._warn("read_entries", account_a, RuntimeError("primary A failed again"))
         backend._warn("read_entries", account_b, RuntimeError("primary B unavailable"))
 
     warnings = [
@@ -2110,7 +2112,7 @@ def test_account_memory_fallback_warning_rate_limit_is_scoped_per_account(caplog
         for record in caplog.records
         if "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in record.getMessage()
     ]
-    assert len(warnings) == 2
+    assert len(warnings) == 3
 
 
 def test_account_memory_fallback_syncs_dirty_entries_back_to_primary(caplog):
