@@ -1755,7 +1755,13 @@ def _account_metadata_broken_line(*, instance_name: str, kind: str, path: Path, 
 
 
 def _account_memory_fallback_warning(store: AccountStore, account_id: str) -> str:
-    backend = store.account_memory_backend
+    try:
+        backend = store.account_memory_backend
+    except (AccountStoreError, OSError) as exc:
+        LOGGER.exception("Failed to resolve account memory backend fallback status.")
+        detail = redact_status_text(exc)
+        suffix = f":{detail}" if detail else ""
+        return f" warning=memory_backend_unavailable{suffix}"
     if backend is None:
         return ""
     stale_entries = set(getattr(backend, "stale_fallback_entry_account_ids", ()) or ())

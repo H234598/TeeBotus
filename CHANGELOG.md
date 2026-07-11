@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.11 - 2026-07-11
+
+- Keep account-memory health diagnostics alive when fallback status resolution
+  fails.
+
 ## 1.9.10 - 2026-07-11
 
 - Keep `/status` diagnostic when account-memory backend resolution fails.

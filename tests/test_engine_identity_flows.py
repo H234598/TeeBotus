@@ -1276,6 +1276,17 @@ def test_memory_encryption_status_diagnoses_backend_resolution_failure():
     assert status_core.memory_encryption_status(None, account_store=FailingStore(), account_id="account") == "Datenbank-Backend nicht verfuegbar"
 
 
+def test_memory_fallback_status_diagnoses_backend_resolution_failure():
+    class FailingStore:
+        @property
+        def account_memory_backend(self):
+            raise AccountStoreError("postgres DSN missing")
+
+    warning = status_core._account_memory_fallback_warning(FailingStore(), "account")
+
+    assert warning == " warning=memory_backend_unavailable:postgres DSN missing"
+
+
 def test_engine_proactive_command_requires_instance_enablement(tmp_path, monkeypatch):
     monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", raising=False)
     monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_DEPRESSIONSBOT", raising=False)
