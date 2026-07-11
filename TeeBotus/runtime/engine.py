@@ -1142,6 +1142,7 @@ class TeeBotusEngine:
                 profile=target.name if target.kind == "profile" else "",
                 purpose=target.name if target.kind == "purpose" else "",
                 allow_remote_fallback=True,
+                allow_local_ollama_offload=False,
                 instance_name=event.instance,
             )
         except (KeyError, LLMAPIError, OpenAIAPIError, ValueError) as exc:

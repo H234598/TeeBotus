@@ -620,6 +620,34 @@ def test_runtime_text_client_uses_explicit_profile_over_direct_openai_default() 
     assert client.temperature == 0.4
 
 
+def test_runtime_text_client_direct_profile_can_bypass_instance_ollama_offload() -> None:
+    env = {
+        "TEEBOTUS_LLM_OFFLOAD_LOCAL_OLLAMA_TEEBOTUS_LOGGER": "1",
+        "TEEBOTUS_LLM_OFFLOAD_LOCAL_OLLAMA_PROFILE_TEEBOTUS_LOGGER": "gemini_flash_stateful",
+    }
+
+    direct = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="local_ollama",
+        instance_name="TeeBotus_Logger",
+        env=env,
+        allow_local_ollama_offload=False,
+    )
+    offloaded = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="local_ollama",
+        instance_name="TeeBotus_Logger",
+        env=env,
+    )
+
+    assert isinstance(direct, LiteLLMTextClient)
+    assert direct.model == "ollama_chat/llama3.2:3b"
+    assert isinstance(offloaded, LiteLLMGeminiStatefulClient)
+    assert offloaded.model == "gemini/gemini-3.5-flash"
+
+
 def test_runtime_text_client_profile_uses_runtime_base_url_override() -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(),

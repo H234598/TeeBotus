@@ -113,6 +113,7 @@ def test_route_to_llm_inline_prompt_is_admin_only_and_bypasses_normal_llm(tmp_pa
     factory_call = calls[0]["factory"]
     assert isinstance(factory_call, dict)
     assert factory_call["profile"] == "openai_premium"
+    assert factory_call["allow_local_ollama_offload"] is False
     assert factory_call["default_api_key"] == "runtime-openai-key"
     routed_instructions = factory_call["instructions"]
     assert isinstance(routed_instructions, BotInstructions)

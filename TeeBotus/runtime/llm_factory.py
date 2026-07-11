@@ -39,6 +39,7 @@ def build_runtime_text_llm_client(
     gemini_key_scope: str = "",
     env: Mapping[str, str] | None = None,
     instance_name: str = "",
+    allow_local_ollama_offload: bool = True,
     openai_client_factory: Callable[[str], object] = OpenAIClient,
 ) -> object | None:
     source = os.environ if env is None else env
@@ -47,13 +48,24 @@ def build_runtime_text_llm_client(
         return None
     if enabled_override is None and instructions.llm_enabled is False:
         return None
-    runtime_profile_name = _offloaded_profile_name(str(profile or "").strip(), env=source, instance_name=instance_name)
+    requested_profile_name = str(profile or "").strip()
+    runtime_profile_name = (
+        _offloaded_profile_name(requested_profile_name, env=source, instance_name=instance_name)
+        if allow_local_ollama_offload
+        else requested_profile_name
+    )
     route_purpose = str(purpose or "").strip()
     has_direct_provider = bool(str(provider or "").strip())
     has_direct_model = bool(str(model or "").strip())
     has_runtime_route_override = bool(runtime_profile_name or route_purpose or has_direct_provider or has_direct_model)
     profile_name = runtime_profile_name or (
-        "" if has_runtime_route_override else _offloaded_profile_name(str(instructions.llm_profile or "").strip(), env=source, instance_name=instance_name)
+        ""
+        if has_runtime_route_override
+        else (
+            _offloaded_profile_name(str(instructions.llm_profile or "").strip(), env=source, instance_name=instance_name)
+            if allow_local_ollama_offload
+            else str(instructions.llm_profile or "").strip()
+        )
     )
     remote_fallback_allowed = _parse_bool(allow_remote_fallback)
     if profile_name:
@@ -77,11 +89,9 @@ def build_runtime_text_llm_client(
             openai_client_factory=openai_client_factory,
         )
     if route_purpose and not (has_direct_provider or has_direct_model):
-        route = _offloaded_route(
-            select_llm_route(route_purpose, allow_remote_fallback=remote_fallback_allowed),
-            env=source,
-            instance_name=instance_name,
-        )
+        route = select_llm_route(route_purpose, allow_remote_fallback=remote_fallback_allowed)
+        if allow_local_ollama_offload:
+            route = _offloaded_route(route, env=source, instance_name=instance_name)
         return _build_route_client(
             route,
             instructions=instructions,
@@ -102,7 +112,7 @@ def build_runtime_text_llm_client(
         )
     resolved_provider = normalize_llm_provider(provider or instructions.llm_provider)
     resolved_model = str(model or instructions.llm_model or "").strip()
-    if _local_ollama_offload_enabled(source, instance_name) and _uses_local_ollama(resolved_provider, resolved_model):
+    if allow_local_ollama_offload and _local_ollama_offload_enabled(source, instance_name) and _uses_local_ollama(resolved_provider, resolved_model):
         return _build_profile_client(
             _local_ollama_offload_profile(source, instance_name),
             instructions=instructions,
