@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.28 - 2026-07-11
+
+- Show malformed runtime and identity counters as unknown instead of zero in
+  status diagnostics.
+
 ## 1.9.27 - 2026-07-11
 
 - Diagnose malformed MCP status configuration instead of raising during

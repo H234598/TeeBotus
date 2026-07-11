@@ -1300,9 +1300,9 @@ def _runtime_status_count_label(value: Any) -> str:
         if not name:
             continue
         try:
-            count = int(item or 0)
+            count = str(max(0, int(item or 0)))
         except (TypeError, ValueError):
-            count = 0
+            count = "unknown"
         parts.append(f"{name}:{count}")
     return ",".join(parts) if parts else "<none>"
 
