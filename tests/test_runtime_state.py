@@ -787,6 +787,20 @@ def test_runtime_state_store_does_not_use_legacy_unscoped_id_for_scoped_lookup(t
     assert state.get_previous_response_id("Bot", ACCOUNT_ID) == "resp-legacy"
 
 
+def test_runtime_state_store_rejects_incomplete_persisted_response_scope(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
+    account_store.write_llm_state(
+        ACCOUNT_ID,
+        {"previous_response_id": "resp-partial", "previous_response_provider": "openai"},
+    )
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID) is None
+    assert "previous response scope is incomplete" in state.llm_state_persistence_error
+
+
 def test_runtime_state_store_scopes_key_fingerprint_only_lookup(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"

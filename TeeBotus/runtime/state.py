@@ -607,6 +607,14 @@ class RuntimeStateStore(RuntimeState):
         provider = str(payload.get(PREVIOUS_RESPONSE_PROVIDER_FIELD) or "").strip().casefold()
         model = str(payload.get(PREVIOUS_RESPONSE_MODEL_FIELD) or "").strip()
         key_fingerprint = str(payload.get(PREVIOUS_RESPONSE_KEY_FIELD) or "").strip().casefold()
+        scope_fields_present = any(
+            field_name in payload
+            for field_name in (PREVIOUS_RESPONSE_PROVIDER_FIELD, PREVIOUS_RESPONSE_MODEL_FIELD, PREVIOUS_RESPONSE_KEY_FIELD)
+        )
+        if value and scope_fields_present and (not provider or not model):
+            error = "LLM state previous response scope is incomplete"
+            self._set_llm_state_persistence_error(error, account_id=account_id)
+            return None, None, error
         scope = (provider, model, key_fingerprint) if provider and model else None
         return value or None, scope, persistence_error
 
