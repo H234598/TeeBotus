@@ -831,6 +831,7 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     )
     account_store.append_proactive_outbox_item(account_id, {"status": "queued", "category": "reminder", "message_text": "Ping"})
     account_store.append_proactive_outbox_item(account_id, {"status": "review_pending", "category": "reminder", "message_text": "Review"})
+    account_store.append_proactive_outbox_item(account_id, {"status": "dispatching", "category": "reminder", "message_text": "In flight"})
     engine = TeeBotusEngine(
         account_store=account_store,
         instructions=instructions,
@@ -852,6 +853,7 @@ def test_engine_status_uses_core_status_before_configured_commands(tmp_path, mon
     assert "- Agent enabled: ja" in actions[0].text
     assert "- Outbox queued: 1" in actions[0].text
     assert "- Review pending: 1" in actions[0].text
+    assert "- Outbox dispatching: 1" in actions[0].text
     assert "- Scheduler enabled: ja" in actions[0].text
     assert "- Model planner: tool" in actions[0].text
     assert "[Aktive LLMs]" in actions[0].text

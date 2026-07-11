@@ -1368,6 +1368,7 @@ def _proactive_agent_status_lines(
             "- Agent enabled: unbekannt",
             "- Outbox queued: unbekannt",
             "- Review pending: unbekannt",
+            "- Outbox dispatching: unbekannt",
             f"- Scheduler enabled: {'ja' if scheduler_enabled else 'nein'}",
             f"- Model planner: {planner}",
         ]
@@ -1381,6 +1382,7 @@ def _proactive_agent_status_lines(
             "- Agent enabled: Fehler beim Lesen",
             "- Outbox queued: Fehler beim Lesen",
             "- Review pending: Fehler beim Lesen",
+            "- Outbox dispatching: Fehler beim Lesen",
             f"- Scheduler enabled: {'ja' if scheduler_enabled else 'nein'}",
             f"- Model planner: {planner}",
         ]
@@ -1391,12 +1393,14 @@ def _proactive_agent_status_lines(
     paused = bool(proactive.get("paused"))
     queued = sum(1 for item in outbox if isinstance(item, dict) and str(item.get("status") or "queued").strip().casefold() == "queued")
     review_pending = sum(1 for item in outbox if isinstance(item, dict) and str(item.get("status") or "").strip().casefold() == "review_pending")
+    dispatching = sum(1 for item in outbox if isinstance(item, dict) and str(item.get("status") or "").strip().casefold() == "dispatching")
     return [
         "Proactive Agent",
         f"- Agent enabled: {'ja' if enabled else 'nein'}",
         f"- Agent paused: {'ja' if paused else 'nein'}",
         f"- Outbox queued: {queued}",
         f"- Review pending: {review_pending}",
+        f"- Outbox dispatching: {dispatching}",
         f"- Scheduler enabled: {'ja' if scheduler_enabled else 'nein'}",
         f"- Model planner: {planner}",
     ]
