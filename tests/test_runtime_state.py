@@ -517,6 +517,16 @@ def test_runtime_state_store_refuses_security_event_symlink_target(tmp_path):
     assert json.loads(security_path.read_text(encoding="utf-8"))["event"] == "recovered"
 
 
+def test_runtime_state_store_does_not_cache_unserializable_security_event(tmp_path):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    with pytest.raises(TypeError):
+        state.append_security_event({"event": object()})
+
+    assert state.security_events == []
+    assert state.security_events_persistence_error
+
+
 def test_runtime_state_store_refuses_runtime_lock_symlink(tmp_path):
     data_dir = tmp_path / "Bot" / "data"
     runtime_dir = data_dir / "runtime"
