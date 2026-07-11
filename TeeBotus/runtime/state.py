@@ -567,7 +567,13 @@ class RuntimeStateStore(RuntimeState):
                 raise AccountStoreError(f"refusing unsafe account state directory: {account_dir}")
             for filename in (LLM_STATE_FILENAME, OPENAI_STATE_FILENAME):
                 state_path = account_dir / filename
-                if state_path.is_symlink():
+                try:
+                    state_stat = os.stat(state_path, follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+                except OSError as exc:
+                    raise AccountStoreError(f"could not inspect account state file: {state_path}") from exc
+                if stat.S_ISLNK(state_stat.st_mode) or state_stat.st_nlink > 1:
                     raise AccountStoreError(f"refusing unsafe account state file: {state_path}")
             return account_memory_lock_for_root(self.accounts_root, account_id)
         except (AccountStoreError, OSError, RuntimeError, TypeError, ValueError) as exc:
