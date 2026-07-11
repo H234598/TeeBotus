@@ -29,6 +29,7 @@ from TeeBotus.runtime.accounts import (
     validate_sha512_token,
 )
 from TeeBotus.runtime.maintenance import (
+    _has_symlink_parent,
     _open_append_text_no_follow,
     maintain_runtime_directory,
     rotate_runtime_text_file_if_needed,
@@ -239,6 +240,8 @@ class RuntimeStateStore(RuntimeState):
     @contextmanager
     def _runtime_file_lock(self, lock_filename: str) -> Iterator[None]:
         lock_path = self.runtime_dir / lock_filename
+        if _has_symlink_parent(lock_path) or lock_path.is_symlink():
+            raise AccountStoreError(f"refusing unsafe runtime lock path: {lock_path}")
         with _RUNTIME_FILE_THREAD_LOCK:
             held_paths = getattr(_RUNTIME_FILE_LOCK_STATE, "paths", None)
             if held_paths is None:
@@ -249,9 +252,14 @@ class RuntimeStateStore(RuntimeState):
                 yield
                 return
             lock_path.parent.mkdir(parents=True, exist_ok=True)
-            with lock_path.open("a+b") as handle:
+            flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+            try:
+                file_descriptor = os.open(lock_path, flags, 0o600)
+            except OSError as exc:
+                raise AccountStoreError(f"could not open runtime lock path: {lock_path}") from exc
+            with os.fdopen(file_descriptor, "a+b") as handle:
                 try:
-                    os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
+                    os.fchmod(handle.fileno(), stat.S_IRUSR | stat.S_IWUSR)
                 except OSError:
                     pass
                 if fcntl is not None:

@@ -247,6 +247,20 @@ def test_runtime_state_store_refuses_security_event_symlink_target(tmp_path):
     assert not outside.exists()
 
 
+def test_runtime_state_store_refuses_runtime_lock_symlink(tmp_path):
+    data_dir = tmp_path / "Bot" / "data"
+    runtime_dir = data_dir / "runtime"
+    runtime_dir.mkdir(parents=True)
+    outside = tmp_path / "outside-runtime-lock"
+    lock_path = runtime_dir / ".Link_Notifications.json.lock"
+    lock_path.symlink_to(outside)
+
+    with pytest.raises(AccountStoreError, match="unsafe runtime lock path"):
+        RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    assert not outside.exists()
+
+
 def test_runtime_state_store_refuses_to_autocreate_llm_state_secret_for_existing_sqlite_memory(tmp_path, monkeypatch):
     data_dir = tmp_path / "Bot" / "data"
     accounts_root = data_dir / "accounts"
