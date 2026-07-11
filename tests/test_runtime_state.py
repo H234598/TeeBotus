@@ -558,6 +558,26 @@ def test_runtime_state_store_reports_security_lock_error(tmp_path):
     assert not outside.exists()
 
 
+def test_runtime_state_store_reports_link_lock_error_after_initialization(tmp_path):
+    data_dir = tmp_path / "Bot" / "data"
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    outside = tmp_path / "outside-link-lock"
+    lock_path = data_dir / "runtime" / ".Link_Notifications.json.lock"
+    lock_path.unlink()
+    lock_path.symlink_to(outside)
+
+    with pytest.raises(AccountStoreError, match="unsafe runtime lock path"):
+        state.record_link_notification(
+            instance_name="Bot",
+            account_id="a" * 128,
+            new_identity_key="signal:uuid:new",
+            old_identity_key="telegram:user:1",
+        )
+
+    assert "unsafe runtime lock path" in state.link_notifications_persistence_error
+    assert not outside.exists()
+
+
 def test_runtime_state_store_refuses_runtime_lock_symlink(tmp_path):
     data_dir = tmp_path / "Bot" / "data"
     runtime_dir = data_dir / "runtime"

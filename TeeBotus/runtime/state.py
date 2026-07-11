@@ -444,39 +444,51 @@ class RuntimeStateStore(RuntimeState):
                 self.pending_previous_response_resets.pop(key, None)
 
     def record_link_notification(self, *, instance_name: str, account_id: str, new_identity_key: str, old_identity_key: str) -> None:
-        with self._link_notifications_lock():
-            self._refresh_persisted_link_notifications()
-            super().record_link_notification(
-                instance_name=instance_name,
-                account_id=account_id,
-                new_identity_key=new_identity_key,
-                old_identity_key=old_identity_key,
-            )
-            self._save_link_notifications()
+        try:
+            with self._link_notifications_lock():
+                self._refresh_persisted_link_notifications()
+                super().record_link_notification(
+                    instance_name=instance_name,
+                    account_id=account_id,
+                    new_identity_key=new_identity_key,
+                    old_identity_key=old_identity_key,
+                )
+                self._save_link_notifications()
+        except (AccountStoreError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            self.link_notifications_persistence_error = str(exc)
+            raise
 
     def pop_link_notification(self, *, instance_name: str, account_id: str, old_identity_key: str = "") -> dict[str, str] | None:
-        with self._link_notifications_lock():
-            self._refresh_persisted_link_notifications()
-            notification = super().pop_link_notification(
-                instance_name=instance_name,
-                account_id=account_id,
-                old_identity_key=old_identity_key,
-            )
-            if notification is not None:
-                self._save_link_notifications()
-            return notification
+        try:
+            with self._link_notifications_lock():
+                self._refresh_persisted_link_notifications()
+                notification = super().pop_link_notification(
+                    instance_name=instance_name,
+                    account_id=account_id,
+                    old_identity_key=old_identity_key,
+                )
+                if notification is not None:
+                    self._save_link_notifications()
+                return notification
+        except (AccountStoreError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            self.link_notifications_persistence_error = str(exc)
+            raise
 
     def clear_link_notifications_for_new_identity(self, *, instance_name: str, account_id: str, new_identity_key: str) -> int:
-        with self._link_notifications_lock():
-            self._refresh_persisted_link_notifications()
-            removed = super().clear_link_notifications_for_new_identity(
-                instance_name=instance_name,
-                account_id=account_id,
-                new_identity_key=new_identity_key,
-            )
-            if removed:
-                self._save_link_notifications()
-            return removed
+        try:
+            with self._link_notifications_lock():
+                self._refresh_persisted_link_notifications()
+                removed = super().clear_link_notifications_for_new_identity(
+                    instance_name=instance_name,
+                    account_id=account_id,
+                    new_identity_key=new_identity_key,
+                )
+                if removed:
+                    self._save_link_notifications()
+                return removed
+        except (AccountStoreError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            self.link_notifications_persistence_error = str(exc)
+            raise
 
     def _purge_expired_link_notifications(self) -> None:
         before = len(self.link_notifications)
@@ -485,9 +497,13 @@ class RuntimeStateStore(RuntimeState):
             self._save_link_notifications()
 
     def list_link_notifications(self, *, instance_name: str, account_id: str) -> list[dict[str, str]]:
-        with self._link_notifications_lock():
-            self._refresh_persisted_link_notifications()
-            return super().list_link_notifications(instance_name=instance_name, account_id=account_id)
+        try:
+            with self._link_notifications_lock():
+                self._refresh_persisted_link_notifications()
+                return super().list_link_notifications(instance_name=instance_name, account_id=account_id)
+        except (AccountStoreError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            self.link_notifications_persistence_error = str(exc)
+            raise
 
     def append_security_event(self, event: dict[str, Any]) -> None:
         try:
