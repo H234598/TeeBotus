@@ -2300,6 +2300,25 @@ def test_account_memory_fallback_preserves_diagnostic_secondary_read_failure(cap
     assert backend.last_fallback_sync_error == "read_entries: fallback read failed: secondary unavailable"
 
 
+def test_account_memory_fallback_marks_both_collection_name_reads_as_unsafe(caplog) -> None:
+    class Backend:
+        def read_collection_names(self, _account_id: str) -> tuple[str, ...]:
+            raise OSError("secondary unavailable")
+
+    account_id = "a" * 128
+    backend = WarningFallbackAccountMemoryBackend(Backend(), Backend(), label="Demo:sqlite")
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        with pytest.raises(AccountStoreError, match="fallback read failed"):
+            backend.read_collection_names(account_id)
+
+    wildcard_key = (account_id, "*")
+    assert wildcard_key in backend._stale_fallback_collections
+    assert wildcard_key in backend._fallback_sync_failed_collections
+    assert backend.last_fallback_sync_error == "read_collection_names: fallback read failed: secondary unavailable"
+    assert "FAILOVER IS BLOCKED" in caplog.text
+
+
 def test_account_memory_fallback_marks_both_write_failures_as_unsafe(caplog) -> None:
     class Backend:
         def __init__(self, *, fail_write: bool = False) -> None:

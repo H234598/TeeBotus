@@ -192,7 +192,7 @@ class WarningFallbackAccountMemoryBackend:
                 raise AccountStoreError(self.last_fallback_sync_error) from exc
             try:
                 return tuple(getattr(self.fallback, "read_collection_names")(account_id))
-            except Exception:
+            except Exception as fallback_exc:
                 if self._backend_database_missing(self.fallback):
                     if self._backend_database_missing(self.primary):
                         self.last_fallback_sync_error = (
@@ -203,7 +203,18 @@ class WarningFallbackAccountMemoryBackend:
                             "read_collection_names: fallback database is missing; no secondary data available"
                         )
                     return ()
-                raise
+                wildcard_key = (account_id, "*")
+                self._stale_fallback_collections.add(wildcard_key)
+                self._fallback_sync_failed_collections.add(wildcard_key)
+                self.last_fallback_sync_error = f"read_collection_names: fallback read failed: {fallback_exc}"
+                LOGGER.critical(
+                    "ACCOUNT MEMORY FALLBACK COLLECTION-NAME READ FAILED AFTER PRIMARY FAILURE. "
+                    "FAILOVER IS BLOCKED UNTIL THE SECONDARY RECOVERS. label=%s account_id=%s error=%s.",
+                    self.label,
+                    account_id,
+                    fallback_exc,
+                )
+                raise AccountStoreError(self.last_fallback_sync_error) from fallback_exc
 
     def clear_account_unchecked(self, account_id: str) -> None:
         primary_clear = getattr(self.primary, "clear_account_unchecked", None)
