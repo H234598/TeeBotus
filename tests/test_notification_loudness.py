@@ -1177,6 +1177,17 @@ def test_loudness_free_text_accepts_completion_synonyms() -> None:
     assert _notification_loudness_decision("I am not done", pending=True) == "declined"
 
 
+def test_loudness_free_text_respects_contracted_english_negations() -> None:
+    assert _notification_loudness_decision("I haven't done it", pending=True) == "declined"
+    assert _notification_loudness_decision("I haven't completed it", pending=True) == "declined"
+    assert _notification_loudness_decision("I didn't do it", pending=True) == "declined"
+    assert _notification_loudness_decision("No, I didn't", pending=True) == "declined"
+    assert _notification_loudness_decision("No, I haven't", pending=True) == "declined"
+    assert _notification_loudness_decision("No, not yet", pending=True) == "declined"
+    assert _notification_loudness_decision("Nein, ich habe es getan", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Nein, ich habe es nicht getan", pending=True) == "declined"
+
+
 def test_loudness_free_text_keeps_negation_precedence_without_pending_state() -> None:
     assert _notification_loudness_decision("Benachrichtigungen sind deaktiviert", pending=False) == "declined"
     assert _notification_loudness_decision("Benachrichtigungen sind nicht aktiviert", pending=False) == "declined"

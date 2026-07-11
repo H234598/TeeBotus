@@ -24,6 +24,21 @@ NOTIFICATION_LOUDNESS_OFF_TERMS = frozenset({"ausgeschaltet", "deaktiviert", "ab
 NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset(
     {"nicht", "nie", "kein", "keine", "nichts", "nix", "weder", "ohne", "not", "never", "nothing", "neither", "without"}
 )
+NOTIFICATION_LOUDNESS_NEGATION_PHRASES = (
+    "don t",
+    "doesn t",
+    "didn t",
+    "haven t",
+    "hasn t",
+    "isn t",
+    "aren t",
+    "wasn t",
+    "weren t",
+    "couldn t",
+    "wouldn t",
+    "shouldn t",
+    "can t",
+)
 NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES = frozenset({"aber", "jedoch", "sondern", "und", "oder", "but", "however", "or", "and"})
 NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN = "<clause>"
 NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
@@ -401,6 +416,14 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "nicht gemacht",
         "nicht eingeschaltet",
         "nicht aktiviert",
+        "did not",
+        "didn t",
+        "haven t",
+        "have not done",
+        "haven t done",
+        "have not completed",
+        "haven t completed",
+        "not yet",
         "keine benachrichtigung",
         "keine benachrichtigungen",
         "benachrichtigungen aus",
@@ -436,6 +459,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and words & NOTIFICATION_LOUDNESS_ACTION_WORDS
         and not (has_negated_mute or has_negated_off)
     ):
+        if any(_contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_COMPLETION_PHRASES) and not has_negated_completion:
+            return "confirmed"
         return "declined"
     if pending and any(_contains_normalized_phrase(normalized, needle) for needle in NOTIFICATION_LOUDNESS_COMPLETION_PHRASES):
         return "confirmed"
@@ -901,7 +926,7 @@ def _notification_loudness_term_polarity(
             ):
                 preceding_start = boundary_index + 1
         preceding = tokens[preceding_start:index]
-        negation_count = sum(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in preceding)
+        negation_count = _notification_loudness_negation_count(preceding)
         if negation_count % 2:
             has_negated = True
         else:
@@ -938,9 +963,18 @@ def _notification_loudness_has_negated_phrase(normalized: str, phrases: tuple[st
                 ):
                     preceding_start = boundary_index + 1
             preceding = tokens[preceding_start:index]
-            if sum(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in preceding) % 2:
+            if _notification_loudness_negation_count(preceding) % 2:
                 return True
     return False
+
+
+def _notification_loudness_negation_count(tokens: list[str]) -> int:
+    count = sum(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in tokens)
+    for phrase in NOTIFICATION_LOUDNESS_NEGATION_PHRASES:
+        phrase_tokens = phrase.split()
+        width = len(phrase_tokens)
+        count += sum(tokens[index : index + width] == phrase_tokens for index in range(len(tokens) - width + 1))
+    return count
 
 
 def _normalize_channel(channel: Any) -> str:

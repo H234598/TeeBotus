@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.108 - 2026-07-12
+
+- Handle contracted English negations in loudness replies.
+
 ## 1.9.107 - 2026-07-12
 
 - Recognize completion synonyms in loudness replies.
