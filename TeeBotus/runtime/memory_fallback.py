@@ -16,10 +16,9 @@ class WarningFallbackAccountMemoryBackend:
         self.fallback = fallback
         self.label = label
         self._fallback_active = False
-        # ``time.monotonic()`` can be below the warning interval on a fresh
-        # CI/container boot. Start far enough in the past that the first
-        # primary-backend failure is never silently suppressed.
-        self._last_warning_at = -FALLBACK_WARNING_INTERVAL_SECONDS
+        # Keep warning timestamps per account and operation so one failing
+        # account cannot suppress the first warning for another account.
+        self._last_warning_at: dict[tuple[str, str, str], float] = {}
         self._dirty_entries: set[str] = set()
         self._dirty_indexes: set[str] = set()
         self._dirty_collections: set[tuple[str, str]] = set()
@@ -168,7 +167,7 @@ class WarningFallbackAccountMemoryBackend:
             return names
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
-            self._warn("read_collection_names", exc)
+            self._warn("read_collection_names", account_id, exc)
             if self._account_has_unsafe_fallback(account_id):
                 self.last_fallback_sync_error = (
                     "read_collection_names: read blocked because primary is unavailable and fallback may be stale or unrecoverable"
@@ -267,7 +266,7 @@ class WarningFallbackAccountMemoryBackend:
             return result
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
-            self._warn(operation, exc)
+            self._warn(operation, account_id, exc)
             if self._operation_has_unsafe_fallback(operation, account_id):
                 self.last_fallback_sync_error = (
                     f"{operation}: read blocked because primary is unavailable and fallback may be stale or unrecoverable"
@@ -346,7 +345,7 @@ class WarningFallbackAccountMemoryBackend:
             self._clear_recovered_if_clean(operation)
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
-            self._warn(operation, exc)
+            self._warn(operation, account_id, exc)
             if self._account_has_unsafe_fallback(account_id):
                 self.last_fallback_sync_error = (
                     f"{operation}: write blocked because primary is unavailable and fallback may be stale or unrecoverable"
@@ -420,7 +419,7 @@ class WarningFallbackAccountMemoryBackend:
         partial_result: bool = False,
     ) -> Any:
         self._fallback_active = True
-        self._warn(operation, RuntimeError(self._diagnostic_error_text(operation)))
+        self._warn(operation, account_id, RuntimeError(self._diagnostic_error_text(operation)))
         primary_entry_read_error = self.last_entry_read_error
         primary_entry_skipped = self.last_entry_skipped
         primary_index_read_error = self.last_index_read_error
@@ -603,10 +602,8 @@ class WarningFallbackAccountMemoryBackend:
     def _warn_if_fallback_repair_pending(self, operation: str, account_id: str) -> None:
         if not self._fallback_repair_pending(operation, account_id):
             return
-        now = time.monotonic()
-        if now - self._last_warning_at < FALLBACK_WARNING_INTERVAL_SECONDS:
+        if not self._warning_due("repair", operation, account_id):
             return
-        self._last_warning_at = now
         LOGGER.critical(
             "ACCOUNT MEMORY FALLBACK DATABASE STILL STALE. PRIMARY DATABASE IS AVAILABLE BUT SECONDARY REPAIR IS PENDING. "
             "label=%s operation=%s account_id=%s error=%s. "
@@ -806,11 +803,9 @@ class WarningFallbackAccountMemoryBackend:
             return (account_id, self._operation_collection(operation))
         return account_id
 
-    def _warn(self, operation: str, exc: Exception) -> None:
-        now = time.monotonic()
-        if now - self._last_warning_at < FALLBACK_WARNING_INTERVAL_SECONDS:
+    def _warn(self, operation: str, account_id: str, exc: Exception) -> None:
+        if not self._warning_due("primary", operation, account_id):
             return
-        self._last_warning_at = now
         LOGGER.critical(
             "ACCOUNT MEMORY PRIMARY DATABASE FAILED. USING FALLBACK DATABASE. label=%s operation=%s error=%s. "
             "Datenbank-Normalitaet ist NICHT hergestellt; diese Warnung wiederholt sich periodisch, bis der Primary-Backend wieder funktioniert.",
@@ -818,6 +813,15 @@ class WarningFallbackAccountMemoryBackend:
             operation,
             exc,
         )
+
+    def _warning_due(self, category: str, operation: str, account_id: str) -> bool:
+        now = time.monotonic()
+        key = (category, operation, account_id)
+        last_warning_at = self._last_warning_at.get(key, -FALLBACK_WARNING_INTERVAL_SECONDS)
+        if now - last_warning_at < FALLBACK_WARNING_INTERVAL_SECONDS:
+            return False
+        self._last_warning_at[key] = now
+        return True
 
     def _copy_diagnostics(self, backend: Any) -> None:
         self.last_entry_read_error = str(getattr(backend, "last_entry_read_error", "") or "")

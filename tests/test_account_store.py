@@ -2076,6 +2076,24 @@ def test_account_store_sqlite_backend_falls_back_to_secondary_with_warning(tmp_p
     assert "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in caplog.text
 
 
+def test_account_memory_fallback_warning_rate_limit_is_scoped_per_account(caplog) -> None:
+    backend = WarningFallbackAccountMemoryBackend(object(), object(), label="Demo:sqlite")
+    account_a = "a" * 128
+    account_b = "b" * 128
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        backend._warn("read_entries", account_a, RuntimeError("primary A unavailable"))
+        backend._warn("read_entries", account_a, RuntimeError("primary A still unavailable"))
+        backend._warn("read_entries", account_b, RuntimeError("primary B unavailable"))
+
+    warnings = [
+        record.getMessage()
+        for record in caplog.records
+        if "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in record.getMessage()
+    ]
+    assert len(warnings) == 2
+
+
 def test_account_memory_fallback_syncs_dirty_entries_back_to_primary(caplog):
     class Backend:
         def __init__(self, *, fail_write: bool = False) -> None:
