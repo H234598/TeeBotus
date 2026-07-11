@@ -325,6 +325,58 @@ def test_runtime_state_store_refreshes_persistent_llm_state_between_bridges(tmp_
     assert first.get_previous_response_id("Bot", ACCOUNT_ID, **scope) is None
 
 
+def test_runtime_state_store_keeps_persistence_error_local_to_parallel_reads(tmp_path, monkeypatch):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    account_a = "a" * 128
+    account_b = "b" * 128
+    state.previous_response_ids[("Bot", account_a)] = "cached-a"
+    a_started = threading.Event()
+    b_read = threading.Event()
+    release_a = threading.Event()
+    results: dict[str, str | None] = {}
+    errors: list[BaseException] = []
+
+    def fake_read(account_id: str) -> tuple[str | None, tuple[str, str, str] | None, str]:
+        if account_id == account_a:
+            state._set_llm_state_persistence_error("account A unavailable")
+            a_started.set()
+            if not release_a.wait(timeout=2):
+                raise RuntimeError("account A read was not released")
+            return None, None, "account A unavailable"
+        state._set_llm_state_persistence_error("")
+        b_read.set()
+        return "persisted-b", None, ""
+
+    monkeypatch.setattr(state, "_read_llm_previous_response", fake_read)
+
+    def read_a() -> None:
+        try:
+            results["a"] = state.get_previous_response_id("Bot", account_a)
+        except BaseException as exc:  # pragma: no cover - assertion below reports the error.
+            errors.append(exc)
+
+    def read_b() -> None:
+        try:
+            results["b"] = state.get_previous_response_id("Bot", account_b)
+        except BaseException as exc:  # pragma: no cover - assertion below reports the error.
+            errors.append(exc)
+
+    thread_a = threading.Thread(target=read_a)
+    thread_b = threading.Thread(target=read_b)
+    thread_a.start()
+    assert a_started.wait(timeout=1)
+    thread_b.start()
+    assert b_read.wait(timeout=1)
+    release_a.set()
+    thread_a.join(timeout=2)
+    thread_b.join(timeout=2)
+
+    assert not thread_a.is_alive()
+    assert not thread_b.is_alive()
+    assert errors == []
+    assert results == {"a": "cached-a", "b": "persisted-b"}
+
+
 def test_runtime_state_store_migrates_previous_response_id_from_legacy_openai_state(tmp_path, monkeypatch):
     monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
     monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", raising=False)

@@ -331,8 +331,8 @@ class RuntimeStateStore(RuntimeState):
         model: str = "",
         key_fingerprint: str = "",
     ) -> str | None:
-        persisted, persisted_scope = self._read_llm_previous_response(account_id)
-        if not self.llm_state_persistence_error:
+        persisted, persisted_scope, persistence_error = self._read_llm_previous_response(account_id)
+        if not persistence_error:
             key = (instance_name, account_id)
             if persisted:
                 self.previous_response_ids[key] = persisted
@@ -456,17 +456,18 @@ class RuntimeStateStore(RuntimeState):
             except AccountStoreError as exc:
                 self._set_llm_state_persistence_error(str(exc))
 
-    def _read_llm_previous_response(self, account_id: str) -> tuple[str | None, tuple[str, str, str] | None]:
+    def _read_llm_previous_response(self, account_id: str) -> tuple[str | None, tuple[str, str, str] | None, str]:
         payload = self._read_llm_state(account_id)
+        persistence_error = self.llm_state_persistence_error
         value = str(payload.get("previous_response_id") or "").strip()
         provider = str(payload.get(PREVIOUS_RESPONSE_PROVIDER_FIELD) or "").strip().casefold()
         model = str(payload.get(PREVIOUS_RESPONSE_MODEL_FIELD) or "").strip()
         key_fingerprint = str(payload.get(PREVIOUS_RESPONSE_KEY_FIELD) or "").strip().casefold()
         scope = (provider, model, key_fingerprint) if provider and model else None
-        return value or None, scope
+        return value or None, scope, persistence_error
 
     def _read_llm_previous_response_id(self, account_id: str) -> str | None:
-        response_id, _scope = self._read_llm_previous_response(account_id)
+        response_id, _scope, _persistence_error = self._read_llm_previous_response(account_id)
         return response_id
 
     def _write_llm_previous_response_id(
