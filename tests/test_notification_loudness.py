@@ -1205,6 +1205,9 @@ def test_loudness_free_text_does_not_decide_questions_or_requests() -> None:
     assert _notification_loudness_decision("Ist laut gestellt", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ist auf laut", pending=False) == "confirmed"
     assert _notification_loudness_decision("Is muted", pending=True) == "declined"
+    assert _notification_loudness_decision("Nachrichten sind laut, oder", pending=True) is None
+    assert _notification_loudness_decision("Notifications are on, right", pending=False) is None
+    assert _notification_loudness_decision("Messages are muted, correct", pending=True) is None
 
 
 def test_loudness_free_text_does_not_decide_english_and_inverted_questions() -> None:

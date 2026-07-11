@@ -208,6 +208,16 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "weisst du ",
     "weißt du ",
 )
+NOTIFICATION_LOUDNESS_QUESTION_TAILS = (
+    "oder",
+    "oder nicht",
+    "stimmt",
+    "richtig",
+    "right",
+    "correct",
+    "isn t it",
+    "aren t they",
+)
 NOTIFICATION_LOUDNESS_STATUS_LEAD_TERMS = frozenset(
     {
         "laut",
@@ -505,6 +515,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if has_notification_context and _notification_loudness_has_habitual_marker(normalized):
         return None
     if has_notification_context and normalized.startswith(NOTIFICATION_LOUDNESS_NON_ASSERTIVE_STARTS):
+        return None
+    if has_notification_context and _notification_loudness_has_question_tail(normalized):
         return None
     if has_notification_context and _notification_loudness_is_non_declarative(text, normalized):
         return None
@@ -1123,6 +1135,13 @@ def _notification_loudness_has_habitual_marker(normalized: str) -> bool:
     return any(
         _contains_normalized_phrase(normalized, _normalize_text(phrase))
         for phrase in NOTIFICATION_LOUDNESS_HABITUAL_MARKERS
+    )
+
+
+def _notification_loudness_has_question_tail(normalized: str) -> bool:
+    return any(
+        normalized == _normalize_text(tail) or normalized.endswith(f" {_normalize_text(tail)}")
+        for tail in NOTIFICATION_LOUDNESS_QUESTION_TAILS
     )
 
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.127 - 2026-07-12
+
+- Ignore loudness tag questions without question punctuation.
+
 ## 1.9.126 - 2026-07-12
 
 - Normalize umlaut-bearing historical and habitual loudness markers.
