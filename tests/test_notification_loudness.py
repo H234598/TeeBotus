@@ -686,6 +686,39 @@ def test_inactive_pending_loudness_check_is_not_resurrected_by_incoming_message(
     assert route_state["checks_active"] is False
 
 
+def test_terminal_case_variant_route_wins_over_duplicate_pending_route(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    state = account_store.read_agent_state(account_id)
+    state["notification_loudness"] = {
+        "schema_version": 1,
+        "routes": {
+            "telegram:1:chat-1": {
+                "status": "pending",
+                "checks_active": True,
+                "route": {"channel": "telegram", "chat_id": "chat-1", "chat_type": "private", "adapter_slot": 1},
+                "identity_key": identity,
+            },
+            "TeLegram:1:chat-1": {
+                "status": "declined",
+                "checks_active": False,
+                "route": {"channel": "TeLegram", "chat_id": "chat-1", "chat_type": "Private", "adapter_slot": 1},
+                "identity_key": identity,
+            },
+        },
+    }
+    account_store.write_agent_state(account_id, state)
+    set_identity_last_seen(account_store, identity, datetime(2026, 6, 15, 15, tzinfo=timezone.utc))
+
+    assert maybe_notification_loudness_prompt_action(
+        event(identity), account_store, account_id, now=datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    ) is None
+    assert queue_due_notification_loudness_prompts(
+        account_store, account_id, now=datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    ) == ()
+
+
 def test_concurrent_loudness_scheduler_runs_queue_only_one_prompt(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

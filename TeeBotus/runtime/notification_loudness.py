@@ -116,12 +116,19 @@ def _queue_due_notification_loudness_prompts_unlocked(
     resolved_now = _resolve_loudness_now(now)
     queued_ids: list[str] = []
     state_changed = False
+    terminal_route_keys = {
+        _normalize_route_key(route_key)
+        for route_key, route_state in routes.items()
+        if isinstance(route_state, dict) and _normalized_route_status(route_state) in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES
+    }
     for route_key, route_state in list(routes.items()):
         if not isinstance(route_state, dict):
             continue
         status = str(route_state.get("status") or "unknown").strip().casefold()
         if status in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
             state_changed = _mark_notification_loudness_checks_stopped(route_state, status) or state_changed
+            continue
+        if _normalize_route_key(route_key) in terminal_route_keys:
             continue
         if status != NOTIFICATION_LOUDNESS_PENDING_STATUS:
             continue
@@ -473,13 +480,16 @@ def _refresh_route_state_from_account_routes(account_store: AccountStore, accoun
 
 def _find_route_state(routes: Mapping[str, Any], route_key: Any) -> dict[str, Any] | None:
     direct = routes.get(route_key) if isinstance(route_key, str) else None
-    if isinstance(direct, dict):
-        return direct
     normalized_key = _normalize_route_key(route_key)
+    fallback: dict[str, Any] | None = direct if isinstance(direct, dict) else None
     for candidate_key, candidate in routes.items():
-        if isinstance(candidate, dict) and _normalize_route_key(candidate_key) == normalized_key:
+        if not isinstance(candidate, dict) or _normalize_route_key(candidate_key) != normalized_key:
+            continue
+        if _normalized_route_status(candidate) in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
             return candidate
-    return None
+        if fallback is None:
+            fallback = candidate
+    return fallback
 
 
 def _normalized_route_status(route_state: Mapping[str, Any]) -> str:

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.67 - 2026-07-11
+
+- Let terminal notification-loudness states win over duplicate route-key variants.
+
 ## 1.9.66 - 2026-07-11
 
 - Prevent incoming messages from resurrecting inactive notification-loudness checks.
