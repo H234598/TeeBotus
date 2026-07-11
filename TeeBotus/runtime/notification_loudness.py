@@ -117,6 +117,8 @@ def _queue_due_notification_loudness_prompts_unlocked(
             continue
         if status != NOTIFICATION_LOUDNESS_PENDING_STATUS:
             continue
+        if not _normalize_bool(route_state.get("checks_active"), default=True):
+            continue
         state_changed = _refresh_route_state_from_account_routes(account_store, account_id, str(route_key), route_state) or state_changed
         route = route_state.get("route")
         if isinstance(route, Mapping):

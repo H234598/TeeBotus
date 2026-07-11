@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.63 - 2026-07-11
+
+- Stop notification-loudness queueing when checks are inactive.
+
 ## 1.9.62 - 2026-07-11
 
 - Fail closed on malformed notification-loudness state payloads.
