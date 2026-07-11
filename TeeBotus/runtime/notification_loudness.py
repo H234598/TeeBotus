@@ -939,6 +939,8 @@ def _outbox_route_is_consistent(item: Mapping[str, Any]) -> bool:
     route = item.get("route")
     if not isinstance(route, Mapping):
         return True
+    if "chat_type" in route and not _is_private_chat_type(route.get("chat_type")):
+        return False
     route_key = _canonical_outbox_route_key(_route_key_from_route(route))
     return not declared_key or not route_key or declared_key == route_key
 

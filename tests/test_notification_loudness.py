@@ -729,6 +729,22 @@ def test_inconsistent_loudness_outbox_route_fails_closed(tmp_path) -> None:
     assert notification_loudness_outbox_item_is_active(account_store, account_id, item) is False
 
 
+def test_group_loudness_outbox_route_fails_closed(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    state = account_store.read_agent_state(account_id)
+    state["notification_loudness"] = {"routes": {"telegram:1:chat-1": {"status": "pending"}}}
+    account_store.write_agent_state(account_id, state)
+
+    item = {
+        "route_key": "telegram:1:chat-1",
+        "route": {"channel": "telegram", "chat_id": "chat-1", "chat_type": "group", "adapter_slot": 1},
+    }
+
+    assert notification_loudness_outbox_item_is_active(account_store, account_id, item) is False
+
+
 def test_terminal_loudness_outbox_item_is_not_active(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

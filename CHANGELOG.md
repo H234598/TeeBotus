@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.125 - 2026-07-12
+
+- Reject non-private routes in notification-loudness outbox items.
+
 ## 1.9.124 - 2026-07-12
 
 - Restrict loudness route refresh to account-owned identities.
