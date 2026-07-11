@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.74 - 2026-07-11
+
+- Reject notification-loudness routes with invalid adapter slots.
+
 ## 1.9.73 - 2026-07-11
 
 - Skip adaptive contact timing until a notification-loudness prompt is actually due.

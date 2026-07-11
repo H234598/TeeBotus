@@ -428,6 +428,7 @@ def _private_route(route: Any) -> bool:
         and _is_private_chat_type(route.get("chat_type"))
         and bool(str(route.get("channel") or "").strip())
         and bool(str(route.get("chat_id") or "").strip())
+        and _route_slot(route.get("adapter_slot")) is not None
     )
 
 
