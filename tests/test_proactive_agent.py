@@ -549,6 +549,101 @@ def test_proactive_agent_health_accepts_valid_queued_item(tmp_path) -> None:
     assert health.errors == ()
 
 
+def test_proactive_agent_health_accepts_fresh_dispatching_claim(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="health_fresh_claim",
+        message_text="In Arbeit",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    assert claim_proactive_worker_job(
+        account_store,
+        account_id,
+        queued.reason.removeprefix("queued:"),
+        now=datetime(2026, 6, 15, 11, tzinfo=timezone.utc),
+    )
+
+    health = check_proactive_agent_account(
+        account_store,
+        account_id,
+        now=datetime(2026, 6, 15, 11, 29, tzinfo=timezone.utc),
+    )
+
+    assert health.ok is True
+    assert health.dispatching_count == 1
+    assert health.errors == ()
+
+
+def test_proactive_agent_health_reports_stale_dispatching_claim(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="health_stale_claim",
+        message_text="Hängt fest",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    assert claim_proactive_worker_job(
+        account_store,
+        account_id,
+        queued.reason.removeprefix("queued:"),
+        now=datetime(2026, 6, 15, 11, tzinfo=timezone.utc),
+    )
+
+    health = check_proactive_agent_account(
+        account_store,
+        account_id,
+        now=datetime(2026, 6, 15, 11, 30, 1, tzinfo=timezone.utc),
+    )
+
+    assert health.ok is False
+    assert health.dispatching_count == 1
+    assert "has stale claim" in "\n".join(health.errors)
+
+
+def test_proactive_agent_health_reports_dispatching_claim_without_timestamp(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="health_missing_claim",
+        message_text="Zeitstempel fehlt",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    assert claim_proactive_worker_job(account_store, account_id, item_id, now=datetime(2026, 6, 15, 11, tzinfo=timezone.utc))
+    rows = account_store.read_proactive_outbox(account_id)
+    rows[0].pop("dispatching_at", None)
+    rows[0].pop("updated_at", None)
+    rows[0].pop("status_history", None)
+    account_store.write_proactive_outbox(account_id, rows)
+
+    health = check_proactive_agent_account(account_store, account_id, now=datetime(2026, 6, 15, 11, 1, tzinfo=timezone.utc))
+
+    assert health.ok is False
+    assert "missing claim timestamp" in "\n".join(health.errors)
+
+
 def test_proactive_agent_health_reports_queued_item_without_provenance(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

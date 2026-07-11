@@ -1482,11 +1482,17 @@ def _proactive_agent_state_shape_errors(state: Mapping[str, Any]) -> list[str]:
     return errors
 
 
-def check_proactive_agent_account(account_store: AccountStore, account_id: str) -> ProactiveAgentHealth:
+def check_proactive_agent_account(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    now: datetime | None = None,
+) -> ProactiveAgentHealth:
     errors: list[str] = []
     queued_count = 0
     review_pending_count = 0
     dispatching_count = 0
+    resolved_now = now or datetime.now(timezone.utc)
     try:
         state = account_store.read_agent_state(account_id)
     except (AccountStoreError, OSError, ValueError) as exc:
@@ -1524,6 +1530,11 @@ def check_proactive_agent_account(account_store: AccountStore, account_id: str) 
             review_pending_count += 1
         elif status == "dispatching":
             dispatching_count += 1
+            claimed_at = _proactive_dispatch_claimed_at(item)
+            if claimed_at is None:
+                errors.append(f"dispatching outbox item {item_id or index} missing claim timestamp")
+            elif resolved_now - claimed_at >= timedelta(minutes=PROACTIVE_DISPATCH_LEASE_MINUTES):
+                errors.append(f"dispatching outbox item {item_id or index} has stale claim")
         if status not in PROACTIVE_OUTBOX_STATUSES:
             errors.append(f"outbox item {item_id or index} has unsupported status: {status}")
         errors.extend(_proactive_outbox_status_history_errors(item, item_id or str(index), current_status=status))
