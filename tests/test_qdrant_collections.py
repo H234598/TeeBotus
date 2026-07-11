@@ -242,6 +242,62 @@ def test_check_collection_reports_vector_schema_mismatch() -> None:
     assert result.error == "vector_size expected 384, got 64"
 
 
+def test_check_collection_reports_distance_schema_mismatch() -> None:
+    def opener(_request, *, timeout):
+        assert timeout > 0
+        return _Response(
+            200,
+            {
+                "result": {
+                    "config": {
+                        "params": {
+                            "vectors": {"size": 64, "distance": "Dot"},
+                        }
+                    }
+                }
+            },
+        )
+
+    result = check_collection(
+        QdrantCollectionSpec(name="teebotus_user_memory", vector_size=64, distance="Cosine"),
+        url="http://127.0.0.1:6333",
+        opener=opener,
+    )
+
+    assert result.ok is False
+    assert result.status == "schema_mismatch"
+    assert result.actual_vector_size == 64
+    assert result.actual_distance == "Dot"
+    assert result.error == "distance expected Cosine, got Dot"
+
+
+def test_check_collection_reports_missing_distance_schema() -> None:
+    def opener(_request, *, timeout):
+        assert timeout > 0
+        return _Response(
+            200,
+            {
+                "result": {
+                    "config": {
+                        "params": {
+                            "vectors": {"size": 64},
+                        }
+                    }
+                }
+            },
+        )
+
+    result = check_collection(
+        QdrantCollectionSpec(name="teebotus_user_memory", vector_size=64),
+        url="http://127.0.0.1:6333",
+        opener=opener,
+    )
+
+    assert result.ok is False
+    assert result.status == "schema_mismatch"
+    assert result.error == "distance expected Cosine, got unknown"
+
+
 def test_check_collection_reports_missing_vector_schema() -> None:
     def opener(_request, *, timeout):
         assert timeout > 0
@@ -455,6 +511,30 @@ def test_format_qdrant_collection_status_lines_reports_actual_vector_size_on_mis
         "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=schema_mismatch "
         "vector_size=384 embedding_model=intfloat/multilingual-e5-small actual_vector_size=64 "
         "error=vector_size expected 384, got 64",
+    )
+
+
+def test_format_qdrant_collection_status_lines_reports_actual_distance_on_mismatch() -> None:
+    health = QdrantHealth(target="http://127.0.0.1:6333", status="reachable", ok=True)
+    results = (
+        QdrantCollectionResult(
+            QDRANT_USER_MEMORY_COLLECTION,
+            "http://127.0.0.1:6333",
+            "schema_mismatch",
+            False,
+            "distance expected Cosine, got Dot",
+            actual_vector_size=64,
+            actual_distance="Dot",
+        ),
+    )
+    specs = (QdrantCollectionSpec(QDRANT_USER_MEMORY_COLLECTION, 64),)
+
+    lines = format_qdrant_collection_status_lines(health, collection_results=results, specs=specs)
+
+    assert lines == (
+        "qdrant_collection=teebotus_user_memory target=127.0.0.1:6333 status=schema_mismatch "
+        "vector_size=64 actual_vector_size=64 actual_distance=Dot "
+        "error=distance expected Cosine, got Dot",
     )
 
 

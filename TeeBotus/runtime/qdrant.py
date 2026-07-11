@@ -64,6 +64,7 @@ class QdrantCollectionResult:
     ok: bool
     error: str = ""
     actual_vector_size: int | None = None
+    actual_distance: str | None = None
 
 
 QdrantOpener = Callable[..., Any]
@@ -279,6 +280,27 @@ def check_collection(
                 error=f"vector_size expected {spec.vector_size}, got {actual_vector_size}",
                 actual_vector_size=actual_vector_size,
             )
+        expected_distance = _validate_distance(spec.distance)
+        actual_distance = _collection_distance(payload)
+        if actual_distance is None:
+            return QdrantCollectionResult(
+                name=name,
+                target=target,
+                status="schema_mismatch",
+                ok=False,
+                error=f"distance expected {expected_distance}, got unknown",
+                actual_vector_size=actual_vector_size,
+            )
+        if actual_distance.casefold() != expected_distance.casefold():
+            return QdrantCollectionResult(
+                name=name,
+                target=target,
+                status="schema_mismatch",
+                ok=False,
+                error=f"distance expected {expected_distance}, got {actual_distance}",
+                actual_vector_size=actual_vector_size,
+                actual_distance=actual_distance,
+            )
         return QdrantCollectionResult(name=name, target=target, status="ready", ok=True)
     if status_code == 404:
         return QdrantCollectionResult(name=name, target=target, status="missing", ok=False, error="HTTP 404")
@@ -329,6 +351,8 @@ def format_qdrant_collection_status_lines(
         )
         if result.actual_vector_size is not None:
             line += f" actual_vector_size={result.actual_vector_size}"
+        if result.actual_distance is not None:
+            line += f" actual_distance={result.actual_distance}"
         if result.error:
             line += f" error={result.error}"
         lines.append(line)
@@ -441,6 +465,30 @@ def _collection_vector_size(payload: dict[str, Any] | None) -> int | None:
                 if parsed is not None:
                     return parsed
     return None
+
+
+def _collection_distance(payload: dict[str, Any] | None) -> str | None:
+    if not payload:
+        return None
+    result = payload.get("result") if isinstance(payload, dict) else None
+    config = result.get("config") if isinstance(result, dict) else None
+    params = config.get("params") if isinstance(config, dict) else None
+    vectors = params.get("vectors") if isinstance(params, dict) else None
+    if not isinstance(vectors, dict):
+        return None
+    if "distance" in vectors:
+        return _optional_distance(vectors.get("distance"))
+    for value in vectors.values():
+        if isinstance(value, dict) and "distance" in value:
+            distance = _optional_distance(value.get("distance"))
+            if distance is not None:
+                return distance
+    return None
+
+
+def _optional_distance(value: object) -> str | None:
+    distance = str(value or "").strip()
+    return distance or None
 
 
 def _validate_collection_name(value: str) -> str:
