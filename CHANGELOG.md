@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.88 - 2026-07-12
+
+- Fail closed on malformed explicit notification-loudness route statuses.
+
 ## 1.9.87 - 2026-07-12
 
 - Fail closed on malformed notification-loudness outbox statuses.

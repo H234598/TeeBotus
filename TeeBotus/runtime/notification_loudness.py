@@ -44,7 +44,7 @@ def maybe_handle_notification_loudness_response(
             if not isinstance(account_store.read_agent_state(account_id), dict):
                 return None
             route_status = _route_status(account_store, account_id, event)
-            if route_status in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
+            if route_status in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES or route_status == "<invalid>":
                 return None
             state = account_store.read_agent_state(account_id)
             notification_state = state.get("notification_loudness") if isinstance(state, dict) else None
@@ -82,7 +82,8 @@ def maybe_notification_loudness_prompt_action(
             if not isinstance(state, dict):
                 return None
             route_state = _ensure_route_state(state, event)
-            if _normalized_route_status(route_state) in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
+            normalized_status = _normalized_route_status(route_state)
+            if normalized_status in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES or normalized_status == "<invalid>":
                 return None
             if not _notification_loudness_checks_active(route_state):
                 return None
@@ -544,7 +545,12 @@ def _find_route_state(routes: Mapping[str, Any], route_key: Any) -> dict[str, An
 
 
 def _normalized_route_status(route_state: Mapping[str, Any]) -> str:
-    return str(route_state.get("status") or "unknown").strip().casefold()
+    if "status" not in route_state:
+        return "unknown"
+    value = route_state.get("status")
+    if not isinstance(value, str) or not value.strip():
+        return "<invalid>"
+    return value.strip().casefold()
 
 
 def _notification_loudness_checks_active(route_state: Mapping[str, Any]) -> bool:
