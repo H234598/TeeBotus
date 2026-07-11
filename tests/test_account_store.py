@@ -2295,6 +2295,34 @@ def test_sqlite_entry_id_read_chunks_large_requests(tmp_path):
     assert [row["id"] for row in selected] == requested_ids
 
 
+def test_sqlite_entry_id_read_recovers_legacy_whitespace_ids(tmp_path):
+    import sqlite3
+
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=tmp_path / "memory.sqlite3", fallback_path=None),
+    )
+    account_id = "a" * 128
+    backend.write_entries(account_id, [{"id": "mem_legacy", "user_text": "Mond"}])
+    legacy_row = {"id": " mem_legacy ", "user_text": "Mond"}
+    nonce, ciphertext = backend._encrypt_json(account_id, " mem_legacy ", legacy_row)
+    with sqlite3.connect(tmp_path / "memory.sqlite3") as connection:
+        connection.execute(
+            """
+            UPDATE memory_entries
+            SET memory_id = ?, payload_nonce = ?, payload_ciphertext = ?
+            WHERE instance_name = ? AND account_id = ? AND memory_id = ?
+            """,
+            (" mem_legacy ", nonce, ciphertext, "Depressionsbot", account_id, "mem_legacy"),
+        )
+
+    selected = backend.read_entries_by_ids(account_id, ["mem_legacy"])
+
+    assert selected == [legacy_row]
+
+
 def test_sqlite_memory_config_resolves_relative_paths_under_instance_root(tmp_path):
     root = tmp_path / "instance" / "data" / "accounts"
     config = SQLiteMemoryConfig.from_env(

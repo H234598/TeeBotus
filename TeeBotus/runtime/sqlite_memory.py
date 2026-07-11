@@ -252,6 +252,22 @@ class SQLiteAccountMemoryBackend:
                         (self.instance_name, account_id, *chunk),
                     ).fetchall()
                 )
+            found_ids = {str(row[0]).strip() for row in rows}
+            missing_ids = [memory_id for memory_id in requested_ids if memory_id not in found_ids]
+            for offset in range(0, len(missing_ids), SQLITE_READ_ENTRIES_BY_IDS_CHUNK_SIZE):
+                chunk = missing_ids[offset : offset + SQLITE_READ_ENTRIES_BY_IDS_CHUNK_SIZE]
+                placeholders = ",".join("?" for _ in chunk)
+                rows.extend(
+                    connection.execute(
+                        f"""
+                        SELECT memory_id, payload_nonce, payload_ciphertext
+                        FROM memory_entries
+                        WHERE instance_name = ? AND account_id = ? AND TRIM(memory_id) IN ({placeholders})
+                        ORDER BY ordinal ASC, created_at ASC, memory_id ASC
+                        """,
+                        (self.instance_name, account_id, *chunk),
+                    ).fetchall()
+                )
         entries: list[dict[str, Any]] = []
         skipped = 0
         first_skipped_id = ""
