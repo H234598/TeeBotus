@@ -271,6 +271,27 @@ def test_runtime_state_store_reports_link_notification_write_error(tmp_path, mon
     assert "write blocked" in state.link_notifications_persistence_error
 
 
+def test_runtime_state_store_reports_link_notification_read_error(tmp_path, monkeypatch):
+    data_dir = tmp_path / "Bot" / "data"
+    provider = StaticSecretProvider(b"s" * 32)
+    initial = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+    initial.record_link_notification(
+        instance_name="Bot",
+        account_id="a" * 128,
+        new_identity_key="signal:uuid:new",
+        old_identity_key="telegram:user:1",
+    )
+
+    def refuse_read(_vault, _path, _default):
+        raise OSError("read blocked")
+
+    monkeypatch.setattr("TeeBotus.runtime.state.EncryptedJsonVault.read_json", refuse_read)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert state.link_notifications == {}
+    assert "read blocked" in state.link_notifications_persistence_error
+
+
 def test_runtime_state_store_refreshes_link_notifications_between_bridges(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"

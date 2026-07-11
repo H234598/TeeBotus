@@ -632,7 +632,7 @@ class RuntimeStateStore(RuntimeState):
                     "old_identity_key": old_identity_key,
                     "created_at": created_at,
                 }
-        except AccountStoreError as exc:
+        except (AccountStoreError, OSError, TypeError, ValueError) as exc:
             self.link_notifications_persistence_error = str(exc)
             self.link_notifications = existing
             return
