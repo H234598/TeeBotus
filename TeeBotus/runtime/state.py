@@ -462,7 +462,7 @@ class RuntimeStateStore(RuntimeState):
             rotate_runtime_text_file_if_needed(self.security_events_path)
             handle = _open_append_text_no_follow(self.security_events_path)
             if handle is None:
-                return
+                raise AccountStoreError(f"refusing unavailable or unsafe security event path: {self.security_events_path}")
             try:
                 handle.write(json.dumps(event, ensure_ascii=False, sort_keys=True) + "\n")
             finally:

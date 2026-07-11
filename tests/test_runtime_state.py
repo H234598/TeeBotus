@@ -282,7 +282,8 @@ def test_runtime_state_store_refuses_security_event_symlink_target(tmp_path):
     security_path.symlink_to(outside)
     state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
 
-    state.append_security_event({"event": "must-not-follow"})
+    with pytest.raises(AccountStoreError, match="unsafe security event path"):
+        state.append_security_event({"event": "must-not-follow"})
 
     assert security_path.is_symlink()
     assert not outside.exists()
