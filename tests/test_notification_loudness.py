@@ -281,6 +281,25 @@ def test_loudness_paths_reject_event_for_different_account(tmp_path) -> None:
     assert "notification_loudness" not in account_store.read_agent_state(first_account_id)
 
 
+def test_loudness_paths_recheck_account_ownership_inside_outbox_lock(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=now) is not None
+
+    original_lookup = account_store.get_account_for_identity
+    ownership_results = iter((account_id, None))
+    monkeypatch.setattr(account_store, "get_account_for_identity", lambda _identity: next(ownership_results))
+    assert maybe_handle_notification_loudness_response(
+        event(identity, "ja, laut"), account_store, account_id, now=now
+    ) is None
+
+    monkeypatch.setattr(account_store, "get_account_for_identity", original_lookup)
+    route_state = account_store.read_agent_state(account_id)["notification_loudness"]["routes"]["telegram:1:chat-1"]
+    assert route_state["status"] == "pending"
+
+
 def test_scheduler_persists_legacy_route_refresh_when_prompt_is_not_due(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

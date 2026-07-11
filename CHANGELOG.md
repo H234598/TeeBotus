@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.112 - 2026-07-12
+
+- Recheck loudness account ownership inside state locks.
+
 ## 1.9.111 - 2026-07-12
 
 - Recognize affirmation variants with explicit notification context.
