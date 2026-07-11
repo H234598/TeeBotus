@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.64 - 2026-07-11
+
+- Prioritize explicit negations in notification-loudness free-text replies.
+
 ## 1.9.63 - 2026-07-11
 
 - Stop notification-loudness queueing when checks are inactive.

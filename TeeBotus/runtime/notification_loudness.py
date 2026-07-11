@@ -217,6 +217,14 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "abgelehnt",
         "nicht fragen",
         "frag nicht",
+        "nicht laut",
+        "nicht auf laut",
+        "noch nicht",
+        "nicht erledigt",
+        "kann ich nicht",
+        "will nicht",
+        "moechte nicht",
+        "möchte nicht",
         "keine nachfrage",
         "will ich nicht",
         "moechte ich nicht",
@@ -224,6 +232,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "stumm lassen",
         "bleibt stumm",
     )
+    if pending and any(needle in normalized for needle in declined_needles):
+        return "declined"
     if pending and (normalized in {"ja", "yes", "jep", "jo", "ok", "okay", "klar", "erledigt", "gemacht"} or words & {"ja", "yes"} and has_notification_context):
         return "confirmed"
     if pending and normalized in {"nein", "no", "nee", "nop", "nope"}:

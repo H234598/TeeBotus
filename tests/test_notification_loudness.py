@@ -16,6 +16,7 @@ from TeeBotus.runtime.notification_loudness import (
     maybe_notification_loudness_prompt_action,
     notification_loudness_outbox_item_is_active,
     queue_due_notification_loudness_prompts,
+    _notification_loudness_decision,
     _route_recently_seen,
     _route_slot,
 )
@@ -621,6 +622,15 @@ def test_loudness_scheduler_does_not_queue_when_checks_are_inactive(tmp_path) ->
 
     assert queue_due_notification_loudness_prompts(account_store, account_id, now=now) == ()
     assert account_store.read_proactive_outbox(account_id) == []
+
+
+def test_loudness_free_text_prioritizes_explicit_negation() -> None:
+    assert _notification_loudness_decision(
+        "Nein, ich habe die Nachrichten nicht laut gestellt",
+        pending=True,
+    ) == "declined"
+    assert _notification_loudness_decision("noch nicht", pending=True) == "declined"
+    assert _notification_loudness_decision("ja, laut gestellt", pending=True) == "confirmed"
 
 
 def test_concurrent_loudness_scheduler_runs_queue_only_one_prompt(tmp_path) -> None:
