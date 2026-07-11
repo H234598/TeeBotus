@@ -3679,11 +3679,26 @@ class AccountStore:
                 ),
                 reverse=True,
             )
-            ordered_ids.extend(memory_id for memory_id in reversed(accessed_ids) if memory_id in entries_by_id and memory_id not in ordered_ids)
-            ordered_ids.extend(memory_id for memory_id in reversed(recent_ids) if memory_id in entries_by_id and memory_id not in ordered_ids)
+            ordered_id_set = set(ordered_ids)
+            for memory_id in reversed(accessed_ids):
+                if memory_id in entries_by_id and memory_id not in ordered_id_set:
+                    ordered_ids.append(memory_id)
+                    ordered_id_set.add(memory_id)
+            for memory_id in reversed(recent_ids):
+                if memory_id in entries_by_id and memory_id not in ordered_id_set:
+                    ordered_ids.append(memory_id)
+                    ordered_id_set.add(memory_id)
         else:
-            ordered_ids = [memory_id for memory_id in reversed(accessed_ids) if memory_id in entries_by_id]
-            ordered_ids.extend(memory_id for memory_id in reversed(recent_ids) if memory_id in entries_by_id and memory_id not in ordered_ids)
+            ordered_ids = []
+            ordered_id_set: set[str] = set()
+            for memory_id in reversed(accessed_ids):
+                if memory_id in entries_by_id and memory_id not in ordered_id_set:
+                    ordered_ids.append(memory_id)
+                    ordered_id_set.add(memory_id)
+            for memory_id in reversed(recent_ids):
+                if memory_id in entries_by_id and memory_id not in ordered_id_set:
+                    ordered_ids.append(memory_id)
+                    ordered_id_set.add(memory_id)
         if not ordered_ids:
             ordered_ids = [str(entry.get("id", "")) for entry in reversed(entries) if isinstance(entry, dict) and str(entry.get("id", ""))]
         return [entries_by_id[memory_id] for memory_id in ordered_ids if memory_id in entries_by_id]
