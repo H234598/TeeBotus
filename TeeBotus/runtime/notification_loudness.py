@@ -202,6 +202,9 @@ def is_notification_loudness_outbox_item(item: Mapping[str, Any] | None) -> bool
 
 def notification_loudness_outbox_item_is_active(account_store: AccountStore, account_id: str, item: Mapping[str, Any]) -> bool:
     """Return whether a queued loudness prompt still belongs to an open check."""
+    item_status = str(item.get("status") or "queued").strip().casefold()
+    if item_status not in {"queued", "dispatching"}:
+        return False
     if not _outbox_route_is_consistent(item):
         return False
     route_key = _outbox_route_key(item)
