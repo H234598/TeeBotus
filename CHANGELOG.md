@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.119 - 2026-07-12
+
+- Ignore conditional notification-loudness statements.
+
 ## 1.9.118 - 2026-07-12
 
 - Avoid treating historical notification status as current.

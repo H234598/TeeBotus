@@ -97,6 +97,19 @@ NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES = (
     "was ",
     "were ",
 )
+NOTIFICATION_LOUDNESS_NON_ASSERTIVE_STARTS = (
+    "if ",
+    "when ",
+    "assuming ",
+    "suppose ",
+    "unless ",
+    "provided ",
+    "in case ",
+    "falls ",
+    "wenn ",
+    "sofern ",
+    "angenommen ",
+)
 NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "stell ",
     "stelle ",
@@ -448,6 +461,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if has_notification_context and _notification_loudness_has_uncertainty(normalized):
         return None
     if has_notification_context and _notification_loudness_has_historical_marker(normalized):
+        return None
+    if has_notification_context and normalized.startswith(NOTIFICATION_LOUDNESS_NON_ASSERTIVE_STARTS):
         return None
     if has_notification_context and _notification_loudness_is_non_declarative(text, normalized):
         return None
