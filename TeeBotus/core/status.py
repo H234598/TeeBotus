@@ -1579,6 +1579,11 @@ def account_memory_payload_size(*, account_store: AccountStore | None, account_i
             LOGGER.exception("Failed to read account memory payload size from store.")
             return None
         else:
+            if not isinstance(entries, list) or not isinstance(index, dict) or any(
+                not isinstance(entry, dict) for entry in entries
+            ):
+                LOGGER.error("Account memory backend returned an invalid payload shape for status size.")
+                return None
             backend_error = ""
             if backend is not None:
                 backend_error = str(

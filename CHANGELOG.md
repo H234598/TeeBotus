@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.37 - 2026-07-11
+
+- Reject invalid account-memory backend payload shapes in status size
+  diagnostics.
+
 ## 1.9.36 - 2026-07-11
 
 - Normalize unknown or malformed Codex-History status tokens before rendering
