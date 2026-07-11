@@ -90,6 +90,23 @@ def test_negative_lifetime_phrasings_do_not_override_tts_dialect(tmp_path) -> No
     assert tts_dialect_city(account_store, account_id) == ""
 
 
+def test_pending_lifetime_confirmation_rejects_contradictory_yes(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="pending-contradiction"))
+
+    pending = maybe_update_tts_dialect_preference(
+        account_store,
+        account_id,
+        "Ich habe den größten Teil meines Lebens in Hamburg verbracht.",
+    )
+    response = maybe_update_tts_dialect_preference(account_store, account_id, "Ja, ich mochte es dort nicht.")
+
+    assert pending.pending is True
+    assert response.changed is False
+    assert response.pending is False
+    assert tts_dialect_city(account_store, account_id) == ""
+
+
 def test_voice_style_observations_are_serialized_per_account(tmp_path, monkeypatch) -> None:
     first = store(tmp_path)
     second = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"d" * 32))

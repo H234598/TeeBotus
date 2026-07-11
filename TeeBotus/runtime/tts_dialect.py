@@ -104,14 +104,14 @@ def maybe_update_tts_dialect_preference(account_store: AccountStore, account_id:
     pending = _pending_lifetime_city(state)
     if pending is not None:
         city = str(pending.get("city") or "").strip()
+        if _NO_RE.search(normalized_text) or _NEGATIVE_RE.search(normalized_text):
+            _clear_pending_lifetime_city(state)
+            _write_state(account_store, account_id, state)
+            return TtsDialectUpdate(reply_text="Okay, dann aendere ich den TTS-Dialekt nicht.")
         if city and _YES_RE.search(normalized_text):
             _set_dialect_city(state, city, "lifetime_city_confirmed")
             _write_state(account_store, account_id, state)
             return TtsDialectUpdate(city=city, source="lifetime_city_confirmed", changed=True, reply_text=f"Okay, fuer Sprachnachrichten nutze ich ab jetzt eine leichte regionale Faerbung aus {city}.")
-        if _NO_RE.search(normalized_text):
-            _clear_pending_lifetime_city(state)
-            _write_state(account_store, account_id, state)
-            return TtsDialectUpdate(reply_text="Okay, dann aendere ich den TTS-Dialekt nicht.")
 
     birth_city = extract_birth_city(normalized_text)
     if birth_city:
