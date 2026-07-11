@@ -226,8 +226,7 @@ class WarningFallbackAccountMemoryBackend:
         self.last_index_read_error = ""
         self.last_collection_read_error = ""
         self.last_collection_skipped = 0
-        self.last_fallback_sync_error = ""
-        self._fallback_active = False
+        self._clear_recovered_if_clean("clear_account_unchecked")
 
     def _read(
         self,

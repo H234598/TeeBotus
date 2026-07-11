@@ -3048,6 +3048,25 @@ def test_account_memory_fallback_clear_resets_recovery_state() -> None:
     assert backend.last_fallback_sync_error == ""
 
 
+def test_account_memory_fallback_clear_does_not_hide_other_account_failure() -> None:
+    class Backend:
+        def clear_account_unchecked(self, _account_id: str) -> None:
+            return None
+
+    account_a = "a" * 128
+    account_b = "b" * 128
+    backend = WarningFallbackAccountMemoryBackend(Backend(), Backend(), label="Demo:sqlite")
+    backend._fallback_active = True
+    backend._fallback_sync_failed_entries.add(account_a)
+    backend.last_fallback_sync_error = "account A fallback unavailable"
+
+    backend.clear_account_unchecked(account_b)
+
+    assert backend._fallback_active is True
+    assert account_a in backend._fallback_sync_failed_entries
+    assert backend.last_fallback_sync_error == "account A fallback unavailable"
+
+
 def test_account_memory_fallback_blocks_failover_when_secondary_clear_fails(caplog) -> None:
     class Backend:
         def __init__(self, *, fail_clear: bool = False) -> None:
