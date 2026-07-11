@@ -237,5 +237,12 @@ def _is_private_chat_type(chat_type: Any) -> bool:
 
 
 def _status_auth_lock(account_store: AccountStore, account_id: str):
+    account_dir = getattr(account_store, "account_dir", None)
+    if callable(account_dir):
+        try:
+            if not account_dir(account_id).is_dir():
+                return nullcontext()
+        except (AccountStoreError, OSError, ValueError):
+            return nullcontext()
     lock = getattr(account_store, "account_memory_lock", None)
     return lock(account_id) if callable(lock) else nullcontext()

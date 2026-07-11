@@ -190,6 +190,8 @@ def admin_account_group_status_lines(
 
 
 def runtime_status_problem_lines(status_output: str, *, limit: int = 40) -> tuple[str, ...]:
+    if limit <= 0:
+        return ()
     problems: list[str] = []
     for raw_line in str(status_output or "").splitlines():
         line = _redact_runtime_status_line(raw_line).strip()

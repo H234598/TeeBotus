@@ -183,6 +183,13 @@ def test_runtime_status_problem_lines_redacts_secrets() -> None:
     )
 
 
+def test_runtime_status_problem_lines_honors_non_positive_limit() -> None:
+    output = "telegram status=broken error=bad\nsignal status=warning reason=slow"
+
+    assert runtime_status_problem_lines(output, limit=0) == ()
+    assert runtime_status_problem_lines(output, limit=-1) == ()
+
+
 def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
     account_store = status_summary_store_for(instances_dir)
