@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from TeeBotus.proactive import (
     ProactiveRoleLLMClient,
+    _cycle_ok,
     main,
     resolve_proactive_role_llm_settings,
     resolve_proactive_role_openai_key,
@@ -60,6 +61,11 @@ def test_proactive_selected_missing_instance_is_an_error(tmp_path) -> None:
 
     assert report["ok"] is False
     assert report["instances"][0]["error"] == "selected_instance_not_found"
+
+
+def test_proactive_cycle_marks_planner_errors_unhealthy() -> None:
+    assert _cycle_ok([{"accounts": [{"llm_planning": {"errors": ["invalid_json"]}}]}]) is False
+    assert _cycle_ok([{"accounts": [{"llm_planning": {"skipped_reason": "llm_planner_unavailable"}}]}]) is True
 
 
 def test_proactive_dry_run_reports_due_items_for_enabled_instance(tmp_path) -> None:

@@ -781,6 +781,10 @@ def _cycle_ok(instances: list[dict[str, Any]]) -> bool:
                 return False
             if account.get("dispatch_persistence_error"):
                 return False
+            for planner_key in ("llm_planning", "tool_planning"):
+                planner_report = account.get(planner_key)
+                if isinstance(planner_report, Mapping) and planner_report.get("errors"):
+                    return False
             for result in account.get("dispatch_results", []):
                 if result.get("status") == "failed":
                     return False
