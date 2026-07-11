@@ -234,6 +234,24 @@ def test_runtime_state_store_persists_merged_notifications_after_recovery(tmp_pa
     }
 
 
+def test_runtime_state_store_reports_link_notification_unlink_error(tmp_path, monkeypatch):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    account_id = "a" * 128
+    state.record_link_notification(
+        instance_name="Bot",
+        account_id=account_id,
+        new_identity_key="signal:uuid:new",
+        old_identity_key="telegram:user:1",
+    )
+
+    def refuse_unlink(_path):
+        raise PermissionError("unlink blocked")
+
+    monkeypatch.setattr(type(state.link_notifications_path), "unlink", refuse_unlink)
+    assert state.pop_link_notification(instance_name="Bot", account_id=account_id, old_identity_key="telegram:user:1")
+    assert "unlink blocked" in state.link_notifications_persistence_error
+
+
 def test_runtime_state_store_refreshes_link_notifications_between_bridges(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"

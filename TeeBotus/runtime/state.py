@@ -668,6 +668,9 @@ class RuntimeStateStore(RuntimeState):
                     self.link_notifications_path.unlink()
                 except FileNotFoundError:
                     pass
+                except OSError as exc:
+                    self.link_notifications_persistence_error = str(exc)
+                    return
                 self.link_notifications_persistence_error = ""
                 return
             try:
