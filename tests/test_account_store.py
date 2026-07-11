@@ -3000,6 +3000,63 @@ def test_account_memory_fallback_blocks_failover_when_secondary_clear_fails(capl
     assert "FAILOVER IS BLOCKED" in caplog.text
 
 
+def test_account_memory_fallback_blocks_collection_names_after_secondary_clear_failure() -> None:
+    class Backend:
+        def __init__(self, *, fail_clear: bool = False, fail_names: bool = False) -> None:
+            self.fail_clear = fail_clear
+            self.fail_names = fail_names
+            self.collections = {"a" * 128: {"version_notifications"}}
+
+        def clear_account_unchecked(self, account_id: str) -> None:
+            if self.fail_clear:
+                raise OSError("fallback clear unavailable")
+            self.collections.pop(account_id, None)
+
+        def read_collection_names(self, account_id: str) -> tuple[str, ...]:
+            if self.fail_names:
+                raise OSError("primary unavailable")
+            return tuple(sorted(self.collections.get(account_id, set())))
+
+    account_id = "a" * 128
+    primary = Backend(fail_names=True)
+    fallback = Backend(fail_clear=True)
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    with pytest.raises(OSError, match="fallback clear unavailable"):
+        backend.clear_account_unchecked(account_id)
+    with pytest.raises(AccountStoreError, match="read_collection_names: read blocked"):
+        backend.read_collection_names(account_id)
+
+
+def test_account_memory_fallback_retries_secondary_clear_before_collection_names() -> None:
+    class Backend:
+        def __init__(self, *, fail_clear: bool = False) -> None:
+            self.fail_clear = fail_clear
+            self.collections = {"a" * 128: {"version_notifications"}}
+
+        def clear_account_unchecked(self, account_id: str) -> None:
+            if self.fail_clear:
+                raise OSError("fallback clear unavailable")
+            self.collections.pop(account_id, None)
+
+        def read_collection_names(self, account_id: str) -> tuple[str, ...]:
+            return tuple(sorted(self.collections.get(account_id, set())))
+
+    account_id = "a" * 128
+    primary = Backend()
+    fallback = Backend(fail_clear=True)
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    with pytest.raises(OSError, match="fallback clear unavailable"):
+        backend.clear_account_unchecked(account_id)
+    fallback.fail_clear = False
+
+    assert backend.read_collection_names(account_id) == ()
+    assert fallback.collections.get(account_id) is None
+    assert backend.stale_fallback_collection_account_ids == ()
+    assert backend.last_fallback_sync_error == ""
+
+
 def test_account_memory_fallback_retries_stale_secondary_when_primary_is_available() -> None:
     class Backend:
         def __init__(self, *, fail_write: bool = False) -> None:

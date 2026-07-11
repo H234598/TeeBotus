@@ -161,10 +161,25 @@ class WarningFallbackAccountMemoryBackend:
                 fallback_names = set(getattr(self.fallback, "read_collection_names")(account_id))
                 for collection in sorted(fallback_names - primary_names):
                     self._sync_collection_from_fallback(account_id, collection)
-            return tuple(getattr(self.primary, "read_collection_names")(account_id))
+            names = tuple(getattr(self.primary, "read_collection_names")(account_id))
+            self._repair_cleared_fallback_account(account_id)
+            self._warn_if_fallback_repair_pending("read_collection:*", account_id)
+            self._clear_recovered_if_clean("read_collection_names")
+            return names
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
             self._warn("read_collection_names", exc)
+            if self._account_has_unsafe_fallback(account_id):
+                self.last_fallback_sync_error = (
+                    "read_collection_names: read blocked because primary is unavailable and fallback may be stale or unrecoverable"
+                )
+                LOGGER.critical(
+                    "ACCOUNT MEMORY COLLECTION NAME READ BLOCKED. PRIMARY DATABASE IS UNAVAILABLE AND FALLBACK MAY BE STALE OR UNRECOVERABLE. "
+                    "label=%s account_id=%s.",
+                    self.label,
+                    account_id,
+                )
+                raise AccountStoreError(self.last_fallback_sync_error) from exc
             return tuple(getattr(self.fallback, "read_collection_names")(account_id))
 
     def clear_account_unchecked(self, account_id: str) -> None:
@@ -460,6 +475,9 @@ class WarningFallbackAccountMemoryBackend:
         return False
 
     def _repair_unrecoverable_fallback_from_primary(self, operation: str, account_id: str, result: Any) -> None:
+        if operation.startswith("read_collection:") and self._collection_clear_pending(account_id):
+            self._repair_cleared_fallback_account(account_id)
+            return
         stale_key = self._operation_stale_key(operation, account_id)
         stale_set = self._fallback_stale_set(operation)
         sync_failed_set = self._fallback_sync_failed_set(operation)
@@ -492,9 +510,53 @@ class WarningFallbackAccountMemoryBackend:
         self._fallback_sync_failed_set(operation).discard(stale_key)
         unrecoverable_set.discard(stale_key)
 
+    def _collection_clear_pending(self, account_id: str) -> bool:
+        wildcard_key = (account_id, "*")
+        return (
+            wildcard_key in self._stale_fallback_collections
+            or wildcard_key in self._fallback_sync_failed_collections
+            or wildcard_key in self._unrecoverable_fallback_collections
+        )
+
+    def _repair_cleared_fallback_account(self, account_id: str) -> None:
+        if not self._collection_clear_pending(account_id):
+            return
+        fallback_clear = getattr(self.fallback, "clear_account_unchecked", None)
+        try:
+            if not callable(fallback_clear):
+                raise AttributeError(f"{type(self.fallback).__name__} has no clear_account_unchecked")
+            fallback_clear(account_id)
+        except Exception as exc:  # noqa: BLE001 - reset must remain fail-closed.
+            self._fallback_active = True
+            wildcard_key = (account_id, "*")
+            self._stale_fallback_collections.add(wildcard_key)
+            self._fallback_sync_failed_collections.add(wildcard_key)
+            self.last_fallback_sync_error = f"clear_account_unchecked: {exc}"
+            LOGGER.critical(
+                "ACCOUNT MEMORY FALLBACK CLEAR RETRY FAILED. FAILOVER REMAINS BLOCKED TO PROTECT DELETED DATA. "
+                "label=%s account_id=%s error=%s.",
+                self.label,
+                account_id,
+                exc,
+            )
+            return
+        self._dirty_entries.discard(account_id)
+        self._dirty_indexes.discard(account_id)
+        self._dirty_collections = {key for key in self._dirty_collections if key[0] != account_id}
+        self._stale_fallback_entries.discard(account_id)
+        self._stale_fallback_indexes.discard(account_id)
+        self._stale_fallback_collections = {key for key in self._stale_fallback_collections if key[0] != account_id}
+        self._fallback_sync_failed_entries.discard(account_id)
+        self._fallback_sync_failed_indexes.discard(account_id)
+        self._fallback_sync_failed_collections = {key for key in self._fallback_sync_failed_collections if key[0] != account_id}
+        self._unrecoverable_fallback_entries.discard(account_id)
+        self._unrecoverable_fallback_indexes.discard(account_id)
+        self._unrecoverable_fallback_collections = {key for key in self._unrecoverable_fallback_collections if key[0] != account_id}
+
     def _fallback_repair_pending(self, operation: str, account_id: str) -> bool:
         stale_key = self._operation_stale_key(operation, account_id)
-        return (
+        collection_clear_pending = operation.startswith("read_collection:") and self._collection_clear_pending(account_id)
+        return collection_clear_pending or (
             stale_key in self._fallback_stale_set(operation)
             or stale_key in self._fallback_sync_failed_set(operation)
             or stale_key in self._unrecoverable_fallback_set(operation)
