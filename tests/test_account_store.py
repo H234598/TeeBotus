@@ -4677,6 +4677,7 @@ def test_structured_account_memory_index_health_reports_malformed_containers(tmp
     store.append_structured_memory_entry(account_id, {"id": "mem_live", "user_text": "Mond", "bot_text": "Tee"})
     index = store.read_memory_index(account_id)
     index["index"]["graph"]["links"]["supports"] = "invalid"
+    index["index"]["graph"]["links"]["related_ids"] = {"": [""]}
     index["index"]["graph"]["relations"] = [{}]
     index["index"]["semantic_cache"] = "invalid"
     store.write_memory_index(account_id, index)
@@ -4686,6 +4687,8 @@ def test_structured_account_memory_index_health_reports_malformed_containers(tmp
     assert not health.ok
     error_text = "\n".join(health.errors)
     assert "graph.links.supports is not an object" in error_text
+    assert "graph related_ids source is empty" in error_text
+    assert "graph related_ids target is empty for" in error_text
     assert "graph relation source_id is empty" in error_text
     assert "graph relation target_id is empty" in error_text
     assert "graph relation type is empty" in error_text

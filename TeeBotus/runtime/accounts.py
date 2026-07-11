@@ -2507,12 +2507,20 @@ class AccountStore:
                 typed_links = typed_links_value
             for source_id, target_ids in typed_links.items():
                 source = str(source_id or "").strip()
-                if source and source not in entry_id_set:
+                if not source:
+                    errors.append(f"graph {link_type} source is empty")
+                elif source not in entry_id_set:
                     errors.append(f"graph {link_type} source missing entry: {source}")
                 if not isinstance(target_ids, list):
                     errors.append(f"graph {link_type} targets are not a list for {source}")
                     continue
-                missing_targets = sorted(str(target_id) for target_id in target_ids if str(target_id) not in entry_id_set)
+                missing_targets: list[str] = []
+                for target_id in target_ids:
+                    target = str(target_id or "").strip()
+                    if not target:
+                        errors.append(f"graph {link_type} target is empty for {source}")
+                    elif target not in entry_id_set:
+                        missing_targets.append(target)
                 if missing_targets:
                     errors.append(f"graph {link_type} targets missing entries: {', '.join(missing_targets)}")
         graph_relations = graph.get("relations") if isinstance(graph.get("relations"), list) else []
