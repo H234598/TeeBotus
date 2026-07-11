@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.9 - 2026-07-11
+
+- Do not report legacy JSON sizes when the configured account-memory backend is
+  unavailable or returned partial data.
+
 ## 1.9.8 - 2026-07-11
 
 - Reject path-traversal instance names in account-memory health checks.

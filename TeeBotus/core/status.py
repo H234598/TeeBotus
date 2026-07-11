@@ -1343,9 +1343,11 @@ def _safe_instance_name_for_accounts(instance_name: str) -> str:
     return text
 
 
-def _memory_status_text(*, account_resolved: bool, memory_size: int) -> str:
+def _memory_status_text(*, account_resolved: bool, memory_size: int | None) -> str:
     if not account_resolved:
         return "Account nicht zugeordnet"
+    if memory_size is None:
+        return "nicht verfuegbar (Memory-Backend-Fehler)"
     return format_byte_size(memory_size)
 
 
@@ -1486,14 +1488,31 @@ def memory_files_size(directory: Path | None) -> int:
     return total
 
 
-def account_memory_payload_size(*, account_store: AccountStore | None, account_id: str, fallback_directory: Path | None) -> int:
+def account_memory_payload_size(*, account_store: AccountStore | None, account_id: str, fallback_directory: Path | None) -> int | None:
     if account_store is not None and account_id:
+        try:
+            backend = account_store.account_memory_backend
+        except (AccountStoreError, OSError):
+            LOGGER.exception("Failed to resolve account memory backend for status size.")
+            return None
         try:
             entries = account_store.read_memory_entries(account_id)
             index = account_store.read_memory_index(account_id)
         except (AccountStoreError, OSError):
             LOGGER.exception("Failed to read account memory payload size from store.")
+            if backend is not None:
+                return None
         else:
+            backend_error = ""
+            if backend is not None:
+                backend_error = str(
+                    getattr(backend, "last_entry_read_error", "")
+                    or getattr(backend, "last_index_read_error", "")
+                    or ""
+                ).strip()
+            if backend_error:
+                LOGGER.error("Account memory backend returned partial data for status size: %s", backend_error)
+                return None
             payload: dict[str, Any] = {"entries": entries}
             if index:
                 payload["index"] = index

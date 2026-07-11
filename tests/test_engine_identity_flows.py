@@ -1239,6 +1239,34 @@ def test_status_uses_account_memory_backend_payload_size(tmp_path):
     assert "- Userfiles: Datenbank-Backend, Payloads verschluesselt" in text
 
 
+def test_status_does_not_fallback_to_legacy_files_when_memory_backend_fails(tmp_path):
+    class FailingBackend:
+        last_entry_read_error = "database unavailable"
+        last_index_read_error = ""
+
+        def read_entries(self, _account_id):
+            return []
+
+        def read_index(self, _account_id):
+            return {}
+
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
+    account_store._account_memory_backend = FailingBackend()
+    account_dir = account_store.account_dir(account_id)
+    (account_dir / "User_Memory_Entries.jsonl").write_text("legacy payload", encoding="utf-8")
+
+    text = build_status_reply(
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        account_store=account_store,
+    )
+
+    assert "- Nutzermemory: nicht verfuegbar (Memory-Backend-Fehler)" in text
+    assert "- Nutzermemory: 13 B" not in text
+
+
 def test_engine_proactive_command_requires_instance_enablement(tmp_path, monkeypatch):
     monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", raising=False)
     monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_DEPRESSIONSBOT", raising=False)
