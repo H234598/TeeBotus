@@ -5648,6 +5648,38 @@ def test_account_memory_index_health_reports_stale_fallback_sync(tmp_path: Path,
     ]
 
 
+def test_account_memory_index_health_survives_broken_fallback_diagnostics(tmp_path: Path, monkeypatch) -> None:
+    account_id = "a" * 128
+    account_dir = tmp_path / "instances" / "Demo" / "data" / "accounts" / "accounts" / account_id
+    account_dir.mkdir(parents=True)
+
+    class Backend:
+        @property
+        def stale_fallback_entry_account_ids(self):
+            raise RuntimeError("fallback diagnostics unavailable")
+
+    class FakeStore:
+        account_memory_backend = Backend()
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def _read_account_profile(self, _account_id: str) -> dict[str, object]:
+            return {"status": "active"}
+
+        def check_structured_memory_index(self, _account_id: str, *, require_resolvable: bool = True) -> object:
+            return SimpleNamespace(ok=True, errors=())
+
+    monkeypatch.setattr("TeeBotus.core.status.AccountStore", FakeStore)
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        "account_memory=Demo/__instance_state status=warning warning=memory_backend_status_unavailable:RuntimeError: fallback diagnostics unavailable",
+        f"account_memory=Demo/{account_id} status=ok warning=memory_backend_status_unavailable:RuntimeError: fallback diagnostics unavailable"
+    ]
+
+
 def test_account_memory_index_health_uses_account_specific_fallback_error(tmp_path: Path, monkeypatch) -> None:
     account_a = "a" * 128
     account_b = "b" * 128

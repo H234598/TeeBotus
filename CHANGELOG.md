@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.44 - 2026-07-11
+
+- Keep account-memory health diagnostics available when fallback metadata fails.
+
 ## 1.9.43 - 2026-07-11
 
 - Keep status output available when a memory backend diagnostic property fails.
