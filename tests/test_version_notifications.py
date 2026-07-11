@@ -22,6 +22,7 @@ from TeeBotus.core.status import (
     account_identity_health_lines,
     account_memory_index_health_lines,
     account_secret_health_lines,
+    build_status_reply,
     codex_history_status_lines,
     github_commit_history_url,
 )
@@ -182,6 +183,35 @@ def test_account_identity_health_does_not_crash_on_malformed_warning_count(tmp_p
     lines = account_identity_health_lines(instance_name="Demo", project_root=tmp_path)
 
     assert lines == ["account_identity=Demo status=warning identity_warnings=unknown runtime_slots=<none> identities=<none>"]
+
+
+def test_status_does_not_crash_when_llm_client_attributes_fail(tmp_path: Path) -> None:
+    class BrokenClient:
+        @property
+        def provider_name(self) -> str:
+            raise RuntimeError("provider unavailable")
+
+        @property
+        def model(self) -> str:
+            raise RuntimeError("model unavailable")
+
+        @property
+        def fallback_models(self) -> tuple[str, ...]:
+            raise RuntimeError("fallbacks unavailable")
+
+        @property
+        def fallback_client(self) -> object:
+            raise RuntimeError("fallback client unavailable")
+
+    text = build_status_reply(
+        instance_name="Demo",
+        project_root=tmp_path,
+        llm_enabled=True,
+        llm_client=BrokenClient(),
+    )
+
+    assert "- Chat/Text: aktiv - openai / openai-default" in text
+    assert "- Ersatzmodelle: keine (kein aktiver Ersatz fuer Chat/Textantworten)" in text
 
 
 def test_account_secret_health_uses_normalized_instance_name(tmp_path: Path) -> None:

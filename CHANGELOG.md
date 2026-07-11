@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.18 - 2026-07-11
+
+- Keep status output alive when optional LLM client attributes fail during
+  inspection.
+
 ## 1.9.17 - 2026-07-11
 
 - Keep identity status diagnostics alive when warning_count contains invalid

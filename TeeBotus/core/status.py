@@ -402,7 +402,7 @@ def _gemini_free_tier_guard_active(*, provider: str, model: str, env: Mapping[st
         )
     except Exception:
         return True
-    return bool(getattr(limits, "active", False))
+    return bool(_status_object_attr(limits, "active", False))
 
 
 def _api_budget_label_for_runner(runner: object | None, *, env: Mapping[str, str], instance_name: str = "") -> str:
@@ -410,7 +410,7 @@ def _api_budget_label_for_runner(runner: object | None, *, env: Mapping[str, str
         return "aus"
     provider = _first_status_attr(runner, "llm_provider", "pydantic_ai_provider", "provider_name", "provider") or "aktiv"
     model = _first_status_attr(runner, "model_name", "pydantic_ai_model_name", "hf_pool_request_model", "llm_model")
-    route = getattr(runner, "llm_route", None)
+    route = _status_object_attr(runner, "llm_route")
     api_key_env = _first_status_attr(route, "api_key_env") or _first_status_attr(runner, "api_key_env", "llm_api_key_env")
     service_tier = _first_status_attr(route, "service_tier") or _first_status_attr(runner, "service_tier")
     return _api_budget_label(
@@ -623,8 +623,9 @@ def _fallback_category_status(client: object | None, configured_fallbacks: tuple
     runtime_fallbacks = _sequence_status_attr(client, "fallback_models")
     if runtime_fallbacks:
         return "aktiv fuer Chat/Textantworten: " + ", ".join(redact_status_text(model) for model in runtime_fallbacks)
-    if hasattr(client, "fallback_client") and getattr(client, "fallback_client") is not None:
-        return "aktiv fuer Chat/Textantworten: " + _llm_client_status_label(getattr(client, "fallback_client"))
+    fallback_client = _status_object_attr(client, "fallback_client")
+    if fallback_client is not None:
+        return "aktiv fuer Chat/Textantworten: " + _llm_client_status_label(fallback_client)
     fallback_models = _fallback_model_list(configured_fallbacks)
     if fallback_models:
         return "nicht aktiv; bei Chat/Textantwort-Fehlern konfiguriert: " + ", ".join(
@@ -637,7 +638,7 @@ def _first_status_attr(obj: object | None, *names: str) -> str:
     if obj is None:
         return ""
     for name in names:
-        value = getattr(obj, name, "")
+        value = _status_object_attr(obj, name, "")
         if isinstance(value, (tuple, list, set)):
             text = ",".join(str(part or "").strip() for part in value if str(part or "").strip())
         else:
@@ -650,12 +651,20 @@ def _first_status_attr(obj: object | None, *names: str) -> str:
 def _sequence_status_attr(obj: object | None, name: str) -> list[str]:
     if obj is None:
         return []
-    value = getattr(obj, name, ())
+    value = _status_object_attr(obj, name, ())
     if isinstance(value, str):
         return [part.strip() for part in value.split(",") if part.strip()]
     if isinstance(value, (tuple, list, set)):
         return [str(part or "").strip() for part in value if str(part or "").strip()]
     return []
+
+
+def _status_object_attr(obj: object, name: str, default: object = None) -> object:
+    try:
+        return getattr(obj, name, default)
+    except Exception:  # noqa: BLE001 - optional runtime objects must not break status.
+        LOGGER.debug("Failed to read status attribute %s from %s.", name, type(obj).__name__, exc_info=True)
+        return default
 
 
 def _llm_enabled_status(value: bool | None) -> str:
