@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.123 - 2026-07-12
+
+- Ignore inverted loudness questions without question marks.
+
 ## 1.9.122 - 2026-07-12
 
 - Avoid treating no-longer notification states as current.

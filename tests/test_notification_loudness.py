@@ -1161,6 +1161,16 @@ def test_loudness_free_text_does_not_decide_questions_or_requests() -> None:
     assert _notification_loudness_decision("Is muted", pending=True) == "declined"
 
 
+def test_loudness_free_text_does_not_decide_english_and_inverted_questions() -> None:
+    assert _notification_loudness_decision("Can messages be muted", pending=True) is None
+    assert _notification_loudness_decision("Can notifications be on", pending=False) is None
+    assert _notification_loudness_decision("Could you check if messages are muted", pending=True) is None
+    assert _notification_loudness_decision("Will notifications be on", pending=False) is None
+    assert _notification_loudness_decision("Would messages be loud", pending=True) is None
+    assert _notification_loudness_decision("Kann man Nachrichten stumm schalten", pending=False) is None
+    assert _notification_loudness_decision("Können Benachrichtigungen an sein", pending=True) is None
+
+
 def test_loudness_free_text_recognizes_message_and_push_context() -> None:
     assert _notification_loudness_decision("Die Nachrichten sind ausgeschaltet", pending=False) == "declined"
     assert _notification_loudness_decision("Die Nachrichten sind nicht ausgeschaltet", pending=False) == "confirmed"
