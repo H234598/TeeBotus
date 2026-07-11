@@ -30,12 +30,18 @@ SQLITE_REQUIRED_TABLES = (
 SQLITE_READ_ENTRIES_BY_IDS_CHUNK_SIZE = 500
 
 
-def _validate_distinct_sqlite_paths(path: Path, fallback_path: Path | None) -> None:
+def validate_distinct_sqlite_paths(
+    path: Path,
+    fallback_path: Path | None,
+    *,
+    primary_label: str = SQLITE_PATH_ENV,
+    fallback_label: str = SQLITE_FALLBACK_PATH_ENV,
+) -> None:
     if fallback_path is None:
         return
     if path.resolve() == fallback_path.resolve():
         raise AccountStoreError(
-            f"{SQLITE_PATH_ENV} and {SQLITE_FALLBACK_PATH_ENV} must point to different files"
+            f"{primary_label} and {fallback_label} must point to different files"
         )
     if not path.exists() or not fallback_path.exists():
         return
@@ -49,7 +55,7 @@ def _validate_distinct_sqlite_paths(path: Path, fallback_path: Path | None) -> N
         fallback_identity.st_ino,
     ):
         raise AccountStoreError(
-            f"{SQLITE_PATH_ENV} and {SQLITE_FALLBACK_PATH_ENV} must not be hardlinks to the same file"
+            f"{primary_label} and {fallback_label} must not be hardlinks to the same file"
         )
 
 
@@ -76,7 +82,7 @@ class SQLiteMemoryConfig:
 
         path = resolve_configured_path(configured_path, SQLITE_DEFAULT_FILENAME)
         resolved_fallback_path = resolve_configured_path(fallback_path, SQLITE_DEFAULT_FALLBACK_FILENAME)
-        _validate_distinct_sqlite_paths(path, resolved_fallback_path)
+        validate_distinct_sqlite_paths(path, resolved_fallback_path)
         return cls(path=path, fallback_path=resolved_fallback_path)
 
 
@@ -89,7 +95,7 @@ class SQLiteAccountMemoryBackend:
         purpose: str,
         config: SQLiteMemoryConfig,
     ) -> None:
-        _validate_distinct_sqlite_paths(config.path, config.fallback_path)
+        validate_distinct_sqlite_paths(config.path, config.fallback_path)
         self.instance_name = instance_name
         self.provider = provider
         self.purpose = purpose

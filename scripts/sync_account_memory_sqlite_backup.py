@@ -10,7 +10,6 @@ import sys
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -29,6 +28,7 @@ from TeeBotus.runtime.sqlite_memory import (  # noqa: E402
     SQLITE_PATH_ENV,
     SQLiteAccountMemoryBackend,
     SQLiteMemoryConfig,
+    validate_distinct_sqlite_paths,
 )
 
 
@@ -90,9 +90,17 @@ def sync_account_memory_sqlite_backup(
     dry_run: bool = False,
     provider: InstanceSecretProvider | None = None,
 ) -> SyncResult:
-    root = Path(accounts_root or ".").expanduser()
-    primary_path = Path(primary or os.environ.get(SQLITE_PATH_ENV) or root / SQLITE_DEFAULT_FILENAME).expanduser()
-    secondary_path = Path(secondary or os.environ.get(SQLITE_FALLBACK_PATH_ENV) or root / SQLITE_DEFAULT_FALLBACK_FILENAME).expanduser()
+    root = Path(accounts_root or ".").expanduser().resolve()
+    primary_value = primary if primary is not None else os.environ.get(SQLITE_PATH_ENV)
+    secondary_value = secondary if secondary is not None else os.environ.get(SQLITE_FALLBACK_PATH_ENV)
+    primary_path = _resolve_sqlite_path(primary_value, root, SQLITE_DEFAULT_FILENAME)
+    secondary_path = _resolve_sqlite_path(secondary_value, root, SQLITE_DEFAULT_FALLBACK_FILENAME)
+    validate_distinct_sqlite_paths(
+        primary_path,
+        secondary_path,
+        primary_label="primary",
+        fallback_label="secondary",
+    )
     if not primary_path.exists():
         raise FileNotFoundError(f"primary_missing={primary_path}")
     if primary_path.is_dir():
@@ -228,6 +236,14 @@ def _backup_existing_secondary(path: Path) -> tuple[str, int]:
 
 def _sqlite_file_family(path: Path) -> tuple[Path, Path, Path]:
     return (path, Path(f"{path}-wal"), Path(f"{path}-shm"))
+
+
+def _resolve_sqlite_path(value: Path | str | None, root: Path, default_filename: str) -> Path:
+    raw_value = str(value or "").strip()
+    if not raw_value:
+        return root / default_filename
+    configured = Path(raw_value).expanduser()
+    return configured if configured.is_absolute() else root / configured
 
 
 def _unique_backup_dir(parent: Path, prefix: str) -> Path:

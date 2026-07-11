@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 import scripts.sync_account_memory_sqlite_backup as sqlite_backup_sync
-from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, StaticSecretProvider
+from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KEY_PURPOSE, AccountStoreError, StaticSecretProvider
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
 
 
@@ -219,3 +219,50 @@ def test_sqlite_backup_sync_deduplicates_accounts_with_collection_and_entry_payl
     )
 
     assert result.account_payloads_checked == 1
+
+
+def test_sqlite_backup_sync_resolves_relative_paths_under_accounts_root(tmp_path: Path, monkeypatch) -> None:
+    accounts_root = tmp_path / "instances" / "Depressionsbot" / "data" / "accounts"
+    primary = accounts_root / "primary.sqlite3"
+    write_sqlite_memory(primary, memory_id="mem_relative")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", "primary.sqlite3")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", "backup/secondary.sqlite3")
+
+    result = sqlite_backup_sync.sync_account_memory_sqlite_backup(
+        accounts_root=accounts_root,
+        provider=provider(),
+        dry_run=True,
+    )
+
+    assert Path(result.primary) == primary.resolve()
+    assert Path(result.secondary) == (accounts_root / "backup" / "secondary.sqlite3").resolve()
+
+
+def test_sqlite_backup_sync_rejects_alias_primary_and_secondary(tmp_path: Path) -> None:
+    primary = tmp_path / "primary.sqlite3"
+    write_sqlite_memory(primary)
+
+    with pytest.raises(AccountStoreError, match="must point to different files"):
+        sqlite_backup_sync.sync_account_memory_sqlite_backup(
+            accounts_root=tmp_path,
+            primary=primary,
+            secondary=primary,
+            provider=provider(),
+            decrypt_check=False,
+        )
+
+
+def test_sqlite_backup_sync_rejects_hardlinked_primary_and_secondary(tmp_path: Path) -> None:
+    primary = tmp_path / "primary.sqlite3"
+    secondary = tmp_path / "secondary.sqlite3"
+    write_sqlite_memory(primary)
+    secondary.hardlink_to(primary)
+
+    with pytest.raises(AccountStoreError, match="must not be hardlinks"):
+        sqlite_backup_sync.sync_account_memory_sqlite_backup(
+            accounts_root=tmp_path,
+            primary=primary,
+            secondary=secondary,
+            provider=provider(),
+            decrypt_check=False,
+        )
