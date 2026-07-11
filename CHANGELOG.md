@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.113 - 2026-07-12
+
+- Recognize contracted uncertainty in loudness status replies.
+
 ## 1.9.112 - 2026-07-12
 
 - Recheck loudness account ownership inside state locks.
