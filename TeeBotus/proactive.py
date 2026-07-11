@@ -532,14 +532,20 @@ async def run_proactive_agent_cycle(
     if llm_plan and tool_plan:
         raise ValueError("llm_plan and tool_plan are mutually exclusive")
     resolved_now = now or datetime.now(timezone.utc)
+    selected = tuple(str(name or "").strip() for name in selected_instances if str(name or "").strip())
     resolved_store_factory = store_factory or AccountStore
     instances: list[dict[str, Any]] = []
-    for instance_dir in _instance_dirs(instances_dir, tuple(selected_instances)):
+    for instance_dir in _instance_dirs(instances_dir, selected):
         instance_report: dict[str, Any] = {
             "instance": instance_dir.name,
             "enabled": proactive_agent_instance_enabled(instance_dir.name, env=env),
             "accounts": [],
         }
+        if selected and (not instance_dir.is_dir() or not (instance_dir / "data" / "accounts").is_dir()):
+            instance_report["enabled"] = False
+            instance_report["error"] = "selected_instance_not_found"
+            instances.append(instance_report)
+            continue
         if not instance_report["enabled"]:
             instance_report["skipped_reason"] = "instance_not_enabled"
             instances.append(instance_report)
@@ -801,6 +807,9 @@ def _print_dry_run_report(report: dict[str, Any]) -> None:
     for instance in report["instances"]:
         enabled = "yes" if instance.get("enabled") else "no"
         print(f"instance={instance['instance']} enabled={enabled}")
+        if instance.get("error"):
+            print(f"  error={instance['error']}")
+            continue
         if instance.get("skipped_reason"):
             print(f"  skipped={instance['skipped_reason']}")
             continue

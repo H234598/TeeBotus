@@ -49,6 +49,19 @@ def test_proactive_dry_run_skips_instance_when_not_enabled(tmp_path) -> None:
     assert report["instances"][0]["skipped_reason"] == "instance_not_enabled"
 
 
+def test_proactive_selected_missing_instance_is_an_error(tmp_path) -> None:
+    report = run_proactive_agent_dry_run(
+        instances_dir=tmp_path / "instances",
+        selected_instances=("MissingInstance",),
+        env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "MissingInstance"},
+        store_factory=lambda *_args: (_ for _ in ()).throw(AssertionError("missing instance must not open a store")),
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert report["ok"] is False
+    assert report["instances"][0]["error"] == "selected_instance_not_found"
+
+
 def test_proactive_dry_run_reports_due_items_for_enabled_instance(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)
