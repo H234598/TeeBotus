@@ -243,12 +243,12 @@ class WarningFallbackAccountMemoryBackend:
                     partial_result=partial_result,
                 )
             if read_full_for_repair is not None:
-                stale_key = self._operation_stale_key(operation, account_id)
-                if stale_key in self._unrecoverable_fallback_set(operation):
+                if self._fallback_repair_pending(operation, account_id):
                     repair_data = read_full_for_repair(self.primary)
                     self._repair_unrecoverable_fallback_from_primary(operation, account_id, repair_data)
             else:
                 self._repair_unrecoverable_fallback_from_primary(operation, account_id, result)
+            self._warn_if_fallback_repair_pending(operation, account_id)
             self._clear_recovered_if_clean(operation)
             return result
         except Exception as exc:  # noqa: BLE001
@@ -461,8 +461,10 @@ class WarningFallbackAccountMemoryBackend:
 
     def _repair_unrecoverable_fallback_from_primary(self, operation: str, account_id: str, result: Any) -> None:
         stale_key = self._operation_stale_key(operation, account_id)
+        stale_set = self._fallback_stale_set(operation)
+        sync_failed_set = self._fallback_sync_failed_set(operation)
         unrecoverable_set = self._unrecoverable_fallback_set(operation)
-        if stale_key not in unrecoverable_set:
+        if stale_key not in stale_set and stale_key not in sync_failed_set and stale_key not in unrecoverable_set:
             return
         try:
             if operation == "read_entries":
@@ -489,6 +491,31 @@ class WarningFallbackAccountMemoryBackend:
         self._fallback_stale_set(operation).discard(stale_key)
         self._fallback_sync_failed_set(operation).discard(stale_key)
         unrecoverable_set.discard(stale_key)
+
+    def _fallback_repair_pending(self, operation: str, account_id: str) -> bool:
+        stale_key = self._operation_stale_key(operation, account_id)
+        return (
+            stale_key in self._fallback_stale_set(operation)
+            or stale_key in self._fallback_sync_failed_set(operation)
+            or stale_key in self._unrecoverable_fallback_set(operation)
+        )
+
+    def _warn_if_fallback_repair_pending(self, operation: str, account_id: str) -> None:
+        if not self._fallback_repair_pending(operation, account_id):
+            return
+        now = time.monotonic()
+        if now - self._last_warning_at < FALLBACK_WARNING_INTERVAL_SECONDS:
+            return
+        self._last_warning_at = now
+        LOGGER.critical(
+            "ACCOUNT MEMORY FALLBACK DATABASE STILL STALE. PRIMARY DATABASE IS AVAILABLE BUT SECONDARY REPAIR IS PENDING. "
+            "label=%s operation=%s account_id=%s error=%s. "
+            "Diese Warnung wiederholt sich periodisch, bis der Fallback wieder synchron ist.",
+            self.label,
+            operation,
+            account_id,
+            self.last_fallback_sync_error or "repair pending",
+        )
 
     def _account_is_dirty(self, operation: str, account_id: str) -> bool:
         if operation == "read_entries":
@@ -566,7 +593,7 @@ class WarningFallbackAccountMemoryBackend:
                 self.label,
                 operation,
             )
-            self.last_fallback_sync_error = ""
+        self.last_fallback_sync_error = ""
         self._fallback_active = False
 
     def _mirror_write(self, operation: str, account_id: str, callback: Callable[[Any], Any]) -> None:
