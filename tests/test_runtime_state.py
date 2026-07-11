@@ -1253,6 +1253,33 @@ def test_runtime_state_store_recovers_local_response_after_failed_reset(tmp_path
     assert account_store.read_llm_state(ACCOUNT_ID)["previous_response_id"] == "resp-local-new"
 
 
+def test_runtime_state_store_keeps_unchanged_response_after_failed_rewrite(tmp_path):
+    secret = b"s" * 32
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=StaticSecretProvider(secret))
+    account_store.write_llm_state(
+        ACCOUNT_ID,
+        {
+            "previous_response_id": "resp-old",
+            "previous_response_provider": "openai",
+            "previous_response_model": "gpt-5.5",
+        },
+    )
+    recovering_provider = RecoveringProvider(secret)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=recovering_provider)
+    state.previous_response_ids[("Bot", ACCOUNT_ID)] = "resp-old"
+    state.previous_response_scopes[("Bot", ACCOUNT_ID)] = ("openai", "gpt-5.5", "")
+
+    state.set_previous_response_id("Bot", ACCOUNT_ID, "resp-old", provider="openai", model="gpt-5.5")
+    assert ("Bot", ACCOUNT_ID) in state.pending_previous_response_resets
+
+    recovering_provider.available = True
+
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID, provider="openai", model="gpt-5.5") == "resp-old"
+    assert ("Bot", ACCOUNT_ID) not in state.pending_previous_response_resets
+    assert account_store.read_llm_state(ACCOUNT_ID)["previous_response_id"] == "resp-old"
+
+
 def test_runtime_state_store_serializes_set_and_reset_transitions(tmp_path, monkeypatch):
     state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
     write_entered = threading.Event()
