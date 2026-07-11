@@ -1333,6 +1333,23 @@ def test_memory_payload_size_reports_unavailable_for_invalid_backend_shape():
     ) is None
 
 
+def test_memory_payload_size_rejects_nonfinite_backend_values():
+    class NonfiniteStore:
+        account_memory_backend = object()
+
+        def read_memory_entries(self, _account_id):
+            return [{"id": "mem", "score": float("inf")}]
+
+        def read_memory_index(self, _account_id):
+            return {}
+
+    assert status_core.account_memory_payload_size(
+        account_store=NonfiniteStore(),
+        account_id="account",
+        fallback_directory=None,
+    ) is None
+
+
 def test_memory_files_size_reports_unavailable_on_directory_read_error(tmp_path, monkeypatch):
     directory = tmp_path / "account"
     directory.mkdir()

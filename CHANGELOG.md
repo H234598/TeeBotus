@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.40 - 2026-07-11
+
+- Reject non-finite memory values when estimating JSON payload size.
+
 ## 1.9.39 - 2026-07-11
 
 - Handle infinite runtime and identity counters as unknown in status output.

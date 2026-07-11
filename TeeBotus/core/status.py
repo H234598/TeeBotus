@@ -1598,7 +1598,7 @@ def account_memory_payload_size(*, account_store: AccountStore | None, account_i
             if index:
                 payload["index"] = index
             try:
-                raw = json.dumps(payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
+                raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, allow_nan=False).encode("utf-8")
             except (TypeError, ValueError, OverflowError, RecursionError):
                 LOGGER.exception("Failed to serialize account memory payload for status size.")
                 return None
