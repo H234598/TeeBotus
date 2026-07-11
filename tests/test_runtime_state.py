@@ -104,6 +104,19 @@ def test_runtime_state_store_rebuilds_cached_account_store_after_provider_swap(t
     assert state.get_previous_response_id("Bot", ACCOUNT_ID) == "resp-recovered"
 
 
+def test_runtime_state_store_rechecks_secret_guard_after_provider_kind_swap(tmp_path, monkeypatch):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    guard_calls: list[str] = []
+    monkeypatch.setattr(state, "_account_store_for_llm_state", lambda: guard_calls.append("checked"))
+
+    state._guard_account_store_secrets()
+    state.secret_provider = SecretToolInstanceSecretProvider(create_if_missing=False)
+    state._guard_account_store_secrets()
+    state._guard_account_store_secrets()
+
+    assert guard_calls == ["checked"]
+
+
 def test_runtime_state_store_clears_link_persistence_error_after_recovery(tmp_path):
     state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=BrokenProvider())
     account_id = "a" * 128

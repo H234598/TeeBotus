@@ -235,6 +235,7 @@ class RuntimeStateStore(RuntimeState):
         self.openai_state_persistence_error = ""
         self._llm_state_persistence_errors: dict[str, str] = {}
         self._account_store_secret_guard_checked = False
+        self._account_store_secret_guard_provider: object | None = None
         self._llm_account_store: AccountStore | None = None
         self._llm_account_store_secret_provider: object | None = None
         with self._link_notifications_lock():
@@ -295,11 +296,12 @@ class RuntimeStateStore(RuntimeState):
         return EncryptedJsonVault(self.instance_name, self.secret_provider)
 
     def _guard_account_store_secrets(self) -> None:
-        if self._account_store_secret_guard_checked:
+        if self._account_store_secret_guard_checked and self._account_store_secret_guard_provider is self.secret_provider:
             return
         if isinstance(self.secret_provider, SecretToolInstanceSecretProvider):
             self._account_store_for_llm_state()
         self._account_store_secret_guard_checked = True
+        self._account_store_secret_guard_provider = self.secret_provider
 
     def _account_store_for_llm_state(self) -> AccountStore:
         if self.secret_provider is None:
