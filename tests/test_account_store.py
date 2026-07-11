@@ -2193,6 +2193,78 @@ def test_account_memory_fallback_syncs_dirty_collection_back_to_primary(caplog):
     assert "primary backend recovered" in caplog.text
 
 
+@pytest.mark.parametrize("kind", ["entries", "index", "collection"])
+def test_account_memory_fallback_does_not_promote_corrupt_dirty_data(kind: str) -> None:
+    class Backend:
+        def __init__(self, *, fail_write: bool = False) -> None:
+            self.fail_write = fail_write
+            self.entries: dict[str, list[dict[str, str]]] = {}
+            self.indexes: dict[str, dict[str, object]] = {}
+            self.collections: dict[tuple[str, str], list[dict[str, str]]] = {}
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+            self.last_index_read_error = ""
+            self.last_collection_read_error = ""
+            self.last_collection_skipped = 0
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise OSError("primary unavailable")
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, account_id: str) -> dict[str, object]:
+            return dict(self.indexes.get(account_id, {}))
+
+        def write_index(self, account_id: str, data: dict[str, object]) -> None:
+            if self.fail_write:
+                raise OSError("primary unavailable")
+            self.indexes[account_id] = dict(data)
+
+        def read_collection(self, account_id: str, collection: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.collections.get((account_id, collection), [])]
+
+        def write_collection(self, account_id: str, collection: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise OSError("primary unavailable")
+            self.collections[(account_id, collection)] = [dict(row) for row in rows]
+
+    account_id = "a" * 128
+    collection = "version_notifications"
+    primary = Backend(fail_write=True)
+    fallback = Backend()
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    if kind == "entries":
+        backend.write_entries(account_id, [{"id": "pending_entry"}])
+        fallback.last_entry_read_error = "payload could not be decrypted"
+        fallback.last_entry_skipped = 1
+        primary.fail_write = False
+        with pytest.raises(AccountStoreError, match="read blocked"):
+            backend.read_entries(account_id)
+        assert account_id not in primary.entries
+        assert account_id in backend._unrecoverable_fallback_entries
+    elif kind == "index":
+        backend.write_index(account_id, {"index": {"pending": {}}})
+        fallback.last_index_read_error = "index could not be decrypted"
+        primary.fail_write = False
+        with pytest.raises(AccountStoreError, match="read blocked"):
+            backend.read_index(account_id)
+        assert account_id not in primary.indexes
+        assert account_id in backend._unrecoverable_fallback_indexes
+    else:
+        backend.write_collection(account_id, collection, [{"id": "pending_row"}])
+        fallback.last_collection_read_error = "collection could not be decrypted"
+        fallback.last_collection_skipped = 1
+        primary.fail_write = False
+        with pytest.raises(AccountStoreError, match="read blocked"):
+            backend.read_collection(account_id, collection)
+        assert (account_id, collection) not in primary.collections
+        assert (account_id, collection) in backend._unrecoverable_fallback_collections
+
+
 def test_account_memory_fallback_blocks_collection_writes_after_unrecoverable_empty_fallback(caplog):
     class Backend:
         def __init__(self, *, fail_read: bool = False) -> None:

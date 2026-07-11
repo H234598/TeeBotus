@@ -370,6 +370,7 @@ class WarningFallbackAccountMemoryBackend:
         if account_id not in self._dirty_entries:
             return
         rows = self.fallback.read_entries(account_id)
+        self._ensure_clean_fallback_read("read_entries", account_id)
         self.primary.write_entries(account_id, rows)
         self._dirty_entries.discard(account_id)
 
@@ -377,6 +378,7 @@ class WarningFallbackAccountMemoryBackend:
         if account_id not in self._dirty_indexes:
             return
         data = self.fallback.read_index(account_id)
+        self._ensure_clean_fallback_read("read_index", account_id)
         self.primary.write_index(account_id, data)
         self._dirty_indexes.discard(account_id)
 
@@ -385,8 +387,27 @@ class WarningFallbackAccountMemoryBackend:
         if key not in self._dirty_collections:
             return
         rows = self.fallback.read_collection(account_id, collection)
+        self._ensure_clean_fallback_read(f"read_collection:{collection}", account_id)
         self.primary.write_collection(account_id, collection, rows)
         self._dirty_collections.discard(key)
+
+    def _ensure_clean_fallback_read(self, operation: str, account_id: str) -> None:
+        self._copy_diagnostics(self.fallback)
+        if not self._read_diagnostic_failed(operation):
+            return
+        stale_key = self._operation_stale_key(operation, account_id)
+        self._fallback_stale_set(operation).add(stale_key)
+        self._unrecoverable_fallback_set(operation).add(stale_key)
+        self.last_fallback_sync_error = f"{operation}: fallback data has read diagnostics; primary sync blocked"
+        LOGGER.critical(
+            "ACCOUNT MEMORY DIRTY FALLBACK DATA IS NOT CLEAN. PRIMARY SYNC IS BLOCKED TO PROTECT EXISTING DATA. "
+            "label=%s operation=%s account_id=%s error=%s.",
+            self.label,
+            operation,
+            account_id,
+            self._diagnostic_error_text(operation),
+        )
+        raise AccountStoreError(self.last_fallback_sync_error)
 
     def _recover_read_from_fallback(
         self,
