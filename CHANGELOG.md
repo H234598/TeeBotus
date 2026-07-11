@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.73 - 2026-07-11
+
+- Skip adaptive contact timing until a notification-loudness prompt is actually due.
+
 ## 1.9.72 - 2026-07-11
 
 - Respect legacy notification-loudness `next_check_at` cooldowns.

@@ -695,7 +695,7 @@ def test_legacy_loudness_outbox_route_fallback_prevents_duplicate_and_cancels(tm
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "cancelled"
 
 
-def test_legacy_next_check_at_blocks_loudness_prompt_until_due(tmp_path) -> None:
+def test_legacy_next_check_at_blocks_loudness_prompt_until_due(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)
     account_id = prepare_account_with_route(account_store, identity)
@@ -715,6 +715,10 @@ def test_legacy_next_check_at_blocks_loudness_prompt_until_due(tmp_path) -> None
         },
     }
     account_store.write_agent_state(account_id, state)
+    monkeypatch.setattr(
+        "TeeBotus.runtime.notification_loudness.contact_timing_decision",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("cooldown must short-circuit contact timing")),
+    )
 
     assert queue_due_notification_loudness_prompts(account_store, account_id, now=now) == ()
     assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=now) is None
