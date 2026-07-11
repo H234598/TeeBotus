@@ -93,6 +93,13 @@ class TtsMimicVoiceCommandResult:
 
 
 def maybe_update_tts_dialect_preference(account_store: AccountStore, account_id: str, text: str) -> TtsDialectUpdate:
+    if not account_id:
+        return TtsDialectUpdate()
+    with account_store.account_memory_lock(account_id):
+        return _maybe_update_tts_dialect_preference_unlocked(account_store, account_id, text)
+
+
+def _maybe_update_tts_dialect_preference_unlocked(account_store: AccountStore, account_id: str, text: str) -> TtsDialectUpdate:
     normalized_text = str(text or "").strip()
     if not normalized_text:
         return TtsDialectUpdate()

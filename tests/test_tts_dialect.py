@@ -107,6 +107,48 @@ def test_pending_lifetime_confirmation_rejects_contradictory_yes(tmp_path) -> No
     assert tts_dialect_city(account_store, account_id) == ""
 
 
+def test_dialect_preference_updates_are_serialized_per_account(tmp_path, monkeypatch) -> None:
+    first = store(tmp_path)
+    second = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"d" * 32))
+    account_id = first.resolve_or_create_account(signal_identity_key(source_uuid="dialect-lock"))
+    original_read = AccountStore.read_agent_state
+    state = {"active": 0, "maximum": 0}
+    state_lock = threading.Lock()
+    errors: list[BaseException] = []
+
+    def slow_read(account_store, current_account_id):
+        with state_lock:
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+        try:
+            time.sleep(0.03)
+            return original_read(account_store, current_account_id)
+        finally:
+            with state_lock:
+                state["active"] -= 1
+
+    monkeypatch.setattr(AccountStore, "read_agent_state", slow_read)
+
+    def update(account_store, text: str) -> None:
+        try:
+            maybe_update_tts_dialect_preference(account_store, account_id, text)
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=update, args=(first, "Ich bin in Dresden geboren.")),
+        threading.Thread(target=update, args=(second, "Ich bin in Leipzig geboren.")),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert state["maximum"] == 1
+    assert tts_dialect_city(first, account_id) in {"Dresden", "Leipzig"}
+
+
 def test_voice_style_observations_are_serialized_per_account(tmp_path, monkeypatch) -> None:
     first = store(tmp_path)
     second = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"d" * 32))
