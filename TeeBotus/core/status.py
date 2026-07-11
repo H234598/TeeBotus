@@ -93,6 +93,16 @@ STATUS_URL_CREDENTIAL_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?:[A-Za-z][A-Za-z0-9+.-]*://)?[^/\s:@]+:[^/\s@]+@(?=[^\s]+)"
 )
 CODEX_HISTORY_SUCCESS_STATUSES = frozenset({"accepted", "acknowledged", "delivered", "sent"})
+CODEX_HISTORY_STATUS_TOKENS = CODEX_HISTORY_SUCCESS_STATUSES | {
+    "dispatching",
+    "error",
+    "failed",
+    "ok",
+    "queued",
+    "skipped",
+    "unknown",
+    "warning",
+}
 
 
 def build_status_reply(
@@ -800,7 +810,7 @@ def codex_history_status_lines(
             (
                 f"codex_history_repo={_status_field_value(safe_instance_name)} "
                 f"repo={_status_field_value(repo.get('repo_name', '<none>'))} "
-                f"status={repo.get('status', 'unknown')} "
+                f"status={_codex_history_status_token(repo.get('status', 'unknown'))} "
                 f"queued={repo.get('queued', 0)} failed={repo.get('failed', 0)} total={repo.get('total', 0)} "
                 f"run_summaries={repo.get('run_summaries', 0)} strategies={repo.get('strategies', 0)} "
                 f"graphs={repo.get('graphs', 0)} other={repo.get('other', 0)} "
@@ -843,7 +853,7 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
     malformed_rows = max(0, len(rows) - len(valid_rows))
     status_counts: dict[str, int] = {}
     for row in valid_rows:
-        status = str(row.get("status") or "unknown").strip().casefold() or "unknown"
+        status = _codex_history_status_token(row.get("status"))
         status_counts[status] = status_counts.get(status, 0) + 1
     queued = status_counts.get("queued", 0)
     failed = status_counts.get("failed", 0)
@@ -879,7 +889,7 @@ def _codex_history_repo_summaries(rows: Sequence[Mapping[str, Any]]) -> list[dic
             project = {}
         repo_name = redact_status_text(project.get("repo_name") or "<none>") or "<none>"
         repo_key = str(project.get("repo_id") or repo_name).strip() or repo_name
-        status = str(row.get("status") or "unknown").strip().casefold() or "unknown"
+        status = _codex_history_status_token(row.get("status"))
         entry = grouped.setdefault(
             repo_key,
             {
@@ -948,6 +958,11 @@ def _codex_history_kind(row: Mapping[str, Any]) -> str:
     if not kind:
         return "codex_run_summary"
     return redact_status_text(kind).strip() or "unknown"
+
+
+def _codex_history_status_token(value: object) -> str:
+    token = str(value or "").strip().casefold() or "unknown"
+    return token if token in CODEX_HISTORY_STATUS_TOKENS else "unknown"
 
 
 def _status_field_value(value: object) -> str:

@@ -5374,6 +5374,27 @@ def test_codex_history_status_warns_for_malformed_backend_row() -> None:
     ]
 
 
+def test_codex_history_status_normalizes_unknown_status_token(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "queued\nsecret",
+            "summary_prefix": "v1.8.0 #0001",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "Statusfehler"},
+        },
+    )
+
+    lines = codex_history_status_lines(instance_name="Demo", account_store=store)
+
+    assert lines[0].startswith("codex_history=Demo status=warning")
+    assert "latest_kind=codex_run_summary" in lines[0]
+    assert "codex_history_repo=Demo repo=TeeBotus status=warning" in lines[1]
+    assert "latest_status=unknown" in lines[1]
+    assert all("\n" not in line for line in lines)
+
+
 def test_codex_history_status_lines_validates_and_normalizes_instance_name(tmp_path: Path) -> None:
     store = _store(tmp_path)
 

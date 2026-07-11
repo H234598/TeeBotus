@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.36 - 2026-07-11
+
+- Normalize unknown or malformed Codex-History status tokens before rendering
+  machine-readable status lines.
+
 ## 1.9.35 - 2026-07-11
 
 - Keep identity status diagnostics alive when the report lacks an instances
