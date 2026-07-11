@@ -130,6 +130,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
         from TeeBotus.runtime.matrix_runner import check_matrix_accounts, check_matrix_homeservers
         from TeeBotus.runtime.ollama_health import check_ollama_services
         from TeeBotus.runtime.admin_accounts import admin_account_group_status_lines
+        from TeeBotus.runtime.accounts import AccountStore
         from TeeBotus.runtime.qdrant import (
             check_default_collections,
             check_qdrant_health,
@@ -150,6 +151,16 @@ def _runtime_status(argv: Sequence[str]) -> int:
         return 2
     print("TeeBotus runtime configuration resolves.")
     status_secret_provider = _runtime_status_secret_provider()
+
+    def status_store_factory(root: Path, instance_name: str) -> AccountStore:
+        return AccountStore(
+            root,
+            instance_name,
+            secret_provider=status_secret_provider,
+            create_dirs=False,
+            memory_backend_enabled=False,
+        )
+
     _print_runtime_status_section(
         "Konfiguration",
         (
@@ -358,6 +369,7 @@ def _runtime_status(argv: Sequence[str]) -> int:
             instance_name=instance_name,
             project_root=config.instances_dir.parent,
             env=os.environ,
+            store_factory=status_store_factory,
         ):
             tool_lines.append(_sanitize_status_text(line))
     _print_runtime_status_section("Tools und Account-Memory", tool_lines)

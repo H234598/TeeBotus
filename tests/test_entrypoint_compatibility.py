@@ -87,6 +87,27 @@ def test_runtime_status_reports_telegram_slot_without_token_secret(monkeypatch, 
     assert "telegram-secret-token" not in captured.out
 
 
+def test_runtime_status_admin_checks_reuse_status_secret_provider(monkeypatch, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    demo_dir = _configure_demo_instance(monkeypatch, tmp_path)
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    provider = StaticSecretProvider(b"c" * 32)
+    monkeypatch.setattr(bot, "_runtime_status_secret_provider", lambda: provider)
+    seen_providers: list[object] = []
+
+    def fake_admin_status(**kwargs):
+        store = kwargs["store_factory"](demo_dir / "data" / "accounts", "Demo")
+        seen_providers.append(store.secret_provider)
+        return ()
+
+    monkeypatch.setattr("TeeBotus.runtime.admin_accounts.admin_account_group_status_lines", fake_admin_status)
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    assert seen_providers == [provider]
+
+
 def test_runtime_status_all_uses_runtime_instance_discovery(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"
