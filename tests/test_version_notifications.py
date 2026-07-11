@@ -206,6 +206,26 @@ def test_account_identity_health_does_not_mask_malformed_runtime_counts(tmp_path
     assert lines == ["account_identity=Demo status=warning identity_warnings=1 runtime_slots=telegram:unknown identities=telegram:unknown"]
 
 
+def test_account_identity_health_does_not_treat_null_counts_as_zero(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "TeeBotus.admin.accounts_report.build_accounts_admin_report",
+        lambda **_kwargs: {
+            "instances": [
+                {
+                    "instance": "Demo",
+                    "account_store": {"identities_by_channel": {"telegram": None}},
+                    "runtime_slots": {"configured_channels": {"telegram": None}},
+                    "identity_health": {"status": "warning", "warning_count": None, "warnings": []},
+                }
+            ]
+        },
+    )
+
+    lines = account_identity_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == ["account_identity=Demo status=warning identity_warnings=unknown runtime_slots=telegram:unknown identities=telegram:unknown"]
+
+
 def test_status_does_not_crash_when_llm_client_attributes_fail(tmp_path: Path) -> None:
     class BrokenClient:
         @property

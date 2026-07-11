@@ -1300,7 +1300,7 @@ def _runtime_status_count_label(value: Any) -> str:
         if not name:
             continue
         try:
-            count = str(max(0, int(item or 0)))
+            count = str(max(0, int(item)))
         except (TypeError, ValueError):
             count = "unknown"
         parts.append(f"{name}:{count}")
@@ -1309,7 +1309,7 @@ def _runtime_status_count_label(value: Any) -> str:
 
 def _status_integer_label(value: object) -> str:
     try:
-        return str(max(0, int(value or 0)))
+        return str(max(0, int(value)))
     except (TypeError, ValueError, OverflowError):
         return "unknown"
 
