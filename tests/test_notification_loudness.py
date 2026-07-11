@@ -352,3 +352,24 @@ def test_concurrent_loudness_scheduler_runs_queue_only_one_prompt(tmp_path) -> N
 
     assert sum(len(result) for result in results) == 1
     assert len(account_store.read_proactive_outbox(account_id)) == 1
+
+
+def test_concurrent_incoming_messages_prompt_only_once(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    incoming_event = event(identity)
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(
+            executor.map(
+                lambda _: maybe_notification_loudness_prompt_action(incoming_event, account_store, account_id, now=now),
+                (1, 2),
+            )
+        )
+
+    assert sum(result is not None for result in results) == 1
+    route_state = account_store.read_agent_state(account_id)["notification_loudness"]["routes"]["telegram:1:chat-1"]
+    assert route_state["status"] == "pending"
+    assert route_state["prompted_windows_by_date"]["2026-06-15"] == ["second"]

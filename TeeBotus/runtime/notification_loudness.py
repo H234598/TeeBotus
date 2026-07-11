@@ -55,17 +55,18 @@ def maybe_notification_loudness_prompt_action(
         return None
     if not _event_has_current_private_route(account_store, event):
         return None
-    state = account_store.read_agent_state(account_id)
-    route_state = _ensure_route_state(state, event)
-    if str(route_state.get("status") or "unknown") in {"confirmed", "declined"}:
-        return None
-    resolved_now = now or datetime.now(timezone.utc)
-    if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=False):
+    with _account_proactive_outbox_lock(account_store, account_id):
+        state = account_store.read_agent_state(account_id)
+        route_state = _ensure_route_state(state, event)
+        if str(route_state.get("status") or "unknown") in {"confirmed", "declined"}:
+            return None
+        resolved_now = now or datetime.now(timezone.utc)
+        if not _notification_loudness_prompt_allowed(route_state, resolved_now, require_online=False):
+            account_store.write_agent_state(account_id, state)
+            return None
+        _mark_notification_loudness_prompted(route_state, event, resolved_now)
         account_store.write_agent_state(account_id, state)
-        return None
-    _mark_notification_loudness_prompted(route_state, event, resolved_now)
-    account_store.write_agent_state(account_id, state)
-    return SendText(event.chat_id, NOTIFICATION_LOUDNESS_PROMPT, track=False, buttons=NOTIFICATION_LOUDNESS_BUTTONS)
+        return SendText(event.chat_id, NOTIFICATION_LOUDNESS_PROMPT, track=False, buttons=NOTIFICATION_LOUDNESS_BUTTONS)
 
 
 def queue_due_notification_loudness_prompts(
