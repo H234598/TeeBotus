@@ -767,7 +767,11 @@ def _message_tracker_for_instance(instance_dir: Path, instance_name: str, factor
 
 def _cycle_ok(instances: list[dict[str, Any]]) -> bool:
     for instance in instances:
+        if instance.get("error"):
+            return False
         for account in instance.get("accounts", []):
+            if account.get("error"):
+                return False
             if account.get("dispatch_persistence_error"):
                 return False
             for result in account.get("dispatch_results", []):

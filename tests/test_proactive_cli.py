@@ -748,7 +748,7 @@ def test_proactive_cycle_reports_account_store_errors_without_crashing(tmp_path)
     )
 
     account = report["instances"][0]["accounts"][0]
-    assert report["ok"] is True
+    assert report["ok"] is False
     assert account["account_id"] == "a" * 128
     assert "AccountStoreError: boom" in account["error"]
 
