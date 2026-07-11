@@ -5,6 +5,7 @@ import os
 import stat
 import threading
 import time
+from copy import deepcopy
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -65,7 +66,7 @@ class PendingFlow:
             "flow_type": self.flow_type,
             "chat_id": self.chat_id,
             "channel": self.channel,
-            "payload": dict(self.payload),
+            "payload": deepcopy(self.payload),
         }
 
 
@@ -82,14 +83,14 @@ class RuntimeState:
     security_events_persistence_error: str = ""
 
     def set_pending_flow(self, instance_name: str, account_id: str, flow_type: str, payload: dict[str, Any]) -> None:
-        self.pending_flows[(instance_name, account_id, flow_type)] = dict(payload)
+        self.pending_flows[(instance_name, account_id, flow_type)] = deepcopy(payload)
 
     def pop_pending_flow(self, instance_name: str, account_id: str, flow_type: str) -> dict[str, Any] | None:
         return self.pending_flows.pop((instance_name, account_id, flow_type), None)
 
     def get_pending_flow(self, instance_name: str, account_id: str, flow_type: str) -> dict[str, Any] | None:
         payload = self.pending_flows.get((instance_name, account_id, flow_type))
-        return dict(payload) if payload is not None else None
+        return deepcopy(payload) if payload is not None else None
 
     def set_previous_response_id(
         self,

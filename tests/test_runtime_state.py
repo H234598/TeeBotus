@@ -874,6 +874,24 @@ def test_runtime_state_store_serializes_pending_flow_transitions(tmp_path, monke
     assert popped == [{"step": "start"}]
 
 
+def test_runtime_state_store_isolates_nested_pending_flow_payloads(tmp_path):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    payload = {"nested": {"step": "start"}, "items": ["one"]}
+    state.set_pending_flow("Bot", ACCOUNT_ID, "route", payload)
+
+    payload["nested"]["step"] = "mutated-input"
+    payload["items"].append("mutated-input")
+    stored = state.get_pending_flow("Bot", ACCOUNT_ID, "route")
+    assert stored == {"nested": {"step": "start"}, "items": ["one"]}
+
+    stored["nested"]["step"] = "mutated-output"
+    stored["items"].append("mutated-output")
+    assert state.get_pending_flow("Bot", ACCOUNT_ID, "route") == {
+        "nested": {"step": "start"},
+        "items": ["one"],
+    }
+
+
 def test_runtime_state_store_scopes_key_fingerprint_only_lookup(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"
