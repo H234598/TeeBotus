@@ -2524,6 +2524,13 @@ class AccountStore:
                 continue
             source_id = str(relation.get("source_id") or "").strip()
             target_id = str(relation.get("target_id") or "").strip()
+            relation_type = str(relation.get("type") or "").strip()
+            if not source_id:
+                errors.append("graph relation source_id is empty")
+            if not target_id:
+                errors.append("graph relation target_id is empty")
+            if not relation_type:
+                errors.append("graph relation type is empty")
             if source_id and source_id not in entry_id_set:
                 errors.append(f"graph relation source missing entry: {source_id}")
             if target_id and target_id not in entry_id_set:
