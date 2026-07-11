@@ -52,6 +52,13 @@ def test_mcp_policy_resolution_is_shared_and_keeps_hard_boundaries() -> None:
     assert "shell.exec" not in policies
 
 
+def test_mcp_policy_resolution_fails_closed_for_malformed_known_override() -> None:
+    policies = resolve_mcp_tool_policies({"memory.search": None})
+
+    assert policies["memory.search"].enabled is False
+    assert policies["memory.search"].read_only is True
+
+
 def test_mcp_status_separates_direct_allowlist_from_guarded_tools() -> None:
     lines = mcp_tool_status_lines(
         {

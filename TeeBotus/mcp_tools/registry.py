@@ -154,7 +154,12 @@ def resolve_mcp_tool_policies(
         name = str(raw_name or "").strip().casefold()
         if name not in defaults:
             continue
-        config = raw_config if isinstance(raw_config, Mapping) else {}
+        if not isinstance(raw_config, Mapping):
+            # A malformed explicit override must not silently re-enable a tool
+            # through the default policy (notably memory.search).
+            merged[name] = MCPToolPolicy(enabled=False, read_only=defaults[name].read_only)
+            continue
+        config = raw_config
         base = defaults[name]
         merged[name] = MCPToolPolicy(
             enabled=_bool_config(config.get("enabled"), base.enabled),
