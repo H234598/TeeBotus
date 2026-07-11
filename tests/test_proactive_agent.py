@@ -77,6 +77,24 @@ def test_proactive_agent_instance_is_default_off_and_can_be_enabled_by_env() -> 
     ) is True
 
 
+def test_proactive_state_string_booleans_do_not_enable_agent(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
+    account_store.write_agent_state(
+        account_id,
+        {"proactive": {"enabled": "false", "paused": "0"}, "consent": {"categories": ["reminder"]}},
+    )
+
+    assert "- aktiviert: nein" in proactive_status_text(account_store, account_id)
+    decision = proactive_policy_decision(
+        account_store,
+        account_id,
+        category="reminder",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    assert decision.reason == "proactive_disabled"
+
+
 def test_proactive_message_is_queued_only_after_consent_and_private_route(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

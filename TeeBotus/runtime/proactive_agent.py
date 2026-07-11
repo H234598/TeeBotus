@@ -2775,8 +2775,8 @@ def _normalized_agent_state(data: dict[str, Any]) -> dict[str, Any]:
         proactive = {}
         state["proactive"] = proactive
     proactive.setdefault("enabled", False)
-    proactive["enabled"] = bool(proactive.get("enabled"))
-    proactive["paused"] = bool(proactive.get("paused", False))
+    proactive["enabled"] = _normalize_bool(proactive.get("enabled"), default=False)
+    proactive["paused"] = _normalize_bool(proactive.get("paused", False), default=False)
     proactive.setdefault("updated_at", "")
     consent = state.setdefault("consent", {})
     if not isinstance(consent, dict):
@@ -2818,6 +2818,19 @@ def _normalize_int(value: Any, *, default: int) -> int:
         return int(value)
     except (TypeError, ValueError):
         return default
+
+
+def _normalize_bool(value: Any, *, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    text = str(value).strip().casefold()
+    if text in {"1", "true", "yes", "on", "enabled", "ja", "an"}:
+        return True
+    if text in {"0", "false", "no", "off", "disabled", "nein", "aus"}:
+        return False
+    return default
 
 
 def _is_int_text(value: Any) -> bool:

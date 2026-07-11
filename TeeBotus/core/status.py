@@ -1497,8 +1497,8 @@ def _proactive_agent_status_lines(
     proactive = state.get("proactive") if isinstance(state, dict) else {}
     if not isinstance(proactive, dict):
         proactive = {}
-    enabled = bool(proactive.get("enabled"))
-    paused = bool(proactive.get("paused"))
+    enabled = _status_bool(proactive.get("enabled"), default=False)
+    paused = _status_bool(proactive.get("paused"), default=False)
     queued = sum(1 for item in outbox if isinstance(item, dict) and str(item.get("status") or "queued").strip().casefold() == "queued")
     review_pending = sum(1 for item in outbox if isinstance(item, dict) and str(item.get("status") or "").strip().casefold() == "review_pending")
     dispatching = sum(1 for item in outbox if isinstance(item, dict) and str(item.get("status") or "").strip().casefold() == "dispatching")
@@ -1519,6 +1519,19 @@ def _proactive_model_planner_status(value: str) -> str:
     if planner in {"tool", "llm", "none"}:
         return planner
     return "unbekannt"
+
+
+def _status_bool(value: object, *, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return default
+    text = str(value).strip().casefold()
+    if text in {"1", "true", "yes", "on", "enabled", "ja", "an"}:
+        return True
+    if text in {"0", "false", "no", "off", "disabled", "nein", "aus"}:
+        return False
+    return default
 
 
 def github_commit_history_url(project_root: Path) -> str:

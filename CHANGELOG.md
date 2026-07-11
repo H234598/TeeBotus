@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.52 - 2026-07-11
+
+- Parse persisted proactive boolean values instead of treating false strings as true.
+
 ## 1.9.51 - 2026-07-11
 
 - Preserve falsy MCP mappings in runtime policy resolution.

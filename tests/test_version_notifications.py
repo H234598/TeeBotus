@@ -31,6 +31,7 @@ from TeeBotus.core.status import (
     _runtime_status_count_label,
     _runtime_status_sequence_label,
     _sequence_status_attr,
+    _status_bool,
 )
 from TeeBotus.runtime.accounts import (
     ACCOUNT_KEYRING_FILENAME,
@@ -382,6 +383,27 @@ def test_proactive_status_respects_explicit_empty_environment(tmp_path: Path, mo
     )
 
     assert "- Scheduler enabled: nein" in lines
+
+
+def test_proactive_status_parses_string_booleans_safely() -> None:
+    class Store:
+        def read_agent_state(self, _account_id: str) -> dict[str, object]:
+            return {"proactive": {"enabled": "false", "paused": "true"}}
+
+        def read_proactive_outbox(self, _account_id: str) -> list[dict[str, object]]:
+            return []
+
+    lines = _proactive_agent_status_lines(
+        account_store=Store(),
+        account_id="account",
+        instance_name="Demo",
+        proactive_model_planner="",
+        env={},
+    )
+
+    assert "- Agent enabled: nein" in lines
+    assert "- Agent paused: ja" in lines
+    assert _status_bool("0", default=True) is False
 
 
 def test_account_secret_health_uses_normalized_instance_name(tmp_path: Path) -> None:
