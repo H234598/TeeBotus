@@ -4,6 +4,7 @@ import logging
 import os
 import uuid
 from dataclasses import dataclass
+from functools import wraps
 from typing import Any, Iterable, Mapping
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -15,6 +16,31 @@ POSTGRES_DSN_ENV = "TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN"
 POSTGRES_CONNECT_TIMEOUT_ENV = "TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_CONNECT_TIMEOUT"
 POSTGRES_BACKEND_TOKENS = {"postgres", "postgresql", "pg"}
 LOGGER = logging.getLogger("TeeBotus")
+
+
+def _retry_after_missing_schema(method):  # noqa: ANN001
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        try:
+            return method(self, *args, **kwargs)
+        except Exception as exc:  # noqa: BLE001
+            if not self._initialized or not _is_missing_postgres_relation(exc):
+                raise
+            self._initialized = False
+            return method(self, *args, **kwargs)
+
+    return wrapped
+
+
+def _is_missing_postgres_relation(exc: BaseException) -> bool:
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if str(getattr(current, "sqlstate", "") or "") == "42P01":
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 @dataclass(frozen=True)
@@ -75,6 +101,7 @@ class PostgresAccountMemoryBackend:
             self._cipher_key = key
         return self._cipher
 
+    @_retry_after_missing_schema
     def read_entries(self, account_id: str) -> list[dict[str, Any]]:
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
@@ -115,6 +142,7 @@ class PostgresAccountMemoryBackend:
             )
         return entries
 
+    @_retry_after_missing_schema
     def read_entries_by_ids(self, account_id: str, memory_ids: Iterable[str]) -> list[dict[str, Any]]:
         requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
         if not requested_ids:
@@ -164,6 +192,7 @@ class PostgresAccountMemoryBackend:
         }
         return [entries_by_id[memory_id] for memory_id in requested_ids if memory_id in entries_by_id]
 
+    @_retry_after_missing_schema
     def write_entries(self, account_id: str, rows: Iterable[dict[str, Any]]) -> None:
         self._ensure_schema()
         normalized_rows = [dict(row) for row in rows if isinstance(row, dict)]
@@ -181,6 +210,7 @@ class PostgresAccountMemoryBackend:
                 for ordinal, row in enumerate(normalized_rows):
                     self._insert_entry(connection, account_id, row, ordinal)
 
+    @_retry_after_missing_schema
     def read_index(self, account_id: str) -> dict[str, Any]:
         self.last_index_read_error = ""
         self._ensure_schema()
@@ -207,6 +237,7 @@ class PostgresAccountMemoryBackend:
             )
             return {}
 
+    @_retry_after_missing_schema
     def write_index(self, account_id: str, data: dict[str, Any]) -> None:
         self._ensure_schema()
         nonce, ciphertext = self._encrypt_json(account_id, "index", dict(data))
@@ -226,6 +257,7 @@ class PostgresAccountMemoryBackend:
                     (self.instance_name, account_id, nonce, ciphertext, utc_now()),
                 )
 
+    @_retry_after_missing_schema
     def read_collection(self, account_id: str, collection: str) -> list[dict[str, Any]]:
         collection_name = _normalize_collection_name(collection)
         self.last_collection_read_error = ""
@@ -268,6 +300,7 @@ class PostgresAccountMemoryBackend:
             )
         return items
 
+    @_retry_after_missing_schema
     def write_collection(self, account_id: str, collection: str, rows: Iterable[dict[str, Any]]) -> None:
         collection_name = _normalize_collection_name(collection)
         self._ensure_schema()
@@ -285,6 +318,7 @@ class PostgresAccountMemoryBackend:
                 for ordinal, row in enumerate(normalized_rows):
                     self._insert_collection_item(connection, account_id, collection_name, row, ordinal)
 
+    @_retry_after_missing_schema
     def append_collection_items(self, account_id: str, collection: str, rows: Iterable[dict[str, Any]]) -> None:
         collection_name = _normalize_collection_name(collection)
         self._ensure_schema()
@@ -305,6 +339,7 @@ class PostgresAccountMemoryBackend:
                 for offset, row in enumerate(normalized_rows):
                     self._insert_collection_item(connection, account_id, collection_name, row, int(start_ordinal) + offset)
 
+    @_retry_after_missing_schema
     def replace_collection_item(self, account_id: str, collection: str, item_key: str, row: dict[str, Any]) -> bool:
         collection_name = _normalize_collection_name(collection)
         normalized_item_key = str(item_key or "").strip()
@@ -352,6 +387,7 @@ class PostgresAccountMemoryBackend:
                 )
                 return int(updated.rowcount or 0) > 0
 
+    @_retry_after_missing_schema
     def read_collection_names(self, account_id: str) -> tuple[str, ...]:
         self._ensure_schema()
         with self._connect() as connection:
@@ -366,6 +402,7 @@ class PostgresAccountMemoryBackend:
             ).fetchall()
         return tuple(str(row[0]) for row in rows if str(row[0] or "").strip())
 
+    @_retry_after_missing_schema
     def clear_account_unchecked(self, account_id: str) -> None:
         self._ensure_schema()
         with self._connect() as connection:

@@ -247,6 +247,57 @@ def test_postgres_backend_skips_corrupt_rows_like_sqlite(monkeypatch, caplog) ->
     assert "first_memory_id=mem_bad" in caplog.text
 
 
+def test_postgres_backend_rebuilds_schema_after_missing_relation(monkeypatch) -> None:
+    class MissingRelationError(Exception):
+        sqlstate = "42P01"
+
+    class FakeResult:
+        def fetchall(self):
+            return [("mem_retry", b"nonce", b"cipher")]
+
+    class FakeTransaction:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+    class FakeConnection:
+        def __init__(self) -> None:
+            self.fail_read_once = True
+            self.executed: list[str] = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def transaction(self) -> FakeTransaction:
+            return FakeTransaction()
+
+        def execute(self, sql: str, _params=()):
+            self.executed.append(sql)
+            if "SELECT memory_id" in sql and self.fail_read_once:
+                self.fail_read_once = False
+                raise MissingRelationError("relation does not exist")
+            return FakeResult()
+
+    backend = PostgresAccountMemoryBackend(
+        instance_name="Bench",
+        provider=StaticSecretProvider(b"p" * 32),
+        purpose="account-structured-memory-key",
+        config=PostgresMemoryConfig(dsn="postgresql://unused"),
+    )
+    backend._initialized = True
+    connection = FakeConnection()
+    monkeypatch.setattr(backend, "_connect", lambda: connection)
+    monkeypatch.setattr(backend, "_decrypt_json", lambda _account_id, memory_id, _nonce, _ciphertext: {"id": memory_id})
+
+    assert backend.read_entries("a" * 128) == [{"id": "mem_retry"}]
+    assert any("CREATE TABLE IF NOT EXISTS teebotus_memory_entries" in sql for sql in connection.executed)
+
+
 def test_postgres_backend_ignores_corrupt_index_like_sqlite(monkeypatch, caplog) -> None:
     class FakeResult:
         def fetchone(self):
