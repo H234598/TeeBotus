@@ -97,11 +97,11 @@ class QdrantMemoryIndex:
     def search(self, *, instance_name: str, account_id: str, query: str, limit: int = 5) -> tuple[QdrantMemoryResult, ...]:
         account = validate_sha512_token(account_id, field_name="account_id")
         instance = _validate_instance_name(instance_name)
-        vector = self.embedding_provider.embed_text(query)
-        _validate_vector(vector, expected_dimensions=int(self.embedding_provider.dimensions))
         limit_value = min(50, int(limit))
         if limit_value < 1:
             return ()
+        vector = self.embedding_provider.embed_text(query)
+        _validate_vector(vector, expected_dimensions=int(self.embedding_provider.dimensions))
         response = self._request_json(
             "POST",
             f"/collections/{quote(_validate_collection(self.collection), safe='')}/points/search",

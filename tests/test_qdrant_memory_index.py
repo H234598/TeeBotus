@@ -183,7 +183,19 @@ def test_qdrant_memory_search_is_scoped_by_instance_and_account() -> None:
 
 def test_qdrant_memory_search_limit_zero_does_not_call_remote() -> None:
     fake_qdrant = _FakeQdrant()
-    index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+
+    class _NoEmbeddingProvider:
+        model_name = USER_MEMORY_QDRANT_EMBEDDING_MODEL
+        dimensions = USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS
+
+        def embed_text(self, _text: str) -> list[float]:  # pragma: no cover - must not be called
+            raise AssertionError("limit=0 must not calculate an embedding")
+
+    index = QdrantMemoryIndex(
+        url="http://127.0.0.1:6333",
+        opener=fake_qdrant,
+        embedding_provider=_NoEmbeddingProvider(),
+    )
 
     results = index.search(instance_name="Depressionsbot", account_id=ACCOUNT_A, query="Schlaf", limit=0)
 
