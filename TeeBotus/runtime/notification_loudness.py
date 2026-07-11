@@ -481,22 +481,27 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if not normalized:
         return None
     words = set(normalized.split())
-    has_notification_context = any(
+    explicit_context_needles = (
+        "benachrichtigung",
+        "benachrichtigungen",
+        "nachricht",
+        "nachrichten",
+        "notification",
+        "notifications",
+        "message",
+        "messages",
+        "push",
+        "alert",
+        "alerts",
+    )
+    has_explicit_notification_context = any(
+        _contains_normalized_phrase(normalized, needle) for needle in explicit_context_needles
+    )
+    has_notification_context = has_explicit_notification_context or any(
         _contains_normalized_phrase(normalized, needle)
         for needle in (
             "laut",
             "loud",
-            "benachrichtigung",
-            "benachrichtigungen",
-            "nachricht",
-            "nachrichten",
-            "notification",
-            "notifications",
-            "message",
-            "messages",
-            "push",
-            "alert",
-            "alerts",
             *NOTIFICATION_LOUDNESS_MUTE_TERMS,
         )
     )
@@ -517,6 +522,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if has_notification_context and normalized.startswith(NOTIFICATION_LOUDNESS_NON_ASSERTIVE_STARTS):
         return None
     if has_notification_context and _notification_loudness_has_question_tail(normalized):
+        return None
+    if (
+        has_notification_context
+        and not has_explicit_notification_context
+        and _notification_loudness_has_unscoped_subject_status(normalized)
+    ):
         return None
     if has_notification_context and _notification_loudness_is_non_declarative(text, normalized):
         return None
@@ -1150,6 +1161,26 @@ def _notification_loudness_has_question_tail(normalized: str) -> bool:
     return any(
         normalized == _normalize_text(tail) or normalized.endswith(f" {_normalize_text(tail)}")
         for tail in NOTIFICATION_LOUDNESS_QUESTION_TAILS
+    )
+
+
+def _notification_loudness_has_unscoped_subject_status(normalized: str) -> bool:
+    subject_starts = (
+        "ich ",
+        "i ",
+        "das ",
+        "der ",
+        "die ",
+        "the ",
+        "mein ",
+        "meine ",
+        "my ",
+    )
+    if not normalized.startswith(subject_starts):
+        return False
+    return any(
+        _contains_normalized_phrase(normalized, copula)
+        for copula in ("bin", "ist", "sind", "am", "is", "are")
     )
 
 

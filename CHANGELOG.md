@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.130 - 2026-07-12
+
+- Ignore unrelated loudness statements without notification context.
+
 ## 1.9.129 - 2026-07-12
 
 - Respect negation in short affirmative loudness replies.

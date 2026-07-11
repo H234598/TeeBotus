@@ -1229,6 +1229,13 @@ def test_loudness_free_text_recognizes_message_and_push_context() -> None:
     assert _notification_loudness_decision("Push ist nicht ausgeschaltet", pending=False) == "confirmed"
 
 
+def test_loudness_free_text_ignores_unrelated_loudness_subjects() -> None:
+    assert _notification_loudness_decision("Das Radio ist laut", pending=True) is None
+    assert _notification_loudness_decision("I am not loud", pending=True) is None
+    assert _notification_loudness_decision("The phone is muted", pending=True) is None
+    assert _notification_loudness_decision("Die Nachrichten sind laut", pending=True) == "confirmed"
+
+
 def test_loudness_free_text_respects_negated_completion_phrases() -> None:
     assert _notification_loudness_decision("Ich habe noch nichts gemacht", pending=True) == "declined"
     assert _notification_loudness_decision("Ich habe nichts erledigt", pending=True) == "declined"
