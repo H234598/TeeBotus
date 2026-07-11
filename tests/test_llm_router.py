@@ -675,6 +675,20 @@ def test_runtime_text_client_uses_hf_pool_model_selector_purpose_for_explicit_pr
     assert client.model_selector == "pool:default#structured_decision"
 
 
+def test_runtime_text_client_explicit_profile_preserves_runtime_purpose() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="hf_pool_default",
+        purpose="proactive_worker",
+    )
+
+    assert isinstance(client, HFPoolProvider)
+    assert client.pool_name == "default"
+    assert client.purpose == "proactive_worker"
+    assert client.model_selector == "pool:default#proactive_worker"
+
+
 def test_runtime_text_client_purpose_overrides_instruction_profile() -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(llm_profile="hf_mistral"),
