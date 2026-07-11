@@ -169,6 +169,18 @@ def test_runtime_state_store_treats_existing_dotted_instance_directory_as_direct
     assert state.runtime_dir == instance_dir / "data" / "runtime"
 
 
+def test_runtime_state_store_rejects_symlinked_instance_directory_before_mkdir(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    instance_link = tmp_path / "Bot"
+    instance_link.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(AccountStoreError, match="unsafe runtime directory"):
+        RuntimeStateStore(instance_link, instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    assert not (outside / "data" / "runtime").exists()
+
+
 def test_runtime_state_store_clears_link_persistence_error_after_recovery(tmp_path):
     state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=BrokenProvider())
     account_id = "a" * 128

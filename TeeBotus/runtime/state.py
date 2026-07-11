@@ -227,6 +227,8 @@ class RuntimeStateStore(RuntimeState):
         else:
             self.runtime_dir = self.instance_dir / "data" / "runtime"
             inferred_instance_dir = self.instance_dir
+        if _has_symlink_parent(self.runtime_dir) or self.runtime_dir.is_symlink():
+            raise AccountStoreError(f"refusing unsafe runtime directory: {self.runtime_dir}")
         self.runtime_dir.mkdir(parents=True, exist_ok=True)
         self.instance_name = instance_name or inferred_instance_dir.name
         self.secret_provider = secret_provider
