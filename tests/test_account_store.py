@@ -2643,6 +2643,53 @@ def test_account_memory_fallback_recovers_primary_entry_diagnostics(caplog):
     assert "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in caplog.text
 
 
+def test_account_memory_fallback_blocks_partial_corrupt_fallback_read() -> None:
+    class Backend:
+        def __init__(
+            self,
+            rows: list[dict[str, str]],
+            *,
+            fail_read: bool = False,
+            skipped: int = 0,
+            error: str = "",
+        ) -> None:
+            self.entries = {"a" * 128: [dict(row) for row in rows]}
+            self.fail_read = fail_read
+            self.last_entry_skipped = skipped
+            self.last_entry_read_error = error
+            self.last_index_read_error = ""
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            if self.fail_read:
+                raise AccountStoreError("primary entries unavailable")
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+    account_id = "a" * 128
+    primary = Backend([{"id": "primary"}], fail_read=True)
+    fallback = Backend(
+        [{"id": "fallback_good"}],
+        skipped=1,
+        error="fallback payload could not be decrypted",
+    )
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    with pytest.raises(AccountStoreError, match="fallback data has read diagnostics"):
+        backend.read_entries(account_id)
+
+    assert primary.entries[account_id] == [{"id": "primary"}]
+    assert account_id in backend._unrecoverable_fallback_entries
+    assert backend.last_entry_read_error == "fallback payload could not be decrypted"
+
+
 def test_account_memory_fallback_keeps_warning_when_primary_repair_fails(caplog):
     class Backend:
         def __init__(

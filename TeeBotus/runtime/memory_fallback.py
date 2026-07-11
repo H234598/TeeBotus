@@ -394,19 +394,22 @@ class WarningFallbackAccountMemoryBackend:
         self._copy_diagnostics(self.fallback)
         if not self._read_diagnostic_failed(operation):
             return
+        raise self._fallback_diagnostics_error(operation, account_id)
+
+    def _fallback_diagnostics_error(self, operation: str, account_id: str) -> AccountStoreError:
         stale_key = self._operation_stale_key(operation, account_id)
         self._fallback_stale_set(operation).add(stale_key)
         self._unrecoverable_fallback_set(operation).add(stale_key)
         self.last_fallback_sync_error = f"{operation}: fallback data has read diagnostics; primary sync blocked"
         LOGGER.critical(
-            "ACCOUNT MEMORY DIRTY FALLBACK DATA IS NOT CLEAN. PRIMARY SYNC IS BLOCKED TO PROTECT EXISTING DATA. "
+            "ACCOUNT MEMORY FALLBACK DATA IS NOT CLEAN. PRIMARY PROMOTION IS BLOCKED TO PROTECT EXISTING DATA. "
             "label=%s operation=%s account_id=%s error=%s.",
             self.label,
             operation,
             account_id,
             self._diagnostic_error_text(operation),
         )
-        raise AccountStoreError(self.last_fallback_sync_error)
+        return AccountStoreError(self.last_fallback_sync_error)
 
     def _recover_read_from_fallback(
         self,
@@ -442,40 +445,41 @@ class WarningFallbackAccountMemoryBackend:
             self._unrecoverable_fallback_set(operation).add(stale_key)
             self.last_fallback_sync_error = f"{operation}: fallback has no recoverable data"
             return result
-        if not self._read_diagnostic_failed(operation):
-            try:
-                if operation == "read_entries":
-                    self.primary.write_entries(account_id, repair_data)
-                    self._dirty_entries.discard(account_id)
-                    self._stale_fallback_entries.discard(account_id)
-                    self._fallback_sync_failed_entries.discard(account_id)
-                    self._unrecoverable_fallback_entries.discard(account_id)
-                elif operation == "read_index":
-                    self.primary.write_index(account_id, repair_data)
-                    self._dirty_indexes.discard(account_id)
-                    self._stale_fallback_indexes.discard(account_id)
-                    self._fallback_sync_failed_indexes.discard(account_id)
-                    self._unrecoverable_fallback_indexes.discard(account_id)
-                elif operation.startswith("read_collection:"):
-                    collection = self._operation_collection(operation)
-                    key = (account_id, collection)
-                    self.primary.write_collection(account_id, collection, repair_data)
-                    self._dirty_collections.discard(key)
-                    self._stale_fallback_collections.discard(key)
-                    self._fallback_sync_failed_collections.discard(key)
-                    self._unrecoverable_fallback_collections.discard(key)
-            except Exception as exc:  # noqa: BLE001
-                self._fallback_stale_set(operation).add(self._operation_stale_key(operation, account_id))
-                self.last_fallback_sync_error = f"{operation}: primary repair failed: {exc}"
-                LOGGER.critical(
-                    "ACCOUNT MEMORY PRIMARY DATABASE REPAIR FROM FALLBACK FAILED. "
-                    "ACCOUNT MEMORY PRIMARY DATABASE FAILED. label=%s operation=%s account_id=%s error=%s.",
-                    self.label,
-                    operation,
-                    account_id,
-                    exc,
-                )
-            self._clear_recovered_if_clean(operation)
+        if self._read_diagnostic_failed(operation):
+            raise self._fallback_diagnostics_error(operation, account_id)
+        try:
+            if operation == "read_entries":
+                self.primary.write_entries(account_id, repair_data)
+                self._dirty_entries.discard(account_id)
+                self._stale_fallback_entries.discard(account_id)
+                self._fallback_sync_failed_entries.discard(account_id)
+                self._unrecoverable_fallback_entries.discard(account_id)
+            elif operation == "read_index":
+                self.primary.write_index(account_id, repair_data)
+                self._dirty_indexes.discard(account_id)
+                self._stale_fallback_indexes.discard(account_id)
+                self._fallback_sync_failed_indexes.discard(account_id)
+                self._unrecoverable_fallback_indexes.discard(account_id)
+            elif operation.startswith("read_collection:"):
+                collection = self._operation_collection(operation)
+                key = (account_id, collection)
+                self.primary.write_collection(account_id, collection, repair_data)
+                self._dirty_collections.discard(key)
+                self._stale_fallback_collections.discard(key)
+                self._fallback_sync_failed_collections.discard(key)
+                self._unrecoverable_fallback_collections.discard(key)
+        except Exception as exc:  # noqa: BLE001
+            self._fallback_stale_set(operation).add(self._operation_stale_key(operation, account_id))
+            self.last_fallback_sync_error = f"{operation}: primary repair failed: {exc}"
+            LOGGER.critical(
+                "ACCOUNT MEMORY PRIMARY DATABASE REPAIR FROM FALLBACK FAILED. "
+                "ACCOUNT MEMORY PRIMARY DATABASE FAILED. label=%s operation=%s account_id=%s error=%s.",
+                self.label,
+                operation,
+                account_id,
+                exc,
+            )
+        self._clear_recovered_if_clean(operation)
         return result
 
     def _fallback_result_is_empty_for_failed_read(
