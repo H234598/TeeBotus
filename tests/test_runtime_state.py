@@ -801,6 +801,19 @@ def test_runtime_state_store_rejects_incomplete_persisted_response_scope(tmp_pat
     assert "previous response scope is incomplete" in state.llm_state_persistence_error
 
 
+def test_runtime_state_store_rejects_persisted_state_for_wrong_instance(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    AccountStore(data_dir / "accounts", "Bot", secret_provider=provider).write_llm_state(
+        ACCOUNT_ID,
+        {"previous_response_id": "bot-response"},
+    )
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    with pytest.raises(AccountStoreError, match="runtime state instance mismatch"):
+        state.get_previous_response_id("OtherBot", ACCOUNT_ID)
+
+
 def test_runtime_state_store_scopes_key_fingerprint_only_lookup(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"

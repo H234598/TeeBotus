@@ -346,6 +346,7 @@ class RuntimeStateStore(RuntimeState):
         model: str = "",
         key_fingerprint: str = "",
     ) -> None:
+        self._ensure_instance_scope(instance_name)
         with self._llm_state_lock(account_id):
             key = (instance_name, account_id)
             previous_response_id = self.previous_response_ids.get(key)
@@ -383,6 +384,7 @@ class RuntimeStateStore(RuntimeState):
         model: str = "",
         key_fingerprint: str = "",
     ) -> str | None:
+        self._ensure_instance_scope(instance_name)
         key = (instance_name, account_id)
         with self._llm_state_lock(account_id):
             persisted, persisted_scope, persistence_error = self._read_llm_previous_response(account_id)
@@ -442,12 +444,21 @@ class RuntimeStateStore(RuntimeState):
             return None
 
     def reset_previous_response_id(self, instance_name: str, account_id: str) -> None:
+        self._ensure_instance_scope(instance_name)
         with self._llm_state_lock(account_id):
             key = (instance_name, account_id)
             self.pending_previous_response_resets[key] = self.previous_response_ids.get(key)
             super().reset_previous_response_id(instance_name, account_id)
             if self._clear_llm_previous_response_id(account_id):
                 self.pending_previous_response_resets.pop(key, None)
+
+    def _ensure_instance_scope(self, instance_name: str) -> None:
+        expected = str(self.instance_name or "").strip()
+        actual = str(instance_name or "").strip()
+        if expected and actual != expected:
+            raise AccountStoreError(
+                f"runtime state instance mismatch: expected={expected} actual={actual}"
+            )
 
     def record_link_notification(self, *, instance_name: str, account_id: str, new_identity_key: str, old_identity_key: str) -> None:
         try:
