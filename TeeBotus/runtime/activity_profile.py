@@ -147,7 +147,7 @@ def _parse_observation(value: Any, now: datetime) -> dict[str, Any] | None:
     if not isinstance(value, Mapping):
         return None
     observed_at = _parse_datetime(str(value.get("at") or ""))
-    if observed_at is None or observed_at > now + timedelta(minutes=5):
+    if observed_at is None or observed_at > now + timedelta(minutes=5) or observed_at < now - timedelta(days=ACTIVITY_HISTORY_DAYS):
         return None
     local = to_local(observed_at)
     age_days = max(0.0, (now - observed_at).total_seconds() / 86400)

@@ -5,7 +5,7 @@ import threading
 import time
 
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
-from TeeBotus.runtime.activity_profile import contact_timing_decision, record_account_activity
+from TeeBotus.runtime.activity_profile import contact_timing_decision, derive_activity_profile, record_account_activity
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.proactive_agent import enable_proactive_agent, proactive_policy_decision, set_proactive_allowed_hours
@@ -146,6 +146,23 @@ def test_record_account_activity_serializes_concurrent_state_updates(tmp_path, m
         "2026-06-15T09:00:00+02:00",
         "2026-06-15T10:00:00+02:00",
     }
+
+
+def test_activity_profile_ignores_observations_older_than_history_window() -> None:
+    now = datetime(2026, 6, 15, 12, 0, tzinfo=LOCAL)
+    observations = [
+        {
+            "at": f"2026-01-{day:02d}T12:00:00+02:00",
+            "text_length": 40,
+            "attachment_count": 0,
+        }
+        for day in range(1, 7)
+    ]
+
+    profile = derive_activity_profile(observations, now=now)
+
+    assert profile["sufficient_data"] is False
+    assert profile["observation_count"] == 0
 
 
 def test_contact_timing_uses_weekend_profile_for_irregular_weekends(tmp_path) -> None:
