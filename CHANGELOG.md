@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.105 - 2026-07-12
+
+- Recognize concise pending loudness action replies.
+
 ## 1.9.104 - 2026-07-12
 
 - Enforce account ownership for notification-loudness events.
