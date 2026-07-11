@@ -1267,6 +1267,17 @@ def test_status_does_not_fallback_to_legacy_files_when_memory_backend_fails(tmp_
     assert "- Nutzermemory: 13 B" not in text
 
 
+def test_status_does_not_treat_invalid_explicit_account_id_as_resolved(tmp_path):
+    text = build_status_reply(
+        account_id="../outside",
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+    )
+
+    assert "- Nutzermemory: Account nicht zugeordnet" in text
+    assert "- Nutzermemory: 0 B" not in text
+
+
 def test_memory_payload_size_does_not_mask_unreadable_json_with_file_size(tmp_path):
     class FailingJsonStore:
         account_memory_backend = None

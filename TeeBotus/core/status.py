@@ -1379,7 +1379,8 @@ def _memory_status_text(*, account_resolved: bool, memory_size: int | None) -> s
 
 def _resolve_status_account_id(*, sender_id: str, account_id: str, account_store: AccountStore | None) -> str:
     if account_id:
-        return account_id
+        candidate = str(account_id).strip().lower()
+        return candidate if TOKEN_HEX_RE.fullmatch(candidate) else ""
     if account_store is None or not sender_id:
         return ""
     try:

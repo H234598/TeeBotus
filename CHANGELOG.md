@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.20 - 2026-07-11
+
+- Do not treat invalid explicit account IDs as resolved in status output.
+
 ## 1.9.19 - 2026-07-11
 
 - Treat malformed fallback-model configuration as an empty fallback list in
