@@ -26,6 +26,7 @@ from TeeBotus.runtime.accounts import (
     SecretToolInstanceSecretProvider,
     StaticSecretProvider,
     _merge_account_jsonl_rows,
+    _atomic_write_text,
     matrix_identity_key,
     runtime_secret_provider,
     signal_identity_key,
@@ -1500,6 +1501,18 @@ def test_account_identity_lock_rejects_redirected_lock_file(tmp_path):
             pass
 
     assert outside.read_bytes() == b"keep"
+
+
+def test_atomic_write_rejects_symlinked_parent(tmp_path):
+    outside = tmp_path / "outside-atomic-write"
+    outside.mkdir()
+    linked_parent = tmp_path / "linked-atomic-write"
+    linked_parent.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(AccountStoreError, match="unsafe account memory atomic-write parent"):
+        _atomic_write_text(linked_parent / "payload.txt", "must not escape")
+
+    assert not (outside / "payload.txt").exists()
 
 
 def test_account_store_sqlite_backend_keeps_newer_legacy_jsonl_row_for_same_id(tmp_path, monkeypatch):

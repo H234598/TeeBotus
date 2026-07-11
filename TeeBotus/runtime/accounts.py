@@ -4838,7 +4838,9 @@ def _atomic_write_text(path: Path, text: str) -> None:
 
 
 def _atomic_write_bytes(path: Path, payload: bytes) -> None:
+    _ensure_safe_account_memory_path(path.parent, label="atomic-write parent", require_directory=True)
     path.parent.mkdir(parents=True, exist_ok=True)
+    _ensure_safe_account_memory_path(path.parent, label="atomic-write parent", require_directory=True)
     try:
         os.chmod(path.parent, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
     except OSError:
