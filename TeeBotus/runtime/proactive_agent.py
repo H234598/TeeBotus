@@ -22,7 +22,7 @@ from TeeBotus.runtime.activity_profile import contact_timing_decision
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import generated_file_to_outbox_payload, normalize_generated_file
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
-from TeeBotus.runtime.notification_loudness import is_notification_loudness_outbox_item
+from TeeBotus.runtime.notification_loudness import is_notification_loudness_outbox_item, notification_loudness_outbox_item_is_active
 from TeeBotus.runtime.timezone import local_now, to_local
 
 PROACTIVE_COMMANDS = {"/proactive", "/agent", "/proaktiv"}
@@ -968,6 +968,11 @@ def proactive_policy_decision(
             return ProactiveDecision(False, "invalid_route")
         if not _account_has_matching_proactive_route(account_store, account_id, route):
             return ProactiveDecision(False, "stale_route")
+        try:
+            if not notification_loudness_outbox_item_is_active(account_store, account_id, item or {}):
+                return ProactiveDecision(False, "notification_loudness_decided", route)
+        except (AccountStoreError, OSError, ValueError):
+            return ProactiveDecision(False, "notification_loudness_state_unavailable", route)
         return ProactiveDecision(True, "system_allowed", route)
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
     normalized_category = str(category or "").strip().casefold()

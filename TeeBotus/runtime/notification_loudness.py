@@ -142,6 +142,31 @@ def is_notification_loudness_outbox_item(item: Mapping[str, Any] | None) -> bool
     return isinstance(planner, Mapping) and str(planner.get("system_item") or "").strip() == NOTIFICATION_LOUDNESS_SYSTEM_ITEM
 
 
+def notification_loudness_outbox_item_is_active(account_store: AccountStore, account_id: str, item: Mapping[str, Any]) -> bool:
+    """Return whether a queued loudness prompt still belongs to an open check."""
+    route_key = str(item.get("route_key") or "").strip().casefold()
+    if not route_key:
+        return True
+    state = account_store.read_agent_state(account_id)
+    notification_state = state.get("notification_loudness") if isinstance(state, dict) else None
+    routes = notification_state.get("routes") if isinstance(notification_state, dict) else None
+    if not isinstance(routes, dict):
+        return True
+    route_state = routes.get(route_key)
+    if not isinstance(route_state, dict):
+        route_state = next(
+            (
+                candidate
+                for key, candidate in routes.items()
+                if str(key or "").strip().casefold() == route_key and isinstance(candidate, dict)
+            ),
+            None,
+        )
+    if not isinstance(route_state, dict):
+        return True
+    return str(route_state.get("status") or "unknown").strip().casefold() not in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES
+
+
 def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     normalized = _normalize_text(text)
     if not normalized:
