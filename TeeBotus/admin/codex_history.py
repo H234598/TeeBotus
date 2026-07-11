@@ -678,7 +678,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                     result["account_id"] = recipient_id
                 existing_results.append(result)
             successful_accounts = {
-                str(result.get("recipient_id") or "").strip()
+                str(result.get("recipient_id") or result.get("account_id") or "").strip()
                 for result in existing_results
                 if str(result.get("status") or "").strip().casefold() in {"delivered", "accepted", "acknowledged"}
             }

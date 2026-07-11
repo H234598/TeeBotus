@@ -1304,7 +1304,7 @@ def test_codex_history_dispatch_bridge_claims_sends_and_completes_only_open_reci
                             "kind": "codex_run_summary",
                             "created_at": "2026-06-19T12:00:00+00:00",
                             "payload": {"summary": {"text": "Bridge summary"}, "project": "/tmp/bridge"},
-                            "recipient_results": [{"recipient_id": "already", "status": "delivered"}],
+                            "recipient_results": [{"account_id": "already", "status": "delivered"}],
                         }],
                     },
                 }

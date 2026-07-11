@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.4 - 2026-07-11
+
+- Accept both `recipient_id` and legacy `account_id` fields when skipping
+  already delivered bridge recipients.
+
 ## 1.9.3 - 2026-07-11
 
 - Preserve already delivered History-Dispatcher recipients when a bridge claim
