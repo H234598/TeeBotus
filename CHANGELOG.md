@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.49 - 2026-07-11
+
+- Strip control characters from visible status titles.
+
 ## 1.9.48 - 2026-07-11
 
 - Make set-valued status labels deterministic without reordering lists.
