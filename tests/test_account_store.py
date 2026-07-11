@@ -2211,6 +2211,40 @@ def test_account_memory_fallback_syncs_dirty_collection_back_to_primary(caplog):
     assert "primary backend recovered" in caplog.text
 
 
+def test_account_memory_fallback_replace_reports_success_from_fallback() -> None:
+    class Backend:
+        def __init__(self, *, fail_replace: bool = False) -> None:
+            self.fail_replace = fail_replace
+            self.collections: dict[tuple[str, str], list[dict[str, str]]] = {}
+
+        def read_collection(self, account_id: str, collection: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.collections.get((account_id, collection), [])]
+
+        def write_collection(self, account_id: str, collection: str, rows: list[dict[str, str]]) -> None:
+            self.collections[(account_id, collection)] = [dict(row) for row in rows]
+
+        def replace_collection_item(self, account_id: str, collection: str, item_key: str, row: dict[str, str]) -> bool:
+            if self.fail_replace:
+                raise OSError("primary unavailable")
+            existing_rows = self.collections.get((account_id, collection), [])
+            for index, existing in enumerate(existing_rows):
+                if str(existing.get("id") or "").strip() == item_key:
+                    existing_rows[index] = dict(row)
+                    return True
+            return False
+
+    account_id = "a" * 128
+    collection = "codex_history_dispatch_results"
+    primary = Backend(fail_replace=True)
+    fallback = Backend()
+    fallback.collections[(account_id, collection)] = [{"id": "row_1", "status": "pending"}]
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    assert backend.replace_collection_item(account_id, collection, "row_1", {"id": "row_1", "status": "sent"}) is True
+    assert fallback.collections[(account_id, collection)] == [{"id": "row_1", "status": "sent"}]
+    assert (account_id, collection) in backend._dirty_collections
+
+
 @pytest.mark.parametrize("kind", ["entries", "index", "collection"])
 def test_account_memory_fallback_does_not_promote_corrupt_dirty_data(kind: str) -> None:
     class Backend:

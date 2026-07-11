@@ -137,12 +137,15 @@ class WarningFallbackAccountMemoryBackend:
         normalized_item_key = str(item_key or "").strip()
         if not collection_name or not normalized_item_key or not isinstance(row, dict):
             return False
-        primary_result = {"replaced": False}
+        replace_result = {"replaced": False, "primary_completed": False}
 
         def callback(backend: Any) -> None:
             replaced = self._replace_collection_item_on_backend(backend, account_id, collection_name, normalized_item_key, dict(row))
             if backend is self.primary:
-                primary_result["replaced"] = bool(replaced)
+                replace_result["replaced"] = bool(replaced)
+                replace_result["primary_completed"] = True
+            elif not replace_result["primary_completed"]:
+                replace_result["replaced"] = bool(replaced)
 
         self._write(
             f"write_collection:{collection_name}",
@@ -151,7 +154,7 @@ class WarningFallbackAccountMemoryBackend:
             self._dirty_collections,
             dirty_key=(account_id, collection_name),
         )
-        return bool(primary_result["replaced"])
+        return bool(replace_result["replaced"])
 
     def read_collection_names(self, account_id: str) -> tuple[str, ...]:
         try:
