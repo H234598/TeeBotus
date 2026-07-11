@@ -298,6 +298,7 @@ def test_benchmark_admin_notify_uses_cross_instance_admin_route_but_writes_logge
     source_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
     logger_store.account_dir(account_id).mkdir(parents=True)
     sent: list[tuple[dict[str, object], SendAttachment]] = []
+    sender_instances: list[str] = []
 
     def store_factory(_root: Path, instance_name: str) -> AccountStore:
         if instance_name == STATUS_SUMMARY_INSTANCE_NAME:
@@ -312,7 +313,8 @@ def test_benchmark_admin_notify_uses_cross_instance_admin_route_but_writes_logge
             markdown_document="# TeeBotus Benchmarks\n\nok\n",
             env={ADMIN_ACCOUNT_IDS_ENV: account_id},
             store_factory=store_factory,
-            sender_factory=lambda _instance, _store: {"telegram": lambda route, action, _metadata: sent.append((route, action)) or "ok"},
+            sender_factory=lambda instance, _store: sender_instances.append(instance)
+            or {"telegram": lambda route, action, _metadata: sent.append((route, action)) or "ok"},
             now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
         )
         return format_admin_notification_result_lines(results)
@@ -324,6 +326,7 @@ def test_benchmark_admin_notify_uses_cross_instance_admin_route_but_writes_logge
     route, action = sent[0]
     assert route["chat_id"] == "123"
     assert route["route_source_instance"] == "Depressionsbot"
+    assert sender_instances == ["Depressionsbot"]
     assert action.caption == f"Benchmark TeeBotus {__version__}"
     assert logger_store.read_status_outbox(account_id)[0]["kind"] == "benchmark_summary"
     assert source_store.read_status_outbox(account_id) == []
