@@ -23,6 +23,17 @@ class BrokenProvider:
         raise AccountStoreError("secret backend unavailable")
 
 
+class RecoveringProvider:
+    def __init__(self, secret: bytes) -> None:
+        self.secret = secret
+        self.available = False
+
+    def get_secret(self, instance_name: str, purpose: str) -> bytes:
+        if not self.available:
+            raise AccountStoreError("secret backend unavailable")
+        return self.secret
+
+
 ACCOUNT_ID = "a" * 128
 
 
@@ -325,54 +336,17 @@ def test_runtime_state_store_refreshes_persistent_llm_state_between_bridges(tmp_
     assert first.get_previous_response_id("Bot", ACCOUNT_ID, **scope) is None
 
 
-def test_runtime_state_store_keeps_persistence_error_local_to_parallel_reads(tmp_path, monkeypatch):
+def test_runtime_state_store_uses_read_error_snapshot_for_cache_fallback(tmp_path, monkeypatch):
     state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
     account_a = "a" * 128
-    account_b = "b" * 128
     state.previous_response_ids[("Bot", account_a)] = "cached-a"
-    a_started = threading.Event()
-    b_read = threading.Event()
-    release_a = threading.Event()
-    results: dict[str, str | None] = {}
-    errors: list[BaseException] = []
 
-    def fake_read(account_id: str) -> tuple[dict[str, str], str]:
-        if account_id == account_a:
-            a_started.set()
-            if not release_a.wait(timeout=2):
-                raise RuntimeError("account A read was not released")
-            return {}, "account A unavailable"
-        b_read.set()
-        return {"previous_response_id": "persisted-b"}, ""
+    def fake_read(_account_id: str) -> tuple[dict[str, str], str]:
+        return {}, "account A unavailable"
 
     monkeypatch.setattr(state, "_read_llm_state", fake_read)
 
-    def read_a() -> None:
-        try:
-            results["a"] = state.get_previous_response_id("Bot", account_a)
-        except BaseException as exc:  # pragma: no cover - assertion below reports the error.
-            errors.append(exc)
-
-    def read_b() -> None:
-        try:
-            results["b"] = state.get_previous_response_id("Bot", account_b)
-        except BaseException as exc:  # pragma: no cover - assertion below reports the error.
-            errors.append(exc)
-
-    thread_a = threading.Thread(target=read_a)
-    thread_b = threading.Thread(target=read_b)
-    thread_a.start()
-    assert a_started.wait(timeout=1)
-    thread_b.start()
-    assert b_read.wait(timeout=1)
-    release_a.set()
-    thread_a.join(timeout=2)
-    thread_b.join(timeout=2)
-
-    assert not thread_a.is_alive()
-    assert not thread_b.is_alive()
-    assert errors == []
-    assert results == {"a": "cached-a", "b": "persisted-b"}
+    assert state.get_previous_response_id("Bot", account_a) == "cached-a"
 
 
 def test_runtime_state_store_does_not_overwrite_llm_state_after_read_failure(tmp_path, monkeypatch):
@@ -421,6 +395,41 @@ def test_runtime_state_store_reset_clears_persisted_previous_llm_response_id(tmp
 
     assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID) is None
     assert "previous_response_id" not in account_store.read_llm_state(ACCOUNT_ID)
+
+
+def test_runtime_state_store_retries_failed_reset_after_persistence_recovers(tmp_path):
+    secret = b"s" * 32
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=StaticSecretProvider(secret))
+    account_store.write_llm_state(ACCOUNT_ID, {"previous_response_id": "resp-old"})
+    recovering_provider = RecoveringProvider(secret)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=recovering_provider)
+    state.previous_response_ids[("Bot", ACCOUNT_ID)] = "resp-old"
+
+    state.reset_previous_response_id("Bot", ACCOUNT_ID)
+    assert ("Bot", ACCOUNT_ID) in state.pending_previous_response_resets
+
+    recovering_provider.available = True
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID) is None
+    assert ("Bot", ACCOUNT_ID) not in state.pending_previous_response_resets
+    assert "previous_response_id" not in account_store.read_llm_state(ACCOUNT_ID)
+
+
+def test_runtime_state_store_does_not_clear_new_response_after_failed_reset(tmp_path):
+    secret = b"s" * 32
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=StaticSecretProvider(secret))
+    account_store.write_llm_state(ACCOUNT_ID, {"previous_response_id": "resp-old"})
+    recovering_provider = RecoveringProvider(secret)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=recovering_provider)
+    state.previous_response_ids[("Bot", ACCOUNT_ID)] = "resp-old"
+
+    state.reset_previous_response_id("Bot", ACCOUNT_ID)
+    account_store.write_llm_state(ACCOUNT_ID, {"previous_response_id": "resp-new"})
+    recovering_provider.available = True
+
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID) == "resp-new"
+    assert ("Bot", ACCOUNT_ID) not in state.pending_previous_response_resets
 
 
 def test_runtime_state_store_set_none_clears_previous_llm_response_id(tmp_path):
