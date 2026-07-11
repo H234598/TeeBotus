@@ -55,7 +55,12 @@ _LIFETIME_CITY_PATTERNS = (
     re.compile(rf"\b(?:ich\s+)?(?:habe\s+)?(?:fast\s+)?mein\s+ganzes\s+leben\s+(?:in|bei)\s+{_CITY_PATTERN}\s+(?:gelebt|verbracht|gewohnt)\b", re.IGNORECASE),
 )
 _POSITIVE_RE = re.compile(r"\b(mochte|mag|liebte|liebe|gern|gerne|schoen|schön|gut|heimat|zuhause|wohlgefuehlt|wohlgefühlt)\b", re.IGNORECASE)
-_NEGATIVE_RE = re.compile(r"\b(nicht\s+mochte|mochte\s+.{0,40}\s+nicht|nicht\s+mag|mag\s+.{0,40}\s+nicht|hasste|hass|schlimm|furchtbar|ungern|nie\s+gemocht)\b", re.IGNORECASE)
+_NEGATIVE_RE = re.compile(
+    r"\b(?:hasste|hass|schlimm|furchtbar|ungern|nie\s+gemocht)\b|"
+    r"\b(?:nicht|nie)\b.{0,40}\b(?:mochte|mag|liebte|liebe|gern|gerne|schoen|schön|gut|heimat|zuhause|wohlgefuehlt|wohlgefühlt)\b|"
+    r"\b(?:mochte|mag|liebte|liebe|gern|gerne|schoen|schön|gut|heimat|zuhause|wohlgefuehlt|wohlgefühlt)\b.{0,40}\b(?:nicht|nie)\b",
+    re.IGNORECASE,
+)
 _YES_RE = re.compile(r"^\s*(ja|jep|jo|yes|y|klar|stimmt|genau|mochte ich|habe ich gemocht|war gut|war schoen|war schön)\b", re.IGNORECASE)
 _NO_RE = re.compile(r"^\s*(nein|nee|no|n|nicht|gar nicht|abbrechen|cancel|mochte ich nicht|eher nicht)\b", re.IGNORECASE)
 
@@ -306,6 +311,22 @@ def record_tts_voice_style_observation(
 ) -> bool:
     if account_store is None or not account_id:
         return False
+    with account_store.account_memory_lock(account_id):
+        return _record_tts_voice_style_observation_unlocked(
+            account_store,
+            account_id,
+            transcript,
+            duration_seconds=duration_seconds,
+        )
+
+
+def _record_tts_voice_style_observation_unlocked(
+    account_store: AccountStore,
+    account_id: str,
+    transcript: str,
+    *,
+    duration_seconds: float | int | None = None,
+) -> bool:
     analysis = _analyze_voice_style(transcript, duration_seconds=duration_seconds)
     if not analysis:
         return False
@@ -563,14 +584,19 @@ def _extract_city(text: str, patterns: tuple[re.Pattern[str], ...]) -> str:
         match = pattern.search(text)
         if not match:
             continue
-        return _clean_city(match.group("city"))
+        city = _clean_city(match.group("city"))
+        if city:
+            return city
     return ""
 
 
 def _clean_city(value: str) -> str:
     city = re.split(r"\s+(?:und|aber|weil|denn|wo|als|seit|dort|da)\b", str(value or "").strip(), maxsplit=1, flags=re.IGNORECASE)[0]
     city = re.sub(r"[.,;:!?]+$", "", city.strip())
-    return re.sub(r"\s+", " ", city)[:80]
+    city = re.sub(r"\s+", " ", city)[:80]
+    if re.search(r"(?i)\b(?:nicht(?:\s+mehr)?|kein(?:e|er|em|en)?|mein(?:e|er|em|en)?|ein(?:e|er|em|en)?)\b", city):
+        return ""
+    return city
 
 
 def _pending_lifetime_city(state: dict[str, Any]) -> dict[str, Any] | None:

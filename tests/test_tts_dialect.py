@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import threading
+import time
+
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
 from TeeBotus.runtime.tts_dialect import (
@@ -22,6 +25,7 @@ def test_extract_birth_and_lifetime_city_phrases() -> None:
     assert extract_birth_city("Ich bin in Nürnberg geboren.") == "Nürnberg"
     assert extract_birth_city("Meine Geburtsstadt ist München.") == "München"
     assert extract_lifetime_city("Ich habe den größten Teil meines Lebens in Hamburg verbracht.") == "Hamburg"
+    assert extract_birth_city("Meine Geburtsstadt ist nicht München.") == ""
 
 
 def test_birth_city_sets_tts_dialect_without_prompt(tmp_path) -> None:
@@ -68,6 +72,52 @@ def test_negative_lifetime_city_does_not_override_tts_dialect(tmp_path) -> None:
 
     assert update.changed is False
     assert tts_dialect_city(account_store, account_id) == ""
+
+
+def test_negative_lifetime_phrasings_do_not_override_tts_dialect(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="negative-phrases"))
+
+    for text in (
+        "Ich habe den größten Teil meines Lebens in Berlin verbracht, aber es war nicht schön.",
+        "Ich habe den größten Teil meines Lebens in Hamburg verbracht, aber nicht gern.",
+    ):
+        update = maybe_update_tts_dialect_preference(account_store, account_id, text)
+        assert update.changed is False
+
+    assert tts_dialect_city(account_store, account_id) == ""
+
+
+def test_voice_style_observations_are_serialized_per_account(tmp_path, monkeypatch) -> None:
+    first = store(tmp_path)
+    second = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"d" * 32))
+    account_id = first.resolve_or_create_account(signal_identity_key(source_uuid="mimic-lock"))
+    original_read = AccountStore.read_agent_state
+
+    def slow_read(account_store, current_account_id):
+        time.sleep(0.03)
+        return original_read(account_store, current_account_id)
+
+    monkeypatch.setattr(AccountStore, "read_agent_state", slow_read)
+    errors: list[BaseException] = []
+
+    def record(account_store, text: str) -> None:
+        try:
+            assert record_tts_voice_style_observation(account_store, account_id, text, duration_seconds=3) is True
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    threads = [
+        threading.Thread(target=record, args=(first, "Ich rede sehr schnell und bin nervoes.")),
+        threading.Thread(target=record, args=(second, "Ich rede langsam und bin ruhig.")),
+    ]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert first.read_agent_state(account_id)["tts_mimic_voice"]["observations_count"] == 2
 
 
 def test_voice_style_observation_builds_mimic_profile_without_raw_transcript(tmp_path) -> None:
