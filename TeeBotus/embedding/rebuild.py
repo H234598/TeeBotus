@@ -724,14 +724,18 @@ def _qdrant_collection_name_error(value: object) -> str:
 
 def _memory_requested_accounts(account_ids: Iterable[str]) -> tuple[tuple[str, ...], str]:
     accounts: list[str] = []
+    seen: set[str] = set()
     for account_id in account_ids:
         raw = str(account_id or "").strip()
         if not raw:
             continue
         try:
-            accounts.append(validate_sha512_token(raw.lower(), field_name="account_id"))
+            account = validate_sha512_token(raw.lower(), field_name="account_id")
         except AccountStoreError as exc:
             return (), str(exc)
+        if account not in seen:
+            seen.add(account)
+            accounts.append(account)
     return tuple(accounts), ""
 
 

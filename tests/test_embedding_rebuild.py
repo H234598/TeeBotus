@@ -268,6 +268,34 @@ def test_rebuild_qdrant_memory_indexes_reports_invalid_requested_account_id(tmp_
     assert "account_id must be a 128 character lowercase hex SHA-512 token" in results[0].error
 
 
+def test_rebuild_qdrant_memory_indexes_deduplicates_requested_accounts(tmp_path):
+    calls: list[str] = []
+
+    class FakeQdrantMemoryIndex:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
+        def rebuild(self, *, account_store, instance_name: str, account_id: str, include_legacy_raw_account_id_cleanup: bool = False):
+            calls.append(account_id)
+            return ()
+
+    instances_dir = tmp_path / "instances"
+    store = AccountStore(instances_dir / "Depressionsbot" / "data" / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+
+    results = rebuild_qdrant_memory_indexes(
+        instances_dir=instances_dir,
+        instance_names=("Depressionsbot",),
+        account_ids=(account_id.upper(), account_id),
+        secret_provider=StaticSecretProvider(b"a" * 32),
+        embedding_config=EmbeddingConfig(provider="hash", model_name="test", dimensions=16),
+        qdrant_index_factory=FakeQdrantMemoryIndex,
+    )
+
+    assert [result.status for result in results] == ["rebuilt"]
+    assert calls == [account_id]
+
+
 def test_rebuild_qdrant_bibliothekar_indexes_uses_local_store_chunks(tmp_path):
     calls: list[tuple[str, str, str, int, list[str]]] = []
     deleted_instances: list[str] = []
