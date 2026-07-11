@@ -226,6 +226,26 @@ def test_account_identity_health_does_not_treat_null_counts_as_zero(tmp_path: Pa
     assert lines == ["account_identity=Demo status=warning identity_warnings=unknown runtime_slots=telegram:unknown identities=telegram:unknown"]
 
 
+def test_account_identity_health_does_not_crash_on_infinite_counts(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "TeeBotus.admin.accounts_report.build_accounts_admin_report",
+        lambda **_kwargs: {
+            "instances": [
+                {
+                    "instance": "Demo",
+                    "account_store": {"identities_by_channel": {"telegram": float("inf")}},
+                    "runtime_slots": {"configured_channels": {"telegram": float("inf")}},
+                    "identity_health": {"status": "warning", "warning_count": float("inf"), "warnings": []},
+                }
+            ]
+        },
+    )
+
+    lines = account_identity_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == ["account_identity=Demo status=warning identity_warnings=unknown runtime_slots=telegram:unknown identities=telegram:unknown"]
+
+
 def test_account_identity_health_normalizes_unknown_status_tokens(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(
         "TeeBotus.admin.accounts_report.build_accounts_admin_report",

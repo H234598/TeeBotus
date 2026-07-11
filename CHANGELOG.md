@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.39 - 2026-07-11
+
+- Handle infinite runtime and identity counters as unknown in status output.
+
 ## 1.9.38 - 2026-07-11
 
 - Preserve falsy malformed MCP configurations for status validation.

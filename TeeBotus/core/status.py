@@ -1327,7 +1327,7 @@ def _runtime_status_count_label(value: Any) -> str:
             continue
         try:
             count = str(max(0, int(item)))
-        except (TypeError, ValueError):
+        except (TypeError, ValueError, OverflowError):
             count = "unknown"
         parts.append(f"{name}:{count}")
     return ",".join(parts) if parts else "<none>"
