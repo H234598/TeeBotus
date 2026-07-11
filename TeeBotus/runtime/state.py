@@ -560,8 +560,15 @@ class RuntimeStateStore(RuntimeState):
             # Keep the legacy in-memory behavior for invalid IDs; the actual
             # state-path validation below still records the persistence error.
             return nullcontext()
-        self._ensure_safe_accounts_root()
-        return account_memory_lock_for_root(self.accounts_root, account_id)
+        try:
+            self._ensure_safe_accounts_root()
+            account_dir = self.accounts_root / ACCOUNTS_DIRNAME / account_id
+            if _has_symlink_parent(account_dir) or account_dir.is_symlink():
+                raise AccountStoreError(f"refusing unsafe account state directory: {account_dir}")
+            return account_memory_lock_for_root(self.accounts_root, account_id)
+        except (AccountStoreError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            self._set_llm_state_persistence_error(str(exc), account_id=account_id)
+            raise
 
     def _read_llm_state(self, account_id: str) -> tuple[dict[str, Any], str]:
         with self._llm_state_lock(account_id):
