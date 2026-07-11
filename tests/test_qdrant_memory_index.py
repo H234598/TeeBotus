@@ -76,8 +76,17 @@ class _FakeQdrant:
             for point_id in points:
                 self.points.pop(str(point_id), None)
             return
-        must = body.get("filter", {}).get("must", []) if isinstance(body.get("filter"), dict) else []
+        filter_data = body.get("filter") if isinstance(body.get("filter"), dict) else {}
+        must = filter_data.get("must", [])
+        must_not = filter_data.get("must_not", [])
         for point_id, point in list(self.points.items()):
+            if any(
+                isinstance(condition, dict)
+                and isinstance(condition.get("has_id"), list)
+                and point_id in {str(value) for value in condition["has_id"]}
+                for condition in must_not
+            ):
+                continue
             payload = point.get("payload")
             if isinstance(payload, dict) and _payload_matches(payload, must):
                 self.points.pop(point_id, None)
@@ -493,6 +502,27 @@ def test_qdrant_memory_rebuild_preserves_cache_when_entry_is_not_indexable() -> 
 
     with pytest.raises(ValueError, match="memory entry must contain id"):
         index.rebuild(account_store=BrokenEntryStore(), instance_name="Depressionsbot", account_id=ACCOUNT_A)  # type: ignore[arg-type]
+
+    assert old_point_id in fake_qdrant.points
+    assert all(call["path"] != "/collections/teebotus_user_memory/points/delete" for call in fake_qdrant.calls)
+
+
+def test_qdrant_memory_rebuild_preserves_cache_when_upsert_fails(monkeypatch) -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+    old_point_id = index.index_memory(instance_name="Depressionsbot", account_id=ACCOUNT_A, entry={"id": "old", "user_text": "Alt"})
+
+    def fail_upsert(_self, _points) -> None:
+        raise RuntimeError("Qdrant upsert failed")
+
+    monkeypatch.setattr(QdrantMemoryIndex, "_upsert_points", fail_upsert)
+
+    class AccountStore:
+        def read_memory_entries(self, _account_id):
+            return [{"id": "current", "user_text": "Neu"}]
+
+    with pytest.raises(RuntimeError, match="Qdrant upsert failed"):
+        index.rebuild(account_store=AccountStore(), instance_name="Depressionsbot", account_id=ACCOUNT_A)  # type: ignore[arg-type]
 
     assert old_point_id in fake_qdrant.points
     assert all(call["path"] != "/collections/teebotus_user_memory/points/delete" for call in fake_qdrant.calls)

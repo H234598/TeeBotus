@@ -5,7 +5,7 @@ import json
 import re
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Iterable
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
 from urllib.request import Request, urlopen
@@ -165,13 +165,28 @@ class QdrantMemoryIndex:
             {"points": [point_id]},
         )
 
-    def delete_account(self, *, instance_name: str, account_id: str, include_legacy_raw_account_id_cleanup: bool = False) -> None:
+    def delete_account(
+        self,
+        *,
+        instance_name: str,
+        account_id: str,
+        include_legacy_raw_account_id_cleanup: bool = False,
+        preserve_point_ids: Iterable[str] = (),
+    ) -> None:
         account = validate_sha512_token(account_id, field_name="account_id")
         instance = _validate_instance_name(instance_name)
+        preserved_ids = tuple(dict.fromkeys(str(point_id or "").strip() for point_id in preserve_point_ids if str(point_id or "").strip()))
         self._request_json(
             "POST",
             f"/collections/{quote(_validate_collection(self.collection), safe='')}/points/delete?wait=true",
-            {"filter": _qdrant_scope_filter(instance_name=instance, account_id=account, schema=None)},
+            {
+                "filter": _qdrant_scope_filter(
+                    instance_name=instance,
+                    account_id=account,
+                    schema=None,
+                    exclude_point_ids=preserved_ids,
+                )
+            },
         )
         if not include_legacy_raw_account_id_cleanup:
             return
@@ -193,12 +208,13 @@ class QdrantMemoryIndex:
         instance = _validate_instance_name(instance_name)
         entries = tuple(entry for entry in account_store.read_memory_entries(account) if isinstance(entry, dict))
         points = tuple(self._memory_point(instance_name=instance, account_id=account, entry=entry) for entry in entries)
+        self._upsert_points(points)
         self.delete_account(
             instance_name=instance,
             account_id=account,
             include_legacy_raw_account_id_cleanup=include_legacy_raw_account_id_cleanup,
+            preserve_point_ids=(str(point["id"]) for point in points),
         )
-        self._upsert_points(points)
         return tuple(str(point["id"]) for point in points)
 
     def _request_json(self, method: str, path: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -299,6 +315,7 @@ def _qdrant_scope_filter(
     schema_version: int | None = None,
     embedding_model: str = "",
     embedding_dimensions: int | None = None,
+    exclude_point_ids: Iterable[str] = (),
 ) -> dict[str, Any]:
     must = [
         {"key": "instance_name", "match": {"value": instance_name}},
@@ -331,7 +348,11 @@ def _qdrant_scope_filter(
             dimensions = 0
         if dimensions > 0:
             must.append({"key": "embedding_dimensions", "match": {"value": dimensions}})
-    return {"must": must}
+    filter_data: dict[str, Any] = {"must": must}
+    preserved_ids = tuple(dict.fromkeys(str(point_id or "").strip() for point_id in exclude_point_ids if str(point_id or "").strip()))
+    if preserved_ids:
+        filter_data["must_not"] = [{"has_id": list(preserved_ids)}]
+    return filter_data
 
 
 def _qdrant_legacy_account_filter(*, instance_name: str, account_id: str) -> dict[str, Any]:
