@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat as stat_module
 import threading
 from typing import Any
 
@@ -554,6 +555,20 @@ def test_runtime_state_store_refuses_security_event_hardlink(tmp_path):
 
     assert outside.read_text(encoding="utf-8") == "sentinel\n"
     assert state.security_events_persistence_error
+
+
+def test_runtime_state_store_secures_existing_security_event_file(tmp_path):
+    data_dir = tmp_path / "Bot" / "data"
+    runtime_dir = data_dir / "runtime"
+    runtime_dir.mkdir(parents=True)
+    security_path = runtime_dir / "Security_Events.jsonl"
+    security_path.write_text("", encoding="utf-8")
+    os.chmod(security_path, 0o644)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    state.append_security_event({"event": "secured"})
+
+    assert stat_module.S_IMODE(security_path.stat().st_mode) == 0o600
 
 
 def test_runtime_state_store_does_not_cache_unserializable_security_event(tmp_path):

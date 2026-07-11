@@ -586,6 +586,13 @@ class RuntimeStateStore(RuntimeState):
                     if handle is None:
                         raise AccountStoreError(f"refusing unavailable or unsafe security event path: {self.security_events_path}")
                     with handle:
+                        try:
+                            handle_stat = os.fstat(handle.fileno())
+                            if handle_stat.st_nlink > 1:
+                                raise AccountStoreError(f"refusing unsafe security event path: {self.security_events_path}")
+                            os.fchmod(handle.fileno(), stat.S_IRUSR | stat.S_IWUSR)
+                        except OSError as exc:
+                            raise AccountStoreError(f"could not secure security event path: {self.security_events_path}") from exc
                         handle.write(serialized_event)
                     maintain_runtime_directory(self.runtime_dir)
                 except (AccountStoreError, OSError, RuntimeError, TypeError, ValueError) as exc:
