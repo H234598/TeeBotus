@@ -292,6 +292,32 @@ def test_runtime_state_store_reports_link_notification_read_error(tmp_path, monk
     assert "read blocked" in state.link_notifications_persistence_error
 
 
+def test_runtime_state_store_uses_cache_when_llm_state_read_raises_oserror(tmp_path, monkeypatch):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    state.previous_response_ids[("Bot", ACCOUNT_ID)] = "cached-response"
+
+    def refuse_read(_store, _account_id):
+        raise OSError("state read blocked")
+
+    monkeypatch.setattr("TeeBotus.runtime.state.AccountStore.read_llm_state", refuse_read)
+
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID) == "cached-response"
+    assert "state read blocked" in state.llm_state_persistence_error
+
+
+def test_runtime_state_store_reports_llm_state_write_oserror(tmp_path, monkeypatch):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    def refuse_write(_store, _account_id, _payload):
+        raise OSError("state write blocked")
+
+    monkeypatch.setattr("TeeBotus.runtime.state.AccountStore.write_llm_state", refuse_write)
+    state.set_previous_response_id("Bot", ACCOUNT_ID, "response-id")
+
+    assert state.previous_response_ids[("Bot", ACCOUNT_ID)] == "response-id"
+    assert "state write blocked" in state.llm_state_persistence_error
+
+
 def test_runtime_state_store_refreshes_link_notifications_between_bridges(tmp_path):
     provider = StaticSecretProvider(b"s" * 32)
     data_dir = tmp_path / "Bot" / "data"

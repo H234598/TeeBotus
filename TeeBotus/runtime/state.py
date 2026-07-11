@@ -516,7 +516,7 @@ class RuntimeStateStore(RuntimeState):
                 selected = self._account_store_for_llm_state().read_llm_state(account_id)
                 self._set_llm_state_persistence_error("", account_id=account_id)
                 return selected, ""
-            except AccountStoreError as exc:
+            except (AccountStoreError, OSError, TypeError, ValueError) as exc:
                 error = str(exc)
                 self._set_llm_state_persistence_error(error, account_id=account_id)
                 return {}, error
@@ -527,7 +527,7 @@ class RuntimeStateStore(RuntimeState):
                 self._account_store_for_llm_state().write_llm_state(account_id, payload)
                 self._set_llm_state_persistence_error("", account_id=account_id)
                 return True
-            except AccountStoreError as exc:
+            except (AccountStoreError, OSError, TypeError, ValueError) as exc:
                 self._set_llm_state_persistence_error(str(exc), account_id=account_id)
                 return False
 
