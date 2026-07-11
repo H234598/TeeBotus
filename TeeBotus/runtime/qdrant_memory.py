@@ -153,7 +153,7 @@ class QdrantMemoryIndex:
                     payload=_result_payload(payload),
                 )
             )
-        return tuple(results)
+        return tuple(results[:limit_value])
 
     def delete_memory(self, *, instance_name: str, account_id: str, memory_id: str) -> None:
         account = validate_sha512_token(account_id, field_name="account_id")

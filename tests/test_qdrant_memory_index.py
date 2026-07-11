@@ -92,6 +92,13 @@ class _FakeQdrant:
                 self.points.pop(point_id, None)
 
 
+class _OverReturningQdrant(_FakeQdrant):
+    def _search(self, body: dict[str, object]) -> list[dict[str, object]]:
+        uncapped_body = dict(body)
+        uncapped_body["limit"] = 50
+        return super()._search(uncapped_body)
+
+
 def test_qdrant_memory_index_indexes_searches_and_deletes_without_cleartext() -> None:
     fake_qdrant = _FakeQdrant()
     index = QdrantMemoryIndex(
@@ -201,6 +208,21 @@ def test_qdrant_memory_search_limit_zero_does_not_call_remote() -> None:
 
     assert results == ()
     assert fake_qdrant.calls == []
+
+
+def test_qdrant_memory_search_clamps_over_returned_results() -> None:
+    fake_qdrant = _OverReturningQdrant()
+    index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+    for number in range(3):
+        index.index_memory(
+            instance_name="Depressionsbot",
+            account_id=ACCOUNT_A,
+            entry={"id": f"mem_{number}", "user_text": f"Schlaf {number}"},
+        )
+
+    results = index.search(instance_name="Depressionsbot", account_id=ACCOUNT_A, query="Schlaf", limit=1)
+
+    assert len(results) == 1
 
 
 def test_qdrant_memory_search_filters_stale_vectors_after_embedding_model_change() -> None:

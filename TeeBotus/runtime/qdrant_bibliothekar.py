@@ -137,7 +137,7 @@ class QdrantBibliothekarIndex:
             except (TypeError, ValueError):
                 score = 0.0
             results.append(QdrantBibliothekarResult(chunk_id=chunk_id, instance_name=instance, score=score, payload=dict(payload)))
-        return tuple(results)
+        return tuple(results[:limit_value])
 
     def delete_instance(self, *, instance_name: str, preserve_point_ids: Iterable[str] = ()) -> None:
         instance = _validate_instance_name(instance_name)

@@ -78,6 +78,13 @@ class _FakeQdrant:
                 self.points.pop(point_id, None)
 
 
+class _OverReturningQdrant(_FakeQdrant):
+    def _search(self, body: dict[str, object]) -> list[dict[str, object]]:
+        uncapped_body = dict(body)
+        uncapped_body["limit"] = 50
+        return super()._search(uncapped_body)
+
+
 def test_qdrant_bibliothekar_index_indexes_test_chunks_without_chunk_text() -> None:
     fake_qdrant = _FakeQdrant()
     index = QdrantBibliothekarIndex(
@@ -190,6 +197,16 @@ def test_qdrant_bibliothekar_search_limit_zero_does_not_call_remote() -> None:
 
     assert results == ()
     assert fake_qdrant.calls == []
+
+
+def test_qdrant_bibliothekar_search_clamps_over_returned_results() -> None:
+    fake_qdrant = _OverReturningQdrant()
+    index = QdrantBibliothekarIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+    index.index_chunks(instance_name="Depressionsbot", chunks=[_chunk(f"chunk_{number}", text="Schlaf") for number in range(3)])
+
+    results = index.search(instance_name="Depressionsbot", query="Schlaf", limit=1)
+
+    assert len(results) == 1
 
 
 def test_bge_m3_embedding_provider_is_prepared_but_not_default() -> None:
