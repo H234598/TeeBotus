@@ -4754,6 +4754,19 @@ def test_structured_account_memory_index_health_reports_broken_invariants(tmp_pa
     assert "entry mem_live relation target_id is empty" in error_text
 
 
+def test_structured_account_memory_index_health_reports_malformed_entry_rows(tmp_path, monkeypatch):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    monkeypatch.setattr(store, "read_memory_entries", lambda _account_id: [{"id": ""}, "not-an-entry"])
+
+    health = store.check_structured_memory_index(account_id)
+
+    assert not health.ok
+    error_text = "\n".join(health.errors)
+    assert "entry 0 id is empty" in error_text
+    assert "entry 1 is not an object" in error_text
+
+
 def test_structured_account_memory_index_health_reports_stale_semantic_cache(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

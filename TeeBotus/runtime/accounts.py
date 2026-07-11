@@ -2368,12 +2368,15 @@ class AccountStore:
         if entry_read_error:
             database_read_errors.append(f"database entries unreadable: skipped={entry_skipped} error={entry_read_error}")
         entry_ids: list[str] = []
-        for entry in entries:
+        for position, entry in enumerate(entries):
             if not isinstance(entry, dict):
+                errors.append(f"entry {position} is not an object")
                 continue
             memory_id = str(entry.get("id") or "").strip()
-            if memory_id:
-                entry_ids.append(memory_id)
+            if not memory_id:
+                errors.append(f"entry {position} id is empty")
+                continue
+            entry_ids.append(memory_id)
         entry_id_set = set(entry_ids)
         duplicate_entry_ids = sorted(memory_id for memory_id, count in Counter(entry_ids).items() if count > 1)
         if duplicate_entry_ids:
