@@ -52,6 +52,24 @@ def update_city_and_weather_context(
 ) -> WeatherContextResult:
     if not account_id:
         return WeatherContextResult(skipped_reason="missing_account")
+    with account_store.account_memory_lock(account_id):
+        return _update_city_and_weather_context_unlocked(
+            account_store,
+            account_id,
+            text,
+            now=now,
+            provider=provider,
+        )
+
+
+def _update_city_and_weather_context_unlocked(
+    account_store: AccountStore,
+    account_id: str,
+    text: str,
+    *,
+    now: datetime | None = None,
+    provider: WeatherProvider | None = None,
+) -> WeatherContextResult:
     resolved_now = _aware(now or datetime.now(timezone.utc))
     state = account_store.read_agent_state(account_id)
     weather_state = _ensure_weather_state(state)

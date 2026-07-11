@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+import time
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
@@ -148,6 +150,32 @@ def test_weather_provider_error_does_not_expose_stale_summary(tmp_path) -> None:
     weather_state = account_store.read_agent_state(account_id)["weather_context"]
     assert weather_state["summary"] == ""
     assert "offline" in weather_state["last_error"]
+
+
+def test_parallel_weather_updates_share_one_rate_limited_check(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    calls: list[str] = []
+
+    def provider(city: str) -> str:
+        calls.append(city)
+        time.sleep(0.05)
+        return f"{city}: 12 C"
+
+    def update() -> object:
+        return update_city_and_weather_context(
+            account_store,
+            account_id,
+            "Ich wohne in Berlin.",
+            now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+            provider=provider,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        results = list(executor.map(lambda _index: update(), range(2)))
+
+    assert len(calls) == 1
+    assert sorted(result.checked for result in results) == [False, True]
 
 
 def test_engine_adds_cached_weather_context_to_openai_prompt(tmp_path, monkeypatch) -> None:
