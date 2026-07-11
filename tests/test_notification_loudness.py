@@ -1245,6 +1245,17 @@ def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("Ich möchte, dass Nachrichten nicht stumm sind", pending=False) is None
 
 
+def test_loudness_free_text_does_not_decide_future_intentions_as_completed() -> None:
+    assert _notification_loudness_decision("I will turn notifications on", pending=True) is None
+    assert _notification_loudness_decision("I am going to turn notifications on", pending=False) is None
+    assert _notification_loudness_decision("I plan to turn notifications on", pending=True) is None
+    assert _notification_loudness_decision("I intend to mute messages", pending=False) is None
+    assert _notification_loudness_decision("Ich werde Nachrichten laut stellen", pending=True) is None
+    assert _notification_loudness_decision("Ich habe vor, Nachrichten laut zu stellen", pending=False) is None
+    assert _notification_loudness_decision("I have turned notifications on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I just turned notifications on", pending=False) == "confirmed"
+
+
 def test_loudness_free_text_accepts_affirmation_variants_with_context() -> None:
     assert _notification_loudness_decision("jo, laut", pending=True) == "confirmed"
     assert _notification_loudness_decision("jep, Nachrichten sind an", pending=True) == "confirmed"
