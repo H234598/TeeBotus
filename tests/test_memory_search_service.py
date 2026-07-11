@@ -22,6 +22,13 @@ def test_memory_search_config_is_opt_in() -> None:
     assert enabled.local_limit == 3
 
 
+def test_memory_search_config_honors_zero_source_limits() -> None:
+    config = MemorySearchConfig.from_mapping({"local_limit": 0, "semantic_limit": "0"})
+
+    assert config.local_limit == 0
+    assert config.semantic_limit == 0
+
+
 def test_merge_memory_candidates_deduplicates_and_prefers_multi_source_hits() -> None:
     merged = merge_memory_candidates(
         [MemoryCandidate("mem_a", 0.8, ("local",)), MemoryCandidate("mem_b", 0.7, ("local",))],

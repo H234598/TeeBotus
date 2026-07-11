@@ -21,8 +21,8 @@ class MemorySearchConfig:
         return cls(
             semantic_enabled=_truthy(source.get("semantic_enabled")),
             semantic_backend=str(source.get("semantic_backend") or "").strip().casefold(),
-            local_limit=_positive_int(source.get("local_limit"), default=8),
-            semantic_limit=_positive_int(source.get("semantic_limit"), default=8),
+            local_limit=_nonnegative_int(source.get("local_limit"), default=8),
+            semantic_limit=_nonnegative_int(source.get("semantic_limit"), default=8),
         )
 
 
@@ -184,14 +184,6 @@ def _truthy(value: Any) -> bool:
     if isinstance(value, bool):
         return value
     return str(value or "").strip().casefold() in {"1", "true", "yes", "ja", "on", "enabled"}
-
-
-def _positive_int(value: Any, *, default: int) -> int:
-    try:
-        parsed = int(value)
-    except (TypeError, ValueError):
-        parsed = default
-    return max(1, parsed)
 
 
 def _nonnegative_int(value: Any, *, default: int) -> int:
