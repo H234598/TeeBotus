@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.72 - 2026-07-11
+
+- Respect legacy notification-loudness `next_check_at` cooldowns.
+
 ## 1.9.71 - 2026-07-11
 
 - Derive legacy notification-loudness outbox route keys from stored routes.
