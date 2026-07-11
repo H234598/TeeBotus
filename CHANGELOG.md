@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.9.17 - 2026-07-11
+
+- Keep identity status diagnostics alive when warning_count contains invalid
+  data.
+
 ## 1.9.16 - 2026-07-11
 
 - Validate and normalize instance names in Codex-History status diagnostics.

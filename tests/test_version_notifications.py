@@ -164,6 +164,26 @@ def test_account_identity_health_rejects_invalid_instance_name(tmp_path: Path) -
     assert lines == ["account_identity=../outside status=unknown error=invalid_instance_name"]
 
 
+def test_account_identity_health_does_not_crash_on_malformed_warning_count(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "TeeBotus.admin.accounts_report.build_accounts_admin_report",
+        lambda **_kwargs: {
+            "instances": [
+                {
+                    "instance": "Demo",
+                    "account_store": {},
+                    "runtime_slots": {},
+                    "identity_health": {"status": "warning", "warning_count": "not-a-number", "warnings": []},
+                }
+            ]
+        },
+    )
+
+    lines = account_identity_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == ["account_identity=Demo status=warning identity_warnings=unknown runtime_slots=<none> identities=<none>"]
+
+
 def test_account_secret_health_uses_normalized_instance_name(tmp_path: Path) -> None:
     accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
     accounts_root.mkdir(parents=True)
