@@ -36,7 +36,9 @@ REMINDER_REQUEST_RE = re.compile(
     r"erinnere?\s+(?:mich|mi|uns)|"
     r"denk(?:e)?(?:\s+bitte)?(?:\s+(?:fuer\s+)?(?:mich|uns))?(?:\s+.{0,80}?)?\s+dran|"
     r"sag(?:e)?\s+(?:mir|uns)\s+(?:bitte\s+)?bescheid|"
-    r"remind\s+(?:me|us)"
+    r"remind\s+(?:me|us)|"
+    r"(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+(?:bitte\s+)?(?!irgendwann\b)"
+    r"(?:(?!\b(?:an|daran)\b).){0,80}\b(?:an|daran)\b\s+.{1,120}\berinner(?:n|en)?"
     r")\b",
     re.IGNORECASE,
 )
@@ -283,6 +285,12 @@ def _reminder_subject(text: str) -> str:
         "",
         cleaned,
     )
+    cleaned = re.sub(
+        r"(?i)\b(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+(?:bitte\s+)?"
+        r"(?!irgendwann\b)(?:(?!\b(?:an|daran)\b).){0,80}\b(?:an|daran)\b\s+",
+        "",
+        cleaned,
+    )
     cleaned = re.sub(r"(?i)\b(bit+e|bitte|please)\b", "", cleaned)
     cleaned = RELATIVE_RE.sub("", cleaned)
     cleaned = TIME_RE.sub("", cleaned)
@@ -290,7 +298,8 @@ def _reminder_subject(text: str) -> str:
     cleaned = DATE_RE.sub("", cleaned)
     cleaned = DAY_WORD_RE.sub("", cleaned)
     cleaned = re.sub(r"(?i)\b(heute|morgen|uebermorgen|übermorgen|um|gegen|uhr|daran|dran|an|dass)\b", " ", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .,:;-")
+    cleaned = re.sub(r"(?i)\b(?:erinnern|erinnerst|erinnere?)\b", " ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .,:;!?-")
     return cleaned[:240] or "deinen Termin"
 
 

@@ -24,6 +24,14 @@ def test_parse_reminder_with_tomorrow_time() -> None:
     assert intent.subject == "den Zahnarzt"
 
 
+def test_parse_reminder_accepts_reverse_question_wording() -> None:
+    intent = parse_reminder_intent("Kannst du mich morgen an den Zahnarzt erinnern?", now=fixed_now())
+
+    assert intent.is_request is True
+    assert intent.due_at == "2026-06-16T09:00:00+00:00"
+    assert intent.subject == "den Zahnarzt"
+
+
 def test_parse_reminder_with_relative_time_and_loose_wording() -> None:
     intent = parse_reminder_intent("Bitte denk in 30 Minuten dran Wasser zu trinken.", now=fixed_now())
 
