@@ -65,7 +65,11 @@ def status_auth_instance_protected(instance_name: str, *, env: Mapping[str, str]
     else:
         protected = tuple(value for value in _AUTH_CODE_SEPARATOR_RE.split(str(raw_instances or "")) if value)
     instance_token = _env_instance_token(instance_name)
-    protected_tokens = {_env_instance_token(value) for value in protected if _env_instance_token(value)}
+    protected_tokens = {
+        "*" if str(value or "").strip() == "*" else _env_instance_token(value)
+        for value in protected
+    }
+    protected_tokens.discard("")
     return "*" in protected_tokens or "ALL" in protected_tokens or instance_token in protected_tokens
 
 

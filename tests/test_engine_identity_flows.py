@@ -25,7 +25,7 @@ from TeeBotus.runtime.accounts import (
 )
 from TeeBotus.runtime.actions import DelaySeconds, DeleteTrackedMessages, ExportFile, SendAttachment, SendText, SendTyping
 from TeeBotus.runtime.admin_accounts import is_runtime_admin_account
-from TeeBotus.runtime.status_auth import authorize_status_recipient, status_auth_state_authorized
+from TeeBotus.runtime.status_auth import authorize_status_recipient, status_auth_instance_protected, status_auth_state_authorized
 from TeeBotus.runtime.engine import MEMORY_PAGE_LIMIT_NOTE, TELADI_EMERGENCY_CHAT_ID, TeeBotusEngine, should_ignore_event_without_account
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent, IncomingLinkPreview
 from TeeBotus.runtime.qdrant import QdrantError
@@ -139,6 +139,13 @@ def test_status_auth_global_code_does_not_silence_non_logger_instances(tmp_path,
     assert actions
     assert "Befehle" in actions[0].text
     assert account_store.get_account_for_identity(identity) is not None
+
+
+def test_status_auth_wildcard_protects_all_instances() -> None:
+    assert status_auth_instance_protected(
+        "Depressionsbot",
+        env={"TEEBOTUS_STATUS_AUTH_INSTANCES": "*"},
+    ) is True
 
 
 def test_status_auth_does_not_trust_unverified_event_account_id(tmp_path, monkeypatch):
