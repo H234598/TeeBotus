@@ -3918,6 +3918,75 @@ def test_account_store_sqlite_backend_skips_corrupt_rows(tmp_path, monkeypatch, 
     assert "skipped corrupt rows" in caplog.text
 
 
+def test_sqlite_missing_primary_schema_is_diagnostic_only_with_secondary(tmp_path, caplog):
+    import sqlite3
+
+    primary_path = tmp_path / "primary.sqlite3"
+    secondary_path = tmp_path / "secondary.sqlite3"
+    sqlite3.connect(primary_path).close()
+    sqlite3.connect(secondary_path).close()
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary_path, fallback_path=secondary_path),
+    )
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        assert backend.read_entries("a" * 128) == []
+        assert backend.read_index("a" * 128) == {}
+        assert backend.read_collection("a" * 128, "version_notifications") == []
+        with pytest.raises(AccountStoreError, match="schema table is missing"):
+            backend.read_collection_names("a" * 128)
+
+    assert "schema table is missing" in backend.last_collection_read_error
+    assert "schema table is missing" in caplog.text
+
+
+def test_sqlite_first_run_without_secondary_keeps_missing_schema_empty(tmp_path):
+    import sqlite3
+
+    primary_path = tmp_path / "primary.sqlite3"
+    sqlite3.connect(primary_path).close()
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary_path, fallback_path=None),
+    )
+
+    assert backend.read_entries("a" * 128) == []
+    assert backend.read_collection_names("a" * 128) == ()
+    assert backend.last_entry_read_error == ""
+    assert backend.last_database_missing is False
+
+
+def test_sqlite_missing_primary_schema_recovers_from_secondary(tmp_path):
+    import sqlite3
+
+    primary_path = tmp_path / "primary.sqlite3"
+    secondary_path = tmp_path / "secondary.sqlite3"
+    sqlite3.connect(primary_path).close()
+    account_id = "a" * 128
+    fallback = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=secondary_path, fallback_path=None),
+    )
+    fallback.write_entries(account_id, [{"id": "from-secondary", "user_text": "Backup"}])
+    primary = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary_path, fallback_path=secondary_path),
+    )
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    assert backend.read_entries(account_id) == [{"id": "from-secondary", "user_text": "Backup"}]
+    assert primary.read_entries(account_id) == [{"id": "from-secondary", "user_text": "Backup"}]
+
+
 def test_structured_account_memory_semantic_cache_boosts_synced_signature(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
