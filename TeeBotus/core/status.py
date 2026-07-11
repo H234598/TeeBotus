@@ -1449,7 +1449,10 @@ def _proactive_agent_status_lines(
     proactive_model_planner: str,
     env: Mapping[str, str] | None,
 ) -> list[str]:
-    scheduler_enabled = proactive_agent_instance_enabled(instance_name, env=env or os.environ)
+    scheduler_enabled = proactive_agent_instance_enabled(
+        instance_name,
+        env=os.environ if env is None else env,
+    )
     planner = _proactive_model_planner_status(proactive_model_planner)
     if account_store is None or not account_id:
         return [

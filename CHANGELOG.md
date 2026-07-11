@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.46 - 2026-07-11
+
+- Respect explicit empty environments in proactive status diagnostics.
+
 ## 1.9.45 - 2026-07-11
 
 - Report unreadable account directories instead of treating them as empty.
