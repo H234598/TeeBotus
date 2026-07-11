@@ -718,6 +718,29 @@ def test_malformed_explicit_route_status_does_not_start_loudness_check(tmp_path)
         ) == ()
 
 
+def test_terminal_loudness_state_repairs_malformed_active_flag(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    for active in (None, "false", "malformed"):
+        state = account_store.read_agent_state(account_id)
+        state["notification_loudness"] = {
+            "routes": {
+                "telegram:1:chat-1": {
+                    "status": "declined",
+                    "checks_active": active,
+                    "checks_stop_reason": "declined",
+                }
+            }
+        }
+        account_store.write_agent_state(account_id, state)
+
+        assert queue_due_notification_loudness_prompts(account_store, account_id) == ()
+        repaired = account_store.read_agent_state(account_id)["notification_loudness"]["routes"]["telegram:1:chat-1"]
+        assert repaired["checks_active"] is False
+        assert repaired["checks_stop_reason"] == "declined"
+
+
 def test_loudness_outbox_system_item_token_is_case_insensitive() -> None:
     assert is_notification_loudness_outbox_item({"system_item": "Notification_Loudness"}) is True
     assert is_notification_loudness_outbox_item({"planner": {"system_item": "NOTIFICATION_LOUDNESS"}}) is True

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.89 - 2026-07-12
+
+- Repair malformed activation flags on terminal notification-loudness states.
+
 ## 1.9.88 - 2026-07-12
 
 - Fail closed on malformed explicit notification-loudness route statuses.
