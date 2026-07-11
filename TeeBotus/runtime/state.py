@@ -293,7 +293,7 @@ class RuntimeStateStore(RuntimeState):
         if self.secret_provider is None:
             raise AccountStoreError("link-notification persistence has no secret provider")
         self._guard_account_store_secrets()
-        return EncryptedJsonVault(self.instance_name, self.secret_provider)
+        return EncryptedJsonVault(self.instance_name, self.secret_provider, root=self.runtime_dir)
 
     def _guard_account_store_secrets(self) -> None:
         if self._account_store_secret_guard_checked and self._account_store_secret_guard_provider is self.secret_provider:

@@ -62,6 +62,27 @@ def test_runtime_state_store_clears_removed_corrupt_link_notification_error(tmp_
     assert state.link_notifications_persistence_error == ""
 
 
+def test_runtime_state_store_keeps_link_vault_inside_runtime_root(tmp_path):
+    data_dir = tmp_path / "Bot" / "data"
+    runtime_dir = data_dir / "runtime"
+    runtime_dir.mkdir(parents=True)
+    outside = tmp_path / "outside-link-notifications.json"
+    outside.write_text("sentinel", encoding="utf-8")
+    link_path = runtime_dir / "Link_Notifications.json"
+    link_path.symlink_to(outside)
+
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    state.record_link_notification(
+        instance_name="Bot",
+        account_id="a" * 128,
+        new_identity_key="signal:uuid:new",
+        old_identity_key="telegram:user:1",
+    )
+
+    assert outside.read_text(encoding="utf-8") == "sentinel"
+    assert state.link_notifications_persistence_error
+
+
 def test_runtime_state_store_keeps_link_notifications_in_memory_when_secret_backend_fails(tmp_path):
     state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=BrokenProvider())
 
