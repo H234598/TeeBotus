@@ -2481,6 +2481,39 @@ def test_account_memory_fallback_repairs_fallback_only_collection_after_name_rea
     assert account_id not in backend._failed_collection_name_reads
 
 
+def test_account_memory_fallback_keeps_name_failure_pending_until_final_read_succeeds() -> None:
+    class Backend:
+        def __init__(self, *, fail_names: bool = False, fail_on_call: int = 0) -> None:
+            self.fail_names = fail_names
+            self.fail_on_call = fail_on_call
+            self.name_calls = 0
+
+        def read_collection_names(self, _account_id: str) -> tuple[str, ...]:
+            self.name_calls += 1
+            if self.fail_names or self.name_calls == self.fail_on_call:
+                raise OSError("collection names unavailable")
+            return ()
+
+    account_id = "a" * 128
+    primary = Backend(fail_names=True)
+    fallback = Backend(fail_names=True)
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    with pytest.raises(AccountStoreError, match="fallback read failed"):
+        backend.read_collection_names(account_id)
+
+    primary.fail_names = False
+    primary.fail_on_call = 3
+    fallback.fail_names = False
+    with pytest.raises(AccountStoreError, match="read blocked"):
+        backend.read_collection_names(account_id)
+    assert account_id in backend._failed_collection_name_reads
+
+    primary.fail_on_call = 0
+    assert backend.read_collection_names(account_id) == ()
+    assert account_id not in backend._failed_collection_name_reads
+
+
 def test_account_memory_fallback_marks_both_write_failures_as_unsafe(caplog) -> None:
     class Backend:
         def __init__(self, *, fail_write: bool = False) -> None:
