@@ -32,6 +32,10 @@ PROACTIVE_REVIEW_STATUSES = frozenset({"review_pending"})
 PROACTIVE_IN_FLIGHT_STATUSES = frozenset({"dispatching"})
 PROACTIVE_TERMINAL_STATUSES = frozenset({"sent", "skipped", "failed", "cancelled", "expired"})
 PROACTIVE_OUTBOX_STATUSES = frozenset({"queued", *PROACTIVE_REVIEW_STATUSES, *PROACTIVE_IN_FLIGHT_STATUSES, *PROACTIVE_TERMINAL_STATUSES})
+PROACTIVE_STATUS_TRANSITIONS = {
+    "queued": frozenset({"dispatching", "sent", "skipped", "failed", "cancelled", "expired"}),
+    "dispatching": frozenset({"sent", "failed", "cancelled"}),
+}
 PROACTIVE_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_AGENT_INSTANCES"
 PROACTIVE_INSTANCE_FLAG_PREFIX = "TEEBOTUS_PROACTIVE_AGENT_"
 PROACTIVE_RISK_BLOCK_CATEGORIES = frozenset({"analysis", "reflection", "test", "image"})
@@ -1199,7 +1203,7 @@ def update_proactive_outbox_item_status(
             if not isinstance(item, dict) or str(item.get("id") or "") != str(item_id or ""):
                 continue
             current_status = str(item.get("status") or "queued").strip().casefold()
-            if current_status not in PROACTIVE_OUTBOX_STATUSES or current_status in PROACTIVE_TERMINAL_STATUSES:
+            if normalized_status not in PROACTIVE_STATUS_TRANSITIONS.get(current_status, ()):
                 return False
             if expected and current_status != expected:
                 return False

@@ -334,6 +334,32 @@ def test_terminal_proactive_outbox_item_cannot_be_reactivated(tmp_path) -> None:
     assert due_proactive_outbox_items(account_store, account_id, now=now) == ()
 
 
+def test_review_pending_proactive_outbox_item_cannot_bypass_human_review(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("analysis",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="analysis",
+        intent="needs_review",
+        message_text="Review",
+        due_at="2026-06-15T11:00:00+00:00",
+        risk_gate="needs_review",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("review_pending:")
+    assert queued.allowed is True
+
+    assert not update_proactive_outbox_item_status(account_store, account_id, item_id, status="sent", reason="bypass", now=now)
+
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "review_pending"
+
+
 def test_due_proactive_outbox_items_normalizes_stored_status(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
