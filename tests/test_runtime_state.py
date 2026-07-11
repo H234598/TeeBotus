@@ -375,6 +375,24 @@ def test_runtime_state_store_keeps_persistence_error_local_to_parallel_reads(tmp
     assert results == {"a": "cached-a", "b": "persisted-b"}
 
 
+def test_runtime_state_store_does_not_overwrite_llm_state_after_read_failure(tmp_path, monkeypatch):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+    writes: list[dict[str, object]] = []
+
+    def failing_read(_account_id: str) -> tuple[dict[str, object], str]:
+        state._set_llm_state_persistence_error("LLM state read failed")
+        return {}, "LLM state read failed"
+
+    monkeypatch.setattr(state, "_read_llm_state", failing_read)
+    monkeypatch.setattr(state, "_write_llm_state", lambda _account_id, payload: writes.append(dict(payload)))
+
+    state.set_previous_response_id("Bot", ACCOUNT_ID, "resp-new", provider="openai", model="gpt-5.5")
+
+    assert writes == []
+    assert state.previous_response_ids[("Bot", ACCOUNT_ID)] == "resp-new"
+    assert state.llm_state_persistence_error == "LLM state read failed"
+
+
 def test_runtime_state_store_migrates_previous_response_id_from_legacy_openai_state(tmp_path, monkeypatch):
     monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
     monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", raising=False)

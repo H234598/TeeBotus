@@ -483,7 +483,9 @@ class RuntimeStateStore(RuntimeState):
         if not clean_response_id:
             return
         with self._llm_state_lock(account_id):
-            payload, _persistence_error = self._read_llm_state(account_id)
+            payload, persistence_error = self._read_llm_state(account_id)
+            if persistence_error:
+                return
             payload["previous_response_id"] = clean_response_id
             clean_provider = str(provider or "").strip().casefold()
             clean_model = str(model or "").strip()
