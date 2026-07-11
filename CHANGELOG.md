@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.103 - 2026-07-12
+
+- Respect negated loudness completion phrases.
+
 ## 1.9.102 - 2026-07-12
 
 - Distinguish status fragments from inverted loudness questions.

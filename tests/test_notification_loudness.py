@@ -1124,6 +1124,14 @@ def test_loudness_free_text_does_not_decide_questions_or_requests() -> None:
     assert _notification_loudness_decision("Is muted", pending=True) == "declined"
 
 
+def test_loudness_free_text_respects_negated_completion_phrases() -> None:
+    assert _notification_loudness_decision("Ich habe noch nichts gemacht", pending=True) == "declined"
+    assert _notification_loudness_decision("Ich habe nichts erledigt", pending=True) == "declined"
+    assert _notification_loudness_decision("Ich habe nichts aktiviert", pending=True) == "declined"
+    assert _notification_loudness_decision("Ich habe nix eingeschaltet", pending=True) == "declined"
+    assert _notification_loudness_decision("Ich habe nichts laut gestellt", pending=False) == "declined"
+
+
 def test_loudness_free_text_keeps_negation_precedence_without_pending_state() -> None:
     assert _notification_loudness_decision("Benachrichtigungen sind deaktiviert", pending=False) == "declined"
     assert _notification_loudness_decision("Benachrichtigungen sind nicht aktiviert", pending=False) == "declined"

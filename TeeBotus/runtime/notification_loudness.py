@@ -22,7 +22,7 @@ NOTIFICATION_LOUDNESS_MUTE_TERMS = frozenset(
 )
 NOTIFICATION_LOUDNESS_OFF_TERMS = frozenset({"ausgeschaltet", "deaktiviert", "abgeschaltet", "off", "disabled"})
 NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset(
-    {"nicht", "nie", "kein", "keine", "weder", "ohne", "not", "never", "neither", "without"}
+    {"nicht", "nie", "kein", "keine", "nichts", "nix", "weder", "ohne", "not", "never", "nothing", "neither", "without"}
 )
 NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES = frozenset({"aber", "jedoch", "sondern", "und", "oder", "but", "however", "or", "and"})
 NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN = "<clause>"
@@ -91,6 +91,7 @@ NOTIFICATION_LOUDNESS_STATUS_LEAD_TERMS = frozenset(
         "not",
     }
 )
+NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = ("erledigt", "gemacht", "eingeschaltet", "aktiviert", "laut gestellt")
 
 NOTIFICATION_LOUDNESS_PROMPT = (
     "Bitte stell meine Nachrichten in diesem Chat auf laut, damit Erinnerungen, Termine und wichtige Hinweise nicht untergehen.\n"
@@ -323,6 +324,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(
         polarity_normalized, NOTIFICATION_LOUDNESS_OFF_TERMS
     )
+    has_negated_completion = _notification_loudness_has_negated_phrase(
+        polarity_normalized, NOTIFICATION_LOUDNESS_COMPLETION_PHRASES
+    )
     if has_notification_context and _notification_loudness_has_uncertainty(normalized):
         return None
     if has_notification_context and _notification_loudness_is_non_declarative(text, normalized):
@@ -389,7 +393,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         if needle not in {"keine benachrichtigung", "keine benachrichtigungen"}
         or not (has_negated_mute or has_negated_off)
     )
-    has_declined_phrase = has_declined_phrase or has_unnegated_mute or has_unnegated_off
+    has_declined_phrase = has_declined_phrase or has_unnegated_mute or has_unnegated_off or has_negated_completion
     if has_declined_phrase and (pending or has_notification_context):
         return "declined"
     if pending and (normalized in {"ja", "yes", "jep", "jo", "ok", "okay", "klar", "erledigt", "gemacht"} or words & {"ja", "yes"} and has_notification_context):
@@ -876,6 +880,27 @@ def _notification_loudness_is_non_declarative(text: str, normalized: str) -> boo
     if tokens and tokens[0] in {"sind", "ist", "are", "is"}:
         return len(tokens) > 1 and tokens[1] not in NOTIFICATION_LOUDNESS_STATUS_LEAD_TERMS
     return normalized.startswith(NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS)
+
+
+def _notification_loudness_has_negated_phrase(normalized: str, phrases: tuple[str, ...]) -> bool:
+    tokens = normalized.split()
+    for phrase in phrases:
+        phrase_tokens = phrase.split()
+        width = len(phrase_tokens)
+        for index in range(len(tokens) - width + 1):
+            if tokens[index : index + width] != phrase_tokens:
+                continue
+            preceding_start = max(0, index - 3)
+            for boundary_index in range(preceding_start, index):
+                if (
+                    tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                    or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+                ):
+                    preceding_start = boundary_index + 1
+            preceding = tokens[preceding_start:index]
+            if sum(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in preceding) % 2:
+                return True
+    return False
 
 
 def _normalize_channel(channel: Any) -> str:
