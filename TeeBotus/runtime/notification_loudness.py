@@ -17,8 +17,12 @@ NOTIFICATION_LOUDNESS_ONLINE_WINDOW = timedelta(minutes=5)
 NOTIFICATION_LOUDNESS_WAKE_HOURS = (8, 22)
 NOTIFICATION_LOUDNESS_PENDING_STATUS = "pending"
 NOTIFICATION_LOUDNESS_TERMINAL_STATUSES = frozenset({"confirmed", "declined"})
-NOTIFICATION_LOUDNESS_MUTE_TERMS = frozenset({"stumm", "lautlos", "stummgeschaltet", "lautlosgeschaltet"})
-NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset({"nicht", "nie", "kein", "keine", "weder", "ohne"})
+NOTIFICATION_LOUDNESS_MUTE_TERMS = frozenset(
+    {"stumm", "lautlos", "stummgeschaltet", "lautlosgeschaltet", "muted", "silenced", "silent"}
+)
+NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset(
+    {"nicht", "nie", "kein", "keine", "weder", "ohne", "not", "never", "neither", "without"}
+)
 
 NOTIFICATION_LOUDNESS_PROMPT = (
     "Bitte stell meine Nachrichten in diesem Chat auf laut, damit Erinnerungen, Termine und wichtige Hinweise nicht untergehen.\n"
@@ -238,6 +242,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         _contains_normalized_phrase(normalized, needle)
         for needle in (
             "laut",
+            "loud",
             "benachrichtigung",
             "benachrichtigungen",
             "notification",
@@ -254,11 +259,16 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "benachrichtigung an",
         "notifications on",
         "notification on",
+        "notifications enabled",
+        "notification enabled",
         "ist laut",
         "sind laut",
+        "are loud",
         "wieder laut",
         "ist an",
         "sind an",
+        "are on",
+        "are enabled",
         "eingeschaltet",
         "aktiviert",
         "erledigt",
@@ -279,8 +289,14 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "keine benachrichtigung",
         "keine benachrichtigungen",
         "benachrichtigungen aus",
+        "notifications off",
+        "notification off",
+        "notifications disabled",
+        "notification disabled",
         "ist aus",
         "sind aus",
+        "are off",
+        "are disabled",
         "ausgeschaltet",
         "deaktiviert",
         "kann ich nicht",

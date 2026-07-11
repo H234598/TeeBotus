@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.94 - 2026-07-12
+
+- Recognize English notification status and mute replies.
+
 ## 1.9.93 - 2026-07-12
 
 - Recognize natural on/off and loud notification status replies.
