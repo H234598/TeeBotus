@@ -50,6 +50,24 @@ def test_parse_reminder_relative_days_and_weeks_keep_explicit_clock() -> None:
     assert in_weeks.due_at == "2026-06-29T08:15:00+00:00"
 
 
+def test_parse_reminder_extracts_supported_recurrence_rules() -> None:
+    now = datetime(2026, 6, 15, 8, 0, tzinfo=timezone.utc)
+
+    daily = parse_reminder_intent("Erinnere mich jeden Tag um 9 an die Medikamente", now=now)
+    weekly = parse_reminder_intent("Erinnere mich jeden Montag um 9 an die Therapie", now=now)
+    every = parse_reminder_intent("Erinnere mich alle 2 Tage um 9 an Wasser", now=now)
+    monthly = parse_reminder_intent("Erinnere mich monatlich am 1. um 10 an die Abrechnung", now=now)
+
+    assert (daily.recurrence, daily.subject) == ("daily", "die Medikamente")
+    assert (weekly.recurrence, weekly.subject) == ("weekly", "die Therapie")
+    assert (every.recurrence, every.subject) == ("every 2 days", "Wasser")
+    assert (monthly.recurrence, monthly.due_at, monthly.subject) == (
+        "monthly",
+        "2026-07-01T10:00:00+00:00",
+        "die Abrechnung",
+    )
+
+
 def test_parse_reminder_default_now_uses_configured_local_timezone(monkeypatch) -> None:
     local = timezone(timedelta(hours=2))
     monkeypatch.setattr(
@@ -139,6 +157,26 @@ def test_structured_reminder_fallback_can_queue_natural_request(tmp_path, monkey
     queued = account_store.read_proactive_outbox(account_id)
     assert queued[0]["planner"]["source"] == "structured_reminder_decision"
     assert queued[0]["due_at"] == "2026-06-16T08:30:00+00:00"
+
+
+def test_classic_recurring_reminder_persists_recurrence(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+
+    reply = maybe_queue_natural_reminder(
+        account_store=account_store,
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        text="Erinnere mich jeden Montag um 9 an die Therapie",
+        now=datetime(2026, 6, 15, 8, 0, tzinfo=timezone.utc),
+    )
+
+    assert reply == "Okay, ich erinnere dich am 15.06.2026 um 09:00: die Therapie"
+    queued = account_store.read_proactive_outbox(account_id)
+    assert queued[0]["recurrence"] == "weekly"
 
 
 def test_structured_reminder_fallback_interprets_naive_datetime_as_configured_local_time(tmp_path, monkeypatch) -> None:

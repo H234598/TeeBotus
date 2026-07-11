@@ -80,6 +80,28 @@ DAY_WORD_RE = re.compile(
     rf"(?:\s+(?:um|gegen)\s+(?P<hour>{_CLOCK_HOUR})(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?)?",
     re.IGNORECASE,
 )
+MONTH_DAY_RE = re.compile(
+    rf"\b(?:am|zum|jeden)\s+(?P<day>[0-3]?\d)\.?"
+    rf"(?:\s+(?:um|gegen)\s+(?P<hour>{_CLOCK_HOUR})(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?)?",
+    re.IGNORECASE,
+)
+RECURRENCE_EVERY_RE = re.compile(
+    r"\b(?:alle|every)\s+(?P<count>\d{1,3})\s+"
+    r"(?P<unit>min(?:ute|uten?)?|minutes?|std|stunden?|hours?|h|tage?n?|days?|wochen?|weeks?|w|monate?n?|months?)\b",
+    re.IGNORECASE,
+)
+RECURRENCE_MARKER_RE = re.compile(
+    r"(?i)\b(?:"
+    r"taeglich|täglich|daily|"
+    r"woechentlich|wöchentlich|weekly|"
+    r"monatlich|monthly|"
+    r"jeden\s+(?:tag|monat|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)|"
+    r"jede\s+(?:woche|monat)|"
+    r"alle\s+\d{1,3}\s+(?:min(?:ute|uten?)?|minutes?|std|stunden?|hours?|h|tage?n?|days?|wochen?|weeks?|w|monate?n?|months?)|"
+    r"every\s+(?:day|week|month)|"
+    r"every\s+\d{1,3}\s+(?:minutes?|hours?|days?|weeks?|months?)"
+    r")\b"
+)
 
 
 def maybe_queue_natural_reminder(
@@ -140,7 +162,8 @@ def parse_reminder_intent(text: str, *, now: datetime | None = None) -> Reminder
     resolved_now = now or local_now()
     due_at = _parse_due_at(raw, resolved_now)
     subject = _reminder_subject(raw)
-    return ReminderIntent(True, due_at=due_at, subject=subject, missing_time=not bool(due_at))
+    recurrence = _parse_recurrence(raw)
+    return ReminderIntent(True, due_at=due_at, subject=subject, recurrence=recurrence, missing_time=not bool(due_at))
 
 
 def _structured_reminder_intent(
@@ -264,6 +287,14 @@ def _parse_due_at(text: str, now: datetime) -> str:
             int(date.group("hour") or 9),
             int(date.group("minute") or 0),
         )
+    month_day = MONTH_DAY_RE.search(text)
+    if month_day:
+        return _next_month_day(
+            normalized_now,
+            day=int(month_day.group("day")),
+            hour=int(month_day.group("hour") or 9),
+            minute=int(month_day.group("minute") or 0),
+        )
     lowered = _normalize(text)
     for word, offset in (("uebermorgen", 2), ("morgen", 1), ("heute", 0)):
         if re.search(rf"\b{word}\b", lowered):
@@ -305,11 +336,64 @@ def _build_datetime(now: datetime, year: int, month: int, day: int, hour: int, m
     return _iso(due)
 
 
+def _next_month_day(now: datetime, *, day: int, hour: int, minute: int) -> str:
+    month_index = now.year * 12 + now.month - 1
+    for offset in range(13):
+        candidate_index = month_index + offset
+        year, zero_based_month = divmod(candidate_index, 12)
+        try:
+            candidate = now.replace(
+                year=year,
+                month=zero_based_month + 1,
+                day=day,
+                hour=hour,
+                minute=minute,
+                second=0,
+                microsecond=0,
+            )
+        except ValueError:
+            continue
+        if candidate > now:
+            return _iso(candidate)
+    return ""
+
+
 def _time_in_text(text: str, *, default_hour: int) -> tuple[int, int]:
     match = TIME_RE.search(text)
     if not match:
         return default_hour, 0
     return int(match.group("hour")), int(match.group("minute") or 0)
+
+
+def _parse_recurrence(text: str) -> str:
+    normalized = _normalize(text)
+    if re.search(r"\b(?:taeglich|daily|jeden\s+tag|every\s+day)\b", normalized):
+        return "daily"
+    if re.search(
+        r"\b(?:woechentlich|weekly|jede\s+woche|jeden\s+(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)|every\s+week)\b",
+        normalized,
+    ):
+        return "weekly"
+    if re.search(r"\b(?:monatlich|monthly|jeden\s+monat|jede\s+monat|every\s+month)\b", normalized):
+        return "monthly"
+    match = RECURRENCE_EVERY_RE.search(normalized)
+    if not match:
+        return ""
+    count = int(match.group("count"))
+    unit = match.group("unit").casefold()
+    if unit.startswith("min"):
+        normalized_unit = "minutes"
+    elif unit in {"std", "h"} or unit.startswith(("stunde", "hour")):
+        normalized_unit = "hours"
+    elif unit.startswith(("tag", "day")):
+        normalized_unit = "days"
+    elif unit in {"w", "week"} or unit.startswith(("woche", "week")):
+        normalized_unit = "weeks"
+    elif count == 1 and unit.startswith(("monat", "month")):
+        return "monthly"
+    else:
+        return ""
+    return f"every {count} {normalized_unit}"
 
 
 def _apply_explicit_time(value: datetime, text: str) -> datetime:
@@ -360,11 +444,13 @@ def _reminder_subject(text: str) -> str:
         "",
         cleaned,
     )
+    cleaned = RECURRENCE_MARKER_RE.sub(" ", cleaned)
     cleaned = re.sub(r"(?i)\b(bit+e|bitte|please)\b", "", cleaned)
     cleaned = RELATIVE_RE.sub("", cleaned)
     cleaned = TIME_RE.sub("", cleaned)
     cleaned = ISO_RE.sub("", cleaned)
     cleaned = DATE_RE.sub("", cleaned)
+    cleaned = MONTH_DAY_RE.sub("", cleaned)
     cleaned = DAY_WORD_RE.sub("", cleaned)
     cleaned = re.sub(r"(?i)\b(heute|morgen|uebermorgen|übermorgen|um|gegen|uhr|daran|dran|an|dass)\b", " ", cleaned)
     cleaned = re.sub(r"(?i)\b(?:erinnern|erinnerst|erinnere?)\b", " ", cleaned)
