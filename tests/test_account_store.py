@@ -14,6 +14,8 @@ from TeeBotus.runtime.accounts import (
     ACCOUNT_KEYRING_FILENAME,
     ACCOUNT_MEMORY_KEY_PURPOSE,
     CODEX_HISTORY_OUTBOX_FILENAME,
+    PROACTIVE_OUTBOX_FILENAME,
+    STATUS_OUTBOX_FILENAME,
     INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_PEPPER_PURPOSE,
     EncryptedJsonVault,
@@ -1462,6 +1464,42 @@ def test_proactive_outbox_lock_is_reentrant(tmp_path):
             event_id = store.append_proactive_audit_event(account_id, {"event_type": "nested"})
 
     assert store.read_proactive_audit(account_id)[0]["id"] == event_id
+
+
+@pytest.mark.parametrize(
+    ("lock_method", "lock_filename"),
+    (
+        ("proactive_outbox_lock", f".{PROACTIVE_OUTBOX_FILENAME}.lock"),
+        ("status_outbox_lock", f".{STATUS_OUTBOX_FILENAME}.lock"),
+        ("codex_history_outbox_lock", f".{CODEX_HISTORY_OUTBOX_FILENAME}.lock"),
+    ),
+)
+def test_account_scoped_locks_reject_redirected_lock_files(tmp_path, lock_method, lock_filename):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    account_dir = store.account_dir(account_id)
+    outside = tmp_path / f"outside-{lock_method}"
+    outside.write_bytes(b"keep")
+    (account_dir / lock_filename).symlink_to(outside)
+
+    with pytest.raises(AccountStoreError, match="unsafe account memory"):
+        with getattr(store, lock_method)(account_id):
+            pass
+
+    assert outside.read_bytes() == b"keep"
+
+
+def test_account_identity_lock_rejects_redirected_lock_file(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    outside = tmp_path / "outside-identity-lock"
+    outside.write_bytes(b"keep")
+    (store.root / ".Account_Identities.json.lock").symlink_to(outside)
+
+    with pytest.raises(AccountStoreError, match="unsafe account memory identity lock"):
+        with store.account_identity_lock():
+            pass
+
+    assert outside.read_bytes() == b"keep"
 
 
 def test_account_store_sqlite_backend_keeps_newer_legacy_jsonl_row_for_same_id(tmp_path, monkeypatch):

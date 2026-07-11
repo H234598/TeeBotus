@@ -930,6 +930,27 @@ def _ensure_safe_account_memory_path(
         raise AccountStoreError(f"account memory {label} is not a regular file: {path}")
 
 
+@contextmanager
+def _safe_account_lock_handle(lock_path: Path, *, label: str) -> Iterator[Any]:
+    """Open an account lock without following the final path component."""
+
+    _ensure_safe_account_memory_path(lock_path, label=label, require_regular=True, reject_hardlink=True)
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    try:
+        file_descriptor = os.open(lock_path, flags, 0o600)
+    except OSError as exc:
+        raise AccountStoreError(f"could not open account memory {label}: {lock_path}") from exc
+    with os.fdopen(file_descriptor, "a+b") as handle:
+        handle_stat = os.fstat(handle.fileno())
+        if not stat.S_ISREG(handle_stat.st_mode) or handle_stat.st_nlink > 1:
+            raise AccountStoreError(f"refusing unsafe account memory {label}: {lock_path}")
+        try:
+            os.fchmod(handle.fileno(), stat.S_IRUSR | stat.S_IWUSR)
+        except OSError:
+            pass
+        yield handle
+
+
 def _safe_rooted_path(path: Path, *, allowed_roots: Iterable[Path], operation: str = "file access") -> Path:
     if not path:
         raise AccountStoreError(f"{operation} path is not safe: {path}")
@@ -1131,7 +1152,6 @@ def account_memory_lock_for_root(root: Path, account_id: str) -> Iterator[None]:
     account_dir.mkdir(parents=True, exist_ok=True)
     _ensure_safe_account_memory_path(account_dir, label="account directory", require_directory=True)
     lock_path = account_dir / ACCOUNT_MEMORY_LOCK_FILENAME
-    _ensure_safe_account_memory_path(lock_path, label="lock", require_regular=True, reject_hardlink=True)
     lock_key = os.path.realpath(os.fspath(lock_path))
     with _ACCOUNT_MEMORY_LOCK:
         held_paths = getattr(_ACCOUNT_MEMORY_LOCK_STATE, "paths", None)
@@ -1141,19 +1161,7 @@ def account_memory_lock_for_root(root: Path, account_id: str) -> Iterator[None]:
         if lock_key in held_paths:
             yield
             return
-        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
-        try:
-            file_descriptor = os.open(lock_path, flags, 0o600)
-        except OSError as exc:
-            raise AccountStoreError(f"could not open account memory lock: {lock_path}") from exc
-        with os.fdopen(file_descriptor, "a+b") as handle:
-            handle_stat = os.fstat(handle.fileno())
-            if not stat.S_ISREG(handle_stat.st_mode) or handle_stat.st_nlink > 1:
-                raise AccountStoreError(f"refusing unsafe account memory lock: {lock_path}")
-            try:
-                os.fchmod(handle.fileno(), stat.S_IRUSR | stat.S_IWUSR)
-            except OSError:
-                pass
+        with _safe_account_lock_handle(lock_path, label="lock") as handle:
             if fcntl is not None:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             held_paths.add(lock_key)
@@ -1614,11 +1622,22 @@ class AccountStore:
     def account_dir(self, account_id: str) -> Path:
         return self.accounts_dir / validate_sha512_token(account_id, field_name="account_id")
 
+    def _prepare_account_memory_directory(self, account_id: str) -> Path:
+        """Create and validate an account directory without following redirects."""
+
+        _ensure_safe_account_memory_path(self.root, label="store root", require_directory=True)
+        _ensure_safe_account_memory_path(self.accounts_dir, label="accounts directory", require_directory=True)
+        self.accounts_dir.mkdir(parents=True, exist_ok=True)
+        _ensure_safe_account_memory_path(self.accounts_dir, label="accounts directory", require_directory=True)
+        account_dir = self.account_dir(account_id)
+        _ensure_safe_account_memory_path(account_dir, label="account directory", require_directory=True)
+        account_dir.mkdir(parents=True, exist_ok=True)
+        _ensure_safe_account_memory_path(account_dir, label="account directory", require_directory=True)
+        return account_dir
+
     @contextmanager
     def proactive_outbox_lock(self, account_id: str) -> Iterator[None]:
-        account_id = validate_sha512_token(account_id, field_name="account_id")
-        account_dir = self.account_dir(account_id)
-        account_dir.mkdir(parents=True, exist_ok=True)
+        account_dir = self._prepare_account_memory_directory(account_id)
         lock_path = account_dir / f".{PROACTIVE_OUTBOX_FILENAME}.lock"
         lock_key = os.path.realpath(os.fspath(lock_path))
         with _PROACTIVE_OUTBOX_LOCK:
@@ -1629,11 +1648,7 @@ class AccountStore:
             if lock_key in held_paths:
                 yield
                 return
-            with lock_path.open("a+b") as handle:
-                try:
-                    os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
-                except OSError:
-                    pass
+            with _safe_account_lock_handle(lock_path, label="proactive outbox lock") as handle:
                 if fcntl is not None:
                     fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
                 held_paths.add(lock_key)
@@ -1648,15 +1663,9 @@ class AccountStore:
 
     @contextmanager
     def status_outbox_lock(self, account_id: str) -> Iterator[None]:
-        account_id = validate_sha512_token(account_id, field_name="account_id")
-        account_dir = self.account_dir(account_id)
-        account_dir.mkdir(parents=True, exist_ok=True)
+        account_dir = self._prepare_account_memory_directory(account_id)
         lock_path = account_dir / f".{STATUS_OUTBOX_FILENAME}.lock"
-        with lock_path.open("a+b") as handle:
-            try:
-                os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
-            except OSError:
-                pass
+        with _safe_account_lock_handle(lock_path, label="status outbox lock") as handle:
             if fcntl is not None:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             try:
@@ -1667,15 +1676,9 @@ class AccountStore:
 
     @contextmanager
     def codex_history_outbox_lock(self, account_id: str) -> Iterator[None]:
-        account_id = validate_sha512_token(account_id, field_name="account_id")
-        account_dir = self.account_dir(account_id)
-        account_dir.mkdir(parents=True, exist_ok=True)
+        account_dir = self._prepare_account_memory_directory(account_id)
         lock_path = account_dir / f".{CODEX_HISTORY_OUTBOX_FILENAME}.lock"
-        with lock_path.open("a+b") as handle:
-            try:
-                os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
-            except OSError:
-                pass
+        with _safe_account_lock_handle(lock_path, label="Codex history outbox lock") as handle:
             if fcntl is not None:
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
             try:
@@ -1689,6 +1692,7 @@ class AccountStore:
         """Serialize identity-map reads that may normalize or create accounts."""
 
         with _ACCOUNT_IDENTITY_LOCK:
+            _ensure_safe_account_memory_path(self.root, label="store root", require_directory=True)
             self.root.mkdir(parents=True, exist_ok=True)
             lock_path = self.root / ACCOUNT_IDENTITIES_LOCK_FILENAME
             lock_key = os.path.realpath(os.fspath(lock_path))
@@ -1699,11 +1703,7 @@ class AccountStore:
             if lock_key in held_paths:
                 yield
                 return
-            with lock_path.open("a+b") as handle:
-                try:
-                    os.chmod(lock_path, stat.S_IRUSR | stat.S_IWUSR)
-                except OSError:
-                    pass
+            with _safe_account_lock_handle(lock_path, label="identity lock") as handle:
                 if fcntl is not None:
                     fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
                 held_paths.add(lock_key)
