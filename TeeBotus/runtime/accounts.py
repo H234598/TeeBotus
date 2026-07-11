@@ -2861,6 +2861,8 @@ class AccountStore:
         return callable(getattr(backend, "read_collection", None)) and callable(getattr(backend, "write_collection", None))
 
     def _collection_read_diagnostic_error(self, backend: Any) -> str:
+        if bool(getattr(backend, "last_database_missing", False)):
+            return ""
         collection_error = str(getattr(backend, "last_collection_read_error", "") or "")
         collection_skipped = int(getattr(backend, "last_collection_skipped", 0) or 0)
         if collection_error or collection_skipped:
