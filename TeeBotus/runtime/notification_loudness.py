@@ -626,6 +626,14 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return "declined"
     if pending and (normalized in {"ja", "yes", "jep", "jo", "ok", "okay", "klar", "erledigt", "gemacht"} or words & {"ja", "yes"} and has_notification_context):
         return "confirmed"
+    if (
+        pending
+        and words & NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS
+        and words & NOTIFICATION_LOUDNESS_ACTION_WORDS
+        and words & NOTIFICATION_LOUDNESS_NEGATION_TERMS
+        and not has_notification_context
+    ):
+        return "declined"
     if pending and words & NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS and words & NOTIFICATION_LOUDNESS_ACTION_WORDS:
         return "confirmed"
     if pending and words & NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS and has_notification_context:

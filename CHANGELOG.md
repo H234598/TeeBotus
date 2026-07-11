@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.129 - 2026-07-12
+
+- Respect negation in short affirmative loudness replies.
+
 ## 1.9.128 - 2026-07-12
 
 - Normalize typographic apostrophes in loudness responses.

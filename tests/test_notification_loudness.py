@@ -1241,6 +1241,8 @@ def test_loudness_free_text_accepts_short_pending_action_replies() -> None:
     assert _notification_loudness_decision("ja hab ich", pending=True) == "confirmed"
     assert _notification_loudness_decision("jo habe ich", pending=True) == "confirmed"
     assert _notification_loudness_decision("yes I did", pending=True) == "confirmed"
+    assert _notification_loudness_decision("ja hab ich nicht", pending=True) == "declined"
+    assert _notification_loudness_decision("okay, habe ich nicht", pending=True) == "declined"
     assert _notification_loudness_decision("nee hab ich nicht", pending=True) == "declined"
     assert _notification_loudness_decision("nein habe ich nicht", pending=True) == "declined"
 
