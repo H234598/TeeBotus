@@ -178,13 +178,13 @@ class WarningFallbackAccountMemoryBackend:
             if dirty_collection_names or name_read_repair_pending:
                 primary_names = set(getattr(self.primary, "read_collection_names")(account_id))
                 fallback_names = set(getattr(self.fallback, "read_collection_names")(account_id))
-                if name_read_repair_pending:
-                    self._failed_collection_name_reads.discard(account_id)
                 collections_to_sync = set(dirty_collection_names)
                 if dirty_collection_names:
                     collections_to_sync.update(fallback_names - primary_names)
                 for collection in sorted(collections_to_sync):
                     self._sync_collection_from_fallback(account_id, collection)
+                if name_read_repair_pending:
+                    self._failed_collection_name_reads.discard(account_id)
             names = tuple(getattr(self.primary, "read_collection_names")(account_id))
             self._warn_if_fallback_repair_pending("read_collection:*", account_id)
             self._clear_recovered_if_clean("read_collection_names", account_id)
