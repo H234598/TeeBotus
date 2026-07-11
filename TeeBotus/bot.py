@@ -210,7 +210,11 @@ def _runtime_status(argv: Sequence[str]) -> int:
     )
     project_history_lines: list[str] = []
     for instance_name in config.selected_instances:
-        for line in codex_history_status_lines(instance_name=instance_name, project_root=config.instances_dir.parent):
+        for line in codex_history_status_lines(
+            instance_name=instance_name,
+            project_root=config.instances_dir.parent,
+            secret_provider=status_secret_provider,
+        ):
             project_history_lines.append(_sanitize_status_text(line))
     _print_runtime_status_section("Projekt-History", project_history_lines)
 

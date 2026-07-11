@@ -95,6 +95,7 @@ def test_runtime_status_admin_checks_reuse_status_secret_provider(monkeypatch, t
     provider = StaticSecretProvider(b"c" * 32)
     monkeypatch.setattr(bot, "_runtime_status_secret_provider", lambda: provider)
     seen_providers: list[object] = []
+    seen_history_providers: list[object] = []
 
     def fake_admin_status(**kwargs):
         store = kwargs["store_factory"](demo_dir / "data" / "accounts", "Demo")
@@ -103,9 +104,16 @@ def test_runtime_status_admin_checks_reuse_status_secret_provider(monkeypatch, t
 
     monkeypatch.setattr("TeeBotus.runtime.admin_accounts.admin_account_group_status_lines", fake_admin_status)
 
+    def fake_history_status(**kwargs):
+        seen_history_providers.append(kwargs["secret_provider"])
+        return ()
+
+    monkeypatch.setattr("TeeBotus.core.status.codex_history_status_lines", fake_history_status)
+
     assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
 
     assert seen_providers == [provider]
+    assert seen_history_providers == [provider]
 
 
 def test_runtime_status_all_uses_runtime_instance_discovery(monkeypatch, capsys, tmp_path) -> None:
