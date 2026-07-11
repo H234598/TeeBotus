@@ -615,7 +615,7 @@ def _route_recently_seen(route: Mapping[str, Any], now: datetime) -> bool:
 
 
 def _trim_prompted_window_dates(prompts_by_date: dict[str, Any]) -> None:
-    for date_key in sorted(prompts_by_date)[:-14]:
+    for date_key in sorted(prompts_by_date, key=lambda value: str(value))[:-14]:
         prompts_by_date.pop(date_key, None)
 
 

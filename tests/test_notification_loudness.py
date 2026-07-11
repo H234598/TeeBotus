@@ -754,6 +754,33 @@ def test_malformed_legacy_next_check_at_blocks_loudness_prompt(tmp_path) -> None
     assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=now) is None
 
 
+def test_prompt_handles_mixed_prompt_window_key_types(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    state = account_store.read_agent_state(account_id)
+    state["notification_loudness"] = {
+        "schema_version": 1,
+        "routes": {
+            "telegram:1:chat-1": {
+                "status": "pending",
+                "checks_active": True,
+                "prompted_windows_by_date": {"2026-06-01": [], 7: []},
+                "route": {"channel": "telegram", "chat_id": "chat-1", "chat_type": "private", "adapter_slot": 1},
+                "identity_key": identity,
+            }
+        },
+    }
+    account_store.read_agent_state = lambda _account_id: state  # type: ignore[method-assign]
+    account_store.write_agent_state = lambda _account_id, _state: None  # type: ignore[method-assign]
+
+    prompt = maybe_notification_loudness_prompt_action(
+        event(identity), account_store, account_id, now=datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    )
+
+    assert prompt is not None
+
+
 def test_scheduler_rejects_private_route_with_invalid_adapter_slot(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

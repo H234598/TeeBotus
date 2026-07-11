@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.79 - 2026-07-11
+
+- Handle mixed-type notification-loudness prompt-window keys safely.
+
 ## 1.9.78 - 2026-07-11
 
 - Treat explicit null notification-loudness activation flags as inactive.
