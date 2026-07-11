@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.55 - 2026-07-11
+
+- Fail loudness dispatches visibly when post-claim state cannot be read.
+
 ## 1.9.54 - 2026-07-11
 
 - Normalize naive proactive scheduler timestamps as UTC.
