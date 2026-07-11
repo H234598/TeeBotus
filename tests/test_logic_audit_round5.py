@@ -161,6 +161,31 @@ def test_account_memory_appends_are_serialized_per_account(tmp_path, monkeypatch
     assert first.check_structured_memory_index(account_id).ok
 
 
+def test_account_memory_health_check_waits_for_memory_writer_lock(tmp_path, monkeypatch):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    original_read = AccountStore.read_memory_entries
+    checker_read = threading.Event()
+
+    def observed_read(current_store, current_account_id):
+        if threading.current_thread().name == "memory-health-check":
+            checker_read.set()
+        return original_read(current_store, current_account_id)
+
+    monkeypatch.setattr(AccountStore, "read_memory_entries", observed_read)
+    with store.account_memory_lock(account_id):
+        thread = threading.Thread(
+            target=lambda: store.check_structured_memory_index(account_id),
+            name="memory-health-check",
+        )
+        thread.start()
+        assert not checker_read.wait(0.1)
+    thread.join(timeout=1)
+
+    assert not thread.is_alive()
+    assert checker_read.is_set()
+
+
 def test_tombstoned_account_cannot_receive_login_or_secret_rotation(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))

@@ -2278,6 +2278,7 @@ class AccountStore:
         rebuilt_index["updated_at"] = utc_now()
         self.write_memory_index(account_id, rebuilt_index)
 
+    @_serialize_account_memory
     def check_structured_memory_index(self, account_id: str, *, require_resolvable: bool = True) -> AccountMemoryIndexHealth:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         if require_resolvable:
