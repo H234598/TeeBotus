@@ -4312,6 +4312,32 @@ def test_structured_account_memory_semantic_embedding_matches_synonym(tmp_path):
     assert len(semantic_entry["embedding"]) == 64
 
 
+def test_memory_ranking_uses_entry_order_as_recent_fallback(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_memory_entries(
+        account_id,
+        [
+            {"id": "mem_first", "user_text": "Mond", "keywords": ["mond"]},
+            {"id": "mem_second", "user_text": "Mond", "keywords": ["mond"]},
+        ],
+    )
+    store.write_memory_index(
+        account_id,
+        {
+            "scope": "account",
+            "index": {
+                "recent_ids": [],
+                "accessed_ids": [],
+                "keywords": {"mond": ["mem_first", "mem_second"]},
+                "entries": {},
+            },
+        },
+    )
+
+    assert store.rank_structured_memory_ids(account_id, query_text="mond", limit=2) == ("mem_second", "mem_first")
+
+
 def test_structured_account_memory_selection_can_exclude_loaded_ids(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

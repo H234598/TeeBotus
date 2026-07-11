@@ -3615,14 +3615,14 @@ class AccountStore:
         recent_ids = [str(value or "") for value in recent_values if str(value or "")]
         accessed_values = nested_index.get("accessed_ids") if isinstance(nested_index.get("accessed_ids"), list) else []
         accessed_ids = [str(value or "") for value in accessed_values if str(value or "")]
+        if not recent_ids:
+            recent_ids = [str(entry.get("id", "")) for entry in entries if isinstance(entry, dict) and str(entry.get("id", ""))]
         accessed_positions: dict[str, int] = {}
         for position, memory_id in enumerate(accessed_ids):
             accessed_positions.setdefault(memory_id, position)
         recent_positions: dict[str, int] = {}
         for position, memory_id in enumerate(recent_ids):
             recent_positions.setdefault(memory_id, position)
-        if not recent_ids:
-            recent_ids = [str(entry.get("id", "")) for entry in entries if isinstance(entry, dict) and str(entry.get("id", ""))]
         scores: dict[str, int] = {}
         query_keywords = _account_memory_keywords(query_text)
         keyword_index = nested_index.get("keywords") if isinstance(nested_index.get("keywords"), dict) else {}
