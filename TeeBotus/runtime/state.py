@@ -448,12 +448,16 @@ class RuntimeStateStore(RuntimeState):
     def _clear_llm_previous_response_id(self, account_id: str) -> None:
         with self._llm_state_lock(account_id):
             payload = self._read_llm_state(account_id)
-            if not payload or "previous_response_id" not in payload:
+            state_fields = {
+                "previous_response_id",
+                PREVIOUS_RESPONSE_PROVIDER_FIELD,
+                PREVIOUS_RESPONSE_MODEL_FIELD,
+                PREVIOUS_RESPONSE_KEY_FIELD,
+            }
+            if not payload or not state_fields.intersection(payload):
                 return
-            payload.pop("previous_response_id", None)
-            payload.pop(PREVIOUS_RESPONSE_PROVIDER_FIELD, None)
-            payload.pop(PREVIOUS_RESPONSE_MODEL_FIELD, None)
-            payload.pop(PREVIOUS_RESPONSE_KEY_FIELD, None)
+            for field_name in state_fields:
+                payload.pop(field_name, None)
             payload["updated_at"] = utc_now()
             self._write_llm_state(account_id, payload)
 

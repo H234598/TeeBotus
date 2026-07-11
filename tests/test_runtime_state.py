@@ -249,6 +249,30 @@ def test_runtime_state_store_set_whitespace_clears_previous_llm_response_id(tmp_
     assert "previous_response_id" not in account_store.read_llm_state(ACCOUNT_ID)
 
 
+def test_runtime_state_store_reset_clears_orphaned_previous_response_scope(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
+    account_store.write_llm_state(
+        ACCOUNT_ID,
+        {
+            "kept": "value",
+            "previous_response_provider": "openai",
+            "previous_response_model": "gpt-5.5",
+            "previous_response_key_fingerprint": "a" * 64,
+        },
+    )
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    state.reset_previous_response_id("Bot", ACCOUNT_ID)
+
+    persisted = account_store.read_llm_state(ACCOUNT_ID)
+    assert persisted == {"kept": "value", "updated_at": persisted["updated_at"]}
+    assert "previous_response_provider" not in persisted
+    assert "previous_response_model" not in persisted
+    assert "previous_response_key_fingerprint" not in persisted
+
+
 def test_runtime_state_store_keeps_invalid_previous_response_account_id_in_memory(tmp_path):
     state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
 
