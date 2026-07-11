@@ -249,7 +249,7 @@ def _llm_api_budget_status_lines(
         service_tier=_first_status_attr(llm_client, "service_tier"),
         instance_name=instance_name,
     )
-    decision_label = _api_budget_label_for_runner(structured_decision_runner, env=values)
+    decision_label = _api_budget_label_for_runner(structured_decision_runner, env=values, instance_name=instance_name)
     bibliothekar_label = _api_budget_label_for_route(
         "bibliothekar_answer",
         enabled=bibliothekar_enabled,
@@ -405,12 +405,23 @@ def _gemini_free_tier_guard_active(*, provider: str, model: str, env: Mapping[st
     return bool(getattr(limits, "active", False))
 
 
-def _api_budget_label_for_runner(runner: object | None, *, env: Mapping[str, str]) -> str:
+def _api_budget_label_for_runner(runner: object | None, *, env: Mapping[str, str], instance_name: str = "") -> str:
     if runner is None:
         return "aus"
     provider = _first_status_attr(runner, "llm_provider", "pydantic_ai_provider", "provider_name", "provider") or "aktiv"
     model = _first_status_attr(runner, "model_name", "pydantic_ai_model_name", "hf_pool_request_model", "llm_model")
-    return _api_budget_label(provider=provider, model=model, env=env, enabled=True)
+    route = getattr(runner, "llm_route", None)
+    api_key_env = _first_status_attr(route, "api_key_env") or _first_status_attr(runner, "api_key_env", "llm_api_key_env")
+    service_tier = _first_status_attr(route, "service_tier") or _first_status_attr(runner, "service_tier")
+    return _api_budget_label(
+        provider=provider,
+        model=model,
+        env=env,
+        enabled=True,
+        api_key_env=api_key_env,
+        service_tier=service_tier,
+        instance_name=instance_name,
+    )
 
 
 def _api_budget_label_for_route(purpose: str, *, enabled: bool | None, env: Mapping[str, str], instance_name: str = "") -> str:

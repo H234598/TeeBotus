@@ -1001,6 +1001,37 @@ def test_status_api_budget_prefers_gemini_key_ring_when_single_key_is_also_set(t
     assert "Key: GEMINI_API_KEY gesetzt" not in text
 
 
+def test_status_api_budget_uses_decision_route_metadata(tmp_path):
+    class DecisionRunner:
+        llm_provider = "litellm"
+        model_name = "openai/gpt-5.5"
+        llm_route = type(
+            "Route",
+            (),
+            {
+                "api_key_env": "OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_DECISION",
+                "service_tier": "flex",
+            },
+        )()
+
+    text = build_status_reply(
+        sender_id="1",
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        llm_enabled=False,
+        structured_decision_runner=DecisionRunner(),
+        bibliothekar_enabled=False,
+        env={"OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_DECISION": "decision-key"},
+    )
+
+    assert (
+        "- Entscheidungen/Planner: litellm / openai/gpt-5.5; "
+        "Key: OPENAI_API_KEY_DEPRESSIONSBOT_PROACTIVE_DECISION gesetzt; "
+        "Kosten/Limits: Provider-Billing nicht abgefragt; Verbrauch: Provider-Usage wenn vorhanden; "
+        "service_tier=flex"
+    ) in text
+
+
 def test_status_omits_stateful_gemini_retention_warning_when_free_tier_guard_is_off(tmp_path):
     class StatefulGeminiClient:
         provider_name = "litellm_gemini_stateful"
