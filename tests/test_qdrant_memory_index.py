@@ -172,6 +172,16 @@ def test_qdrant_memory_search_is_scoped_by_instance_and_account() -> None:
     ]
 
 
+def test_qdrant_memory_search_limit_zero_does_not_call_remote() -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantMemoryIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+
+    results = index.search(instance_name="Depressionsbot", account_id=ACCOUNT_A, query="Schlaf", limit=0)
+
+    assert results == ()
+    assert fake_qdrant.calls == []
+
+
 def test_qdrant_memory_search_filters_stale_vectors_after_embedding_model_change() -> None:
     fake_qdrant = _FakeQdrant()
     old_index = QdrantMemoryIndex(
