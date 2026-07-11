@@ -268,7 +268,7 @@ class RuntimeStateStore(RuntimeState):
             model=model,
             key_fingerprint=key_fingerprint,
         )
-        if response_id:
+        if str(response_id or "").strip():
             self._write_llm_previous_response_id(
                 account_id,
                 response_id,
