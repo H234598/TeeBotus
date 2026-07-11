@@ -18,7 +18,7 @@ from TeeBotus.proactive import (
 )
 from TeeBotus.runtime.actions import SendAttachment, SendText
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key
-from TeeBotus.runtime.proactive_agent import enable_proactive_agent, queue_proactive_message
+from TeeBotus.runtime.proactive_agent import claim_proactive_worker_job, enable_proactive_agent, queue_proactive_message
 
 
 def store_for(instance_dir) -> AccountStore:
@@ -631,6 +631,52 @@ def test_proactive_cycle_dispatches_due_items_with_injected_sender(tmp_path) -> 
     assert persisted_results[0]["item_id"] == account["dispatch_results"][0]["item_id"]
     assert persisted_results[0]["message_ref"] == "sent-ref"
     assert persisted_results[0]["instance"] == "Depressionsbot"
+
+
+def test_proactive_dispatch_report_includes_recovered_claim_in_due_items(tmp_path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="crash_recovery_report",
+        message_text="Bitte auch im Bericht sichtbar sein",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    assert claim_proactive_worker_job(
+        account_store,
+        account_id,
+        item_id,
+        now=datetime(2026, 6, 15, 11, tzinfo=timezone.utc),
+    )
+
+    def sender(_route: dict, _action: SendText, _item: dict) -> str:
+        return "recovered-ref"
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 11, 31, tzinfo=timezone.utc),
+            dispatch=True,
+            sender_factory=lambda _instance, _store: {"signal": sender},
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert account["recovered_dispatching_item_ids"] == [item_id]
+    assert [item["id"] for item in account["due_items"]] == [item_id]
+    assert account["dispatch_results"][0]["status"] == "sent"
+    assert account_store.read_proactive_outbox(account_id)[0]["dispatch_attempts"] == 2
 
 
 def test_proactive_cycle_expires_stale_items_before_due_selection(tmp_path) -> None:

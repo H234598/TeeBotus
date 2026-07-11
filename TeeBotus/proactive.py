@@ -33,6 +33,7 @@ from TeeBotus.runtime.proactive_agent import (
     run_proactive_llm_planner,
     run_proactive_reflection_planner,
     run_proactive_tool_agent,
+    recover_stale_proactive_dispatching_items,
     should_run_proactive_model_planner,
 )
 
@@ -622,6 +623,10 @@ async def run_proactive_agent_cycle(
                                 "errors": list(tool_planning.errors),
                                 "audit_event_ids": list(tool_planning.audit_event_ids),
                             }
+                if dispatch:
+                    recovered_item_ids = recover_stale_proactive_dispatching_items(store, account_id, now=resolved_now)
+                    if recovered_item_ids:
+                        account_report["recovered_dispatching_item_ids"] = list(recovered_item_ids)
                 expired_item_ids = expire_stale_proactive_outbox_items(store, account_id, now=resolved_now)
                 if expired_item_ids:
                     account_report["expired_item_ids"] = list(expired_item_ids)
