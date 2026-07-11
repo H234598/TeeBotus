@@ -447,6 +447,49 @@ def test_terminal_loudness_route_blocks_legacy_queued_prompt(tmp_path) -> None:
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "skipped"
 
 
+def test_dispatch_rechecks_loudness_after_worker_claim(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    prompt_now = now - timedelta(hours=7)
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=prompt_now) is not None
+    set_identity_last_seen(account_store, identity, now)
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=now)
+
+    import TeeBotus.runtime.proactive_agent as proactive_agent
+
+    original_claim = proactive_agent.claim_proactive_worker_job
+
+    def claim_then_confirm(current_store, current_account_id, item_id, *, now=None):
+        claimed = original_claim(current_store, current_account_id, item_id, now=now)
+        assert maybe_handle_notification_loudness_response(
+            event(identity, "ja, laut"), current_store, current_account_id, now=now
+        ) is not None
+        return claimed
+
+    monkeypatch.setattr(proactive_agent, "claim_proactive_worker_job", claim_then_confirm)
+    sent: list[SendText] = []
+
+    async def sender(_route, action, _item):
+        sent.append(action)
+        return "message-ref"
+
+    result = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"telegram": sender},
+            now=now,
+        )
+    )
+
+    assert sent == []
+    assert result[0].status == "skipped"
+    assert result[0].reason == "notification_loudness_decided"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "cancelled"
+
+
 def test_queued_loudness_item_requires_explicit_pending_route_state(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

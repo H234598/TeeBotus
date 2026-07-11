@@ -45,7 +45,7 @@ def maybe_handle_notification_loudness_response(
         if decision is None:
             return None
         _set_notification_loudness_status(account_store, account_id, event, decision, now=now)
-        _cancel_queued_notification_loudness_items(account_store, account_id, event)
+        _cancel_pending_notification_loudness_items(account_store, account_id, event)
         text = NOTIFICATION_LOUDNESS_CONFIRMED_REPLY if decision == "confirmed" else NOTIFICATION_LOUDNESS_DECLINED_REPLY
         return (SendText(event.chat_id, text, track=False),)
 
@@ -315,7 +315,7 @@ def _mark_route_state_prompted(route_state: dict[str, Any], now: datetime) -> No
     _trim_prompted_window_dates(prompts_by_date)
 
 
-def _cancel_queued_notification_loudness_items(account_store: AccountStore, account_id: str, event: IncomingEvent) -> None:
+def _cancel_pending_notification_loudness_items(account_store: AccountStore, account_id: str, event: IncomingEvent) -> None:
     route_key = _route_key(event)
     with _account_proactive_outbox_lock(account_store, account_id):
         rows = account_store.read_proactive_outbox(account_id)
@@ -326,7 +326,7 @@ def _cancel_queued_notification_loudness_items(account_store: AccountStore, acco
                 continue
             if _normalize_route_key(item.get("route_key")) != _normalize_route_key(route_key):
                 continue
-            if str(item.get("status") or "queued").strip().casefold() != "queued":
+            if str(item.get("status") or "queued").strip().casefold() not in {"queued", "dispatching"}:
                 continue
             item["status"] = "cancelled"
             item["updated_at"] = timestamp

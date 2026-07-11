@@ -1381,6 +1381,18 @@ async def dispatch_due_proactive_outbox_items(
         if not claim_proactive_worker_job(account_store, account_id, item_id, now=resolved_now):
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "worker_claim_failed", channel))
             continue
+        if is_notification_loudness_outbox_item(item) and not notification_loudness_outbox_item_is_active(account_store, account_id, item):
+            update_proactive_outbox_item_status(
+                account_store,
+                account_id,
+                item_id,
+                status="cancelled",
+                reason="notification_loudness_decided",
+                now=resolved_now,
+                expected_status="dispatching",
+            )
+            results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "notification_loudness_decided", channel))
+            continue
         try:
             sent_ref = await _maybe_await(sender(route, action, item))
         except Exception as exc:  # pragma: no cover - exact adapter exception types are channel specific
