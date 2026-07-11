@@ -370,7 +370,7 @@ def queue_proactive_message(
     recurrence: str = "",
     user_requested: bool = False,
 ) -> ProactiveDecision:
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_proactive_now(now)
     timestamp = resolved_now.isoformat(timespec="seconds")
     normalized_category = str(category or "").strip().casefold()
     normalized_risk_gate = _normalize_risk_gate(risk_gate)
@@ -438,7 +438,7 @@ def approve_proactive_review_item(
         decision = proactive_policy_decision(account_store, account_id, category=category, now=now, exclude_item_id=str(item_id or ""), item={**target, "risk_gate": "none"})
         if not decision.allowed:
             return decision
-        timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+        timestamp = _resolve_proactive_now(now).isoformat(timespec="seconds")
         target["status"] = "queued"
         target["risk_gate"] = "none"
         target["updated_at"] = timestamp
@@ -471,7 +471,7 @@ def reject_proactive_review_item(
 ) -> ProactiveDecision:
     with _account_proactive_outbox_lock(account_store, account_id):
         rows = account_store.read_proactive_outbox(account_id)
-        timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+        timestamp = _resolve_proactive_now(now).isoformat(timespec="seconds")
         for item in rows:
             if not isinstance(item, dict) or str(item.get("id") or "").strip() != str(item_id or "").strip():
                 continue
@@ -502,7 +502,7 @@ def run_proactive_reflection_planner(
     now: datetime | None = None,
     max_items: int = 1,
 ) -> ProactivePlanningResult:
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_proactive_now(now)
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
     if max_items <= 0:
         return ProactivePlanningResult(account_id, skipped_reason="max_items_reached")
@@ -619,7 +619,7 @@ def run_proactive_llm_planner(
     now: datetime | None = None,
     max_memory_chars: int = 6000,
 ) -> ProactiveLLMPlanningResult:
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_proactive_now(now)
     if not _normalized_agent_state(account_store.read_agent_state(account_id))["proactive"]["enabled"]:
         return _proactive_planning_disabled_result(
             account_store,
@@ -641,7 +641,7 @@ def run_proactive_tool_agent(
     now: datetime | None = None,
     max_memory_chars: int = 6000,
 ) -> ProactiveLLMPlanningResult:
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_proactive_now(now)
     if not _normalized_agent_state(account_store.read_agent_state(account_id))["proactive"]["enabled"]:
         return _proactive_planning_disabled_result(
             account_store,
@@ -821,7 +821,7 @@ def apply_proactive_agent_tool_calls(
     decisions: list[dict[str, Any]] = []
     errors: list[str] = []
     audit_event_ids: list[str] = []
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_proactive_now(now)
     for index, raw_call in enumerate(list(tool_calls)[:PROACTIVE_LLM_MAX_DECISIONS]):
         call = raw_call if isinstance(raw_call, ProactiveAgentToolCall) else _normalize_proactive_agent_tool_call(raw_call)
         if call is None:
@@ -888,7 +888,7 @@ def apply_proactive_llm_plan(
     *,
     now: datetime | None = None,
 ) -> ProactiveLLMPlanningResult:
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_proactive_now(now)
     if not isinstance(payload, Mapping):
         audit_id = _append_proactive_llm_audit_event(account_store, account_id, event_type="llm_plan_rejected", reason="payload_not_object", payload=payload, now=resolved_now)
         return ProactiveLLMPlanningResult(account_id, errors=("payload_not_object",), audit_event_ids=(audit_id,))
@@ -997,7 +997,7 @@ def proactive_policy_decision(
     risk_decision = proactive_risk_policy_decision(account_store, account_id, category=normalized_category, now=now, item=item)
     if not risk_decision.allowed:
         return risk_decision
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_proactive_now(now)
     if isinstance(item, Mapping) and "route" in item:
         route = _normalize_proactive_route(item.get("route"))
         if route is None:
@@ -1027,7 +1027,7 @@ def proactive_policy_decision(
 
 
 def due_proactive_outbox_items(account_store: AccountStore, account_id: str, *, now: datetime | None = None) -> tuple[dict[str, Any], ...]:
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_proactive_now(now)
     due: list[dict[str, Any]] = []
     for item in account_store.read_proactive_outbox(account_id):
         if not isinstance(item, dict):
@@ -1058,7 +1058,7 @@ def fail_invalid_due_proactive_outbox_items(account_store: AccountStore, account
     with _account_proactive_outbox_lock(account_store, account_id):
         rows = account_store.read_proactive_outbox(account_id)
         failed_ids: list[str] = []
-        timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+        timestamp = _resolve_proactive_now(now).isoformat(timespec="seconds")
         for item in rows:
             if not isinstance(item, dict):
                 continue
@@ -1088,7 +1088,7 @@ def expire_stale_proactive_outbox_items(account_store: AccountStore, account_id:
     expire_after_days = int(state["policy"].get("expire_queued_after_days") or 0)
     if expire_after_days <= 0:
         return ()
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_proactive_now(now)
     cutoff = resolved_now - timedelta(days=expire_after_days)
     with _account_proactive_outbox_lock(account_store, account_id):
         rows = account_store.read_proactive_outbox(account_id)
@@ -1133,7 +1133,7 @@ def recover_stale_proactive_dispatching_items(
     attempt counter make this recovery visible for later deduplication/audit.
     """
     timeout_minutes = max(1, _normalize_int(lease_minutes, default=PROACTIVE_DISPATCH_LEASE_MINUTES))
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_proactive_now(now)
     cutoff = resolved_now - timedelta(minutes=timeout_minutes)
     timestamp = resolved_now.isoformat(timespec="seconds")
     recovered_ids: list[str] = []
@@ -1204,7 +1204,7 @@ def update_proactive_outbox_item_status(
     with _account_proactive_outbox_lock(account_store, account_id):
         rows = account_store.read_proactive_outbox(account_id)
         changed = False
-        timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+        timestamp = _resolve_proactive_now(now).isoformat(timespec="seconds")
         for item in rows:
             if not isinstance(item, dict) or str(item.get("id") or "") != str(item_id or ""):
                 continue
@@ -1290,7 +1290,7 @@ async def dispatch_due_proactive_outbox_items(
     message_tracker: MessageTracker | None = None,
     instance_name: str = "",
 ) -> tuple[ProactiveDispatchResult, ...]:
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_proactive_now(now)
     recover_stale_proactive_dispatching_items(account_store, account_id, now=resolved_now)
     expire_stale_proactive_outbox_items(account_store, account_id, now=resolved_now)
     invalid_due_item_ids = fail_invalid_due_proactive_outbox_items(account_store, account_id, now=resolved_now)
@@ -1624,7 +1624,7 @@ def check_proactive_agent_account(
     queued_count = 0
     review_pending_count = 0
     dispatching_count = 0
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_proactive_now(now)
     try:
         state = account_store.read_agent_state(account_id)
     except (AccountStoreError, OSError, ValueError) as exc:
@@ -1785,7 +1785,7 @@ def proactive_risk_policy_decision(
 
 
 def active_proactive_risk_memory_ids(account_store: AccountStore, account_id: str, *, now: datetime | None = None) -> tuple[str, ...]:
-    resolved_now = now or datetime.now(timezone.utc)
+    resolved_now = _resolve_proactive_now(now)
     active: list[str] = []
     for entry in account_store.read_memory_entries(account_id):
         if not isinstance(entry, dict):
@@ -2379,7 +2379,7 @@ def _append_proactive_llm_audit_event(
     plan_text: str = "",
     now: datetime | None = None,
 ) -> str:
-    timestamp = (now or datetime.now(timezone.utc)).isoformat(timespec="seconds")
+    timestamp = _resolve_proactive_now(now).isoformat(timespec="seconds")
     event: dict[str, Any] = {
         "event_type": str(event_type or "llm_decision_rejected").strip(),
         "source": "proactive_llm_planner",
@@ -2848,6 +2848,14 @@ def _parse_csv(value: str) -> set[str]:
 def _instance_env_token(instance_name: str) -> str:
     token = "".join(char if char.isalnum() else "_" for char in str(instance_name or "").strip().upper())
     return "_".join(part for part in token.split("_") if part)
+
+
+def _resolve_proactive_now(value: datetime | None) -> datetime:
+    if value is None:
+        return datetime.now(timezone.utc)
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value
 
 
 def _hour_in_window(hour: int, start_hour: int, end_hour: int) -> bool:

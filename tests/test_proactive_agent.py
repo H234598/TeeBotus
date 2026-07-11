@@ -433,6 +433,19 @@ def test_due_proactive_outbox_items_normalizes_stored_status(tmp_path) -> None:
     assert [item["id"] for item in due] == ["pro_upper"]
 
 
+def test_due_proactive_outbox_items_accepts_naive_utc_now(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
+    account_store.write_proactive_outbox(
+        account_id,
+        [{"id": "naive_now", "status": "queued", "due_at": "2026-06-15T12:00:00+00:00"}],
+    )
+
+    due = due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 15, 12))
+
+    assert [item["id"] for item in due] == ["naive_now"]
+
+
 def test_proactive_status_text_normalizes_stored_status_counts(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
