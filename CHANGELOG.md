@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.117 - 2026-07-12
+
+- Distinguish present notification actions from completed states.
+
 ## 1.9.116 - 2026-07-12
 
 - Ignore future notification-loudness intentions as completed states.
