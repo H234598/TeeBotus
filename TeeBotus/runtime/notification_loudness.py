@@ -33,7 +33,9 @@ def maybe_handle_notification_loudness_response(
     *,
     now: datetime | None = None,
 ) -> tuple[SendText, ...] | None:
-    if not _is_private_chat_type(event.chat_type):
+    if not account_id or not _is_private_chat_type(event.chat_type):
+        return None
+    if not _event_has_current_private_route(account_store, event):
         return None
     with _account_proactive_outbox_lock(account_store, account_id):
         route_status = _route_status(account_store, account_id, event)

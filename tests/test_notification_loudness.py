@@ -229,6 +229,19 @@ def test_response_normalizes_legacy_route_key_and_status(tmp_path) -> None:
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "cancelled"
 
 
+def test_response_ignores_private_route_that_is_no_longer_current(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=now) is not None
+    account_store.update_identity_route(identity, channel="telegram", chat_id="chat-2", chat_type="private", adapter_slot=1)
+
+    assert maybe_handle_notification_loudness_response(event(identity, "ja"), account_store, account_id, now=now) is None
+    route_state = account_store.read_agent_state(account_id)["notification_loudness"]["routes"]["telegram:1:chat-1"]
+    assert route_state["status"] == "pending"
+
+
 def test_prompt_does_not_resurrect_case_variant_terminal_route(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)
