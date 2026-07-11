@@ -118,6 +118,71 @@ def test_structured_reminder_fallback_can_queue_natural_request(tmp_path, monkey
     assert queued[0]["due_at"] == "2026-06-16T08:30:00+00:00"
 
 
+def test_structured_reminder_fallback_interprets_naive_datetime_as_configured_local_time(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    monkeypatch.setattr(
+        "TeeBotus.runtime.reminder_intent.configured_timezone",
+        lambda: timezone(timedelta(hours=2)),
+    )
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+
+    prompts = []
+
+    def fake_runner(prompt, _schema):
+        prompts.append(prompt)
+        return ReminderDecision(
+            should_create=True,
+            text="die Unterlagen mitnehmen",
+            datetime_iso="2026-06-16T08:30:00",
+            confidence=0.86,
+        )
+
+    reply = maybe_queue_natural_reminder(
+        account_store=account_store,
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        text="Kannst du mich morgen wegen der Unterlagen anstupsen?",
+        now=fixed_now(),
+        structured_decision_runner=fake_runner,
+    )
+
+    assert reply == "Okay, ich erinnere dich am 16.06.2026 um 08:30: die Unterlagen mitnehmen"
+    assert "Aktuelle lokale Zeit: 2026-06-15T14:00:00+02:00" in prompts[0]
+    assert account_store.read_proactive_outbox(account_id)[0]["due_at"] == "2026-06-16T08:30:00+02:00"
+
+
+def test_structured_reminder_fallback_does_not_queue_past_model_datetime(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    monkeypatch.setattr(
+        "TeeBotus.runtime.reminder_intent.configured_timezone",
+        lambda: timezone(timedelta(hours=2)),
+    )
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+
+    reply = maybe_queue_natural_reminder(
+        account_store=account_store,
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        text="Kannst du mich wegen der Unterlagen anstupsen?",
+        now=fixed_now(),
+        structured_decision_runner=lambda _prompt, _schema: ReminderDecision(
+            should_create=True,
+            text="die Unterlagen mitnehmen",
+            datetime_iso="2026-06-15T11:00:00",
+            confidence=0.86,
+        ),
+    )
+
+    assert reply == "Woran und wann soll ich dich erinnern? Beispiel: Erinnere mich morgen um 9 an den Termin."
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
 def test_structured_reminder_fallback_preserves_recurrence(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
     account_store = store(tmp_path)

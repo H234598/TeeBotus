@@ -15,7 +15,7 @@ from TeeBotus.runtime.proactive_agent import (
     queue_proactive_message,
     set_proactive_categories,
 )
-from TeeBotus.runtime.timezone import local_now
+from TeeBotus.runtime.timezone import configured_timezone, local_now
 
 StructuredReminderRunner = Callable[[str, type[Any]], Any]
 
@@ -83,9 +83,14 @@ def maybe_queue_natural_reminder(
     now: datetime | None = None,
     structured_decision_runner: StructuredReminderRunner | None = None,
 ) -> str | None:
-    intent = parse_reminder_intent(text, now=now)
+    resolved_now = now or local_now()
+    intent = parse_reminder_intent(text, now=resolved_now)
     if not intent.is_request and structured_decision_runner is not None:
-        intent = _structured_reminder_intent(text, structured_decision_runner=structured_decision_runner)
+        intent = _structured_reminder_intent(
+            text,
+            structured_decision_runner=structured_decision_runner,
+            now=resolved_now,
+        )
     if not intent.is_request:
         return None
     if not proactive_agent_instance_enabled(instance_name):
@@ -130,12 +135,19 @@ def parse_reminder_intent(text: str, *, now: datetime | None = None) -> Reminder
     return ReminderIntent(True, due_at=due_at, subject=subject, missing_time=not bool(due_at))
 
 
-def _structured_reminder_intent(text: str, *, structured_decision_runner: StructuredReminderRunner) -> ReminderIntent:
+def _structured_reminder_intent(
+    text: str,
+    *,
+    structured_decision_runner: StructuredReminderRunner,
+    now: datetime,
+) -> ReminderIntent:
     raw = str(text or "").strip()
     if not raw or raw.startswith("/"):
         return ReminderIntent(False)
+    resolved_now = now if now.tzinfo else now.replace(tzinfo=timezone.utc)
+    prompt_now = resolved_now.astimezone(configured_timezone())
     try:
-        payload = structured_decision_runner(_structured_reminder_prompt(raw), ReminderDecision)
+        payload = structured_decision_runner(_structured_reminder_prompt(raw, now=prompt_now), ReminderDecision)
         decision = parse_reminder_decision(payload)
     except (TypeError, ValueError, ValidationError):
         return ReminderIntent(False)
@@ -144,18 +156,44 @@ def _structured_reminder_intent(text: str, *, structured_decision_runner: Struct
     subject = decision.text.strip() or "deinen Termin"
     if not decision.datetime_iso:
         return ReminderIntent(True, subject=subject, recurrence=str(decision.recurrence or "").strip(), missing_time=True, source="model")
-    try:
-        datetime.fromisoformat(decision.datetime_iso)
-    except ValueError:
+    parsed_due_at = _parse_structured_due_at(decision.datetime_iso)
+    if parsed_due_at is None:
         return ReminderIntent(True, subject=subject, recurrence=str(decision.recurrence or "").strip(), missing_time=True, source="model")
-    return ReminderIntent(True, due_at=decision.datetime_iso, subject=subject[:240], recurrence=str(decision.recurrence or "").strip(), missing_time=False, source="model")
+    if parsed_due_at <= resolved_now:
+        return ReminderIntent(True, subject=subject, recurrence=str(decision.recurrence or "").strip(), missing_time=True, source="model")
+    return ReminderIntent(
+        True,
+        due_at=parsed_due_at.isoformat(timespec="seconds"),
+        subject=subject[:240],
+        recurrence=str(decision.recurrence or "").strip(),
+        missing_time=False,
+        source="model",
+    )
 
 
-def _structured_reminder_prompt(text: str) -> str:
+def _parse_structured_due_at(value: str) -> datetime | None:
+    text = str(value or "").strip()
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=configured_timezone())
+    return parsed
+
+
+def _structured_reminder_prompt(text: str, *, now: datetime) -> str:
+    timezone_name = getattr(now.tzinfo, "key", str(now.tzinfo or "UTC"))
     return (
         "Pruefe, ob die natuerliche Nachricht eine Bitte ist, eine Erinnerung fuer den User anzulegen. "
         "Antworte ausschliesslich als JSON fuer ReminderDecision. Lege nur User-gewuenschte Erinnerungen an; "
-        "keine allgemeinen Fragen, keine Bot-Aufgaben ohne Reminderwunsch.\n\n"
+        "keine allgemeinen Fragen, keine Bot-Aufgaben ohne Reminderwunsch. "
+        "Nutze den folgenden Zeitanker fuer relative Angaben. Gib datetime_iso immer mit einem expliziten "
+        "UTC-Offset aus; eine Uhrzeit ohne Offset ist lokale Userzeit. Wenn die Zeit nicht sicher bestimmbar ist, "
+        "lasse datetime_iso leer.\n"
+        f"Aktuelle lokale Zeit: {now.isoformat(timespec='seconds')} ({timezone_name})\n\n"
         f"Nachricht:\n{text}"
     )
 
