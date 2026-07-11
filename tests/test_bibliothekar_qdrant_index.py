@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from urllib.parse import urlparse
 
+import pytest
+
 from TeeBotus.embedding import FakeEmbeddingProvider
 from TeeBotus.runtime.qdrant_bibliothekar import (
     BGE_M3_EMBEDDING_DIMENSIONS,
@@ -59,8 +61,17 @@ class _FakeQdrant:
         return results[: int(body.get("limit", 5))]
 
     def _delete(self, body: dict[str, object]) -> None:
-        must = body.get("filter", {}).get("must", []) if isinstance(body.get("filter"), dict) else []
+        filter_data = body.get("filter") if isinstance(body.get("filter"), dict) else {}
+        must = filter_data.get("must", [])
+        must_not = filter_data.get("must_not", [])
         for point_id, point in list(self.points.items()):
+            if any(
+                isinstance(condition, dict)
+                and isinstance(condition.get("has_id"), list)
+                and point_id in {str(value) for value in condition["has_id"]}
+                for condition in must_not
+            ):
+                continue
             payload = point.get("payload")
             if isinstance(payload, dict) and _payload_matches(payload, must):
                 self.points.pop(point_id, None)
@@ -128,6 +139,32 @@ def test_qdrant_bibliothekar_delete_instance_removes_only_matching_chunks() -> N
     index.delete_instance(instance_name="Depressionsbot")
 
     assert [point["payload"]["chunk_id"] for point in fake_qdrant.points.values()] == ["chunk_b"]
+
+
+def test_qdrant_bibliothekar_rebuild_preserves_cache_when_upsert_fails(monkeypatch) -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantBibliothekarIndex(url="http://127.0.0.1:6333", opener=fake_qdrant, embedding_provider=FakeEmbeddingProvider(dimensions=16))
+    old_point_id = index.index_chunks(instance_name="Depressionsbot", chunks=[_chunk("old", text="Alt")])[0]
+
+    def fail_upsert(_self, _method, _path, _payload):
+        raise RuntimeError("Qdrant upsert failed")
+
+    monkeypatch.setattr(QdrantBibliothekarIndex, "_request_json", fail_upsert)
+
+    with pytest.raises(RuntimeError, match="Qdrant upsert failed"):
+        index.rebuild_instance(instance_name="Depressionsbot", chunks=[_chunk("current", text="Neu")])
+
+    assert old_point_id in fake_qdrant.points
+
+
+def test_qdrant_bibliothekar_search_limit_zero_does_not_call_remote() -> None:
+    fake_qdrant = _FakeQdrant()
+    index = QdrantBibliothekarIndex(url="http://127.0.0.1:6333", opener=fake_qdrant)
+
+    results = index.search(instance_name="Depressionsbot", query="Schlaf", limit=0)
+
+    assert results == ()
+    assert fake_qdrant.calls == []
 
 
 def test_bge_m3_embedding_provider_is_prepared_but_not_default() -> None:

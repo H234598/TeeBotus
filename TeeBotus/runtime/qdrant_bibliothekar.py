@@ -88,6 +88,9 @@ class QdrantBibliothekarIndex:
 
     def search(self, *, instance_name: str, query: str, limit: int = 5) -> tuple[QdrantBibliothekarResult, ...]:
         instance = _validate_instance_name(instance_name)
+        limit_value = min(50, int(limit))
+        if limit_value < 1:
+            return ()
         vector = self.embedding_provider.embed_text(query)
         _validate_vector(vector, expected_dimensions=int(self.embedding_provider.dimensions))
         response = self._request_json(
@@ -95,7 +98,7 @@ class QdrantBibliothekarIndex:
             f"/collections/{quote(_validate_collection(self.collection), safe='')}/points/search",
             {
                 "vector": vector,
-                "limit": max(1, min(50, int(limit))),
+                "limit": limit_value,
                 "with_payload": True,
                 "filter": {"must": [{"key": "instance_name", "match": {"value": instance}}]},
             },
@@ -122,13 +125,22 @@ class QdrantBibliothekarIndex:
             results.append(QdrantBibliothekarResult(chunk_id=chunk_id, instance_name=instance, score=score, payload=dict(payload)))
         return tuple(results)
 
-    def delete_instance(self, *, instance_name: str) -> None:
+    def delete_instance(self, *, instance_name: str, preserve_point_ids: Iterable[str] = ()) -> None:
         instance = _validate_instance_name(instance_name)
+        preserved_ids = tuple(dict.fromkeys(str(point_id or "").strip() for point_id in preserve_point_ids if str(point_id or "").strip()))
+        filter_data: dict[str, Any] = {"must": [{"key": "instance_name", "match": {"value": instance}}]}
+        if preserved_ids:
+            filter_data["must_not"] = [{"has_id": list(preserved_ids)}]
         self._request_json(
             "POST",
             f"/collections/{quote(_validate_collection(self.collection), safe='')}/points/delete?wait=true",
-            {"filter": {"must": [{"key": "instance_name", "match": {"value": instance}}]}},
+            {"filter": filter_data},
         )
+
+    def rebuild_instance(self, *, instance_name: str, chunks: Iterable[dict[str, Any]]) -> tuple[str, ...]:
+        point_ids = self.index_chunks(instance_name=instance_name, chunks=chunks)
+        self.delete_instance(instance_name=instance_name, preserve_point_ids=point_ids)
+        return point_ids
 
     def _request_json(self, method: str, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         target = resolve_qdrant_url(self.url)

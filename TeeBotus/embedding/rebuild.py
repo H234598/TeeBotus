@@ -101,6 +101,21 @@ def rebuild_qdrant_memory_index(
     )
 
 
+def _rebuild_qdrant_instance_index(
+    index: QdrantBibliothekarIndex,
+    *,
+    instance_name: str,
+    chunks: Iterable[dict[str, Any]],
+) -> tuple[str, ...]:
+    safe_rebuild = getattr(index, "rebuild_instance", None)
+    if callable(safe_rebuild):
+        return tuple(safe_rebuild(instance_name=instance_name, chunks=chunks))
+    # Compatibility for injected test/third-party doubles predating the
+    # failure-safe rebuild API. The production index implements the branch above.
+    index.delete_instance(instance_name=instance_name)
+    return tuple(index.index_chunks(instance_name=instance_name, chunks=chunks))
+
+
 def rebuild_qdrant_memory_indexes(
     *,
     instances_dir: str | Path = "instances",
@@ -326,8 +341,7 @@ def rebuild_qdrant_bibliothekar_indexes(
                     )
                 )
                 continue
-            index.delete_instance(instance_name=instance_name)
-            point_ids = index.index_chunks(instance_name=instance_name, chunks=chunks)
+            point_ids = _rebuild_qdrant_instance_index(index, instance_name=instance_name, chunks=chunks)
             results.append(
                 _bibliothekar_rebuild_result(
                     instance_name,
@@ -469,8 +483,9 @@ def rebuild_qdrant_codex_history_indexes(
                 embedding_provider=embedding_provider,
             )
             if full_rebuild:
-                index.delete_instance(instance_name=instance_name)
-            point_ids = index.index_chunks(instance_name=instance_name, chunks=chunks)
+                point_ids = _rebuild_qdrant_instance_index(index, instance_name=instance_name, chunks=chunks)
+            else:
+                point_ids = tuple(index.index_chunks(instance_name=instance_name, chunks=chunks))
             results.append(
                 _codex_history_rebuild_result(
                     instance_name,
