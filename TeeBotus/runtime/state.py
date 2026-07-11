@@ -325,6 +325,11 @@ class RuntimeStateStore(RuntimeState):
             raise AccountStoreError(f"could not inspect link-notification path: {self.link_notifications_path}") from exc
         if link_stat is not None and (stat.S_ISLNK(link_stat.st_mode) or link_stat.st_nlink > 1):
             raise AccountStoreError(f"refusing unsafe link-notification path: {self.link_notifications_path}")
+        if link_stat is not None and stat.S_ISREG(link_stat.st_mode):
+            try:
+                os.chmod(self.link_notifications_path, stat.S_IRUSR | stat.S_IWUSR)
+            except OSError as exc:
+                raise AccountStoreError(f"could not secure link-notification path: {self.link_notifications_path}") from exc
         self._guard_account_store_secrets()
         return EncryptedJsonVault(self.instance_name, self.secret_provider, root=self.runtime_dir)
 

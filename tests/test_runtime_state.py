@@ -127,6 +127,23 @@ def test_runtime_state_store_refuses_link_notification_hardlink(tmp_path):
     assert "unsafe link-notification path" in reloaded.link_notifications_persistence_error
 
 
+def test_runtime_state_store_secures_existing_link_notification_file(tmp_path):
+    data_dir = tmp_path / "Bot" / "data"
+    provider = StaticSecretProvider(b"s" * 32)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+    state.record_link_notification(
+        instance_name="Bot",
+        account_id="a" * 128,
+        new_identity_key="signal:uuid:new",
+        old_identity_key="telegram:user:1",
+    )
+    os.chmod(state.link_notifications_path, 0o644)
+
+    reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert stat_module.S_IMODE(reloaded.link_notifications_path.stat().st_mode) == 0o600
+
+
 def test_runtime_state_store_keeps_link_notifications_in_memory_when_secret_backend_fails(tmp_path):
     state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=BrokenProvider())
 
