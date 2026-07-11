@@ -2407,7 +2407,10 @@ class AccountStore:
         if not isinstance(recent_ids, list):
             errors.append("index.recent_ids is not a list")
             recent_ids = []
-        normalized_recent_ids = [str(value or "").strip() for value in recent_ids if str(value or "").strip()]
+        normalized_recent_ids = [str(value or "").strip() for value in recent_ids]
+        if any(not memory_id for memory_id in normalized_recent_ids):
+            errors.append("index.recent_ids contains an empty id")
+        normalized_recent_ids = [memory_id for memory_id in normalized_recent_ids if memory_id]
         duplicate_recent_ids = sorted(memory_id for memory_id, count in Counter(normalized_recent_ids).items() if count > 1)
         if duplicate_recent_ids:
             errors.append(f"duplicate recent_ids: {', '.join(duplicate_recent_ids)}")
@@ -2418,7 +2421,10 @@ class AccountStore:
         if not isinstance(accessed_ids, list):
             errors.append("index.accessed_ids is not a list")
             accessed_ids = []
-        normalized_accessed_ids = [str(value or "").strip() for value in accessed_ids if str(value or "").strip()]
+        normalized_accessed_ids = [str(value or "").strip() for value in accessed_ids]
+        if any(not memory_id for memory_id in normalized_accessed_ids):
+            errors.append("index.accessed_ids contains an empty id")
+        normalized_accessed_ids = [memory_id for memory_id in normalized_accessed_ids if memory_id]
         duplicate_accessed_ids = sorted(memory_id for memory_id, count in Counter(normalized_accessed_ids).items() if count > 1)
         if duplicate_accessed_ids:
             errors.append(f"duplicate accessed_ids: {', '.join(duplicate_accessed_ids)}")
@@ -2435,8 +2441,15 @@ class AccountStore:
             if not isinstance(values, list):
                 errors.append(f"keyword {keyword} ids are not a list")
                 continue
-            for value in values:
-                memory_id = str(value or "").strip()
+            normalized_keyword_ids = [str(value or "").strip() for value in values]
+            if any(not memory_id for memory_id in normalized_keyword_ids):
+                errors.append(f"keyword {keyword} contains an empty id")
+            duplicate_keyword_ids = sorted(
+                memory_id for memory_id, count in Counter(normalized_keyword_ids).items() if memory_id and count > 1
+            )
+            if duplicate_keyword_ids:
+                errors.append(f"duplicate keyword ids for {keyword}: {', '.join(duplicate_keyword_ids)}")
+            for memory_id in normalized_keyword_ids:
                 if memory_id and memory_id not in entry_id_set:
                     missing_keyword_ids.append(memory_id)
         if missing_keyword_ids:
@@ -2448,6 +2461,12 @@ class AccountStore:
             index_entries = {}
         if any(not str(memory_id or "").strip() for memory_id in index_entries):
             errors.append("index.entries contains an empty id")
+        normalized_index_entry_ids = [str(memory_id or "").strip() for memory_id in index_entries]
+        duplicate_index_entry_ids = sorted(
+            memory_id for memory_id, count in Counter(normalized_index_entry_ids).items() if memory_id and count > 1
+        )
+        if duplicate_index_entry_ids:
+            errors.append(f"duplicate index.entries ids: {', '.join(duplicate_index_entry_ids)}")
         missing_index_entry_ids = sorted(
             memory_id
             for raw_memory_id in index_entries
@@ -2467,6 +2486,12 @@ class AccountStore:
                 continue
             if any(not str(value or "").strip() for value in values):
                 errors.append(f"index.types.{memory_type} contains an empty id")
+            normalized_type_ids = [str(value or "").strip() for value in values]
+            duplicate_type_ids = sorted(
+                memory_id for memory_id, count in Counter(normalized_type_ids).items() if memory_id and count > 1
+            )
+            if duplicate_type_ids:
+                errors.append(f"duplicate index.types.{memory_type} ids: {', '.join(duplicate_type_ids)}")
             missing_type_ids = sorted(
                 memory_id
                 for value in values
@@ -2610,6 +2635,14 @@ class AccountStore:
             if (memory_id := str(raw_memory_id or "").strip())
             if memory_id not in entry_id_set
         )
+        normalized_semantic_ids = [str(memory_id or "").strip() for memory_id in semantic_entries]
+        if any(not memory_id for memory_id in normalized_semantic_ids):
+            errors.append("semantic_cache entries contain an empty id")
+        duplicate_semantic_ids = sorted(
+            memory_id for memory_id, count in Counter(normalized_semantic_ids).items() if memory_id and count > 1
+        )
+        if duplicate_semantic_ids:
+            errors.append(f"duplicate semantic_cache entry ids: {', '.join(duplicate_semantic_ids)}")
         if missing_semantic_ids:
             errors.append(f"semantic_cache entries missing entries: {', '.join(missing_semantic_ids)}")
         if semantic_cache and semantic_cache.get("rebuildable") is not True:

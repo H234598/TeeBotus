@@ -4842,6 +4842,44 @@ def test_structured_account_memory_index_health_reports_malformed_containers(tmp
     assert "index.semantic_cache is not an object" in error_text
 
 
+def test_structured_account_memory_index_health_reports_empty_and_duplicate_ids(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_live", "user_text": "Mond"})
+    index = store.read_memory_index(account_id)
+    nested_index = index["index"]
+    nested_index["recent_ids"] = ["", "mem_live"]
+    nested_index["accessed_ids"] = ["", "mem_live"]
+    nested_index["keywords"] = {"mond": ["", "mem_live", " mem_live "]}
+    nested_index["entries"] = {
+        "mem_live": nested_index["entries"]["mem_live"],
+        " mem_live ": nested_index["entries"]["mem_live"],
+    }
+    for memory_type, values in nested_index["types"].items():
+        if values:
+            nested_index["types"][memory_type] = ["mem_live", " mem_live "]
+    semantic_entry = nested_index["semantic_cache"]["entries"]["mem_live"]
+    nested_index["semantic_cache"]["entries"] = {
+        "mem_live": semantic_entry,
+        " mem_live ": semantic_entry,
+        "": {},
+    }
+    store.write_memory_index(account_id, index)
+
+    health = store.check_structured_memory_index(account_id)
+
+    assert not health.ok
+    error_text = "\n".join(health.errors)
+    assert "index.recent_ids contains an empty id" in error_text
+    assert "index.accessed_ids contains an empty id" in error_text
+    assert "keyword mond contains an empty id" in error_text
+    assert "duplicate keyword ids for mond: mem_live" in error_text
+    assert "duplicate index.entries ids: mem_live" in error_text
+    assert "duplicate index.types." in error_text
+    assert "semantic_cache entries contain an empty id" in error_text
+    assert "duplicate semantic_cache entry ids: mem_live" in error_text
+
+
 def test_merge_rebuilds_structured_account_memory_index_from_merged_entries(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))
