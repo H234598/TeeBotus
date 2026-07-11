@@ -305,6 +305,26 @@ def test_runtime_state_store_scopes_key_fingerprint_only_lookup(tmp_path):
     ) is None
 
 
+def test_runtime_state_store_refreshes_persistent_llm_state_between_bridges(tmp_path, monkeypatch):
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", raising=False)
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    first = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+    second = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+    scope = {"provider": "openai", "model": "gpt-5.5", "key_fingerprint": "a" * 64}
+
+    first.set_previous_response_id("Bot", ACCOUNT_ID, "resp-1", **scope)
+    assert first.get_previous_response_id("Bot", ACCOUNT_ID, **scope) == "resp-1"
+
+    second.set_previous_response_id("Bot", ACCOUNT_ID, "resp-2", **scope)
+    assert first.get_previous_response_id("Bot", ACCOUNT_ID, **scope) == "resp-2"
+
+    second.reset_previous_response_id("Bot", ACCOUNT_ID)
+    assert first.get_previous_response_id("Bot", ACCOUNT_ID, **scope) is None
+
+
 def test_runtime_state_store_migrates_previous_response_id_from_legacy_openai_state(tmp_path, monkeypatch):
     monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
     monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", raising=False)

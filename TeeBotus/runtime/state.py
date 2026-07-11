@@ -331,22 +331,15 @@ class RuntimeStateStore(RuntimeState):
         model: str = "",
         key_fingerprint: str = "",
     ) -> str | None:
-        cached = super().get_previous_response_id(
-            instance_name,
-            account_id,
-            provider=provider,
-            model=model,
-            key_fingerprint=key_fingerprint,
-        )
-        if cached:
-            return cached
         persisted, persisted_scope = self._read_llm_previous_response(account_id)
-        if persisted:
+        if not self.llm_state_persistence_error:
             key = (instance_name, account_id)
-            self.previous_response_ids[key] = persisted
-            if persisted_scope is not None:
-                self.previous_response_scopes[key] = persisted_scope
-            if provider or model or key_fingerprint:
+            if persisted:
+                self.previous_response_ids[key] = persisted
+                if persisted_scope is not None:
+                    self.previous_response_scopes[key] = persisted_scope
+                else:
+                    self.previous_response_scopes.pop(key, None)
                 return super().get_previous_response_id(
                     instance_name,
                     account_id,
@@ -354,7 +347,16 @@ class RuntimeStateStore(RuntimeState):
                     model=model,
                     key_fingerprint=key_fingerprint,
                 )
-        return persisted
+            self.previous_response_ids.pop(key, None)
+            self.previous_response_scopes.pop(key, None)
+            return None
+        return super().get_previous_response_id(
+            instance_name,
+            account_id,
+            provider=provider,
+            model=model,
+            key_fingerprint=key_fingerprint,
+        )
 
     def reset_previous_response_id(self, instance_name: str, account_id: str) -> None:
         super().reset_previous_response_id(instance_name, account_id)
