@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.122 - 2026-07-12
+
+- Avoid treating no-longer notification states as current.
+
 ## 1.9.121 - 2026-07-12
 
 - Ignore habitual notification-loudness statements as current state.

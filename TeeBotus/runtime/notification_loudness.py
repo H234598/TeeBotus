@@ -96,6 +96,7 @@ NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES = (
     "had ",
     "was ",
     "were ",
+    "no longer",
 )
 NOTIFICATION_LOUDNESS_NON_ASSERTIVE_STARTS = (
     "if ",
