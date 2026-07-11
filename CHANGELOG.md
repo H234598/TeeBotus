@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.114 - 2026-07-12
+
+- Recognize explicit English uncertainty markers in loudness replies.
+
 ## 1.9.113 - 2026-07-12
 
 - Recognize contracted uncertainty in loudness status replies.

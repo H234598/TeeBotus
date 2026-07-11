@@ -1228,6 +1228,12 @@ def test_loudness_free_text_rejects_contracted_uncertainty_markers() -> None:
     assert _notification_loudness_decision("I am unsure whether messages are loud", pending=True) is None
 
 
+def test_loudness_free_text_rejects_explicit_english_uncertainty_markers() -> None:
+    assert _notification_loudness_decision("I do not know if notifications are on", pending=True) is None
+    assert _notification_loudness_decision("I do not think notifications are on", pending=False) is None
+    assert _notification_loudness_decision("I do not believe messages are loud", pending=True) is None
+
+
 def test_loudness_free_text_accepts_affirmation_variants_with_context() -> None:
     assert _notification_loudness_decision("jo, laut", pending=True) == "confirmed"
     assert _notification_loudness_decision("jep, Nachrichten sind an", pending=True) == "confirmed"
