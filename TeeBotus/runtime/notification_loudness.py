@@ -334,6 +334,10 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "switched them on",
     "enabled them",
     "unmuted",
+    "made loud",
+    "made them loud",
+    "set to loud",
+    "set them to loud",
 )
 NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES = (
     "off mute",
@@ -658,6 +662,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "laut geschaltet",
         "lautgeschaltet",
         "entstummt",
+        "made loud",
+        "made them loud",
+        "made messages loud",
+        "made notifications loud",
+        "set notifications to loud",
+        "set them to loud",
         "eingeschaltet",
         "angeschaltet",
         "aktiviert",

@@ -1422,6 +1422,15 @@ def test_loudness_free_text_does_not_decide_negated_keep_requests() -> None:
     assert _notification_loudness_decision("I leave notifications off", pending=False) is None
     assert _notification_loudness_decision("Ich lasse die Nachrichten stumm", pending=True) is None
     assert _notification_loudness_decision("Ich lasse die Nachrichten nicht stumm", pending=False) is None
+    assert _notification_loudness_decision("I set notifications to loud", pending=True) is None
+    assert _notification_loudness_decision("I make messages loud", pending=False) is None
+
+
+def test_loudness_free_text_accepts_completed_set_and_make_forms() -> None:
+    assert _notification_loudness_decision("I have set notifications to loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I have set them to loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I have made messages loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I have made them loud", pending=True) == "confirmed"
 
 
 def test_loudness_free_text_does_not_decide_present_actions_as_completed() -> None:

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.145 - 2026-07-12
+
+- Recognize completed set/make loudness forms.
+
 ## 1.9.144 - 2026-07-12
 
 - Ignore additional uncertain loudness statements.
