@@ -1406,6 +1406,13 @@ def test_loudness_free_text_rejects_explicit_english_uncertainty_markers() -> No
     assert _notification_loudness_decision("I do not believe messages are loud", pending=True) is None
 
 
+def test_loudness_free_text_does_not_confirm_uncertain_short_completion_replies() -> None:
+    assert _notification_loudness_decision("Ich weiß nicht, ob ich es gemacht habe", pending=True) is None
+    assert _notification_loudness_decision("Ich glaube, ich habe es gemacht", pending=True) is None
+    assert _notification_loudness_decision("I am not sure if I have done it", pending=True) is None
+    assert _notification_loudness_decision("I think I have done it", pending=True) is None
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None

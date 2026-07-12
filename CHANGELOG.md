@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.162 - 2026-07-12
+
+- Keep uncertain short completion replies undecided.
+
 ## 1.9.161 - 2026-07-12
 
 - Recognize recent negative loudness changes as declined.

@@ -713,7 +713,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_positive_unmute_phrase = any(
         _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
     )
-    if has_notification_context and _notification_loudness_has_uncertainty(normalized):
+    if _notification_loudness_has_uncertainty(normalized) and (has_notification_context or pending):
         return None
     if (
         has_notification_context
