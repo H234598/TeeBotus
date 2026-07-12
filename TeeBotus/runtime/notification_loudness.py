@@ -2482,6 +2482,13 @@ def _notification_loudness_pending_negated_volume_reply_decision(normalized: str
                 continue
             if remainder == reply:
                 return decision
+    if remainder.startswith(("not ", "nicht ")):
+        return None
+    remainder_decision = _notification_loudness_pending_modified_reply_decision(remainder)
+    if remainder_decision is not None:
+        remainder_tokens = set(remainder.split())
+        if remainder_tokens & volume_markers or remainder_tokens & scalar_positive or remainder_tokens & scalar_negative:
+            return "declined" if remainder_decision == "confirmed" else "confirmed"
     if remainder in scalar_positive:
         return "declined"
     if remainder in scalar_negative:
