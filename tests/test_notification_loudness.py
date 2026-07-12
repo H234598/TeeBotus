@@ -1248,6 +1248,8 @@ def test_loudness_free_text_scopes_pronoun_statuses_after_actions() -> None:
     assert _notification_loudness_decision("I switched them on; they are loud", pending=False) == "confirmed"
     assert _notification_loudness_decision("Ich schaltete sie an, aber sie sind stumm", pending=True) == "declined"
     assert _notification_loudness_decision("Ich stellte sie laut, aber sie sind stumm", pending=True) is None
+    assert _notification_loudness_decision("I set them to loud but they aren't muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I set them to loud but they are muted", pending=True) is None
     assert _notification_loudness_decision("Die Nachrichten sind laut, aber stumm", pending=True) is None
     assert _notification_loudness_decision("Messages are loud but silent", pending=False) is None
 

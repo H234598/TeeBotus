@@ -1182,7 +1182,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if (
         has_notification_context
         and _notification_loudness_is_non_declarative(text, normalized)
-        and not (has_audibility_state or has_explicit_confirmation)
+        and not (
+            has_audibility_state
+            or has_explicit_confirmation
+            or _notification_loudness_has_sequenced_action_status(polarity_normalized)
+        )
     ):
         return None
     has_volume_positive, has_volume_negative = _notification_loudness_volume_polarity(
