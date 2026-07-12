@@ -1892,6 +1892,12 @@ def test_loudness_free_text_recognizes_prefixed_pending_pronoun_statuses() -> No
     assert _notification_loudness_decision("Yup, notifications are not muted", pending=True) == "confirmed"
     assert _notification_loudness_decision("Sure, they are on", pending=True) == "confirmed"
     assert _notification_loudness_decision("Nope, they are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("Nah, they are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("Nah, they are off", pending=True) == "declined"
+    assert _notification_loudness_decision("Nö, sie sind stumm", pending=True) == "declined"
+    assert _notification_loudness_decision("Nö, sie sind aus", pending=True) == "declined"
+    assert _notification_loudness_decision("Nah, they are on", pending=True) is None
+    assert _notification_loudness_decision("Nö, sie sind an", pending=True) is None
     assert _notification_loudness_decision("Ja, sie sind an, glaube ich", pending=True) is None
 
 
