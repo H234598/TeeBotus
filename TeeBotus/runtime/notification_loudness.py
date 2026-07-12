@@ -1867,6 +1867,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
                     "didn t",
                     "haven t",
                     "not yet",
+                    "noch nicht",
                 }
                 or not (has_negated_mute or has_negated_off)
             )
