@@ -93,7 +93,9 @@ STATUS_URL_CREDENTIAL_RE = re.compile(
     r"(?<![A-Za-z0-9_])(?:[A-Za-z][A-Za-z0-9+.-]*://)?[^/\s:@]+:[^/\s@]+@(?=[^\s]+)"
 )
 CODEX_HISTORY_SUCCESS_STATUSES = frozenset({"accepted", "acknowledged", "delivered", "sent"})
+CODEX_HISTORY_NONPROBLEM_STATUSES = CODEX_HISTORY_SUCCESS_STATUSES | {"compacted"}
 CODEX_HISTORY_STATUS_TOKENS = CODEX_HISTORY_SUCCESS_STATUSES | {
+    "compacted",
     "dispatching",
     "error",
     "failed",
@@ -103,6 +105,9 @@ CODEX_HISTORY_STATUS_TOKENS = CODEX_HISTORY_SUCCESS_STATUSES | {
     "unknown",
     "warning",
 }
+HISTORY_DISPATCHER_MODE_ENV = "TEEBOTUS_HISTORY_DISPATCHER_MODE"
+CODEX_HISTORY_DISPATCH_INSTANCES_ENV = "TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES"
+DEFAULT_CODEX_HISTORY_DISPATCH_INSTANCES = ("TeeBotus_Logger", "TeeBotusLogger", "TBL")
 
 
 def build_status_reply(
@@ -811,32 +816,36 @@ def codex_history_status_lines(
                 f"error={_status_field_value(summary['error'])}"
             )
         ]
+    delegated_source = _codex_history_queue_is_delegated(safe_instance_name)
+    summary_status = "ok" if delegated_source and int(summary.get("non_delegable_problem_count", 0) or 0) == 0 else summary["status"]
+    delegation_fields = " dispatch_mode=bridge dispatch_role=source" if delegated_source else ""
     lines = [
         (
-            f"codex_history={_status_field_value(safe_instance_name)} status={summary['status']} "
+            f"codex_history={_status_field_value(safe_instance_name)} status={summary_status} "
             f"queued={summary['queued']} failed={summary['failed']} total={summary['total']} "
             f"latest_repo={_status_field_value(summary['latest_repo'])} "
             f"latest_prefix={_status_field_value(summary['latest_prefix'])} "
             f"latest_kind={_status_field_value(summary['latest_kind'])} "
             f"run_summaries={summary['run_summaries']} strategies={summary['strategies']} "
-            f"graphs={summary['graphs']} other={summary['other']}"
+            f"graphs={summary['graphs']} other={summary['other']}{delegation_fields}"
         )
     ]
     for repo in summary.get("repos", []):
         if not isinstance(repo, Mapping):
             continue
+        repo_status = "ok" if delegated_source and not bool(repo.get("non_delegable_problem")) else repo.get("status", "unknown")
         lines.append(
             (
                 f"codex_history_repo={_status_field_value(safe_instance_name)} "
                 f"repo={_status_field_value(repo.get('repo_name', '<none>'))} "
-                f"status={_codex_history_status_token(repo.get('status', 'unknown'))} "
+                f"status={_codex_history_status_token(repo_status)} "
                 f"queued={repo.get('queued', 0)} failed={repo.get('failed', 0)} total={repo.get('total', 0)} "
                 f"run_summaries={repo.get('run_summaries', 0)} strategies={repo.get('strategies', 0)} "
                 f"graphs={repo.get('graphs', 0)} other={repo.get('other', 0)} "
                 f"latest_prefix={_status_field_value(repo.get('latest_prefix', '<none>'))} "
                 f"latest_status={_status_field_value(repo.get('latest_status', '<none>'))} "
                 f"latest_kind={_status_field_value(repo.get('latest_kind', '<none>'))} "
-                f"latest_title={_status_field_value(repo.get('latest_title', '<none>'))}"
+                f"latest_title={_status_field_value(repo.get('latest_title', '<none>'))}{delegation_fields}"
             )
         )
     return lines
@@ -886,7 +895,12 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
         latest_prefix = "<none>"
     latest_kind = _codex_history_kind(latest) if valid_rows else "<none>"
     kind_counts = _codex_history_kind_counts(valid_rows)
-    has_problem_status = malformed_rows > 0 or any(status not in CODEX_HISTORY_SUCCESS_STATUSES for status in status_counts)
+    has_problem_status = malformed_rows > 0 or any(status not in CODEX_HISTORY_NONPROBLEM_STATUSES for status in status_counts)
+    non_delegable_problem_count = malformed_rows + sum(
+        count
+        for status, count in status_counts.items()
+        if status not in CODEX_HISTORY_NONPROBLEM_STATUSES | {"queued"}
+    )
     return {
         "status": "warning" if has_problem_status else "ok",
         "queued": queued,
@@ -895,6 +909,7 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
         "latest_repo": latest_repo,
         "latest_prefix": latest_prefix,
         "latest_kind": latest_kind,
+        "non_delegable_problem_count": non_delegable_problem_count,
         **kind_counts,
         "repos": _codex_history_repo_summaries(valid_rows),
     }
@@ -925,11 +940,14 @@ def _codex_history_repo_summaries(rows: Sequence[Mapping[str, Any]]) -> list[dic
                 "graphs": 0,
                 "other": 0,
                 "problem": False,
+                "non_delegable_problem": False,
             },
         )
         entry["total"] += 1
-        if status not in CODEX_HISTORY_SUCCESS_STATUSES:
+        if status not in CODEX_HISTORY_NONPROBLEM_STATUSES:
             entry["problem"] = True
+            if status != "queued":
+                entry["non_delegable_problem"] = True
         if status == "queued":
             entry["queued"] += 1
         elif status == "failed":
@@ -982,6 +1000,24 @@ def _codex_history_kind(row: Mapping[str, Any]) -> str:
 def _codex_history_status_token(value: object) -> str:
     token = str(value or "").strip().casefold() or "unknown"
     return token if token in CODEX_HISTORY_STATUS_TOKENS else "unknown"
+
+
+def _codex_history_queue_is_delegated(instance_name: str) -> bool:
+    mode = str(os.environ.get(HISTORY_DISPATCHER_MODE_ENV, "legacy") or "legacy").strip().casefold()
+    if mode != "bridge":
+        return False
+    raw_allowed = os.environ.get(CODEX_HISTORY_DISPATCH_INSTANCES_ENV)
+    if raw_allowed is None:
+        allowed = DEFAULT_CODEX_HISTORY_DISPATCH_INSTANCES
+    else:
+        allowed = tuple(token for token in re.split(r"[\s,;]+", str(raw_allowed or "").strip()) if token)
+    instance_token = re.sub(r"[^a-z0-9]+", "_", str(instance_name or "").strip().casefold()).strip("_")
+    allowed_markers = {str(name or "").strip().casefold() for name in allowed}
+    allowed_tokens = {
+        re.sub(r"[^a-z0-9]+", "_", str(name or "").strip().casefold()).strip("_")
+        for name in allowed
+    }
+    return "*" not in allowed_markers and "all" not in allowed_tokens and instance_token not in allowed_tokens
 
 
 def _status_field_value(value: object) -> str:

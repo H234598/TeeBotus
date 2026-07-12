@@ -1385,6 +1385,33 @@ def test_codex_history_dispatch_bridge_preserves_already_delivered_recipients(
     }]
 
 
+def test_history_dispatcher_digest_payload_becomes_markdown_attachment() -> None:
+    item = codex_history_module._history_dispatcher_item_to_legacy(
+        {
+            "id": "digest-1",
+            "kind": "codex_history_digest",
+            "project": "/home/teladi/TeeBotus",
+            "created_at": "2026-07-12T21:55:15+00:00",
+            "payload": {
+                "summary_prefix": "digest_abc123",
+                "summary_number": 1,
+                "version": {"semver": "digest", "tag": "digest", "summary_number": 1},
+                "summary": {
+                    "title": "Codex-History-Sammelbericht: TeeBotus",
+                    "markdown": "# digest_abc123 Codex-History-Sammelbericht\n\n- Original-ID: `one`\n",
+                },
+            },
+        }
+    )
+
+    action = codex_history_module._codex_history_attachment_action(item, "42")
+
+    assert item["summary_prefix"] == "digest_abc123"
+    assert action.caption == "Release TeeBotus digest"
+    assert action.filename == "TeeBotus_release_digest_0001.md"
+    assert action.data.startswith(b"# digest_abc123 Codex-History-Sammelbericht")
+
+
 def test_codex_history_shadow_append_mirrors_after_legacy_write(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

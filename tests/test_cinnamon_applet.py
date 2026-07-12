@@ -113,13 +113,13 @@ def _run_gjs_spawn_smoke(
     gjs = shutil.which("gjs")
     if not gjs:
         pytest.skip("gjs is not available for Gio subprocess behavior check")
-    source = (APPLET_DIR / "applet.js").read_text(encoding="utf-8")
     script = f"""
 const Gio = imports.gi.Gio;
 const GLib = imports.gi.GLib;
+const appletSource = imports.byteArray.toString(GLib.file_get_contents(GLib.getenv("TEEBOTUS_APPLET_SOURCE"))[1]);
 function load(fakeImports) {{
   const imports = fakeImports;
-  eval({json.dumps(source)} + "\\nglobalThis.__TeeBotusApplet = TeeBotusApplet;");
+  eval(appletSource + "\\nglobalThis.__TeeBotusApplet = TeeBotusApplet;");
 }}
 load({{
   ui: {{applet: {{TextIconApplet: function() {{}}}}, modalDialog: {{}}, popupMenu: {{}}, settings: {{}}}},
@@ -143,7 +143,9 @@ let loop = new GLib.MainLoop(null, false);
 );
 loop.run();
 """
-    completed = subprocess.run([gjs, "-c", script], check=True, capture_output=True, text=True, timeout=10)
+    env = os.environ.copy()
+    env["TEEBOTUS_APPLET_SOURCE"] = str(APPLET_DIR / "applet.js")
+    completed = subprocess.run([gjs, "-c", script], check=True, capture_output=True, text=True, timeout=10, env=env)
     return json.loads(completed.stdout)
 
 
@@ -151,9 +153,9 @@ def _run_gjs_spawn_success_query_failure_smoke() -> dict[str, object]:
     gjs = shutil.which("gjs")
     if not gjs:
         pytest.skip("gjs is not available for Gio subprocess behavior check")
-    source = (APPLET_DIR / "applet.js").read_text(encoding="utf-8")
     script = f"""
 const GLib = imports.gi.GLib;
+const appletSource = imports.byteArray.toString(GLib.file_get_contents(GLib.getenv("TEEBOTUS_APPLET_SOURCE"))[1]);
 function FakeBytes() {{}}
 FakeBytes.prototype.get_size = function() {{ return 0; }};
 function FakeStream() {{}}
@@ -186,7 +188,7 @@ const Gio = {{
 }};
 function load(fakeImports) {{
   const imports = fakeImports;
-  eval({json.dumps(source)} + "\\nglobalThis.__TeeBotusApplet = TeeBotusApplet;");
+  eval(appletSource + "\\nglobalThis.__TeeBotusApplet = TeeBotusApplet;");
 }}
 load({{
   ui: {{applet: {{TextIconApplet: function() {{}}}}, modalDialog: {{}}, popupMenu: {{}}, settings: {{}}}},
@@ -210,7 +212,9 @@ applet._spawn(
 );
 loop.run();
 """
-    completed = subprocess.run([gjs, "-c", script], check=True, capture_output=True, text=True, timeout=10)
+    env = os.environ.copy()
+    env["TEEBOTUS_APPLET_SOURCE"] = str(APPLET_DIR / "applet.js")
+    completed = subprocess.run([gjs, "-c", script], check=True, capture_output=True, text=True, timeout=10, env=env)
     return json.loads(completed.stdout)
 
 
@@ -222,10 +226,9 @@ def test_cinnamon_applet_refresh_timer_clears_itself_when_auto_refresh_stops() -
     node = shutil.which("node")
     if not node:
         pytest.skip("node is not available for Cinnamon applet timer check")
-    source = (APPLET_DIR / "applet.js").read_text(encoding="utf-8")
     script = f"""
 const vm = require("vm");
-const source = {json.dumps(source)};
+const source = require("fs").readFileSync(process.env.TEEBOTUS_APPLET_SOURCE, "utf8");
 let timerCallback = null;
 let removed = [];
 const TextIconApplet = function() {{}};
@@ -272,7 +275,9 @@ const before = applet.statusTimer;
 const keepRunning = timerCallback();
 console.log(JSON.stringify({{before, after: applet.statusTimer, keepRunning, removed}}));
 """
-    completed = subprocess.run([node, "-e", script], check=True, capture_output=True, text=True, timeout=10)
+    env = os.environ.copy()
+    env["TEEBOTUS_APPLET_SOURCE"] = str(APPLET_DIR / "applet.js")
+    completed = subprocess.run([node, "-e", script], check=True, capture_output=True, text=True, timeout=10, env=env)
     result = json.loads(completed.stdout)
 
     assert result == {"before": 42, "after": 0, "keepRunning": False, "removed": []}
@@ -2030,6 +2035,24 @@ def test_cinnamon_applet_formats_runtime_slot_and_admin_status_lines() -> None:
     }
 
 
+def test_cinnamon_applet_formats_signal_identity_action_as_concrete_login_steps() -> None:
+    result = _run_js_applet_expression(
+        """
+        applet._formatAccountLine(
+          "account_identity_warning=Depressionsbot code=runtime_channel_without_identity channel=signal "
+          + "message=signal runtime is configured action=legacy"
+        )
+        """
+    )
+
+    assert result == (
+        "Signal-Verknuepfung Depressionsbot: erforderlich; "
+        "1. in einem bereits verknuepften privaten Chat /register oder /rotate_secret ausfuehren; "
+        "2. im privaten Signal-Chat /login <account_id> <secret> senden; "
+        "/register in Signal nur fuer ein absichtlich getrenntes Konto verwenden"
+    )
+
+
 def test_cinnamon_applet_usage_formatters_keep_error_details() -> None:
     result = _run_js_applet_expression(
         """
@@ -2295,6 +2318,38 @@ def test_cinnamon_applet_menu_header_keeps_authoritative_total_problem_count() -
     )
 
     assert "Warnungen 1" in result["statusSummary"]
+
+
+def test_cinnamon_applet_health_v2_keeps_information_visible_without_promoting_it_to_problem() -> None:
+    result = _run_js_applet_expression(
+        """
+        ({
+          total: applet._healthProblemTotal(
+            {classification_version: 2, status: "ok", total_problem_count: 0, informational_problem_count: 3},
+            {problem_status_count: 9, problem_statuses: "unavailable:9"},
+            {unavailable: 9}
+          ),
+          summary: applet._statusSummary({
+            ok: true,
+            unit: {active_state: "active"},
+            health: {
+              classification_version: 2,
+              status: "ok",
+              total_problem_count: 0,
+              actionable_problem_statuses: "",
+              informational_problem_count: 3,
+              informational_problem_statuses: "unavailable:3"
+            },
+            runtime: {summary: {instances: "Demo", channels: "telegram"}, status_counts: {unavailable: 9}},
+            qdrant: {collections: {}}
+          })
+        })
+        """
+    )
+
+    assert result["total"] == 0
+    assert result["summary"].startswith("Health ok | Hinweise nicht verfuegbar:3 | Unit active")
+    assert "Warnungen" not in result["summary"]
 
 
 def test_cinnamon_applet_menu_header_does_not_trust_zero_total_problem_count() -> None:
@@ -2962,6 +3017,45 @@ def test_cinnamon_applet_runtime_parser_deduplicates_same_problem_status_per_lin
     assert parsed["summary"]["problem_statuses"] == "broken:1,unavailable:1,warning:4"
 
 
+def test_cinnamon_applet_runtime_parser_separates_actions_from_fallback_information() -> None:
+    parsed = parse_runtime_status(
+        """
+[LLM-Routen und Backends]
+llm_route=structured status=unavailable fallback=local fallback_model=ollama effective_status=configured
+llm_route=hard status=missing_key error=missing_key
+[API Keys, Limits und Kosten]
+api_budget=hard status=missing_key error=missing_key
+structured_decision=Demo/telegram:1 status=enabled route_status=unavailable fallback=local
+gemini_free_tier_limits status=fallback_defaults error=public_source_incomplete
+codex_usage_account=Demo status=partial five_hour=none weekly=50
+[Projekt-History]
+codex_history=Legacy status=warning queued=3 failed=0 total=3
+codex_history_repo=Legacy repo=TeeBotus status=warning queued=3 failed=0 total=3
+codex_history=Logger status=warning queued=0 failed=0 total=10
+[Tools und Account-Memory]
+account_identity=Demo status=warning identity_warnings=2
+account_identity_warning=Demo code=account_store_integrity_warning message=cleanup_needed
+account_identity_warning=Demo code=runtime_channel_without_identity channel=signal message=link_needed
+"""
+    )
+
+    assert parsed["summary"]["problem_status_count"] == 12
+    assert parsed["summary"]["actionable_problem_status_count"] == 4
+    assert parsed["summary"]["actionable_problem_statuses"] == "missing_key:1,warning:3"
+    assert parsed["summary"]["informational_problem_status_count"] == 8
+    assert parsed["summary"]["informational_problem_statuses"] == (
+        "fallback_defaults:1,missing_key:1,partial:1,unavailable:2,warning:3"
+    )
+    assert parsed["summary"]["llm_actionable_problem_status_count"] == 1
+    assert parsed["summary"]["llm_informational_status_count"] == 1
+    assert parsed["summary"]["api_actionable_problem_status_count"] == 0
+    assert parsed["summary"]["api_informational_status_count"] == 4
+    assert parsed["summary"]["codex_history_actionable_problem_status_count"] == 1
+    assert parsed["summary"]["codex_history_informational_status_count"] == 2
+    assert parsed["summary"]["memory_actionable_problem_status_count"] == 2
+    assert parsed["summary"]["memory_informational_status_count"] == 1
+
+
 def test_cinnamon_applet_runtime_parser_keeps_fresh_codex_usage_neutral() -> None:
     parsed = parse_runtime_status(
         """
@@ -3050,11 +3144,16 @@ def test_cinnamon_applet_payload_ok_reflects_runtime_health(monkeypatch, tmp_pat
     assert payload["command_ok"] is True
     assert payload["ok"] is False
     assert payload["health"] == {
+        "classification_version": 2,
         "status": "warning",
         "command_ok": True,
         "command_problem_count": 0,
         "problem_status_count": 1,
         "problem_statuses": "warning:1",
+        "actionable_problem_count": 1,
+        "actionable_problem_statuses": "warning:1",
+        "informational_problem_count": 0,
+        "informational_problem_statuses": "",
         "runtime_problem_count": 1,
         "qdrant_problem_count": 0,
         "qdrant_probe_problem_count": 0,

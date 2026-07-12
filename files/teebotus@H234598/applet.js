@@ -521,7 +521,7 @@ TeeBotusApplet.prototype = {
         "Uebersicht: Telegram-Slots " + String(summary.telegram_slots || 0)
         + " | Signal-Accounts " + String(summary.signal_accounts || 0)
         + " | Matrix-Homeserver " + String(summary.matrix_homeservers || 0)
-        + this._sectionProblemText(summary.messenger_problem_status_count)
+        + this._sectionHealthText(summary.messenger_actionable_problem_status_count, summary.messenger_informational_status_count, summary.messenger_problem_status_count)
       );
     }
     messengerLines = messengerLines.concat(this._formatLines(sections["Messenger"] || [], (line) => this._formatMessengerLine(line)));
@@ -529,7 +529,7 @@ TeeBotusApplet.prototype = {
 
     let llmLines = [];
     if (summary.llm_routes || summary.hf_pool || summary.gemini_free_tier) {
-      llmLines.push("Uebersicht: LLM-Routen " + String(summary.llm_routes || 0) + this._sectionProblemText(summary.llm_problem_status_count));
+      llmLines.push("Uebersicht: LLM-Routen " + String(summary.llm_routes || 0) + this._sectionHealthText(summary.llm_actionable_problem_status_count, summary.llm_informational_status_count, summary.llm_problem_status_count));
     }
     let llmStatusGroups = this._splitProblemStatusLines((sections["LLM-Routen und Backends"] || []).concat(sections["Accounts und Entscheidungen"] || []));
     let localServiceLines = this._problemStatusLines(sections["Lokale Dienste"] || []);
@@ -544,7 +544,7 @@ TeeBotusApplet.prototype = {
         apiLines.push(
           "Uebersicht: API-Routen " + String(summary.api_budgets || 0)
           + " | codex-usage Accounts " + String(summary.codex_usage_accounts || 0)
-          + this._sectionProblemText(summary.api_problem_status_count)
+          + this._sectionHealthText(summary.api_actionable_problem_status_count, summary.api_informational_status_count, summary.api_problem_status_count)
         );
       }
       apiLines = apiLines.concat(this._formatLines(this._problemStatusLines(sections["API Keys, Limits und Kosten"] || []), (line) => this._formatApiBudgetLine(line)));
@@ -560,7 +560,7 @@ TeeBotusApplet.prototype = {
         + " | Runs " + String(summary.codex_history_run_summaries || 0)
         + " | Strategie " + String(summary.codex_history_strategies || 0)
         + " | Graphen " + String(summary.codex_history_graphs || 0)
-        + this._sectionProblemText(summary.codex_history_problem_status_count)
+        + this._sectionHealthText(summary.codex_history_actionable_problem_status_count, summary.codex_history_informational_status_count, summary.codex_history_problem_status_count)
       );
       projectHistoryLines = projectHistoryLines.concat(this._formatLines(this._problemStatusLines(sections["Projekt-History"] || []), (line) => this._formatProjectHistoryLine(line)));
       this.projectMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
@@ -578,7 +578,7 @@ TeeBotusApplet.prototype = {
         "Uebersicht: Account-Memorys " + String(summary.memory_accounts || 0)
         + " | Qdrant-Collections " + String(summary.qdrant_ready_collections || 0) + "/" + String(summary.qdrant_collections || 0)
         + " | Usermemory-Vektoren " + String(userMemoryPoints)
-        + this._sectionProblemText(summary.memory_problem_status_count)
+        + this._sectionHealthText(summary.memory_actionable_problem_status_count, summary.memory_informational_status_count, summary.memory_problem_status_count)
       );
     }
     if (qdrant.unit) {
@@ -893,6 +893,14 @@ TeeBotusApplet.prototype = {
   _sectionProblemText: function(value) {
     let count = this._nonNegativeInt(value, 0);
     return count > 0 ? " | Probleme " + String(count) : "";
+  },
+
+  _sectionHealthText: function(actionableValue, informationalValue, legacyProblemValue) {
+    let hasClassification = actionableValue !== undefined || informationalValue !== undefined;
+    let actionable = this._nonNegativeInt(hasClassification ? actionableValue : legacyProblemValue, 0);
+    let informational = this._nonNegativeInt(informationalValue, 0);
+    let text = actionable > 0 ? " | Handlungsbedarf " + String(actionable) : "";
+    return informational > 0 ? text + " | Hinweise " + String(informational) : text;
   },
 
   _formatRuntimeLine: function(line) {
@@ -1290,6 +1298,12 @@ TeeBotusApplet.prototype = {
   _formatAccountLine: function(line) {
     let fields = this._parseFields(line);
     if (fields.account_identity_warning) {
+      if (String(fields.code || "").trim() === "runtime_channel_without_identity" && String(fields.channel || "").trim() === "signal") {
+        return "Signal-Verknuepfung " + fields.account_identity_warning
+          + ": erforderlich; 1. in einem bereits verknuepften privaten Chat /register oder /rotate_secret ausfuehren"
+          + "; 2. im privaten Signal-Chat /login <account_id> <secret> senden"
+          + "; /register in Signal nur fuer ein absichtlich getrenntes Konto verwenden";
+      }
       let message = fields.message ? "; " + fields.message : "";
       let action = fields.action ? "; Aktion " + fields.action : "";
       return "Account-Identitaet " + fields.account_identity_warning + ": Warnung" + message + action;
@@ -1612,22 +1626,26 @@ TeeBotusApplet.prototype = {
     let vectors = this._qdrantCollectionCount(qdrant.collections || {}, "teebotus_user_memory");
     let vectorText = vectors > 0 ? " | Vektoren " + String(vectors) : "";
     let healthText = this._statusWord(health.status || (payload.ok ? "ok" : "warning"));
-    let breakdown = this._problemBreakdownText(health.problem_statuses || summary.problem_statuses || this._problemStatusesFromCounts(counts || {}));
+    let breakdown = this._problemBreakdownText(health.actionable_problem_statuses || health.problem_statuses || summary.actionable_problem_statuses || summary.problem_statuses || this._problemStatusesFromCounts(counts || {}));
+    let informational = this._informationalHealthText(health, summary);
     let commandBreakdown = this._commandProblemBreakdownText(health);
     let qdrantBreakdown = this._qdrantProblemBreakdownText(health);
     let runtimeDiagnostics = this._runtimeDiagnosticsText(payload);
     let result;
     if (bad > 0) {
       let problemLabel = health.status === "broken" ? "Probleme " : "Warnungen ";
-      result = problemLabel + String(bad) + breakdown + commandBreakdown + qdrantBreakdown + " | Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + runtimeDiagnostics;
+      result = problemLabel + String(bad) + breakdown + informational + commandBreakdown + qdrantBreakdown + " | Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + runtimeDiagnostics;
     } else {
-      result = "Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + breakdown + commandBreakdown + qdrantBreakdown + runtimeDiagnostics;
+      result = "Health " + healthText + informational + " | Unit " + state + " | " + instances + " | " + channels + vectorText + breakdown + commandBreakdown + qdrantBreakdown + runtimeDiagnostics;
     }
     return this._shortText(result, MAX_PANEL_STATUS_CHARS);
   },
 
   _healthProblemTotal: function(health, summary, counts) {
     let total = this._nonNegativeInt((health || {}).total_problem_count, null);
+    if (this._nonNegativeInt((health || {}).classification_version, 0) >= 2 && total !== null) {
+      return total;
+    }
     let qdrantRuntimeTotal = this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0);
     let textProblemTotal = Math.max(
       this._problemBreakdownCount((health || {}).problem_statuses),
@@ -1758,10 +1776,25 @@ TeeBotusApplet.prototype = {
 
   _healthProblemDetailsText: function(health, summary, counts) {
     let text = "";
-    text += this._problemBreakdownText((health || {}).problem_statuses || (summary || {}).problem_statuses || this._problemStatusesFromCounts(counts || {}));
+    text += this._problemBreakdownText((health || {}).actionable_problem_statuses || (health || {}).problem_statuses || (summary || {}).actionable_problem_statuses || (summary || {}).problem_statuses || this._problemStatusesFromCounts(counts || {}));
+    text += this._informationalHealthText(health, summary);
     text += this._commandProblemBreakdownText(health);
     text += this._qdrantProblemBreakdownText(health);
     return text;
+  },
+
+  _informationalHealthText: function(health, summary) {
+    let count = this._nonNegativeInt((health || {}).informational_problem_count, null);
+    if (count === null) {
+      count = this._nonNegativeInt((summary || {}).informational_problem_status_count, 0);
+    }
+    if (count <= 0) {
+      return "";
+    }
+    let details = this._problemBreakdownText(
+      (health || {}).informational_problem_statuses || (summary || {}).informational_problem_statuses || ""
+    ).replace(" | Probleme ", " | Hinweise ");
+    return details || " | Hinweise " + String(count);
   },
 
   _runtimeDiagnosticsText: function(payload) {

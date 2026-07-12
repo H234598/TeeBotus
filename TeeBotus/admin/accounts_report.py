@@ -423,7 +423,27 @@ def _other_identity_count(identity_counts: Mapping[str, int], channel: str) -> i
 def _account_dirs(accounts_dir: Path) -> list[Path]:
     if not accounts_dir.exists():
         return []
-    return sorted(path for path in accounts_dir.iterdir() if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name))
+    return sorted(
+        path
+        for path in accounts_dir.iterdir()
+        if path.is_dir()
+        and TOKEN_HEX_RE.fullmatch(path.name)
+        and not _account_dir_contains_only_transient_locks(path)
+    )
+
+
+def _account_dir_contains_only_transient_locks(path: Path) -> bool:
+    try:
+        children = list(path.iterdir())
+    except OSError:
+        return False
+    return bool(children) and all(
+        child.is_file()
+        and not child.is_symlink()
+        and child.name.startswith(".")
+        and child.name.endswith(".lock")
+        for child in children
+    )
 
 
 def _encrypted_store_files_present(store: AccountStore) -> dict[str, bool]:

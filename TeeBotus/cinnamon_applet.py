@@ -243,6 +243,21 @@ PROBLEM_STATUSES = frozenset(
         "warning",
     }
 )
+HEALTHY_EFFECTIVE_STATUSES = frozenset(
+    {
+        "accepted",
+        "available",
+        "configured",
+        "enabled",
+        "healthy",
+        "installed",
+        "ok",
+        "reachable",
+        "ready",
+        "registered",
+        "routable",
+    }
+)
 SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"models_feed", "route_status", "semantic"})
 STATUS_FIELD_BOUNDARY_KEYS = frozenset({"status"}) | SECONDARY_PROBLEM_STATUS_FIELDS
 STATUS_FIELD_BOUNDARY_VALUES = PROBLEM_STATUSES | frozenset(
@@ -277,6 +292,14 @@ SECTION_PROBLEM_SUMMARY_KEYS = {
     "Projekt-History": "codex_history_problem_status_count",
     "Memory und semantische Suche": "memory_problem_status_count",
     "Tools und Account-Memory": "memory_problem_status_count",
+}
+SECTION_ACTIONABLE_SUMMARY_KEYS = {
+    section: key.replace("_problem_status_count", "_actionable_problem_status_count")
+    for section, key in SECTION_PROBLEM_SUMMARY_KEYS.items()
+}
+SECTION_INFORMATIONAL_SUMMARY_KEYS = {
+    section: key.replace("_problem_status_count", "_informational_status_count")
+    for section, key in SECTION_PROBLEM_SUMMARY_KEYS.items()
 }
 
 
@@ -358,6 +381,8 @@ def build_status_payload(
             "sections": parsed_runtime["sections"],
             "summary": parsed_runtime["summary"],
             "status_counts": parsed_runtime["status_counts"],
+            "actionable_status_counts": parsed_runtime.get("actionable_status_counts", parsed_runtime["status_counts"]),
+            "informational_status_counts": parsed_runtime.get("informational_status_counts", {}),
         },
     }
 
@@ -367,16 +392,31 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     status_counts = parsed_runtime.get("status_counts", {}) if isinstance(parsed_runtime, dict) else {}
     command_problem_count = 0 if command_ok else 1
     problem_count = _safe_int(runtime_summary.get("problem_status_count", 0))
+    has_health_classification = "actionable_problem_status_count" in runtime_summary
     status_problem_count = sum(_safe_int(status_counts.get(status, 0)) for status in PROBLEM_STATUSES)
+    actionable_problem_count = _safe_int(
+        runtime_summary.get("actionable_problem_status_count", max(problem_count, status_problem_count))
+    )
+    informational_problem_count = _safe_int(runtime_summary.get("informational_problem_status_count", 0))
     qdrant_unit_problem_count = _unit_problem_count(qdrant_unit)
-    qdrant_runtime_problem_count = _safe_int(runtime_summary.get("qdrant_problem_status_count", 0))
+    qdrant_runtime_problem_count = _safe_int(
+        runtime_summary.get("qdrant_actionable_problem_status_count", runtime_summary.get("qdrant_problem_status_count", 0))
+    )
     qdrant_probe_problem_count = _qdrant_problem_count(qdrant)
     # A failed service query and failed collection probes are overlapping signals
     # for the same Qdrant outage; keep their detail fields, but count the worst
     # signal once in the top-level health total.
     qdrant_problem_count = max(qdrant_runtime_problem_count, qdrant_probe_problem_count, qdrant_unit_problem_count)
-    severe_count = sum(_safe_int(status_counts.get(status, 0)) for status in ("broken", "config_conflict", "error", "failed", "invalid", "schema_mismatch"))
-    runtime_problem_count = max(0, max(problem_count, status_problem_count) - qdrant_runtime_problem_count)
+    actionable_status_counts = (
+        parsed_runtime.get("actionable_status_counts", {})
+        if has_health_classification and isinstance(parsed_runtime, dict)
+        else status_counts
+    )
+    severe_count = sum(
+        _safe_int(actionable_status_counts.get(status, 0))
+        for status in ("broken", "config_conflict", "error", "failed", "invalid", "schema_mismatch")
+    )
+    runtime_problem_count = max(0, actionable_problem_count - qdrant_runtime_problem_count)
     total_problem_count = command_problem_count + runtime_problem_count + qdrant_problem_count
     status = "ok"
     if not command_ok or severe_count > 0:
@@ -384,11 +424,16 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     elif total_problem_count > 0:
         status = "warning"
     return {
+        "classification_version": 2,
         "status": status,
         "command_ok": bool(command_ok),
         "command_problem_count": command_problem_count,
         "problem_status_count": problem_count,
         "problem_statuses": str(runtime_summary.get("problem_statuses", "") or _problem_statuses_from_counts(status_counts)),
+        "actionable_problem_count": actionable_problem_count,
+        "actionable_problem_statuses": str(runtime_summary.get("actionable_problem_statuses", "")),
+        "informational_problem_count": informational_problem_count,
+        "informational_problem_statuses": str(runtime_summary.get("informational_problem_statuses", "")),
         "runtime_problem_count": runtime_problem_count,
         "qdrant_problem_count": qdrant_problem_count,
         "qdrant_probe_problem_count": qdrant_probe_problem_count,
@@ -507,13 +552,24 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         "qdrant": "",
         "qdrant_collections": 0,
         "qdrant_problem_status_count": 0,
+        "qdrant_actionable_problem_status_count": 0,
+        "qdrant_informational_status_count": 0,
         "qdrant_ready_collections": 0,
         "memory_semantic_ready": 0,
         "hf_pool": "",
         "problem_status_count": 0,
         "problem_statuses": "",
+        "actionable_problem_status_count": 0,
+        "actionable_problem_statuses": "",
+        "informational_problem_status_count": 0,
+        "informational_problem_statuses": "",
         "output_truncated": False,
     }
+    for section_key in set(SECTION_PROBLEM_SUMMARY_KEYS.values()):
+        summary.setdefault(section_key.replace("_problem_status_count", "_actionable_problem_status_count"), 0)
+        summary.setdefault(section_key.replace("_problem_status_count", "_informational_status_count"), 0)
+    actionable_status_counts: dict[str, int] = {}
+    informational_status_counts: dict[str, int] = {}
     redacted_output = _redact(str(output or ""))
     for raw_line in redacted_output.splitlines():
         line = raw_line.strip()
@@ -533,11 +589,18 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             _append_status_value(line_statuses, "warning")
         if line.startswith("codex_usage=") and _codex_usage_is_stale(fields):
             _append_status_value(line_statuses, "stale")
+        actionable_statuses, informational_statuses = _line_health_statuses(line, fields, line_statuses)
         for status in line_statuses:
             status_counts[status] = status_counts.get(status, 0) + 1
+        for status in actionable_statuses:
+            actionable_status_counts[status] = actionable_status_counts.get(status, 0) + 1
+        for status in informational_statuses:
+            informational_status_counts[status] = informational_status_counts.get(status, 0) + 1
         section_problem_key = SECTION_PROBLEM_SUMMARY_KEYS.get(current)
         if section_problem_key:
             summary[section_problem_key] += sum(1 for status in line_statuses if status in PROBLEM_STATUSES)
+            summary[SECTION_ACTIONABLE_SUMMARY_KEYS[current]] += len(actionable_statuses)
+            summary[SECTION_INFORMATIONAL_SUMMARY_KEYS[current]] += len(informational_statuses)
         if line.startswith("instances="):
             summary["instances"] = line.split("=", 1)[1]
         elif line.startswith("channels="):
@@ -575,9 +638,13 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         elif line.startswith("qdrant="):
             summary["qdrant"] = line
             summary["qdrant_problem_status_count"] += sum(status in PROBLEM_STATUSES for status in line_statuses)
+            summary["qdrant_actionable_problem_status_count"] += len(actionable_statuses)
+            summary["qdrant_informational_status_count"] += len(informational_statuses)
         elif line.startswith("qdrant_collection="):
             summary["qdrant_collections"] += 1
             summary["qdrant_problem_status_count"] += sum(status in PROBLEM_STATUSES for status in line_statuses)
+            summary["qdrant_actionable_problem_status_count"] += len(actionable_statuses)
+            summary["qdrant_informational_status_count"] += len(informational_statuses)
             if _status_is_ready_without_error(fields, "status"):
                 summary["qdrant_ready_collections"] += 1
         elif (
@@ -590,11 +657,32 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["hf_pool"] = line
     if summary["output_truncated"]:
         status_counts["warning"] = status_counts.get("warning", 0) + 1
+        actionable_status_counts["warning"] = actionable_status_counts.get("warning", 0) + 1
     problem_counts = {status: count for status, count in sorted(status_counts.items()) if status in PROBLEM_STATUSES}
+    actionable_problem_counts = {
+        status: count for status, count in sorted(actionable_status_counts.items()) if status in PROBLEM_STATUSES
+    }
+    informational_problem_counts = {
+        status: count for status, count in sorted(informational_status_counts.items()) if status in PROBLEM_STATUSES
+    }
     summary["problem_status_count"] = sum(problem_counts.values())
     summary["problem_statuses"] = ",".join(f"{status}:{count}" for status, count in problem_counts.items())
+    summary["actionable_problem_status_count"] = sum(actionable_problem_counts.values())
+    summary["actionable_problem_statuses"] = ",".join(
+        f"{status}:{count}" for status, count in actionable_problem_counts.items()
+    )
+    summary["informational_problem_status_count"] = sum(informational_problem_counts.values())
+    summary["informational_problem_statuses"] = ",".join(
+        f"{status}:{count}" for status, count in informational_problem_counts.items()
+    )
     sections = {key: value for key, value in sections.items() if value}
-    return {"sections": sections, "summary": summary, "status_counts": status_counts}
+    return {
+        "sections": sections,
+        "summary": summary,
+        "status_counts": status_counts,
+        "actionable_status_counts": actionable_status_counts,
+        "informational_status_counts": informational_status_counts,
+    }
 
 
 def _line_status_values(fields: dict[str, str]) -> tuple[str, ...]:
@@ -613,6 +701,42 @@ def _line_status_values(fields: dict[str, str]) -> tuple[str, ...]:
         if _status_flag_is_set(fields.get(key, "")):
             _append_status_value(values, status)
     return tuple(values)
+
+
+def _line_health_statuses(
+    line: str,
+    fields: Mapping[str, Any],
+    statuses: list[str] | tuple[str, ...],
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """Split raw diagnostics into top-level actions and visible information.
+
+    Runtime status intentionally repeats route failures in route, budget, and
+    per-slot rows. The applet keeps all of those rows, while this classifier
+    selects one authoritative actionable signal for the health header.
+    """
+    problems = tuple(status for status in statuses if status in PROBLEM_STATUSES)
+    if not problems:
+        return (), ()
+    prefix = line.split("=", 1)[0].strip()
+    primary = _normalized_status_value(fields.get("status"))
+    effective = _normalized_status_value(fields.get("effective_status"))
+    fallback_covered = effective in HEALTHY_EFFECTIVE_STATUSES and any(
+        str(fields.get(key, "") or "").strip()
+        for key in ("fallback", "fallback_profile", "fallback_model", "offload_profile")
+    )
+    informational = (
+        primary == "fallback_defaults"
+        or (prefix == "codex_usage_account" and primary == "partial")
+        or prefix in {"api_budget", "account_identity", "codex_history_repo"}
+        or (prefix == "structured_decision" and bool(str(fields.get("fallback", "") or "").strip()))
+        or (
+            prefix == "codex_history"
+            and _safe_int(fields.get("queued", 0)) == 0
+            and _safe_int(fields.get("failed", 0)) == 0
+        )
+        or fallback_covered
+    )
+    return ((), problems) if informational else (problems, ())
 
 
 def _normalized_status_value(value: Any) -> str:

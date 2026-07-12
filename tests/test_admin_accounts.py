@@ -167,6 +167,22 @@ def test_admin_report_warns_for_dangling_account_directory(tmp_path: Path) -> No
     assert "account_store_warning: account directory has no Account_Profile.json" in text
 
 
+def test_admin_report_ignores_account_directory_with_only_transient_locks(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    account_dir = instance_dir / "data" / "accounts" / "accounts" / ("a" * 128)
+    account_dir.mkdir(parents=True)
+    (account_dir / ".Codex_History_Outbox.jsonl.lock").touch()
+    (account_dir / ".Status_Outbox.jsonl.lock").touch()
+
+    report = build_accounts_admin_report(instances_dir=tmp_path, provider=provider())
+
+    store_report = report["instances"][0]["account_store"]
+    assert store_report["account_directories"] == 0
+    assert store_report["dangling_account_dirs"] == 0
+    assert store_report["warnings"] == []
+    assert report["instances"][0]["identity_health"] == {"status": "ok", "warning_count": 0, "warnings": []}
+
+
 def test_text_report_contains_account_store_and_identity_summary(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
