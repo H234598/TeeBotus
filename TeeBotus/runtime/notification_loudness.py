@@ -550,6 +550,12 @@ NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES = (
 NOTIFICATION_LOUDNESS_ACTION_WORDS = frozenset({"hab", "habe", "haben", "getan", "gemacht", "erledigt", "did", "done"})
 NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS = frozenset({"ja", "yes", "jep", "jo", "ok", "okay", "klar"})
 NOTIFICATION_LOUDNESS_NEGATION_REPLY_WORDS = frozenset({"nein", "no", "nee", "nop", "nope"})
+NOTIFICATION_LOUDNESS_PENDING_POSITIVE_STATUS_REPLIES = frozenset(
+    {"laut", "loud", "an", "on", "nicht stumm", "nicht lautlos", "nicht aus", "not muted", "not off", "not disabled"}
+)
+NOTIFICATION_LOUDNESS_PENDING_NEGATIVE_STATUS_REPLIES = frozenset(
+    {"stumm", "lautlos", "muted", "silent", "aus", "off", "disabled", "nicht laut", "nicht an", "not loud", "not on"}
+)
 
 NOTIFICATION_LOUDNESS_PROMPT = (
     "Bitte stell meine Nachrichten in diesem Chat auf laut, damit Erinnerungen, Termine und wichtige Hinweise nicht untergehen.\n"
@@ -792,6 +798,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
                     break
         if direct_pronoun_decision is not None:
             return direct_pronoun_decision
+    if pending and normalized in NOTIFICATION_LOUDNESS_PENDING_POSITIVE_STATUS_REPLIES:
+        return "confirmed"
+    if pending and normalized in NOTIFICATION_LOUDNESS_PENDING_NEGATIVE_STATUS_REPLIES:
+        return "declined"
     words = set(normalized.split())
     explicit_context_needles = (
         "benachrichtigung",

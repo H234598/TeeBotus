@@ -1582,6 +1582,18 @@ def test_loudness_free_text_recognizes_demonstrative_pending_pronouns() -> None:
     assert _notification_loudness_decision("It is muted", pending=True) == "declined"
 
 
+def test_loudness_free_text_recognizes_short_pending_status_replies() -> None:
+    assert _notification_loudness_decision("laut", pending=True) == "confirmed"
+    assert _notification_loudness_decision("an", pending=True) == "confirmed"
+    assert _notification_loudness_decision("on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("nicht aus", pending=True) == "confirmed"
+    assert _notification_loudness_decision("not muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("aus", pending=True) == "declined"
+    assert _notification_loudness_decision("muted", pending=True) == "declined"
+    assert _notification_loudness_decision("nicht laut", pending=True) == "declined"
+    assert _notification_loudness_decision("laut", pending=False) is None
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None
