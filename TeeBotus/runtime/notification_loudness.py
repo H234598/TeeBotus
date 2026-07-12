@@ -1179,7 +1179,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     )
     has_positive_unmute_phrase = any(
         _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
-    )
+    ) or _notification_loudness_has_indirect_positive_mute_action(normalized)
     has_failed_action = _notification_loudness_has_failed_action(normalized)
     has_successful_ability_action = _notification_loudness_has_successful_ability_action(normalized)
     has_notification_context = has_notification_context or has_positive_unmute_phrase
@@ -1221,7 +1221,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         )
         has_positive_unmute_phrase = any(
             _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
-        )
+        ) or _notification_loudness_has_indirect_positive_mute_action(normalized)
         has_notification_context = has_notification_context or has_positive_unmute_phrase
         has_completed_action_positive, has_completed_action_negative = _notification_loudness_completed_action_polarity(
             polarity_normalized, has_notification_context=has_notification_context
@@ -1584,7 +1584,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or has_absolute_negative_still_inner_negation
         or has_absolute_negative_off_inner_negation
         or has_volume_negative
-        or (has_completed_action_negative and not has_explicit_confirmation)
+        or (has_completed_action_negative and not has_explicit_confirmation and not has_positive_unmute_phrase)
     )
     if has_absolute_negative_positive_inner_negation:
         has_declined_phrase = False
@@ -2150,6 +2150,28 @@ def _notification_loudness_term_polarity(
     normalized: str, terms: frozenset[str]
 ) -> tuple[bool, bool]:
     tokens = normalized.split()
+    relation_terms = {
+        "avoid",
+        "avoided",
+        "avoiding",
+        "prevent",
+        "prevented",
+        "preventing",
+        "keep",
+        "kept",
+        "keeping",
+        "leave",
+        "left",
+        "leaving",
+        "vermeide",
+        "vermeiden",
+        "vermieden",
+        "verhindere",
+        "verhindern",
+        "verhindert",
+        "verhinderte",
+        "lassen",
+    }
     has_unnegated = False
     has_negated = False
     for index, token in enumerate(tokens):
@@ -2163,6 +2185,15 @@ def _notification_loudness_term_polarity(
             ):
                 preceding_start = boundary_index + 1
         negation_count = _notification_loudness_scoped_negation_count(tokens, preceding_start, index)
+        if any(
+            tokens[relation_index] in relation_terms
+            and _notification_loudness_scoped_negation_count(
+                tokens, preceding_start, relation_index
+            )
+            % 2
+            for relation_index in range(preceding_start, index)
+        ):
+            negation_count -= 1
         if negation_count % 2:
             has_negated = True
         else:
@@ -2256,20 +2287,26 @@ def _notification_loudness_failed_action_polarity(normalized: str) -> str | None
         "lautlos",
         "muted",
         "mute",
+        "muting",
         "silent",
         "silenced",
+        "silencing",
         "aus",
         "off",
         "disabled",
         "disable",
+        "disabling",
         "inaktiv",
         "deaktiviert",
         "deactivate",
         "deactivated",
+        "deactivating",
         "ausschalten",
         "auszuschalten",
         "abschalten",
         "abzuschalten",
+        "turning",
+        "switching",
         "leise",
         "quiet",
         "down",
@@ -2336,6 +2373,114 @@ def _notification_loudness_has_successful_ability_action(normalized: str) -> boo
         _contains_normalized_phrase(normalized, phrase)
         for phrase in NOTIFICATION_LOUDNESS_SUCCESSFUL_ABILITY_PHRASES
     )
+
+
+def _notification_loudness_has_indirect_positive_mute_action(normalized: str) -> bool:
+    tokens = normalized.split()
+    relation_tokens = {
+        "avoid",
+        "avoided",
+        "avoiding",
+        "prevent",
+        "prevented",
+        "preventing",
+        "keep",
+        "kept",
+        "keeping",
+        "vermeiden",
+        "vermieden",
+        "vermeide",
+        "verhindern",
+        "verhindert",
+        "verhindere",
+        "verhinderte",
+    }
+    completed_relations = {
+        "avoided",
+        "avoiding",
+        "prevented",
+        "preventing",
+        "kept",
+        "keeping",
+        "vermieden",
+        "verhindert",
+        "verhinderte",
+    }
+    success_markers = (
+        "managed to",
+        "succeeded in",
+        "successfully",
+        "was able to",
+        "were able to",
+        "have been able to",
+        "has been able to",
+        "geschafft",
+        "gelungen",
+    )
+    attempt_or_failure_terms = {
+        "tried",
+        "attempted",
+        "versuchte",
+        "versucht",
+        "probierte",
+        "probiert",
+        "failed",
+        "gescheitert",
+        "fehlgeschlagen",
+    }
+    negative_action_terms = {
+        "mute",
+        "muted",
+        "muting",
+        "silence",
+        "silenced",
+        "silencing",
+        "stumm",
+        "lautlos",
+        "stummgeschaltet",
+        "ausschalten",
+        "auszuschalten",
+        "turn",
+        "turning",
+        "switch",
+        "switching",
+    }
+    negative_state_terms = set(NOTIFICATION_LOUDNESS_MUTE_TERMS) | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+    for relation_index, relation in enumerate(tokens):
+        if relation not in relation_tokens:
+            continue
+        preceding_start = max(0, relation_index - 8)
+        preceding = tokens[preceding_start:relation_index]
+        if _notification_loudness_scoped_negation_count(tokens, preceding_start, relation_index) % 2:
+            continue
+        if set(preceding) & attempt_or_failure_terms:
+            continue
+        prefix_text = " ".join(preceding)
+        is_completed = relation in completed_relations or any(
+            _contains_normalized_phrase(prefix_text, marker) for marker in success_markers
+        )
+        if not is_completed:
+            continue
+        tail_end = min(len(tokens), relation_index + 12)
+        for boundary_index in range(relation_index + 1, tail_end):
+            if (
+                tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+            ):
+                tail_end = boundary_index
+                break
+        tail = tokens[relation_index + 1 : tail_end]
+        if not set(tail) & negative_state_terms:
+            continue
+        if relation in {"avoid", "avoided", "avoiding", "vermeiden", "vermieden", "vermeide"}:
+            if set(tail) & negative_action_terms or "zu" in tail:
+                return True
+            continue
+        if set(tail) & negative_action_terms and ("from" in tail or "dass" in tail or "zu" in tail):
+            return True
+        if set(tail) & negative_action_terms and tail and tail[0] in negative_action_terms:
+            return True
+    return False
 
 
 def _notification_loudness_has_explicit_historical_time(normalized: str) -> bool:

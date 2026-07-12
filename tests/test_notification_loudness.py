@@ -2022,6 +2022,10 @@ def test_loudness_free_text_recognizes_successful_action_polarity() -> None:
     assert _notification_loudness_decision("I managed to keep notifications not muted", pending=True) == "confirmed"
     assert _notification_loudness_decision("I succeeded in keeping notifications not off", pending=False) == "confirmed"
     assert _notification_loudness_decision("I managed to set notifications not loud", pending=True) == "declined"
+    assert _notification_loudness_decision("I did not avoid muting notifications", pending=True) == "declined"
+    assert _notification_loudness_decision("I did not avoid turning notifications off", pending=False) == "declined"
+    assert _notification_loudness_decision("I did not prevent notifications from being muted", pending=True) == "declined"
+    assert _notification_loudness_decision("Ich habe nicht vermieden, die Nachrichten stumm zu schalten", pending=False) == "declined"
     assert _notification_loudness_decision("I managed to enable the chat", pending=True) is None
     assert _notification_loudness_decision("I succeeded in disabling the thread", pending=False) is None
     assert _notification_loudness_decision("The chat is muted", pending=True) == "declined"
