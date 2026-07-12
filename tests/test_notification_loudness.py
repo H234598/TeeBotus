@@ -1373,6 +1373,8 @@ def test_loudness_free_text_does_not_decide_questions_or_requests() -> None:
     assert _notification_loudness_decision("In theory notifications are on", pending=True) is None
     assert _notification_loudness_decision("Notifications are on or off", pending=True) is None
     assert _notification_loudness_decision("Messages are loud or muted", pending=False) is None
+    assert _notification_loudness_decision("Notifications are audible or muted", pending=True) is None
+    assert _notification_loudness_decision("Messages are visible or hidden", pending=False) is None
     assert _notification_loudness_decision("Benachrichtigungen sind an oder aus", pending=True) is None
 
 
@@ -1514,6 +1516,8 @@ def test_loudness_free_text_recognizes_current_status_with_modifiers() -> None:
 def test_loudness_free_text_recognizes_audibility_reports() -> None:
     assert _notification_loudness_decision("Die Nachrichten klingeln jetzt", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich kann die Nachrichten jetzt hören", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I hear notifications", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications ring", pending=False) == "confirmed"
     assert _notification_loudness_decision("Ich kann die Nachrichten nicht hören", pending=True) == "declined"
     assert _notification_loudness_decision("I cannot hear notifications", pending=False) == "declined"
     assert _notification_loudness_decision("I couldn't hear notifications", pending=True) == "declined"
@@ -1830,6 +1834,8 @@ def test_loudness_free_text_blocks_negated_english_intentions() -> None:
 
 def test_loudness_free_text_recognizes_negative_sound_reports() -> None:
     assert _notification_loudness_decision("There is no sound from messages", pending=True) == "declined"
+    assert _notification_loudness_decision("There is no sound for notifications", pending=False) == "declined"
+    assert _notification_loudness_decision("I receive no notification sounds", pending=True) == "declined"
     assert _notification_loudness_decision("There is no notification sound", pending=False) == "declined"
     assert _notification_loudness_decision("I get no notification sound", pending=True) == "declined"
     assert _notification_loudness_decision("Messages make no sound", pending=False) == "declined"
@@ -1841,6 +1847,8 @@ def test_loudness_free_text_recognizes_negative_sound_reports() -> None:
 
 def test_loudness_free_text_recognizes_positive_sound_reports() -> None:
     assert _notification_loudness_decision("There is sound from messages", pending=True) == "confirmed"
+    assert _notification_loudness_decision("There is sound for notifications", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I receive notification sounds", pending=True) == "confirmed"
     assert _notification_loudness_decision("There is a notification sound", pending=False) == "confirmed"
     assert _notification_loudness_decision("I get notification sound", pending=True) == "confirmed"
     assert _notification_loudness_decision("Messages make a sound", pending=False) == "confirmed"
