@@ -2697,6 +2697,28 @@ def _notification_loudness_completed_action_polarity(
         "conversation",
         "thread",
     }
+
+    def target_polarity(start: int, end: int) -> tuple[bool, bool]:
+        target_positive = False
+        target_negative = False
+        for target_index in range(start, end):
+            target = tokens[target_index]
+            if target not in positive_targets | negative_targets:
+                continue
+            target_negated = _notification_loudness_scoped_negation_count(
+                tokens, start, target_index
+            ) % 2 == 1
+            if target in positive_targets:
+                if target_negated:
+                    target_negative = True
+                else:
+                    target_positive = True
+            elif target_negated:
+                target_positive = True
+            else:
+                target_negative = True
+        return target_positive, target_negative
+
     positive = False
     negative = False
     for auxiliary_index, auxiliary in enumerate(tokens):
@@ -2717,8 +2739,7 @@ def _notification_loudness_completed_action_polarity(
                     tail_end = boundary_index
                     break
             tail = tokens[action_index + 1 : tail_end]
-            has_positive_target = bool(set(tail) & positive_targets)
-            has_negative_target = bool(set(tail) & negative_targets)
+            has_positive_target, has_negative_target = target_polarity(action_index + 1, tail_end)
             if action in {"enabled", "activated"} and set(tail) & subjects:
                 has_positive_target = True
             if action in {"muted", "silenced", "disabled"} and set(tail) & subjects:
@@ -2812,27 +2833,28 @@ def _notification_loudness_completed_action_polarity(
             set(context) & subjects
         ):
             continue
-        has_positive_target = bool(set(context) & positive_targets)
-        has_negative_target = bool(set(context) & negative_targets)
-        if action in {"enabled", "activated", "enable", "activate"} and set(context) & subjects:
-            has_positive_target = True
+        before_positive, before_negative = target_polarity(context_start, action_index)
+        after_positive, after_negative = target_polarity(action_index + 1, context_end)
+        action_positive = action in positive_targets
+        action_negative = action in negative_targets
+        if action in {"enabled", "activated", "enable", "activate", "unmuted"} and set(context) & subjects:
+            action_positive = True
         if action in {"muted", "mute", "silenced", "silence", "disabled", "disable"} and set(context) & subjects:
-            has_negative_target = True
-        if not has_positive_target and not has_negative_target:
-            continue
+            action_negative = True
         negated = _notification_loudness_scoped_negation_count(
             tokens, max(0, action_index - 5), action_index
         ) % 2 == 1
+        if negated:
+            after_positive, after_negative = after_negative, after_positive
+            action_positive, action_negative = action_negative, action_positive
+        has_positive_target = before_positive or after_positive or action_positive
+        has_negative_target = before_negative or after_negative or action_negative
+        if not has_positive_target and not has_negative_target:
+            continue
         if has_positive_target:
-            if negated:
-                negative = True
-            else:
-                positive = True
+            positive = True
         if has_negative_target:
-            if negated:
-                positive = True
-            else:
-                negative = True
+            negative = True
     successful_prefixes = (
         ("succeeded", "in"),
         ("managed", "to"),
@@ -2949,8 +2971,7 @@ def _notification_loudness_completed_action_polarity(
             }
         ):
             continue
-        has_positive_target = bool(set(tail) & positive_targets)
-        has_negative_target = bool(set(tail) & negative_targets)
+        has_positive_target, has_negative_target = target_polarity(action_index + 1, context_end)
         if action in {"enable", "enabled", "enabling", "activate", "activated", "activating"}:
             if set(tail) & subjects:
                 has_positive_target = True
