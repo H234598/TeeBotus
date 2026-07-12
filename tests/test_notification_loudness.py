@@ -1224,6 +1224,11 @@ def test_loudness_free_text_does_not_decide_uncertain_status_statements() -> Non
     assert _notification_loudness_decision("Ich vermute, dass Benachrichtigungen an sind", pending=True) is None
     assert _notification_loudness_decision("Ich schätze, die Nachrichten sind laut", pending=False) is None
     assert _notification_loudness_decision("Ich nehme an, Benachrichtigungen sind an", pending=True) is None
+    assert _notification_loudness_decision("I hope notifications are on", pending=True) is None
+    assert _notification_loudness_decision("Hopefully messages are muted", pending=False) is None
+    assert _notification_loudness_decision("I pray notifications are on", pending=True) is None
+    assert _notification_loudness_decision("Hoffentlich sind Benachrichtigungen an", pending=False) is None
+    assert _notification_loudness_decision("Ich hoffe, die Nachrichten sind laut", pending=True) is None
     assert _notification_loudness_decision("I can't remember whether notifications are on", pending=True) is None
     assert _notification_loudness_decision("I cannot remember if notifications are on", pending=False) is None
     assert _notification_loudness_decision("I forgot whether messages are muted", pending=True) is None

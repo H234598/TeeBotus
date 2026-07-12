@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.154 - 2026-07-12
+
+- Ignore hope, wish, and prayer loudness statements.
+
 ## 1.9.153 - 2026-07-12
 
 - Ignore ongoing loudness action progress statements.
