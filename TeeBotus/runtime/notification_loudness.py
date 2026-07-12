@@ -2180,7 +2180,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         has_declined_phrase = False
     if has_declined_phrase and (pending or has_notification_context):
         return "declined"
-    if pending and (normalized in {"ja", "yes", "jep", "jo", "ok", "okay", "klar", "erledigt", "gemacht"} or words & {"ja", "yes"} and has_notification_context):
+    if pending and (
+        normalized in NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS | {"erledigt", "gemacht"}
+        or words & {"ja", "yes"}
+        and has_notification_context
+    ):
         return "confirmed"
     if (
         pending
@@ -2215,7 +2219,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         ) and not _notification_loudness_has_sequenced_action_status(polarity_normalized):
             return None
         return "confirmed"
-    if pending and normalized in {"nein", "no", "nee", "nop", "nope"}:
+    if pending and normalized in NOTIFICATION_LOUDNESS_NEGATION_REPLY_WORDS:
         return "declined"
     if has_notification_context and (
         (

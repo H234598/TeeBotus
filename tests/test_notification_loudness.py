@@ -2088,6 +2088,13 @@ def test_loudness_free_text_recognizes_demonstrative_pending_pronouns() -> None:
 
 
 def test_loudness_free_text_recognizes_short_pending_status_replies() -> None:
+    assert _notification_loudness_decision("yep", pending=True) == "confirmed"
+    assert _notification_loudness_decision("yeah", pending=True) == "confirmed"
+    assert _notification_loudness_decision("yup", pending=True) == "confirmed"
+    assert _notification_loudness_decision("sure", pending=True) == "confirmed"
+    assert _notification_loudness_decision("nah", pending=True) == "declined"
+    assert _notification_loudness_decision("nö", pending=True) == "declined"
+    assert _notification_loudness_decision("noe", pending=True) == "declined"
     assert _notification_loudness_decision("laut", pending=True) == "confirmed"
     assert _notification_loudness_decision("an", pending=True) == "confirmed"
     assert _notification_loudness_decision("on", pending=True) == "confirmed"
