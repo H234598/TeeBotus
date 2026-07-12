@@ -755,7 +755,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and _notification_loudness_has_unscoped_subject_status(normalized)
     ):
         return None
-    if has_notification_context and _notification_loudness_is_non_declarative(text, normalized):
+    has_audibility_state = _notification_loudness_has_audibility_state(normalized)
+    if (
+        has_notification_context
+        and _notification_loudness_is_non_declarative(text, normalized)
+        and not has_audibility_state
+    ):
         return None
     has_positive_current_status = _notification_loudness_has_positive_current_status(normalized)
     confirmed_needles = (
@@ -799,6 +804,16 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "made notifications loud",
         "set notifications to loud",
         "set them to loud",
+        "kann die nachrichten jetzt hoeren",
+        "kann die benachrichtigungen jetzt hoeren",
+        "man kann die nachrichten jetzt hoeren",
+        "man kann die benachrichtigungen jetzt hoeren",
+        "can hear notifications now",
+        "can hear message notifications now",
+        "messages ring now",
+        "notifications ring now",
+        "die nachrichten klingeln jetzt",
+        "die benachrichtigungen klingeln jetzt",
         "eingeschaltet",
         "angeschaltet",
         "aktiviert",
@@ -855,6 +870,24 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "will ich nicht",
         "moechte ich nicht",
         "möchte ich nicht",
+        "kann die nachrichten nicht hoeren",
+        "kann die benachrichtigungen nicht hoeren",
+        "cannot hear notifications",
+        "can not hear notifications",
+        "can t hear notifications",
+        "cannot hear messages",
+        "can not hear messages",
+        "can t hear messages",
+        "i do not hear notifications",
+        "i don t hear notifications",
+        "messages do not ring",
+        "messages don t ring",
+        "notifications do not ring",
+        "notifications don t ring",
+        "die nachrichten klingeln nicht",
+        "die benachrichtigungen klingeln nicht",
+        "messages are not audible",
+        "notifications are not audible",
     )
     has_negated_confirmed_phrase = _notification_loudness_has_negated_phrase(
         polarity_normalized, confirmed_needles
@@ -1458,6 +1491,24 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
             if all(value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in between):
                 return True
     return False
+
+
+def _notification_loudness_has_audibility_state(normalized: str) -> bool:
+    return any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in (
+            "cannot hear notifications",
+            "can not hear notifications",
+            "can t hear notifications",
+            "cannot hear messages",
+            "can not hear messages",
+            "can t hear messages",
+            "i do not hear notifications",
+            "i don t hear notifications",
+            "kann die nachrichten nicht hoeren",
+            "kann die benachrichtigungen nicht hoeren",
+        )
+    )
 
 
 def _notification_loudness_has_ambiguous_alternative(normalized: str) -> bool:

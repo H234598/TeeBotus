@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.165 - 2026-07-12
+
+- Recognize positive and negative notification audibility reports.
+
 ## 1.9.164 - 2026-07-12
 
 - Recognize current positive notification states with modifiers.
