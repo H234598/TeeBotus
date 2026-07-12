@@ -29,9 +29,13 @@ NOTIFICATION_LOUDNESS_MUTE_TERMS = frozenset(
         "silence",
         "silenced",
         "silent",
+        "still",
+        "quiet",
     }
 )
-NOTIFICATION_LOUDNESS_OFF_TERMS = frozenset({"ausgeschaltet", "deaktiviert", "abgeschaltet", "off", "disabled"})
+NOTIFICATION_LOUDNESS_OFF_TERMS = frozenset(
+    {"ausgeschaltet", "deaktiviert", "abgeschaltet", "inaktiv", "inactive", "deactivated", "off", "disabled"}
+)
 NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset(
     {
         "nicht",

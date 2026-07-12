@@ -1594,6 +1594,16 @@ def test_loudness_free_text_recognizes_short_pending_status_replies() -> None:
     assert _notification_loudness_decision("laut", pending=False) is None
 
 
+def test_loudness_free_text_recognizes_inactive_and_quiet_states() -> None:
+    assert _notification_loudness_decision("Die Nachrichten sind inaktiv", pending=False) == "declined"
+    assert _notification_loudness_decision("Messages are inactive", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications are deactivated", pending=False) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind still", pending=True) == "declined"
+    assert _notification_loudness_decision("Messages are quiet", pending=False) == "declined"
+    assert _notification_loudness_decision("Messages are not inactive", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Messages are not quiet", pending=False) == "confirmed"
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None

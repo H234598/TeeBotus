@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.184 - 2026-07-12
+
+- Recognize inactive, deactivated, and quiet notification states.
+
 ## 1.9.183 - 2026-07-12
 
 - Recognize short pending notification-status replies.
