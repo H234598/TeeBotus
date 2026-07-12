@@ -633,6 +633,7 @@ NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
         "no",
         "longer",
         "anymore",
+        "any",
         "mehr",
     }
 )

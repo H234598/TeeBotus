@@ -2039,6 +2039,9 @@ def test_loudness_free_text_recognizes_current_no_longer_status() -> None:
     assert _notification_loudness_decision("They are not muted anymore", pending=True) == "confirmed"
     assert _notification_loudness_decision("They are no longer loud", pending=True) == "declined"
     assert _notification_loudness_decision("They are no longer off", pending=True) == "confirmed"
+    assert _notification_loudness_decision("They are not muted any longer", pending=True) == "confirmed"
+    assert _notification_loudness_decision("They are not loud any longer", pending=True) == "declined"
+    assert _notification_loudness_decision("They are not off any longer", pending=True) == "confirmed"
 
 
 def test_loudness_free_text_does_not_decide_conditional_status_as_current() -> None:
