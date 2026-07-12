@@ -1220,6 +1220,13 @@ def test_loudness_free_text_keeps_unrelated_media_sound_neutral() -> None:
     assert _notification_loudness_decision("The sound of the video is loud", pending=True) is None
     assert _notification_loudness_decision("Der Ton meiner Stimme ist laut", pending=True) is None
     assert _notification_loudness_decision("I restored the sound on the video", pending=True) is None
+    assert _notification_loudness_decision("I failed to make the television loud enough", pending=True) is None
+    assert _notification_loudness_decision("I failed to make the radio loud enough", pending=True) is None
+    assert _notification_loudness_decision("I failed to make the podcast loud enough", pending=True) is None
+    assert _notification_loudness_decision("Ich habe es nicht geschafft, den Fernseher laut genug zu stellen", pending=True) is None
+    assert _notification_loudness_decision("Ich bin nicht in der Lage, die Nachrichten laut genug zu stellen", pending=True) == "declined"
+    assert _notification_loudness_decision("Ich bin in der Lage, die Nachrichten laut genug zu stellen", pending=True) is None
+    assert _notification_loudness_decision("Ich bin nicht in der Lage zu bestätigen, ob die Nachrichten laut sind", pending=True) is None
     assert _notification_loudness_decision("Notifications in the video are loud", pending=True) is None
     assert _notification_loudness_decision("Messages are loud because the movie is loud", pending=True) is None
 
@@ -1323,6 +1330,7 @@ def test_loudness_free_text_respects_negation_parity_and_hedges() -> None:
     assert _notification_loudness_decision("I did not make it louder", pending=True) == "declined"
     assert _notification_loudness_decision("I did not restore it", pending=True) == "declined"
     assert _notification_loudness_decision("I did not remove the mute", pending=True) == "declined"
+    assert _notification_loudness_decision("I did not make it louder but they are not muted", pending=True) == "confirmed"
     assert _notification_loudness_decision("I did not make it louder but they are not muted", pending=True) == "confirmed"
     assert _notification_loudness_decision("I did not make it louder but they are muted", pending=True) == "declined"
     assert _notification_loudness_decision("I did not restore it but it is not muted", pending=True) == "confirmed"
@@ -2814,6 +2822,23 @@ def test_loudness_free_text_recognizes_successful_action_polarity() -> None:
     assert (
         _notification_loudness_decision("I didn't manage to make notifications loud enough", pending=True)
         == "declined"
+    )
+    assert (
+        _notification_loudness_decision("I have not managed to make notifications loud enough", pending=True)
+        == "declined"
+    )
+    assert (
+        _notification_loudness_decision("I haven't succeeded in making notifications loud enough", pending=True)
+        == "declined"
+    )
+    assert (
+        _notification_loudness_decision("I have not been able to make notifications loud enough", pending=True)
+        == "declined"
+    )
+    assert _notification_loudness_decision("I didn't make notifications loud enough", pending=True) == "declined"
+    assert (
+        _notification_loudness_decision("I failed to make it loud enough, but now it is loud enough", pending=True)
+        == "confirmed"
     )
     assert _notification_loudness_decision("I succeeded in disabling notifications", pending=True) == "declined"
     assert _notification_loudness_decision("I managed to disable notifications", pending=False) == "declined"

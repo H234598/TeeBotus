@@ -224,6 +224,8 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "ich kann nicht bestätigen",
     "ich kann nicht verifizieren",
     "ich kann nicht sicher sein",
+    "nicht in der lage zu bestaetigen",
+    "nicht in der lage zu verifizieren",
     "nicht absolut sicher",
     "nicht völlig sicher",
     "nicht ueberzeugt",
@@ -1335,6 +1337,10 @@ NOTIFICATION_LOUDNESS_COMPLETION_PRONOUN_PHRASES = (
         "made them not loud enough",
         "made it sufficiently loud",
         "made them sufficiently loud",
+        "make it loud enough",
+        "make them loud enough",
+        "make it sufficiently loud",
+        "make them sufficiently loud",
         "set it loud enough",
         "set them loud enough",
         "set it to loud enough",
@@ -1373,12 +1379,24 @@ NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES = (
     "was unable to",
     "were unable to",
     "never managed to",
+    "have not managed to",
     "haven t managed to",
+    "has not managed to",
     "hasn t managed to",
     "did not manage to",
     "didn t manage to",
+    "did not make",
+    "didn t make",
+    "have not succeeded in",
+    "haven t succeeded in",
+    "has not succeeded in",
+    "hasn t succeeded in",
     "did not succeed",
     "didn t succeed",
+    "have not been able to",
+    "haven t been able to",
+    "has not been able to",
+    "hasn t been able to",
     "tried and failed",
     "but failed",
     "did not work",
@@ -1393,6 +1411,11 @@ NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES = (
     "fehlgeschlagen",
     "nicht gelungen",
     "nicht geschafft",
+    "bin nicht in der lage",
+    "ist nicht in der lage",
+    "sind nicht in der lage",
+    "war nicht in der lage",
+    "waren nicht in der lage",
     "konnte nicht",
     "konnten nicht",
     "was not able to",
@@ -2271,7 +2294,16 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if later_current_status_segment:
         has_completed_action_positive = False
         has_completed_action_negative = False
-    if has_notification_context and _notification_loudness_has_failed_action(normalized):
+    if (
+        has_notification_context
+        and _notification_loudness_has_failed_action(normalized)
+        and not later_current_status_segment
+    ):
+        if (
+            not has_explicit_notification_context
+            and _notification_loudness_has_ambiguous_status_qualifier(normalized)
+        ):
+            return None
         failed_action_polarity = _notification_loudness_failed_action_polarity(normalized)
         if failed_action_polarity == "negative":
             return None
@@ -4067,6 +4099,9 @@ def _notification_loudness_has_non_assertive_status(normalized: str) -> bool:
         NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
     }
     tokens = normalized.split()
+    if "in der lage" in normalized and set(tokens) & state_terms:
+        if set(tokens) & {"bin", "ist", "sind"}:
+            return True
     clauses: list[list[str]] = [[]]
     for token in tokens:
         if token in clause_boundaries:
@@ -6618,6 +6653,17 @@ def _notification_loudness_has_ambiguous_status_qualifier(normalized: str) -> bo
         "film",
         "films",
         "music",
+        "television",
+        "tv",
+        "radio",
+        "podcast",
+        "podcasts",
+        "speaker",
+        "speakers",
+        "headphones",
+        "fernseher",
+        "lautsprecher",
+        "kopfhoerer",
         "alarm",
         "alarms",
         "voice",
