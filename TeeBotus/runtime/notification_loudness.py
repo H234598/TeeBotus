@@ -1218,6 +1218,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     if _notification_loudness_has_negative_german_existential_description(normalized):
         return None
+    if _notification_loudness_has_ambiguous_comparative_negation(normalized):
+        return None
     proposition_negation_decision = _notification_loudness_explicit_negated_status_decision(
         normalized, pending=pending
     )
@@ -5109,6 +5111,57 @@ def _notification_loudness_has_negative_german_existential_description(normalize
             ):
                 return True
     return False
+
+
+def _notification_loudness_has_ambiguous_comparative_negation(normalized: str) -> bool:
+    """Keep relative comparisons without an absolute state interpretation."""
+    token_list = normalized.split()
+    tokens = set(token_list)
+    comparative_terms = {
+        "louder",
+        "lauter",
+        "higher",
+        "hoeher",
+        "quieter",
+        "softer",
+        "leiser",
+        "lower",
+        "niedriger",
+    }
+    negation_or_quantifier_terms = {
+        "not",
+        "nicht",
+        "no",
+        "kein",
+        "keine",
+        "keinen",
+        "keinerlei",
+    }
+    if not (tokens & comparative_terms and tokens & negation_or_quantifier_terms):
+        return False
+    subject_terms = {
+        "nachricht",
+        "nachrichten",
+        "message",
+        "messages",
+        "benachrichtigung",
+        "benachrichtigungen",
+        "notification",
+        "notifications",
+    }
+    copulas = {"ist", "sind", "is", "are", "remain", "remains", "bleibt", "bleiben"}
+    for comparative_index, token in enumerate(token_list):
+        if token not in comparative_terms:
+            continue
+        for subject_index, subject in enumerate(token_list[:comparative_index]):
+            if subject not in subject_terms:
+                continue
+            if any(
+                candidate in copulas
+                for candidate in token_list[subject_index + 1 : comparative_index]
+            ):
+                return False
+    return True
 
 
 def _notification_loudness_is_non_declarative(text: str, normalized: str) -> bool:
