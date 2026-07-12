@@ -1578,6 +1578,21 @@ def test_loudness_free_text_prioritizes_latest_transition_clause() -> None:
     assert _notification_loudness_decision("Die Nachrichten verschwanden und blieben weg", pending=True) == "declined"
 
 
+def test_loudness_free_text_prioritizes_current_status_over_intent() -> None:
+    assert _notification_loudness_decision("I want notifications on, but they are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("I want notifications on, but they are loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I plan to unmute notifications, but they are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("I am trying to unmute notifications, but they are loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I will mute notifications, but they are loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I wanted notifications loud, but they are not loud", pending=False) == "declined"
+    assert _notification_loudness_decision("Notifications should be loud, but they are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications might be muted, but they are loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I cannot unmute notifications, but they are loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I failed to unmute notifications, but they are loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Ich möchte die Nachrichten laut, aber sie sind stumm", pending=True) == "declined"
+    assert _notification_loudness_decision("Ich möchte die Nachrichten laut, aber sie sind laut", pending=False) == "confirmed"
+
+
 def test_loudness_free_text_recognizes_audibility_reports() -> None:
     assert _notification_loudness_decision("Die Nachrichten klingeln jetzt", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich kann die Nachrichten jetzt hören", pending=False) == "confirmed"

@@ -1271,7 +1271,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     polarity_text = _normalize_text_for_polarity(text)
     transition_segment = _notification_loudness_current_transition_segment(polarity_text)
-    temporal_segment = _notification_loudness_current_temporal_segment(polarity_text) or transition_segment
+    intent_segment = _notification_loudness_current_intent_segment(polarity_text)
+    temporal_segment = (
+        _notification_loudness_current_temporal_segment(polarity_text)
+        or transition_segment
+        or intent_segment
+    )
     if (
         has_notification_context
         and _notification_loudness_has_historical_marker(normalized)
@@ -1358,6 +1363,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             or has_explicit_confirmation
             or _notification_loudness_has_sequenced_action_status(polarity_normalized)
             or transition_segment
+            or intent_segment
         )
     ):
         return None
@@ -3159,6 +3165,85 @@ def _notification_loudness_current_transition_segment(normalized: str) -> str | 
         "wieder",
     }
     if not set(segment) & transition_markers:
+        return None
+    return " ".join(token for token in segment if token != NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN) or None
+
+
+def _notification_loudness_current_intent_segment(normalized: str) -> str | None:
+    """Prefer a later explicit state over an earlier intent or failed action."""
+    tokens = normalized.split()
+    boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
+        NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+    }
+    boundary_indices = [index for index, token in enumerate(tokens) if token in boundaries]
+    if not boundary_indices:
+        return None
+    segment_start = boundary_indices[-1] + 1
+    segment = tokens[segment_start:]
+    if segment and segment[0] in {"ob", "whether", "dass", "that"}:
+        return None
+    status_copulas = {
+        "ist",
+        "sind",
+        "is",
+        "are",
+        "re",
+        "aren",
+        "isn",
+        "remain",
+        "remains",
+        "stay",
+        "stays",
+        "bleibt",
+        "bleiben",
+    }
+    if not set(segment) & status_copulas:
+        return None
+    state_terms = (
+        set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS)
+        | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
+        | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+        | {"loud", "laut", "ringing", "klingeln", "klingelt"}
+    )
+    if not set(segment) & state_terms:
+        return None
+    intent_terms = {
+        "want",
+        "wanted",
+        "plan",
+        "planned",
+        "planning",
+        "try",
+        "trying",
+        "tried",
+        "should",
+        "must",
+        "will",
+        "would",
+        "could",
+        "might",
+        "may",
+        "need",
+        "failed",
+        "attempted",
+        "attempting",
+        "cannot",
+        "moechte",
+        "wollte",
+        "plane",
+        "plante",
+        "versuche",
+        "versuchte",
+        "sollte",
+        "muss",
+        "werde",
+        "wuerde",
+        "koennte",
+        "gescheitert",
+        "fehlgeschlagen",
+        "konnte",
+    }
+    if not set(tokens[:segment_start]) & intent_terms:
         return None
     return " ".join(token for token in segment if token != NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN) or None
 
