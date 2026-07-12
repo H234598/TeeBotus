@@ -1304,6 +1304,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
                 has_indirect_positive_mute_action
                 and not _notification_loudness_has_explicit_historical_time(normalized)
             )
+            or (
+                (has_completed_action_positive or has_completed_action_negative)
+                and not _notification_loudness_has_explicit_historical_time(normalized)
+            )
             or has_sequenced_action_status
         )
     ):
@@ -3587,6 +3591,9 @@ def _notification_loudness_completed_action_polarity(
         "unmuted",
         "enabled",
         "active",
+        "hochgedreht",
+        "hochgesetzt",
+        "hochgestellt",
     }
     negative_targets = {
         "stumm",
@@ -3598,6 +3605,9 @@ def _notification_loudness_completed_action_polarity(
         "niedrig",
         "low",
         "leise",
+        "runtergedreht",
+        "heruntergedreht",
+        "runtergesetzt",
     }
     subjects = {
         "nachricht",
@@ -3701,6 +3711,12 @@ def _notification_loudness_completed_action_polarity(
         "enable",
         "activate",
         "disable",
+        "hochgedreht",
+        "hochgesetzt",
+        "hochgestellt",
+        "runtergedreht",
+        "heruntergedreht",
+        "runtergesetzt",
     }
     did_actions = {"turn", "switch", "mute", "silence", "enable", "activate", "disable"}
     for action_index, action in enumerate(tokens):
@@ -3710,12 +3726,12 @@ def _notification_loudness_completed_action_polarity(
             tokens[candidate] in {"did", "didn"}
             for candidate in range(max(0, action_index - 3), action_index)
         ):
-            continue
-        if any(
-            tokens[candidate] in {"ist", "sind", "war", "waren", "is", "are", "were"}
-            for candidate in range(max(0, action_index - 5), action_index)
-        ):
-            continue
+            if not any(
+                tokens[candidate]
+                in {"ist", "sind", "war", "waren", "wurde", "wurden", "is", "are", "was", "were"}
+                for candidate in range(max(0, action_index - 5), action_index)
+            ):
+                continue
         context_start = max(0, action_index - 5)
         for boundary_index in range(context_start, action_index):
             if (
@@ -3747,6 +3763,12 @@ def _notification_loudness_completed_action_polarity(
         } and not (
             set(context) & subjects
         ):
+            continue
+        if any(
+            tokens[candidate] in {"keep", "kept", "keeping"}
+            for candidate in range(context_start, action_index)
+        ):
+            # Keeping a state is not evidence that the user completed a switch.
             continue
         before_positive, before_negative = target_polarity(context_start, action_index)
         after_positive, after_negative = target_polarity(action_index + 1, context_end)

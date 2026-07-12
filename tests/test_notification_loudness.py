@@ -1798,6 +1798,15 @@ def test_loudness_free_text_recognizes_volume_states_and_actions() -> None:
     assert _notification_loudness_decision("I turned up notification volume", pending=False) == "confirmed"
     assert _notification_loudness_decision("The message volume is low", pending=True) == "declined"
     assert _notification_loudness_decision("I turned the notification volume down", pending=False) == "declined"
+    assert _notification_loudness_decision("Notification volume was turned up", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notification volume was turned down", pending=False) == "declined"
+    assert _notification_loudness_decision("The notification volume was set to high", pending=True) == "confirmed"
+    assert _notification_loudness_decision("The notification volume was set to low", pending=False) == "declined"
+    assert _notification_loudness_decision("Notifications were turned on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications were turned off", pending=False) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten wurden hochgedreht", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten wurden runtergedreht", pending=False) == "declined"
+    assert _notification_loudness_decision("Notifications were turned on yesterday", pending=True) is None
     assert _notification_loudness_decision("Turn up notification volume", pending=True) is None
     assert _notification_loudness_decision("Ich drehe die Lautstärke der Nachrichten hoch", pending=True) is None
 
