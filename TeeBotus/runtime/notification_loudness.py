@@ -396,6 +396,16 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "i m working on ",
     "i am in the process of ",
     "i m in the process of ",
+    "i tried to ",
+    "i attempted to ",
+    "i intended to ",
+    "i planned to ",
+    "i wanted to ",
+    "i hoped to ",
+    "i meant to ",
+    "i was trying to ",
+    "i was planning to ",
+    "i was about to ",
     "i am turning ",
     "i m turning ",
     "i am switching ",
@@ -477,6 +487,7 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "ich sollte ",
     "ich muss ",
     "ich soll ",
+    "ich konnte ",
     "ich habe beschlossen ",
     "ich kann nachrichten laut ",
     "ich kann die nachrichten laut ",
@@ -649,6 +660,27 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "made them loud",
     "set to loud",
     "set them to loud",
+    "gelungen",
+)
+NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES = (
+    "failed",
+    "couldn t manage",
+    "could not manage",
+    "was unable to",
+    "were unable to",
+    "never managed to",
+    "haven t managed to",
+    "hasn t managed to",
+    "did not succeed",
+    "didn t succeed",
+    "tried and failed",
+    "but failed",
+    "gescheitert",
+    "fehlgeschlagen",
+    "nicht gelungen",
+    "nicht geschafft",
+    "konnte nicht",
+    "konnten nicht",
 )
 NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES = (
     "off mute",
@@ -996,6 +1028,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_positive_unmute_phrase = any(
         _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
     )
+    has_failed_action = _notification_loudness_has_failed_action(normalized)
     has_notification_context = has_notification_context or has_positive_unmute_phrase
     if _notification_loudness_has_uncertainty(normalized) and (has_notification_context or pending):
         return None
@@ -1010,6 +1043,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and not (
             _notification_loudness_has_recent_completion_marker(normalized)
             or temporal_segment
+            or has_failed_action
         )
     ):
         return None
@@ -1035,6 +1069,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         has_completed_action_positive, has_completed_action_negative = _notification_loudness_completed_action_polarity(
             normalized, has_notification_context=has_notification_context
         )
+        has_failed_action = _notification_loudness_has_failed_action(normalized)
+    if has_notification_context and _notification_loudness_has_failed_action(normalized):
+        return "declined"
     if has_notification_context and _notification_loudness_has_habitual_marker(normalized) and not (
         has_completed_action_positive or has_completed_action_negative
     ):
@@ -1205,6 +1242,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "done",
         "completed",
         "geschafft",
+        "gelungen",
     )
     declined_needles = (
         "ablehnen",
@@ -1905,13 +1943,34 @@ def _notification_loudness_has_historical_marker(normalized: str) -> bool:
     )
 
 
+def _notification_loudness_has_failed_action(normalized: str) -> bool:
+    if any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES
+    ):
+        return True
+    tokens = normalized.split()
+    for index, token in enumerate(tokens):
+        if token not in {"konnte", "konnten"}:
+            continue
+        if _notification_loudness_scoped_negation_count(tokens, index + 1, len(tokens)) % 2:
+            return True
+    return False
+
+
 def _notification_loudness_has_current_temporal_contrast(normalized: str) -> bool:
     return _notification_loudness_current_temporal_segment(normalized) is not None
 
 
 def _notification_loudness_current_temporal_segment(normalized: str) -> str | None:
     tokens = normalized.split()
-    historical_phrases = tuple(_normalize_text(phrase.strip()).split() for phrase in NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES)
+    historical_phrases = tuple(
+        _normalize_text(phrase.strip()).split()
+        for phrase in NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES
+    ) + tuple(
+        _normalize_text(phrase).split()
+        for phrase in NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES
+    )
     current_phrases = tuple(_normalize_text(phrase).split() for phrase in NOTIFICATION_LOUDNESS_CURRENT_TIME_MARKER_PHRASES)
     historical_ranges: list[tuple[int, int]] = []
     current_starts: list[int] = []

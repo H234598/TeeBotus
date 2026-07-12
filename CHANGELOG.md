@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.208 - 2026-07-12
+
+- Distinguish attempted, failed, and successful notification actions in English and German.
+
 ## 1.9.207 - 2026-07-12
 
 - Keep contradictory notification states undecided while preserving compatible mixed states.
