@@ -969,6 +969,9 @@ NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
         "actually",
         "truly",
         "indeed",
+        "sufficiently",
+        "adequately",
+        "ausreichend",
         "tatsaechlich",
         "wirklich",
     }
@@ -1525,6 +1528,10 @@ NOTIFICATION_LOUDNESS_PENDING_NEGATIVE_STATUS_REPLIES = frozenset(
         "nicht laut",
         "nicht an",
         "not loud",
+        "insufficiently loud",
+        "insufficiently audible",
+        "unzureichend laut",
+        "unzureichend hoerbar",
         "not on",
     }
 )
@@ -2523,6 +2530,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "nicht auf laut",
         "nicht an",
         "not loud",
+        "insufficiently loud",
+        "insufficiently audible",
+        "unzureichend laut",
+        "unzureichend hoerbar",
         "not on",
         "not enabled",
         "aren t loud",

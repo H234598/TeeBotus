@@ -1357,6 +1357,14 @@ def test_loudness_free_text_respects_negation_parity_and_hedges() -> None:
     assert _notification_loudness_decision("Noch nicht aktiviert", pending=True) == "declined"
 
 
+def test_loudness_free_text_recognizes_sufficiency_gradients() -> None:
+    assert _notification_loudness_decision("Notifications are sufficiently loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are adequately loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten sind ausreichend laut", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are insufficiently loud", pending=True) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind unzureichend laut", pending=True) == "declined"
+
+
 def test_loudness_free_text_accepts_natural_mute_phrases() -> None:
     assert _notification_loudness_decision("Die Nachrichten sind stumm", pending=True) == "declined"
     assert _notification_loudness_decision("Benachrichtigungen sind ausgeschaltet", pending=True) == "declined"
