@@ -1167,6 +1167,22 @@ def test_loudness_free_text_accepts_natural_completion_phrases() -> None:
     assert _notification_loudness_decision("I switched the sound on", pending=True) == "confirmed"
     assert _notification_loudness_decision("I enabled the sound", pending=True) == "confirmed"
     assert _notification_loudness_decision("I activated the sound", pending=True) == "confirmed"
+    assert _notification_loudness_decision("The silent mode was turned off", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I turned off silent mode", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I disabled silent mode", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich habe den Lautlosmodus deaktiviert", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich habe den Stummmodus deaktiviert", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich habe die Lautstaerke erhoeht", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I raised the notification volume", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I increased the notification volume", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I made the notifications audible again", pending=True) == "confirmed"
+    assert (
+        _notification_loudness_decision(
+            "I turned off silent mode but notifications are still muted", pending=True
+        )
+        == "declined"
+    )
+    assert _notification_loudness_decision("I turned off notifications", pending=True) == "declined"
     assert _notification_loudness_decision("I got the sound back", pending=True) == "confirmed"
     assert _notification_loudness_decision("I put the sound on mute", pending=True) == "declined"
     assert _notification_loudness_decision("Ich habe den Ton zurückgebracht", pending=True) == "confirmed"
