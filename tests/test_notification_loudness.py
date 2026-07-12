@@ -1154,6 +1154,13 @@ def test_loudness_free_text_accepts_natural_on_off_and_loud_status_phrases() -> 
     assert _notification_loudness_decision("Die Nachrichten sind jetzt auf laut", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_handles_german_subordinate_status_order() -> None:
+    assert _notification_loudness_decision("dass die Nachrichten aktiv sind", pending=True) == "confirmed"
+    assert _notification_loudness_decision("dass die Nachrichten nicht aktiv sind", pending=True) == "declined"
+    assert _notification_loudness_decision("dass die Nachrichten hoerbar sind", pending=False) == "confirmed"
+    assert _notification_loudness_decision("dass die Nachrichten nicht hoerbar sind", pending=False) == "declined"
+
+
 def test_loudness_free_text_accepts_english_notification_status_phrases() -> None:
     assert _notification_loudness_decision("notifications on", pending=True) == "confirmed"
     assert _notification_loudness_decision("notifications off", pending=True) == "declined"

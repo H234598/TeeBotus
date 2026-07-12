@@ -2441,6 +2441,8 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
                 continue
             before_status = tokens[max(0, status_index - 4) : status_index]
             after_status = tokens[status_index + 1 : copula_index]
+            if any(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in before_status):
+                continue
             if any(value in subject_terms for value in before_status) and all(
                 value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in after_status
             ):
@@ -2759,6 +2761,33 @@ def _notification_loudness_has_negative_current_status(normalized: str) -> bool:
             if copula in {"ist", "sind"} and "nicht" in between:
                 return True
             if copula in contracted_copulas and "t" in between:
+                return True
+    for copula_index, copula in enumerate(tokens):
+        if copula not in {"ist", "sind"}:
+            continue
+        for status_index in range(max(0, copula_index - 4), copula_index):
+            if tokens[status_index] not in positive_status_terms:
+                continue
+            before_status = tokens[max(0, status_index - 4) : status_index]
+            after_status = tokens[status_index + 1 : copula_index]
+            if (
+                any(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in before_status)
+                and any(
+                    value
+                    in {
+                        "nachricht",
+                        "nachrichten",
+                        "message",
+                        "messages",
+                        "benachrichtigung",
+                        "benachrichtigungen",
+                        "die",
+                        "sie",
+                    }
+                    for value in before_status
+                )
+                and all(value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in after_status)
+            ):
                 return True
     return False
 
