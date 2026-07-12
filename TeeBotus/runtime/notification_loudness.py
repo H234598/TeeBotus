@@ -527,7 +527,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     normalized = _normalize_text(text)
     if not normalized:
         return None
-    if pending:
+    if pending and "?" not in str(text or ""):
         direct_pronoun_decision = _notification_loudness_pending_pronoun_decision(normalized)
         if direct_pronoun_decision is not None:
             return direct_pronoun_decision

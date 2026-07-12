@@ -1432,6 +1432,8 @@ def test_loudness_free_text_accepts_pending_pronoun_statuses() -> None:
     assert _notification_loudness_decision("They aren't loud", pending=True) == "declined"
     assert _notification_loudness_decision("They are muted", pending=True) == "declined"
     assert _notification_loudness_decision("They are disabled", pending=True) == "declined"
+    assert _notification_loudness_decision("They are on?", pending=True) is None
+    assert _notification_loudness_decision("Sie sind nicht stumm?", pending=True) is None
     assert _notification_loudness_decision("They are on", pending=False) is None
 
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.139 - 2026-07-12
+
+- Keep punctuated pronoun questions undecided.
+
 ## 1.9.138 - 2026-07-12
 
 - Complete pending pronoun polarity coverage for loudness states.
