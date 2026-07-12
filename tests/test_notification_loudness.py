@@ -2163,6 +2163,63 @@ def test_loudness_free_text_prioritizes_current_status_after_indirect_action() -
     ) == "confirmed"
 
 
+def test_loudness_free_text_handles_escape_and_safety_relations() -> None:
+    assert _notification_loudness_decision(
+        "Notifications escaped being muted", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Notifications were safe from being muted", pending=False
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Notifications were free from being muted", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Notifications were immune to being muted", pending=False
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Notifications were saved from being muted", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "I escaped muting notifications", pending=False
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "I was safe from muting notifications", pending=True
+    ) is None
+    assert _notification_loudness_decision(
+        "I was immune to muting notifications", pending=False
+    ) is None
+    assert _notification_loudness_decision(
+        "Notifications are free to be muted", pending=True
+    ) is None
+    assert _notification_loudness_decision(
+        "Notifications were saved to be muted", pending=False
+    ) is None
+    assert _notification_loudness_decision(
+        "I saved notifications to be muted", pending=True
+    ) is None
+    assert _notification_loudness_decision(
+        "Die Nachrichten entgingen der Stummschaltung", pending=False
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Die Nachrichten wurden vor der Stummschaltung verschont", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Die Nachrichten blieben von der Stummschaltung verschont", pending=False
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Ich wurde vor der Stummschaltung verschont", pending=True
+    ) is None
+    assert _notification_loudness_decision(
+        "Notifications escaped being muted yesterday", pending=False
+    ) is None
+    assert _notification_loudness_decision(
+        "Notifications were safe from being muted, but they are muted", pending=True
+    ) == "declined"
+    assert _notification_loudness_decision(
+        "Notifications were safe from being muted, but they are not muted", pending=False
+    ) == "confirmed"
+
+
 def test_loudness_free_text_does_not_decide_historical_status_as_current() -> None:
     assert _notification_loudness_decision("I used to have notifications on", pending=True) is None
     assert _notification_loudness_decision("I formerly had notifications on", pending=False) is None

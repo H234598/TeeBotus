@@ -468,6 +468,24 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "i was protected from ",
     "i am shielded from ",
     "i was shielded from ",
+    "i am safe from ",
+    "i was safe from ",
+    "i am safe to ",
+    "i was safe to ",
+    "i am immune to ",
+    "i was immune to ",
+    "i am free from ",
+    "i was free from ",
+    "i am free to ",
+    "i was free to ",
+    "i am saved from ",
+    "i was saved from ",
+    "ich wurde vor der stummschaltung verschont",
+    "ich wurde von der stummschaltung verschont",
+    "ich blieb von der stummschaltung verschont",
+    "ich wurde vor der stummschaltung verschont ",
+    "ich wurde von der stummschaltung verschont ",
+    "ich blieb von der stummschaltung verschont ",
     "ich wurde daran gehindert ",
     "ich werde daran gehindert ",
     "ich bin daran gehindert ",
@@ -2236,6 +2254,22 @@ def _notification_loudness_term_polarity(
         "geschuetzt",
         "schuetzen",
         "schuetzte",
+        "escape",
+        "escaped",
+        "escaping",
+        "save",
+        "saved",
+        "saving",
+        "safe",
+        "free",
+        "immune",
+        "entgehen",
+        "entging",
+        "entgingen",
+        "entgangen",
+        "verschonen",
+        "verschont",
+        "verschonte",
         "lassen",
     }
     direct_positive_relation_terms = {
@@ -2265,6 +2299,22 @@ def _notification_loudness_term_polarity(
         "geschuetzt",
         "schuetzen",
         "schuetzte",
+        "escape",
+        "escaped",
+        "escaping",
+        "save",
+        "saved",
+        "saving",
+        "safe",
+        "free",
+        "immune",
+        "entgehen",
+        "entging",
+        "entgingen",
+        "entgangen",
+        "verschonen",
+        "verschont",
+        "verschonte",
     }
     conditional_positive_relation_terms = {"keep", "kept", "keeping", "leave", "left", "leaving", "lassen"}
     passive_relation_terms = {
@@ -2277,6 +2327,18 @@ def _notification_loudness_term_polarity(
         "protected",
         "shielded",
         "geschuetzt",
+        "escaped",
+        "escaping",
+        "saved",
+        "saving",
+        "safe",
+        "free",
+        "immune",
+        "entging",
+        "entgingen",
+        "entgangen",
+        "verschont",
+        "verschonte",
     }
     passive_markers = {
         "am",
@@ -2291,6 +2353,10 @@ def _notification_loudness_term_polarity(
         "wurden",
         "werde",
         "wird",
+        "bleibt",
+        "bleiben",
+        "blieb",
+        "blieben",
     }
     notification_subject_terms = {
         "nachricht",
@@ -2385,6 +2451,14 @@ def _notification_loudness_term_polarity(
             relation_negated = _notification_loudness_scoped_negation_count(
                 tokens, relation_search_start, relation_index
             ) % 2 == 1
+            relation_target_tokens = set(tokens[relation_index + 1 : index])
+            relation_is_positive = tokens[relation_index] in direct_positive_relation_terms
+            if tokens[relation_index] in {"safe", "free"}:
+                relation_is_positive = bool(relation_target_tokens & {"from", "vor", "von"})
+            elif tokens[relation_index] == "immune":
+                relation_is_positive = bool(relation_target_tokens & {"from", "to", "vor", "von"})
+            elif tokens[relation_index] in {"save", "saved", "saving"}:
+                relation_is_positive = bool(relation_target_tokens & {"from", "vor", "von"})
             passive_user_relation = (
                 tokens[relation_index] in passive_relation_terms
                 and bool(set(tokens[relation_search_start:relation_index]) & passive_markers)
@@ -2395,10 +2469,10 @@ def _notification_loudness_term_polarity(
             if relation_negated and relation_index >= preceding_start:
                 negation_count -= 1
             elif (
-                tokens[relation_index] in direct_positive_relation_terms
+                relation_is_positive
                 or (
                     tokens[relation_index] in conditional_positive_relation_terms
-                    and set(tokens[relation_index + 1 : index]) & {"from", "dass", "zu"}
+                    and relation_target_tokens & {"from", "dass", "zu"}
                 )
             ) and not passive_user_relation:
                 negation_count += 1
@@ -2615,6 +2689,22 @@ def _notification_loudness_has_indirect_positive_mute_action(normalized: str) ->
         "geschuetzt",
         "schuetzen",
         "schuetzte",
+        "escape",
+        "escaped",
+        "escaping",
+        "save",
+        "saved",
+        "saving",
+        "safe",
+        "free",
+        "immune",
+        "entgehen",
+        "entging",
+        "entgingen",
+        "entgangen",
+        "verschonen",
+        "verschont",
+        "verschonte",
     }
     completed_relations = {
         "avoided",
@@ -2631,6 +2721,14 @@ def _notification_loudness_has_indirect_positive_mute_action(normalized: str) ->
         "protected",
         "shielded",
         "geschuetzt",
+        "escaped",
+        "saved",
+        "safe",
+        "free",
+        "immune",
+        "entgangen",
+        "verschont",
+        "verschonte",
     }
     success_markers = (
         "managed to",
@@ -2682,6 +2780,16 @@ def _notification_loudness_has_indirect_positive_mute_action(normalized: str) ->
         "protected",
         "shielded",
         "geschuetzt",
+        "escaped",
+        "escaping",
+        "saved",
+        "saving",
+        "safe",
+        "free",
+        "immune",
+        "entgangen",
+        "verschont",
+        "verschonte",
     }
     passive_markers = {
         "am",
@@ -2696,6 +2804,10 @@ def _notification_loudness_has_indirect_positive_mute_action(normalized: str) ->
         "wurden",
         "werde",
         "wird",
+        "bleibt",
+        "bleiben",
+        "blieb",
+        "blieben",
     }
     notification_subject_terms = {
         "nachricht",
@@ -2722,6 +2834,13 @@ def _notification_loudness_has_indirect_positive_mute_action(normalized: str) ->
             and not set(preceding) & notification_subject_terms
         ):
             continue
+        tail_connector_terms = {"from", "dass", "zu", "to", "vor", "von", "being"}
+        if relation in {"safe", "free"} and not set(tokens[relation_index + 1 :]) & {"from", "vor", "von"}:
+            continue
+        if relation == "immune" and not set(tokens[relation_index + 1 :]) & {"from", "to", "vor", "von"}:
+            continue
+        if relation in {"save", "saved", "saving"} and not set(tokens[relation_index + 1 :]) & {"from", "vor", "von"}:
+            continue
         prefix_text = " ".join(preceding)
         is_completed = relation in completed_relations or any(
             _contains_normalized_phrase(prefix_text, marker) for marker in success_markers
@@ -2743,8 +2862,11 @@ def _notification_loudness_has_indirect_positive_mute_action(normalized: str) ->
             if set(tail) & negative_action_terms or "zu" in tail:
                 return True
             continue
-        if set(tail) & negative_action_terms and ("from" in tail or "dass" in tail or "zu" in tail):
+        if set(tail) & negative_action_terms and set(tail) & tail_connector_terms:
             return True
+        if relation in {"escape", "escaped", "escaping", "entgehen", "entging", "entgingen", "entgangen"}:
+            if set(tail) & (negative_action_terms | negative_state_terms):
+                return True
         if (
             relation
             in {
@@ -2773,6 +2895,21 @@ def _notification_loudness_has_indirect_positive_mute_action(normalized: str) ->
             and tail
             and tail[0] in negative_action_terms
         ):
+            return True
+    postposed_relation_terms = {"verschont", "verschonte"}
+    for relation_index, relation in enumerate(tokens):
+        if relation not in postposed_relation_terms:
+            continue
+        preceding_start = max(0, relation_index - 12)
+        preceding = tokens[preceding_start:relation_index]
+        if not set(preceding) & negative_state_terms:
+            continue
+        if (
+            set(preceding) & passive_markers
+            and not set(preceding) & notification_subject_terms
+        ):
+            continue
+        if set(preceding) & {"vor", "von"}:
             return True
     return False
 
@@ -3636,6 +3773,22 @@ def _notification_loudness_has_sequenced_action_status(
         "geschuetzt",
         "schuetzen",
         "schuetzte",
+        "escape",
+        "escaped",
+        "escaping",
+        "save",
+        "saved",
+        "saving",
+        "safe",
+        "free",
+        "immune",
+        "entgehen",
+        "entging",
+        "entgingen",
+        "entgangen",
+        "verschonen",
+        "verschont",
+        "verschonte",
         "muting",
         "silencing",
         "geprueft",
@@ -3852,6 +4005,16 @@ def _notification_loudness_has_ambiguous_status_qualifier(normalized: str) -> bo
             "on whatsapp",
             "on in the app",
             "on in app",
+            "free to mute",
+            "free to be muted",
+            "safe to mute",
+            "safe to be muted",
+            "saved to mute",
+            "saved to be muted",
+            "saved notifications to mute",
+            "saved notifications to be muted",
+            "saved messages to mute",
+            "saved messages to be muted",
         )
     )
 
