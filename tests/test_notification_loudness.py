@@ -1488,6 +1488,7 @@ def test_loudness_free_text_keeps_cross_subject_conflicts_undecided() -> None:
     assert _notification_loudness_decision("Messages are loud but notifications are muted", pending=False) is None
     assert _notification_loudness_decision("Messages are loud and notifications are loud", pending=True) == "confirmed"
     assert _notification_loudness_decision("Messages are muted and notifications are muted", pending=False) == "declined"
+    assert _notification_loudness_decision("Messages are not loud, notifications are not muted", pending=True) is None
 
 
 def test_loudness_free_text_recognizes_inverted_current_statuses() -> None:

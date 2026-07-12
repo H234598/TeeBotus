@@ -1096,7 +1096,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         normalized, NOTIFICATION_LOUDNESS_OFF_TERMS, inner_negated=True
     )
     if has_notification_context and _notification_loudness_has_cross_subject_conflict(
-        normalized,
+        polarity_normalized,
         has_unnegated_mute=has_unnegated_mute,
         has_negated_mute=has_negated_mute,
         has_unnegated_off=has_unnegated_off,
@@ -2348,7 +2348,10 @@ def _notification_loudness_has_cross_subject_conflict(
     }
     if not message_subject or not notification_subject:
         return False
-    if not tokens & NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES:
+    if not (
+        tokens & NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+        or NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN in tokens
+    ):
         return False
     positive = has_negated_mute or has_negated_off or has_positive_unmute_phrase or has_positive_current_status
     negative = has_unnegated_mute or has_unnegated_off or has_negative_current_status
