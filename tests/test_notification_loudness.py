@@ -1484,6 +1484,14 @@ def test_loudness_free_text_keeps_cross_subject_conflicts_undecided() -> None:
     assert _notification_loudness_decision("Messages are muted and notifications are muted", pending=False) == "declined"
 
 
+def test_loudness_free_text_recognizes_inverted_current_statuses() -> None:
+    assert _notification_loudness_decision("Heute sind die Nachrichten laut", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Jetzt sind die Benachrichtigungen laut", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Gerade eben sind die Nachrichten nicht laut", pending=True) == "declined"
+    assert _notification_loudness_decision("Vor einer Stunde waren die Nachrichten laut", pending=True) is None
+    assert _notification_loudness_decision("Seit gestern sind die Nachrichten laut", pending=False) is None
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None

@@ -425,7 +425,22 @@ NOTIFICATION_LOUDNESS_STATUS_LEAD_TERMS = frozenset(
     }
 )
 NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
-    {"jetzt", "nun", "aktuell", "gerade", "wieder", "now", "currently", "right"}
+    {
+        "jetzt",
+        "nun",
+        "aktuell",
+        "gerade",
+        "eben",
+        "wieder",
+        "heute",
+        "now",
+        "currently",
+        "right",
+        "today",
+        "recently",
+        "newly",
+        "neuerdings",
+    }
 )
 NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS = frozenset(
     {"laut", "loud", "an", "on", "aktiv", "active", "enabled", "hoerbar", "audible", "unmuted"}
@@ -1520,6 +1535,17 @@ def _notification_loudness_has_question_tail(normalized: str) -> bool:
 def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
     tokens = normalized.split()
     copulas = {"ist", "sind", "is", "are", "re"}
+    subject_terms = {
+        "nachricht",
+        "nachrichten",
+        "message",
+        "messages",
+        "benachrichtigung",
+        "benachrichtigungen",
+        "benachrichtigungston",
+        "notification",
+        "notifications",
+    }
     for status_index, token in enumerate(tokens):
         if token not in NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS:
             continue
@@ -1528,6 +1554,11 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
                 continue
             between = tokens[copula_index + 1 : status_index]
             if all(value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in between):
+                return True
+            before_copula = tokens[max(0, copula_index - 3) : copula_index]
+            if before_copula and all(value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in before_copula) and any(
+                value in subject_terms for value in between
+            ):
                 return True
     return False
 

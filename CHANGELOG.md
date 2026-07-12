@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.172 - 2026-07-12
+
+- Recognize inverted current notification status sentences.
+
 ## 1.9.171 - 2026-07-12
 
 - Keep conflicting message and notification clauses undecided.
