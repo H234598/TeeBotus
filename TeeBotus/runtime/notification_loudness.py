@@ -1033,6 +1033,22 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "unmuted",
     "made loud",
     "made them loud",
+    "turned it up",
+    "turned them up",
+    "turned the sound up",
+    "raised it",
+    "raised them",
+    "raised the volume",
+    "increased it",
+    "increased them",
+    "increased the volume",
+    "made it louder",
+    "made them louder",
+    "set it high",
+    "set the volume high",
+    "hochgedreht",
+    "hochgesetzt",
+    "hochgestellt",
     "set to loud",
     "set them to loud",
     "gelungen",
@@ -1063,6 +1079,22 @@ NOTIFICATION_LOUDNESS_COMPLETION_PRONOUN_PHRASES = (
     "repaired it",
     "repaired them",
     "fixed them",
+    "turned it up",
+    "turned them up",
+    "turned the sound up",
+    "raised it",
+    "raised them",
+    "raised the volume",
+    "increased it",
+    "increased them",
+    "increased the volume",
+    "made it louder",
+    "made them louder",
+    "set it high",
+    "set the volume high",
+    "hochgedreht",
+    "hochgesetzt",
+    "hochgestellt",
     "den ton zurueckgebracht",
     "ton zurueckgebracht",
     "repariert",
@@ -1656,6 +1688,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             "put it on",
             "made it audible",
             "made them audible",
+            "set it high",
+            "set the volume high",
         )
     )
     allow_completion_pronoun = pending and any(
@@ -6017,6 +6051,20 @@ def _notification_loudness_has_ambiguous_comparative_negation(normalized: str) -
         "keinerlei",
     }
     if not (tokens & comparative_terms and tokens & negation_or_quantifier_terms):
+        return False
+    completed_comparative_actions = (
+        "made it louder",
+        "made them louder",
+        "raised it",
+        "raised them",
+        "raised the volume",
+        "increased it",
+        "increased them",
+        "increased the volume",
+        "lauter gemacht",
+        "hoeher gedreht",
+    )
+    if any(_contains_normalized_phrase(normalized, phrase) for phrase in completed_comparative_actions):
         return False
     subject_terms = {
         "nachricht",
