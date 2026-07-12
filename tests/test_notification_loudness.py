@@ -1413,6 +1413,13 @@ def test_loudness_free_text_does_not_confirm_uncertain_short_completion_replies(
     assert _notification_loudness_decision("I think I have done it", pending=True) is None
 
 
+def test_loudness_free_text_recognizes_explicit_unmute_forms() -> None:
+    assert _notification_loudness_decision("I removed the mute from messages", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I took the messages off mute", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Ich habe den Lautlosmodus für Nachrichten ausgeschaltet", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich habe den Stummmodus ausgemacht", pending=False) == "confirmed"
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None

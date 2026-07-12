@@ -444,8 +444,21 @@ NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES = (
     "off mute",
     "off of mute",
     "removed mute",
+    "removed the mute",
     "taken off mute",
     "taken off of mute",
+    "taken off the mute",
+    "took off mute",
+    "took off the mute",
+    "turned off mute",
+    "turned mute off",
+    "lautlosmodus ausgeschaltet",
+    "lautlosmodus ausgemacht",
+    "lautlosmodus fuer nachrichten ausgeschaltet",
+    "stummmodus ausgeschaltet",
+    "stummmodus ausgemacht",
+    "nicht stoeren modus ausgeschaltet",
+    "nicht stoeren modus ausgemacht",
 )
 NOTIFICATION_LOUDNESS_ACTION_WORDS = frozenset({"hab", "habe", "haben", "getan", "gemacht", "erledigt", "did", "done"})
 NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS = frozenset({"ja", "yes", "jep", "jo", "ok", "okay", "klar"})
@@ -713,6 +726,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_positive_unmute_phrase = any(
         _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
     )
+    has_notification_context = has_notification_context or has_positive_unmute_phrase
     if _notification_loudness_has_uncertainty(normalized) and (has_notification_context or pending):
         return None
     if (

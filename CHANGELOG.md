@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.163 - 2026-07-12
+
+- Recognize explicit unmute and disabled-silence-mode confirmations.
+
 ## 1.9.162 - 2026-07-12
 
 - Keep uncertain short completion replies undecided.
