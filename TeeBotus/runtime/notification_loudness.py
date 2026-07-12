@@ -343,6 +343,10 @@ NOTIFICATION_LOUDNESS_CURRENT_TIME_MARKER_PHRASES = (
     "momentan",
     "inzwischen",
     "mittlerweile",
+    "since then",
+    "in the meantime",
+    "meanwhile",
+    "ever since",
     "heute",
     "neuerdings",
 )
