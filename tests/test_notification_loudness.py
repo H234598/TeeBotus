@@ -1255,6 +1255,15 @@ def test_loudness_free_text_does_not_treat_progressive_actions_as_done() -> None
     assert _notification_loudness_decision(
         "Notifications are being unmuted, but they are loud", pending=True
     ) == "confirmed"
+
+
+def test_loudness_free_text_does_not_treat_past_perfect_as_current() -> None:
+    assert _notification_loudness_decision("Notifications had been unmuted", pending=True) is None
+    assert _notification_loudness_decision("Notifications had been muted", pending=True) is None
+    assert _notification_loudness_decision("I had turned notifications on", pending=True) is None
+    assert _notification_loudness_decision(
+        "Notifications had been unmuted, but now they are loud", pending=True
+    ) == "confirmed"
     assert _notification_loudness_decision("I did not turn off silent mode", pending=True) == "declined"
     assert _notification_loudness_decision("I did not disable silent mode", pending=True) == "declined"
     assert _notification_loudness_decision("I didn't deactivate quiet mode", pending=True) == "declined"

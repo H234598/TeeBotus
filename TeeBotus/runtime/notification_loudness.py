@@ -2067,6 +2067,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             or (
                 (has_completed_action_positive or has_completed_action_negative)
                 and not _notification_loudness_has_explicit_historical_time(normalized)
+                and not _notification_loudness_has_past_perfect_marker(normalized)
             )
             or has_sequenced_action_status
         )
@@ -4047,6 +4048,13 @@ def _notification_loudness_has_historical_marker(normalized: str) -> bool:
     return any(
         _contains_normalized_phrase(normalized, _normalize_text(phrase.strip()))
         for phrase in NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES
+    )
+
+
+def _notification_loudness_has_past_perfect_marker(normalized: str) -> bool:
+    return any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in ("had", "hatte", "hatten")
     )
 
 
