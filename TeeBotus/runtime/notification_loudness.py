@@ -1001,6 +1001,15 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "turned them on",
     "switched them on",
     "enabled them",
+    "turned it on",
+    "switched it on",
+    "enabled it",
+    "activated it",
+    "unmuted it",
+    "made it loud",
+    "set it loud",
+    "set it to loud",
+    "put it on",
     "unmuted",
     "made loud",
     "made them loud",
@@ -1589,6 +1598,14 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         _contains_normalized_phrase(normalized, phrase)
         for phrase in NOTIFICATION_LOUDNESS_COMPLETION_PHRASES
     )
+    has_pending_pronoun_completion = pending and any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in (
+            "set it loud",
+            "set it to loud",
+            "put it on",
+        )
+    )
     has_indirect_positive_mute_action = _notification_loudness_has_indirect_positive_mute_action(normalized)
     has_positive_unmute_phrase = any(
         _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
@@ -1725,6 +1742,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if (
         has_notification_context
         and _notification_loudness_is_non_declarative(text, normalized)
+        and not has_pending_pronoun_completion
         and not (
             has_audibility_state
             or has_explicit_confirmation
@@ -2275,7 +2293,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     ):
         if _notification_loudness_is_non_declarative(
             text, status_scope_normalized
-        ) and not _notification_loudness_has_sequenced_action_status(polarity_normalized):
+        ) and not _notification_loudness_has_sequenced_action_status(
+            polarity_normalized
+        ) and not has_pending_pronoun_completion:
             return None
         return "confirmed"
     if pending and normalized in NOTIFICATION_LOUDNESS_NEGATION_REPLY_WORDS:

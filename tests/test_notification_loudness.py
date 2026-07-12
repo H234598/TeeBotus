@@ -1151,6 +1151,13 @@ def test_loudness_free_text_accepts_natural_completion_phrases() -> None:
     assert _notification_loudness_decision("I did it but not really", pending=True) is None
     assert _notification_loudness_decision("Ich habe es gemacht, aber nicht ganz", pending=True) is None
     assert _notification_loudness_decision("I can confirm I did it", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I turned it on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I switched it on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I enabled it", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I set it loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I set it to loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I put it on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I turned it off", pending=True) == "declined"
     assert _notification_loudness_decision("Benachrichtigungen sind eingeschaltet", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich habe es nicht gemacht", pending=True) == "declined"
     assert _notification_loudness_decision("I did not do it", pending=True) == "declined"
