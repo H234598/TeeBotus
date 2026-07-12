@@ -1292,6 +1292,16 @@ def test_loudness_free_text_does_not_decide_uncertain_status_statements() -> Non
     assert _notification_loudness_decision("Anscheinend sind Benachrichtigungen an", pending=True) is None
 
 
+def test_loudness_free_text_inverts_explicit_proposition_negation() -> None:
+    assert _notification_loudness_decision("I deny that notifications are muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I deny that notifications are on", pending=False) == "declined"
+    assert _notification_loudness_decision("It is not true that notifications are muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("It is not true that notifications are on", pending=True) == "declined"
+    assert _notification_loudness_decision("Ich bestreite, dass die Nachrichten stumm sind", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Es stimmt nicht, dass die Nachrichten laut sind", pending=False) == "declined"
+    assert _notification_loudness_decision("I do not deny that notifications are on", pending=True) is None
+
+
 def test_loudness_free_text_does_not_treat_imperative_as_confirmation() -> None:
     assert _notification_loudness_decision("Stell die Nachrichten auf laut", pending=True) is None
     assert _notification_loudness_decision("Die Nachrichten sind auf laut", pending=True) == "confirmed"

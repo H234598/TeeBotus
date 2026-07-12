@@ -229,6 +229,12 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "can t confirm",
     "cannot verify",
     "can t verify",
+    "i do not deny that",
+    "i don t deny that",
+    "i cannot deny that",
+    "i can t deny that",
+    "ich bestreite nicht dass",
+    "ich verneine nicht dass",
     "unable to confirm",
     "unable to verify",
     "unable to tell",
@@ -993,6 +999,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     normalized = _normalize_text(text)
     if not normalized:
         return None
+    proposition_negation_decision = _notification_loudness_explicit_negated_status_decision(
+        normalized, pending=pending
+    )
+    if proposition_negation_decision is not None:
+        return proposition_negation_decision
     reply_prefix = _notification_loudness_leading_reply_prefix(text)
     if reply_prefix is not None:
         prefix_decision, remainder = reply_prefix
@@ -2167,6 +2178,53 @@ def _notification_loudness_failed_action_polarity(normalized: str) -> str | None
     return None
 
 
+def _notification_loudness_explicit_negated_status_decision(
+    normalized: str, *, pending: bool
+) -> str | None:
+    tokens = normalized.split()
+    markers = (
+        ("not", "the", "case", "that"),
+        ("nicht", "der", "fall", "dass"),
+        ("not", "true", "that"),
+        ("nicht", "wahr", "dass"),
+        ("stimmt", "nicht", "dass"),
+        ("false", "that"),
+        ("falsch", "dass"),
+        ("deny", "that"),
+        ("denies", "that"),
+        ("denied", "that"),
+        ("bestreite", "dass"),
+        ("bestreitet", "dass"),
+        ("bestritt", "dass"),
+        ("verneine", "dass"),
+        ("verneint", "dass"),
+        ("verneinte", "dass"),
+        ("not", "true"),
+        ("nicht", "wahr"),
+    )
+    for marker in sorted(markers, key=len, reverse=True):
+        width = len(marker)
+        for index in range(len(tokens) - width + 1):
+            if tuple(tokens[index : index + width]) != marker:
+                continue
+            preceding = tokens[max(0, index - 3) : index]
+            if (
+                set(preceding) & {"not", "nicht", "cannot", "t"}
+                or {"don", "t"}.issubset(preceding)
+                or {"do", "not"}.issubset(preceding)
+            ):
+                continue
+            remainder = " ".join(tokens[index + width :]).strip()
+            if not remainder:
+                continue
+            inner_decision = _notification_loudness_decision(remainder, pending=pending)
+            if inner_decision == "confirmed":
+                return "declined"
+            if inner_decision == "declined":
+                return "confirmed"
+    return None
+
+
 def _notification_loudness_has_successful_ability_action(normalized: str) -> bool:
     return any(
         _contains_normalized_phrase(normalized, phrase)
@@ -2373,6 +2431,18 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
             before_copula = tokens[max(0, copula_index - 3) : copula_index]
             if before_copula and all(value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in before_copula) and any(
                 value in subject_terms for value in between
+            ):
+                return True
+    for copula_index, copula in enumerate(tokens):
+        if copula not in {"ist", "sind"}:
+            continue
+        for status_index in range(max(0, copula_index - 4), copula_index):
+            if tokens[status_index] not in NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS:
+                continue
+            before_status = tokens[max(0, status_index - 4) : status_index]
+            after_status = tokens[status_index + 1 : copula_index]
+            if any(value in subject_terms for value in before_status) and all(
+                value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in after_status
             ):
                 return True
     return False
