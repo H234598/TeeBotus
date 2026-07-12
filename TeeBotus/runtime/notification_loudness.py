@@ -206,8 +206,30 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "not sure",
     "uncertain",
     "maybe",
+    "possibly",
     "probably",
     "perhaps",
+    "it is possible",
+    "possible that",
+    "it is likely",
+    "likely that",
+    "it is unlikely",
+    "unlikely that",
+    "it is necessary",
+    "necessary that",
+    "not necessary that",
+    "es ist möglich",
+    "möglicherweise",
+    "moeglicherweise",
+    "möglich dass",
+    "moeglich dass",
+    "es ist wahrscheinlich",
+    "wahrscheinlich dass",
+    "es ist unwahrscheinlich",
+    "unwahrscheinlich dass",
+    "es ist notwendig",
+    "notwendig dass",
+    "nicht notwendig dass",
     "presumably",
     "i guess",
     "i suppose",
@@ -2530,7 +2552,9 @@ def _notification_loudness_canonicalize_epistemic_forms(normalized: str) -> str:
     return (
         normalized.replace("do not doubt", "don t doubt")
         .replace("do not dispute", "don t dispute")
+        .replace("it is not possible that", "it is not true that")
         .replace("it is impossible that", "it is not true that")
+        .replace("es ist nicht moeglich dass", "nicht wahr dass")
         .replace("es ist unmoeglich dass", "nicht wahr dass")
     )
 

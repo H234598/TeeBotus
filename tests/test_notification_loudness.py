@@ -1314,6 +1314,12 @@ def test_loudness_free_text_does_not_decide_uncertain_status_statements() -> Non
     assert _notification_loudness_decision("It is impossible that notifications are on", pending=True) == "declined"
     assert _notification_loudness_decision("It is not impossible that notifications are on", pending=True) is None
     assert _notification_loudness_decision("Es ist unmöglich, dass Nachrichten an sind", pending=True) == "declined"
+    assert _notification_loudness_decision("It is possible that notifications are on", pending=True) is None
+    assert _notification_loudness_decision("It is likely that notifications are on", pending=True) is None
+    assert _notification_loudness_decision("It is necessary that notifications are on", pending=True) is None
+    assert _notification_loudness_decision("It is not possible that notifications are on", pending=True) == "declined"
+    assert _notification_loudness_decision("Es ist möglich, dass Nachrichten an sind", pending=True) is None
+    assert _notification_loudness_decision("Es ist wahrscheinlich, dass Nachrichten an sind", pending=True) is None
     assert _notification_loudness_decision("I should not turn notifications off", pending=True) is None
     assert _notification_loudness_decision("I must not turn notifications off", pending=False) is None
     assert _notification_loudness_decision("I cannot turn notifications off", pending=True) is None
