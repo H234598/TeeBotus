@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.177 - 2026-07-12
+
+- Handle idiomatic unmute negations.
+
 ## 1.9.176 - 2026-07-12
 
 - Recognize chat, conversation, and thread notification subjects.

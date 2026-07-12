@@ -1531,6 +1531,14 @@ def test_loudness_free_text_recognizes_chat_subjects() -> None:
     assert _notification_loudness_decision("Thread is muted", pending=True) == "declined"
 
 
+def test_loudness_free_text_handles_idiomatic_unmute_negations() -> None:
+    assert _notification_loudness_decision("Die Nachrichten sind keineswegs stumm", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten sind keinesfalls lautlos", pending=False) == "confirmed"
+    assert _notification_loudness_decision("The notifications are anything but muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("The notifications are anything but silent", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Die Benachrichtigungen sind alles andere als stumm", pending=True) == "confirmed"
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None
