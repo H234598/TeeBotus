@@ -1017,6 +1017,20 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "set them to loud",
     "gelungen",
 )
+NOTIFICATION_LOUDNESS_GENERIC_COMPLETION_PRONOUN_PHRASES = (
+    "did it",
+    "did that",
+    "did so",
+    "done it",
+    "completed it",
+    "finished it",
+    "did not do it",
+    "didn t do it",
+    "have not done it",
+    "haven t done it",
+    "never did it",
+    "never done it",
+)
 NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES = (
     "failed to",
     "couldn t manage",
@@ -1606,9 +1620,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             "put it on",
         )
     )
-    allow_completion_pronoun = pending and not has_negated_completion and any(
+    allow_completion_pronoun = pending and any(
         _contains_normalized_phrase(normalized, phrase)
-        for phrase in ("did it", "did that", "did so", "done it", "completed it", "finished it")
+        for phrase in NOTIFICATION_LOUDNESS_GENERIC_COMPLETION_PRONOUN_PHRASES
     )
     has_indirect_positive_mute_action = _notification_loudness_has_indirect_positive_mute_action(normalized)
     has_positive_unmute_phrase = any(
@@ -1652,7 +1666,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     )
     has_generic_completion_pronoun_prefix = pending and later_current_status_prefix is not None and any(
         _contains_normalized_phrase(later_current_status_prefix, phrase)
-        for phrase in ("did it", "did that", "did so", "done it", "completed it", "finished it")
+        for phrase in NOTIFICATION_LOUDNESS_GENERIC_COMPLETION_PRONOUN_PHRASES
     )
     if (
         (has_notification_context or (pending and has_completion_phrase and not has_negated_completion))
@@ -1722,8 +1736,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         if failed_action_polarity == "negative":
             return None
         return "declined"
-    if has_notification_context and _notification_loudness_has_habitual_marker(normalized) and not (
-        has_completed_action_positive or has_completed_action_negative
+    if (
+        has_notification_context
+        and _notification_loudness_has_habitual_marker(normalized)
+        and not (has_completed_action_positive or has_completed_action_negative)
+        and not has_generic_completion_pronoun_prefix
     ):
         return None
     if has_notification_context and normalized.startswith(NOTIFICATION_LOUDNESS_NON_ASSERTIVE_STARTS):
@@ -2245,7 +2262,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
                 or (has_indirect_positive_mute_action and has_sequenced_action_status)
             )
         )
-        or has_negated_completion
+        or (
+            has_negated_completion
+            and not (has_generic_completion_pronoun_prefix and later_current_status_segment)
+        )
         or (has_negated_confirmed_phrase and not has_absolute_negative_positive_inner_negation)
         or (has_negative_current_status and not has_absolute_negative_positive_inner_negation)
         or has_absolute_negative_positive_status
