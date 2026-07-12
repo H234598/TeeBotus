@@ -1997,6 +1997,20 @@ def test_loudness_free_text_does_not_decide_future_intentions_as_completed() -> 
     assert _notification_loudness_decision("I failed the test and notifications are loud", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_scopes_negated_attempts_and_gerunds() -> None:
+    assert _notification_loudness_decision("I succeeded in muting notifications", pending=True) == "declined"
+    assert _notification_loudness_decision("I succeeded in not muting notifications", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I was able not to mute notifications", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I was able not to turn notifications off", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I tried not to mute notifications", pending=True) is None
+    assert _notification_loudness_decision("I attempted not to turn notifications off", pending=False) is None
+    assert _notification_loudness_decision("I failed not to mute notifications", pending=True) is None
+    assert (
+        _notification_loudness_decision("I tried not to mute notifications, but they are muted", pending=True)
+        == "declined"
+    )
+
+
 def test_loudness_free_text_does_not_decide_historical_status_as_current() -> None:
     assert _notification_loudness_decision("I used to have notifications on", pending=True) is None
     assert _notification_loudness_decision("I formerly had notifications on", pending=False) is None
