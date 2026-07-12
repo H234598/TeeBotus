@@ -527,6 +527,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     normalized = _normalize_text(text)
     if not normalized:
         return None
+    if pending:
+        direct_pronoun_decision = _notification_loudness_pending_pronoun_decision(normalized)
+        if direct_pronoun_decision is not None:
+            return direct_pronoun_decision
     words = set(normalized.split())
     explicit_context_needles = (
         "benachrichtigung",
@@ -1218,6 +1222,42 @@ def _notification_loudness_has_question_tail(normalized: str) -> bool:
         normalized == _normalize_text(tail) or normalized.endswith(f" {_normalize_text(tail)}")
         for tail in NOTIFICATION_LOUDNESS_QUESTION_TAILS
     )
+
+
+def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | None:
+    if normalized in {
+        "sie sind an",
+        "sie sind laut",
+        "sie sind nicht stumm",
+        "sie sind nicht lautlos",
+        "they are on",
+        "they re on",
+        "they are loud",
+        "they re loud",
+        "they are not muted",
+        "they re not muted",
+        "they are enabled",
+        "they re enabled",
+        "they are unmuted",
+        "they re unmuted",
+    }:
+        return "confirmed"
+    if normalized in {
+        "sie sind aus",
+        "sie sind stumm",
+        "sie sind lautlos",
+        "sie sind ausgeschaltet",
+        "they are off",
+        "they re off",
+        "they are muted",
+        "they re muted",
+        "they are disabled",
+        "they re disabled",
+        "they are not on",
+        "they re not on",
+    }:
+        return "declined"
+    return None
 
 
 def _notification_loudness_has_unscoped_subject_status(normalized: str) -> bool:

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.137 - 2026-07-12
+
+- Recognize exact pending pronoun status replies.
+
 ## 1.9.136 - 2026-07-12
 
 - Recognize German loudgeschaltet and entstummt completion forms.
