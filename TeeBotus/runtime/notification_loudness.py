@@ -1238,6 +1238,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     normalized = _normalize_text(text)
     if not normalized:
         return None
+    normalized = _notification_loudness_canonicalize_double_temporal_negation(normalized)
     if _notification_loudness_has_unrelated_identity_description(normalized):
         return None
     if _notification_loudness_has_negative_possession_description(normalized):
@@ -1361,7 +1362,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         )
     )
     has_notification_context = has_notification_context or has_volume_context
-    polarity_normalized = _normalize_text_for_polarity(text)
+    polarity_normalized = _notification_loudness_canonicalize_double_temporal_negation(
+        _normalize_text_for_polarity(text)
+    )
     has_explicit_confirmation = _notification_loudness_has_explicit_confirmation(normalized)
     has_sequenced_action_status = _notification_loudness_has_sequenced_action_status(polarity_normalized)
     has_notification_context = has_notification_context or has_explicit_confirmation or has_sequenced_action_status
@@ -1404,7 +1407,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     if has_notification_context and _notification_loudness_has_partial_quantifier(normalized):
         return None
-    polarity_text = _normalize_text_for_polarity(text)
+    polarity_text = _notification_loudness_canonicalize_double_temporal_negation(
+        _normalize_text_for_polarity(text)
+    )
     transition_segment = _notification_loudness_current_transition_segment(polarity_text)
     intent_segment = _notification_loudness_current_intent_segment(polarity_text)
     temporal_segment = (
@@ -2495,6 +2500,14 @@ def _resolve_loudness_now(value: datetime | None) -> datetime:
 
 def _normalize_text(text: str) -> str:
     return _normalize_text_value(text, preserve_clause_boundaries=False)
+
+
+def _notification_loudness_canonicalize_double_temporal_negation(normalized: str) -> str:
+    return (
+        normalized.replace("not no longer", "still")
+        .replace("nicht mehr nicht", "weiterhin")
+        .replace("nicht laenger nicht", "weiterhin")
+    )
 
 
 def _notification_loudness_leading_reply_prefix(text: str) -> tuple[str, str] | None:
