@@ -1213,6 +1213,13 @@ def test_loudness_free_text_accepts_natural_completion_phrases() -> None:
     assert _notification_loudness_decision("I cannot unmute notifications", pending=True) == "declined"
     assert _notification_loudness_decision("I couldn't unmute notifications", pending=True) == "declined"
     assert _notification_loudness_decision("I tried but couldn't restore notification sound", pending=True) == "declined"
+
+
+def test_loudness_free_text_keeps_unrelated_media_sound_neutral() -> None:
+    assert _notification_loudness_decision("The sound of music is loud", pending=True) is None
+    assert _notification_loudness_decision("The sound of the video is loud", pending=True) is None
+    assert _notification_loudness_decision("Der Ton meiner Stimme ist laut", pending=True) is None
+    assert _notification_loudness_decision("I restored the sound on the video", pending=True) is None
     assert _notification_loudness_decision("I did not turn off silent mode", pending=True) == "declined"
     assert _notification_loudness_decision("I did not disable silent mode", pending=True) == "declined"
     assert _notification_loudness_decision("I didn't deactivate quiet mode", pending=True) == "declined"

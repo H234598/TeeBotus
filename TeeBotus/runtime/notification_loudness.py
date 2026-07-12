@@ -1101,6 +1101,18 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "set them to loud",
     "gelungen",
 )
+NOTIFICATION_LOUDNESS_PENDING_DIRECT_COMPLETION_PHRASES = frozenset(
+    {
+        "i restored the sound",
+        "the sound is restored",
+        "the sound was restored",
+        "i can hear the sound again",
+        "i hear the sound now",
+        "ich habe den ton wiederhergestellt",
+        "ich habe den ton wieder hergestellt",
+        "der ton wurde wiederhergestellt",
+    }
+)
 NOTIFICATION_LOUDNESS_COMPLETION_PRONOUN_PHRASES = (
     "did it",
     "did that",
@@ -1680,6 +1692,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     normalized = _notification_loudness_canonicalize_epistemic_forms(
         _notification_loudness_canonicalize_double_temporal_negation(normalized)
     )
+    if (
+        pending
+        and "?" not in str(text or "")
+        and normalized in NOTIFICATION_LOUDNESS_PENDING_DIRECT_COMPLETION_PHRASES
+    ):
+        return "confirmed"
     if _notification_loudness_has_unrelated_identity_description(normalized):
         return None
     if _notification_loudness_has_negative_possession_description(normalized):
@@ -1763,8 +1781,6 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "push",
         "alert",
         "alerts",
-        "sound",
-        "ton",
         "mute",
         "silent mode",
         "quiet mode",
@@ -1788,15 +1804,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "the notification sound was brought back",
         "notification sound is restored",
         "the notification sound is restored",
-        "sound is restored",
-        "the sound is restored",
         "the mute is off",
         "der ton ist wieder da",
-        "der ton ist wiederhergestellt",
-        "der ton wurde wiederhergestellt",
         "der nachrichtenton wurde wiederhergestellt",
         "der benachrichtigungston ist wieder da",
-        "ton wiederhergestellt",
         "benachrichtigungston wiederhergestellt",
         "i can hear the notification sound again",
         "can hear the notification sound again",
