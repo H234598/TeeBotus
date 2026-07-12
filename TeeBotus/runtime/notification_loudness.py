@@ -839,6 +839,15 @@ NOTIFICATION_LOUDNESS_STATUS_LEAD_TERMS = frozenset(
         "disabled",
         "nicht",
         "not",
+        "done",
+        "completed",
+        "finished",
+        "erledigt",
+        "fertig",
+        "abgeschlossen",
+        "gemacht",
+        "getan",
+        "geschafft",
     }
 )
 NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
@@ -950,6 +959,9 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "done",
     "completed",
     "finished",
+    "did it",
+    "did that",
+    "did so",
     "all set",
     "took care of it",
     "take care of it",

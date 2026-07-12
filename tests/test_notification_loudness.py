@@ -1135,8 +1135,15 @@ def test_loudness_free_text_separates_reply_prefix_from_determiner_negation() ->
 def test_loudness_free_text_accepts_natural_completion_phrases() -> None:
     assert _notification_loudness_decision("Habe ich erledigt", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich habe es gemacht", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I did it", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I did that", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ist erledigt", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ist fertig", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ist abgeschlossen", pending=True) == "confirmed"
     assert _notification_loudness_decision("Benachrichtigungen sind eingeschaltet", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich habe es nicht gemacht", pending=True) == "declined"
+    assert _notification_loudness_decision("I did not do it", pending=True) == "declined"
+    assert _notification_loudness_decision("Ist nicht erledigt", pending=True) == "declined"
     assert _notification_loudness_decision("Noch nicht aktiviert", pending=True) == "declined"
 
 
