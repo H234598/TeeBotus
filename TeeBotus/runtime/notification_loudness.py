@@ -641,6 +641,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     if has_notification_context and _notification_loudness_has_question_tail(normalized):
         return None
+    if has_notification_context and _notification_loudness_has_ambiguous_alternative(normalized):
+        return None
     if (
         has_notification_context
         and not has_explicit_notification_context
@@ -1304,6 +1306,43 @@ def _notification_loudness_has_question_tail(normalized: str) -> bool:
     return any(
         normalized == _normalize_text(tail) or normalized.endswith(f" {_normalize_text(tail)}")
         for tail in NOTIFICATION_LOUDNESS_QUESTION_TAILS
+    )
+
+
+def _notification_loudness_has_ambiguous_alternative(normalized: str) -> bool:
+    tokens = set(normalized.split())
+    if not tokens & {"or", "oder"}:
+        return False
+    positive_phrases = (
+        "laut",
+        "loud",
+        "an",
+        "on",
+        "active",
+        "enabled",
+        "unmuted",
+        "nicht stumm",
+        "nicht lautlos",
+        "not muted",
+        "not off",
+        "not disabled",
+    )
+    negative_phrases = (
+        "stumm",
+        "lautlos",
+        "muted",
+        "silenced",
+        "silent",
+        "aus",
+        "off",
+        "disabled",
+        "nicht laut",
+        "not loud",
+        "not on",
+    )
+    return (
+        any(_contains_normalized_phrase(normalized, phrase) for phrase in positive_phrases)
+        and any(_contains_normalized_phrase(normalized, phrase) for phrase in negative_phrases)
     )
 
 

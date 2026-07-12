@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.149 - 2026-07-12
+
+- Keep contradictory loudness alternatives undecided.
+
 ## 1.9.148 - 2026-07-12
 
 - Ignore indirect loudness questions and requests.
