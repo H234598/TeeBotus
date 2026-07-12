@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.144 - 2026-07-12
+
+- Ignore additional uncertain loudness statements.
+
 ## 1.9.143 - 2026-07-12
 
 - Ignore additional first-person present loudness actions.
