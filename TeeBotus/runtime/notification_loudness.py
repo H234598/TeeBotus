@@ -2176,6 +2176,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         for phrase in NOTIFICATION_LOUDNESS_NEGATED_POSITIVE_MUTE_PHRASES
     )
     has_failed_action = _notification_loudness_has_failed_action(normalized)
+    has_negated_failure_action = _notification_loudness_has_negated_failure_action(normalized)
     has_successful_ability_action = _notification_loudness_has_successful_ability_action(normalized)
     has_notification_context = has_notification_context or has_positive_unmute_phrase
     has_audibility_gradient = _notification_loudness_has_audibility_gradient(normalized)
@@ -2237,6 +2238,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             _notification_loudness_has_recent_completion_marker(normalized)
             or temporal_segment
             or has_failed_action
+            or has_negated_failure_action
             or (
                 has_successful_ability_action
                 and not _notification_loudness_has_explicit_historical_time(normalized)
@@ -2281,6 +2283,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             polarity_normalized, has_notification_context=has_notification_context
         )
         has_failed_action = _notification_loudness_has_failed_action(normalized)
+        has_negated_failure_action = _notification_loudness_has_negated_failure_action(normalized)
         has_attributive_positive, has_attributive_negative = (
             _notification_loudness_attributive_quantifier_polarity(normalized)
         )
@@ -2297,6 +2300,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     if later_current_status_segment:
         has_completed_action_positive = False
+        has_completed_action_negative = False
+    if has_negated_failure_action:
+        has_completed_action_positive = True
         has_completed_action_negative = False
     if (
         has_notification_context
@@ -4386,16 +4392,28 @@ def _notification_loudness_historical_causal_prefix(normalized: str) -> str | No
 
 
 def _notification_loudness_has_failed_action(normalized: str) -> bool:
-    if any(
-        _contains_normalized_phrase(normalized, phrase)
-        for phrase in NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES
-    ):
-        return True
+    for phrase in NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES:
+        if (
+            _contains_normalized_phrase(normalized, phrase)
+            and not _notification_loudness_phrase_is_negated(normalized, _normalize_text(phrase))
+        ):
+            return True
     tokens = normalized.split()
     for index, token in enumerate(tokens):
         if token not in {"konnte", "konnten"}:
             continue
         if _notification_loudness_scoped_negation_count(tokens, index + 1, len(tokens)) % 2:
+            return True
+    return False
+
+
+def _notification_loudness_has_negated_failure_action(normalized: str) -> bool:
+    tokens = normalized.split()
+    failure_terms = {"failed", "gescheitert", "fehlgeschlagen"}
+    for index, token in enumerate(tokens):
+        if token not in failure_terms:
+            continue
+        if _notification_loudness_scoped_negation_count(tokens, max(0, index - 4), index) % 2:
             return True
     return False
 
