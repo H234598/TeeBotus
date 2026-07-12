@@ -674,6 +674,7 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "fertig",
     "done",
     "completed",
+    "finished",
     "geschafft",
     "eingeschaltet",
     "angeschaltet",
