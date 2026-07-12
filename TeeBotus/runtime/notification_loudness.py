@@ -1174,6 +1174,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         has_notification_context
         and not has_explicit_notification_context
         and _notification_loudness_has_unscoped_subject_status(normalized)
+        and not _notification_loudness_has_sequenced_action_status(polarity_normalized)
     ):
         return None
     has_audibility_state = _notification_loudness_has_audibility_state(normalized)
@@ -1215,7 +1216,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     )
     if has_notification_context and _notification_loudness_has_contradictory_state(
         polarity_normalized
-    ) and not _notification_loudness_has_sequenced_action_status(polarity_normalized):
+    ) and not _notification_loudness_has_sequenced_action_status(
+        polarity_normalized, activation_only=True
+    ):
         return None
     if has_notification_context and _notification_loudness_has_cross_subject_conflict(
         polarity_normalized,
@@ -2847,10 +2850,22 @@ def _notification_loudness_has_contradictory_state(normalized: str) -> bool:
             return True
         if negated_pair_is_contradictory and left_negated and right_negated:
             return True
+    for loud_term in ("loud", "laut"):
+        for mute_term in ("muted", "silenced", "silent", "quiet", "stumm", "lautlos"):
+            loud_unnegated, _ = _notification_loudness_term_polarity(
+                normalized, frozenset({loud_term})
+            )
+            mute_unnegated, _ = _notification_loudness_term_polarity(
+                normalized, frozenset({mute_term})
+            )
+            if loud_unnegated and mute_unnegated:
+                return True
     return False
 
 
-def _notification_loudness_has_sequenced_action_status(normalized: str) -> bool:
+def _notification_loudness_has_sequenced_action_status(
+    normalized: str, *, activation_only: bool = False
+) -> bool:
     tokens = normalized.split()
     action_terms = {
         "set",
@@ -2895,11 +2910,23 @@ def _notification_loudness_has_sequenced_action_status(normalized: str) -> bool:
         "die",
         "das",
     }
-    state_terms = (
-        set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS)
-        | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
-        | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
-    )
+    if activation_only:
+        state_terms = {
+            "an",
+            "on",
+            "aktiv",
+            "active",
+            "enabled",
+            "sichtbar",
+            "visible",
+            *NOTIFICATION_LOUDNESS_OFF_TERMS,
+        }
+    else:
+        state_terms = (
+            set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS)
+            | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
+            | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+        )
     boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
         NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
     }

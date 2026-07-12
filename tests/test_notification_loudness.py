@@ -1241,6 +1241,17 @@ def test_loudness_free_text_scopes_completed_actions_to_their_clause() -> None:
     assert _notification_loudness_decision("I did not turn notifications off but they are muted", pending=True) == "declined"
 
 
+def test_loudness_free_text_scopes_pronoun_statuses_after_actions() -> None:
+    assert _notification_loudness_decision("I turned them on but they are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("I turned them on but they are not muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I turned them off but they are loud", pending=True) == "declined"
+    assert _notification_loudness_decision("I switched them on; they are loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Ich schaltete sie an, aber sie sind stumm", pending=True) == "declined"
+    assert _notification_loudness_decision("Ich stellte sie laut, aber sie sind stumm", pending=True) is None
+    assert _notification_loudness_decision("Die Nachrichten sind laut, aber stumm", pending=True) is None
+    assert _notification_loudness_decision("Messages are loud but silent", pending=False) is None
+
+
 def test_loudness_free_text_preserves_punctuation_clause_boundaries() -> None:
     assert _notification_loudness_decision("nicht stumm, lautlos", pending=True) == "declined"
     assert _notification_loudness_decision("not muted, silenced", pending=False) == "declined"
