@@ -920,10 +920,48 @@ NOTIFICATION_LOUDNESS_ACTION_WORDS = frozenset({"hab", "habe", "haben", "getan",
 NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS = frozenset({"ja", "yes", "jep", "jo", "ok", "okay", "klar"})
 NOTIFICATION_LOUDNESS_NEGATION_REPLY_WORDS = frozenset({"nein", "no", "nee", "nop", "nope"})
 NOTIFICATION_LOUDNESS_PENDING_POSITIVE_STATUS_REPLIES = frozenset(
-    {"laut", "loud", "an", "on", "nicht stumm", "nicht lautlos", "nicht aus", "not muted", "not off", "not disabled"}
+    {
+        "laut",
+        "loud",
+        "an",
+        "on",
+        "hoch",
+        "high",
+        "voll",
+        "voller",
+        "full",
+        "maximum",
+        "maximal",
+        "nicht stumm",
+        "nicht lautlos",
+        "nicht aus",
+        "not muted",
+        "not off",
+        "not disabled",
+    }
 )
 NOTIFICATION_LOUDNESS_PENDING_NEGATIVE_STATUS_REPLIES = frozenset(
-    {"stumm", "lautlos", "muted", "silent", "aus", "off", "disabled", "nicht laut", "nicht an", "not loud", "not on"}
+    {
+        "stumm",
+        "lautlos",
+        "muted",
+        "silent",
+        "aus",
+        "off",
+        "disabled",
+        "niedrig",
+        "low",
+        "leise",
+        "quiet",
+        "minimum",
+        "down",
+        "runter",
+        "herunter",
+        "nicht laut",
+        "nicht an",
+        "not loud",
+        "not on",
+    }
 )
 
 NOTIFICATION_LOUDNESS_PROMPT = (
