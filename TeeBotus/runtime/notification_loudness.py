@@ -1265,6 +1265,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_explicit_confirmation = _notification_loudness_has_explicit_confirmation(normalized)
     has_sequenced_action_status = _notification_loudness_has_sequenced_action_status(polarity_normalized)
     has_notification_context = has_notification_context or has_explicit_confirmation or has_sequenced_action_status
+    has_attributive_positive, has_attributive_negative = (
+        _notification_loudness_attributive_quantifier_polarity(normalized)
+    )
     if _notification_loudness_has_verification_question(normalized):
         return None
     has_completed_action_positive, has_completed_action_negative = _notification_loudness_completed_action_polarity(
@@ -1351,6 +1354,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             polarity_normalized, has_notification_context=has_notification_context
         )
         has_failed_action = _notification_loudness_has_failed_action(normalized)
+        has_attributive_positive, has_attributive_negative = (
+            _notification_loudness_attributive_quantifier_polarity(normalized)
+        )
     if has_notification_context and _notification_loudness_has_failed_action(normalized):
         failed_action_polarity = _notification_loudness_failed_action_polarity(normalized)
         if failed_action_polarity == "negative":
@@ -1401,6 +1407,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if has_volume_positive and has_volume_negative:
         return None
     if has_completed_action_positive and has_completed_action_negative:
+        return None
+    if has_attributive_positive and has_attributive_negative:
         return None
     has_positive_current_status = _notification_loudness_has_positive_current_status(normalized)
     has_negative_current_status = _notification_loudness_has_negative_current_status(polarity_normalized)
@@ -1827,6 +1835,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or has_absolute_negative_mute_inner_negation
         or has_absolute_negative_still_inner_negation
         or has_absolute_negative_off_inner_negation
+        or has_attributive_negative
         or has_volume_negative
         or (
             has_completed_action_negative
@@ -1887,6 +1896,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or has_absolute_negative_mute
         or has_absolute_negative_still
         or has_absolute_negative_off
+        or has_attributive_positive
         or has_volume_positive
         or has_completed_action_positive
     ):
@@ -3290,6 +3300,97 @@ def _notification_loudness_has_partial_quantifier(normalized: str) -> bool:
         _contains_normalized_phrase(normalized, _normalize_text(phrase))
         for phrase in NOTIFICATION_LOUDNESS_PARTIAL_QUANTIFIER_PHRASES
     )
+
+
+def _notification_loudness_attributive_quantifier_polarity(
+    normalized: str,
+) -> tuple[bool, bool]:
+    """Read German ``keine + state adjective + notification`` phrases."""
+    tokens = normalized.split()
+    subject_terms = {
+        "nachricht",
+        "nachrichten",
+        "benachrichtigung",
+        "benachrichtigungen",
+        "message",
+        "messages",
+        "notification",
+        "notifications",
+    }
+    positive_adjectives = {
+        "laut",
+        "laute",
+        "lauten",
+        "lautes",
+        "loud",
+        "hoerbar",
+        "hoerbare",
+        "audible",
+        "angeschaltet",
+        "angeschaltete",
+        "eingeschaltet",
+        "eingeschaltete",
+        "aktiv",
+        "aktive",
+        "an",
+        "on",
+        "enabled",
+        "unmuted",
+        "entstummt",
+    }
+    negative_adjectives = {
+        "stumm",
+        "stumme",
+        "stummen",
+        "stummes",
+        "lautlos",
+        "lautlose",
+        "lautlosen",
+        "muted",
+        "silent",
+        "quiet",
+        "inaudible",
+        "unhoerbar",
+        "still",
+        "stille",
+        "stillen",
+        "leise",
+        "leisen",
+        "ausgeschaltet",
+        "ausgeschaltete",
+        "ausgeschalteten",
+        "deaktiviert",
+        "deaktivierte",
+        "inaktiv",
+        "inactive",
+        "off",
+        "disabled",
+    }
+    negative_prefixes = (
+        ("keine",),
+        ("keinen",),
+        ("kein",),
+        ("keinerlei",),
+        ("es", "gibt", "keine"),
+        ("es", "gibt", "keinen"),
+        ("es", "gibt", "kein"),
+        ("es", "gibt", "keinerlei"),
+    )
+    positive = False
+    negative = False
+    for prefix in negative_prefixes:
+        if tokens[: len(prefix)] != list(prefix):
+            continue
+        state_index = len(prefix)
+        subject_index = state_index + 1
+        if subject_index >= len(tokens) or tokens[subject_index] not in subject_terms:
+            continue
+        state = tokens[state_index]
+        if state in positive_adjectives:
+            negative = True
+        elif state in negative_adjectives:
+            positive = True
+    return positive, negative
 
 
 def _notification_loudness_has_absolute_negative_positive_status(normalized: str) -> bool:
