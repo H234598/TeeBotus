@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.159 - 2026-07-12
+
+- Recognize recent completed loudness changes despite past-tense wording.
+
 ## 1.9.158 - 2026-07-12
 
 - Handle negated certainty and conviction statements.

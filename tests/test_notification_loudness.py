@@ -1437,6 +1437,9 @@ def test_loudness_free_text_does_not_decide_historical_status_as_current() -> No
     assert _notification_loudness_decision("Gestern waren die Nachrichten laut", pending=False) is None
     assert _notification_loudness_decision("I have notifications on now", pending=True) == "confirmed"
     assert _notification_loudness_decision("Notifications are on now", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Notifications were turned on just now", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications were enabled right now", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Notifications were turned on yesterday", pending=True) is None
 
 
 def test_loudness_free_text_does_not_decide_habitual_status_as_current() -> None:

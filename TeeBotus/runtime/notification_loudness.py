@@ -715,7 +715,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     )
     if has_notification_context and _notification_loudness_has_uncertainty(normalized):
         return None
-    if has_notification_context and _notification_loudness_has_historical_marker(normalized):
+    if (
+        has_notification_context
+        and _notification_loudness_has_historical_marker(normalized)
+        and not _notification_loudness_has_recent_completion_marker(normalized)
+    ):
         return None
     if has_notification_context and _notification_loudness_has_habitual_marker(normalized):
         return None
@@ -757,6 +761,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "sind an",
         "are on",
         "been on",
+        "turned on",
         "are enabled",
         "enabled",
         "are active",
@@ -1374,6 +1379,13 @@ def _notification_loudness_has_historical_marker(normalized: str) -> bool:
     return any(
         _contains_normalized_phrase(normalized, _normalize_text(phrase.strip()))
         for phrase in NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES
+    )
+
+
+def _notification_loudness_has_recent_completion_marker(normalized: str) -> bool:
+    return any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in ("just now", "right now", "gerade eben", "soeben")
     )
 
 
