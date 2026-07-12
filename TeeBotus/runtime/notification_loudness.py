@@ -4637,6 +4637,8 @@ def _notification_loudness_has_ambiguous_chat_activity(normalized: str) -> bool:
 def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | None:
     if normalized in {
         "sie sind an",
+        "ist an",
+        "sind an",
         "sie sind laut",
         "sie sind nicht aus",
         "sie sind nicht ausgeschaltet",
@@ -4659,6 +4661,8 @@ def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | No
         "das ist nicht still",
         "they are on",
         "they re on",
+        "is on",
+        "are on",
         "they are loud",
         "they re loud",
         "they are not off",
