@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.194 - 2026-07-12
+
+- Recognize positive notification sound reports.
+
 ## 1.9.193 - 2026-07-12
 
 - Recognize negative notification sound reports.
