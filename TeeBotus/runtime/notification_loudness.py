@@ -2144,6 +2144,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         later_current_status_segment
         and later_current_status_prefix is not None
         and not _notification_loudness_is_explicit_status_segment(later_current_status_prefix)
+    ) and not (
+        has_positive_current_status
+        and not has_negative_current_status
+        and not has_unnegated_mute
+        and not has_unnegated_off
     ):
         return None
     if has_notification_context and _notification_loudness_has_cross_subject_conflict(
@@ -2660,6 +2665,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
                 has_negated_off
                 and needle in {"notifications off", "notification off", "benachrichtigungen aus"}
             )
+            and not (
+                has_positive_current_status
+                and not has_negative_current_status
+                and needle in {"did not", "didn t"}
+            )
         )
     )
     has_declined_phrase = (
@@ -2711,6 +2721,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             has_completed_action_negative
             and not has_explicit_confirmation
             and not has_positive_unmute_phrase
+            and not (has_positive_current_status and not has_negative_current_status)
             and not (
                 has_absolute_negative_mute
                 or has_absolute_negative_still
@@ -5227,10 +5238,51 @@ def _notification_loudness_completed_action_polarity(
         "heruntergedreht",
         "runtergesetzt",
     }
+    status_copulas = {
+        "ist",
+        "sind",
+        "war",
+        "waren",
+        "wurde",
+        "wurden",
+        "is",
+        "are",
+        "was",
+        "were",
+        "remain",
+        "remains",
+        "bleibt",
+        "bleiben",
+        "blieb",
+        "blieben",
+    }
+    status_action_terms = {
+        "muted",
+        "silenced",
+        "disabled",
+        "enabled",
+        "unmuted",
+        "activated",
+    }
     did_actions = {"turn", "switch", "mute", "silence", "enable", "activate", "disable"}
     for action_index, action in enumerate(tokens):
         if action not in simple_past_actions:
             continue
+        if action in status_action_terms:
+            status_clause = False
+            for copula_index in range(max(0, action_index - 4), action_index):
+                if tokens[copula_index] not in status_copulas:
+                    continue
+                between = tokens[copula_index + 1 : action_index]
+                if all(
+                    token in NOTIFICATION_LOUDNESS_NEGATION_TERMS
+                    or token in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS
+                    for token in between
+                ):
+                    status_clause = True
+                    break
+            if status_clause:
+                continue
         if action in did_actions and not any(
             tokens[candidate] in {"did", "didn"}
             for candidate in range(max(0, action_index - 3), action_index)

@@ -2982,6 +2982,10 @@ def test_loudness_free_text_does_not_decide_conditional_status_as_current() -> N
     assert _notification_loudness_decision("Die Nachrichten sind laut, wenn sie nicht stumm sind", pending=True) is None
     assert _notification_loudness_decision("Notifications are not muted provided they are loud", pending=True) is None
     assert _notification_loudness_decision("Notifications are loud because they are not muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are not muted because they are loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are loud, but I did not change them", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are loud, but I did not set them loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are loud, but I did not turn them on", pending=True) == "confirmed"
 
 
 def test_loudness_free_text_does_not_decide_negated_keep_requests() -> None:
