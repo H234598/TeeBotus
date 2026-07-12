@@ -1383,6 +1383,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_notification_context = has_notification_context or has_positive_unmute_phrase
     if _notification_loudness_has_uncertainty(normalized) and (has_notification_context or pending):
         return None
+    if (
+        has_notification_context
+        and not has_explicit_confirmation
+        and _notification_loudness_has_non_assertive_status(normalized)
+    ):
+        return None
     if has_notification_context and _notification_loudness_has_partial_quantifier(normalized):
         return None
     polarity_text = _normalize_text_for_polarity(text)
@@ -2837,6 +2843,79 @@ def _notification_loudness_has_uncertainty(normalized: str) -> bool:
         _contains_normalized_phrase(normalized, _normalize_text(phrase))
         for phrase in NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES
     )
+
+
+def _notification_loudness_has_non_assertive_status(normalized: str) -> bool:
+    """Reject modal or future state claims unless a later clause states a fact."""
+    modal_terms = frozenset(
+        {
+            "will",
+            "shall",
+            "may",
+            "might",
+            "could",
+            "would",
+            "should",
+            "must",
+            "can",
+            "cannot",
+            "kann",
+            "koennte",
+            "könnte",
+            "muss",
+            "muessen",
+            "müssen",
+            "soll",
+            "sollen",
+            "sollte",
+            "wuerde",
+            "würde",
+            "moechte",
+            "möchte",
+            "plane",
+            "plant",
+            "plan",
+            "planned",
+            "planning",
+            "versuche",
+            "versucht",
+            "trying",
+            "try",
+            "intend",
+            "intended",
+            "supposed",
+            "expected",
+            "likely",
+            "unlikely",
+        }
+    )
+    state_terms = (
+        set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS)
+        | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
+        | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+    )
+    clause_boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
+        NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+    }
+    tokens = normalized.split()
+    clauses: list[list[str]] = [[]]
+    for token in tokens:
+        if token in clause_boundaries:
+            clauses.append([])
+        else:
+            clauses[-1].append(token)
+    for clause in reversed(clauses):
+        state_indices = [index for index, token in enumerate(clause) if token in state_terms]
+        if not state_indices:
+            continue
+        first_state_index = state_indices[0]
+        prefix = clause[:first_state_index]
+        if modal_terms.intersection(prefix):
+            return True
+        if {"werde", "werden", "wird"}.intersection(prefix):
+            return "sein" in clause[first_state_index + 1 :]
+        return False
+    return False
 
 
 def _notification_loudness_has_historical_marker(normalized: str) -> bool:
@@ -4649,6 +4728,8 @@ def _notification_loudness_has_explicit_confirmation(normalized: str) -> bool:
             "made sure",
             "verified that",
             "confirmed that",
+            "i can confirm",
+            "i can verify",
             "sichergestellt",
             "ich kann bestaetigen",
             "ich kann belegen",
