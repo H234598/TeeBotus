@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.196 - 2026-07-12
+
+- Recognize notification bells and inaudible states.
+
 ## 1.9.195 - 2026-07-12
 
 - Recognize negative notification sound reception reports.

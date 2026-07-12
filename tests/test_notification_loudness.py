@@ -1712,6 +1712,17 @@ def test_loudness_free_text_recognizes_negative_sound_reception_reports() -> Non
     assert _notification_loudness_decision("Ich bekomme keinen Nachrichtenton", pending=True) == "declined"
 
 
+def test_loudness_free_text_recognizes_bells_and_audibility_states() -> None:
+    assert _notification_loudness_decision("The notification bell is ringing", pending=False) == "confirmed"
+    assert _notification_loudness_decision("The notification bell is not ringing", pending=True) == "declined"
+    assert _notification_loudness_decision("Die Benachrichtigungsbox ist an", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Die Benachrichtigungsbox ist aus", pending=False) == "declined"
+    assert _notification_loudness_decision("Messages are inaudible", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications are inaudible", pending=False) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind unhörbar", pending=True) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind nicht unhörbar", pending=False) == "confirmed"
+
+
 def test_loudness_free_text_does_not_decide_obligations_or_plans_as_done() -> None:
     assert _notification_loudness_decision("I have to mute messages", pending=True) is None
     assert _notification_loudness_decision("I have to turn notifications on", pending=False) is None
