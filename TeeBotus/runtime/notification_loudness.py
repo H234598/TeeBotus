@@ -1110,7 +1110,18 @@ NOTIFICATION_LOUDNESS_PENDING_DIRECT_COMPLETION_PHRASES = frozenset(
         "i hear the sound now",
         "ich habe den ton wiederhergestellt",
         "ich habe den ton wieder hergestellt",
+        "ich habe den ton wieder angemacht",
         "der ton wurde wiederhergestellt",
+        "it worked",
+        "it worked now",
+        "it has worked",
+        "everything worked",
+        "es funktioniert",
+        "es funktioniert jetzt",
+        "es hat funktioniert",
+        "hat funktioniert",
+        "hat geklappt",
+        "klappt",
     }
 )
 NOTIFICATION_LOUDNESS_PENDING_DIRECT_FAILURE_PHRASES = frozenset(
@@ -1123,6 +1134,12 @@ NOTIFICATION_LOUDNESS_PENDING_DIRECT_FAILURE_PHRASES = frozenset(
         "ich kann den ton nicht wiederherstellen",
         "ich kann den nachrichtenton nicht wiederherstellen",
         "ich kann den benachrichtigungston nicht wiederherstellen",
+        "it failed",
+        "everything failed",
+        "es hat nicht funktioniert",
+        "hat nicht funktioniert",
+        "es hat nicht geklappt",
+        "hat nicht geklappt",
     }
 )
 NOTIFICATION_LOUDNESS_PENDING_AUXILIARY_CONFIRMATION_REPLIES = frozenset(

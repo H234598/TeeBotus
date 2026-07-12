@@ -1236,6 +1236,15 @@ def test_loudness_free_text_accepts_explicit_english_auxiliary_replies() -> None
     assert _notification_loudness_decision("Yep, I've", pending=True) == "confirmed"
     assert _notification_loudness_decision("No, I have not", pending=True) == "declined"
     assert _notification_loudness_decision("Nope, I haven't", pending=True) == "declined"
+
+
+def test_loudness_free_text_accepts_direct_worked_and_failed_replies() -> None:
+    assert _notification_loudness_decision("Ich habe den Ton wieder angemacht", pending=True) == "confirmed"
+    assert _notification_loudness_decision("It worked", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Es hat funktioniert", pending=True) == "confirmed"
+    assert _notification_loudness_decision("It failed", pending=True) == "declined"
+    assert _notification_loudness_decision("Es hat nicht funktioniert", pending=True) == "declined"
+    assert _notification_loudness_decision("Hat nicht geklappt", pending=True) == "declined"
     assert _notification_loudness_decision("I did not turn off silent mode", pending=True) == "declined"
     assert _notification_loudness_decision("I did not disable silent mode", pending=True) == "declined"
     assert _notification_loudness_decision("I didn't deactivate quiet mode", pending=True) == "declined"
