@@ -1477,6 +1477,13 @@ def test_loudness_free_text_recognizes_prefixed_pending_pronoun_statuses() -> No
     assert _notification_loudness_decision("Ja, sie sind an, glaube ich", pending=True) is None
 
 
+def test_loudness_free_text_keeps_cross_subject_conflicts_undecided() -> None:
+    assert _notification_loudness_decision("Messages are muted but notifications are loud", pending=True) is None
+    assert _notification_loudness_decision("Messages are loud but notifications are muted", pending=False) is None
+    assert _notification_loudness_decision("Messages are loud and notifications are loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Messages are muted and notifications are muted", pending=False) == "declined"
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None

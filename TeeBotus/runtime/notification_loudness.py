@@ -790,6 +790,17 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     has_positive_current_status = _notification_loudness_has_positive_current_status(normalized)
     has_negative_current_status = _notification_loudness_has_negative_current_status(normalized)
+    if has_notification_context and _notification_loudness_has_cross_subject_conflict(
+        normalized,
+        has_unnegated_mute=has_unnegated_mute,
+        has_negated_mute=has_negated_mute,
+        has_unnegated_off=has_unnegated_off,
+        has_negated_off=has_negated_off,
+        has_positive_unmute_phrase=has_positive_unmute_phrase,
+        has_positive_current_status=has_positive_current_status,
+        has_negative_current_status=has_negative_current_status,
+    ):
+        return None
     confirmed_needles = (
         "ja laut",
         "laut gestellt",
@@ -1538,6 +1549,35 @@ def _notification_loudness_has_negative_current_status(normalized: str) -> bool:
             if copula in contracted_copulas and "t" in between:
                 return True
     return False
+
+
+def _notification_loudness_has_cross_subject_conflict(
+    normalized: str,
+    *,
+    has_unnegated_mute: bool,
+    has_negated_mute: bool,
+    has_unnegated_off: bool,
+    has_negated_off: bool,
+    has_positive_unmute_phrase: bool,
+    has_positive_current_status: bool,
+    has_negative_current_status: bool,
+) -> bool:
+    tokens = set(normalized.split())
+    message_subject = tokens & {"nachricht", "nachrichten", "message", "messages"}
+    notification_subject = tokens & {
+        "benachrichtigung",
+        "benachrichtigungen",
+        "benachrichtigungston",
+        "notification",
+        "notifications",
+    }
+    if not message_subject or not notification_subject:
+        return False
+    if not tokens & NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES:
+        return False
+    positive = has_negated_mute or has_negated_off or has_positive_unmute_phrase or has_positive_current_status
+    negative = has_unnegated_mute or has_unnegated_off or has_negative_current_status
+    return positive and negative
 
 
 def _notification_loudness_has_audibility_state(normalized: str) -> bool:

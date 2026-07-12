@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.171 - 2026-07-12
+
+- Keep conflicting message and notification clauses undecided.
+
 ## 1.9.170 - 2026-07-12
 
 - Recognize prefixed pending pronoun status replies.
