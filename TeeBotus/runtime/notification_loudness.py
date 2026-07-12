@@ -2140,6 +2140,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_audibility_gradient = _notification_loudness_has_audibility_gradient(normalized)
     has_direct_audibility_experience = _notification_loudness_has_direct_audibility_experience(normalized)
     has_progressive_status_transition = _notification_loudness_has_progressive_status_transition(normalized)
+    has_pending_quantified_gradient = pending and has_audibility_gradient and any(
+        normalized.startswith(f"{prefix} ")
+        for prefix in ("none", "no", "neither", "keine", "keinerlei", "weder")
+    )
     if _notification_loudness_has_uncertainty(normalized) and (has_notification_context or pending):
         return None
     if has_notification_context and _notification_loudness_has_conditional_status(normalized):
@@ -2281,6 +2285,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and not has_explicit_confirmation
         and not allow_completion_pronoun
         and not has_positive_unmute_phrase
+        and not has_pending_quantified_gradient
     ):
         return None
     has_audibility_state = _notification_loudness_has_audibility_state(normalized)
