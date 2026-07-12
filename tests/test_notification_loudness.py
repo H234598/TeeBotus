@@ -2199,6 +2199,8 @@ def test_loudness_free_text_recognizes_prefixed_pending_pronoun_statuses() -> No
 def test_loudness_free_text_keeps_cross_subject_conflicts_undecided() -> None:
     assert _notification_loudness_decision("Messages are muted but notifications are loud", pending=True) is None
     assert _notification_loudness_decision("Messages are loud but notifications are muted", pending=False) is None
+    assert _notification_loudness_decision("Despite notifications being loud enough, messages are muted", pending=True) is None
+    assert _notification_loudness_decision("Notifications are loud enough despite messages being muted", pending=True) is None
     assert _notification_loudness_decision("Messages are loud and notifications are loud", pending=True) == "confirmed"
     assert _notification_loudness_decision("Messages are muted and notifications are muted", pending=False) == "declined"
     assert _notification_loudness_decision("Messages are not loud, notifications are not muted", pending=True) is None

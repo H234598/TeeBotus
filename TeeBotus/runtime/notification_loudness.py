@@ -6268,10 +6268,19 @@ def _notification_loudness_has_cross_subject_conflict(
     }
     if not message_subject or not notification_subject:
         return False
-    if not (
-        tokens & NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
-        or NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN in tokens
-    ):
+    conflict_boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
+        "because",
+        "since",
+        "as",
+        "although",
+        "while",
+        "though",
+        "despite",
+        "weil",
+        "da",
+        "denn",
+    }
+    if not (tokens & conflict_boundaries or NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN in tokens):
         return False
     positive = has_negated_mute or has_negated_off or has_positive_unmute_phrase or has_positive_current_status
     negative = has_unnegated_mute or has_unnegated_off or has_negative_current_status
@@ -6307,6 +6316,21 @@ def _notification_loudness_has_cross_subject_gradient_conflict(normalized: str) 
     for clause in clauses:
         clause_text = " ".join(clause)
         state = _notification_loudness_audibility_gradient_decision(clause_text)
+        if state is None:
+            unnegated_mute, negated_mute = _notification_loudness_mute_polarity(clause_text)
+            unnegated_off, negated_off = _notification_loudness_term_polarity(
+                clause_text, NOTIFICATION_LOUDNESS_OFF_TERMS
+            )
+            positive_status = _notification_loudness_has_positive_current_status(clause_text)
+            negative_status = _notification_loudness_has_negative_current_status(clause_text)
+            if (unnegated_mute or unnegated_off) and not (negated_mute or negated_off):
+                state = "declined"
+            elif (negated_mute or negated_off) and not (unnegated_mute or unnegated_off):
+                state = "confirmed"
+            elif positive_status and not negative_status:
+                state = "confirmed"
+            elif negative_status and not positive_status:
+                state = "declined"
         if state is None:
             continue
         terms = set(clause)
