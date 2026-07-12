@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.210 - 2026-07-12
+
+- Use current states after past attempts and intentions.
+
 ## 1.9.209 - 2026-07-12
 
 - Scope failed-action detection to notification-related actions.

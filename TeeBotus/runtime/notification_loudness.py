@@ -682,6 +682,23 @@ NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES = (
     "konnte nicht",
     "konnten nicht",
 )
+NOTIFICATION_LOUDNESS_ATTEMPT_ACTION_PHRASES = (
+    "tried",
+    "attempted",
+    "intended",
+    "planned",
+    "wanted",
+    "hoped",
+    "meant",
+    "versuchte",
+    "versucht",
+    "wollte",
+    "plante",
+    "hoffte",
+    "meinte",
+    "probierte",
+    "probiert",
+)
 NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES = (
     "off mute",
     "off of mute",
@@ -1970,6 +1987,9 @@ def _notification_loudness_current_temporal_segment(normalized: str) -> str | No
     ) + tuple(
         _normalize_text(phrase).split()
         for phrase in NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES
+    ) + tuple(
+        _normalize_text(phrase).split()
+        for phrase in NOTIFICATION_LOUDNESS_ATTEMPT_ACTION_PHRASES
     )
     current_phrases = tuple(_normalize_text(phrase).split() for phrase in NOTIFICATION_LOUDNESS_CURRENT_TIME_MARKER_PHRASES)
     historical_ranges: list[tuple[int, int]] = []

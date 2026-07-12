@@ -1864,6 +1864,18 @@ def test_loudness_free_text_does_not_decide_future_intentions_as_completed() -> 
     assert _notification_loudness_decision(
         "I couldn't manage to turn notifications on, but now they are enabled", pending=True
     ) == "confirmed"
+    assert _notification_loudness_decision(
+        "I tried to turn notifications on, but now they are on", pending=False
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "I attempted to turn notifications on, but now they are muted", pending=True
+    ) == "declined"
+    assert _notification_loudness_decision(
+        "Ich versuchte, Benachrichtigungen anzuschalten, aber jetzt sind sie an", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Ich wollte Nachrichten laut stellen, aber jetzt sind sie laut", pending=False
+    ) == "confirmed"
     assert _notification_loudness_decision("Ich bin gescheitert, die Benachrichtigungen anzuschalten", pending=True) == "declined"
     assert _notification_loudness_decision("Es ist mir nicht gelungen, Nachrichten laut zu stellen", pending=False) == "declined"
     assert _notification_loudness_decision("Das Anschalten der Benachrichtigungen ist fehlgeschlagen", pending=True) == "declined"
