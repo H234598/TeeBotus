@@ -350,6 +350,9 @@ NOTIFICATION_LOUDNESS_CURRENT_TIME_MARKER_PHRASES = (
     "momentan",
     "inzwischen",
     "mittlerweile",
+    "im moment",
+    "zurzeit",
+    "gegenwaertig",
     "since then",
     "in the meantime",
     "meanwhile",
@@ -4042,6 +4045,11 @@ def _notification_loudness_canonicalize_present_perfect_status(normalized: str) 
 
 def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
     normalized = _notification_loudness_canonicalize_present_perfect_status(normalized)
+    normalized = normalized.replace("at the moment", "currently")
+    normalized = normalized.replace("just now", "now")
+    normalized = normalized.replace("im moment", "momentan")
+    normalized = normalized.replace("zurzeit", "momentan")
+    normalized = normalized.replace("gegenwaertig", "aktuell")
     normalized = normalized.replace("ab jetzt", "jetzt")
     normalized = normalized.replace("bis jetzt", "jetzt")
     normalized = normalized.replace("bis heute", "heute")
