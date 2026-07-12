@@ -1626,6 +1626,14 @@ def test_loudness_free_text_handles_perfect_never_actions() -> None:
     assert _notification_loudness_decision("I never turn notifications off", pending=True) is None
 
 
+def test_loudness_free_text_recognizes_positive_audibility_without_time_adverb() -> None:
+    assert _notification_loudness_decision("Ich kann die Nachrichten hören", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich kann die Benachrichtigungen hören", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I can hear notifications", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I can hear messages", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I can hear notifications?", pending=True) is None
+
+
 def test_loudness_free_text_does_not_decide_obligations_or_plans_as_done() -> None:
     assert _notification_loudness_decision("I have to mute messages", pending=True) is None
     assert _notification_loudness_decision("I have to turn notifications on", pending=False) is None

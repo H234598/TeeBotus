@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.188 - 2026-07-12
+
+- Recognize positive audibility without a time adverb.
+
 ## 1.9.187 - 2026-07-12
 
 - Keep obligations and plans out of completed-state detection.
