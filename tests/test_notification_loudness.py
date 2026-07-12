@@ -1227,6 +1227,12 @@ def test_loudness_free_text_keeps_unrelated_media_sound_neutral() -> None:
     assert _notification_loudness_decision("Ich bin nicht in der Lage, die Nachrichten laut genug zu stellen", pending=True) == "declined"
     assert _notification_loudness_decision("Ich bin in der Lage, die Nachrichten laut genug zu stellen", pending=True) is None
     assert _notification_loudness_decision("Ich bin nicht in der Lage zu bestätigen, ob die Nachrichten laut sind", pending=True) is None
+    assert _notification_loudness_decision(
+        "Ich habe es nicht geschafft, sie laut genug zu stellen, aber jetzt sind sie laut genug", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Ich habe es geschafft, sie laut genug zu stellen, aber jetzt sind sie nicht laut genug", pending=True
+    ) == "declined"
     assert _notification_loudness_decision("Notifications in the video are loud", pending=True) is None
     assert _notification_loudness_decision("Messages are loud because the movie is loud", pending=True) is None
 
