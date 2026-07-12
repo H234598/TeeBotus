@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.153 - 2026-07-12
+
+- Ignore ongoing loudness action progress statements.
+
 ## 1.9.152 - 2026-07-12
 
 - Ignore ongoing loudness-check intentions.
