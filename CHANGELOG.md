@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.207 - 2026-07-12
+
+- Keep contradictory notification states undecided while preserving compatible mixed states.
+
 ## 1.9.206 - 2026-07-12
 
 - Treat punctuation markers as real clause boundaries in cross-subject conflict checks.

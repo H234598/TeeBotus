@@ -1095,6 +1095,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_absolute_negative_off_inner_negation = _notification_loudness_has_absolute_negative_term(
         normalized, NOTIFICATION_LOUDNESS_OFF_TERMS, inner_negated=True
     )
+    if has_notification_context and _notification_loudness_has_contradictory_state(polarity_normalized):
+        return None
     if has_notification_context and _notification_loudness_has_cross_subject_conflict(
         polarity_normalized,
         has_unnegated_mute=has_unnegated_mute,
@@ -2323,6 +2325,41 @@ def _notification_loudness_has_negative_current_status(normalized: str) -> bool:
                 return True
             if copula in contracted_copulas and "t" in between:
                 return True
+    return False
+
+
+def _notification_loudness_has_contradictory_state(normalized: str) -> bool:
+    state_terms = (
+        set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS)
+        | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
+        | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+    )
+    for term in state_terms:
+        has_unnegated, has_negated = _notification_loudness_term_polarity(normalized, frozenset({term}))
+        if has_unnegated and has_negated:
+            return True
+    german_still_unnegated, german_still_negated = _notification_loudness_german_still_polarity(normalized)
+    if german_still_unnegated and german_still_negated:
+        return True
+    for left, right, negated_pair_is_contradictory in (
+        ("on", "off", True),
+        ("aktiv", "inaktiv", True),
+        ("active", "inactive", True),
+        ("enabled", "disabled", True),
+        ("sichtbar", "unsichtbar", True),
+        ("visible", "hidden", True),
+        ("loud", "muted", False),
+    ):
+        left_unnegated, left_negated = _notification_loudness_term_polarity(
+            normalized, frozenset({left})
+        )
+        right_unnegated, right_negated = _notification_loudness_term_polarity(
+            normalized, frozenset({right})
+        )
+        if left_unnegated and right_unnegated:
+            return True
+        if negated_pair_is_contradictory and left_negated and right_negated:
+            return True
     return False
 
 
