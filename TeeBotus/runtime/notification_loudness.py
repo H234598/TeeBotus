@@ -1248,12 +1248,36 @@ NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES = (
     "switched the mute off",
     "turned off silent mode",
     "turned silent mode off",
+    "turn off silent mode",
+    "switch off silent mode",
+    "disable silent mode",
+    "deactivate silent mode",
     "switched off silent mode",
     "switched silent mode off",
+    "turned off quiet mode",
+    "turned quiet mode off",
+    "turn off quiet mode",
+    "switch off quiet mode",
+    "disable quiet mode",
+    "deactivate quiet mode",
+    "switched off quiet mode",
+    "switched quiet mode off",
+    "disabled quiet mode",
+    "deactivated quiet mode",
+    "quiet mode off",
+    "quiet mode is off",
+    "quiet mode is turned off",
+    "quiet mode was turned off",
+    "quiet mode has been turned off",
+    "quiet mode disabled",
+    "quiet mode is disabled",
+    "quiet mode deactivated",
+    "quiet mode is deactivated",
     "disabled silent mode",
     "deactivated silent mode",
     "silent mode off",
     "silent mode is off",
+    "silent mode is turned off",
     "silent mode was turned off",
     "silent mode has been turned off",
     "silent mode disabled",
@@ -1266,6 +1290,10 @@ NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES = (
     "stummmodus deaktiviert",
     "stummmodus ist deaktiviert",
     "stummmodus wurde deaktiviert",
+    "lautlosmodus aus",
+    "lautlosmodus ist aus",
+    "stummmodus aus",
+    "stummmodus ist aus",
     "disabled mute",
     "disabled the mute",
     "deactivated mute",
@@ -1299,6 +1327,14 @@ NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES = (
     "disabled do not disturb for notifications",
     "turned off do not disturb for notifications",
     "do not disturb is disabled for notifications",
+)
+NOTIFICATION_LOUDNESS_NEGATED_POSITIVE_MUTE_PHRASES = (
+    "silent mode is not turned off",
+    "silent mode was not turned off",
+    "silent mode is not disabled",
+    "quiet mode is not turned off",
+    "quiet mode was not turned off",
+    "quiet mode is not disabled",
 )
 NOTIFICATION_LOUDNESS_ACTION_WORDS = frozenset({"hab", "habe", "haben", "getan", "gemacht", "erledigt", "did", "done"})
 NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS = frozenset(
@@ -1686,10 +1722,16 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "push",
         "alert",
         "alerts",
+        "silent mode",
+        "quiet mode",
+        "lautlosmodus",
+        "stummmodus",
         "sound is back",
         "the sound is back",
         "sound has returned",
         "the sound has returned",
+        "sound is audible again",
+        "the sound is audible again",
         "sound returned",
         "the sound returned",
         "sound came back",
@@ -1795,6 +1837,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             "set the volume high",
             "put the sound on mute",
             "put sound on mute",
+            "set notifications to audible",
+            "put notifications on loud",
         )
     )
     allow_completion_pronoun = pending and any(
@@ -1802,9 +1846,15 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         for phrase in NOTIFICATION_LOUDNESS_COMPLETION_PRONOUN_PHRASES
     )
     has_indirect_positive_mute_action = _notification_loudness_has_indirect_positive_mute_action(normalized)
-    has_positive_unmute_phrase = any(
-        _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
+    has_positive_unmute_phrase = _notification_loudness_has_unnegated_phrase(
+        normalized, NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
     ) or has_indirect_positive_mute_action
+    has_negated_positive_unmute_phrase = _notification_loudness_has_negated_phrase(
+        polarity_normalized, NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
+    ) or any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in NOTIFICATION_LOUDNESS_NEGATED_POSITIVE_MUTE_PHRASES
+    )
     has_failed_action = _notification_loudness_has_failed_action(normalized)
     has_successful_ability_action = _notification_loudness_has_successful_ability_action(normalized)
     has_notification_context = has_notification_context or has_positive_unmute_phrase
@@ -1887,8 +1937,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             has_indirect_positive_mute_action
             or _notification_loudness_has_indirect_positive_mute_action(normalized)
         )
-        has_positive_unmute_phrase = any(
-            _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
+        has_positive_unmute_phrase = _notification_loudness_has_unnegated_phrase(
+            normalized, NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
         ) or has_indirect_positive_mute_action
         has_notification_context = has_notification_context or has_positive_unmute_phrase
         has_completed_action_positive, has_completed_action_negative = _notification_loudness_completed_action_polarity(
@@ -1941,6 +1991,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and not _notification_loudness_has_sequenced_action_status(polarity_normalized)
         and not has_explicit_confirmation
         and not allow_completion_pronoun
+        and not has_positive_unmute_phrase
     ):
         return None
     has_audibility_state = _notification_loudness_has_audibility_state(normalized)
@@ -1962,7 +2013,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     )
     if has_volume_positive and has_volume_negative:
         return None
-    if has_completed_action_positive and has_completed_action_negative:
+    if has_completed_action_positive and has_completed_action_negative and not has_negated_positive_unmute_phrase:
         return None
     if has_attributive_positive and has_attributive_negative:
         return None
@@ -2022,9 +2073,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(
             scoped_normalized, NOTIFICATION_LOUDNESS_OFF_TERMS
         )
-        has_positive_unmute_phrase = any(
-            _contains_normalized_phrase(scoped_normalized, phrase)
-            for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
+        has_positive_unmute_phrase = _notification_loudness_has_unnegated_phrase(
+            scoped_normalized, NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
         ) or _notification_loudness_has_indirect_positive_mute_action(scoped_normalized)
         has_positive_current_status = _notification_loudness_has_positive_current_status(
             scoped_normalized
@@ -2067,6 +2117,18 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "notification on",
         "notifications enabled",
         "notification enabled",
+        "silent mode is turned off",
+        "silent mode was turned off",
+        "silent mode is disabled",
+        "silent mode is deactivated",
+        "quiet mode is turned off",
+        "quiet mode was turned off",
+        "quiet mode is disabled",
+        "quiet mode is deactivated",
+        "lautlosmodus aus",
+        "lautlosmodus ist aus",
+        "stummmodus aus",
+        "stummmodus ist aus",
         "nicht aus",
         "not off",
         "ist laut",
@@ -2102,6 +2164,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "made messages loud",
         "made notifications loud",
         "set notifications to loud",
+        "set notifications to audible",
+        "put notifications on loud",
+        "the notification volume is higher now",
+        "notification volume is higher",
+        "the sound is audible again",
+        "sound is audible again",
         "set them to loud",
         "kann die nachrichten jetzt hoeren",
         "kann die benachrichtigungen jetzt hoeren",
@@ -2262,6 +2330,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "have not completed",
         "haven t completed",
         "not yet",
+        "silent mode is not turned off",
+        "silent mode was not turned off",
+        "silent mode is not disabled",
+        "quiet mode is not turned off",
+        "quiet mode was not turned off",
+        "quiet mode is not disabled",
         "keine benachrichtigung",
         "keine benachrichtigungen",
         "benachrichtigungen aus",
@@ -2390,6 +2464,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_negated_confirmed_phrase = _notification_loudness_has_negated_phrase(
         status_scope_polarity, confirmed_needles
     )
+    has_negated_positive_unmute_phrase = _notification_loudness_has_negated_phrase(
+        polarity_normalized, NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
+    ) or any(
+        _contains_normalized_phrase(status_scope_normalized, phrase)
+        for phrase in NOTIFICATION_LOUDNESS_NEGATED_POSITIVE_MUTE_PHRASES
+    )
     has_declined_phrase = any(
         _contains_normalized_phrase(status_scope_normalized, needle)
         for needle in declined_needles
@@ -2441,6 +2521,13 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or (
             has_negated_completion
             and not (has_completion_pronoun_prefix and later_current_status_segment)
+        )
+        or (
+            has_negated_positive_unmute_phrase
+            and not (
+                later_current_status_segment
+                and _notification_loudness_is_explicit_status_segment(later_current_status_segment)
+            )
         )
         or (has_negated_confirmed_phrase and not has_absolute_negative_positive_inner_negation)
         or (has_negative_current_status and not has_absolute_negative_positive_inner_negation)
@@ -5231,6 +5318,27 @@ def _notification_loudness_phrase_is_negated(normalized: str, phrase: str) -> bo
             tokens, max(0, index - 3), index
         ) % 2:
             return True
+    return False
+
+
+def _notification_loudness_has_unnegated_phrase(normalized: str, phrases: tuple[str, ...]) -> bool:
+    """Return true when at least one matching phrase occurrence is unnegated."""
+    tokens = normalized.split()
+    for phrase in phrases:
+        phrase_tokens = phrase.split()
+        width = len(phrase_tokens)
+        for index in range(len(tokens) - width + 1):
+            if tokens[index : index + width] != phrase_tokens:
+                continue
+            preceding_start = max(0, index - 3)
+            for boundary_index in range(preceding_start, index):
+                if (
+                    tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                    or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+                ):
+                    preceding_start = boundary_index + 1
+            if _notification_loudness_scoped_negation_count(tokens, preceding_start, index) % 2 == 0:
+                return True
     return False
 
 
