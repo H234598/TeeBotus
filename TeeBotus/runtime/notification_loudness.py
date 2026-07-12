@@ -1909,6 +1909,19 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(
         polarity_normalized, NOTIFICATION_LOUDNESS_OFF_TERMS
     )
+    historical_causal_prefix = _notification_loudness_historical_causal_prefix(polarity_normalized)
+    if historical_causal_prefix:
+        has_unnegated_mute, has_negated_mute = _notification_loudness_mute_polarity(
+            historical_causal_prefix
+        )
+        has_unnegated_german_still, has_negated_german_still = _notification_loudness_german_still_polarity(
+            historical_causal_prefix
+        )
+        has_unnegated_mute = has_unnegated_mute or has_unnegated_german_still
+        has_negated_mute = has_negated_mute or has_negated_german_still
+        has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(
+            historical_causal_prefix, NOTIFICATION_LOUDNESS_OFF_TERMS
+        )
     has_negated_completion = _notification_loudness_has_negated_phrase(
         polarity_normalized, NOTIFICATION_LOUDNESS_COMPLETION_PHRASES
     )
@@ -1994,7 +2007,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     )
     if (
         (has_notification_context or (pending and has_completion_phrase and not has_negated_completion))
-        and _notification_loudness_has_historical_marker(normalized)
+        and _notification_loudness_has_historical_marker(historical_causal_prefix or normalized)
         and not (
             _notification_loudness_has_recent_completion_marker(normalized)
             or temporal_segment
@@ -3984,6 +3997,36 @@ def _notification_loudness_has_historical_marker(normalized: str) -> bool:
     )
 
 
+def _notification_loudness_historical_causal_prefix(normalized: str) -> str | None:
+    """Return the asserted prefix when a causal tail only describes the past."""
+    tokens = normalized.split()
+    causal_terms = {"because", "since", "as", "weil", "da", "denn"}
+    past_copulas = {"was", "were", "war", "waren", "had", "hatte", "hatten"}
+    state_terms = (
+        set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS)
+        | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
+        | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+    )
+    boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
+        NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+    }
+    for connector_index, token in enumerate(tokens):
+        if token not in causal_terms:
+            continue
+        tail_end = len(tokens)
+        for boundary_index in range(connector_index + 1, len(tokens)):
+            if tokens[boundary_index] in boundaries:
+                tail_end = boundary_index
+                break
+        tail = tokens[connector_index + 1 : tail_end]
+        if not set(tail) & past_copulas or not set(tail) & state_terms:
+            continue
+        if set(tail) & set(NOTIFICATION_LOUDNESS_CURRENT_TIME_MARKER_PHRASES):
+            continue
+        return " ".join(tokens[:connector_index])
+    return None
+
+
 def _notification_loudness_has_failed_action(normalized: str) -> bool:
     if any(
         _contains_normalized_phrase(normalized, phrase)
@@ -5066,6 +5109,15 @@ def _notification_loudness_completed_action_polarity(
 ) -> tuple[bool, bool]:
     if not has_notification_context:
         return False, False
+    action_boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
+        NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN,
+        "because",
+        "since",
+        "as",
+        "weil",
+        "da",
+        "denn",
+    }
     tokens = normalized.split()
     actions = {
         "set",
@@ -5171,15 +5223,14 @@ def _notification_loudness_completed_action_polarity(
             continue
         for action_index in range(auxiliary_index + 1, min(len(tokens), auxiliary_index + 10)):
             action = tokens[action_index]
-            if action in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES:
+            if action in action_boundaries:
                 break
             if action not in actions:
                 continue
             tail_end = min(len(tokens), action_index + 10)
             for boundary_index in range(action_index + 1, tail_end):
                 if (
-                    tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
-                    or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+                    tokens[boundary_index] in action_boundaries
                 ):
                     tail_end = boundary_index
                     break
@@ -5296,15 +5347,13 @@ def _notification_loudness_completed_action_polarity(
         context_start = max(0, action_index - 5)
         for boundary_index in range(context_start, action_index):
             if (
-                tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
-                or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+                tokens[boundary_index] in action_boundaries
             ):
                 context_start = boundary_index + 1
         context_end = min(len(tokens), action_index + 10)
         for boundary_index in range(action_index + 1, context_end):
             if (
-                tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
-                or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+                tokens[boundary_index] in action_boundaries
             ):
                 context_end = boundary_index
                 break
@@ -5430,8 +5479,7 @@ def _notification_loudness_completed_action_polarity(
         context_end = min(len(tokens), action_index + 12)
         for boundary_index in range(action_index + 1, context_end):
             if (
-                tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
-                or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+                tokens[boundary_index] in action_boundaries
             ):
                 context_end = boundary_index
                 break
