@@ -1526,6 +1526,23 @@ def test_loudness_free_text_recognizes_persistent_current_statuses() -> None:
     assert _notification_loudness_decision("Remain loud", pending=False) is None
 
 
+def test_loudness_free_text_recognizes_returned_sound_states() -> None:
+    assert _notification_loudness_decision("Notifications are back on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are back to being loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Notifications came back on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications have returned to being loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("The sound returned", pending=True) == "confirmed"
+    assert _notification_loudness_decision("The sound came back", pending=False) == "confirmed"
+    assert _notification_loudness_decision("The sound has returned", pending=True) == "confirmed"
+    assert _notification_loudness_decision("The sound was restored", pending=False) == "confirmed"
+    assert _notification_loudness_decision("The notification sound was brought back", pending=True) == "confirmed"
+    assert _notification_loudness_decision("The sound is gone again", pending=False) == "declined"
+    assert _notification_loudness_decision("Der Nachrichtenton kam zurück", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Der Ton ist zurückgekehrt", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Notifications were restored", pending=True) is None
+    assert _notification_loudness_decision("The sound was not restored", pending=False) is None
+
+
 def test_loudness_free_text_recognizes_audibility_reports() -> None:
     assert _notification_loudness_decision("Die Nachrichten klingeln jetzt", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich kann die Nachrichten jetzt hören", pending=False) == "confirmed"
