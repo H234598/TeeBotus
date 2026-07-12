@@ -2011,6 +2011,20 @@ def test_loudness_free_text_scopes_negated_attempts_and_gerunds() -> None:
     )
 
 
+def test_loudness_free_text_recognizes_successful_action_polarity() -> None:
+    assert _notification_loudness_decision("I succeeded in enabling notifications", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I managed to enable notifications", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I succeeded in disabling notifications", pending=True) == "declined"
+    assert _notification_loudness_decision("I managed to disable notifications", pending=False) == "declined"
+    assert _notification_loudness_decision("I succeeded in unmuting notifications", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I managed to unmute notifications", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I tried to enable notifications", pending=True) is None
+    assert _notification_loudness_decision("I managed to enable the chat", pending=True) is None
+    assert _notification_loudness_decision("I succeeded in disabling the thread", pending=False) is None
+    assert _notification_loudness_decision("The chat is muted", pending=True) == "declined"
+    assert _notification_loudness_decision("The conversation is unmuted", pending=False) == "confirmed"
+
+
 def test_loudness_free_text_does_not_decide_historical_status_as_current() -> None:
     assert _notification_loudness_decision("I used to have notifications on", pending=True) is None
     assert _notification_loudness_decision("I formerly had notifications on", pending=False) is None

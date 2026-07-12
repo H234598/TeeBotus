@@ -2798,6 +2798,154 @@ def _notification_loudness_completed_action_polarity(
                 positive = True
             else:
                 negative = True
+    successful_prefixes = (
+        ("succeeded", "in"),
+        ("managed", "to"),
+        ("managed", "not", "to"),
+        ("was", "able", "to"),
+        ("were", "able", "to"),
+        ("have", "been", "able", "to"),
+        ("has", "been", "able", "to"),
+        ("was", "able", "not", "to"),
+        ("were", "able", "not", "to"),
+        ("have", "been", "able", "not", "to"),
+        ("has", "been", "able", "not", "to"),
+    )
+    successful_actions = {
+        "turn",
+        "turned",
+        "turning",
+        "switch",
+        "switched",
+        "switching",
+        "set",
+        "setting",
+        "put",
+        "putting",
+        "make",
+        "made",
+        "making",
+        "keep",
+        "keeping",
+        "leave",
+        "leaving",
+        "enable",
+        "enabled",
+        "enabling",
+        "activate",
+        "activated",
+        "activating",
+        "disable",
+        "disabled",
+        "disabling",
+        "deactivate",
+        "deactivated",
+        "deactivating",
+        "mute",
+        "muted",
+        "muting",
+        "silence",
+        "silenced",
+        "silencing",
+        "unmute",
+        "unmuted",
+        "unmuting",
+    }
+    for prefix_start in range(len(tokens)):
+        matched_prefix = next(
+            (
+                prefix
+                for prefix in sorted(successful_prefixes, key=len, reverse=True)
+                if tokens[prefix_start : prefix_start + len(prefix)] == list(prefix)
+            ),
+            None,
+        )
+        if matched_prefix is None:
+            continue
+        action_index = prefix_start + len(matched_prefix)
+        if action_index >= len(tokens):
+            continue
+        if tokens[action_index] == "not":
+            action_index += 1
+        if action_index >= len(tokens):
+            continue
+        action = tokens[action_index]
+        if action not in successful_actions:
+            continue
+        context_end = min(len(tokens), action_index + 12)
+        for boundary_index in range(action_index + 1, context_end):
+            if (
+                tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+            ):
+                context_end = boundary_index
+                break
+        tail = tokens[action_index + 1 : context_end]
+        if (
+            set(tail) & {"chat", "conversation", "thread"}
+            and not set(tokens)
+            & {
+                "nachricht",
+                "nachrichten",
+                "message",
+                "messages",
+                "benachrichtigung",
+                "benachrichtigungen",
+                "notification",
+                "notifications",
+                "push",
+                "alert",
+                "alerts",
+            }
+            and action
+            in {
+                "enable",
+                "enabled",
+                "enabling",
+                "activate",
+                "activated",
+                "activating",
+                "disable",
+                "disabled",
+                "disabling",
+                "deactivate",
+                "deactivated",
+                "deactivating",
+            }
+        ):
+            continue
+        has_positive_target = bool(set(tail) & positive_targets)
+        has_negative_target = bool(set(tail) & negative_targets)
+        if action in {"enable", "enabled", "enabling", "activate", "activated", "activating"}:
+            if set(tail) & subjects:
+                has_positive_target = True
+        if action in {
+            "disable",
+            "disabled",
+            "disabling",
+            "deactivate",
+            "deactivated",
+            "deactivating",
+        }:
+            if set(tail) & subjects:
+                has_negative_target = True
+        if action in {"unmute", "unmuted", "unmuting"}:
+            if set(tail) & subjects:
+                has_positive_target = True
+        if action in {"mute", "muted", "muting", "silence", "silenced", "silencing"}:
+            if set(tail) & subjects:
+                has_negative_target = True
+        if not has_positive_target and not has_negative_target:
+            continue
+        action_negated = _notification_loudness_negation_count(
+            tokens[prefix_start:action_index]
+        ) % 2 == 1
+        if action_negated:
+            has_positive_target, has_negative_target = has_negative_target, has_positive_target
+        if has_positive_target:
+            positive = True
+        if has_negative_target:
+            negative = True
     has_perfect_never = bool(
         {"habe", "haben", "hat", "have", "has"}.intersection(tokens)
         and {"nie", "niemals", "never"}.intersection(tokens)
