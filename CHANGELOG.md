@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.212 - 2026-07-12
+
+- Recognize simple-past notification actions without reclassifying status phrases.
+
 ## 1.9.211 - 2026-07-12
 
 - Classify able/unable notification actions without confusing current ability with completion.

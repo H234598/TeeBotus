@@ -1422,6 +1422,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
                 has_positive_unmute_phrase
                 and needle in {"notifications off", "notification off", "benachrichtigungen aus"}
             )
+            and not (
+                has_completed_action_positive
+                and needle in {"notifications off", "notification off", "benachrichtigungen aus"}
+            )
         )
     )
     has_declined_phrase = (
@@ -2397,6 +2401,61 @@ def _notification_loudness_completed_action_polarity(
                     positive = True
                 else:
                     negative = True
+    simple_past_actions = {
+        "turned",
+        "switched",
+        "enabled",
+        "activated",
+        "muted",
+        "silenced",
+        "disabled",
+        "unmuted",
+        "made",
+        "set",
+        "put",
+        "stellte",
+        "schaltete",
+        "machte",
+        "setzte",
+        "gestellt",
+        "geschaltet",
+        "gemacht",
+        "gesetzt",
+    }
+    for action_index, action in enumerate(tokens):
+        if action not in simple_past_actions:
+            continue
+        if any(
+            tokens[candidate] in {"ist", "sind", "war", "waren", "is", "are", "were"}
+            for candidate in range(max(0, action_index - 5), action_index)
+        ):
+            continue
+        context = tokens[max(0, action_index - 5) : min(len(tokens), action_index + 10)]
+        if action in {"muted", "silenced", "disabled", "unmuted", "enabled", "activated"} and not (
+            set(context) & subjects
+        ):
+            continue
+        has_positive_target = bool(set(context) & positive_targets)
+        has_negative_target = bool(set(context) & negative_targets)
+        if action in {"enabled", "activated"} and set(context) & subjects:
+            has_positive_target = True
+        if action in {"muted", "silenced", "disabled"} and set(context) & subjects:
+            has_negative_target = True
+        if not has_positive_target and not has_negative_target:
+            continue
+        negated = _notification_loudness_scoped_negation_count(
+            tokens, max(0, action_index - 5), action_index
+        ) % 2 == 1
+        if has_positive_target:
+            if negated:
+                negative = True
+            else:
+                positive = True
+        if has_negative_target:
+            if negated:
+                positive = True
+            else:
+                negative = True
     has_perfect_never = bool(
         {"habe", "haben", "hat", "have", "has"}.intersection(tokens)
         and {"nie", "niemals", "never"}.intersection(tokens)

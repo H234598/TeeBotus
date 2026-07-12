@@ -1898,6 +1898,10 @@ def test_loudness_free_text_does_not_decide_historical_status_as_current() -> No
     assert _notification_loudness_decision("I formerly had notifications on", pending=False) is None
     assert _notification_loudness_decision("I previously had notifications on", pending=True) is None
     assert _notification_loudness_decision("I had notifications on yesterday", pending=False) is None
+    assert _notification_loudness_decision("I never turned notifications on", pending=True) == "declined"
+    assert _notification_loudness_decision("I never turned notifications off", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I never muted notifications", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I never unmuted notifications", pending=False) == "declined"
     assert _notification_loudness_decision("Die Nachrichten waren vorher nicht stumm", pending=True) is None
     assert _notification_loudness_decision("Gestern waren die Nachrichten laut", pending=False) is None
     assert _notification_loudness_decision("I have notifications on now", pending=True) == "confirmed"
@@ -1911,6 +1915,9 @@ def test_loudness_free_text_does_not_decide_historical_status_as_current() -> No
     assert _notification_loudness_decision("Notifications were newly enabled", pending=False) == "confirmed"
     assert _notification_loudness_decision("Messages were just muted", pending=True) == "declined"
     assert _notification_loudness_decision("Notifications were recently disabled", pending=False) == "declined"
+    assert _notification_loudness_decision("Ich stellte die Nachrichten laut", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich stellte die Nachrichten stumm", pending=False) == "declined"
+    assert _notification_loudness_decision("Ich habe die Nachrichten nie stumm gestellt", pending=True) == "confirmed"
     assert _notification_loudness_decision(
         "I muted notifications yesterday, but they are loud now", pending=True
     ) == "confirmed"
