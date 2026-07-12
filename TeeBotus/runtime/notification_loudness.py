@@ -3948,6 +3948,14 @@ def _notification_loudness_completed_action_polarity(
         target_negative = False
         for target_index in range(start, end):
             target = tokens[target_index]
+            if (
+                target == "on"
+                and target_index > start
+                and tokens[target_index - 1] == "now"
+                and "from" in tokens[max(start, target_index - 3) : target_index - 1]
+            ):
+                # In ``from (right) now on``, ``on`` is a time preposition.
+                continue
             if target not in positive_targets | negative_targets:
                 continue
             target_negated = _notification_loudness_scoped_negation_count(
