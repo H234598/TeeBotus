@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.151 - 2026-07-12
+
+- Ignore memory/recall uncertainty in loudness responses.
+
 ## 1.9.150 - 2026-07-12
 
 - Ignore whether/theoretical loudness statements.
