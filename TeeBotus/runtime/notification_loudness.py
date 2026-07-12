@@ -2427,19 +2427,31 @@ def _notification_loudness_has_reply_status_context(text: str) -> bool:
 
 
 def _notification_loudness_pending_modified_reply_decision(normalized: str) -> str | None:
-    """Accept a known short reply followed only by current-state modifiers."""
+    """Accept a known short reply surrounded only by current-state modifiers."""
     tokens = normalized.split()
+    reply_modifiers = set(NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS) - {
+        "any",
+        "no",
+        "mehr",
+        "longer",
+    }
     for replies, decision in (
         (NOTIFICATION_LOUDNESS_PENDING_POSITIVE_STATUS_REPLIES, "confirmed"),
         (NOTIFICATION_LOUDNESS_PENDING_NEGATIVE_STATUS_REPLIES, "declined"),
     ):
         for reply in sorted(replies, key=len, reverse=True):
             reply_tokens = reply.split()
-            if tokens[: len(reply_tokens)] != reply_tokens:
-                continue
-            suffix = tokens[len(reply_tokens) :]
-            if suffix and all(token in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for token in suffix):
-                return decision
+            for prefix_length in range(len(tokens) - len(reply_tokens) + 1):
+                prefix = tokens[:prefix_length]
+                if not all(token in reply_modifiers for token in prefix):
+                    continue
+                start = prefix_length
+                end = start + len(reply_tokens)
+                if tokens[start:end] != reply_tokens:
+                    continue
+                suffix = tokens[end:]
+                if all(token in reply_modifiers for token in suffix):
+                    return decision
     return None
 
 
