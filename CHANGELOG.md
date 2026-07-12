@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.141 - 2026-07-12
+
+- Ignore first-person negated mute/keep/turn intentions.
+
 ## 1.9.140 - 2026-07-12
 
 - Respect positive unmute phrases without misclassifying requests.
