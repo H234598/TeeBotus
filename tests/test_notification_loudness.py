@@ -1442,6 +1442,14 @@ def test_loudness_free_text_recognizes_negative_current_status_with_modifiers() 
     assert _notification_loudness_decision("Notifications are not off", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_rejects_extended_uncertainty_phrasing() -> None:
+    assert _notification_loudness_decision("Ich weiß es nicht genau", pending=True) is None
+    assert _notification_loudness_decision(
+        "Ja, die Nachrichten sind laut, aber ich weiß es nicht genau", pending=True
+    ) is None
+    assert _notification_loudness_decision("I am not exactly sure if I did it", pending=True) is None
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None

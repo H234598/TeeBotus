@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.167 - 2026-07-12
+
+- Reject extended uncertainty phrasing in loudness replies.
+
 ## 1.9.166 - 2026-07-12
 
 - Recognize negative current notification states with modifiers.
