@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.175 - 2026-07-12
+
+- Keep partial set quantifiers undecided.
+
 ## 1.9.174 - 2026-07-12
 
 - Handle absolute negative quantifier variants across languages.

@@ -1515,6 +1515,14 @@ def test_loudness_free_text_handles_absolute_negative_quantifier_variants() -> N
     assert _notification_loudness_decision("No notifications are not muted", pending=False) == "declined"
 
 
+def test_loudness_free_text_keeps_partial_set_quantifiers_undecided() -> None:
+    assert _notification_loudness_decision("Most messages are loud", pending=True) is None
+    assert _notification_loudness_decision("Viele Nachrichten sind laut", pending=False) is None
+    assert _notification_loudness_decision("Almost all notifications are enabled", pending=True) is None
+    assert _notification_loudness_decision("At least one message is loud", pending=False) is None
+    assert _notification_loudness_decision("All but one notification is muted", pending=True) is None
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None
