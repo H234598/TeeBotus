@@ -3946,15 +3946,22 @@ def _notification_loudness_completed_action_polarity(
     def target_polarity(start: int, end: int) -> tuple[bool, bool]:
         target_positive = False
         target_negative = False
+        temporal_on_phrases = (
+            ("from", "now", "on"),
+            ("from", "right", "now", "on"),
+            ("from", "this", "point", "on"),
+            ("from", "here", "on"),
+            ("from", "then", "on"),
+        )
         for target_index in range(start, end):
             target = tokens[target_index]
-            if (
+            if any(
                 target == "on"
-                and target_index > start
-                and tokens[target_index - 1] == "now"
-                and "from" in tokens[max(start, target_index - 3) : target_index - 1]
+                and target_index - len(phrase) + 1 >= start
+                and tuple(tokens[target_index - len(phrase) + 1 : target_index + 1]) == phrase
+                for phrase in temporal_on_phrases
             ):
-                # In ``from (right) now on``, ``on`` is a time preposition.
+                # In these phrases, ``on`` is temporal rather than a state.
                 continue
             if target not in positive_targets | negative_targets:
                 continue
