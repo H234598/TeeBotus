@@ -2121,8 +2121,13 @@ def test_loudness_free_text_handles_unmute_noun_phrasing() -> None:
     assert _notification_loudness_decision("Ich habe die Stummschaltung entfernt", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich habe die Stummschaltung aufgehoben", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich habe die Stummschaltung ausgeschaltet", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich habe die Stummschaltung ausgemacht", pending=True) == "confirmed"
     assert _notification_loudness_decision("Die Stummschaltung wurde entfernt", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich habe die Stummschaltung nicht entfernt", pending=True) == "declined"
+    assert _notification_loudness_decision("I turned off the mute", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I switched off the mute", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I switched the mute off", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I turned the mute off", pending=True) == "confirmed"
     assert _notification_loudness_decision("Messages are free of mute", pending=False) == "confirmed"
     assert _notification_loudness_decision("The chat is free from silence", pending=True) == "confirmed"
 
