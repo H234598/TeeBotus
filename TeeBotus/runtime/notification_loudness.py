@@ -341,6 +341,8 @@ NOTIFICATION_LOUDNESS_CURRENT_TIME_MARKER_PHRASES = (
     "gerade",
     "derzeit",
     "momentan",
+    "inzwischen",
+    "mittlerweile",
     "heute",
     "neuerdings",
 )
@@ -748,6 +750,8 @@ NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
         "momentan",
         "bislang",
         "bisher",
+        "inzwischen",
+        "mittlerweile",
         "permanently",
         "persistently",
         "continuously",
