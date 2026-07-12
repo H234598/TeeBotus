@@ -191,6 +191,8 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "i switch ",
     "i mute ",
     "i set ",
+    "i take ",
+    "i remove ",
     "i keep ",
     "i will ",
     "i am going to ",
@@ -214,6 +216,8 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "please turn ",
     "please keep ",
     "please set ",
+    "please take ",
+    "please remove ",
     "please make ",
     "don t mute ",
     "do not mute ",
@@ -240,6 +244,9 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "können ",
     "koennen ",
     "turn ",
+    "take ",
+    "remove ",
+    "set ",
     "keep ",
     "kannst du ",
     "koenntest du ",
@@ -301,6 +308,13 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "switched them on",
     "enabled them",
     "unmuted",
+)
+NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES = (
+    "off mute",
+    "off of mute",
+    "removed mute",
+    "taken off mute",
+    "taken off of mute",
 )
 NOTIFICATION_LOUDNESS_ACTION_WORDS = frozenset({"hab", "habe", "haben", "getan", "gemacht", "erledigt", "did", "done"})
 NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS = frozenset({"ja", "yes", "jep", "jo", "ok", "okay", "klar"})
@@ -565,6 +579,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_negated_completion = _notification_loudness_has_negated_phrase(
         polarity_normalized, NOTIFICATION_LOUDNESS_COMPLETION_PHRASES
     )
+    has_positive_unmute_phrase = any(
+        _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
+    )
     if has_notification_context and _notification_loudness_has_uncertainty(normalized):
         return None
     if has_notification_context and _notification_loudness_has_historical_marker(normalized):
@@ -678,19 +695,27 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_declined_phrase = any(
         _contains_normalized_phrase(normalized, needle)
         for needle in declined_needles
-        if needle not in {
-            "keine benachrichtigung",
-            "keine benachrichtigungen",
-            "did not",
-            "didn t",
-            "haven t",
-        }
-        or not (has_negated_mute or has_negated_off)
+        if (
+            (
+                needle not in {
+                    "keine benachrichtigung",
+                    "keine benachrichtigungen",
+                    "did not",
+                    "didn t",
+                    "haven t",
+                }
+                or not (has_negated_mute or has_negated_off)
+            )
+            and not (
+                has_positive_unmute_phrase
+                and needle in {"notifications off", "notification off", "benachrichtigungen aus"}
+            )
+        )
     )
     has_declined_phrase = (
         has_declined_phrase
-        or has_unnegated_mute
-        or has_unnegated_off
+        or (has_unnegated_mute and not has_positive_unmute_phrase)
+        or (has_unnegated_off and not has_positive_unmute_phrase)
         or has_negated_completion
         or has_negated_confirmed_phrase
     )
@@ -730,6 +755,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         )
         or has_negated_mute
         or has_negated_off
+        or has_positive_unmute_phrase
     ):
         return "confirmed"
     if has_notification_context and has_declined_phrase:

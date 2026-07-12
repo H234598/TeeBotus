@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.140 - 2026-07-12
+
+- Respect positive unmute phrases without misclassifying requests.
+
 ## 1.9.139 - 2026-07-12
 
 - Keep punctuated pronoun questions undecided.
