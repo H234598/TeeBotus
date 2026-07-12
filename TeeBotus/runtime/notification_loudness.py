@@ -268,6 +268,22 @@ NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES = (
     "were ",
     "no longer",
 )
+NOTIFICATION_LOUDNESS_CURRENT_TIME_MARKER_PHRASES = (
+    "now",
+    "right now",
+    "just now",
+    "currently",
+    "at the moment",
+    "today",
+    "jetzt",
+    "nun",
+    "aktuell",
+    "gerade",
+    "derzeit",
+    "momentan",
+    "heute",
+    "neuerdings",
+)
 NOTIFICATION_LOUDNESS_NON_ASSERTIVE_STARTS = (
     "if ",
     "when ",
@@ -985,12 +1001,40 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     if has_notification_context and _notification_loudness_has_partial_quantifier(normalized):
         return None
+    temporal_segment = _notification_loudness_current_temporal_segment(
+        _normalize_text_for_polarity(text)
+    )
     if (
         has_notification_context
         and _notification_loudness_has_historical_marker(normalized)
-        and not _notification_loudness_has_recent_completion_marker(normalized)
+        and not (
+            _notification_loudness_has_recent_completion_marker(normalized)
+            or temporal_segment
+        )
     ):
         return None
+    if temporal_segment:
+        normalized = temporal_segment
+        polarity_normalized = normalized
+        has_unnegated_mute, has_negated_mute = _notification_loudness_mute_polarity(polarity_normalized)
+        has_unnegated_german_still, has_negated_german_still = _notification_loudness_german_still_polarity(
+            polarity_normalized
+        )
+        has_unnegated_mute = has_unnegated_mute or has_unnegated_german_still
+        has_negated_mute = has_negated_mute or has_negated_german_still
+        has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(
+            polarity_normalized, NOTIFICATION_LOUDNESS_OFF_TERMS
+        )
+        has_negated_completion = _notification_loudness_has_negated_phrase(
+            polarity_normalized, NOTIFICATION_LOUDNESS_COMPLETION_PHRASES
+        )
+        has_positive_unmute_phrase = any(
+            _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
+        )
+        has_notification_context = has_notification_context or has_positive_unmute_phrase
+        has_completed_action_positive, has_completed_action_negative = _notification_loudness_completed_action_polarity(
+            normalized, has_notification_context=has_notification_context
+        )
     if has_notification_context and _notification_loudness_has_habitual_marker(normalized) and not (
         has_completed_action_positive or has_completed_action_negative
     ):
@@ -1853,6 +1897,56 @@ def _notification_loudness_has_historical_marker(normalized: str) -> bool:
     )
 
 
+def _notification_loudness_has_current_temporal_contrast(normalized: str) -> bool:
+    return _notification_loudness_current_temporal_segment(normalized) is not None
+
+
+def _notification_loudness_current_temporal_segment(normalized: str) -> str | None:
+    tokens = normalized.split()
+    historical_phrases = tuple(_normalize_text(phrase.strip()).split() for phrase in NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES)
+    current_phrases = tuple(_normalize_text(phrase).split() for phrase in NOTIFICATION_LOUDNESS_CURRENT_TIME_MARKER_PHRASES)
+    historical_ranges: list[tuple[int, int]] = []
+    current_starts: list[int] = []
+    for phrase in historical_phrases:
+        width = len(phrase)
+        historical_ranges.extend(
+            (index, index + width)
+            for index in range(len(tokens) - width + 1)
+            if tokens[index : index + width] == phrase
+        )
+    for phrase in current_phrases:
+        width = len(phrase)
+        current_starts.extend(
+            index
+            for index in range(len(tokens) - width + 1)
+            if tokens[index : index + width] == phrase
+        )
+    candidates: list[tuple[int, int]] = []
+    for historical_start, historical_end in historical_ranges:
+        for current_start in current_starts:
+            if current_start < historical_end:
+                continue
+            between = tokens[historical_end:current_start]
+            if not between or any(
+                token in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                or token == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+                for token in between
+            ):
+                boundary_indices = [
+                    index
+                    for index in range(historical_end, current_start)
+                    if tokens[index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                    or tokens[index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+                ]
+                segment_start = (max(boundary_indices) + 1) if boundary_indices else historical_end
+                candidates.append((current_start, segment_start))
+    if not candidates:
+        return None
+    _, segment_start = max(candidates)
+    segment = [token for token in tokens[segment_start:] if token != NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN]
+    return " ".join(segment) or None
+
+
 def _notification_loudness_has_partial_quantifier(normalized: str) -> bool:
     return any(
         _contains_normalized_phrase(normalized, _normalize_text(phrase))
@@ -1968,6 +2062,11 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
         "benachrichtigungston",
         "notification",
         "notifications",
+        "sie",
+        "die",
+        "das",
+        "they",
+        "it",
     }
     for status_index, token in enumerate(tokens):
         if token not in NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS:

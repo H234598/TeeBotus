@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.200 - 2026-07-12
+
+- Prefer the current temporal clause over stale historical notification states.
+
 ## 1.9.199 - 2026-07-12
 
 - Distinguish English temporal `still` from German quiet-state `still` and preserve temporally modified non-assertive intents.
