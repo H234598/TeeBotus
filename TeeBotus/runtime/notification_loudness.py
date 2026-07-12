@@ -2581,7 +2581,25 @@ def _notification_loudness_has_indirect_positive_mute_action(normalized: str) ->
             continue
         if set(tail) & negative_action_terms and ("from" in tail or "dass" in tail or "zu" in tail):
             return True
-        if set(tail) & negative_action_terms and tail and tail[0] in negative_action_terms:
+        if (
+            relation
+            in {
+                "prevent",
+                "prevented",
+                "preventing",
+                "verhindern",
+                "verhindert",
+                "verhindere",
+                "verhinderte",
+                "bewahren",
+                "bewahrt",
+                "bewahre",
+                "bewahrte",
+            }
+            and set(tail) & negative_action_terms
+            and tail
+            and tail[0] in negative_action_terms
+        ):
             return True
     return False
 

@@ -2097,6 +2097,7 @@ def test_loudness_free_text_prioritizes_current_status_after_indirect_action() -
     assert _notification_loudness_decision(
         "Die Nachrichten wurden davor bewahrt, stumm geschaltet zu werden", pending=False
     ) == "confirmed"
+    assert _notification_loudness_decision("The messages were kept muted", pending=True) is None
 
 
 def test_loudness_free_text_does_not_decide_historical_status_as_current() -> None:
