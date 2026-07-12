@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.157 - 2026-07-12
+
+- Ignore modal loudness intentions and obligations.
+
 ## 1.9.156 - 2026-07-12
 
 - Handle indirect inability-to-know loudness statements.
