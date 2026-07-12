@@ -1480,13 +1480,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             has_unnegated_mute
             and not has_positive_unmute_phrase
             and not has_absolute_negative_mute
-            and not has_completed_action_positive
         )
         or (
             has_unnegated_off
             and not has_positive_unmute_phrase
             and not has_absolute_negative_off
-            and not has_completed_action_positive
         )
         or has_negated_completion
         or (has_negated_confirmed_phrase and not has_absolute_negative_positive_inner_negation)
@@ -2602,7 +2600,15 @@ def _notification_loudness_completed_action_polarity(
                 break
             if action not in actions:
                 continue
-            tail = tokens[action_index + 1 : min(len(tokens), action_index + 10)]
+            tail_end = min(len(tokens), action_index + 10)
+            for boundary_index in range(action_index + 1, tail_end):
+                if (
+                    tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                    or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+                ):
+                    tail_end = boundary_index
+                    break
+            tail = tokens[action_index + 1 : tail_end]
             has_positive_target = bool(set(tail) & positive_targets)
             has_negative_target = bool(set(tail) & negative_targets)
             if action in {"enabled", "activated"} and set(tail) & subjects:
@@ -2666,7 +2672,22 @@ def _notification_loudness_completed_action_polarity(
             for candidate in range(max(0, action_index - 5), action_index)
         ):
             continue
-        context = tokens[max(0, action_index - 5) : min(len(tokens), action_index + 10)]
+        context_start = max(0, action_index - 5)
+        for boundary_index in range(context_start, action_index):
+            if (
+                tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+            ):
+                context_start = boundary_index + 1
+        context_end = min(len(tokens), action_index + 10)
+        for boundary_index in range(action_index + 1, context_end):
+            if (
+                tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+            ):
+                context_end = boundary_index
+                break
+        context = tokens[context_start:context_end]
         if action in {
             "muted",
             "mute",

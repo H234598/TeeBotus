@@ -1228,6 +1228,14 @@ def test_loudness_free_text_does_not_leak_negation_across_clauses() -> None:
     assert _notification_loudness_decision("Notifications are not muted, not loud", pending=True) == "declined"
 
 
+def test_loudness_free_text_scopes_completed_actions_to_their_clause() -> None:
+    assert _notification_loudness_decision("I turned notifications on but they are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("I turned notifications on but they are not muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I turned notifications off but they are not muted", pending=False) == "declined"
+    assert _notification_loudness_decision("I did not turn notifications off but they are on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I did not turn notifications off but they are muted", pending=True) == "declined"
+
+
 def test_loudness_free_text_preserves_punctuation_clause_boundaries() -> None:
     assert _notification_loudness_decision("nicht stumm, lautlos", pending=True) == "declined"
     assert _notification_loudness_decision("not muted, silenced", pending=False) == "declined"
