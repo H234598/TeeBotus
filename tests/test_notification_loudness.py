@@ -1516,6 +1516,16 @@ def test_loudness_free_text_recognizes_current_status_with_modifiers() -> None:
     assert _notification_loudness_decision("Notifications are again not muted", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_recognizes_persistent_current_statuses() -> None:
+    assert _notification_loudness_decision("Notifications remain loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications stayed muted", pending=False) == "declined"
+    assert _notification_loudness_decision("Notifications remained not muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten bleiben hörbar", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten blieben nicht stumm", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I remain loud", pending=True) is None
+    assert _notification_loudness_decision("Remain loud", pending=False) is None
+
+
 def test_loudness_free_text_recognizes_audibility_reports() -> None:
     assert _notification_loudness_decision("Die Nachrichten klingeln jetzt", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich kann die Nachrichten jetzt hören", pending=False) == "confirmed"

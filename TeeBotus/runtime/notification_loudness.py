@@ -599,6 +599,16 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "ich versuche ",
     "ich bin dabei ",
     "ich bin gerade dabei ",
+    "remain ",
+    "remains ",
+    "remained ",
+    "stay ",
+    "stays ",
+    "stayed ",
+    "bleibt ",
+    "bleiben ",
+    "blieb ",
+    "blieben ",
     "ich schalte ",
     "ich stelle ",
     "ich mache ",
@@ -3096,7 +3106,23 @@ def _notification_loudness_has_question_tail(normalized: str) -> bool:
 
 def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
     tokens = normalized.split()
-    copulas = {"ist", "sind", "is", "are", "re"}
+    copulas = {
+        "ist",
+        "sind",
+        "is",
+        "are",
+        "re",
+        "remain",
+        "remains",
+        "remained",
+        "stay",
+        "stays",
+        "stayed",
+        "bleibt",
+        "bleiben",
+        "blieb",
+        "blieben",
+    }
     subject_terms = {
         "nachricht",
         "nachrichten",
@@ -3128,7 +3154,7 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
             ):
                 return True
     for copula_index, copula in enumerate(tokens):
-        if copula not in {"ist", "sind"}:
+        if copula not in {"ist", "sind", "bleibt", "bleiben", "blieb", "blieben"}:
             continue
         for status_index in range(max(0, copula_index - 4), copula_index):
             if tokens[status_index] not in NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS:
@@ -3152,7 +3178,22 @@ def _notification_loudness_volume_polarity(
     tokens = normalized.split()
     positive = False
     negative = False
-    copulas = {"ist", "sind", "is", "are"}
+    copulas = {
+        "ist",
+        "sind",
+        "is",
+        "are",
+        "remain",
+        "remains",
+        "remained",
+        "stay",
+        "stays",
+        "stayed",
+        "bleibt",
+        "bleiben",
+        "blieb",
+        "blieben",
+    }
     for index, token in enumerate(tokens):
         if token not in NOTIFICATION_LOUDNESS_VOLUME_POSITIVE_TERMS | NOTIFICATION_LOUDNESS_VOLUME_NEGATIVE_TERMS:
             continue
@@ -3629,6 +3670,8 @@ def _notification_loudness_has_negative_current_status(normalized: str) -> bool:
     tokens = normalized.split()
     positive_status_terms = NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS
     contracted_copulas = {"isn", "aren", "re"}
+    english_persistent_copulas = {"remain", "remains", "remained", "stay", "stays", "stayed"}
+    german_persistent_copulas = {"bleibt", "bleiben", "blieb", "blieben"}
     for status_index, token in enumerate(tokens):
         if token not in positive_status_terms:
             continue
@@ -3642,14 +3685,14 @@ def _notification_loudness_has_negative_current_status(normalized: str) -> bool:
                 ):
                     between_start = boundary_index + 1
             between = tokens[between_start:status_index]
-            if copula in {"is", "are", "re"} and "not" in between:
+            if copula in {"is", "are", "re"} | english_persistent_copulas and "not" in between:
                 return True
-            if copula in {"ist", "sind"} and "nicht" in between:
+            if copula in {"ist", "sind"} | german_persistent_copulas and "nicht" in between:
                 return True
             if copula in contracted_copulas and "t" in between:
                 return True
     for copula_index, copula in enumerate(tokens):
-        if copula not in {"ist", "sind"}:
+        if copula not in {"ist", "sind"} | german_persistent_copulas:
             continue
         for status_index in range(max(0, copula_index - 4), copula_index):
             if tokens[status_index] not in positive_status_terms:
@@ -4230,12 +4273,27 @@ def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | No
 
 
 def _notification_loudness_has_unscoped_subject_status(normalized: str) -> bool:
-    if normalized.startswith(("bin ", "ist ", "sind ", "am ", "is ", "are ")):
-        return False
-    return any(
-        _contains_normalized_phrase(normalized, copula)
-        for copula in ("bin", "ist", "sind", "am", "is", "are")
+    copulas = (
+        "bin",
+        "ist",
+        "sind",
+        "am",
+        "is",
+        "are",
+        "remain",
+        "remains",
+        "remained",
+        "stay",
+        "stays",
+        "stayed",
+        "bleibt",
+        "bleiben",
+        "blieb",
+        "blieben",
     )
+    if normalized.startswith(tuple(f"{copula} " for copula in copulas)):
+        return False
+    return any(_contains_normalized_phrase(normalized, copula) for copula in copulas)
 
 
 def _notification_loudness_is_non_declarative(text: str, normalized: str) -> bool:
