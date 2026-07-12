@@ -1985,8 +1985,14 @@ def test_loudness_free_text_does_not_treat_transport_or_idiom_qualifiers_as_stat
     assert _notification_loudness_decision("Notifications are on the table", pending=True) is None
     assert _notification_loudness_decision("Notifications are off the table", pending=False) is None
     assert _notification_loudness_decision("Die Nachrichten liegen auf dem Tisch", pending=True) is None
+    assert _notification_loudness_decision("Notifications are on Matrix", pending=True) is None
+    assert _notification_loudness_decision("Notifications are on Discord", pending=False) is None
+    assert _notification_loudness_decision("Notifications are on the app", pending=True) is None
+    assert _notification_loudness_decision("Notifications are on the way", pending=False) is None
+    assert _notification_loudness_decision("Notifications are off Matrix", pending=True) is None
     assert _notification_loudness_decision("Notifications are visible on screen", pending=False) == "confirmed"
     assert _notification_loudness_decision("Messages are loud on my phone", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Messages are loud on Matrix", pending=True) == "confirmed"
     assert _notification_loudness_decision("Notifications are on", pending=True) == "confirmed"
     assert _notification_loudness_decision("Notifications are off", pending=False) == "declined"
 

@@ -5305,6 +5305,43 @@ def _notification_loudness_has_ambiguous_alternative(normalized: str) -> bool:
 
 
 def _notification_loudness_has_ambiguous_status_qualifier(normalized: str) -> bool:
+    platform_phrases = (
+        "on telegram",
+        "on signal",
+        "on whatsapp",
+        "on matrix",
+        "on discord",
+        "on slack",
+        "on facebook",
+        "on email",
+        "on the internet",
+        "on the app",
+        "on in the app",
+        "on in app",
+        "on the web",
+        "on the website",
+        "on the server",
+        "on the way",
+        "on schedule",
+        "off matrix",
+        "off discord",
+        "off slack",
+        "off facebook",
+        "off email",
+        "off the internet",
+        "off the app",
+        "off the web",
+        "off the website",
+        "off the server",
+    )
+    if any(_contains_normalized_phrase(normalized, phrase) for phrase in platform_phrases):
+        other_state_terms = (
+            set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS) - {"on"}
+        ) | set(NOTIFICATION_LOUDNESS_MUTE_TERMS) | (
+            set(NOTIFICATION_LOUDNESS_OFF_TERMS) - {"off"}
+        ) | {"laut", "loud"}
+        if not any(_contains_normalized_phrase(normalized, term) for term in other_state_terms):
+            return True
     return any(
         _contains_normalized_phrase(normalized, phrase)
         for phrase in (
@@ -5314,11 +5351,6 @@ def _notification_loudness_has_ambiguous_status_qualifier(normalized: str) -> bo
             "on vacation",
             "off topic",
             "off duty",
-            "on telegram",
-            "on signal",
-            "on whatsapp",
-            "on in the app",
-            "on in app",
             "on do not disturb",
             "on dnd",
             "notifications on do not disturb",
