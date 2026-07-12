@@ -201,6 +201,13 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "do not know",
     "do not think",
     "do not believe",
+    "didn t know",
+    "did not know",
+    "didn t think",
+    "did not think",
+    "didn t believe",
+    "did not believe",
+    "wusste nicht",
     "can t tell",
     "cannot tell",
     "no idea",
@@ -1147,10 +1154,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     ):
         return None
     has_audibility_state = _notification_loudness_has_audibility_state(normalized)
+    has_explicit_confirmation = _notification_loudness_has_explicit_confirmation(normalized)
     if (
         has_notification_context
         and _notification_loudness_is_non_declarative(text, normalized)
-        and not has_audibility_state
+        and not (has_audibility_state or has_explicit_confirmation)
     ):
         return None
     has_volume_positive, has_volume_negative = _notification_loudness_volume_polarity(
@@ -1297,6 +1305,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "completed",
         "geschafft",
         "gelungen",
+        "ich kann bestaetigen",
+        "ich kann belegen",
+        "ich bestaetige",
+        "ich habe bestaetigt",
+        "bestaetigt",
     )
     declined_needles = (
         "ablehnen",
@@ -1351,6 +1364,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "cannot hear messages",
         "can not hear messages",
         "can t hear messages",
+        "could not hear notifications",
+        "couldn t hear notifications",
+        "could not hear messages",
+        "couldn t hear messages",
+        "could not hear message notifications",
+        "couldn t hear message notifications",
         "i do not hear notifications",
         "i don t hear notifications",
         "messages do not ring",
@@ -2623,6 +2642,12 @@ def _notification_loudness_has_audibility_state(normalized: str) -> bool:
             "cannot hear messages",
             "can not hear messages",
             "can t hear messages",
+            "could not hear notifications",
+            "couldn t hear notifications",
+            "could not hear messages",
+            "couldn t hear messages",
+            "could not hear message notifications",
+            "couldn t hear message notifications",
             "i do not hear notifications",
             "i don t hear notifications",
             "i can hear notifications",
@@ -2636,6 +2661,21 @@ def _notification_loudness_has_audibility_state(normalized: str) -> bool:
             "ich kann die benachrichtigungen jetzt hoeren",
             "kann die nachrichten nicht hoeren",
             "kann die benachrichtigungen nicht hoeren",
+        )
+    )
+
+
+def _notification_loudness_has_explicit_confirmation(normalized: str) -> bool:
+    return any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in (
+            "ich kann bestaetigen",
+            "ich kann belegen",
+            "ich bestaetige",
+            "ich habe bestaetigt",
+            "ich kann bestätigen",
+            "ich bestätige",
+            "ich habe bestätigt",
         )
     )
 

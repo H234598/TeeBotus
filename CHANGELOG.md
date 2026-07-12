@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.214 - 2026-07-12
+
+- Handle contracted audibility failures, German confirmation evidence, and past uncertainty.
+
 ## 1.9.213 - 2026-07-12
 
 - Preserve contracted negation scope for past notification actions.

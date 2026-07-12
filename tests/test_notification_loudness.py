@@ -1410,6 +1410,9 @@ def test_loudness_free_text_rejects_explicit_english_uncertainty_markers() -> No
     assert _notification_loudness_decision("I do not know if notifications are on", pending=True) is None
     assert _notification_loudness_decision("I do not think notifications are on", pending=False) is None
     assert _notification_loudness_decision("I do not believe messages are loud", pending=True) is None
+    assert _notification_loudness_decision("I didn't know notifications were on", pending=True) is None
+    assert _notification_loudness_decision("I did not believe messages were loud", pending=False) is None
+    assert _notification_loudness_decision("Ich wusste nicht, dass Benachrichtigungen an sind", pending=True) is None
 
 
 def test_loudness_free_text_does_not_confirm_uncertain_short_completion_replies() -> None:
@@ -1438,7 +1441,15 @@ def test_loudness_free_text_recognizes_audibility_reports() -> None:
     assert _notification_loudness_decision("Ich kann die Nachrichten jetzt hören", pending=False) == "confirmed"
     assert _notification_loudness_decision("Ich kann die Nachrichten nicht hören", pending=True) == "declined"
     assert _notification_loudness_decision("I cannot hear notifications", pending=False) == "declined"
+    assert _notification_loudness_decision("I couldn't hear notifications", pending=True) == "declined"
+    assert _notification_loudness_decision("I could not hear message notifications", pending=False) == "declined"
     assert _notification_loudness_decision("Messages don't ring", pending=True) == "declined"
+
+
+def test_loudness_free_text_recognizes_explicit_confirmation_evidence() -> None:
+    assert _notification_loudness_decision("Ich kann bestätigen, dass Benachrichtigungen an sind", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich kann belegen, dass Benachrichtigungen an sind", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Ich habe die Benachrichtigungen bestätigt", pending=True) == "confirmed"
 
 
 def test_loudness_free_text_recognizes_negative_current_status_with_modifiers() -> None:
