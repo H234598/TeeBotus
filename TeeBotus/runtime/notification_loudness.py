@@ -279,7 +279,6 @@ NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES = (
     "had ",
     "was ",
     "were ",
-    "no longer",
 )
 NOTIFICATION_LOUDNESS_CURRENT_TIME_MARKER_PHRASES = (
     "now",
@@ -490,6 +489,12 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "i declined to ",
     "i decided not to ",
     "i have decided not to ",
+    "i no longer mute ",
+    "i no longer keep ",
+    "i no longer turn ",
+    "i no longer switch ",
+    "i no longer set ",
+    "i no longer make ",
     "ich will ",
     "ich kann ",
     "ich könnte ",
@@ -624,6 +629,10 @@ NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
         "newly",
         "still",
         "neuerdings",
+        "no",
+        "longer",
+        "anymore",
+        "mehr",
     }
 )
 NOTIFICATION_LOUDNESS_NON_ASSERTIVE_OPTIONAL_MODIFIERS = frozenset(
@@ -3229,6 +3238,33 @@ def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | No
         "it is disabled",
     }:
         return "declined"
+    tokens = normalized.split()
+    pronouns = {"sie", "die", "das", "they", "it"}
+    copulas = {"ist", "sind", "is", "are", "re"}
+    status_terms = (
+        NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS
+        | NOTIFICATION_LOUDNESS_MUTE_TERMS
+        | NOTIFICATION_LOUDNESS_OFF_TERMS
+    )
+    if len(tokens) >= 3 and tokens[0] in pronouns and tokens[1] in copulas:
+        for status_index in range(2, len(tokens)):
+            status = tokens[status_index]
+            if status not in status_terms:
+                continue
+            between = tokens[2:status_index]
+            if not all(
+                value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS
+                or value in NOTIFICATION_LOUDNESS_NEGATION_TERMS
+                for value in between
+            ):
+                continue
+            after = tokens[status_index + 1 :]
+            if not all(value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in after):
+                continue
+            negated = sum(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in between) % 2 == 1
+            if status in NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS:
+                return "declined" if negated else "confirmed"
+            return "confirmed" if negated else "declined"
     return None
 
 

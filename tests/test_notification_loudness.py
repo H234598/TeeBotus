@@ -2023,10 +2023,16 @@ def test_loudness_free_text_normalizes_historical_markers_before_matching() -> N
     assert _notification_loudness_decision("Früher: Benachrichtigungen sind an", pending=True) is None
 
 
-def test_loudness_free_text_does_not_decide_no_longer_status_as_current() -> None:
-    assert _notification_loudness_decision("I no longer have notifications on", pending=True) is None
+def test_loudness_free_text_recognizes_current_no_longer_status() -> None:
+    assert _notification_loudness_decision("I no longer have notifications on", pending=True) == "declined"
     assert _notification_loudness_decision("I no longer mute messages", pending=False) is None
-    assert _notification_loudness_decision("Messages are no longer muted", pending=True) is None
+    assert _notification_loudness_decision("Messages are no longer muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are no longer off", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten sind nicht mehr stumm", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten sind nicht mehr laut", pending=False) == "declined"
+    assert _notification_loudness_decision("They are not muted anymore", pending=True) == "confirmed"
+    assert _notification_loudness_decision("They are no longer loud", pending=True) == "declined"
+    assert _notification_loudness_decision("They are no longer off", pending=True) == "confirmed"
 
 
 def test_loudness_free_text_does_not_decide_conditional_status_as_current() -> None:
