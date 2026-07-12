@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.187 - 2026-07-12
+
+- Keep obligations and plans out of completed-state detection.
+
 ## 1.9.186 - 2026-07-12
 
 - Handle perfect never-actions without changing habitual present tense.

@@ -1626,6 +1626,16 @@ def test_loudness_free_text_handles_perfect_never_actions() -> None:
     assert _notification_loudness_decision("I never turn notifications off", pending=True) is None
 
 
+def test_loudness_free_text_does_not_decide_obligations_or_plans_as_done() -> None:
+    assert _notification_loudness_decision("I have to mute messages", pending=True) is None
+    assert _notification_loudness_decision("I have to turn notifications on", pending=False) is None
+    assert _notification_loudness_decision("I have to set messages to loud", pending=True) is None
+    assert _notification_loudness_decision("I have decided to mute messages", pending=False) is None
+    assert _notification_loudness_decision("I have been meaning to mute messages", pending=True) is None
+    assert _notification_loudness_decision("Ich muss die Nachrichten stumm schalten", pending=True) is None
+    assert _notification_loudness_decision("Ich soll Nachrichten laut stellen", pending=False) is None
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None
