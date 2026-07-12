@@ -1560,6 +1560,24 @@ def test_loudness_free_text_recognizes_lost_and_reappeared_notifications() -> No
     assert _notification_loudness_decision("Die Benachrichtigungen tauchen wieder auf", pending=False) == "confirmed"
 
 
+def test_loudness_free_text_prioritizes_latest_transition_clause() -> None:
+    assert _notification_loudness_decision("Notifications disappeared, but they are back", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications stopped ringing, but they started again", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Notifications were silent, but now the sound returned", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I lost notification sound, but it came back", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Notifications are loud, but the sound stopped", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications are muted, but now they are loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Notifications are muted, but the sound came back", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications disappeared and reappeared", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Notifications disappeared and stayed gone", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications came back and disappeared", pending=False) == "declined"
+    assert _notification_loudness_decision("Notifications are muted but audible", pending=True) is None
+    assert _notification_loudness_decision("Notifications are loud but inaudible", pending=False) is None
+    assert _notification_loudness_decision("Die Nachrichten waren stumm, aber jetzt sind sie laut", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten verschwanden, aber sind wieder da", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten verschwanden und blieben weg", pending=True) == "declined"
+
+
 def test_loudness_free_text_recognizes_audibility_reports() -> None:
     assert _notification_loudness_decision("Die Nachrichten klingeln jetzt", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich kann die Nachrichten jetzt hören", pending=False) == "confirmed"

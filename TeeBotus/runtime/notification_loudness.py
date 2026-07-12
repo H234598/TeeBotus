@@ -750,6 +750,7 @@ NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS = frozenset(
         "hoerbar",
         "audible",
         "unmuted",
+        "back",
         "visible",
         "sichtbar",
     }
@@ -1268,9 +1269,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     if has_notification_context and _notification_loudness_has_partial_quantifier(normalized):
         return None
-    temporal_segment = _notification_loudness_current_temporal_segment(
-        _normalize_text_for_polarity(text)
-    )
+    polarity_text = _normalize_text_for_polarity(text)
+    transition_segment = _notification_loudness_current_transition_segment(polarity_text)
+    temporal_segment = _notification_loudness_current_temporal_segment(polarity_text) or transition_segment
     if (
         has_notification_context
         and _notification_loudness_has_historical_marker(normalized)
@@ -1356,6 +1357,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             has_audibility_state
             or has_explicit_confirmation
             or _notification_loudness_has_sequenced_action_status(polarity_normalized)
+            or transition_segment
         )
     ):
         return None
@@ -1490,6 +1492,13 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "notifications came back on",
         "notifications have come back on",
         "notifications have returned to being loud",
+        "back",
+        "they are back",
+        "it is back",
+        "they are ringing now",
+        "they started again",
+        "reappeared",
+        "sind wieder da",
         "notifications came back",
         "the notifications came back",
         "notifications reappeared",
@@ -1645,6 +1654,14 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "sound is not back",
         "the sound is gone again",
         "sound is gone again",
+        "gone",
+        "the sound stopped",
+        "they are gone",
+        "it is gone",
+        "they disappeared",
+        "disappeared",
+        "stayed gone",
+        "blieben weg",
         "notifications disappeared",
         "the notifications disappeared",
         "notifications no longer appear",
@@ -3102,6 +3119,48 @@ def _notification_loudness_current_temporal_segment(normalized: str) -> str | No
     _, segment_start = max(candidates)
     segment = [token for token in tokens[segment_start:] if token != NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN]
     return " ".join(segment) or None
+
+
+def _notification_loudness_current_transition_segment(normalized: str) -> str | None:
+    """Return the last clause only when it explicitly describes a state transition."""
+    tokens = normalized.split()
+    boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
+        NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+    }
+    boundary_indices = [index for index, token in enumerate(tokens) if token in boundaries]
+    if not boundary_indices:
+        return None
+    segment_start = boundary_indices[-1] + 1
+    segment = tokens[segment_start:]
+    transition_markers = {
+        "back",
+        "returned",
+        "return",
+        "reappeared",
+        "reappear",
+        "came",
+        "come",
+        "started",
+        "start",
+        "again",
+        "now",
+        "currently",
+        "stopped",
+        "stop",
+        "disappeared",
+        "vanished",
+        "lost",
+        "gone",
+        "weg",
+        "verschwunden",
+        "verschwanden",
+        "aufgetaucht",
+        "auftauchen",
+        "wieder",
+    }
+    if not set(segment) & transition_markers:
+        return None
+    return " ".join(token for token in segment if token != NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN) or None
 
 
 def _notification_loudness_has_partial_quantifier(normalized: str) -> bool:
