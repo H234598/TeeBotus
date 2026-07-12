@@ -1646,6 +1646,16 @@ def test_loudness_free_text_does_not_decide_modal_intentions_as_states() -> None
     assert _notification_loudness_decision("I can hear messages", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_blocks_german_modal_action_variants() -> None:
+    assert _notification_loudness_decision("Ich kann die Nachrichten auf laut stellen", pending=True) is None
+    assert _notification_loudness_decision("Ich kann Nachrichten auf laut stellen", pending=False) is None
+    assert _notification_loudness_decision("Ich kann die Nachrichten laut machen", pending=True) is None
+    assert _notification_loudness_decision("Ich kann die Nachrichten stumm machen", pending=False) is None
+    assert _notification_loudness_decision("Ich kann die Nachrichten nicht auf laut stellen", pending=True) is None
+    assert _notification_loudness_decision("Ich kann die Nachrichten hören", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich kann die Nachrichten nicht hören", pending=False) == "declined"
+
+
 def test_loudness_free_text_does_not_decide_obligations_or_plans_as_done() -> None:
     assert _notification_loudness_decision("I have to mute messages", pending=True) is None
     assert _notification_loudness_decision("I have to turn notifications on", pending=False) is None

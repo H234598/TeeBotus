@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.190 - 2026-07-12
+
+- Block German modal loudness action variants.
+
 ## 1.9.189 - 2026-07-12
 
 - Keep modal intentions out of notification-state detection.
