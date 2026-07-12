@@ -464,6 +464,10 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "i am being prevented from ",
     "i was prevented from ",
     "i were prevented from ",
+    "i am protected from ",
+    "i was protected from ",
+    "i am shielded from ",
+    "i was shielded from ",
     "ich wurde daran gehindert ",
     "ich werde daran gehindert ",
     "ich bin daran gehindert ",
@@ -2199,6 +2203,15 @@ def _notification_loudness_term_polarity(
         "bewahrte",
         "gehindert",
         "hindern",
+        "protect",
+        "protected",
+        "protecting",
+        "shield",
+        "shielded",
+        "shielding",
+        "geschuetzt",
+        "schuetzen",
+        "schuetzte",
         "lassen",
     }
     direct_positive_relation_terms = {
@@ -2219,6 +2232,15 @@ def _notification_loudness_term_polarity(
         "bewahrt",
         "bewahre",
         "bewahrte",
+        "protect",
+        "protected",
+        "protecting",
+        "shield",
+        "shielded",
+        "shielding",
+        "geschuetzt",
+        "schuetzen",
+        "schuetzte",
     }
     conditional_positive_relation_terms = {"keep", "kept", "keeping", "leave", "left", "leaving", "lassen"}
     passive_relation_terms = {
@@ -2228,6 +2250,9 @@ def _notification_loudness_term_polarity(
         "bewahrt",
         "bewahrte",
         "gehindert",
+        "protected",
+        "shielded",
+        "geschuetzt",
     }
     passive_markers = {
         "am",
@@ -2274,7 +2299,17 @@ def _notification_loudness_term_polarity(
             ):
                 relation_search_start = boundary_index + 1
                 break
-        bridge_relation_terms = {"prevented", "verhindert", "verhinderte", "bewahrt", "bewahrte", "gehindert"}
+        bridge_relation_terms = {
+            "prevented",
+            "verhindert",
+            "verhinderte",
+            "bewahrt",
+            "bewahrte",
+            "gehindert",
+            "protected",
+            "shielded",
+            "geschuetzt",
+        }
         bridge_target_terms = set(NOTIFICATION_LOUDNESS_MUTE_TERMS) | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
         bridge_subject_terms = {
             "die",
@@ -2547,6 +2582,15 @@ def _notification_loudness_has_indirect_positive_mute_action(normalized: str) ->
         "bewahrt",
         "bewahre",
         "bewahrte",
+        "protect",
+        "protected",
+        "protecting",
+        "shield",
+        "shielded",
+        "shielding",
+        "geschuetzt",
+        "schuetzen",
+        "schuetzte",
     }
     completed_relations = {
         "avoided",
@@ -2560,6 +2604,9 @@ def _notification_loudness_has_indirect_positive_mute_action(normalized: str) ->
         "verhinderte",
         "bewahrt",
         "bewahrte",
+        "protected",
+        "shielded",
+        "geschuetzt",
     }
     success_markers = (
         "managed to",
@@ -2601,6 +2648,41 @@ def _notification_loudness_has_indirect_positive_mute_action(normalized: str) ->
         "switching",
     }
     negative_state_terms = set(NOTIFICATION_LOUDNESS_MUTE_TERMS) | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+    passive_relation_terms = {
+        "prevented",
+        "verhindert",
+        "verhinderte",
+        "bewahrt",
+        "bewahrte",
+        "gehindert",
+        "protected",
+        "shielded",
+        "geschuetzt",
+    }
+    passive_markers = {
+        "am",
+        "is",
+        "are",
+        "was",
+        "were",
+        "bin",
+        "ist",
+        "sind",
+        "wurde",
+        "wurden",
+        "werde",
+        "wird",
+    }
+    notification_subject_terms = {
+        "nachricht",
+        "nachrichten",
+        "message",
+        "messages",
+        "benachrichtigung",
+        "benachrichtigungen",
+        "notification",
+        "notifications",
+    }
     for relation_index, relation in enumerate(tokens):
         if relation not in relation_tokens:
             continue
@@ -2609,6 +2691,12 @@ def _notification_loudness_has_indirect_positive_mute_action(normalized: str) ->
         if _notification_loudness_scoped_negation_count(tokens, preceding_start, relation_index) % 2:
             continue
         if set(preceding) & attempt_or_failure_terms:
+            continue
+        if (
+            relation in passive_relation_terms
+            and set(preceding) & passive_markers
+            and not set(preceding) & notification_subject_terms
+        ):
             continue
         prefix_text = " ".join(preceding)
         is_completed = relation in completed_relations or any(
@@ -2647,6 +2735,15 @@ def _notification_loudness_has_indirect_positive_mute_action(normalized: str) ->
                 "bewahrt",
                 "bewahre",
                 "bewahrte",
+                "protect",
+                "protected",
+                "protecting",
+                "shield",
+                "shielded",
+                "shielding",
+                "geschuetzt",
+                "schuetzen",
+                "schuetzte",
             }
             and set(tail) & negative_action_terms
             and tail
@@ -3506,6 +3603,15 @@ def _notification_loudness_has_sequenced_action_status(
         "verhindert",
         "verhinderte",
         "gehindert",
+        "protect",
+        "protected",
+        "protecting",
+        "shield",
+        "shielded",
+        "shielding",
+        "geschuetzt",
+        "schuetzen",
+        "schuetzte",
         "muting",
         "silencing",
         "geprueft",

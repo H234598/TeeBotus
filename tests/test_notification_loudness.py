@@ -2089,8 +2089,47 @@ def test_loudness_free_text_prioritizes_current_status_after_indirect_action() -
         "Notifications were prevented from being muted", pending=True
     ) == "confirmed"
     assert _notification_loudness_decision(
+        "Notifications were protected from being muted", pending=False
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Notifications were shielded from being muted", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "I protected notifications from being muted", pending=False
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "I shielded notifications from being muted", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "I was protected from muting notifications", pending=False
+    ) is None
+    assert _notification_loudness_decision(
+        "I was shielded from muting notifications", pending=True
+    ) is None
+    assert _notification_loudness_decision(
+        "Die Nachrichten wurden davor geschützt, stumm geschaltet zu werden", pending=False
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Ich habe die Nachrichten davor geschützt, stumm geschaltet zu werden", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Ich wurde davor geschützt, die Nachrichten stumm zu schalten", pending=False
+    ) is None
+    assert _notification_loudness_decision(
+        "Die Nachrichten wurden nicht davor geschützt, stumm geschaltet zu werden", pending=True
+    ) == "declined"
+    assert _notification_loudness_decision(
         "Notifications were prevented from being muted yesterday", pending=False
     ) is None
+    assert _notification_loudness_decision(
+        "Notifications were protected from being muted yesterday", pending=True
+    ) is None
+    assert _notification_loudness_decision(
+        "Notifications were protected from being muted, but they are muted", pending=True
+    ) == "declined"
+    assert _notification_loudness_decision(
+        "Notifications were protected from being muted, but they are not muted", pending=False
+    ) == "confirmed"
     assert _notification_loudness_decision(
         "I am prevented from muting notifications", pending=True
     ) is None
