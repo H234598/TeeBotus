@@ -347,6 +347,7 @@ NOTIFICATION_LOUDNESS_CURRENT_TIME_MARKER_PHRASES = (
     "in the meantime",
     "meanwhile",
     "ever since",
+    "from then on",
     "heute",
     "neuerdings",
 )
