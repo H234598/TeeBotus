@@ -1254,6 +1254,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return "confirmed"
     if pending and normalized in NOTIFICATION_LOUDNESS_PENDING_NEGATIVE_STATUS_REPLIES:
         return "declined"
+    if pending:
+        modified_reply_decision = _notification_loudness_pending_modified_reply_decision(normalized)
+        if modified_reply_decision is not None:
+            return modified_reply_decision
     words = set(normalized.split())
     explicit_context_needles = (
         "benachrichtigung",
@@ -2420,6 +2424,23 @@ def _notification_loudness_has_reply_status_context(text: str) -> bool:
             | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
         )
     )
+
+
+def _notification_loudness_pending_modified_reply_decision(normalized: str) -> str | None:
+    """Accept a known short reply followed only by current-state modifiers."""
+    tokens = normalized.split()
+    for replies, decision in (
+        (NOTIFICATION_LOUDNESS_PENDING_POSITIVE_STATUS_REPLIES, "confirmed"),
+        (NOTIFICATION_LOUDNESS_PENDING_NEGATIVE_STATUS_REPLIES, "declined"),
+    ):
+        for reply in sorted(replies, key=len, reverse=True):
+            reply_tokens = reply.split()
+            if tokens[: len(reply_tokens)] != reply_tokens:
+                continue
+            suffix = tokens[len(reply_tokens) :]
+            if suffix and all(token in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for token in suffix):
+                return decision
+    return None
 
 
 def _normalize_text_for_polarity(text: str) -> str:
