@@ -1426,6 +1426,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
                 has_completed_action_positive
                 and needle in {"notifications off", "notification off", "benachrichtigungen aus"}
             )
+            and not (
+                has_negated_off
+                and needle in {"notifications off", "notification off", "benachrichtigungen aus"}
+            )
         )
     )
     has_declined_phrase = (
@@ -1972,7 +1976,7 @@ def _notification_loudness_term_polarity(
     for index, token in enumerate(tokens):
         if token not in terms:
             continue
-        preceding_start = max(0, index - 3)
+        preceding_start = max(0, index - 5)
         for boundary_index in range(preceding_start, index):
             if (
                 tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
@@ -2421,9 +2425,22 @@ def _notification_loudness_completed_action_polarity(
         "geschaltet",
         "gemacht",
         "gesetzt",
+        "turn",
+        "switch",
+        "mute",
+        "silence",
+        "enable",
+        "activate",
+        "disable",
     }
+    did_actions = {"turn", "switch", "mute", "silence", "enable", "activate", "disable"}
     for action_index, action in enumerate(tokens):
         if action not in simple_past_actions:
+            continue
+        if action in did_actions and not any(
+            tokens[candidate] in {"did", "didn"}
+            for candidate in range(max(0, action_index - 3), action_index)
+        ):
             continue
         if any(
             tokens[candidate] in {"ist", "sind", "war", "waren", "is", "are", "were"}
@@ -2431,15 +2448,27 @@ def _notification_loudness_completed_action_polarity(
         ):
             continue
         context = tokens[max(0, action_index - 5) : min(len(tokens), action_index + 10)]
-        if action in {"muted", "silenced", "disabled", "unmuted", "enabled", "activated"} and not (
+        if action in {
+            "muted",
+            "mute",
+            "silenced",
+            "silence",
+            "disabled",
+            "disable",
+            "unmuted",
+            "enabled",
+            "activated",
+            "enable",
+            "activate",
+        } and not (
             set(context) & subjects
         ):
             continue
         has_positive_target = bool(set(context) & positive_targets)
         has_negative_target = bool(set(context) & negative_targets)
-        if action in {"enabled", "activated"} and set(context) & subjects:
+        if action in {"enabled", "activated", "enable", "activate"} and set(context) & subjects:
             has_positive_target = True
-        if action in {"muted", "silenced", "disabled"} and set(context) & subjects:
+        if action in {"muted", "mute", "silenced", "silence", "disabled", "disable"} and set(context) & subjects:
             has_negative_target = True
         if not has_positive_target and not has_negative_target:
             continue

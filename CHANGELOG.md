@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.213 - 2026-07-12
+
+- Preserve contracted negation scope for past notification actions.
+
 ## 1.9.212 - 2026-07-12
 
 - Recognize simple-past notification actions without reclassifying status phrases.

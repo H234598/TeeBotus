@@ -1902,6 +1902,10 @@ def test_loudness_free_text_does_not_decide_historical_status_as_current() -> No
     assert _notification_loudness_decision("I never turned notifications off", pending=False) == "confirmed"
     assert _notification_loudness_decision("I never muted notifications", pending=True) == "confirmed"
     assert _notification_loudness_decision("I never unmuted notifications", pending=False) == "declined"
+    assert _notification_loudness_decision("I didn't turn notifications off", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I did not turn notifications off", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I didn't turn notifications on", pending=True) == "declined"
+    assert _notification_loudness_decision("I don't have notifications off", pending=True) == "confirmed"
     assert _notification_loudness_decision("Die Nachrichten waren vorher nicht stumm", pending=True) is None
     assert _notification_loudness_decision("Gestern waren die Nachrichten laut", pending=False) is None
     assert _notification_loudness_decision("I have notifications on now", pending=True) == "confirmed"
