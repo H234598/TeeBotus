@@ -464,6 +464,9 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "i am being prevented from ",
     "i was prevented from ",
     "i were prevented from ",
+    "ich wurde daran gehindert ",
+    "ich werde daran gehindert ",
+    "ich bin daran gehindert ",
     "i am switching ",
     "i m switching ",
     "i am muting ",
@@ -1210,6 +1213,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
                 has_indirect_positive_mute_action
                 and not _notification_loudness_has_explicit_historical_time(normalized)
             )
+            or has_sequenced_action_status
         )
     ):
         return None
@@ -2193,6 +2197,8 @@ def _notification_loudness_term_polarity(
         "bewahrt",
         "bewahre",
         "bewahrte",
+        "gehindert",
+        "hindern",
         "lassen",
     }
     direct_positive_relation_terms = {
@@ -2215,8 +2221,28 @@ def _notification_loudness_term_polarity(
         "bewahrte",
     }
     conditional_positive_relation_terms = {"keep", "kept", "keeping", "leave", "left", "leaving", "lassen"}
-    passive_relation_terms = {"prevented", "verhindert", "verhinderte", "bewahrt", "bewahrte"}
-    passive_markers = {"am", "is", "are", "was", "were", "bin", "ist", "sind", "wurde", "wurden"}
+    passive_relation_terms = {
+        "prevented",
+        "verhindert",
+        "verhinderte",
+        "bewahrt",
+        "bewahrte",
+        "gehindert",
+    }
+    passive_markers = {
+        "am",
+        "is",
+        "are",
+        "was",
+        "were",
+        "bin",
+        "ist",
+        "sind",
+        "wurde",
+        "wurden",
+        "werde",
+        "wird",
+    }
     notification_subject_terms = {
         "nachricht",
         "nachrichten",
@@ -2240,9 +2266,29 @@ def _notification_loudness_term_polarity(
             ):
                 preceding_start = boundary_index + 1
         negation_count = _notification_loudness_scoped_negation_count(tokens, preceding_start, index)
-        relation_search_start = preceding_start
-        bridge_relation_terms = {"prevented", "verhindert", "verhinderte", "bewahrt", "bewahrte"}
+        relation_search_start = max(0, preceding_start - 4)
+        for boundary_index in range(preceding_start - 1, relation_search_start - 1, -1):
+            if (
+                tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+            ):
+                relation_search_start = boundary_index + 1
+                break
+        bridge_relation_terms = {"prevented", "verhindert", "verhinderte", "bewahrt", "bewahrte", "gehindert"}
         bridge_target_terms = set(NOTIFICATION_LOUDNESS_MUTE_TERMS) | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+        bridge_subject_terms = {
+            "die",
+            "der",
+            "das",
+            "nachricht",
+            "nachrichten",
+            "message",
+            "messages",
+            "benachrichtigung",
+            "benachrichtigungen",
+            "notification",
+            "notifications",
+        }
         if (
             preceding_start <= index
             and preceding_start > 0
@@ -2252,6 +2298,10 @@ def _notification_loudness_term_polarity(
                 tokens[preceding_start] in {"dass", "that"}
                 or (
                     tokens[preceding_start] in bridge_target_terms
+                    and set(tokens[max(0, preceding_start - 4) : preceding_start]) & bridge_relation_terms
+                )
+                or (
+                    tokens[preceding_start] in bridge_subject_terms
                     and set(tokens[max(0, preceding_start - 4) : preceding_start]) & bridge_relation_terms
                 )
             )
@@ -2281,6 +2331,8 @@ def _notification_loudness_term_polarity(
                 and bool(set(tokens[relation_search_start:relation_index]) & passive_markers)
                 and not bool(set(tokens[relation_search_start:relation_index]) & notification_subject_terms)
             )
+            if passive_user_relation:
+                continue
             if relation_negated and relation_index >= preceding_start:
                 negation_count -= 1
             elif (
@@ -3453,6 +3505,7 @@ def _notification_loudness_has_sequenced_action_status(
         "verhindern",
         "verhindert",
         "verhinderte",
+        "gehindert",
         "muting",
         "silencing",
         "geprueft",
