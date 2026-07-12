@@ -3767,7 +3767,17 @@ def _notification_loudness_has_question_tail(normalized: str) -> bool:
     )
 
 
+def _notification_loudness_canonicalize_present_perfect_status(normalized: str) -> str:
+    return (
+        normalized.replace("have not been", "remain not")
+        .replace("has not been", "remains not")
+        .replace("have been", "remain")
+        .replace("has been", "remains")
+    )
+
+
 def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
+    normalized = _notification_loudness_canonicalize_present_perfect_status(normalized)
     normalized = normalized.replace("ab jetzt", "jetzt")
     normalized = normalized.replace("bis jetzt", "jetzt")
     normalized = normalized.replace("bis heute", "heute")
@@ -3785,7 +3795,6 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
         "is",
         "are",
         "re",
-        "been",
         "remain",
         "remains",
         "remained",
@@ -3828,6 +3837,11 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
             continue
         for copula_index in range(max(0, status_index - 4), status_index):
             if tokens[copula_index] not in copulas:
+                continue
+            if any(
+                value in NOTIFICATION_LOUDNESS_NEGATION_TERMS
+                for value in tokens[max(0, copula_index - 2) : copula_index]
+            ):
                 continue
             between = tokens[copula_index + 1 : status_index]
             if all(value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in between):
@@ -4394,6 +4408,7 @@ def _notification_loudness_phrase_is_negated(normalized: str, phrase: str) -> bo
 
 
 def _notification_loudness_has_negative_current_status(normalized: str) -> bool:
+    normalized = _notification_loudness_canonicalize_present_perfect_status(normalized)
     tokens = normalized.split()
     positive_status_terms = NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS
     contracted_copulas = {"isn", "aren", "re"}
@@ -5070,6 +5085,7 @@ def _notification_loudness_has_unscoped_subject_status(normalized: str) -> bool:
         "am",
         "is",
         "are",
+        "been",
         "remain",
         "remains",
         "remained",

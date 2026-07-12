@@ -1572,7 +1572,10 @@ def test_loudness_free_text_recognizes_persistent_current_statuses() -> None:
     assert _notification_loudness_decision("Die Nachrichten sind bis heute laut", pending=True) == "confirmed"
     assert _notification_loudness_decision("Notifications have been loud", pending=True) == "confirmed"
     assert _notification_loudness_decision("Notifications have been loud so far", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications have not been loud", pending=True) == "declined"
     assert _notification_loudness_decision("Notifications had been loud", pending=True) is None
+    assert _notification_loudness_decision("I have been loud", pending=True) is None
+    assert _notification_loudness_decision("I have not been loud", pending=True) is None
     assert _notification_loudness_decision("Notifications are muted from now on", pending=True) == "declined"
     assert _notification_loudness_decision("Notifications are not muted from now on", pending=True) == "confirmed"
     assert _notification_loudness_decision("Notifications are muted from this point on", pending=True) == "declined"
