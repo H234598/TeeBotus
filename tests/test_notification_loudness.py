@@ -2044,6 +2044,20 @@ def test_loudness_free_text_recognizes_current_no_longer_status() -> None:
     assert _notification_loudness_decision("They are not off any longer", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_recognizes_already_and_not_yet_status() -> None:
+    assert _notification_loudness_decision("Notifications are already on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are already loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Notifications are already muted", pending=True) == "declined"
+    assert _notification_loudness_decision("They are already on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("They are already muted", pending=True) == "declined"
+    assert _notification_loudness_decision("Sie sind bereits laut", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Sie sind bereits stumm", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications are not yet muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("They are not yet muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("They are not yet loud", pending=True) == "declined"
+    assert _notification_loudness_decision("No, not yet", pending=True) == "declined"
+
+
 def test_loudness_free_text_does_not_decide_conditional_status_as_current() -> None:
     assert _notification_loudness_decision("If notifications are on, reminders work", pending=True) is None
     assert _notification_loudness_decision("When messages are loud, I notice them", pending=False) is None

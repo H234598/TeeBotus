@@ -635,6 +635,10 @@ NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
         "anymore",
         "any",
         "mehr",
+        "already",
+        "bereits",
+        "schon",
+        "yet",
     }
 )
 NOTIFICATION_LOUDNESS_NON_ASSERTIVE_OPTIONAL_MODIFIERS = frozenset(
@@ -1477,6 +1481,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
                     "did not",
                     "didn t",
                     "haven t",
+                    "not yet",
                 }
                 or not (has_negated_mute or has_negated_off)
             )
