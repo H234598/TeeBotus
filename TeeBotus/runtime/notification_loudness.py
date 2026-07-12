@@ -183,6 +183,7 @@ NOTIFICATION_LOUDNESS_NEGATION_PHRASES = (
     "wouldn t",
     "shouldn t",
     "can t",
+    "cannot",
 )
 NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES = frozenset({"aber", "jedoch", "sondern", "und", "oder", "but", "however", "or", "and"})
 NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN = "<clause>"
@@ -1003,6 +1004,94 @@ NOTIFICATION_LOUDNESS_VOLUME_POSITIVE_TERMS = frozenset(
 )
 NOTIFICATION_LOUDNESS_VOLUME_NEGATIVE_TERMS = frozenset(
     {"niedrig", "low", "leise", "quiet", "minimum", "down", "runter", "herunter"}
+)
+NOTIFICATION_LOUDNESS_GRADIENT_POSITIVE_PHRASES = (
+    "loud enough",
+    "laut genug",
+    "sufficiently loud",
+    "adequately loud",
+    "sufficiently audible",
+    "adequately audible",
+    "audible enough",
+    "not inadequate",
+    "not insufficient",
+    "nicht unzureichend",
+    "ausreichend laut",
+    "ausreichend hoerbar",
+    "hoerbar genug",
+    "adequate volume",
+    "an adequate volume",
+    "at an adequate volume",
+    "sufficient volume",
+    "volume is adequate",
+    "volume is sufficient",
+    "is adequate",
+    "is sufficient",
+    "are adequate",
+    "are sufficient",
+    "ausreichende lautstaerke",
+    "lautstaerke ist ausreichend",
+    "lautstaerke ist angemessen",
+    "ist ausreichend",
+    "ist angemessen",
+    "sind ausreichend",
+    "sind angemessen",
+    "clearly hear notifications",
+    "clearly hear messages",
+    "hear notifications clearly",
+    "hear messages clearly",
+    "clearly audible",
+    "deutlich hoerbar",
+    "deutlich hoeren",
+    "klar hoeren",
+    "gut hoeren",
+)
+NOTIFICATION_LOUDNESS_GRADIENT_NEGATIVE_PHRASES = (
+    "insufficiently loud",
+    "insufficiently audible",
+    "inadequately loud",
+    "inadequately audible",
+    "barely audible",
+    "hardly audible",
+    "faintly audible",
+    "unzureichend laut",
+    "unzureichend hoerbar",
+    "inadequate volume",
+    "an inadequate volume",
+    "at an inadequate volume",
+    "insufficient volume",
+    "volume is inadequate",
+    "volume is insufficient",
+    "is inadequate",
+    "is insufficient",
+    "are inadequate",
+    "are insufficient",
+    "not adequate",
+    "not sufficient",
+    "unzureichende lautstaerke",
+    "lautstaerke ist unzureichend",
+    "lautstaerke ist zu niedrig",
+    "nicht ausreichend",
+    "ist unzureichend",
+    "ist zu niedrig",
+    "sind unzureichend",
+    "sind zu niedrig",
+    "too quiet",
+    "zu leise",
+    "barely hear notifications",
+    "barely hear messages",
+    "hardly hear notifications",
+    "hardly hear messages",
+    "kaum hoeren",
+    "kaum hoerbar",
+    "only faintly hear notifications",
+    "only faintly hear messages",
+    "too faint to hear",
+    "nur schwach hoeren",
+    "loud just not enough",
+    "loud but not enough",
+    "laut nur nicht genug",
+    "laut aber nicht genug",
 )
 NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "erledigt",
@@ -2029,6 +2118,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_failed_action = _notification_loudness_has_failed_action(normalized)
     has_successful_ability_action = _notification_loudness_has_successful_ability_action(normalized)
     has_notification_context = has_notification_context or has_positive_unmute_phrase
+    has_audibility_gradient = _notification_loudness_has_audibility_gradient(normalized)
+    has_direct_audibility_experience = _notification_loudness_has_direct_audibility_experience(normalized)
     if _notification_loudness_has_uncertainty(normalized) and (has_notification_context or pending):
         return None
     if has_notification_context and _notification_loudness_has_conditional_status(normalized):
@@ -2036,11 +2127,13 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if (
         (has_notification_context or (pending and has_completion_phrase))
         and not has_explicit_confirmation
+        and not (has_audibility_gradient and has_direct_audibility_experience)
         and _notification_loudness_has_non_assertive_status(normalized)
     ):
         return None
     if (
         (has_notification_context or (pending and has_completion_phrase))
+        and not has_audibility_gradient
         and _notification_loudness_has_partial_quantifier(normalized)
     ):
         return None
@@ -2173,6 +2266,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and not has_pending_pronoun_completion
         and not (
             has_audibility_state
+            or (has_audibility_gradient and has_direct_audibility_experience)
             or has_explicit_confirmation
             or _notification_loudness_has_sequenced_action_status(polarity_normalized)
             or transition_segment
@@ -2285,6 +2379,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         )
     status_scope_normalized = later_current_status_segment or normalized
     status_scope_polarity = later_current_status_segment or polarity_normalized
+    audibility_gradient_decision = _notification_loudness_audibility_gradient_decision(
+        status_scope_normalized
+    )
+    if audibility_gradient_decision is not None and (pending or has_notification_context):
+        return audibility_gradient_decision
     confirmed_needles = (
         "ja laut",
         "laut gestellt",
@@ -3779,10 +3878,21 @@ def _notification_loudness_term_polarity(
 
 
 def _notification_loudness_has_uncertainty(normalized: str) -> bool:
-    return any(
-        _contains_normalized_phrase(normalized, _normalize_text(phrase))
-        for phrase in NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES
+    direct_can_not_hear = any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in (
+            "can not clearly hear",
+            "kann nicht deutlich hoeren",
+            "kann nicht klar hoeren",
+        )
     )
+    for phrase in NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES:
+        normalized_phrase = _normalize_text(phrase)
+        if normalized_phrase == "not clearly" and direct_can_not_hear:
+            continue
+        if _contains_normalized_phrase(normalized, normalized_phrase):
+            return True
+    return False
 
 
 def _notification_loudness_has_non_assertive_status(normalized: str) -> bool:
@@ -3924,9 +4034,11 @@ def _notification_loudness_has_conditional_status(normalized: str) -> bool:
         | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
     )
     tokens = normalized.split()
-    return any(
-        token in conditional_terms and bool(set(tokens) & state_terms)
-        for token in tokens
+    if any(token in conditional_terms and bool(set(tokens) & state_terms) for token in tokens):
+        return True
+    return bool(
+        any(token in conditional_terms for token in tokens)
+        and _notification_loudness_has_audibility_gradient(normalized)
     )
 
 
@@ -3934,6 +4046,16 @@ def _notification_loudness_later_current_status_segment(
     normalized: str, *, allow_completion_pronoun: bool = False
 ) -> str | None:
     tokens = normalized.split()
+    notification_subject_terms = {
+        "nachricht",
+        "nachrichten",
+        "message",
+        "messages",
+        "benachrichtigung",
+        "benachrichtigungen",
+        "notification",
+        "notifications",
+    }
     boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
         NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
     }
@@ -3971,6 +4093,12 @@ def _notification_loudness_later_current_status_segment(
         if not _notification_loudness_is_explicit_status_segment(
             segment,
             allow_pronoun=bool(indirect_relation_terms.intersection(tokens[:boundary_index]))
+            or (
+                bool(set(tokens[:boundary_index]) & notification_subject_terms)
+                and _notification_loudness_has_audibility_gradient(
+                    " ".join(tokens[:boundary_index])
+                )
+            )
             or allow_completion_pronoun,
         ):
             continue
@@ -6044,6 +6172,59 @@ def _notification_loudness_has_audibility_state(normalized: str) -> bool:
             "ich kann den benachrichtigungston wieder hoeren",
             "kann die nachrichten nicht hoeren",
             "kann die benachrichtigungen nicht hoeren",
+        )
+    )
+
+
+def _notification_loudness_audibility_gradient_decision(normalized: str) -> str | None:
+    """Resolve explicit loudness thresholds while respecting local negation."""
+    if _notification_loudness_has_partial_quantifier(normalized) and not any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in NOTIFICATION_LOUDNESS_GRADIENT_NEGATIVE_PHRASES
+    ):
+        return None
+    for phrase in NOTIFICATION_LOUDNESS_GRADIENT_NEGATIVE_PHRASES:
+        if not _contains_normalized_phrase(normalized, phrase):
+            continue
+        return (
+            "confirmed"
+            if _notification_loudness_phrase_is_negated(normalized, phrase)
+            else "declined"
+        )
+    for phrase in NOTIFICATION_LOUDNESS_GRADIENT_POSITIVE_PHRASES:
+        if not _contains_normalized_phrase(normalized, phrase):
+            continue
+        return (
+            "declined"
+            if _notification_loudness_phrase_is_negated(normalized, phrase)
+            else "confirmed"
+        )
+    return None
+
+
+def _notification_loudness_has_audibility_gradient(normalized: str) -> bool:
+    return _notification_loudness_audibility_gradient_decision(normalized) is not None
+
+
+def _notification_loudness_has_direct_audibility_experience(normalized: str) -> bool:
+    return any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in (
+            "barely hear notifications",
+            "barely hear messages",
+            "hardly hear notifications",
+            "hardly hear messages",
+            "clearly hear notifications",
+            "clearly hear messages",
+            "hear notifications clearly",
+            "hear messages clearly",
+            "can not clearly hear",
+            "cannot clearly hear",
+            "can t clearly hear",
+            "kaum hoeren",
+            "deutlich hoeren",
+            "klar hoeren",
+            "gut hoeren",
         )
     )
 
