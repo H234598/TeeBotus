@@ -1682,6 +1682,17 @@ def test_loudness_free_text_blocks_negated_english_intentions() -> None:
     assert _notification_loudness_decision("I decided not to mute messages", pending=False) is None
 
 
+def test_loudness_free_text_recognizes_negative_sound_reports() -> None:
+    assert _notification_loudness_decision("There is no sound from messages", pending=True) == "declined"
+    assert _notification_loudness_decision("There is no notification sound", pending=False) == "declined"
+    assert _notification_loudness_decision("I get no notification sound", pending=True) == "declined"
+    assert _notification_loudness_decision("Messages make no sound", pending=False) == "declined"
+    assert _notification_loudness_decision("Notifications make no sound", pending=True) == "declined"
+    assert _notification_loudness_decision("I hear no message notifications", pending=False) == "declined"
+    assert _notification_loudness_decision("Ich höre keinen Nachrichtenton", pending=True) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind ohne Ton", pending=False) == "declined"
+
+
 def test_loudness_free_text_does_not_decide_obligations_or_plans_as_done() -> None:
     assert _notification_loudness_decision("I have to mute messages", pending=True) is None
     assert _notification_loudness_decision("I have to turn notifications on", pending=False) is None

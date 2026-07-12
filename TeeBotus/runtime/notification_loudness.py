@@ -1129,6 +1129,20 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "die benachrichtigungen klingeln nicht",
         "messages are not audible",
         "notifications are not audible",
+        "no sound from messages",
+        "no notification sound",
+        "isn t any notification sound",
+        "no message sounds",
+        "no sound comes from messages",
+        "messages make no sound",
+        "notifications make no sound",
+        "messages produce no sound",
+        "hear no message notifications",
+        "keinen nachrichtenton",
+        "keinen benachrichtigungston",
+        "kein ton",
+        "keinen ton",
+        "ohne ton",
     )
     has_negated_confirmed_phrase = _notification_loudness_has_negated_phrase(
         polarity_normalized, confirmed_needles

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.193 - 2026-07-12
+
+- Recognize negative notification sound reports.
+
 ## 1.9.192 - 2026-07-12
 
 - Keep negated English intentions undecided.
