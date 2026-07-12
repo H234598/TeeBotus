@@ -1585,7 +1585,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if has_notification_context and _notification_loudness_has_conditional_status(normalized):
         return None
     if (
-        has_notification_context
+        (has_notification_context or (pending and has_completion_phrase))
         and not has_explicit_confirmation
         and _notification_loudness_has_non_assertive_status(normalized)
     ):
@@ -3268,6 +3268,12 @@ def _notification_loudness_has_non_assertive_status(normalized: str) -> bool:
         set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS)
         | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
         | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+        | {
+            phrase
+            for phrase in NOTIFICATION_LOUDNESS_COMPLETION_PHRASES
+            if " " not in phrase
+        }
+        | {"work", "works", "worked", "funktioniert", "funktionieren", "klappt", "geklappt"}
     )
     clause_boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
         NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
