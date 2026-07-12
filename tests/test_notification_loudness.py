@@ -1368,10 +1368,20 @@ def test_loudness_free_text_recognizes_sufficiency_gradients() -> None:
     assert _notification_loudness_decision("Notifications are clearly audible", pending=True) == "confirmed"
     assert _notification_loudness_decision("I can barely hear notifications", pending=True) == "declined"
     assert _notification_loudness_decision("I can clearly hear notifications", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I can barely hear the notification sound", pending=True) == "declined"
+    assert _notification_loudness_decision("I can clearly hear the notification sound", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I can barely hear the message sound", pending=True) == "declined"
+    assert _notification_loudness_decision("I can clearly hear the message sound", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich kann die Benachrichtigungen kaum hören", pending=True) == "declined"
     assert _notification_loudness_decision("Ich kann die Benachrichtigungen deutlich hören", pending=True) == "confirmed"
     assert _notification_loudness_decision("The notification volume is adequate", pending=True) == "confirmed"
     assert _notification_loudness_decision("The notification volume is inadequate", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications are becoming loud enough", pending=True) is None
+    assert _notification_loudness_decision("Notifications are getting loud enough", pending=True) is None
+    assert _notification_loudness_decision("Notifications have become loud enough", pending=True) == "confirmed"
+    assert _notification_loudness_decision(
+        "Notifications are becoming loud enough, but they are still quiet", pending=True
+    ) == "declined"
     assert _notification_loudness_decision("Die Lautstärke der Nachrichten ist ausreichend", pending=True) == "confirmed"
     assert _notification_loudness_decision("Die Lautstärke der Nachrichten ist unzureichend", pending=True) == "declined"
     assert _notification_loudness_decision("Not all notifications are loud enough", pending=True) is None

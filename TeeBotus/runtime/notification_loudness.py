@@ -1038,8 +1038,16 @@ NOTIFICATION_LOUDNESS_GRADIENT_POSITIVE_PHRASES = (
     "sind angemessen",
     "clearly hear notifications",
     "clearly hear messages",
+    "clearly hear notification sound",
+    "clearly hear message sound",
+    "clearly hear the notification sound",
+    "clearly hear the message sound",
     "hear notifications clearly",
     "hear messages clearly",
+    "hear notification sound clearly",
+    "hear message sound clearly",
+    "hear the notification sound clearly",
+    "hear the message sound clearly",
     "clearly audible",
     "deutlich hoerbar",
     "deutlich hoeren",
@@ -1080,8 +1088,16 @@ NOTIFICATION_LOUDNESS_GRADIENT_NEGATIVE_PHRASES = (
     "zu leise",
     "barely hear notifications",
     "barely hear messages",
+    "barely hear notification sound",
+    "barely hear message sound",
+    "barely hear the notification sound",
+    "barely hear the message sound",
     "hardly hear notifications",
     "hardly hear messages",
+    "hardly hear notification sound",
+    "hardly hear message sound",
+    "hardly hear the notification sound",
+    "hardly hear the message sound",
     "kaum hoeren",
     "kaum hoerbar",
     "only faintly hear notifications",
@@ -2120,6 +2136,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_notification_context = has_notification_context or has_positive_unmute_phrase
     has_audibility_gradient = _notification_loudness_has_audibility_gradient(normalized)
     has_direct_audibility_experience = _notification_loudness_has_direct_audibility_experience(normalized)
+    has_progressive_status_transition = _notification_loudness_has_progressive_status_transition(normalized)
     if _notification_loudness_has_uncertainty(normalized) and (has_notification_context or pending):
         return None
     if has_notification_context and _notification_loudness_has_conditional_status(normalized):
@@ -2213,13 +2230,17 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         has_attributive_positive, has_attributive_negative = (
             _notification_loudness_attributive_quantifier_polarity(normalized)
         )
-        later_current_status_segment = _notification_loudness_later_current_status_segment(
-            polarity_normalized,
-            allow_completion_pronoun=allow_completion_pronoun,
-        )
-        later_current_status_prefix = _notification_loudness_prior_clause_before_later_status(
-            polarity_normalized, later_current_status_segment
-        )
+        if later_current_status_segment is None:
+            later_current_status_segment = _notification_loudness_later_current_status_segment(
+                polarity_normalized,
+                allow_completion_pronoun=allow_completion_pronoun,
+            )
+        if later_current_status_prefix is None:
+            later_current_status_prefix = _notification_loudness_prior_clause_before_later_status(
+                polarity_normalized, later_current_status_segment
+            )
+    if has_progressive_status_transition and later_current_status_segment is None:
+        return None
     if later_current_status_segment:
         has_completed_action_positive = False
         has_completed_action_negative = False
@@ -2309,7 +2330,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         polarity_normalized
     ) and not _notification_loudness_has_sequenced_action_status(
         polarity_normalized, activation_only=True
-    ) and not (has_indirect_positive_mute_action and has_sequenced_action_status) and not (
+    ) and not (
+        has_indirect_positive_mute_action and has_sequenced_action_status
+    ) and not has_progressive_status_transition and not (
         later_current_status_segment
         and later_current_status_prefix is not None
         and not _notification_loudness_is_explicit_status_segment(later_current_status_prefix)
@@ -3944,6 +3967,8 @@ def _notification_loudness_has_non_assertive_status(normalized: str) -> bool:
             "intended",
             "supposed",
             "expected",
+            "becoming",
+            "getting",
             "likely",
             "unlikely",
             "seem",
@@ -4012,6 +4037,29 @@ def _notification_loudness_has_non_assertive_status(normalized: str) -> bool:
             return "sein" in clause[first_state_index + 1 :]
         return False
     return False
+
+
+def _notification_loudness_has_progressive_status_transition(normalized: str) -> bool:
+    tokens = normalized.split()
+    english_transition_terms = {
+        "becoming",
+        "getting",
+    }
+    state_terms = (
+        set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS)
+        | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
+        | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+        | {"quiet", "leise", "still"}
+    )
+    if set(tokens) & english_transition_terms and set(tokens) & state_terms:
+        return True
+    german_transition_terms = {"werden", "werde", "wird"}
+    german_state_terms = {"laut", "loud", "leise", "quiet", "stumm", "silent"}
+    return any(
+        token in german_transition_terms
+        and bool(set(tokens[index + 1 :]) & german_state_terms)
+        for index, token in enumerate(tokens)
+    )
 
 
 def _notification_loudness_has_conditional_status(normalized: str) -> bool:
@@ -6212,12 +6260,28 @@ def _notification_loudness_has_direct_audibility_experience(normalized: str) -> 
         for phrase in (
             "barely hear notifications",
             "barely hear messages",
+            "barely hear notification sound",
+            "barely hear message sound",
+            "barely hear the notification sound",
+            "barely hear the message sound",
             "hardly hear notifications",
             "hardly hear messages",
+            "hardly hear notification sound",
+            "hardly hear message sound",
+            "hardly hear the notification sound",
+            "hardly hear the message sound",
             "clearly hear notifications",
             "clearly hear messages",
+            "clearly hear notification sound",
+            "clearly hear message sound",
+            "clearly hear the notification sound",
+            "clearly hear the message sound",
             "hear notifications clearly",
             "hear messages clearly",
+            "hear notification sound clearly",
+            "hear message sound clearly",
+            "hear the notification sound clearly",
+            "hear the message sound clearly",
             "can not clearly hear",
             "cannot clearly hear",
             "can t clearly hear",
