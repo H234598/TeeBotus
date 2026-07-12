@@ -1735,6 +1735,10 @@ def test_loudness_free_text_keeps_partial_set_quantifiers_undecided() -> None:
     assert _notification_loudness_decision("Almost all notifications are enabled", pending=True) is None
     assert _notification_loudness_decision("At least one message is loud", pending=False) is None
     assert _notification_loudness_decision("All but one notification is muted", pending=True) is None
+    assert _notification_loudness_decision("The notifications aren't all muted", pending=True) is None
+    assert _notification_loudness_decision("The messages aren't all loud", pending=False) is None
+    assert _notification_loudness_decision("The messages are all loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten sind alle laut", pending=False) == "confirmed"
 
 
 def test_loudness_free_text_recognizes_chat_subjects() -> None:

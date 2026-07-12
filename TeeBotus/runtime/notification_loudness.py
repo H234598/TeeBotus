@@ -116,6 +116,10 @@ NOTIFICATION_LOUDNESS_QUANTIFIER_TERMS = frozenset(
 )
 NOTIFICATION_LOUDNESS_PARTIAL_QUANTIFIER_PHRASES = (
     "not all",
+    "aren t all",
+    "isn t all",
+    "wasn t all",
+    "weren t all",
     "not every",
     "not each",
     "nicht alle",
@@ -739,6 +743,8 @@ NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
         "longer",
         "anymore",
         "any",
+        "all",
+        "alle",
         "mehr",
         "already",
         "bereits",
