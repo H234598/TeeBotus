@@ -1394,6 +1394,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_notification_context = has_notification_context or has_positive_unmute_phrase
     if _notification_loudness_has_uncertainty(normalized) and (has_notification_context or pending):
         return None
+    if has_notification_context and _notification_loudness_has_conditional_status(normalized):
+        return None
     if (
         has_notification_context
         and not has_explicit_confirmation
@@ -3001,6 +3003,32 @@ def _notification_loudness_has_non_assertive_status(normalized: str) -> bool:
             return "sein" in clause[first_state_index + 1 :]
         return False
     return False
+
+
+def _notification_loudness_has_conditional_status(normalized: str) -> bool:
+    conditional_terms = {
+        "if",
+        "when",
+        "unless",
+        "provided",
+        "assuming",
+        "suppose",
+        "falls",
+        "wenn",
+        "sofern",
+        "vorausgesetzt",
+        "angenommen",
+    }
+    state_terms = (
+        set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS)
+        | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
+        | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+    )
+    tokens = normalized.split()
+    return any(
+        token in conditional_terms and bool(set(tokens) & state_terms)
+        for token in tokens
+    )
 
 
 def _notification_loudness_later_current_status_segment(normalized: str) -> str | None:
