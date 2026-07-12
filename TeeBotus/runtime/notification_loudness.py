@@ -3656,7 +3656,10 @@ def _notification_loudness_has_recent_completion_marker(normalized: str) -> bool
 def _notification_loudness_has_habitual_marker(normalized: str) -> bool:
     for phrase in NOTIFICATION_LOUDNESS_HABITUAL_MARKERS:
         normalized_phrase = _normalize_text(phrase)
-        if phrase == "immer" and _contains_normalized_phrase(normalized, "immer noch"):
+        if phrase == "immer" and (
+            _contains_normalized_phrase(normalized, "immer noch")
+            or _contains_normalized_phrase(normalized, "noch immer")
+        ):
             continue
         if _contains_normalized_phrase(normalized, normalized_phrase):
             return True
