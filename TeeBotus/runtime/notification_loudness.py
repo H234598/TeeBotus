@@ -985,6 +985,7 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "handled it",
     "sorted it",
     "fixed it",
+    "fixed them",
     "wrapped it up",
     "geschafft",
     "abgeschlossen",
@@ -1010,6 +1011,25 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "set it loud",
     "set it to loud",
     "put it on",
+    "restored it",
+    "restored them",
+    "brought it back",
+    "brought them back",
+    "made it audible",
+    "made them audible",
+    "made it ring",
+    "made them ring",
+    "turned the sound back on",
+    "brought the sound back",
+    "got it working again",
+    "got them working again",
+    "set it back to loud",
+    "repaired it",
+    "repaired them",
+    "den ton zurueckgebracht",
+    "ton zurueckgebracht",
+    "zurueckgebracht",
+    "repariert",
     "unmuted",
     "made loud",
     "made them loud",
@@ -1017,7 +1037,7 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "set them to loud",
     "gelungen",
 )
-NOTIFICATION_LOUDNESS_GENERIC_COMPLETION_PRONOUN_PHRASES = (
+NOTIFICATION_LOUDNESS_COMPLETION_PRONOUN_PHRASES = (
     "did it",
     "did that",
     "did so",
@@ -1030,6 +1050,22 @@ NOTIFICATION_LOUDNESS_GENERIC_COMPLETION_PRONOUN_PHRASES = (
     "haven t done it",
     "never did it",
     "never done it",
+    "restored it",
+    "restored them",
+    "brought it back",
+    "brought them back",
+    "made it audible",
+    "made them audible",
+    "made it ring",
+    "made them ring",
+    "got it working again",
+    "got them working again",
+    "repaired it",
+    "repaired them",
+    "fixed them",
+    "den ton zurueckgebracht",
+    "ton zurueckgebracht",
+    "repariert",
 )
 NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES = (
     "failed to",
@@ -1464,7 +1500,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             for candidate in candidate_texts:
                 direct_pronoun_decision = _notification_loudness_pending_pronoun_decision(candidate)
                 candidate_tokens = candidate.split()
-                if direct_pronoun_decision is None and len(candidate_tokens) >= 2 and candidate_tokens[0] in {"sie", "die", "das", "they", "it"}:
+                if direct_pronoun_decision is None and len(candidate_tokens) >= 2 and candidate_tokens[0] in {"sie", "die", "das", "er", "they", "it"}:
                     if candidate_tokens[1] in {"ist", "sind", "is", "are", "re"}:
                         if (
                             _notification_loudness_has_ambiguous_status_qualifier(candidate)
@@ -1618,11 +1654,13 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             "set it loud",
             "set it to loud",
             "put it on",
+            "made it audible",
+            "made them audible",
         )
     )
     allow_completion_pronoun = pending and any(
         _contains_normalized_phrase(normalized, phrase)
-        for phrase in NOTIFICATION_LOUDNESS_GENERIC_COMPLETION_PRONOUN_PHRASES
+        for phrase in NOTIFICATION_LOUDNESS_COMPLETION_PRONOUN_PHRASES
     )
     has_indirect_positive_mute_action = _notification_loudness_has_indirect_positive_mute_action(normalized)
     has_positive_unmute_phrase = any(
@@ -1664,9 +1702,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     later_current_status_prefix = _notification_loudness_prior_clause_before_later_status(
         polarity_normalized, later_current_status_segment
     )
-    has_generic_completion_pronoun_prefix = pending and later_current_status_prefix is not None and any(
+    has_completion_pronoun_prefix = pending and later_current_status_prefix is not None and any(
         _contains_normalized_phrase(later_current_status_prefix, phrase)
-        for phrase in NOTIFICATION_LOUDNESS_GENERIC_COMPLETION_PRONOUN_PHRASES
+        for phrase in NOTIFICATION_LOUDNESS_COMPLETION_PRONOUN_PHRASES
     )
     if (
         (has_notification_context or (pending and has_completion_phrase and not has_negated_completion))
@@ -1740,7 +1778,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         has_notification_context
         and _notification_loudness_has_habitual_marker(normalized)
         and not (has_completed_action_positive or has_completed_action_negative)
-        and not has_generic_completion_pronoun_prefix
+        and not has_completion_pronoun_prefix
     ):
         return None
     if has_notification_context and normalized.startswith(NOTIFICATION_LOUDNESS_NON_ASSERTIVE_STARTS):
@@ -1819,7 +1857,6 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         later_current_status_segment
         and later_current_status_prefix is not None
         and not _notification_loudness_is_explicit_status_segment(later_current_status_prefix)
-        and not has_generic_completion_pronoun_prefix
     ):
         return None
     if has_notification_context and _notification_loudness_has_cross_subject_conflict(
@@ -2264,7 +2301,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         )
         or (
             has_negated_completion
-            and not (has_generic_completion_pronoun_prefix and later_current_status_segment)
+            and not (has_completion_pronoun_prefix and later_current_status_segment)
         )
         or (has_negated_confirmed_phrase and not has_absolute_negative_positive_inner_negation)
         or (has_negative_current_status and not has_absolute_negative_positive_inner_negation)
@@ -2275,7 +2312,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or has_attributive_negative
         or has_volume_negative
         or (
-            has_generic_completion_pronoun_prefix
+            has_completion_pronoun_prefix
             and later_current_status_segment
             and (
                 (has_unnegated_mute and not has_negated_mute)
@@ -2803,6 +2840,7 @@ def _notification_loudness_leading_reply_prefix(text: str) -> tuple[str, str] | 
         "sie",
         "die",
         "das",
+        "er",
         "they",
         "it",
         "notification",
@@ -3480,7 +3518,7 @@ def _notification_loudness_is_explicit_status_segment(
         "notification",
         "notifications",
     }
-    pronoun_terms = {"sie", "die", "das", "they", "it"}
+    pronoun_terms = {"sie", "die", "das", "er", "they", "it"}
     copulas = {
         "ist",
         "sind",
@@ -4478,6 +4516,7 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
         "sie",
         "die",
         "das",
+        "er",
         "they",
         "it",
     }
@@ -5286,6 +5325,7 @@ def _notification_loudness_has_sequenced_action_status(
         "notification",
         "notifications",
         "sie",
+        "er",
         "they",
         "it",
         "die",
@@ -5740,7 +5780,7 @@ def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | No
     }:
         return "declined"
     tokens = normalized.split()
-    pronouns = {"sie", "die", "das", "they", "it", "this", "that", "these", "those"}
+    pronouns = {"sie", "die", "das", "er", "they", "it", "this", "that", "these", "those"}
     copulas = {"ist", "sind", "is", "are", "re", "s"}
     status_terms = (
         NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS
