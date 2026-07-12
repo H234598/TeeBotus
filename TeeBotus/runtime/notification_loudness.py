@@ -1530,6 +1530,25 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_explicit_confirmation = _notification_loudness_has_explicit_confirmation(normalized)
     has_sequenced_action_status = _notification_loudness_has_sequenced_action_status(polarity_normalized)
     has_notification_context = has_notification_context or has_explicit_confirmation or has_sequenced_action_status
+    leading_copula_status_tokens = normalized.split()[1:]
+    while (
+        leading_copula_status_tokens
+        and leading_copula_status_tokens[0] in NOTIFICATION_LOUDNESS_NON_ASSERTIVE_OPTIONAL_MODIFIERS
+    ):
+        leading_copula_status_tokens = leading_copula_status_tokens[1:]
+    if leading_copula_status_tokens and leading_copula_status_tokens[0] in {"not", "nicht"}:
+        leading_copula_status_tokens = leading_copula_status_tokens[1:]
+    if (
+        not pending
+        and normalized.startswith(("ist ", "sind ", "is ", "are "))
+        and len(leading_copula_status_tokens) <= 1
+        and not has_explicit_notification_context
+        and not has_explicit_confirmation
+        and not has_sequenced_action_status
+    ):
+        # A leading copula without a subject cannot establish a global status
+        # when no pending route supplies the omitted notification context.
+        return None
     has_attributive_positive, has_attributive_negative = (
         _notification_loudness_attributive_quantifier_polarity(normalized)
     )
@@ -5899,7 +5918,10 @@ def _notification_loudness_is_non_declarative(text: str, normalized: str) -> boo
         return False
     tokens = normalized.split()
     if tokens and tokens[0] in {"sind", "ist", "are", "is"}:
-        return len(tokens) > 1 and tokens[1] not in NOTIFICATION_LOUDNESS_STATUS_LEAD_TERMS
+        status_tokens = tokens[1:]
+        while status_tokens and status_tokens[0] in NOTIFICATION_LOUDNESS_NON_ASSERTIVE_OPTIONAL_MODIFIERS:
+            status_tokens = status_tokens[1:]
+        return bool(status_tokens) and status_tokens[0] not in NOTIFICATION_LOUDNESS_STATUS_LEAD_TERMS
     if normalized.startswith(NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS):
         return True
     without_temporal_fillers = " ".join(

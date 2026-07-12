@@ -1138,12 +1138,14 @@ def test_loudness_free_text_accepts_natural_completion_phrases() -> None:
     assert _notification_loudness_decision("I did it", pending=True) == "confirmed"
     assert _notification_loudness_decision("I did that", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ist erledigt", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ist jetzt erledigt", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ist fertig", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ist abgeschlossen", pending=True) == "confirmed"
     assert _notification_loudness_decision("Benachrichtigungen sind eingeschaltet", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich habe es nicht gemacht", pending=True) == "declined"
     assert _notification_loudness_decision("I did not do it", pending=True) == "declined"
     assert _notification_loudness_decision("Ist nicht erledigt", pending=True) == "declined"
+    assert _notification_loudness_decision("Ist jetzt nicht erledigt", pending=True) == "declined"
     assert _notification_loudness_decision("Noch nicht aktiviert", pending=True) == "declined"
 
 
@@ -1167,6 +1169,11 @@ def test_loudness_free_text_accepts_natural_on_off_and_loud_status_phrases() -> 
     assert _notification_loudness_decision("Die Nachrichten sind wieder laut", pending=True) == "confirmed"
     assert _notification_loudness_decision("Aktuell stehen die Nachrichten auf laut", pending=False) == "confirmed"
     assert _notification_loudness_decision("Die Nachrichten sind jetzt auf laut", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ist jetzt laut", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ist jetzt nicht laut", pending=True) == "declined"
+    assert _notification_loudness_decision("Is now loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ist jetzt laut", pending=False) is None
+    assert _notification_loudness_decision("Is now loud", pending=False) is None
 
 
 def test_loudness_free_text_handles_german_subordinate_status_order() -> None:
