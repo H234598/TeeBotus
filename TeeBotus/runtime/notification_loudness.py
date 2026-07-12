@@ -1375,6 +1375,8 @@ NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES = (
     "never managed to",
     "haven t managed to",
     "hasn t managed to",
+    "did not manage to",
+    "didn t manage to",
     "did not succeed",
     "didn t succeed",
     "tried and failed",
