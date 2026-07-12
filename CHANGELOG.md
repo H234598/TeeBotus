@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.142 - 2026-07-12
+
+- Ignore present leave/let/lassen loudness actions.
+
 ## 1.9.141 - 2026-07-12
 
 - Ignore first-person negated mute/keep/turn intentions.

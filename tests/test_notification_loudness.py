@@ -1411,6 +1411,10 @@ def test_loudness_free_text_does_not_decide_negated_keep_requests() -> None:
     assert _notification_loudness_decision("I do not keep notifications off", pending=False) is None
     assert _notification_loudness_decision("I don't mute messages", pending=True) is None
     assert _notification_loudness_decision("I do not turn notifications on", pending=False) is None
+    assert _notification_loudness_decision("I leave messages muted", pending=True) is None
+    assert _notification_loudness_decision("I leave notifications off", pending=False) is None
+    assert _notification_loudness_decision("Ich lasse die Nachrichten stumm", pending=True) is None
+    assert _notification_loudness_decision("Ich lasse die Nachrichten nicht stumm", pending=False) is None
 
 
 def test_loudness_free_text_does_not_decide_present_actions_as_completed() -> None:
