@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.209 - 2026-07-12
+
+- Scope failed-action detection to notification-related actions.
+
 ## 1.9.208 - 2026-07-12
 
 - Distinguish attempted, failed, and successful notification actions in English and German.

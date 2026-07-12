@@ -663,7 +663,7 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "gelungen",
 )
 NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES = (
-    "failed",
+    "failed to",
     "couldn t manage",
     "could not manage",
     "was unable to",

@@ -1870,6 +1870,9 @@ def test_loudness_free_text_does_not_decide_future_intentions_as_completed() -> 
     assert _notification_loudness_decision("Es ist mir gelungen, Nachrichten laut zu stellen", pending=False) == "confirmed"
     assert _notification_loudness_decision("Ich konnte die Nachrichten laut stellen", pending=True) is None
     assert _notification_loudness_decision("Ich konnte die Nachrichten nicht laut stellen", pending=False) == "declined"
+    assert _notification_loudness_decision("The notification failed to arrive", pending=True) == "declined"
+    assert _notification_loudness_decision("The test failed, but notifications are loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I failed the test and notifications are loud", pending=True) == "confirmed"
 
 
 def test_loudness_free_text_does_not_decide_historical_status_as_current() -> None:
