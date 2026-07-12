@@ -763,6 +763,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     ):
         return None
     has_positive_current_status = _notification_loudness_has_positive_current_status(normalized)
+    has_negative_current_status = _notification_loudness_has_negative_current_status(normalized)
     confirmed_needles = (
         "ja laut",
         "laut gestellt",
@@ -918,6 +919,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or (has_unnegated_off and not has_positive_unmute_phrase)
         or has_negated_completion
         or has_negated_confirmed_phrase
+        or has_negative_current_status
     )
     if has_declined_phrase and (pending or has_notification_context):
         return "declined"
@@ -1489,6 +1491,25 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
                 continue
             between = tokens[copula_index + 1 : status_index]
             if all(value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in between):
+                return True
+    return False
+
+
+def _notification_loudness_has_negative_current_status(normalized: str) -> bool:
+    tokens = normalized.split()
+    positive_status_terms = NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS
+    contracted_copulas = {"isn", "aren"}
+    for status_index, token in enumerate(tokens):
+        if token not in positive_status_terms:
+            continue
+        for copula_index in range(max(0, status_index - 4), status_index):
+            copula = tokens[copula_index]
+            between = tokens[copula_index + 1 : status_index]
+            if copula in {"is", "are"} and "not" in between:
+                return True
+            if copula in {"ist", "sind"} and "nicht" in between:
+                return True
+            if copula in contracted_copulas and "t" in between:
                 return True
     return False
 

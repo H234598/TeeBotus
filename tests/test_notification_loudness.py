@@ -1435,6 +1435,13 @@ def test_loudness_free_text_recognizes_audibility_reports() -> None:
     assert _notification_loudness_decision("Messages don't ring", pending=True) == "declined"
 
 
+def test_loudness_free_text_recognizes_negative_current_status_with_modifiers() -> None:
+    assert _notification_loudness_decision("Die Nachrichten sind nicht jetzt laut", pending=True) == "declined"
+    assert _notification_loudness_decision("Messages aren't currently loud", pending=False) == "declined"
+    assert _notification_loudness_decision("Notifications are not currently enabled", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications are not off", pending=True) == "confirmed"
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None
