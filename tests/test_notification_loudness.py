@@ -1523,6 +1523,14 @@ def test_loudness_free_text_keeps_partial_set_quantifiers_undecided() -> None:
     assert _notification_loudness_decision("All but one notification is muted", pending=True) is None
 
 
+def test_loudness_free_text_recognizes_chat_subjects() -> None:
+    assert _notification_loudness_decision("Der Chat ist auf laut", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Der Chat ist nicht stumm", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Der Chat ist stumm", pending=False) == "declined"
+    assert _notification_loudness_decision("The conversation is unmuted", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Thread is muted", pending=True) == "declined"
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None

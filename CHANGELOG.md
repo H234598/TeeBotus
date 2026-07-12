@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.176 - 2026-07-12
+
+- Recognize chat, conversation, and thread notification subjects.
+
 ## 1.9.175 - 2026-07-12
 
 - Keep partial set quantifiers undecided.
