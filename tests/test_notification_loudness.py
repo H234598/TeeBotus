@@ -1543,6 +1543,23 @@ def test_loudness_free_text_recognizes_returned_sound_states() -> None:
     assert _notification_loudness_decision("The sound was not restored", pending=False) is None
 
 
+def test_loudness_free_text_recognizes_lost_and_reappeared_notifications() -> None:
+    assert _notification_loudness_decision("Notifications disappeared", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications no longer appear", pending=False) == "declined"
+    assert _notification_loudness_decision("Messages stopped making a sound", pending=True) == "declined"
+    assert _notification_loudness_decision("The notification sound stopped", pending=False) == "declined"
+    assert _notification_loudness_decision("I lost notification sound", pending=True) == "declined"
+    assert _notification_loudness_decision("The sound was lost", pending=False) == "declined"
+    assert _notification_loudness_decision("Die Benachrichtigungen sind verschwunden", pending=True) == "declined"
+    assert _notification_loudness_decision("Der Nachrichtenton ist weg", pending=False) == "declined"
+    assert _notification_loudness_decision("Notifications came back", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications reappeared", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Messages started ringing", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I got the notification sound back", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten sind wieder da", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Die Benachrichtigungen tauchen wieder auf", pending=False) == "confirmed"
+
+
 def test_loudness_free_text_recognizes_audibility_reports() -> None:
     assert _notification_loudness_decision("Die Nachrichten klingeln jetzt", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich kann die Nachrichten jetzt hören", pending=False) == "confirmed"
