@@ -1769,6 +1769,24 @@ def test_loudness_free_text_rejects_status_requests_as_confirmations() -> None:
     assert _notification_loudness_decision("I checked and notifications are on", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_rejects_indirect_status_questions_as_confirmations() -> None:
+    for request in (
+        "Tell us whether notifications are on",
+        "Please state whether notifications are on",
+        "Please answer whether notifications are not muted",
+        "We need to know whether notifications are on",
+        "The question is whether notifications are on",
+        "Bitte sag mir, ob Nachrichten laut sind",
+        "Bitte sag uns, ob Nachrichten laut sind",
+        "Bitte teile mir mit, ob Nachrichten laut sind",
+        "Gib mir Bescheid, ob Nachrichten laut sind",
+        "Wir müssen wissen, ob Nachrichten laut sind",
+        "Die Frage ist, ob Nachrichten laut sind",
+        "Die Frage lautet, ob Nachrichten laut sind",
+    ):
+        assert _notification_loudness_decision(request, pending=True) is None
+
+
 def test_loudness_free_text_recognizes_negative_current_status_with_modifiers() -> None:
     assert _notification_loudness_decision("Die Nachrichten sind nicht jetzt laut", pending=True) == "declined"
     assert _notification_loudness_decision("Messages aren't currently loud", pending=False) == "declined"
