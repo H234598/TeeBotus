@@ -1079,7 +1079,9 @@ NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES = (
     "do not disturb is disabled for notifications",
 )
 NOTIFICATION_LOUDNESS_ACTION_WORDS = frozenset({"hab", "habe", "haben", "getan", "gemacht", "erledigt", "did", "done"})
-NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS = frozenset({"ja", "yes", "jep", "jo", "ok", "okay", "klar"})
+NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS = frozenset(
+    {"ja", "yes", "jep", "jo", "ok", "okay", "klar", "yep", "yup", "yeah", "yea", "sure"}
+)
 NOTIFICATION_LOUDNESS_NEGATION_REPLY_WORDS = frozenset({"nein", "no", "nee", "nop", "nope"})
 NOTIFICATION_LOUDNESS_PENDING_POSITIVE_STATUS_REPLIES = frozenset(
     {
