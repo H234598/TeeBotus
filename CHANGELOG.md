@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.189 - 2026-07-12
+
+- Keep modal intentions out of notification-state detection.
+
 ## 1.9.188 - 2026-07-12
 
 - Recognize positive audibility without a time adverb.

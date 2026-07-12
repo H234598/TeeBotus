@@ -1634,6 +1634,18 @@ def test_loudness_free_text_recognizes_positive_audibility_without_time_adverb()
     assert _notification_loudness_decision("I can hear notifications?", pending=True) is None
 
 
+def test_loudness_free_text_does_not_decide_modal_intentions_as_states() -> None:
+    assert _notification_loudness_decision("I won't mute messages", pending=True) is None
+    assert _notification_loudness_decision("I won't turn notifications off", pending=False) is None
+    assert _notification_loudness_decision("I can't mute messages", pending=True) is None
+    assert _notification_loudness_decision("I can't keep messages muted", pending=False) is None
+    assert _notification_loudness_decision("I couldn't mute messages", pending=True) is None
+    assert _notification_loudness_decision("Ich würde Nachrichten nicht stumm schalten", pending=True) is None
+    assert _notification_loudness_decision("Ich sollte Nachrichten laut stellen", pending=False) is None
+    assert _notification_loudness_decision("Ich kann Nachrichten nicht stumm schalten", pending=True) is None
+    assert _notification_loudness_decision("I can hear messages", pending=True) == "confirmed"
+
+
 def test_loudness_free_text_does_not_decide_obligations_or_plans_as_done() -> None:
     assert _notification_loudness_decision("I have to mute messages", pending=True) is None
     assert _notification_loudness_decision("I have to turn notifications on", pending=False) is None
