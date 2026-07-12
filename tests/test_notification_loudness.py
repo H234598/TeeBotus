@@ -1245,6 +1245,16 @@ def test_loudness_free_text_accepts_direct_worked_and_failed_replies() -> None:
     assert _notification_loudness_decision("It failed", pending=True) == "declined"
     assert _notification_loudness_decision("Es hat nicht funktioniert", pending=True) == "declined"
     assert _notification_loudness_decision("Hat nicht geklappt", pending=True) == "declined"
+
+
+def test_loudness_free_text_does_not_treat_progressive_actions_as_done() -> None:
+    assert _notification_loudness_decision("Notifications are being unmuted", pending=True) is None
+    assert _notification_loudness_decision("Notifications are being turned on", pending=True) is None
+    assert _notification_loudness_decision("Notifications were being turned on", pending=True) is None
+    assert _notification_loudness_decision("Die Nachrichten werden gerade entstummt", pending=True) is None
+    assert _notification_loudness_decision(
+        "Notifications are being unmuted, but they are loud", pending=True
+    ) == "confirmed"
     assert _notification_loudness_decision("I did not turn off silent mode", pending=True) == "declined"
     assert _notification_loudness_decision("I did not disable silent mode", pending=True) == "declined"
     assert _notification_loudness_decision("I didn't deactivate quiet mode", pending=True) == "declined"

@@ -3864,6 +3864,15 @@ def _notification_loudness_has_non_assertive_status(normalized: str) -> bool:
             continue
         first_state_index = state_indices[0]
         prefix = clause[:first_state_index]
+        if any(
+            index > 0
+            and token == "being"
+            and prefix[index - 1] in {"is", "are", "was", "were"}
+            for index, token in enumerate(prefix)
+        ):
+            return True
+        if "gerade" in prefix and set(prefix) & {"werde", "werden", "wird"}:
+            return True
         if modal_terms.intersection(prefix):
             return True
         if {"werde", "werden", "wird"}.intersection(prefix):
