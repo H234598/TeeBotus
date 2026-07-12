@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.138 - 2026-07-12
+
+- Complete pending pronoun polarity coverage for loudness states.
+
 ## 1.9.137 - 2026-07-12
 
 - Recognize exact pending pronoun status replies.
