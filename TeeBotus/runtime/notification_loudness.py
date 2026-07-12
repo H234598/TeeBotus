@@ -885,6 +885,21 @@ NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
         "bereits",
         "schon",
         "yet",
+        "definitely",
+        "certainly",
+        "clearly",
+        "obviously",
+        "surely",
+        "undoubtedly",
+        "demonstrably",
+        "undeniably",
+        "definitiv",
+        "sicher",
+        "eindeutig",
+        "offensichtlich",
+        "zweifellos",
+        "bekanntermassen",
+        "nachweislich",
     }
 )
 NOTIFICATION_LOUDNESS_NON_ASSERTIVE_OPTIONAL_MODIFIERS = frozenset(
