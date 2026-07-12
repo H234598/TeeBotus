@@ -3671,6 +3671,7 @@ def _notification_loudness_has_question_tail(normalized: str) -> bool:
 
 
 def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
+    normalized = normalized.replace("nach wie vor", "weiterhin")
     tokens = normalized.split()
     copulas = {
         "ist",
