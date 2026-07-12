@@ -940,6 +940,7 @@ NOTIFICATION_LOUDNESS_PENDING_POSITIVE_STATUS_REPLIES = frozenset(
         "hohe lautstaerke",
         "voller lautstaerke",
         "maximale lautstaerke",
+        "high volume",
         "full volume",
         "maximum volume",
         "100 prozent",
@@ -976,6 +977,7 @@ NOTIFICATION_LOUDNESS_PENDING_NEGATIVE_STATUS_REPLIES = frozenset(
         "herunter",
         "leise lautstaerke",
         "niedrige lautstaerke",
+        "minimale lautstaerke",
         "minimum volume",
         "low volume",
         "quiet volume",
@@ -1258,6 +1260,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         modified_reply_decision = _notification_loudness_pending_modified_reply_decision(normalized)
         if modified_reply_decision is not None:
             return modified_reply_decision
+        negated_volume_reply_decision = _notification_loudness_pending_negated_volume_reply_decision(normalized)
+        if negated_volume_reply_decision is not None:
+            return negated_volume_reply_decision
     words = set(normalized.split())
     explicit_context_needles = (
         "benachrichtigung",
@@ -2452,6 +2457,29 @@ def _notification_loudness_pending_modified_reply_decision(normalized: str) -> s
                 suffix = tokens[end:]
                 if all(token in reply_modifiers for token in suffix):
                     return decision
+    return None
+
+
+def _notification_loudness_pending_negated_volume_reply_decision(normalized: str) -> str | None:
+    """Invert only explicit volume short replies prefixed by ``not/nicht``."""
+    negation = None
+    for candidate in ("not", "nicht"):
+        if normalized.startswith(f"{candidate} "):
+            negation = candidate
+            break
+    if negation is None:
+        return None
+    remainder = normalized[len(negation) + 1 :]
+    volume_markers = {"volume", "lautstaerke", "prozent", "percent", "%"}
+    for replies, decision in (
+        (NOTIFICATION_LOUDNESS_PENDING_POSITIVE_STATUS_REPLIES, "declined"),
+        (NOTIFICATION_LOUDNESS_PENDING_NEGATIVE_STATUS_REPLIES, "confirmed"),
+    ):
+        for reply in replies:
+            if not volume_markers.intersection(reply.split()) and not reply.endswith("%"):
+                continue
+            if remainder == reply:
+                return decision
     return None
 
 
