@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.150 - 2026-07-12
+
+- Ignore whether/theoretical loudness statements.
+
 ## 1.9.149 - 2026-07-12
 
 - Keep contradictory loudness alternatives undecided.

@@ -224,6 +224,8 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "i wonder ",
     "what if ",
     "how do i know ",
+    "whether ",
+    "in theory ",
     "i make ",
     "i put ",
     "i activate ",

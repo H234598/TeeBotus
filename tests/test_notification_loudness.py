@@ -1259,6 +1259,9 @@ def test_loudness_free_text_does_not_decide_questions_or_requests() -> None:
     assert _notification_loudness_decision("I wonder whether messages are muted", pending=False) is None
     assert _notification_loudness_decision("What if notifications are on", pending=True) is None
     assert _notification_loudness_decision("How do I know notifications are on", pending=False) is None
+    assert _notification_loudness_decision("Whether notifications are on", pending=True) is None
+    assert _notification_loudness_decision("Whether or not notifications are on", pending=False) is None
+    assert _notification_loudness_decision("In theory notifications are on", pending=True) is None
     assert _notification_loudness_decision("Notifications are on or off", pending=True) is None
     assert _notification_loudness_decision("Messages are loud or muted", pending=False) is None
     assert _notification_loudness_decision("Benachrichtigungen sind an oder aus", pending=True) is None
