@@ -4939,6 +4939,60 @@ def _notification_loudness_has_partial_quantifier(normalized: str) -> bool:
     return False
 
 
+def _notification_loudness_has_set_partial_quantifier(normalized: str) -> bool:
+    return any(
+        _contains_normalized_phrase(normalized, _normalize_text(phrase))
+        for phrase in (
+            "not all",
+            "aren t all",
+            "isn t all",
+            "wasn t all",
+            "weren t all",
+            "not every",
+            "not each",
+            "not completely",
+            "not fully",
+            "not entirely",
+            "not quite",
+            "almost",
+            "nearly",
+            "partially",
+            "only partly",
+            "some",
+            "a few",
+            "several",
+            "most",
+            "many",
+            "almost all",
+            "all but",
+            "at least",
+            "at most",
+            "a majority",
+            "nicht alle",
+            "nicht jede",
+            "nicht jeder",
+            "nicht jedes",
+            "nicht vollstaendig",
+            "nicht komplett",
+            "nicht ganz",
+            "teilweise",
+            "nur teilweise",
+            "nur zum teil",
+            "einige",
+            "manche",
+            "mehrere",
+            "ein paar",
+            "die meisten",
+            "viele",
+            "wenige",
+            "fast alle",
+            "bis auf",
+            "mindestens",
+            "hoechstens",
+        )
+    )
+
+
 def _notification_loudness_attributive_quantifier_polarity(
     normalized: str,
 ) -> tuple[bool, bool]:
@@ -6242,15 +6296,53 @@ def _notification_loudness_has_audibility_state(normalized: str) -> bool:
     )
 
 
+def _notification_loudness_gradient_absolute_polarity(
+    normalized: str, phrase: str
+) -> str | None:
+    marker = "__loudness_gradient__"
+    candidate = normalized.replace(phrase, marker)
+    if candidate == normalized:
+        return None
+    marker_terms = frozenset({marker})
+    if _notification_loudness_has_absolute_negative_term(
+        candidate, marker_terms, inner_negated=True
+    ):
+        return "inner"
+    if _notification_loudness_has_absolute_negative_term(candidate, marker_terms):
+        return "outer"
+    return None
+
+
 def _notification_loudness_audibility_gradient_decision(normalized: str) -> str | None:
     """Resolve explicit loudness thresholds while respecting local negation."""
-    if _notification_loudness_has_partial_quantifier(normalized) and not any(
-        _contains_normalized_phrase(normalized, phrase)
+    negative_matches = tuple(
+        phrase
         for phrase in NOTIFICATION_LOUDNESS_GRADIENT_NEGATIVE_PHRASES
-    ):
+        if _contains_normalized_phrase(normalized, phrase)
+    )
+    positive_matches = tuple(
+        phrase
+        for phrase in NOTIFICATION_LOUDNESS_GRADIENT_POSITIVE_PHRASES
+        if _contains_normalized_phrase(normalized, phrase)
+    )
+    for phrase in negative_matches:
+        absolute_polarity = _notification_loudness_gradient_absolute_polarity(normalized, phrase)
+        if absolute_polarity == "outer":
+            return "confirmed"
+        if absolute_polarity == "inner":
+            return "declined"
+    for phrase in positive_matches:
+        absolute_polarity = _notification_loudness_gradient_absolute_polarity(normalized, phrase)
+        if absolute_polarity == "outer":
+            return "declined"
+        if absolute_polarity == "inner":
+            return "confirmed"
+    if _notification_loudness_has_set_partial_quantifier(normalized):
+        return None
+    if _notification_loudness_has_partial_quantifier(normalized) and not negative_matches:
         return None
     for phrase in NOTIFICATION_LOUDNESS_GRADIENT_NEGATIVE_PHRASES:
-        if not _contains_normalized_phrase(normalized, phrase):
+        if phrase not in negative_matches:
             continue
         return (
             "confirmed"
@@ -6258,7 +6350,7 @@ def _notification_loudness_audibility_gradient_decision(normalized: str) -> str 
             else "declined"
         )
     for phrase in NOTIFICATION_LOUDNESS_GRADIENT_POSITIVE_PHRASES:
-        if not _contains_normalized_phrase(normalized, phrase):
+        if phrase not in positive_matches:
             continue
         return (
             "declined"
