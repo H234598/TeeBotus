@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.158 - 2026-07-12
+
+- Handle negated certainty and conviction statements.
+
 ## 1.9.157 - 2026-07-12
 
 - Ignore modal loudness intentions and obligations.

@@ -103,6 +103,10 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "ich kann nicht bestätigen",
     "ich kann nicht verifizieren",
     "ich kann nicht sicher sein",
+    "nicht absolut sicher",
+    "nicht völlig sicher",
+    "nicht ueberzeugt",
+    "nicht überzeugt",
     "nicht genug informationen",
     "keine möglichkeit zu wissen",
     "keine möglichkeit zu sagen",
@@ -171,6 +175,11 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "there is no way to tell",
     "cannot be sure",
     "can t be sure",
+    "not absolutely sure",
+    "not completely sure",
+    "not entirely sure",
+    "not fully convinced",
+    "not convinced",
 )
 NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES = (
     "used to",
