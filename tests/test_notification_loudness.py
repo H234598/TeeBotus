@@ -1746,6 +1746,29 @@ def test_loudness_free_text_recognizes_hidden_and_visible_states() -> None:
     assert _notification_loudness_decision("Benachrichtigungen werden unterdrückt", pending=False) == "declined"
 
 
+def test_loudness_free_text_distinguishes_english_temporal_still_from_german_quiet_still() -> None:
+    assert _notification_loudness_decision("Notifications are still on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Messages are still loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("The notifications are still visible", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are still muted", pending=False) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind still", pending=True) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind nicht still", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Die sind still", pending=True) == "declined"
+    assert _notification_loudness_decision("Die sind nicht still", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Keine Nachrichten sind still", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Keine Nachrichten sind nicht still", pending=False) == "declined"
+    assert _notification_loudness_decision("No messages are still on", pending=True) == "declined"
+
+
+def test_loudness_free_text_keeps_temporally_modified_intentions_non_assertive() -> None:
+    assert _notification_loudness_decision("I am still trying to turn notifications on", pending=True) is None
+    assert _notification_loudness_decision("I am currently planning to mute messages", pending=False) is None
+    assert _notification_loudness_decision("I am just about to turn notifications on", pending=True) is None
+    assert _notification_loudness_decision("I am still going to turn notifications on", pending=False) is None
+    assert _notification_loudness_decision("I am currently turning notifications on", pending=True) is None
+    assert _notification_loudness_decision("I am still waiting for messages", pending=False) is None
+
+
 def test_loudness_free_text_does_not_decide_obligations_or_plans_as_done() -> None:
     assert _notification_loudness_decision("I have to mute messages", pending=True) is None
     assert _notification_loudness_decision("I have to turn notifications on", pending=False) is None

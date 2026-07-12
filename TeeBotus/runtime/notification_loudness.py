@@ -29,7 +29,6 @@ NOTIFICATION_LOUDNESS_MUTE_TERMS = frozenset(
         "silence",
         "silenced",
         "silent",
-        "still",
         "quiet",
         "inaudible",
         "unhoerbar",
@@ -381,6 +380,32 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "i m working on ",
     "i am in the process of ",
     "i m in the process of ",
+    "i am turning ",
+    "i m turning ",
+    "i am switching ",
+    "i m switching ",
+    "i am muting ",
+    "i m muting ",
+    "i am setting ",
+    "i m setting ",
+    "i am enabling ",
+    "i m enabling ",
+    "i am activating ",
+    "i m activating ",
+    "i am disabling ",
+    "i m disabling ",
+    "i am making ",
+    "i m making ",
+    "i am putting ",
+    "i m putting ",
+    "i am taking ",
+    "i m taking ",
+    "i am removing ",
+    "i m removing ",
+    "i am keeping ",
+    "i m keeping ",
+    "i am leaving ",
+    "i m leaving ",
     "tell me ",
     "please tell me ",
     "let me know ",
@@ -555,8 +580,12 @@ NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
         "today",
         "recently",
         "newly",
+        "still",
         "neuerdings",
     }
+)
+NOTIFICATION_LOUDNESS_NON_ASSERTIVE_OPTIONAL_MODIFIERS = frozenset(
+    set(NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS) | {"just"}
 )
 NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS = frozenset(
     {
@@ -937,6 +966,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     )
     polarity_normalized = _normalize_text_for_polarity(text)
     has_unnegated_mute, has_negated_mute = _notification_loudness_mute_polarity(polarity_normalized)
+    has_unnegated_german_still, has_negated_german_still = _notification_loudness_german_still_polarity(
+        polarity_normalized
+    )
+    has_unnegated_mute = has_unnegated_mute or has_unnegated_german_still
+    has_negated_mute = has_negated_mute or has_negated_german_still
     has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(
         polarity_normalized, NOTIFICATION_LOUDNESS_OFF_TERMS
     )
@@ -1003,6 +1037,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     )
     has_absolute_negative_mute_inner_negation = _notification_loudness_has_absolute_negative_term(
         normalized, NOTIFICATION_LOUDNESS_MUTE_TERMS, inner_negated=True
+    )
+    has_absolute_negative_still = _notification_loudness_has_absolute_negative_german_still(normalized)
+    has_absolute_negative_still_inner_negation = _notification_loudness_has_absolute_negative_german_still(
+        normalized, inner_negated=True
     )
     has_absolute_negative_off_inner_negation = _notification_loudness_has_absolute_negative_term(
         normalized, NOTIFICATION_LOUDNESS_OFF_TERMS, inner_negated=True
@@ -1261,6 +1299,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or (has_negative_current_status and not has_absolute_negative_positive_inner_negation)
         or has_absolute_negative_positive_status
         or has_absolute_negative_mute_inner_negation
+        or has_absolute_negative_still_inner_negation
         or has_absolute_negative_off_inner_negation
         or has_volume_negative
         or has_completed_action_negative
@@ -1307,6 +1346,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or has_positive_current_status
         or has_absolute_negative_positive_inner_negation
         or has_absolute_negative_mute
+        or has_absolute_negative_still
         or has_absolute_negative_off
         or has_volume_positive
         or has_completed_action_positive
@@ -1752,6 +1792,29 @@ def _notification_loudness_mute_polarity(normalized: str) -> tuple[bool, bool]:
     return _notification_loudness_term_polarity(normalized, NOTIFICATION_LOUDNESS_MUTE_TERMS)
 
 
+def _notification_loudness_german_still_polarity(normalized: str) -> tuple[bool, bool]:
+    """Treat German ``still`` as quiet without confusing English temporal ``still``."""
+    tokens = normalized.split()
+    copulas = {"ist", "sind", "war", "waren", "bleibt", "bleiben"}
+    has_unnegated = False
+    has_negated = False
+    for index, token in enumerate(tokens):
+        if token != "still":
+            continue
+        for copula_index in range(max(0, index - 5), index):
+            if tokens[copula_index] not in copulas:
+                continue
+            negation_count = _notification_loudness_scoped_negation_count(
+                tokens, copula_index + 1, index
+            )
+            if negation_count % 2:
+                has_negated = True
+            else:
+                has_unnegated = True
+            break
+    return has_unnegated, has_negated
+
+
 def _notification_loudness_term_polarity(
     normalized: str, terms: frozenset[str]
 ) -> tuple[bool, bool]:
@@ -1838,6 +1901,17 @@ def _notification_loudness_has_absolute_negative_term(
                 if has_inner_negation is inner_negated:
                     return True
     return False
+
+
+def _notification_loudness_has_absolute_negative_german_still(
+    normalized: str, *, inner_negated: bool = False
+) -> bool:
+    has_german_still, has_negated_german_still = _notification_loudness_german_still_polarity(normalized)
+    if not (has_german_still or has_negated_german_still):
+        return False
+    return _notification_loudness_has_absolute_negative_term(
+        normalized, frozenset({"still"}), inner_negated=inner_negated
+    )
 
 
 def _notification_loudness_has_recent_completion_marker(normalized: str) -> bool:
@@ -2241,18 +2315,21 @@ def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | No
         "sie sind nicht ausgeschaltet",
         "sie sind nicht stumm",
         "sie sind nicht lautlos",
+        "sie sind nicht still",
         "die sind an",
         "die sind laut",
         "die sind nicht aus",
         "die sind nicht ausgeschaltet",
         "die sind nicht stumm",
         "die sind nicht lautlos",
+        "die sind nicht still",
         "das ist an",
         "das ist laut",
         "das ist nicht aus",
         "das ist nicht ausgeschaltet",
         "das ist nicht stumm",
         "das ist nicht lautlos",
+        "das ist nicht still",
         "they are on",
         "they re on",
         "they are loud",
@@ -2278,18 +2355,21 @@ def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | No
         "sie sind aus",
         "sie sind stumm",
         "sie sind lautlos",
+        "sie sind still",
         "sie sind nicht laut",
         "sie sind nicht an",
         "sie sind ausgeschaltet",
         "die sind aus",
         "die sind stumm",
         "die sind lautlos",
+        "die sind still",
         "die sind nicht laut",
         "die sind nicht an",
         "die sind ausgeschaltet",
         "das ist aus",
         "das ist stumm",
         "das ist lautlos",
+        "das ist still",
         "das ist nicht laut",
         "das ist nicht an",
         "das ist ausgeschaltet",
@@ -2329,7 +2409,14 @@ def _notification_loudness_is_non_declarative(text: str, normalized: str) -> boo
     tokens = normalized.split()
     if tokens and tokens[0] in {"sind", "ist", "are", "is"}:
         return len(tokens) > 1 and tokens[1] not in NOTIFICATION_LOUDNESS_STATUS_LEAD_TERMS
-    return normalized.startswith(NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS)
+    if normalized.startswith(NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS):
+        return True
+    without_temporal_fillers = " ".join(
+        token
+        for token in tokens
+        if token not in NOTIFICATION_LOUDNESS_NON_ASSERTIVE_OPTIONAL_MODIFIERS
+    )
+    return without_temporal_fillers.startswith(NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS)
 
 
 def _notification_loudness_has_negated_phrase(normalized: str, phrases: tuple[str, ...]) -> bool:

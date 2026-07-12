@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.199 - 2026-07-12
+
+- Distinguish English temporal `still` from German quiet-state `still` and preserve temporally modified non-assertive intents.
+
 ## 1.9.198 - 2026-07-12
 
 - Recognize hidden, visible, and suppressed notification states.
