@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.135 - 2026-07-12
+
+- Recognize active, turned-on, and unmuted notification states.
+
 ## 1.9.134 - 2026-07-12
 
 - Recognize completed English enabled-notification statements.

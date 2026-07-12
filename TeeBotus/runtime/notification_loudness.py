@@ -294,6 +294,10 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "angeschaltet",
     "aktiviert",
     "laut gestellt",
+    "turned them on",
+    "switched them on",
+    "enabled them",
+    "unmuted",
 )
 NOTIFICATION_LOUDNESS_ACTION_WORDS = frozenset({"hab", "habe", "haben", "getan", "gemacht", "erledigt", "did", "done"})
 NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS = frozenset({"ja", "yes", "jep", "jo", "ok", "okay", "klar"})
@@ -596,6 +600,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "are on",
         "are enabled",
         "enabled",
+        "are active",
+        "sind aktiv",
+        "turned on",
+        "switched on",
+        "unmuted",
         "eingeschaltet",
         "angeschaltet",
         "aktiviert",
