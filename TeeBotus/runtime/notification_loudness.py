@@ -129,6 +129,10 @@ NOTIFICATION_LOUDNESS_PARTIAL_QUANTIFIER_PHRASES = (
     "not fully",
     "not entirely",
     "not quite",
+    "almost",
+    "nearly",
+    "hardly",
+    "barely",
     "not all the way",
     "partially",
     "only partly",
@@ -233,7 +237,13 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "i really do not know",
     "not sure",
     "not really",
+    "not definitely",
+    "not certainly",
+    "not clearly",
+    "not obviously",
+    "not surely",
     "nicht wirklich",
+    "nicht definitiv",
     "uncertain",
     "maybe",
     "may have",
@@ -2723,6 +2733,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
                 has_negated_off
                 and needle in {"notifications off", "notification off", "benachrichtigungen aus"}
             )
+            and not _notification_loudness_phrase_is_double_negated(status_scope_normalized, needle)
             and not (
                 has_positive_current_status
                 and not has_negative_current_status
@@ -5029,16 +5040,22 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
         for copula_index in range(max(0, status_index - 4), status_index):
             if tokens[copula_index] not in copulas:
                 continue
-            if any(
-                value in NOTIFICATION_LOUDNESS_NEGATION_TERMS
-                for value in tokens[max(0, copula_index - 2) : copula_index]
-            ):
-                continue
             between = tokens[copula_index + 1 : status_index]
-            if all(value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in between):
+            if not all(
+                value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS
+                or value in NOTIFICATION_LOUDNESS_NEGATION_TERMS
+                for value in between
+            ):
+                between_is_status_only = False
+            else:
+                between_is_status_only = True
+            negation_count = sum(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in between)
+            if between_is_status_only and negation_count % 2 == 0:
                 return True
             before_copula = tokens[max(0, copula_index - 3) : copula_index]
-            if before_copula and all(value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in before_copula) and any(
+            if negation_count % 2 == 0 and before_copula and all(
+                value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in before_copula
+            ) and any(
                 value in subject_terms for value in between
             ):
                 return True
@@ -5050,7 +5067,7 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
                 continue
             before_status = tokens[max(0, status_index - 4) : status_index]
             after_status = tokens[status_index + 1 : copula_index]
-            if any(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in before_status):
+            if sum(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in before_status) % 2:
                 continue
             if any(value in subject_terms for value in before_status) and all(
                 value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in after_status
@@ -5638,6 +5655,20 @@ def _notification_loudness_phrase_is_negated(normalized: str, phrase: str) -> bo
     return False
 
 
+def _notification_loudness_phrase_is_double_negated(normalized: str, phrase: str) -> bool:
+    phrase_tokens = phrase.split()
+    if not phrase_tokens or phrase_tokens[0] not in {"not", "nicht"}:
+        return False
+    tokens = normalized.split()
+    width = len(phrase_tokens)
+    for index in range(len(tokens) - width + 1):
+        if tokens[index : index + width] != phrase_tokens or index == 0:
+            continue
+        if tokens[index - 1] in {"not", "nicht"}:
+            return True
+    return False
+
+
 def _notification_loudness_has_unnegated_phrase(normalized: str, phrases: tuple[str, ...]) -> bool:
     """Return true when at least one matching phrase occurrence is unnegated."""
     tokens = normalized.split()
@@ -5696,11 +5727,17 @@ def _notification_loudness_has_negative_current_status(normalized: str) -> bool:
                 ):
                     between_start = boundary_index + 1
             between = tokens[between_start:status_index]
-            if copula in {"is", "are", "re"} | english_persistent_copulas and "not" in between:
+            if (
+                copula in {"is", "are", "re"} | english_persistent_copulas
+                and sum(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in between) % 2
+            ):
                 return True
-            if copula in {"ist", "sind"} | german_persistent_copulas and "nicht" in between:
+            if (
+                copula in {"ist", "sind"} | german_persistent_copulas
+                and sum(value in NOTIFICATION_LOUDNESS_NEGATION_TERMS for value in between) % 2
+            ):
                 return True
-            if copula in contracted_copulas and "t" in between:
+            if copula in contracted_copulas and sum(value == "t" for value in between) % 2:
                 return True
     for copula_index, copula in enumerate(tokens):
         if copula not in {"ist", "sind"} | german_persistent_copulas:

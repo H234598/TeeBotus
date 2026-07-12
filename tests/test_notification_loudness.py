@@ -1273,6 +1273,16 @@ def test_loudness_free_text_recognizes_english_past_passive_actions() -> None:
     assert _notification_loudness_decision("Notifications were muted", pending=True) == "declined"
     assert _notification_loudness_decision("Notifications were not enabled", pending=True) == "declined"
     assert _notification_loudness_decision("Notifications were not disabled", pending=True) == "confirmed"
+
+
+def test_loudness_free_text_respects_negation_parity_and_hedges() -> None:
+    assert _notification_loudness_decision("Notifications are not not loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are not not on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are not not muted", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications are almost not muted", pending=True) is None
+    assert _notification_loudness_decision("Notifications are barely muted", pending=True) is None
+    assert _notification_loudness_decision("Notifications are not definitely muted", pending=True) is None
+    assert _notification_loudness_decision("Notifications are not certainly loud", pending=True) is None
     assert _notification_loudness_decision("I did not turn off silent mode", pending=True) == "declined"
     assert _notification_loudness_decision("I did not disable silent mode", pending=True) == "declined"
     assert _notification_loudness_decision("I didn't deactivate quiet mode", pending=True) == "declined"
