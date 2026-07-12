@@ -2424,10 +2424,16 @@ def _notification_loudness_has_ambiguous_status_qualifier(normalized: str) -> bo
         _contains_normalized_phrase(normalized, phrase)
         for phrase in (
             "on hold",
+            "on pause",
+            "on standby",
+            "on vacation",
             "off topic",
+            "off duty",
             "on telegram",
             "on signal",
             "on whatsapp",
+            "on in the app",
+            "on in app",
         )
     )
 

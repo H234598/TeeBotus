@@ -1539,7 +1539,11 @@ def test_loudness_free_text_recognizes_chat_subjects() -> None:
 
 def test_loudness_free_text_does_not_treat_transport_or_idiom_qualifiers_as_status() -> None:
     assert _notification_loudness_decision("The chat is on hold", pending=True) is None
+    assert _notification_loudness_decision("Notifications are on pause", pending=False) is None
+    assert _notification_loudness_decision("Notifications are on standby", pending=True) is None
+    assert _notification_loudness_decision("Notifications are on vacation", pending=False) is None
     assert _notification_loudness_decision("The conversation is off topic", pending=False) is None
+    assert _notification_loudness_decision("Notifications are off duty", pending=True) is None
     assert _notification_loudness_decision("Messages are on Telegram", pending=True) is None
     assert _notification_loudness_decision("Notifications are on Signal", pending=False) is None
     assert _notification_loudness_decision("Notifications are on WhatsApp", pending=True) is None
@@ -1547,6 +1551,7 @@ def test_loudness_free_text_does_not_treat_transport_or_idiom_qualifiers_as_stat
     assert _notification_loudness_decision("Messages are on the screen", pending=False) is None
     assert _notification_loudness_decision("Notifications are off my phone", pending=True) is None
     assert _notification_loudness_decision("Notifications are off the record", pending=True) is None
+    assert _notification_loudness_decision("Notifications are on in the app", pending=False) is None
     assert _notification_loudness_decision("Notifications are visible on screen", pending=False) == "confirmed"
     assert _notification_loudness_decision("Messages are loud on my phone", pending=True) == "confirmed"
 

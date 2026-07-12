@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.205 - 2026-07-12
+
+- Reject pause, standby, duty, and app-location idioms as notification states.
+
 ## 1.9.204 - 2026-07-12
 
 - Preserve punctuation-aware clause boundaries for notification negation.
