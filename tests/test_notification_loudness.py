@@ -1656,6 +1656,19 @@ def test_loudness_free_text_blocks_german_modal_action_variants() -> None:
     assert _notification_loudness_decision("Ich kann die Nachrichten nicht hören", pending=False) == "declined"
 
 
+def test_loudness_free_text_blocks_additional_english_modals() -> None:
+    assert _notification_loudness_decision("I may mute messages", pending=True) is None
+    assert _notification_loudness_decision("I may turn notifications off", pending=False) is None
+    assert _notification_loudness_decision("I would mute messages", pending=True) is None
+    assert _notification_loudness_decision("I ought to mute messages", pending=False) is None
+    assert _notification_loudness_decision("I am allowed to mute messages", pending=True) is None
+    assert _notification_loudness_decision("I am supposed to mute messages", pending=False) is None
+    assert _notification_loudness_decision("I am expected to mute messages", pending=True) is None
+    assert _notification_loudness_decision("I am likely to mute messages", pending=False) is None
+    assert _notification_loudness_decision("I may have muted messages", pending=True) is None
+    assert _notification_loudness_decision("I would have muted messages", pending=False) is None
+
+
 def test_loudness_free_text_does_not_decide_obligations_or_plans_as_done() -> None:
     assert _notification_loudness_decision("I have to mute messages", pending=True) is None
     assert _notification_loudness_decision("I have to turn notifications on", pending=False) is None

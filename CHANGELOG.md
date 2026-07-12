@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.191 - 2026-07-12
+
+- Keep additional English modal intentions undecided.
+
 ## 1.9.190 - 2026-07-12
 
 - Block German modal loudness action variants.
