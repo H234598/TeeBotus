@@ -1366,6 +1366,10 @@ def test_loudness_free_text_recognizes_sufficiency_gradients() -> None:
     assert _notification_loudness_decision("Notifications are not insufficiently loud", pending=True) == "confirmed"
     assert _notification_loudness_decision("Notifications are barely audible", pending=True) == "declined"
     assert _notification_loudness_decision("Notifications are clearly audible", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are clear enough to hear", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are not clear enough to hear", pending=True) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind gut hörbar", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten sind nicht gut hörbar", pending=True) == "declined"
     assert _notification_loudness_decision("I can barely hear notifications", pending=True) == "declined"
     assert _notification_loudness_decision("I can clearly hear notifications", pending=True) == "confirmed"
     assert _notification_loudness_decision("I can barely hear the notification sound", pending=True) == "declined"
@@ -1394,6 +1398,8 @@ def test_loudness_free_text_recognizes_sufficiency_gradients() -> None:
     assert _notification_loudness_decision("I can barely hear notifications from the movie", pending=True) is None
     assert _notification_loudness_decision("I can barely hear notifications, but they are loud", pending=True) == "confirmed"
     assert _notification_loudness_decision("Notifications are loud enough?", pending=True) is None
+    assert _notification_loudness_decision("Loud enough", pending=False) is None
+    assert _notification_loudness_decision("Not loud enough", pending=False) is None
 
 
 def test_loudness_free_text_accepts_natural_mute_phrases() -> None:

@@ -1013,12 +1013,15 @@ NOTIFICATION_LOUDNESS_GRADIENT_POSITIVE_PHRASES = (
     "sufficiently audible",
     "adequately audible",
     "audible enough",
+    "clear enough",
+    "clear enough to hear",
     "not inadequate",
     "not insufficient",
     "nicht unzureichend",
     "ausreichend laut",
     "ausreichend hoerbar",
     "hoerbar genug",
+    "gut hoerbar",
     "adequate volume",
     "an adequate volume",
     "at an adequate volume",
@@ -2406,6 +2409,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         status_scope_normalized
     )
     if audibility_gradient_decision is not None and (pending or has_notification_context):
+        if not pending and not has_explicit_notification_context and not has_direct_audibility_experience:
+            return None
         return audibility_gradient_decision
     confirmed_needles = (
         "ja laut",
@@ -3909,9 +3914,17 @@ def _notification_loudness_has_uncertainty(normalized: str) -> bool:
             "kann nicht klar hoeren",
         )
     )
+    direct_negative_clarity_gradient = direct_can_not_hear or any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in (
+            "not clear enough",
+            "nicht klar genug",
+            "nicht deutlich genug",
+        )
+    )
     for phrase in NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES:
         normalized_phrase = _normalize_text(phrase)
-        if normalized_phrase == "not clearly" and direct_can_not_hear:
+        if normalized_phrase in {"not clear", "not clearly"} and direct_negative_clarity_gradient:
             continue
         if _contains_normalized_phrase(normalized, normalized_phrase):
             return True
