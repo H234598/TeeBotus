@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.179 - 2026-07-12
+
+- Recognize notification volume states and completed adjustments.
+
 ## 1.9.178 - 2026-07-12
 
 - Recognize unmute noun phrasing.

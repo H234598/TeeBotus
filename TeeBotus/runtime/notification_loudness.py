@@ -488,6 +488,13 @@ NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
 NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS = frozenset(
     {"laut", "loud", "an", "on", "aktiv", "active", "enabled", "hoerbar", "audible", "unmuted"}
 )
+NOTIFICATION_LOUDNESS_VOLUME_TERMS = frozenset({"lautstaerke", "volume"})
+NOTIFICATION_LOUDNESS_VOLUME_POSITIVE_TERMS = frozenset(
+    {"hoch", "high", "voll", "voller", "full", "maximum", "maximal", "up"}
+)
+NOTIFICATION_LOUDNESS_VOLUME_NEGATIVE_TERMS = frozenset(
+    {"niedrig", "low", "leise", "quiet", "minimum", "down", "runter", "herunter"}
+)
 NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "erledigt",
     "gemacht",
@@ -797,6 +804,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "notifications",
         "message",
         "messages",
+        "nachrichtenlautstaerke",
+        "benachrichtigungslautstaerke",
+        "message volume",
+        "notification volume",
         "chat",
         "conversation",
         "thread",
@@ -807,6 +818,13 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_explicit_notification_context = any(
         _contains_normalized_phrase(normalized, needle) for needle in explicit_context_needles
     )
+    has_volume_context = any(
+        _contains_normalized_phrase(normalized, needle)
+        for needle in ("nachrichtenlautstaerke", "benachrichtigungslautstaerke", "message volume", "notification volume")
+    ) or (
+        has_explicit_notification_context
+        and any(_contains_normalized_phrase(normalized, term) for term in NOTIFICATION_LOUDNESS_VOLUME_TERMS)
+    )
     has_notification_context = has_explicit_notification_context or any(
         _contains_normalized_phrase(normalized, needle)
         for needle in (
@@ -816,6 +834,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             *NOTIFICATION_LOUDNESS_OFF_TERMS,
         )
     )
+    has_notification_context = has_notification_context or has_volume_context
     polarity_normalized = _normalize_text_for_polarity(text)
     has_unnegated_mute, has_negated_mute = _notification_loudness_mute_polarity(polarity_normalized)
     has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(
@@ -858,6 +877,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and _notification_loudness_is_non_declarative(text, normalized)
         and not has_audibility_state
     ):
+        return None
+    has_volume_positive, has_volume_negative = _notification_loudness_volume_polarity(
+        normalized, has_volume_context=has_volume_context
+    )
+    if has_volume_positive and has_volume_negative:
         return None
     has_positive_current_status = _notification_loudness_has_positive_current_status(normalized)
     has_negative_current_status = _notification_loudness_has_negative_current_status(normalized)
@@ -1047,6 +1071,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or has_absolute_negative_positive_status
         or has_absolute_negative_mute_inner_negation
         or has_absolute_negative_off_inner_negation
+        or has_volume_negative
     )
     if has_absolute_negative_positive_inner_negation:
         has_declined_phrase = False
@@ -1091,6 +1116,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or has_absolute_negative_positive_inner_negation
         or has_absolute_negative_mute
         or has_absolute_negative_off
+        or has_volume_positive
     ):
         return "confirmed"
     if has_notification_context and has_declined_phrase:
@@ -1691,6 +1717,68 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
             ):
                 return True
     return False
+
+
+def _notification_loudness_volume_polarity(
+    normalized: str, *, has_volume_context: bool
+) -> tuple[bool, bool]:
+    if not has_volume_context:
+        return False, False
+    tokens = normalized.split()
+    positive = False
+    negative = False
+    copulas = {"ist", "sind", "is", "are"}
+    for index, token in enumerate(tokens):
+        if token not in NOTIFICATION_LOUDNESS_VOLUME_POSITIVE_TERMS | NOTIFICATION_LOUDNESS_VOLUME_NEGATIVE_TERMS:
+            continue
+        if not any(tokens[candidate] in copulas for candidate in range(max(0, index - 5), index)):
+            continue
+        negated = _notification_loudness_scoped_negation_count(
+            tokens, max(0, index - 3), index
+        ) % 2 == 1
+        is_positive_term = token in NOTIFICATION_LOUDNESS_VOLUME_POSITIVE_TERMS
+        if is_positive_term is negated:
+            negative = True
+        else:
+            positive = True
+    if any(_contains_normalized_phrase(normalized, phrase) for phrase in (
+        "volle lautstaerke",
+        "voller lautstaerke",
+        "auf voller lautstaerke",
+        "full volume",
+        "maximum volume",
+        "at full volume",
+    )):
+        positive = True
+    if any(_contains_normalized_phrase(normalized, phrase) for phrase in (
+        "leise gestellt",
+        "runtergedreht",
+        "heruntergedreht",
+        "turned down",
+        "volume down",
+    )):
+        negative = True
+    if any(_contains_normalized_phrase(normalized, phrase) for phrase in (
+        "hochgestellt",
+        "hochgedreht",
+        "hochgesetzt",
+        "turned up",
+        "volume up",
+    )):
+        positive = True
+    for index, token in enumerate(tokens):
+        if token != "turned":
+            continue
+        following = tokens[index + 1 : index + 6]
+        if "up" in following:
+            positive = True
+        if "down" in following:
+            negative = True
+    if "100" in tokens and any(value in tokens for value in {"prozent", "percent"}):
+        positive = True
+    if "0" in tokens and any(value in tokens for value in {"prozent", "percent"}):
+        negative = True
+    return positive, negative
 
 
 def _notification_loudness_has_negative_current_status(normalized: str) -> bool:

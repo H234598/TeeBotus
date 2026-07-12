@@ -1547,6 +1547,17 @@ def test_loudness_free_text_handles_unmute_noun_phrasing() -> None:
     assert _notification_loudness_decision("The chat is free from silence", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_recognizes_volume_states_and_actions() -> None:
+    assert _notification_loudness_decision("Die Lautstärke der Nachrichten ist hoch", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich habe die Lautstärke für Nachrichten hochgedreht", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten sind auf voller Lautstärke", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I turned up notification volume", pending=False) == "confirmed"
+    assert _notification_loudness_decision("The message volume is low", pending=True) == "declined"
+    assert _notification_loudness_decision("I turned the notification volume down", pending=False) == "declined"
+    assert _notification_loudness_decision("Turn up notification volume", pending=True) is None
+    assert _notification_loudness_decision("Ich drehe die Lautstärke der Nachrichten hoch", pending=True) is None
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None
