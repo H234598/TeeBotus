@@ -1593,6 +1593,20 @@ def test_loudness_free_text_prioritizes_current_status_over_intent() -> None:
     assert _notification_loudness_decision("Ich möchte die Nachrichten laut, aber sie sind laut", pending=False) == "confirmed"
 
 
+def test_loudness_free_text_handles_volume_degree_words() -> None:
+    assert _notification_loudness_decision("Notifications are quieter", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications are the quietest", pending=False) == "declined"
+    assert _notification_loudness_decision("Notifications are not quiet", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Messages are softly audible", pending=False) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind leise", pending=True) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind leiser", pending=False) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind nicht leise", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are louder", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Notifications are not louder", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications got quieter", pending=False) == "declined"
+    assert _notification_loudness_decision("Notifications got louder", pending=True) == "confirmed"
+
+
 def test_loudness_free_text_recognizes_audibility_reports() -> None:
     assert _notification_loudness_decision("Die Nachrichten klingeln jetzt", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich kann die Nachrichten jetzt hören", pending=False) == "confirmed"
