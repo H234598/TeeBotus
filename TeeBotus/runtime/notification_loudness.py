@@ -1047,6 +1047,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     if has_notification_context and _notification_loudness_has_ambiguous_alternative(normalized):
         return None
+    if has_notification_context and _notification_loudness_has_ambiguous_status_qualifier(normalized):
+        return None
     if (
         has_notification_context
         and not has_explicit_notification_context
@@ -2303,7 +2305,14 @@ def _notification_loudness_has_negative_current_status(normalized: str) -> bool:
             continue
         for copula_index in range(max(0, status_index - 4), status_index):
             copula = tokens[copula_index]
-            between = tokens[copula_index + 1 : status_index]
+            between_start = copula_index + 1
+            for boundary_index in range(between_start, status_index):
+                if (
+                    tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                    or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+                ):
+                    between_start = boundary_index + 1
+            between = tokens[between_start:status_index]
             if copula in {"is", "are", "re"} and "not" in between:
                 return True
             if copula in {"ist", "sind"} and "nicht" in between:
@@ -2403,6 +2412,19 @@ def _notification_loudness_has_ambiguous_alternative(normalized: str) -> bool:
     return (
         any(_contains_normalized_phrase(normalized, phrase) for phrase in positive_phrases)
         and any(_contains_normalized_phrase(normalized, phrase) for phrase in negative_phrases)
+    )
+
+
+def _notification_loudness_has_ambiguous_status_qualifier(normalized: str) -> bool:
+    return any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in (
+            "on hold",
+            "off topic",
+            "on telegram",
+            "on signal",
+            "on whatsapp",
+        )
     )
 
 

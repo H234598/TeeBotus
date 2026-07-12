@@ -1203,6 +1203,9 @@ def test_loudness_free_text_does_not_leak_negation_across_clauses() -> None:
     assert _notification_loudness_decision("not muted but silenced", pending=False) == "declined"
     assert _notification_loudness_decision("nicht stumm und nicht lautlos", pending=True) == "confirmed"
     assert _notification_loudness_decision("nicht ausgeschaltet, aber deaktiviert", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications are not muted and loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are not muted but loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Notifications are not muted and not loud", pending=True) == "declined"
 
 
 def test_loudness_free_text_preserves_punctuation_clause_boundaries() -> None:
@@ -1529,6 +1532,14 @@ def test_loudness_free_text_recognizes_chat_subjects() -> None:
     assert _notification_loudness_decision("Der Chat ist stumm", pending=False) == "declined"
     assert _notification_loudness_decision("The conversation is unmuted", pending=False) == "confirmed"
     assert _notification_loudness_decision("Thread is muted", pending=True) == "declined"
+
+
+def test_loudness_free_text_does_not_treat_transport_or_idiom_qualifiers_as_status() -> None:
+    assert _notification_loudness_decision("The chat is on hold", pending=True) is None
+    assert _notification_loudness_decision("The conversation is off topic", pending=False) is None
+    assert _notification_loudness_decision("Messages are on Telegram", pending=True) is None
+    assert _notification_loudness_decision("Notifications are on Signal", pending=False) is None
+    assert _notification_loudness_decision("Notifications are on WhatsApp", pending=True) is None
 
 
 def test_loudness_free_text_handles_idiomatic_unmute_negations() -> None:

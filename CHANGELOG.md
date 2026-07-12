@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.201 - 2026-07-12
+
+- Keep clause-scoped negation and reject ambiguous transport/status phrases.
+
 ## 1.9.200 - 2026-07-12
 
 - Prefer the current temporal clause over stale historical notification states.
