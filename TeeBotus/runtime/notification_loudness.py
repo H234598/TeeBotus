@@ -2471,6 +2471,8 @@ def _notification_loudness_pending_negated_volume_reply_decision(normalized: str
         return None
     remainder = normalized[len(negation) + 1 :]
     volume_markers = {"volume", "lautstaerke", "prozent", "percent", "%"}
+    scalar_positive = {"hoch", "high", "voll", "voller", "full", "maximum", "maximal"}
+    scalar_negative = {"niedrig", "low", "leise", "quiet", "minimum", "down", "runter", "herunter"}
     for replies, decision in (
         (NOTIFICATION_LOUDNESS_PENDING_POSITIVE_STATUS_REPLIES, "declined"),
         (NOTIFICATION_LOUDNESS_PENDING_NEGATIVE_STATUS_REPLIES, "confirmed"),
@@ -2480,6 +2482,10 @@ def _notification_loudness_pending_negated_volume_reply_decision(normalized: str
                 continue
             if remainder == reply:
                 return decision
+    if remainder in scalar_positive:
+        return "declined"
+    if remainder in scalar_negative:
+        return "confirmed"
     return None
 
 

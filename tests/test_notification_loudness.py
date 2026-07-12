@@ -1893,6 +1893,11 @@ def test_loudness_free_text_recognizes_short_pending_status_replies() -> None:
     assert _notification_loudness_decision("nicht niedrige Lautstärke", pending=True) == "confirmed"
     assert _notification_loudness_decision("not 100 percent", pending=True) == "declined"
     assert _notification_loudness_decision("not 0 percent", pending=True) == "confirmed"
+    assert _notification_loudness_decision("not high", pending=True) == "declined"
+    assert _notification_loudness_decision("nicht hoch", pending=True) == "declined"
+    assert _notification_loudness_decision("not low", pending=True) == "confirmed"
+    assert _notification_loudness_decision("nicht niedrig", pending=True) == "confirmed"
+    assert _notification_loudness_decision("not louder", pending=True) is None
     assert _notification_loudness_decision("louder now", pending=True) == "confirmed"
     assert _notification_loudness_decision("volle Lautstärke aktuell", pending=True) == "confirmed"
     assert _notification_loudness_decision("low volume now", pending=True) == "declined"
