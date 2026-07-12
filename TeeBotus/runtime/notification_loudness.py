@@ -1113,6 +1113,18 @@ NOTIFICATION_LOUDNESS_PENDING_DIRECT_COMPLETION_PHRASES = frozenset(
         "der ton wurde wiederhergestellt",
     }
 )
+NOTIFICATION_LOUDNESS_PENDING_DIRECT_FAILURE_PHRASES = frozenset(
+    {
+        "i could not restore the sound",
+        "i couldn t restore the sound",
+        "i could not get notifications working again",
+        "i couldn t get notifications working again",
+        "ich kann die benachrichtigungen nicht entstummen",
+        "ich kann den ton nicht wiederherstellen",
+        "ich kann den nachrichtenton nicht wiederherstellen",
+        "ich kann den benachrichtigungston nicht wiederherstellen",
+    }
+)
 NOTIFICATION_LOUDNESS_COMPLETION_PRONOUN_PHRASES = (
     "did it",
     "did that",
@@ -1698,6 +1710,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and normalized in NOTIFICATION_LOUDNESS_PENDING_DIRECT_COMPLETION_PHRASES
     ):
         return "confirmed"
+    if (
+        pending
+        and "?" not in str(text or "")
+        and normalized in NOTIFICATION_LOUDNESS_PENDING_DIRECT_FAILURE_PHRASES
+    ):
+        return "declined"
     if _notification_loudness_has_unrelated_identity_description(normalized):
         return None
     if _notification_loudness_has_negative_possession_description(normalized):
@@ -5914,6 +5932,48 @@ def _notification_loudness_has_ambiguous_alternative(normalized: str) -> bool:
 
 
 def _notification_loudness_has_ambiguous_status_qualifier(normalized: str) -> bool:
+    if set(normalized.split()) & {
+        "video",
+        "videos",
+        "movie",
+        "movies",
+        "film",
+        "films",
+        "music",
+        "alarm",
+        "alarms",
+        "voice",
+        "wecker",
+        "weckers",
+        "stimme",
+        "stimmen",
+    }:
+        return True
+    if any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in (
+            "in the video",
+            "of the video",
+            "on the video",
+            "in the movie",
+            "of the movie",
+            "in the film",
+            "of the film",
+            "of music",
+            "of my voice",
+            "my voice",
+            "of my alarm",
+            "my alarm",
+            "im video",
+            "in dem video",
+            "des videos",
+            "im film",
+            "des films",
+            "meiner stimme",
+            "meines weckers",
+        )
+    ):
+        return True
     platform_phrases = (
         "on telegram",
         "on signal",

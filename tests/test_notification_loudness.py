@@ -1220,6 +1220,15 @@ def test_loudness_free_text_keeps_unrelated_media_sound_neutral() -> None:
     assert _notification_loudness_decision("The sound of the video is loud", pending=True) is None
     assert _notification_loudness_decision("Der Ton meiner Stimme ist laut", pending=True) is None
     assert _notification_loudness_decision("I restored the sound on the video", pending=True) is None
+    assert _notification_loudness_decision("Notifications in the video are loud", pending=True) is None
+    assert _notification_loudness_decision("Messages are loud because the movie is loud", pending=True) is None
+
+
+def test_loudness_free_text_accepts_direct_failure_replies() -> None:
+    assert _notification_loudness_decision("I could not restore the sound", pending=True) == "declined"
+    assert _notification_loudness_decision("I couldn't get notifications working again", pending=True) == "declined"
+    assert _notification_loudness_decision("Ich kann die Benachrichtigungen nicht entstummen", pending=True) == "declined"
+    assert _notification_loudness_decision("Ich kann den Ton nicht wiederherstellen", pending=True) == "declined"
     assert _notification_loudness_decision("I did not turn off silent mode", pending=True) == "declined"
     assert _notification_loudness_decision("I did not disable silent mode", pending=True) == "declined"
     assert _notification_loudness_decision("I didn't deactivate quiet mode", pending=True) == "declined"
