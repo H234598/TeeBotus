@@ -702,14 +702,21 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if pending and "?" not in str(text or ""):
         direct_pronoun_decision = None
         if not _notification_loudness_has_uncertainty(normalized):
-            direct_pronoun_decision = _notification_loudness_pending_pronoun_decision(normalized)
+            candidate_texts = [normalized]
             tokens = normalized.split()
-            if direct_pronoun_decision is None and len(tokens) >= 2 and tokens[0] in {"sie", "they"}:
-                if tokens[1] in {"ist", "sind", "is", "are", "re"}:
-                    if _notification_loudness_has_positive_current_status(normalized):
-                        direct_pronoun_decision = "confirmed"
-                    elif _notification_loudness_has_negative_current_status(normalized):
-                        direct_pronoun_decision = "declined"
+            if tokens and tokens[0] in NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS | NOTIFICATION_LOUDNESS_NEGATION_REPLY_WORDS:
+                candidate_texts.append(" ".join(tokens[1:]))
+            for candidate in candidate_texts:
+                direct_pronoun_decision = _notification_loudness_pending_pronoun_decision(candidate)
+                candidate_tokens = candidate.split()
+                if direct_pronoun_decision is None and len(candidate_tokens) >= 2 and candidate_tokens[0] in {"sie", "they"}:
+                    if candidate_tokens[1] in {"ist", "sind", "is", "are", "re"}:
+                        if _notification_loudness_has_positive_current_status(candidate):
+                            direct_pronoun_decision = "confirmed"
+                        elif _notification_loudness_has_negative_current_status(candidate):
+                            direct_pronoun_decision = "declined"
+                if direct_pronoun_decision is not None:
+                    break
         if direct_pronoun_decision is not None:
             return direct_pronoun_decision
     words = set(normalized.split())

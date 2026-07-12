@@ -1466,6 +1466,17 @@ def test_loudness_free_text_recognizes_modified_pending_pronoun_statuses() -> No
     assert _notification_loudness_decision("They're enabled, I think", pending=True) is None
 
 
+def test_loudness_free_text_recognizes_prefixed_pending_pronoun_statuses() -> None:
+    assert _notification_loudness_decision("Ja, sie sind an", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ja, sie sind jetzt an", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ja, sie sind nicht aus", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Nein, sie sind aus", pending=True) == "declined"
+    assert _notification_loudness_decision("Nein, sie sind nicht laut", pending=True) == "declined"
+    assert _notification_loudness_decision("Yes, they are on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("No, they are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("Ja, sie sind an, glaube ich", pending=True) is None
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None
