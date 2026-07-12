@@ -1822,7 +1822,16 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or has_absolute_negative_still_inner_negation
         or has_absolute_negative_off_inner_negation
         or has_volume_negative
-        or (has_completed_action_negative and not has_explicit_confirmation and not has_positive_unmute_phrase)
+        or (
+            has_completed_action_negative
+            and not has_explicit_confirmation
+            and not has_positive_unmute_phrase
+            and not (
+                has_absolute_negative_mute
+                or has_absolute_negative_still
+                or has_absolute_negative_off
+            )
+        )
     )
     if has_absolute_negative_positive_inner_negation:
         has_declined_phrase = False
@@ -3289,7 +3298,17 @@ def _notification_loudness_has_absolute_negative_term(
     tokens = normalized.split()
     quantifier_patterns = (
         ("not", "a", "single"),
+        ("not", "any"),
+        ("not", "a"),
         ("not", "one"),
+        ("aren", "t", "any"),
+        ("isn", "t", "any"),
+        ("wasn", "t", "any"),
+        ("weren", "t", "any"),
+        ("aren", "t", "a"),
+        ("isn", "t", "a"),
+        ("wasn", "t", "a"),
+        ("weren", "t", "a"),
         ("nicht", "eine", "einzige"),
         ("nicht", "eine"),
         ("nicht", "ein", "einziger"),
