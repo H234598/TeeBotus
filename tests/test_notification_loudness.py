@@ -1357,6 +1357,18 @@ def test_loudness_free_text_does_not_decide_uncertain_status_statements() -> Non
     assert _notification_loudness_decision("Anscheinend sind Benachrichtigungen an", pending=True) is None
 
 
+def test_loudness_free_text_does_not_decide_hedged_observations() -> None:
+    assert _notification_loudness_decision("Notifications appear to be on", pending=True) is None
+    assert _notification_loudness_decision("Notifications appear to be muted", pending=False) is None
+    assert _notification_loudness_decision("Notifications look like they are on", pending=True) is None
+    assert _notification_loudness_decision("It looks like notifications are on", pending=False) is None
+    assert _notification_loudness_decision("Nachrichten scheinen laut zu sein", pending=True) is None
+    assert _notification_loudness_decision("Nachrichten wirken laut", pending=False) is None
+    assert _notification_loudness_decision("Es sieht so aus, als wären die Nachrichten laut", pending=True) is None
+    assert _notification_loudness_decision("I can confirm notifications appear to be on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich kann bestätigen, dass Nachrichten offenbar laut sind", pending=False) == "confirmed"
+
+
 def test_loudness_free_text_does_not_decide_unverified_status_statements() -> None:
     assert _notification_loudness_decision("I have not checked and notifications are on", pending=True) is None
     assert _notification_loudness_decision("I haven't checked but notifications are on", pending=False) is None

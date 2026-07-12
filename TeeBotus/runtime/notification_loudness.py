@@ -3113,6 +3113,19 @@ def _notification_loudness_has_non_assertive_status(normalized: str) -> bool:
             "expected",
             "likely",
             "unlikely",
+            "seem",
+            "seems",
+            "appear",
+            "appears",
+            "look",
+            "looks",
+            "scheine",
+            "scheint",
+            "scheinen",
+            "wirke",
+            "wirkt",
+            "wirken",
+            "sieht",
         }
     )
     state_terms = (
