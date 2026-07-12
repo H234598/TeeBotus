@@ -703,8 +703,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     explicit_context_needles = (
         "benachrichtigung",
         "benachrichtigungen",
+        "benachrichtigungston",
         "nachricht",
         "nachrichten",
+        "nachrichtenton",
         "notification",
         "notifications",
         "message",

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.168 - 2026-07-12
+
+- Recognize German notification-sound compound nouns.
+
 ## 1.9.167 - 2026-07-12
 
 - Reject extended uncertainty phrasing in loudness replies.
