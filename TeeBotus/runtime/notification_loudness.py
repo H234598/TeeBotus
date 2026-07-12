@@ -2676,6 +2676,22 @@ def _notification_loudness_canonicalize_epistemic_forms(normalized: str) -> str:
 
 def _notification_loudness_leading_reply_prefix(text: str) -> tuple[str, str] | None:
     raw = str(text or "").strip().casefold()
+    pronoun_or_status_subjects = {
+        "sie",
+        "die",
+        "das",
+        "they",
+        "it",
+        "notification",
+        "notifications",
+        "nachricht",
+        "nachrichten",
+        "benachrichtigung",
+        "benachrichtigungen",
+        "message",
+        "messages",
+    }
+    ambiguous_negative_determiners = {"no", "nein", "nee"}
     for word in sorted(
         NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS | NOTIFICATION_LOUDNESS_NEGATION_REPLY_WORDS,
         key=len,
@@ -2684,10 +2700,30 @@ def _notification_loudness_leading_reply_prefix(text: str) -> tuple[str, str] | 
         if not raw.startswith(word):
             continue
         remainder = raw[len(word) :]
-        if not remainder or remainder[0] not in ",;:!?":
+        if not remainder:
+            continue
+        if remainder[0] in ",;:!?":
+            remainder = remainder[1:].strip()
+        else:
+            if not remainder[0].isspace():
+                continue
+            remainder = remainder.strip()
+            first_remainder_word = remainder.split(maxsplit=1)[0] if remainder else ""
+            if word in ambiguous_negative_determiners and first_remainder_word not in pronoun_or_status_subjects - {
+                "notification",
+                "notifications",
+                "nachricht",
+                "nachrichten",
+                "benachrichtigung",
+                "benachrichtigungen",
+                "message",
+                "messages",
+            }:
+                continue
+        if not remainder:
             continue
         decision = "confirmed" if word in NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS else "declined"
-        return decision, remainder[1:].strip()
+        return decision, remainder
     return None
 
 

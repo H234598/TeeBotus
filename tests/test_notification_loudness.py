@@ -1117,6 +1117,14 @@ def test_loudness_free_text_prioritizes_explicit_negation() -> None:
 def test_loudness_free_text_separates_reply_prefix_from_determiner_negation() -> None:
     assert _notification_loudness_decision("No notifications are muted", pending=True) == "confirmed"
     assert _notification_loudness_decision("No, notifications are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("Yes they are on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Yes they are muted", pending=True) is None
+    assert _notification_loudness_decision("No they are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("No they are on", pending=True) is None
+    assert _notification_loudness_decision("Nö sie sind aus", pending=True) == "declined"
+    assert _notification_loudness_decision("Nö sie sind an", pending=True) is None
+    assert _notification_loudness_decision("No notifications are muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("No notifications are on", pending=True) == "declined"
     assert _notification_loudness_decision("Nein, die Nachrichten sind stumm", pending=True) == "declined"
     assert _notification_loudness_decision("Ja, die Nachrichten sind laut", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ja, die Nachrichten sind stumm", pending=True) is None
