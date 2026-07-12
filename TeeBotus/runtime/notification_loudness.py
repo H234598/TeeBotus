@@ -1177,9 +1177,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_negated_completion = _notification_loudness_has_negated_phrase(
         polarity_normalized, NOTIFICATION_LOUDNESS_COMPLETION_PHRASES
     )
+    has_indirect_positive_mute_action = _notification_loudness_has_indirect_positive_mute_action(normalized)
     has_positive_unmute_phrase = any(
         _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
-    ) or _notification_loudness_has_indirect_positive_mute_action(normalized)
+    ) or has_indirect_positive_mute_action
     has_failed_action = _notification_loudness_has_failed_action(normalized)
     has_successful_ability_action = _notification_loudness_has_successful_ability_action(normalized)
     has_notification_context = has_notification_context or has_positive_unmute_phrase
@@ -1219,9 +1220,13 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         has_negated_completion = _notification_loudness_has_negated_phrase(
             polarity_normalized, NOTIFICATION_LOUDNESS_COMPLETION_PHRASES
         )
+        has_indirect_positive_mute_action = (
+            has_indirect_positive_mute_action
+            or _notification_loudness_has_indirect_positive_mute_action(normalized)
+        )
         has_positive_unmute_phrase = any(
             _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
-        ) or _notification_loudness_has_indirect_positive_mute_action(normalized)
+        ) or has_indirect_positive_mute_action
         has_notification_context = has_notification_context or has_positive_unmute_phrase
         has_completed_action_positive, has_completed_action_negative = _notification_loudness_completed_action_polarity(
             polarity_normalized, has_notification_context=has_notification_context
@@ -1302,7 +1307,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         polarity_normalized
     ) and not _notification_loudness_has_sequenced_action_status(
         polarity_normalized, activation_only=True
-    ):
+    ) and not (has_indirect_positive_mute_action and has_sequenced_action_status):
         return None
     if has_notification_context and _notification_loudness_has_cross_subject_conflict(
         polarity_normalized,
@@ -1568,13 +1573,19 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         has_declined_phrase
         or (
             has_unnegated_mute
-            and not has_positive_unmute_phrase
             and not has_absolute_negative_mute
+            and (
+                not has_positive_unmute_phrase
+                or (has_indirect_positive_mute_action and has_sequenced_action_status)
+            )
         )
         or (
             has_unnegated_off
-            and not has_positive_unmute_phrase
             and not has_absolute_negative_off
+            and (
+                not has_positive_unmute_phrase
+                or (has_indirect_positive_mute_action and has_sequenced_action_status)
+            )
         )
         or has_negated_completion
         or (has_negated_confirmed_phrase and not has_absolute_negative_positive_inner_negation)
@@ -2172,6 +2183,22 @@ def _notification_loudness_term_polarity(
         "verhinderte",
         "lassen",
     }
+    direct_positive_relation_terms = {
+        "avoid",
+        "avoided",
+        "avoiding",
+        "prevent",
+        "prevented",
+        "preventing",
+        "vermeide",
+        "vermeiden",
+        "vermieden",
+        "verhindere",
+        "verhindern",
+        "verhindert",
+        "verhinderte",
+    }
+    conditional_positive_relation_terms = {"keep", "kept", "keeping", "leave", "left", "leaving", "lassen"}
     has_unnegated = False
     has_negated = False
     for index, token in enumerate(tokens):
@@ -2185,15 +2212,44 @@ def _notification_loudness_term_polarity(
             ):
                 preceding_start = boundary_index + 1
         negation_count = _notification_loudness_scoped_negation_count(tokens, preceding_start, index)
-        if any(
-            tokens[relation_index] in relation_terms
-            and _notification_loudness_scoped_negation_count(
-                tokens, preceding_start, relation_index
-            )
-            % 2
-            for relation_index in range(preceding_start, index)
+        relation_search_start = preceding_start
+        if (
+            preceding_start < index
+            and tokens[preceding_start] in {"dass", "that"}
+            and preceding_start > 0
+            and tokens[preceding_start - 1]
+            in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN}
         ):
-            negation_count -= 1
+            relation_search_start = max(0, preceding_start - 8)
+            for boundary_index in range(preceding_start - 2, relation_search_start - 1, -1):
+                if (
+                    tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                    or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+                ):
+                    relation_search_start = boundary_index + 1
+                    break
+        relation_index = next(
+            (
+                candidate
+                for candidate in range(index - 1, relation_search_start - 1, -1)
+                if tokens[candidate] in relation_terms
+            ),
+            None,
+        )
+        if relation_index is not None:
+            relation_negated = _notification_loudness_scoped_negation_count(
+                tokens, relation_search_start, relation_index
+            ) % 2 == 1
+            if relation_negated and relation_index >= preceding_start:
+                negation_count -= 1
+            elif (
+                tokens[relation_index] in direct_positive_relation_terms
+                or (
+                    tokens[relation_index] in conditional_positive_relation_terms
+                    and set(tokens[relation_index + 1 : index]) & {"from", "dass", "zu"}
+                )
+            ):
+                negation_count += 1
         if negation_count % 2:
             has_negated = True
         else:
@@ -3316,6 +3372,24 @@ def _notification_loudness_has_sequenced_action_status(
         "confirmed",
         "noticed",
         "saw",
+        "avoid",
+        "avoided",
+        "avoiding",
+        "prevent",
+        "prevented",
+        "preventing",
+        "keep",
+        "kept",
+        "keeping",
+        "vermeide",
+        "vermeiden",
+        "vermieden",
+        "verhindere",
+        "verhindern",
+        "verhindert",
+        "verhinderte",
+        "muting",
+        "silencing",
         "geprueft",
         "sichergestellt",
     }

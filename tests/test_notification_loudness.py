@@ -2053,6 +2053,32 @@ def test_loudness_free_text_scopes_german_action_polarity() -> None:
     ) == "declined"
 
 
+def test_loudness_free_text_prioritizes_current_status_after_indirect_action() -> None:
+    assert _notification_loudness_decision(
+        "I succeeded in preventing notifications from being muted", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "I succeeded in preventing notifications from being muted, but they are muted", pending=True
+    ) == "declined"
+    assert _notification_loudness_decision(
+        "I succeeded in preventing notifications from being muted, but they are not muted", pending=False
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "I avoided muting notifications, but now they are muted", pending=True
+    ) == "declined"
+    assert _notification_loudness_decision(
+        "I avoided muting notifications, but now they are not muted", pending=False
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Ich habe verhindert, dass die Nachrichten stumm geschaltet werden, aber jetzt sind sie stumm",
+        pending=True,
+    ) == "declined"
+    assert _notification_loudness_decision(
+        "Ich habe verhindert, dass die Nachrichten stumm geschaltet werden, aber jetzt sind sie laut",
+        pending=False,
+    ) == "confirmed"
+
+
 def test_loudness_free_text_does_not_decide_historical_status_as_current() -> None:
     assert _notification_loudness_decision("I used to have notifications on", pending=True) is None
     assert _notification_loudness_decision("I formerly had notifications on", pending=False) is None
