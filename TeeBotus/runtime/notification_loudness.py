@@ -1125,6 +1125,28 @@ NOTIFICATION_LOUDNESS_PENDING_DIRECT_FAILURE_PHRASES = frozenset(
         "ich kann den benachrichtigungston nicht wiederherstellen",
     }
 )
+NOTIFICATION_LOUDNESS_PENDING_AUXILIARY_CONFIRMATION_REPLIES = frozenset(
+    {
+        "yes i have",
+        "yes i ve",
+        "yep i have",
+        "yep i ve",
+        "yeah i have",
+        "yeah i ve",
+        "sure i have",
+        "sure i ve",
+    }
+)
+NOTIFICATION_LOUDNESS_PENDING_AUXILIARY_DECLINE_REPLIES = frozenset(
+    {
+        "no i have not",
+        "no i haven t",
+        "no i ve not",
+        "nope i have not",
+        "nope i haven t",
+        "nope i ve not",
+    }
+)
 NOTIFICATION_LOUDNESS_COMPLETION_PRONOUN_PHRASES = (
     "did it",
     "did that",
@@ -1716,6 +1738,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and normalized in NOTIFICATION_LOUDNESS_PENDING_DIRECT_FAILURE_PHRASES
     ):
         return "declined"
+    if pending and "?" not in str(text or ""):
+        if normalized in NOTIFICATION_LOUDNESS_PENDING_AUXILIARY_CONFIRMATION_REPLIES:
+            return "confirmed"
+        if normalized in NOTIFICATION_LOUDNESS_PENDING_AUXILIARY_DECLINE_REPLIES:
+            return "declined"
     if _notification_loudness_has_unrelated_identity_description(normalized):
         return None
     if _notification_loudness_has_negative_possession_description(normalized):
