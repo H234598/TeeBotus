@@ -5353,20 +5353,14 @@ def _notification_loudness_completed_action_polarity(
     status_copulas = {
         "ist",
         "sind",
-        "war",
-        "waren",
-        "wurde",
-        "wurden",
         "is",
         "are",
-        "was",
-        "were",
         "remain",
         "remains",
+        "stay",
+        "stays",
         "bleibt",
         "bleiben",
-        "blieb",
-        "blieben",
     }
     status_action_terms = {
         "muted",
