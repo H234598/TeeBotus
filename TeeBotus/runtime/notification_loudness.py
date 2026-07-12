@@ -675,7 +675,19 @@ NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "done",
     "completed",
     "finished",
+    "all set",
+    "took care of it",
+    "take care of it",
+    "taken care of",
+    "handled it",
+    "sorted it",
+    "fixed it",
+    "wrapped it up",
     "geschafft",
+    "abgeschlossen",
+    "damit durch",
+    "darum gekuemmert",
+    "mich darum gekuemmert",
     "eingeschaltet",
     "angeschaltet",
     "aktiviert",
@@ -1550,6 +1562,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             return "confirmed"
         return "declined"
     if pending and any(_contains_normalized_phrase(normalized, needle) for needle in NOTIFICATION_LOUDNESS_COMPLETION_PHRASES):
+        if _notification_loudness_is_non_declarative(
+            text, normalized
+        ) and not _notification_loudness_has_sequenced_action_status(polarity_normalized):
+            return None
         return "confirmed"
     if pending and normalized in {"nein", "no", "nee", "nop", "nope"}:
         return "declined"

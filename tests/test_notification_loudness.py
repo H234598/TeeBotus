@@ -1421,6 +1421,19 @@ def test_loudness_free_text_accepts_completion_synonyms() -> None:
     assert _notification_loudness_decision("I am done", pending=True) == "confirmed"
     assert _notification_loudness_decision("I am already finished", pending=True) == "confirmed"
     assert _notification_loudness_decision("I am not finished yet", pending=True) == "declined"
+    assert _notification_loudness_decision("All set", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I took care of it", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I have taken care of it", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I handled it", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I wrapped it up", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich habe mich darum gekümmert", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich habe es abgeschlossen", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich bin damit durch", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I am taking care of it", pending=True) is None
+    assert _notification_loudness_decision("I will take care of it", pending=True) is None
+    assert _notification_loudness_decision("I want it done", pending=True) is None
+    assert _notification_loudness_decision("I did not take care of it", pending=True) == "declined"
+    assert _notification_loudness_decision("Ich habe mich nicht darum gekümmert", pending=True) == "declined"
     assert _notification_loudness_decision("I completed it", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich habe es geschafft", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich bin nicht fertig", pending=True) == "declined"
