@@ -2159,6 +2159,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         (has_notification_context or (pending and has_completion_phrase))
         and not has_audibility_gradient
         and _notification_loudness_has_partial_quantifier(normalized)
+        and not _notification_loudness_has_later_current_status_clause(
+            _notification_loudness_canonicalize_double_temporal_negation(
+                _normalize_text_for_polarity(text)
+            )
+        )
     ):
         return None
     polarity_text = _notification_loudness_canonicalize_double_temporal_negation(
@@ -2343,7 +2348,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     ) and not has_progressive_status_transition and not (
         later_current_status_segment
         and later_current_status_prefix is not None
-        and not _notification_loudness_is_explicit_status_segment(later_current_status_prefix)
+        and (
+            not _notification_loudness_is_explicit_status_segment(later_current_status_prefix)
+            or _notification_loudness_has_set_partial_quantifier(later_current_status_prefix)
+        )
     ) and not (
         has_positive_current_status
         and not has_negative_current_status
@@ -2360,6 +2368,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         has_positive_unmute_phrase=has_positive_unmute_phrase,
         has_positive_current_status=has_positive_current_status,
         has_negative_current_status=has_negative_current_status,
+    ):
+        return None
+    if has_notification_context and _notification_loudness_has_cross_subject_gradient_conflict(
+        polarity_normalized
     ):
         return None
     if later_current_status_segment:
@@ -2410,6 +2422,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         )
     status_scope_normalized = later_current_status_segment or normalized
     status_scope_polarity = later_current_status_segment or polarity_normalized
+    if (
+        later_current_status_segment
+        and _notification_loudness_has_set_partial_quantifier(status_scope_normalized)
+        and _notification_loudness_has_audibility_gradient_phrase(status_scope_normalized)
+    ):
+        return None
     audibility_gradient_decision = _notification_loudness_audibility_gradient_decision(
         status_scope_normalized
     )
@@ -4129,6 +4147,7 @@ def _notification_loudness_later_current_status_segment(
         index
         for index, token in enumerate(tokens)
         if token in boundaries and token not in {"or", "oder"}
+        and not (token == "but" and index > 0 and tokens[index - 1] == "all")
     ]
     for boundary_index in reversed(boundary_indices):
         segment = " ".join(tokens[boundary_index + 1 :])
@@ -4174,6 +4193,7 @@ def _notification_loudness_later_current_status_segment(
         has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(
             segment, NOTIFICATION_LOUDNESS_OFF_TERMS
         )
+        has_gradient = _notification_loudness_has_audibility_gradient_phrase(segment)
         if (
             has_positive
             or has_negative
@@ -4181,6 +4201,7 @@ def _notification_loudness_later_current_status_segment(
             or has_negated_mute
             or has_unnegated_off
             or has_negated_off
+            or has_gradient
         ):
             return segment
     return None
@@ -6257,6 +6278,50 @@ def _notification_loudness_has_cross_subject_conflict(
     return positive and negative
 
 
+def _notification_loudness_has_cross_subject_gradient_conflict(normalized: str) -> bool:
+    boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
+        NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN,
+        "because",
+        "since",
+        "as",
+        "weil",
+        "da",
+        "denn",
+    }
+    clauses: list[list[str]] = [[]]
+    for token in normalized.split():
+        if token in boundaries:
+            clauses.append([])
+        else:
+            clauses[-1].append(token)
+    notification_states: set[str] = set()
+    message_states: set[str] = set()
+    notification_terms = {
+        "benachrichtigung",
+        "benachrichtigungen",
+        "benachrichtigungston",
+        "notification",
+        "notifications",
+    }
+    message_terms = {"nachricht", "nachrichten", "message", "messages"}
+    for clause in clauses:
+        clause_text = " ".join(clause)
+        state = _notification_loudness_audibility_gradient_decision(clause_text)
+        if state is None:
+            continue
+        terms = set(clause)
+        has_notification = bool(terms & notification_terms)
+        has_message = bool(terms & message_terms)
+        if has_notification and not has_message:
+            notification_states.add(state)
+        elif has_message and not has_notification:
+            message_states.add(state)
+    return bool(
+        ("confirmed" in notification_states and "declined" in message_states)
+        or ("declined" in notification_states and "confirmed" in message_states)
+    )
+
+
 def _notification_loudness_has_audibility_state(normalized: str) -> bool:
     return any(
         _contains_normalized_phrase(normalized, phrase)
@@ -6292,6 +6357,16 @@ def _notification_loudness_has_audibility_state(normalized: str) -> bool:
             "ich kann den benachrichtigungston wieder hoeren",
             "kann die nachrichten nicht hoeren",
             "kann die benachrichtigungen nicht hoeren",
+        )
+    )
+
+
+def _notification_loudness_has_audibility_gradient_phrase(normalized: str) -> bool:
+    return any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in (
+            *NOTIFICATION_LOUDNESS_GRADIENT_NEGATIVE_PHRASES,
+            *NOTIFICATION_LOUDNESS_GRADIENT_POSITIVE_PHRASES,
         )
     )
 
