@@ -1606,6 +1606,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             "put it on",
         )
     )
+    allow_completion_pronoun = pending and not has_negated_completion and any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in ("did it", "did that", "did so", "done it", "completed it", "finished it")
+    )
     has_indirect_positive_mute_action = _notification_loudness_has_indirect_positive_mute_action(normalized)
     has_positive_unmute_phrase = any(
         _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
@@ -1640,10 +1644,15 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or intent_segment
     )
     later_current_status_segment = _notification_loudness_later_current_status_segment(
-        polarity_normalized
+        polarity_normalized,
+        allow_completion_pronoun=allow_completion_pronoun,
     )
     later_current_status_prefix = _notification_loudness_prior_clause_before_later_status(
         polarity_normalized, later_current_status_segment
+    )
+    has_generic_completion_pronoun_prefix = pending and later_current_status_prefix is not None and any(
+        _contains_normalized_phrase(later_current_status_prefix, phrase)
+        for phrase in ("did it", "did that", "did so", "done it", "completed it", "finished it")
     )
     if (
         (has_notification_context or (pending and has_completion_phrase and not has_negated_completion))
@@ -1699,7 +1708,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             _notification_loudness_attributive_quantifier_polarity(normalized)
         )
         later_current_status_segment = _notification_loudness_later_current_status_segment(
-            polarity_normalized
+            polarity_normalized,
+            allow_completion_pronoun=allow_completion_pronoun,
         )
         later_current_status_prefix = _notification_loudness_prior_clause_before_later_status(
             polarity_normalized, later_current_status_segment
@@ -1736,6 +1746,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and _notification_loudness_has_unscoped_subject_status(normalized)
         and not _notification_loudness_has_sequenced_action_status(polarity_normalized)
         and not has_explicit_confirmation
+        and not allow_completion_pronoun
     ):
         return None
     has_audibility_state = _notification_loudness_has_audibility_state(normalized)
@@ -1791,6 +1802,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         later_current_status_segment
         and later_current_status_prefix is not None
         and not _notification_loudness_is_explicit_status_segment(later_current_status_prefix)
+        and not has_generic_completion_pronoun_prefix
     ):
         return None
     if has_notification_context and _notification_loudness_has_cross_subject_conflict(
@@ -3364,7 +3376,9 @@ def _notification_loudness_has_conditional_status(normalized: str) -> bool:
     )
 
 
-def _notification_loudness_later_current_status_segment(normalized: str) -> str | None:
+def _notification_loudness_later_current_status_segment(
+    normalized: str, *, allow_completion_pronoun: bool = False
+) -> str | None:
     tokens = normalized.split()
     boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
         NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
@@ -3402,7 +3416,8 @@ def _notification_loudness_later_current_status_segment(normalized: str) -> str 
         }
         if not _notification_loudness_is_explicit_status_segment(
             segment,
-            allow_pronoun=bool(indirect_relation_terms.intersection(tokens[:boundary_index])),
+            allow_pronoun=bool(indirect_relation_terms.intersection(tokens[:boundary_index]))
+            or allow_completion_pronoun,
         ):
             continue
         has_positive = _notification_loudness_has_positive_current_status(segment)
