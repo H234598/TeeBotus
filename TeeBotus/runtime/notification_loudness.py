@@ -396,6 +396,8 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "i m working on ",
     "i am in the process of ",
     "i m in the process of ",
+    "i am able to ",
+    "i m able to ",
     "i tried to ",
     "i attempted to ",
     "i intended to ",
@@ -681,6 +683,32 @@ NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES = (
     "nicht geschafft",
     "konnte nicht",
     "konnten nicht",
+    "was not able to",
+    "wasn t able to",
+    "were not able to",
+    "weren t able to",
+    "unable to",
+    "not able to",
+)
+NOTIFICATION_LOUDNESS_SUCCESSFUL_ABILITY_PHRASES = (
+    "was able to",
+    "were able to",
+    "have been able to",
+    "has been able to",
+)
+NOTIFICATION_LOUDNESS_EXPLICIT_HISTORICAL_TIME_PHRASES = (
+    "used to",
+    "formerly",
+    "previously",
+    "yesterday",
+    "earlier",
+    "before",
+    "last night",
+    "last week",
+    "früher",
+    "vorher",
+    "gestern",
+    "damals",
 )
 NOTIFICATION_LOUDNESS_ATTEMPT_ACTION_PHRASES = (
     "tried",
@@ -1046,6 +1074,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
     )
     has_failed_action = _notification_loudness_has_failed_action(normalized)
+    has_successful_ability_action = _notification_loudness_has_successful_ability_action(normalized)
     has_notification_context = has_notification_context or has_positive_unmute_phrase
     if _notification_loudness_has_uncertainty(normalized) and (has_notification_context or pending):
         return None
@@ -1061,6 +1090,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             _notification_loudness_has_recent_completion_marker(normalized)
             or temporal_segment
             or has_failed_action
+            or (
+                has_successful_ability_action
+                and not _notification_loudness_has_explicit_historical_time(normalized)
+            )
         )
     ):
         return None
@@ -1189,6 +1222,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "turned on",
         "are enabled",
         "enabled",
+        "was able to",
+        "were able to",
+        "have been able to",
+        "has been able to",
         "are active",
         "sind aktiv",
         "turned on",
@@ -1973,6 +2010,20 @@ def _notification_loudness_has_failed_action(normalized: str) -> bool:
         if _notification_loudness_scoped_negation_count(tokens, index + 1, len(tokens)) % 2:
             return True
     return False
+
+
+def _notification_loudness_has_successful_ability_action(normalized: str) -> bool:
+    return any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in NOTIFICATION_LOUDNESS_SUCCESSFUL_ABILITY_PHRASES
+    )
+
+
+def _notification_loudness_has_explicit_historical_time(normalized: str) -> bool:
+    return any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in NOTIFICATION_LOUDNESS_EXPLICIT_HISTORICAL_TIME_PHRASES
+    )
 
 
 def _notification_loudness_has_current_temporal_contrast(normalized: str) -> bool:

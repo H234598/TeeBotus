@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.211 - 2026-07-12
+
+- Classify able/unable notification actions without confusing current ability with completion.
+
 ## 1.9.210 - 2026-07-12
 
 - Use current states after past attempts and intentions.
