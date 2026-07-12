@@ -2085,6 +2085,16 @@ def test_loudness_free_text_recognizes_demonstrative_pending_pronouns() -> None:
     assert _notification_loudness_decision("Das ist aktuell nicht laut", pending=True) == "declined"
     assert _notification_loudness_decision("It is on", pending=True) == "confirmed"
     assert _notification_loudness_decision("It is muted", pending=True) == "declined"
+    assert _notification_loudness_decision("It's on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("It's muted", pending=True) == "declined"
+    assert _notification_loudness_decision("That is on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Those are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("This is loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("These are not muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("It is on the table", pending=True) is None
+    assert _notification_loudness_decision("It's on Matrix", pending=True) is None
+    assert _notification_loudness_decision("That is on the screen", pending=True) is None
+    assert _notification_loudness_decision("Those are loud", pending=True) == "confirmed"
 
 
 def test_loudness_free_text_recognizes_short_pending_status_replies() -> None:

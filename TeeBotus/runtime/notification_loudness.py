@@ -1415,6 +1415,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
                 candidate_tokens = candidate.split()
                 if direct_pronoun_decision is None and len(candidate_tokens) >= 2 and candidate_tokens[0] in {"sie", "die", "das", "they", "it"}:
                     if candidate_tokens[1] in {"ist", "sind", "is", "are", "re"}:
+                        if (
+                            _notification_loudness_has_ambiguous_status_qualifier(candidate)
+                            or _notification_loudness_has_ambiguous_location_status(candidate)
+                        ):
+                            continue
                         if _notification_loudness_has_non_assertive_status(candidate):
                             continue
                         if _notification_loudness_has_positive_current_status(candidate):
@@ -5479,6 +5484,11 @@ def _notification_loudness_has_ambiguous_chat_activity(normalized: str) -> bool:
 
 
 def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | None:
+    if (
+        _notification_loudness_has_ambiguous_status_qualifier(normalized)
+        or _notification_loudness_has_ambiguous_location_status(normalized)
+    ):
+        return None
     if normalized in {
         "sie sind an",
         "ist an",
@@ -5607,8 +5617,8 @@ def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | No
     }:
         return "declined"
     tokens = normalized.split()
-    pronouns = {"sie", "die", "das", "they", "it"}
-    copulas = {"ist", "sind", "is", "are", "re"}
+    pronouns = {"sie", "die", "das", "they", "it", "this", "that", "these", "those"}
+    copulas = {"ist", "sind", "is", "are", "re", "s"}
     status_terms = (
         NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS
         | NOTIFICATION_LOUDNESS_MUTE_TERMS
