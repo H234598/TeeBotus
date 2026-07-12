@@ -1741,15 +1741,20 @@ def _notification_loudness_volume_polarity(
             negative = True
         else:
             positive = True
-    if any(_contains_normalized_phrase(normalized, phrase) for phrase in (
+    for phrase in (
         "volle lautstaerke",
         "voller lautstaerke",
         "auf voller lautstaerke",
         "full volume",
         "maximum volume",
         "at full volume",
-    )):
-        positive = True
+    ):
+        if not _contains_normalized_phrase(normalized, phrase):
+            continue
+        if _notification_loudness_phrase_is_negated(normalized, phrase):
+            negative = True
+        else:
+            positive = True
     if any(_contains_normalized_phrase(normalized, phrase) for phrase in (
         "leise gestellt",
     )):
@@ -1793,6 +1798,20 @@ def _notification_loudness_volume_polarity(
     if "0" in tokens and any(value in tokens for value in {"prozent", "percent"}):
         negative = True
     return positive, negative
+
+
+def _notification_loudness_phrase_is_negated(normalized: str, phrase: str) -> bool:
+    tokens = normalized.split()
+    phrase_tokens = phrase.split()
+    width = len(phrase_tokens)
+    for index in range(len(tokens) - width + 1):
+        if tokens[index : index + width] != phrase_tokens:
+            continue
+        if _notification_loudness_scoped_negation_count(
+            tokens, max(0, index - 3), index
+        ) % 2:
+            return True
+    return False
 
 
 def _notification_loudness_has_negative_current_status(normalized: str) -> bool:

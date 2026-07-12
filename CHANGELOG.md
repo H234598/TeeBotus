@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.181 - 2026-07-12
+
+- Respect negation in full-volume status phrases.
+
 ## 1.9.180 - 2026-07-12
 
 - Respect progress and negation in volume adjustments.

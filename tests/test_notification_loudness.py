@@ -1566,6 +1566,13 @@ def test_loudness_free_text_respects_volume_action_progress_and_negation() -> No
     assert _notification_loudness_decision("I have not turned notification volume down", pending=False) == "confirmed"
 
 
+def test_loudness_free_text_respects_volume_fullness_negation() -> None:
+    assert _notification_loudness_decision("The notification volume is not at full volume", pending=True) == "declined"
+    assert _notification_loudness_decision("The notification volume isn't at full volume", pending=False) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind nicht auf voller Lautstärke", pending=True) == "declined"
+    assert _notification_loudness_decision("The notification volume is at full volume", pending=False) == "confirmed"
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None
