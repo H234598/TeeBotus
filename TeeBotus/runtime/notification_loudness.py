@@ -782,7 +782,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             for candidate in candidate_texts:
                 direct_pronoun_decision = _notification_loudness_pending_pronoun_decision(candidate)
                 candidate_tokens = candidate.split()
-                if direct_pronoun_decision is None and len(candidate_tokens) >= 2 and candidate_tokens[0] in {"sie", "they"}:
+                if direct_pronoun_decision is None and len(candidate_tokens) >= 2 and candidate_tokens[0] in {"sie", "die", "das", "they", "it"}:
                     if candidate_tokens[1] in {"ist", "sind", "is", "are", "re"}:
                         if _notification_loudness_has_positive_current_status(candidate):
                             direct_pronoun_decision = "confirmed"
@@ -1925,6 +1925,18 @@ def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | No
         "sie sind nicht ausgeschaltet",
         "sie sind nicht stumm",
         "sie sind nicht lautlos",
+        "die sind an",
+        "die sind laut",
+        "die sind nicht aus",
+        "die sind nicht ausgeschaltet",
+        "die sind nicht stumm",
+        "die sind nicht lautlos",
+        "das ist an",
+        "das ist laut",
+        "das ist nicht aus",
+        "das ist nicht ausgeschaltet",
+        "das ist nicht stumm",
+        "das ist nicht lautlos",
         "they are on",
         "they re on",
         "they are loud",
@@ -1939,6 +1951,11 @@ def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | No
         "they re enabled",
         "they are unmuted",
         "they re unmuted",
+        "it is on",
+        "it is loud",
+        "it is not off",
+        "it is not disabled",
+        "it is not muted",
     }:
         return "confirmed"
     if normalized in {
@@ -1948,6 +1965,18 @@ def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | No
         "sie sind nicht laut",
         "sie sind nicht an",
         "sie sind ausgeschaltet",
+        "die sind aus",
+        "die sind stumm",
+        "die sind lautlos",
+        "die sind nicht laut",
+        "die sind nicht an",
+        "die sind ausgeschaltet",
+        "das ist aus",
+        "das ist stumm",
+        "das ist lautlos",
+        "das ist nicht laut",
+        "das ist nicht an",
+        "das ist ausgeschaltet",
         "they are off",
         "they re off",
         "they are muted",
@@ -1958,6 +1987,12 @@ def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | No
         "they re disabled",
         "they are not on",
         "they re not on",
+        "it is off",
+        "it is muted",
+        "it is silent",
+        "it is not loud",
+        "it is not on",
+        "it is disabled",
     }:
         return "declined"
     return None

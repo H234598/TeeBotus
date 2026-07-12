@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.182 - 2026-07-12
+
+- Recognize demonstrative pending pronoun replies.
+
 ## 1.9.181 - 2026-07-12
 
 - Respect negation in full-volume status phrases.
