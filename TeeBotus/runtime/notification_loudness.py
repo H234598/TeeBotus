@@ -122,10 +122,24 @@ NOTIFICATION_LOUDNESS_PARTIAL_QUANTIFIER_PHRASES = (
     "weren t all",
     "not every",
     "not each",
+    "not completely",
+    "not fully",
+    "not entirely",
+    "not quite",
+    "not all the way",
+    "partially",
+    "only partly",
     "nicht alle",
     "nicht jede",
     "nicht jeder",
     "nicht jedes",
+    "nicht vollständig",
+    "nicht vollstaendig",
+    "nicht komplett",
+    "nicht ganz",
+    "teilweise",
+    "nur teilweise",
+    "nur zum teil",
     "some",
     "einige",
     "manche",
@@ -215,6 +229,8 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "i really don t know",
     "i really do not know",
     "not sure",
+    "not really",
+    "nicht wirklich",
     "uncertain",
     "maybe",
     "possibly",
@@ -1590,7 +1606,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and _notification_loudness_has_non_assertive_status(normalized)
     ):
         return None
-    if has_notification_context and _notification_loudness_has_partial_quantifier(normalized):
+    if (
+        (has_notification_context or (pending and has_completion_phrase))
+        and _notification_loudness_has_partial_quantifier(normalized)
+    ):
         return None
     polarity_text = _notification_loudness_canonicalize_double_temporal_negation(
         _normalize_text_for_polarity(text)
