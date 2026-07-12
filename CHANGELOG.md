@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.180 - 2026-07-12
+
+- Respect progress and negation in volume adjustments.
+
 ## 1.9.179 - 2026-07-12
 
 - Recognize notification volume states and completed adjustments.

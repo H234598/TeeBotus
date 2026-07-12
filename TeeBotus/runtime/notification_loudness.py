@@ -1752,28 +1752,42 @@ def _notification_loudness_volume_polarity(
         positive = True
     if any(_contains_normalized_phrase(normalized, phrase) for phrase in (
         "leise gestellt",
-        "runtergedreht",
-        "heruntergedreht",
-        "turned down",
-        "volume down",
     )):
         negative = True
-    if any(_contains_normalized_phrase(normalized, phrase) for phrase in (
-        "hochgestellt",
-        "hochgedreht",
-        "hochgesetzt",
-        "turned up",
-        "volume up",
-    )):
-        positive = True
     for index, token in enumerate(tokens):
         if token != "turned":
             continue
         following = tokens[index + 1 : index + 6]
+        negated = _notification_loudness_scoped_negation_count(
+            tokens, max(0, index - 3), index
+        ) % 2 == 1
         if "up" in following:
-            positive = True
+            if negated:
+                negative = True
+            else:
+                positive = True
         if "down" in following:
+            if negated:
+                positive = True
+            else:
+                negative = True
+    for action, action_is_positive in (
+        ("hochgestellt", True),
+        ("hochgedreht", True),
+        ("hochgesetzt", True),
+        ("runtergedreht", False),
+        ("heruntergedreht", False),
+    ):
+        if action not in tokens:
+            continue
+        index = tokens.index(action)
+        negated = _notification_loudness_scoped_negation_count(
+            tokens, max(0, index - 3), index
+        ) % 2 == 1
+        if action_is_positive is negated:
             negative = True
+        else:
+            positive = True
     if "100" in tokens and any(value in tokens for value in {"prozent", "percent"}):
         positive = True
     if "0" in tokens and any(value in tokens for value in {"prozent", "percent"}):
