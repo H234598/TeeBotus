@@ -2193,6 +2193,21 @@ def test_loudness_free_text_does_not_decide_future_intentions_as_completed() -> 
     assert _notification_loudness_decision(
         "I will mute notifications, but they are loud", pending=True
     ) == "confirmed"
+
+
+def test_loudness_free_text_prefers_later_assertive_status_after_action() -> None:
+    assert _notification_loudness_decision(
+        "I have muted notifications, but notifications are loud", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "I turned notifications off, but notifications are loud", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "I have muted notifications, but notifications are not muted", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Ich habe die Nachrichten stumm gestellt, aber die Nachrichten sind laut", pending=True
+    ) == "confirmed"
     assert _notification_loudness_decision("Ich habe vor, Nachrichten laut zu stellen", pending=False) is None
     assert _notification_loudness_decision("I have turned notifications on", pending=True) == "confirmed"
     assert _notification_loudness_decision("I just turned notifications on", pending=False) == "confirmed"

@@ -1401,6 +1401,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or transition_segment
         or intent_segment
     )
+    later_current_status_segment = _notification_loudness_later_current_status_segment(
+        polarity_normalized
+    )
+    later_current_status_prefix = _notification_loudness_prior_clause_before_later_status(
+        polarity_normalized, later_current_status_segment
+    )
     if (
         has_notification_context
         and _notification_loudness_has_historical_marker(normalized)
@@ -1454,6 +1460,15 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         has_attributive_positive, has_attributive_negative = (
             _notification_loudness_attributive_quantifier_polarity(normalized)
         )
+        later_current_status_segment = _notification_loudness_later_current_status_segment(
+            polarity_normalized
+        )
+        later_current_status_prefix = _notification_loudness_prior_clause_before_later_status(
+            polarity_normalized, later_current_status_segment
+        )
+    if later_current_status_segment:
+        has_completed_action_positive = False
+        has_completed_action_negative = False
     if has_notification_context and _notification_loudness_has_failed_action(normalized):
         failed_action_polarity = _notification_loudness_failed_action_polarity(normalized)
         if failed_action_polarity == "negative":
@@ -1533,7 +1548,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         polarity_normalized
     ) and not _notification_loudness_has_sequenced_action_status(
         polarity_normalized, activation_only=True
-    ) and not (has_indirect_positive_mute_action and has_sequenced_action_status):
+    ) and not (has_indirect_positive_mute_action and has_sequenced_action_status) and not (
+        later_current_status_segment
+        and later_current_status_prefix is not None
+        and not _notification_loudness_is_explicit_status_segment(later_current_status_prefix)
+    ):
         return None
     if has_notification_context and _notification_loudness_has_cross_subject_conflict(
         polarity_normalized,
@@ -1546,6 +1565,55 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         has_negative_current_status=has_negative_current_status,
     ):
         return None
+    if later_current_status_segment:
+        scoped_normalized = later_current_status_segment
+        has_unnegated_mute, has_negated_mute = _notification_loudness_mute_polarity(
+            scoped_normalized
+        )
+        has_unnegated_german_still, has_negated_german_still = _notification_loudness_german_still_polarity(
+            scoped_normalized
+        )
+        has_unnegated_mute = has_unnegated_mute or has_unnegated_german_still
+        has_negated_mute = has_negated_mute or has_negated_german_still
+        has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(
+            scoped_normalized, NOTIFICATION_LOUDNESS_OFF_TERMS
+        )
+        has_positive_unmute_phrase = any(
+            _contains_normalized_phrase(scoped_normalized, phrase)
+            for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
+        ) or _notification_loudness_has_indirect_positive_mute_action(scoped_normalized)
+        has_positive_current_status = _notification_loudness_has_positive_current_status(
+            scoped_normalized
+        )
+        has_negative_current_status = _notification_loudness_has_negative_current_status(
+            scoped_normalized
+        )
+        has_absolute_negative_positive_status = _notification_loudness_has_absolute_negative_positive_status(
+            scoped_normalized
+        )
+        has_absolute_negative_mute = _notification_loudness_has_absolute_negative_term(
+            scoped_normalized, NOTIFICATION_LOUDNESS_MUTE_TERMS
+        )
+        has_absolute_negative_off = _notification_loudness_has_absolute_negative_term(
+            scoped_normalized, NOTIFICATION_LOUDNESS_OFF_TERMS
+        )
+        has_absolute_negative_positive_inner_negation = _notification_loudness_has_absolute_negative_term(
+            scoped_normalized, NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS, inner_negated=True
+        )
+        has_absolute_negative_mute_inner_negation = _notification_loudness_has_absolute_negative_term(
+            scoped_normalized, NOTIFICATION_LOUDNESS_MUTE_TERMS, inner_negated=True
+        )
+        has_absolute_negative_still = _notification_loudness_has_absolute_negative_german_still(
+            scoped_normalized
+        )
+        has_absolute_negative_still_inner_negation = _notification_loudness_has_absolute_negative_german_still(
+            scoped_normalized, inner_negated=True
+        )
+        has_absolute_negative_off_inner_negation = _notification_loudness_has_absolute_negative_term(
+            scoped_normalized, NOTIFICATION_LOUDNESS_OFF_TERMS, inner_negated=True
+        )
+    status_scope_normalized = later_current_status_segment or normalized
+    status_scope_polarity = later_current_status_segment or polarity_normalized
     confirmed_needles = (
         "ja laut",
         "laut gestellt",
@@ -1876,10 +1944,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "ohne ton",
     )
     has_negated_confirmed_phrase = _notification_loudness_has_negated_phrase(
-        polarity_normalized, confirmed_needles
+        status_scope_polarity, confirmed_needles
     )
     has_declined_phrase = any(
-        _contains_normalized_phrase(normalized, needle)
+        _contains_normalized_phrase(status_scope_normalized, needle)
         for needle in declined_needles
         if (
             (
@@ -1970,12 +2038,18 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and words & NOTIFICATION_LOUDNESS_ACTION_WORDS
         and not (has_negated_mute or has_negated_off)
     ):
-        if any(_contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_COMPLETION_PHRASES) and not has_negated_completion:
+        if any(
+            _contains_normalized_phrase(status_scope_normalized, phrase)
+            for phrase in NOTIFICATION_LOUDNESS_COMPLETION_PHRASES
+        ) and not has_negated_completion:
             return "confirmed"
         return "declined"
-    if pending and any(_contains_normalized_phrase(normalized, needle) for needle in NOTIFICATION_LOUDNESS_COMPLETION_PHRASES):
+    if pending and any(
+        _contains_normalized_phrase(status_scope_normalized, needle)
+        for needle in NOTIFICATION_LOUDNESS_COMPLETION_PHRASES
+    ):
         if _notification_loudness_is_non_declarative(
-            text, normalized
+            text, status_scope_normalized
         ) and not _notification_loudness_has_sequenced_action_status(polarity_normalized):
             return None
         return "confirmed"
@@ -1983,7 +2057,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return "declined"
     if has_notification_context and (
         (
-            any(_contains_normalized_phrase(normalized, needle) for needle in confirmed_needles)
+            any(_contains_normalized_phrase(status_scope_normalized, needle) for needle in confirmed_needles)
             and not has_negated_confirmed_phrase
         )
         or (has_negated_mute and not has_absolute_negative_mute_inner_negation)
@@ -2918,6 +2992,139 @@ def _notification_loudness_has_non_assertive_status(normalized: str) -> bool:
             return "sein" in clause[first_state_index + 1 :]
         return False
     return False
+
+
+def _notification_loudness_later_current_status_segment(normalized: str) -> str | None:
+    tokens = normalized.split()
+    boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
+        NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+    }
+    boundary_indices = [
+        index
+        for index, token in enumerate(tokens)
+        if token in boundaries and token not in {"or", "oder"}
+    ]
+    for boundary_index in reversed(boundary_indices):
+        segment = " ".join(tokens[boundary_index + 1 :])
+        if not segment or _notification_loudness_has_non_assertive_status(segment):
+            continue
+        indirect_relation_terms = {
+            "prevent",
+            "prevented",
+            "preventing",
+            "protected",
+            "protecting",
+            "shielded",
+            "shielding",
+            "saved",
+            "saving",
+            "avoided",
+            "avoiding",
+            "verhindert",
+            "verhindern",
+            "gehindert",
+            "geschützt",
+            "geschuetzt",
+            "bewahrt",
+            "bewahren",
+            "verschont",
+            "verschonen",
+        }
+        if not _notification_loudness_is_explicit_status_segment(
+            segment,
+            allow_pronoun=bool(indirect_relation_terms.intersection(tokens[:boundary_index])),
+        ):
+            continue
+        has_positive = _notification_loudness_has_positive_current_status(segment)
+        has_negative = _notification_loudness_has_negative_current_status(segment)
+        has_unnegated_mute, has_negated_mute = _notification_loudness_mute_polarity(segment)
+        has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(
+            segment, NOTIFICATION_LOUDNESS_OFF_TERMS
+        )
+        if (
+            has_positive
+            or has_negative
+            or has_unnegated_mute
+            or has_negated_mute
+            or has_unnegated_off
+            or has_negated_off
+        ):
+            return segment
+    return None
+
+
+def _notification_loudness_is_explicit_status_segment(
+    normalized: str, *, allow_pronoun: bool = False
+) -> bool:
+    tokens = normalized.split()
+    subject_terms = {
+        "nachricht",
+        "nachrichten",
+        "message",
+        "messages",
+        "benachrichtigung",
+        "benachrichtigungen",
+        "notification",
+        "notifications",
+    }
+    pronoun_terms = {"sie", "die", "das", "they", "it"}
+    copulas = {
+        "ist",
+        "sind",
+        "is",
+        "are",
+        "re",
+        "remain",
+        "remains",
+        "remained",
+        "stay",
+        "stays",
+        "stayed",
+        "bleibt",
+        "bleiben",
+        "blieb",
+        "blieben",
+        "been",
+    }
+    state_terms = (
+        set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS)
+        | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
+        | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+    )
+    has_explicit_subject = bool(set(tokens) & subject_terms)
+    has_temporal_pronoun_context = bool(
+        set(tokens) & pronoun_terms
+        and (
+            set(tokens) & set(NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS)
+            or allow_pronoun
+        )
+    )
+    return bool(
+        (has_explicit_subject or has_temporal_pronoun_context)
+        and set(tokens) & copulas
+        and set(tokens) & state_terms
+    )
+
+
+def _notification_loudness_prior_clause_before_later_status(
+    normalized: str, later_segment: str | None
+) -> str | None:
+    if not later_segment:
+        return None
+    tokens = normalized.split()
+    segment_tokens = later_segment.split()
+    boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
+        NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+    }
+    boundary_indices = [index for index, token in enumerate(tokens) if token in boundaries]
+    for boundary_index in reversed(boundary_indices):
+        if tokens[boundary_index + 1 :] == segment_tokens:
+            return " ".join(tokens[:boundary_index])
+    return None
+
+
+def _notification_loudness_has_later_current_status_clause(normalized: str) -> bool:
+    return _notification_loudness_later_current_status_segment(normalized) is not None
 
 
 def _notification_loudness_has_historical_marker(normalized: str) -> bool:
