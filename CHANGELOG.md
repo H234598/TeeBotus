@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.178 - 2026-07-12
+
+- Recognize unmute noun phrasing.
+
 ## 1.9.177 - 2026-07-12
 
 - Handle idiomatic unmute negations.

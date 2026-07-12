@@ -1539,6 +1539,14 @@ def test_loudness_free_text_handles_idiomatic_unmute_negations() -> None:
     assert _notification_loudness_decision("Die Benachrichtigungen sind alles andere als stumm", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_handles_unmute_noun_phrasing() -> None:
+    assert _notification_loudness_decision("Die Nachrichten sind ohne Stummschaltung", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Der Chat läuft ohne Stummschaltung", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten sind frei von Stummschaltung", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Messages are free of mute", pending=False) == "confirmed"
+    assert _notification_loudness_decision("The chat is free from silence", pending=True) == "confirmed"
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None

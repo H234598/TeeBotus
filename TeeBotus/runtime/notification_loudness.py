@@ -18,7 +18,18 @@ NOTIFICATION_LOUDNESS_WAKE_HOURS = (8, 22)
 NOTIFICATION_LOUDNESS_PENDING_STATUS = "pending"
 NOTIFICATION_LOUDNESS_TERMINAL_STATUSES = frozenset({"confirmed", "declined"})
 NOTIFICATION_LOUDNESS_MUTE_TERMS = frozenset(
-    {"stumm", "lautlos", "stummgeschaltet", "lautlosgeschaltet", "mute", "muted", "silence", "silenced", "silent"}
+    {
+        "stumm",
+        "lautlos",
+        "stummgeschaltet",
+        "lautlosgeschaltet",
+        "stummschaltung",
+        "mute",
+        "muted",
+        "silence",
+        "silenced",
+        "silent",
+    }
 )
 NOTIFICATION_LOUDNESS_OFF_TERMS = frozenset({"ausgeschaltet", "deaktiviert", "abgeschaltet", "off", "disabled"})
 NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset(
@@ -517,6 +528,10 @@ NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES = (
     "anything but silent",
     "alles andere als stumm",
     "alles andere als lautlos",
+    "frei von stummschaltung",
+    "free of mute",
+    "free from mute",
+    "free from silence",
     "lautlosmodus ausgeschaltet",
     "lautlosmodus ausgemacht",
     "lautlosmodus fuer nachrichten ausgeschaltet",
