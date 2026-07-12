@@ -296,9 +296,11 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "not enough information",
     "no proof",
     "no evidence",
+    "not impossible",
     "kein beweis",
     "keine beweise",
     "keine belege",
+    "nicht unmoeglich",
     "no way to know",
     "no way to tell",
     "there is no way to tell",
@@ -1248,7 +1250,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     normalized = _normalize_text(text)
     if not normalized:
         return None
-    normalized = _notification_loudness_canonicalize_double_temporal_negation(normalized)
+    normalized = _notification_loudness_canonicalize_epistemic_forms(
+        _notification_loudness_canonicalize_double_temporal_negation(normalized)
+    )
     if _notification_loudness_has_unrelated_identity_description(normalized):
         return None
     if _notification_loudness_has_negative_possession_description(normalized):
@@ -1375,6 +1379,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     polarity_normalized = _notification_loudness_canonicalize_double_temporal_negation(
         _normalize_text_for_polarity(text)
     )
+    polarity_normalized = _notification_loudness_canonicalize_epistemic_forms(polarity_normalized)
     has_explicit_confirmation = _notification_loudness_has_explicit_confirmation(normalized)
     has_sequenced_action_status = _notification_loudness_has_sequenced_action_status(polarity_normalized)
     has_notification_context = has_notification_context or has_explicit_confirmation or has_sequenced_action_status
@@ -1420,6 +1425,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     polarity_text = _notification_loudness_canonicalize_double_temporal_negation(
         _normalize_text_for_polarity(text)
     )
+    polarity_text = _notification_loudness_canonicalize_epistemic_forms(polarity_text)
     transition_segment = _notification_loudness_current_transition_segment(polarity_text)
     intent_segment = _notification_loudness_current_intent_segment(polarity_text)
     temporal_segment = (
@@ -2517,6 +2523,15 @@ def _notification_loudness_canonicalize_double_temporal_negation(normalized: str
         normalized.replace("not no longer", "still")
         .replace("nicht mehr nicht", "weiterhin")
         .replace("nicht laenger nicht", "weiterhin")
+    )
+
+
+def _notification_loudness_canonicalize_epistemic_forms(normalized: str) -> str:
+    return (
+        normalized.replace("do not doubt", "don t doubt")
+        .replace("do not dispute", "don t dispute")
+        .replace("it is impossible that", "it is not true that")
+        .replace("es ist unmoeglich dass", "nicht wahr dass")
     )
 
 
