@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.173 - 2026-07-12
+
+- Handle partial and absolute notification-state quantifiers safely.
+
 ## 1.9.172 - 2026-07-12
 
 - Recognize inverted current notification status sentences.

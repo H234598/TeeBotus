@@ -62,6 +62,22 @@ NOTIFICATION_LOUDNESS_QUANTIFIER_TERMS = frozenset(
         "neither",
     }
 )
+NOTIFICATION_LOUDNESS_PARTIAL_QUANTIFIER_PHRASES = (
+    "not all",
+    "not every",
+    "not each",
+    "nicht alle",
+    "nicht jede",
+    "nicht jeder",
+    "nicht jedes",
+    "some",
+    "einige",
+    "manche",
+    "mehrere",
+    "a few",
+    "several",
+    "ein paar",
+)
 NOTIFICATION_LOUDNESS_NEGATION_PHRASES = (
     "don t",
     "doesn t",
@@ -776,6 +792,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_notification_context = has_notification_context or has_positive_unmute_phrase
     if _notification_loudness_has_uncertainty(normalized) and (has_notification_context or pending):
         return None
+    if has_notification_context and _notification_loudness_has_partial_quantifier(normalized):
+        return None
     if (
         has_notification_context
         and _notification_loudness_has_historical_marker(normalized)
@@ -805,6 +823,22 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     has_positive_current_status = _notification_loudness_has_positive_current_status(normalized)
     has_negative_current_status = _notification_loudness_has_negative_current_status(normalized)
+    has_absolute_negative_positive_status = _notification_loudness_has_absolute_negative_positive_status(normalized)
+    has_absolute_negative_mute = _notification_loudness_has_absolute_negative_term(
+        normalized, NOTIFICATION_LOUDNESS_MUTE_TERMS
+    )
+    has_absolute_negative_off = _notification_loudness_has_absolute_negative_term(
+        normalized, NOTIFICATION_LOUDNESS_OFF_TERMS
+    )
+    has_absolute_negative_positive_inner_negation = _notification_loudness_has_absolute_negative_term(
+        normalized, NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS, inner_negated=True
+    )
+    has_absolute_negative_mute_inner_negation = _notification_loudness_has_absolute_negative_term(
+        normalized, NOTIFICATION_LOUDNESS_MUTE_TERMS, inner_negated=True
+    )
+    has_absolute_negative_off_inner_negation = _notification_loudness_has_absolute_negative_term(
+        normalized, NOTIFICATION_LOUDNESS_OFF_TERMS, inner_negated=True
+    )
     if has_notification_context and _notification_loudness_has_cross_subject_conflict(
         normalized,
         has_unnegated_mute=has_unnegated_mute,
@@ -967,12 +1001,17 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     )
     has_declined_phrase = (
         has_declined_phrase
-        or (has_unnegated_mute and not has_positive_unmute_phrase)
-        or (has_unnegated_off and not has_positive_unmute_phrase)
+        or (has_unnegated_mute and not has_positive_unmute_phrase and not has_absolute_negative_mute)
+        or (has_unnegated_off and not has_positive_unmute_phrase and not has_absolute_negative_off)
         or has_negated_completion
-        or has_negated_confirmed_phrase
-        or has_negative_current_status
+        or (has_negated_confirmed_phrase and not has_absolute_negative_positive_inner_negation)
+        or (has_negative_current_status and not has_absolute_negative_positive_inner_negation)
+        or has_absolute_negative_positive_status
+        or has_absolute_negative_mute_inner_negation
+        or has_absolute_negative_off_inner_negation
     )
+    if has_absolute_negative_positive_inner_negation:
+        has_declined_phrase = False
     if has_declined_phrase and (pending or has_notification_context):
         return "declined"
     if pending and (normalized in {"ja", "yes", "jep", "jo", "ok", "okay", "klar", "erledigt", "gemacht"} or words & {"ja", "yes"} and has_notification_context):
@@ -1007,10 +1046,13 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
             any(_contains_normalized_phrase(normalized, needle) for needle in confirmed_needles)
             and not has_negated_confirmed_phrase
         )
-        or has_negated_mute
-        or has_negated_off
+        or (has_negated_mute and not has_absolute_negative_mute_inner_negation)
+        or (has_negated_off and not has_absolute_negative_off_inner_negation)
         or has_positive_unmute_phrase
         or has_positive_current_status
+        or has_absolute_negative_positive_inner_negation
+        or has_absolute_negative_mute
+        or has_absolute_negative_off
     ):
         return "confirmed"
     if has_notification_context and has_declined_phrase:
@@ -1489,6 +1531,47 @@ def _notification_loudness_has_historical_marker(normalized: str) -> bool:
         _contains_normalized_phrase(normalized, _normalize_text(phrase.strip()))
         for phrase in NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES
     )
+
+
+def _notification_loudness_has_partial_quantifier(normalized: str) -> bool:
+    return any(
+        _contains_normalized_phrase(normalized, _normalize_text(phrase))
+        for phrase in NOTIFICATION_LOUDNESS_PARTIAL_QUANTIFIER_PHRASES
+    )
+
+
+def _notification_loudness_has_absolute_negative_positive_status(normalized: str) -> bool:
+    return _notification_loudness_has_absolute_negative_term(
+        normalized, NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS
+    )
+
+
+def _notification_loudness_has_absolute_negative_term(
+    normalized: str, terms: frozenset[str], *, inner_negated: bool = False
+) -> bool:
+    tokens = normalized.split()
+    quantifier_patterns = (
+        ("not", "a", "single"),
+        ("not", "one"),
+        ("nicht", "eine", "einzige"),
+        ("nicht", "eine"),
+        ("nicht", "ein", "einziger"),
+    )
+    for pattern in quantifier_patterns:
+        width = len(pattern)
+        for start in range(len(tokens) - width + 1):
+            if tuple(tokens[start : start + width]) != pattern:
+                continue
+            for index in range(start + width, len(tokens)):
+                if tokens[index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES:
+                    break
+                if tokens[index] not in terms:
+                    continue
+                between = tokens[start + width : index]
+                has_inner_negation = bool({"not", "nicht"}.intersection(between))
+                if has_inner_negation is inner_negated:
+                    return True
+    return False
 
 
 def _notification_loudness_has_recent_completion_marker(normalized: str) -> bool:
