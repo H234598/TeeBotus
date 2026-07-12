@@ -33,6 +33,11 @@ NOTIFICATION_LOUDNESS_MUTE_TERMS = frozenset(
         "quiet",
         "inaudible",
         "unhoerbar",
+        "hidden",
+        "suppressed",
+        "unsichtbar",
+        "verborgen",
+        "unterdrueckt",
     }
 )
 NOTIFICATION_LOUDNESS_OFF_TERMS = frozenset(
@@ -554,7 +559,20 @@ NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
     }
 )
 NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS = frozenset(
-    {"laut", "loud", "an", "on", "aktiv", "active", "enabled", "hoerbar", "audible", "unmuted"}
+    {
+        "laut",
+        "loud",
+        "an",
+        "on",
+        "aktiv",
+        "active",
+        "enabled",
+        "hoerbar",
+        "audible",
+        "unmuted",
+        "visible",
+        "sichtbar",
+    }
 )
 NOTIFICATION_LOUDNESS_VOLUME_TERMS = frozenset({"lautstaerke", "volume"})
 NOTIFICATION_LOUDNESS_VOLUME_POSITIVE_TERMS = frozenset(

@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.198 - 2026-07-12
+
+- Recognize hidden, visible, and suppressed notification states.
+
 ## 1.9.197 - 2026-07-12
 
 - Recognize notification visibility and delivery reports.

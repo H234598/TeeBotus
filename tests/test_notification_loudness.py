@@ -1735,6 +1735,17 @@ def test_loudness_free_text_recognizes_notification_visibility_reports() -> None
     assert _notification_loudness_decision("Do notifications appear?", pending=True) is None
 
 
+def test_loudness_free_text_recognizes_hidden_and_visible_states() -> None:
+    assert _notification_loudness_decision("Notifications are visible", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are not visible", pending=False) == "declined"
+    assert _notification_loudness_decision("Messages are hidden", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications are suppressed", pending=False) == "declined"
+    assert _notification_loudness_decision("Die Benachrichtigungen sind sichtbar", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Die Benachrichtigungen sind unsichtbar", pending=False) == "declined"
+    assert _notification_loudness_decision("Die Nachrichten sind verborgen", pending=True) == "declined"
+    assert _notification_loudness_decision("Benachrichtigungen werden unterdrückt", pending=False) == "declined"
+
+
 def test_loudness_free_text_does_not_decide_obligations_or_plans_as_done() -> None:
     assert _notification_loudness_decision("I have to mute messages", pending=True) is None
     assert _notification_loudness_decision("I have to turn notifications on", pending=False) is None
