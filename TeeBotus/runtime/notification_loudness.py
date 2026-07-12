@@ -1081,10 +1081,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         )
     )
     has_notification_context = has_notification_context or has_volume_context
-    has_completed_action_positive, has_completed_action_negative = _notification_loudness_completed_action_polarity(
-        normalized, has_notification_context=has_notification_context
-    )
     polarity_normalized = _normalize_text_for_polarity(text)
+    has_completed_action_positive, has_completed_action_negative = _notification_loudness_completed_action_polarity(
+        polarity_normalized, has_notification_context=has_notification_context
+    )
     has_unnegated_mute, has_negated_mute = _notification_loudness_mute_polarity(polarity_normalized)
     has_unnegated_german_still, has_negated_german_still = _notification_loudness_german_still_polarity(
         polarity_normalized
@@ -1144,7 +1144,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         )
         has_notification_context = has_notification_context or has_positive_unmute_phrase
         has_completed_action_positive, has_completed_action_negative = _notification_loudness_completed_action_polarity(
-            normalized, has_notification_context=has_notification_context
+            polarity_normalized, has_notification_context=has_notification_context
         )
         has_failed_action = _notification_loudness_has_failed_action(normalized)
     if has_notification_context and _notification_loudness_has_failed_action(normalized):
@@ -1213,7 +1213,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_absolute_negative_off_inner_negation = _notification_loudness_has_absolute_negative_term(
         normalized, NOTIFICATION_LOUDNESS_OFF_TERMS, inner_negated=True
     )
-    if has_notification_context and _notification_loudness_has_contradictory_state(polarity_normalized):
+    if has_notification_context and _notification_loudness_has_contradictory_state(
+        polarity_normalized
+    ) and not _notification_loudness_has_sequenced_action_status(polarity_normalized):
         return None
     if has_notification_context and _notification_loudness_has_cross_subject_conflict(
         polarity_normalized,
@@ -2844,6 +2846,73 @@ def _notification_loudness_has_contradictory_state(normalized: str) -> bool:
         if left_unnegated and right_unnegated:
             return True
         if negated_pair_is_contradictory and left_negated and right_negated:
+            return True
+    return False
+
+
+def _notification_loudness_has_sequenced_action_status(normalized: str) -> bool:
+    tokens = normalized.split()
+    action_terms = {
+        "set",
+        "put",
+        "make",
+        "made",
+        "turn",
+        "turned",
+        "switch",
+        "switched",
+        "enable",
+        "enabled",
+        "activate",
+        "activated",
+        "mute",
+        "muted",
+        "silence",
+        "silenced",
+        "disable",
+        "disabled",
+        "stellte",
+        "schaltete",
+        "machte",
+        "setzte",
+        "gestellt",
+        "geschaltet",
+        "gemacht",
+        "gesetzt",
+    }
+    subject_terms = {
+        "nachricht",
+        "nachrichten",
+        "message",
+        "messages",
+        "benachrichtigung",
+        "benachrichtigungen",
+        "notification",
+        "notifications",
+        "sie",
+        "they",
+        "it",
+        "die",
+        "das",
+    }
+    state_terms = (
+        set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS)
+        | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
+        | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+    )
+    boundaries = NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES | {
+        NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+    }
+    for boundary_index, token in enumerate(tokens):
+        if token not in boundaries:
+            continue
+        before = tokens[:boundary_index]
+        after = tokens[boundary_index + 1 :]
+        if (
+            any(value in action_terms for value in before)
+            and any(value in subject_terms for value in after)
+            and any(value in state_terms for value in after)
+        ):
             return True
     return False
 

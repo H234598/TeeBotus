@@ -1231,6 +1231,11 @@ def test_loudness_free_text_does_not_leak_negation_across_clauses() -> None:
 def test_loudness_free_text_scopes_completed_actions_to_their_clause() -> None:
     assert _notification_loudness_decision("I turned notifications on but they are muted", pending=True) == "declined"
     assert _notification_loudness_decision("I turned notifications on but they are not muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I turned notifications on; they are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("I turned notifications on. They are not muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I turned notifications on: they are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("I have enabled notifications; they are disabled", pending=True) == "declined"
+    assert _notification_loudness_decision("I turned notifications on; they are off", pending=False) == "declined"
     assert _notification_loudness_decision("I turned notifications off but they are not muted", pending=False) == "declined"
     assert _notification_loudness_decision("I did not turn notifications off but they are on", pending=True) == "confirmed"
     assert _notification_loudness_decision("I did not turn notifications off but they are muted", pending=True) == "declined"
