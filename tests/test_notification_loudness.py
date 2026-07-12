@@ -1879,6 +1879,9 @@ def test_loudness_free_text_does_not_decide_future_intentions_as_completed() -> 
     assert _notification_loudness_decision("I tried to turn notifications on but failed", pending=True) == "declined"
     assert _notification_loudness_decision("I managed to turn notifications on", pending=False) == "confirmed"
     assert _notification_loudness_decision("I succeeded in turning notifications on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I failed to turn notifications off", pending=True) is None
+    assert _notification_loudness_decision("I failed to mute notifications", pending=False) is None
+    assert _notification_loudness_decision("I failed to unmute notifications", pending=True) == "declined"
     assert _notification_loudness_decision("I was able to turn notifications on", pending=True) == "confirmed"
     assert _notification_loudness_decision("I have been able to turn notifications on", pending=False) == "confirmed"
     assert _notification_loudness_decision("I am able to turn notifications on", pending=True) is None
@@ -1906,6 +1909,7 @@ def test_loudness_free_text_does_not_decide_future_intentions_as_completed() -> 
     assert _notification_loudness_decision("Ich bin gescheitert, die Benachrichtigungen anzuschalten", pending=True) == "declined"
     assert _notification_loudness_decision("Es ist mir nicht gelungen, Nachrichten laut zu stellen", pending=False) == "declined"
     assert _notification_loudness_decision("Das Anschalten der Benachrichtigungen ist fehlgeschlagen", pending=True) == "declined"
+    assert _notification_loudness_decision("Das Ausschalten der Benachrichtigungen ist fehlgeschlagen", pending=True) is None
     assert _notification_loudness_decision("Es ist mir gelungen, Nachrichten laut zu stellen", pending=False) == "confirmed"
     assert _notification_loudness_decision("Ich konnte die Nachrichten laut stellen", pending=True) is None
     assert _notification_loudness_decision("Ich konnte die Nachrichten nicht laut stellen", pending=False) == "declined"

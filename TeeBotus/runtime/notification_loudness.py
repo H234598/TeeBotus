@@ -1137,6 +1137,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         )
         has_failed_action = _notification_loudness_has_failed_action(normalized)
     if has_notification_context and _notification_loudness_has_failed_action(normalized):
+        failed_action_polarity = _notification_loudness_failed_action_polarity(normalized)
+        if failed_action_polarity == "negative":
+            return None
         return "declined"
     if has_notification_context and _notification_loudness_has_habitual_marker(normalized) and not (
         has_completed_action_positive or has_completed_action_negative
@@ -2091,6 +2094,77 @@ def _notification_loudness_has_failed_action(normalized: str) -> bool:
         if _notification_loudness_scoped_negation_count(tokens, index + 1, len(tokens)) % 2:
             return True
     return False
+
+
+def _notification_loudness_failed_action_polarity(normalized: str) -> str | None:
+    tokens = normalized.split()
+    failure_phrases = tuple(
+        _normalize_text(phrase).split() for phrase in NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES
+    )
+    windows: list[list[str]] = []
+    for phrase_tokens in failure_phrases:
+        width = len(phrase_tokens)
+        if not width:
+            continue
+        for index in range(len(tokens) - width + 1):
+            if tokens[index : index + width] != phrase_tokens:
+                continue
+            windows.append(tokens[max(0, index - 8) : min(len(tokens), index + width + 10)])
+    if not windows:
+        return None
+    positive_targets = (
+        "laut",
+        "loud",
+        "an",
+        "on",
+        "enabled",
+        "enable",
+        "aktiv",
+        "aktiviert",
+        "activate",
+        "activated",
+        "unmute",
+        "unmuted",
+        "entstummt",
+        "anschalten",
+        "anzuschalten",
+        "einschalten",
+        "einzuschalten",
+        "hoch",
+        "up",
+        "full",
+    )
+    negative_targets = (
+        "stumm",
+        "lautlos",
+        "muted",
+        "mute",
+        "silent",
+        "silenced",
+        "aus",
+        "off",
+        "disabled",
+        "disable",
+        "inaktiv",
+        "deaktiviert",
+        "deactivate",
+        "deactivated",
+        "ausschalten",
+        "auszuschalten",
+        "abschalten",
+        "abzuschalten",
+        "leise",
+        "quiet",
+        "down",
+        "low",
+    )
+    has_positive_target = any(set(window).intersection(positive_targets) for window in windows)
+    has_negative_target = any(set(window).intersection(negative_targets) for window in windows)
+    if has_positive_target and not has_negative_target:
+        return "positive"
+    if has_negative_target and not has_positive_target:
+        return "negative"
+    return None
 
 
 def _notification_loudness_has_successful_ability_action(normalized: str) -> bool:
