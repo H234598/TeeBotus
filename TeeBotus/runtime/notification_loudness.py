@@ -3980,10 +3980,34 @@ def _notification_loudness_current_intent_segment(normalized: str) -> str | None
 
 
 def _notification_loudness_has_partial_quantifier(normalized: str) -> bool:
-    return any(
+    if any(
         _contains_normalized_phrase(normalized, _normalize_text(phrase))
         for phrase in NOTIFICATION_LOUDNESS_PARTIAL_QUANTIFIER_PHRASES
-    )
+    ):
+        return True
+    tokens = normalized.split()
+    subject_terms = {
+        "nachricht",
+        "nachrichten",
+        "message",
+        "messages",
+        "benachrichtigung",
+        "benachrichtigungen",
+        "notification",
+        "notifications",
+    }
+    absolute_negation_tokens = {"not", "nicht", "no", "none", "neither", "kein", "keine", "weder"}
+    for index, token in enumerate(tokens[:-1]):
+        if token != "any" or tokens[index + 1] not in subject_terms:
+            continue
+        preceding = tokens[max(0, index - 3) : index]
+        if (
+            set(preceding) & absolute_negation_tokens
+            or tuple(preceding[-2:]) in {("aren", "t"), ("isn", "t"), ("weren", "t"), ("wasn", "t")}
+        ):
+            continue
+        return True
+    return False
 
 
 def _notification_loudness_attributive_quantifier_polarity(
