@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.155 - 2026-07-12
+
+- Handle inability-to-confirm loudness statements.
+
 ## 1.9.154 - 2026-07-12
 
 - Ignore hope, wish, and prayer loudness statements.

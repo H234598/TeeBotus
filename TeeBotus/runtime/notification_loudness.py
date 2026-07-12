@@ -100,6 +100,8 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "ich erinnere mich nicht",
     "ich habe vergessen",
     "vergessen",
+    "ich kann nicht bestätigen",
+    "ich kann nicht verifizieren",
     "i don t know",
     "not sure",
     "uncertain",
@@ -147,6 +149,12 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "cannot recall",
     "unclear",
     "not clear",
+    "cannot confirm",
+    "can t confirm",
+    "cannot verify",
+    "can t verify",
+    "unable to confirm",
+    "unable to verify",
 )
 NOTIFICATION_LOUDNESS_HISTORICAL_PHRASES = (
     "used to",
