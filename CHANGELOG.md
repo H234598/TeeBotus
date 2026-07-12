@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.136 - 2026-07-12
+
+- Recognize German loudgeschaltet and entstummt completion forms.
+
 ## 1.9.135 - 2026-07-12
 
 - Recognize active, turned-on, and unmuted notification states.

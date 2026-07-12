@@ -1161,6 +1161,11 @@ def test_loudness_free_text_accepts_english_notification_status_phrases() -> Non
     assert _notification_loudness_decision("I have unmuted notifications", pending=True) == "confirmed"
     assert _notification_loudness_decision("I turned them on", pending=True) == "confirmed"
     assert _notification_loudness_decision("I switched them on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich habe Benachrichtigungen laut geschaltet", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Benachrichtigungen lautgeschaltet", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten sind lautgeschaltet", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ich habe die Nachrichten entstummt", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten sind nicht laut geschaltet", pending=True) == "declined"
 
 
 def test_loudness_free_text_preserves_negation_for_disabled_status() -> None:
