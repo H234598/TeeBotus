@@ -1357,6 +1357,17 @@ def test_loudness_free_text_does_not_decide_uncertain_status_statements() -> Non
     assert _notification_loudness_decision("Anscheinend sind Benachrichtigungen an", pending=True) is None
 
 
+def test_loudness_free_text_does_not_decide_unverified_status_statements() -> None:
+    assert _notification_loudness_decision("I have not checked and notifications are on", pending=True) is None
+    assert _notification_loudness_decision("I haven't checked but notifications are on", pending=False) is None
+    assert _notification_loudness_decision("I did not verify and notifications are not muted", pending=True) is None
+    assert _notification_loudness_decision("I didn't verify that notifications are on", pending=False) is None
+    assert _notification_loudness_decision("I have not confirmed notifications are on", pending=True) is None
+    assert _notification_loudness_decision("Ich habe nicht geprüft, aber die Nachrichten sind laut", pending=True) is None
+    assert _notification_loudness_decision("Ich habe nicht überprüft, ob Nachrichten laut sind", pending=False) is None
+    assert _notification_loudness_decision("Die Nachrichten sind ungeprüft laut", pending=True) is None
+
+
 def test_loudness_free_text_inverts_explicit_proposition_negation() -> None:
     assert _notification_loudness_decision("I deny that notifications are muted", pending=True) == "confirmed"
     assert _notification_loudness_decision("I deny that notifications are on", pending=False) == "declined"
