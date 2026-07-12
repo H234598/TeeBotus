@@ -871,6 +871,9 @@ NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES = (
     "stummmodus ausgemacht",
     "nicht stoeren modus ausgeschaltet",
     "nicht stoeren modus ausgemacht",
+    "disabled do not disturb for notifications",
+    "turned off do not disturb for notifications",
+    "do not disturb is disabled for notifications",
 )
 NOTIFICATION_LOUDNESS_ACTION_WORDS = frozenset({"hab", "habe", "haben", "getan", "gemacht", "erledigt", "did", "done"})
 NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS = frozenset({"ja", "yes", "jep", "jo", "ok", "okay", "klar"})
@@ -1513,6 +1516,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "benachrichtigungen aus",
         "notifications off",
         "notification off",
+        "do not disturb is enabled for notifications",
+        "do not disturb is on for notifications",
+        "dnd is enabled for notifications",
+        "dnd is on for notifications",
         "ist aus",
         "sind aus",
         "kann ich nicht",
@@ -1549,8 +1556,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         "i get no message sounds",
         "messages do not ring",
         "messages don t ring",
+        "do not ring",
+        "don t ring",
+        "does not ring",
         "notifications do not ring",
         "notifications don t ring",
+        "nicht klingeln",
         "die nachrichten klingeln nicht",
         "die benachrichtigungen klingeln nicht",
         "messages are not audible",
@@ -3699,7 +3710,16 @@ def _notification_loudness_has_contradictory_state(normalized: str) -> bool:
         if negated_pair_is_contradictory and left_negated and right_negated:
             return True
     for loud_term in ("loud", "laut"):
-        for mute_term in ("muted", "silenced", "silent", "quiet", "stumm", "lautlos"):
+        for mute_term in (
+            "muted",
+            "silenced",
+            "silent",
+            "quiet",
+            "inaudible",
+            "unhoerbar",
+            "stumm",
+            "lautlos",
+        ):
             loud_unnegated, _ = _notification_loudness_term_polarity(
                 normalized, frozenset({loud_term})
             )
@@ -3707,6 +3727,16 @@ def _notification_loudness_has_contradictory_state(normalized: str) -> bool:
                 normalized, frozenset({mute_term})
             )
             if loud_unnegated and mute_unnegated:
+                return True
+    for audible_term in ("audible", "hoerbar"):
+        for mute_term in ("muted", "silenced", "silent", "inaudible", "unhoerbar", "stumm", "lautlos"):
+            audible_unnegated, _ = _notification_loudness_term_polarity(
+                normalized, frozenset({audible_term})
+            )
+            mute_unnegated, _ = _notification_loudness_term_polarity(
+                normalized, frozenset({mute_term})
+            )
+            if audible_unnegated and mute_unnegated:
                 return True
     return False
 
@@ -4005,6 +4035,10 @@ def _notification_loudness_has_ambiguous_status_qualifier(normalized: str) -> bo
             "on whatsapp",
             "on in the app",
             "on in app",
+            "on do not disturb",
+            "on dnd",
+            "notifications on do not disturb",
+            "notifications on dnd",
             "free to mute",
             "free to be muted",
             "safe to mute",
@@ -4206,6 +4240,8 @@ def _notification_loudness_has_unscoped_subject_status(normalized: str) -> bool:
 def _notification_loudness_is_non_declarative(text: str, normalized: str) -> bool:
     if "?" in str(text or ""):
         return True
+    if normalized.startswith(("do not disturb is ", "dnd is ")):
+        return False
     tokens = normalized.split()
     if tokens and tokens[0] in {"sind", "ist", "are", "is"}:
         return len(tokens) > 1 and tokens[1] not in NOTIFICATION_LOUDNESS_STATUS_LEAD_TERMS

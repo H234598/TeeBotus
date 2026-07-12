@@ -1869,12 +1869,26 @@ def test_loudness_free_text_recognizes_negative_sound_reception_reports() -> Non
 def test_loudness_free_text_recognizes_bells_and_audibility_states() -> None:
     assert _notification_loudness_decision("The notification bell is ringing", pending=False) == "confirmed"
     assert _notification_loudness_decision("The notification bell is not ringing", pending=True) == "declined"
+    assert _notification_loudness_decision("Messages vibrate but do not ring", pending=True) == "declined"
     assert _notification_loudness_decision("Die Benachrichtigungsbox ist an", pending=False) == "confirmed"
     assert _notification_loudness_decision("Die Benachrichtigungsbox ist aus", pending=False) == "declined"
     assert _notification_loudness_decision("Messages are inaudible", pending=True) == "declined"
     assert _notification_loudness_decision("Notifications are inaudible", pending=False) == "declined"
     assert _notification_loudness_decision("Die Nachrichten sind unhörbar", pending=True) == "declined"
     assert _notification_loudness_decision("Die Nachrichten sind nicht unhörbar", pending=False) == "confirmed"
+
+
+def test_loudness_free_text_handles_do_not_disturb_and_audibility_conflicts() -> None:
+    assert _notification_loudness_decision("Notifications are on do not disturb", pending=True) is None
+    assert _notification_loudness_decision("Notifications are on DND", pending=False) is None
+    assert _notification_loudness_decision("Do not disturb is enabled for notifications", pending=True) == "declined"
+    assert _notification_loudness_decision("DND is on for notifications", pending=False) == "declined"
+    assert _notification_loudness_decision("I disabled do not disturb for notifications", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I turned off do not disturb for notifications", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Do not disturb is disabled for notifications", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Notifications are muted but audible", pending=True) is None
+    assert _notification_loudness_decision("Notifications are loud but inaudible", pending=False) is None
+    assert _notification_loudness_decision("Notifications are quiet but audible", pending=True) == "declined"
 
 
 def test_loudness_free_text_recognizes_notification_visibility_reports() -> None:
