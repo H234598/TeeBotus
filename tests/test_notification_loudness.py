@@ -2025,6 +2025,27 @@ def test_loudness_free_text_recognizes_successful_action_polarity() -> None:
     assert _notification_loudness_decision("The conversation is unmuted", pending=False) == "confirmed"
 
 
+def test_loudness_free_text_scopes_german_action_polarity() -> None:
+    assert _notification_loudness_decision(
+        "Es ist mir gelungen, die Benachrichtigungen auszuschalten", pending=True
+    ) == "declined"
+    assert _notification_loudness_decision(
+        "Ich habe es geschafft, die Nachrichten auszuschalten", pending=False
+    ) == "declined"
+    assert _notification_loudness_decision(
+        "Ich versuchte, Benachrichtigungen nicht stumm zu schalten", pending=True
+    ) is None
+    assert _notification_loudness_decision(
+        "Ich habe versucht, Benachrichtigungen nicht stumm zu schalten", pending=False
+    ) is None
+    assert _notification_loudness_decision(
+        "Ich konnte die Nachrichten nicht stumm schalten", pending=True
+    ) is None
+    assert _notification_loudness_decision(
+        "Ich konnte die Nachrichten nicht laut stellen", pending=False
+    ) == "declined"
+
+
 def test_loudness_free_text_does_not_decide_historical_status_as_current() -> None:
     assert _notification_loudness_decision("I used to have notifications on", pending=True) is None
     assert _notification_loudness_decision("I formerly had notifications on", pending=False) is None

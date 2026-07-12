@@ -42,7 +42,23 @@ NOTIFICATION_LOUDNESS_MUTE_TERMS = frozenset(
     }
 )
 NOTIFICATION_LOUDNESS_OFF_TERMS = frozenset(
-    {"aus", "ausgeschaltet", "deaktiviert", "abgeschaltet", "inaktiv", "inactive", "deactivated", "off", "disabled"}
+    {
+        "aus",
+        "ausgeschaltet",
+        "ausschalten",
+        "auszuschalten",
+        "auszumachen",
+        "deaktiviert",
+        "deaktivieren",
+        "abgeschaltet",
+        "abschalten",
+        "abzuschalten",
+        "inaktiv",
+        "inactive",
+        "deactivated",
+        "off",
+        "disabled",
+    }
 )
 NOTIFICATION_LOUDNESS_NEGATION_TERMS = frozenset(
     {
@@ -530,6 +546,11 @@ NOTIFICATION_LOUDNESS_NON_DECLARATIVE_STARTS = (
     "ich muss ",
     "ich soll ",
     "ich konnte ",
+    "ich versuchte ",
+    "ich habe versucht ",
+    "ich probierte ",
+    "ich habe probiert ",
+    "ich habe es versucht ",
     "ich habe beschlossen ",
     "ich kann nachrichten laut ",
     "ich kann die nachrichten laut ",
@@ -2192,6 +2213,20 @@ def _notification_loudness_failed_action_polarity(normalized: str) -> str | None
             if tokens[index : index + width] != phrase_tokens:
                 continue
             windows.append(tokens[max(0, index - 8) : min(len(tokens), index + width + 10)])
+    for index, token in enumerate(tokens):
+        if token not in {"konnte", "konnten"}:
+            continue
+        if _notification_loudness_scoped_negation_count(tokens, index + 1, len(tokens)) % 2 == 0:
+            continue
+        window_end = min(len(tokens), index + 14)
+        for boundary_index in range(index + 1, window_end):
+            if (
+                tokens[boundary_index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES
+                or tokens[boundary_index] == NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARY_TOKEN
+            ):
+                window_end = boundary_index
+                break
+        windows.append(tokens[max(0, index - 8) : window_end])
     if not windows:
         return None
     positive_targets = (
