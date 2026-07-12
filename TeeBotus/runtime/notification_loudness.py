@@ -4748,7 +4748,7 @@ def _notification_loudness_has_negative_possession_description(normalized: str) 
                 (
                     index
                     for index in range(subject_index + 1, len(tokens))
-                    if tokens[index] in {"that", "which"}
+                    if tokens[index] in {"that", "which", "die", "welche"}
                 ),
                 None,
             )
