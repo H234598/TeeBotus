@@ -1604,6 +1604,18 @@ def test_loudness_free_text_recognizes_inactive_and_quiet_states() -> None:
     assert _notification_loudness_decision("Messages are not quiet", pending=False) == "confirmed"
 
 
+def test_loudness_free_text_recognizes_variable_english_completed_actions() -> None:
+    assert _notification_loudness_decision("I have set messages to loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I have set the messages to loud", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I have set message notifications to loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I have put messages on", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I have made the message sound loud", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I have turned messages on", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I have switched messages on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I have not set messages to loud", pending=True) == "declined"
+    assert _notification_loudness_decision("I haven't enabled messages", pending=False) == "declined"
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None

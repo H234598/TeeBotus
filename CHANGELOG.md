@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.185 - 2026-07-12
+
+- Recognize variable English completed notification actions.
+
 ## 1.9.184 - 2026-07-12
 
 - Recognize inactive, deactivated, and quiet notification states.

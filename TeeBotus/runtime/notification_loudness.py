@@ -897,6 +897,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     )
     if has_volume_positive and has_volume_negative:
         return None
+    has_completed_action_positive, has_completed_action_negative = _notification_loudness_completed_action_polarity(
+        normalized, has_notification_context=has_notification_context
+    )
+    if has_completed_action_positive and has_completed_action_negative:
+        return None
     has_positive_current_status = _notification_loudness_has_positive_current_status(normalized)
     has_negative_current_status = _notification_loudness_has_negative_current_status(normalized)
     has_absolute_negative_positive_status = _notification_loudness_has_absolute_negative_positive_status(normalized)
@@ -1077,8 +1082,18 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     )
     has_declined_phrase = (
         has_declined_phrase
-        or (has_unnegated_mute and not has_positive_unmute_phrase and not has_absolute_negative_mute)
-        or (has_unnegated_off and not has_positive_unmute_phrase and not has_absolute_negative_off)
+        or (
+            has_unnegated_mute
+            and not has_positive_unmute_phrase
+            and not has_absolute_negative_mute
+            and not has_completed_action_positive
+        )
+        or (
+            has_unnegated_off
+            and not has_positive_unmute_phrase
+            and not has_absolute_negative_off
+            and not has_completed_action_positive
+        )
         or has_negated_completion
         or (has_negated_confirmed_phrase and not has_absolute_negative_positive_inner_negation)
         or (has_negative_current_status and not has_absolute_negative_positive_inner_negation)
@@ -1086,6 +1101,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or has_absolute_negative_mute_inner_negation
         or has_absolute_negative_off_inner_negation
         or has_volume_negative
+        or has_completed_action_negative
     )
     if has_absolute_negative_positive_inner_negation:
         has_declined_phrase = False
@@ -1131,6 +1147,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or has_absolute_negative_mute
         or has_absolute_negative_off
         or has_volume_positive
+        or has_completed_action_positive
     ):
         return "confirmed"
     if has_notification_context and has_declined_phrase:
@@ -1811,6 +1828,84 @@ def _notification_loudness_volume_polarity(
         positive = True
     if "0" in tokens and any(value in tokens for value in {"prozent", "percent"}):
         negative = True
+    return positive, negative
+
+
+def _notification_loudness_completed_action_polarity(
+    normalized: str, *, has_notification_context: bool
+) -> tuple[bool, bool]:
+    if not has_notification_context:
+        return False, False
+    tokens = normalized.split()
+    actions = {"set", "put", "make", "made", "turn", "turned", "switch", "switched", "enable", "enabled", "activate", "activated"}
+    positive_targets = {
+        "laut",
+        "loud",
+        "an",
+        "on",
+        "up",
+        "hoch",
+        "high",
+        "full",
+        "unmuted",
+        "enabled",
+        "active",
+    }
+    negative_targets = {
+        "stumm",
+        "lautlos",
+        "muted",
+        "silent",
+        "off",
+        "down",
+        "niedrig",
+        "low",
+        "leise",
+    }
+    subjects = {
+        "nachricht",
+        "nachrichten",
+        "message",
+        "messages",
+        "benachrichtigung",
+        "benachrichtigungen",
+        "notification",
+        "notifications",
+        "chat",
+        "conversation",
+        "thread",
+    }
+    positive = False
+    negative = False
+    for auxiliary_index, auxiliary in enumerate(tokens):
+        if auxiliary not in {"have", "has"}:
+            continue
+        for action_index in range(auxiliary_index + 1, min(len(tokens), auxiliary_index + 10)):
+            action = tokens[action_index]
+            if action in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES:
+                break
+            if action not in actions:
+                continue
+            tail = tokens[action_index + 1 : min(len(tokens), action_index + 10)]
+            has_positive_target = bool(set(tail) & positive_targets)
+            has_negative_target = bool(set(tail) & negative_targets)
+            if action in {"enabled", "activated"} and set(tail) & subjects:
+                has_positive_target = True
+            if not has_positive_target and not has_negative_target:
+                continue
+            negated = _notification_loudness_scoped_negation_count(
+                tokens, max(0, action_index - 4), action_index
+            ) % 2 == 1
+            if has_positive_target:
+                if negated:
+                    negative = True
+                else:
+                    positive = True
+            if has_negative_target:
+                if negated:
+                    positive = True
+                else:
+                    negative = True
     return positive, negative
 
 
