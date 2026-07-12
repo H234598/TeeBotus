@@ -1723,6 +1723,18 @@ def test_loudness_free_text_recognizes_bells_and_audibility_states() -> None:
     assert _notification_loudness_decision("Die Nachrichten sind nicht unhörbar", pending=False) == "confirmed"
 
 
+def test_loudness_free_text_recognizes_notification_visibility_reports() -> None:
+    assert _notification_loudness_decision("Notifications don't show up", pending=True) == "declined"
+    assert _notification_loudness_decision("Notifications do not appear", pending=False) == "declined"
+    assert _notification_loudness_decision("I don't see notifications", pending=True) == "declined"
+    assert _notification_loudness_decision("No alerts appear", pending=False) == "declined"
+    assert _notification_loudness_decision("Messages show up", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I see message notifications", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Benachrichtigungen werden angezeigt", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Nachrichten tauchen nicht auf", pending=False) == "declined"
+    assert _notification_loudness_decision("Do notifications appear?", pending=True) is None
+
+
 def test_loudness_free_text_does_not_decide_obligations_or_plans_as_done() -> None:
     assert _notification_loudness_decision("I have to mute messages", pending=True) is None
     assert _notification_loudness_decision("I have to turn notifications on", pending=False) is None

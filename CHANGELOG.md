@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.197 - 2026-07-12
+
+- Recognize notification visibility and delivery reports.
+
 ## 1.9.196 - 2026-07-12
 
 - Recognize notification bells and inaudible states.
