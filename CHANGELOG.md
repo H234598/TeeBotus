@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.164 - 2026-07-12
+
+- Recognize current positive notification states with modifiers.
+
 ## 1.9.163 - 2026-07-12
 
 - Recognize explicit unmute and disabled-silence-mode confirmations.

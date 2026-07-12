@@ -416,6 +416,12 @@ NOTIFICATION_LOUDNESS_STATUS_LEAD_TERMS = frozenset(
         "not",
     }
 )
+NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
+    {"jetzt", "nun", "aktuell", "gerade", "wieder", "now", "currently", "right"}
+)
+NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS = frozenset(
+    {"laut", "loud", "an", "on", "aktiv", "active", "enabled", "hoerbar", "audible", "unmuted"}
+)
 NOTIFICATION_LOUDNESS_COMPLETION_PHRASES = (
     "erledigt",
     "gemacht",
@@ -751,6 +757,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     if has_notification_context and _notification_loudness_is_non_declarative(text, normalized):
         return None
+    has_positive_current_status = _notification_loudness_has_positive_current_status(normalized)
     confirmed_needles = (
         "ja laut",
         "laut gestellt",
@@ -916,6 +923,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or has_negated_mute
         or has_negated_off
         or has_positive_unmute_phrase
+        or has_positive_current_status
     ):
         return "confirmed"
     if has_notification_context and has_declined_phrase:
@@ -1435,6 +1443,21 @@ def _notification_loudness_has_question_tail(normalized: str) -> bool:
         normalized == _normalize_text(tail) or normalized.endswith(f" {_normalize_text(tail)}")
         for tail in NOTIFICATION_LOUDNESS_QUESTION_TAILS
     )
+
+
+def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
+    tokens = normalized.split()
+    copulas = {"ist", "sind", "is", "are"}
+    for status_index, token in enumerate(tokens):
+        if token not in NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS:
+            continue
+        for copula_index in range(max(0, status_index - 4), status_index):
+            if tokens[copula_index] not in copulas:
+                continue
+            between = tokens[copula_index + 1 : status_index]
+            if all(value in NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS for value in between):
+                return True
+    return False
 
 
 def _notification_loudness_has_ambiguous_alternative(normalized: str) -> bool:
