@@ -1051,6 +1051,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     if has_notification_context and _notification_loudness_has_ambiguous_location_status(normalized):
         return None
+    if has_notification_context and _notification_loudness_has_ambiguous_chat_activity(normalized):
+        return None
     if (
         has_notification_context
         and not has_explicit_notification_context
@@ -2452,6 +2454,43 @@ def _notification_loudness_has_ambiguous_location_status(normalized: str) -> boo
         "loud",
     }
     return not any(_contains_normalized_phrase(normalized, term) for term in other_state_terms)
+
+
+def _notification_loudness_has_ambiguous_chat_activity(normalized: str) -> bool:
+    tokens = set(normalized.split())
+    if not tokens & {"chat", "conversation", "thread"}:
+        return False
+    if tokens & {
+        "laut",
+        "loud",
+        "stumm",
+        "lautlos",
+        "muted",
+        "silenced",
+        "silent",
+        "unmuted",
+        "audible",
+        "hoerbar",
+        "volume",
+    }:
+        return False
+    return bool(
+        tokens
+        & {
+            "aktiv",
+            "active",
+            "inaktiv",
+            "inactive",
+            "enabled",
+            "disabled",
+            "sichtbar",
+            "visible",
+            "an",
+            "on",
+            "aus",
+            "off",
+        }
+    )
 
 
 def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | None:

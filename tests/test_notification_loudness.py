@@ -1548,6 +1548,17 @@ def test_loudness_free_text_does_not_treat_transport_or_idiom_qualifiers_as_stat
     assert _notification_loudness_decision("Messages are loud on my phone", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_does_not_treat_generic_chat_activity_as_loudness() -> None:
+    assert _notification_loudness_decision("The chat is active", pending=True) is None
+    assert _notification_loudness_decision("The conversation is enabled", pending=False) is None
+    assert _notification_loudness_decision("The thread is visible", pending=True) is None
+    assert _notification_loudness_decision("The chat is on", pending=False) is None
+    assert _notification_loudness_decision("The thread is off", pending=True) is None
+    assert _notification_loudness_decision("The chat is not visible", pending=False) is None
+    assert _notification_loudness_decision("The chat is muted", pending=True) == "declined"
+    assert _notification_loudness_decision("The conversation is unmuted", pending=False) == "confirmed"
+
+
 def test_loudness_free_text_handles_idiomatic_unmute_negations() -> None:
     assert _notification_loudness_decision("Die Nachrichten sind keineswegs stumm", pending=True) == "confirmed"
     assert _notification_loudness_decision("Die Nachrichten sind keinesfalls lautlos", pending=False) == "confirmed"

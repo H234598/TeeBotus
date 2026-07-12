@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.203 - 2026-07-12
+
+- Avoid treating generic chat activity as notification loudness state.
+
 ## 1.9.202 - 2026-07-12
 
 - Reject location and transport qualifiers that mimic notification on/off states.
