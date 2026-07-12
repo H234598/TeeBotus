@@ -3785,6 +3785,7 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
         "is",
         "are",
         "re",
+        "been",
         "remain",
         "remains",
         "remained",
