@@ -1377,6 +1377,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
                 candidate_tokens = candidate.split()
                 if direct_pronoun_decision is None and len(candidate_tokens) >= 2 and candidate_tokens[0] in {"sie", "die", "das", "they", "it"}:
                     if candidate_tokens[1] in {"ist", "sind", "is", "are", "re"}:
+                        if _notification_loudness_has_non_assertive_status(candidate):
+                            continue
                         if _notification_loudness_has_positive_current_status(candidate):
                             direct_pronoun_decision = "confirmed"
                         elif _notification_loudness_has_negative_current_status(candidate):
@@ -3126,6 +3128,15 @@ def _notification_loudness_has_non_assertive_status(normalized: str) -> bool:
             "wirkt",
             "wirken",
             "sieht",
+            "said",
+            "believed",
+            "told",
+            "informed",
+            "reported",
+            "heisst",
+            "gesagt",
+            "berichtet",
+            "gemeldet",
         }
     )
     state_terms = (
