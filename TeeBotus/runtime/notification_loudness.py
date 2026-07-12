@@ -747,6 +747,7 @@ NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
         "all",
         "alle",
         "mehr",
+        "immer",
         "already",
         "bereits",
         "schon",
@@ -3653,10 +3654,13 @@ def _notification_loudness_has_recent_completion_marker(normalized: str) -> bool
 
 
 def _notification_loudness_has_habitual_marker(normalized: str) -> bool:
-    return any(
-        _contains_normalized_phrase(normalized, _normalize_text(phrase))
-        for phrase in NOTIFICATION_LOUDNESS_HABITUAL_MARKERS
-    )
+    for phrase in NOTIFICATION_LOUDNESS_HABITUAL_MARKERS:
+        normalized_phrase = _normalize_text(phrase)
+        if phrase == "immer" and _contains_normalized_phrase(normalized, "immer noch"):
+            continue
+        if _contains_normalized_phrase(normalized, normalized_phrase):
+            return True
+    return False
 
 
 def _notification_loudness_has_question_tail(normalized: str) -> bool:
