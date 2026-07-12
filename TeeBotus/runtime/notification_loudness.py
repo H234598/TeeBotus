@@ -1569,6 +1569,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     has_negated_completion = _notification_loudness_has_negated_phrase(
         polarity_normalized, NOTIFICATION_LOUDNESS_COMPLETION_PHRASES
     )
+    has_completion_phrase = any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in NOTIFICATION_LOUDNESS_COMPLETION_PHRASES
+    )
     has_indirect_positive_mute_action = _notification_loudness_has_indirect_positive_mute_action(normalized)
     has_positive_unmute_phrase = any(
         _contains_normalized_phrase(normalized, phrase) for phrase in NOTIFICATION_LOUDNESS_POSITIVE_MUTE_PHRASES
@@ -1606,7 +1610,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         polarity_normalized, later_current_status_segment
     )
     if (
-        has_notification_context
+        (has_notification_context or (pending and has_completion_phrase and not has_negated_completion))
         and _notification_loudness_has_historical_marker(normalized)
         and not (
             _notification_loudness_has_recent_completion_marker(normalized)
