@@ -2275,6 +2275,14 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or has_attributive_negative
         or has_volume_negative
         or (
+            has_generic_completion_pronoun_prefix
+            and later_current_status_segment
+            and (
+                (has_unnegated_mute and not has_negated_mute)
+                or (has_unnegated_off and not has_negated_off)
+            )
+        )
+        or (
             has_completed_action_negative
             and not has_explicit_confirmation
             and not has_positive_unmute_phrase
