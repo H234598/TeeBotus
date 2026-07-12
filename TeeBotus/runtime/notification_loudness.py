@@ -1385,7 +1385,19 @@ def _notification_loudness_has_historical_marker(normalized: str) -> bool:
 def _notification_loudness_has_recent_completion_marker(normalized: str) -> bool:
     return any(
         _contains_normalized_phrase(normalized, phrase)
-        for phrase in ("just now", "right now", "gerade eben", "soeben")
+        for phrase in (
+            "just now",
+            "right now",
+            "just turned on",
+            "just enabled",
+            "recently turned on",
+            "recently enabled",
+            "newly enabled",
+            "gerade eben",
+            "gerade angeschaltet",
+            "gerade aktiviert",
+            "soeben",
+        )
     )
 
 

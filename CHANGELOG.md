@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.160 - 2026-07-12
+
+- Recognize recent just-enabled loudness changes.
+
 ## 1.9.159 - 2026-07-12
 
 - Recognize recent completed loudness changes despite past-tense wording.
