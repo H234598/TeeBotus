@@ -1411,6 +1411,11 @@ def test_loudness_free_text_recognizes_sufficiency_gradients() -> None:
         "No notification is loud enough because messages are loud enough", pending=True
     ) is None
     assert _notification_loudness_decision("I can not clearly hear notifications", pending=True) == "declined"
+    assert _notification_loudness_decision("I have not set notifications to loud enough", pending=True) == "declined"
+    assert _notification_loudness_decision("I could not make notifications loud enough", pending=True) == "declined"
+    assert _notification_loudness_decision(
+        "I could not make notifications loud enough, but now they are loud enough", pending=True
+    ) == "confirmed"
     assert _notification_loudness_decision("Notifications are not inadequate", pending=True) == "confirmed"
     assert _notification_loudness_decision("I do not know if notifications are loud enough", pending=True) is None
     assert _notification_loudness_decision("If I can clearly hear notifications, I am fine", pending=True) is None

@@ -1358,6 +1358,8 @@ NOTIFICATION_LOUDNESS_FAILED_ACTION_PHRASES = (
     "failed to",
     "couldn t manage",
     "could not manage",
+    "couldn t make",
+    "could not make",
     "was unable to",
     "were unable to",
     "never managed to",
@@ -2152,6 +2154,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         (has_notification_context or (pending and has_completion_phrase))
         and not has_explicit_confirmation
         and not (has_audibility_gradient and has_direct_audibility_experience)
+        and not has_failed_action
         and _notification_loudness_has_non_assertive_status(normalized)
     ):
         return None
@@ -2432,6 +2435,12 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         status_scope_normalized
     )
     if audibility_gradient_decision is not None and (pending or has_notification_context):
+        if (
+            audibility_gradient_decision == "confirmed"
+            and has_completed_action_negative
+            and not has_completed_action_positive
+        ):
+            return "declined"
         if not pending and not has_explicit_notification_context and not has_direct_audibility_experience:
             return None
         return audibility_gradient_decision
