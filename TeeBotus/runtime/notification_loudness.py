@@ -210,6 +210,10 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "keine möglichkeit zu wissen",
     "keine möglichkeit zu sagen",
     "i don t know",
+    "i don t really know",
+    "i do not really know",
+    "i really don t know",
+    "i really do not know",
     "not sure",
     "uncertain",
     "maybe",
@@ -292,6 +296,8 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "didn t believe",
     "did not believe",
     "wusste nicht",
+    "ich weiss wirklich nicht",
+    "ich weiss nicht wirklich",
     "can t tell",
     "cannot tell",
     "no idea",
@@ -900,6 +906,12 @@ NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
         "zweifellos",
         "bekanntermassen",
         "nachweislich",
+        "really",
+        "actually",
+        "truly",
+        "indeed",
+        "tatsaechlich",
+        "wirklich",
     }
 )
 NOTIFICATION_LOUDNESS_NON_ASSERTIVE_OPTIONAL_MODIFIERS = frozenset(
@@ -2644,6 +2656,13 @@ def _notification_loudness_canonicalize_epistemic_forms(normalized: str) -> str:
     return (
         normalized.replace("do not doubt", "don t doubt")
         .replace("do not dispute", "don t dispute")
+        .replace("no doubt", "certainly")
+        .replace("without doubt", "certainly")
+        .replace("for sure", "certainly")
+        .replace("in fact", "actually")
+        .replace("in der tat", "tatsaechlich")
+        .replace("ohne zweifel", "sicher")
+        .replace("kein zweifel", "sicher")
         .replace("it is not possible that", "it is not true that")
         .replace("it is impossible that", "it is not true that")
         .replace("es ist nicht moeglich dass", "nicht wahr dass")
