@@ -1165,6 +1165,8 @@ def test_loudness_free_text_accepts_natural_completion_phrases() -> None:
     assert _notification_loudness_decision("I turned the sound back on", pending=True) == "confirmed"
     assert _notification_loudness_decision("I turned the sound on", pending=True) == "confirmed"
     assert _notification_loudness_decision("I switched the sound on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I enabled the sound", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I activated the sound", pending=True) == "confirmed"
     assert _notification_loudness_decision("I got the sound back", pending=True) == "confirmed"
     assert _notification_loudness_decision("I put the sound on mute", pending=True) == "declined"
     assert _notification_loudness_decision("Ich habe den Ton zurückgebracht", pending=True) == "confirmed"
