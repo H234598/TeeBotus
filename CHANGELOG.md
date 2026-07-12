@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.161 - 2026-07-12
+
+- Recognize recent negative loudness changes as declined.
+
 ## 1.9.160 - 2026-07-12
 
 - Recognize recent just-enabled loudness changes.

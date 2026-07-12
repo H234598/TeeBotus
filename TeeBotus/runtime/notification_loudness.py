@@ -1393,9 +1393,17 @@ def _notification_loudness_has_recent_completion_marker(normalized: str) -> bool
             "recently turned on",
             "recently enabled",
             "newly enabled",
+            "just muted",
+            "recently muted",
+            "just silenced",
+            "recently silenced",
+            "just disabled",
+            "recently disabled",
             "gerade eben",
             "gerade angeschaltet",
             "gerade aktiviert",
+            "gerade stummgeschaltet",
+            "gerade deaktiviert",
             "soeben",
         )
     )
