@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.148 - 2026-07-12
+
+- Ignore indirect loudness questions and requests.
+
 ## 1.9.147 - 2026-07-12
 
 - Recognize current `been on` and `auf laut` status forms.
