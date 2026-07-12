@@ -1424,6 +1424,10 @@ def test_loudness_free_text_does_not_decide_present_actions_as_completed() -> No
     assert _notification_loudness_decision("Ich schalte Benachrichtigungen an", pending=True) is None
     assert _notification_loudness_decision("Ich aktiviere Benachrichtigungen", pending=False) is None
     assert _notification_loudness_decision("Ich habe Benachrichtigungen angeschaltet", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I make messages muted", pending=True) is None
+    assert _notification_loudness_decision("I put notifications on", pending=True) is None
+    assert _notification_loudness_decision("I activate notifications", pending=False) is None
+    assert _notification_loudness_decision("I disable notifications", pending=True) is None
 
 
 def test_loudness_free_text_accepts_affirmation_variants_with_context() -> None:

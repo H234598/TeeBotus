@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.143 - 2026-07-12
+
+- Ignore additional first-person present loudness actions.
+
 ## 1.9.142 - 2026-07-12
 
 - Ignore present leave/let/lassen loudness actions.
