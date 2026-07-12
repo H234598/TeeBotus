@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.204 - 2026-07-12
+
+- Preserve punctuation-aware clause boundaries for notification negation.
+
 ## 1.9.203 - 2026-07-12
 
 - Avoid treating generic chat activity as notification loudness state.

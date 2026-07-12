@@ -1074,7 +1074,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if has_completed_action_positive and has_completed_action_negative:
         return None
     has_positive_current_status = _notification_loudness_has_positive_current_status(normalized)
-    has_negative_current_status = _notification_loudness_has_negative_current_status(normalized)
+    has_negative_current_status = _notification_loudness_has_negative_current_status(polarity_normalized)
     has_absolute_negative_positive_status = _notification_loudness_has_absolute_negative_positive_status(normalized)
     has_absolute_negative_mute = _notification_loudness_has_absolute_negative_term(
         normalized, NOTIFICATION_LOUDNESS_MUTE_TERMS
