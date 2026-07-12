@@ -1114,6 +1114,16 @@ def test_loudness_free_text_prioritizes_explicit_negation() -> None:
     assert _notification_loudness_decision("ja, laut gestellt", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_separates_reply_prefix_from_determiner_negation() -> None:
+    assert _notification_loudness_decision("No notifications are muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("No, notifications are muted", pending=True) == "declined"
+    assert _notification_loudness_decision("Nein, die Nachrichten sind stumm", pending=True) == "declined"
+    assert _notification_loudness_decision("Ja, die Nachrichten sind laut", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Ja, die Nachrichten sind stumm", pending=True) is None
+    assert _notification_loudness_decision("Nein, die Nachrichten sind laut", pending=True) is None
+    assert _notification_loudness_decision("No, I turned notifications off", pending=True) == "declined"
+
+
 def test_loudness_free_text_accepts_natural_completion_phrases() -> None:
     assert _notification_loudness_decision("Habe ich erledigt", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich habe es gemacht", pending=True) == "confirmed"

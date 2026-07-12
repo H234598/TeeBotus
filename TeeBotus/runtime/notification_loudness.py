@@ -993,6 +993,15 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     normalized = _normalize_text(text)
     if not normalized:
         return None
+    reply_prefix = _notification_loudness_leading_reply_prefix(text)
+    if reply_prefix is not None:
+        prefix_decision, remainder = reply_prefix
+        if remainder and _notification_loudness_has_reply_status_context(remainder):
+            remainder_decision = _notification_loudness_decision(remainder, pending=pending)
+            if remainder_decision is not None:
+                if remainder_decision == prefix_decision:
+                    return prefix_decision
+                return None
     if pending and "?" not in str(text or ""):
         direct_pronoun_decision = None
         if not _notification_loudness_has_uncertainty(normalized):
@@ -1934,6 +1943,51 @@ def _resolve_loudness_now(value: datetime | None) -> datetime:
 
 def _normalize_text(text: str) -> str:
     return _normalize_text_value(text, preserve_clause_boundaries=False)
+
+
+def _notification_loudness_leading_reply_prefix(text: str) -> tuple[str, str] | None:
+    raw = str(text or "").strip().casefold()
+    for word in sorted(
+        NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS | NOTIFICATION_LOUDNESS_NEGATION_REPLY_WORDS,
+        key=len,
+        reverse=True,
+    ):
+        if not raw.startswith(word):
+            continue
+        remainder = raw[len(word) :]
+        if not remainder or remainder[0] not in ",;:!?":
+            continue
+        decision = "confirmed" if word in NOTIFICATION_LOUDNESS_AFFIRMATION_WORDS else "declined"
+        return decision, remainder[1:].strip()
+    return None
+
+
+def _notification_loudness_has_reply_status_context(text: str) -> bool:
+    normalized = _normalize_text(text)
+    tokens = set(normalized.split())
+    return bool(
+        tokens
+        & (
+            {
+                "benachrichtigung",
+                "benachrichtigungen",
+                "nachricht",
+                "nachrichten",
+                "notification",
+                "notifications",
+                "message",
+                "messages",
+                "laut",
+                "loud",
+                "an",
+                "on",
+                "aus",
+                "off",
+            }
+            | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
+            | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+        )
+    )
 
 
 def _normalize_text_for_polarity(text: str) -> str:
