@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.169 - 2026-07-12
+
+- Recognize modified pending pronoun status replies.
+
 ## 1.9.168 - 2026-07-12
 
 - Recognize German notification-sound compound nouns.

@@ -87,8 +87,11 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "vielleicht",
     "wahrscheinlich",
     "ich glaube",
+    "glaube ich",
     "ich denke",
+    "denke ich",
     "ich vermute",
+    "vermute ich",
     "ich schätze",
     "ich nehme an",
     "ich bezweifle",
@@ -137,6 +140,7 @@ NOTIFICATION_LOUDNESS_UNCERTAINTY_PHRASES = (
     "i wish",
     "hoffentlich",
     "ich hoffe",
+    "hoffe ich",
     "i think",
     "i believe",
     "don t think",
@@ -696,7 +700,16 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     if not normalized:
         return None
     if pending and "?" not in str(text or ""):
-        direct_pronoun_decision = _notification_loudness_pending_pronoun_decision(normalized)
+        direct_pronoun_decision = None
+        if not _notification_loudness_has_uncertainty(normalized):
+            direct_pronoun_decision = _notification_loudness_pending_pronoun_decision(normalized)
+            tokens = normalized.split()
+            if direct_pronoun_decision is None and len(tokens) >= 2 and tokens[0] in {"sie", "they"}:
+                if tokens[1] in {"ist", "sind", "is", "are", "re"}:
+                    if _notification_loudness_has_positive_current_status(normalized):
+                        direct_pronoun_decision = "confirmed"
+                    elif _notification_loudness_has_negative_current_status(normalized):
+                        direct_pronoun_decision = "declined"
         if direct_pronoun_decision is not None:
             return direct_pronoun_decision
     words = set(normalized.split())
@@ -1488,7 +1501,7 @@ def _notification_loudness_has_question_tail(normalized: str) -> bool:
 
 def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
     tokens = normalized.split()
-    copulas = {"ist", "sind", "is", "are"}
+    copulas = {"ist", "sind", "is", "are", "re"}
     for status_index, token in enumerate(tokens):
         if token not in NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS:
             continue
@@ -1504,14 +1517,14 @@ def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
 def _notification_loudness_has_negative_current_status(normalized: str) -> bool:
     tokens = normalized.split()
     positive_status_terms = NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS
-    contracted_copulas = {"isn", "aren"}
+    contracted_copulas = {"isn", "aren", "re"}
     for status_index, token in enumerate(tokens):
         if token not in positive_status_terms:
             continue
         for copula_index in range(max(0, status_index - 4), status_index):
             copula = tokens[copula_index]
             between = tokens[copula_index + 1 : status_index]
-            if copula in {"is", "are"} and "not" in between:
+            if copula in {"is", "are", "re"} and "not" in between:
                 return True
             if copula in {"ist", "sind"} and "nicht" in between:
                 return True

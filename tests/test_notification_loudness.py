@@ -1456,6 +1456,16 @@ def test_loudness_free_text_recognizes_notification_sound_compounds() -> None:
     assert _notification_loudness_decision("Der Nachrichtenton ist nicht ausgeschaltet", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_recognizes_modified_pending_pronoun_statuses() -> None:
+    assert _notification_loudness_decision("Sie sind jetzt an", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Sie sind aktuell laut", pending=True) == "confirmed"
+    assert _notification_loudness_decision("They are currently enabled", pending=True) == "confirmed"
+    assert _notification_loudness_decision("They're currently enabled", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Sie sind nicht aktuell laut", pending=True) == "declined"
+    assert _notification_loudness_decision("Sie sind an, glaube ich", pending=True) is None
+    assert _notification_loudness_decision("They're enabled, I think", pending=True) is None
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None
