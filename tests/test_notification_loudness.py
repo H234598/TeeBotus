@@ -2077,6 +2077,26 @@ def test_loudness_free_text_prioritizes_current_status_after_indirect_action() -
         "Ich habe verhindert, dass die Nachrichten stumm geschaltet werden, aber jetzt sind sie laut",
         pending=False,
     ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Die Nachrichten wurden davor bewahrt, stumm geschaltet zu werden, aber jetzt sind sie stumm",
+        pending=True,
+    ) == "declined"
+    assert _notification_loudness_decision(
+        "Die Nachrichten wurden davor bewahrt, stumm geschaltet zu werden, aber jetzt sind sie laut",
+        pending=False,
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Notifications were prevented from being muted", pending=True
+    ) == "confirmed"
+    assert _notification_loudness_decision(
+        "Notifications were prevented from being muted yesterday", pending=False
+    ) is None
+    assert _notification_loudness_decision(
+        "I am prevented from muting notifications", pending=True
+    ) is None
+    assert _notification_loudness_decision(
+        "Die Nachrichten wurden davor bewahrt, stumm geschaltet zu werden", pending=False
+    ) == "confirmed"
 
 
 def test_loudness_free_text_does_not_decide_historical_status_as_current() -> None:
