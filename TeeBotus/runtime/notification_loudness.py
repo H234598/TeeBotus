@@ -744,6 +744,8 @@ NOTIFICATION_LOUDNESS_CURRENT_STATUS_MODIFIERS = frozenset(
         "permanent",
         "fortwaehrend",
         "kontinuierlich",
+        "derzeit",
+        "momentan",
         "permanently",
         "persistently",
         "continuously",
@@ -3685,6 +3687,9 @@ def _notification_loudness_has_question_tail(normalized: str) -> bool:
 
 
 def _notification_loudness_has_positive_current_status(normalized: str) -> bool:
+    normalized = normalized.replace("ab jetzt", "jetzt")
+    normalized = normalized.replace("seit heute", "heute")
+    normalized = normalized.replace("seitdem", "weiterhin")
     normalized = normalized.replace("are continuing to be", "remain")
     normalized = normalized.replace("is continuing to be", "remains")
     normalized = normalized.replace("continue to be", "remain")
