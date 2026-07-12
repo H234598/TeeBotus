@@ -1140,6 +1140,8 @@ def test_loudness_free_text_accepts_natural_on_off_and_loud_status_phrases() -> 
     assert _notification_loudness_decision("Benachrichtigungen sind an", pending=True) == "confirmed"
     assert _notification_loudness_decision("Benachrichtigungen sind aus", pending=True) == "declined"
     assert _notification_loudness_decision("Die Nachrichten sind wieder laut", pending=True) == "confirmed"
+    assert _notification_loudness_decision("Aktuell stehen die Nachrichten auf laut", pending=False) == "confirmed"
+    assert _notification_loudness_decision("Die Nachrichten sind jetzt auf laut", pending=True) == "confirmed"
 
 
 def test_loudness_free_text_accepts_english_notification_status_phrases() -> None:
@@ -1152,6 +1154,7 @@ def test_loudness_free_text_accepts_english_notification_status_phrases() -> Non
     assert _notification_loudness_decision("Notifications have been enabled", pending=True) == "confirmed"
     assert _notification_loudness_decision("I enabled notifications", pending=False) == "confirmed"
     assert _notification_loudness_decision("I have enabled notifications", pending=True) == "confirmed"
+    assert _notification_loudness_decision("The notifications have been on since today", pending=False) == "confirmed"
     assert _notification_loudness_decision("Have notifications been enabled", pending=True) is None
     assert _notification_loudness_decision("Has notifications been enabled", pending=False) is None
     assert _notification_loudness_decision("Notifications are active", pending=False) == "confirmed"

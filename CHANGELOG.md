@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.147 - 2026-07-12
+
+- Recognize current `been on` and `auf laut` status forms.
+
 ## 1.9.146 - 2026-07-12
 
 - Ignore additional epistemically uncertain loudness statements.
