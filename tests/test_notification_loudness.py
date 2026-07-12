@@ -1198,6 +1198,11 @@ def test_loudness_free_text_accepts_natural_completion_phrases() -> None:
     assert _notification_loudness_decision("Ich habe es nicht lauter gemacht, aber sie sind laut", pending=True) == "confirmed"
     assert _notification_loudness_decision("Ich habe es nicht lauter gemacht, aber sie sind leise", pending=True) == "declined"
     assert _notification_loudness_decision("I am turning it up", pending=True) is None
+    assert _notification_loudness_decision("Make it louder", pending=True) is None
+    assert _notification_loudness_decision("Restore it", pending=True) is None
+    assert _notification_loudness_decision("Bring it back", pending=True) is None
+    assert _notification_loudness_decision("I can restore it", pending=True) is None
+    assert _notification_loudness_decision("I can raise it", pending=True) is None
     assert _notification_loudness_decision("I turned it off", pending=True) == "declined"
     assert _notification_loudness_decision("I did it but they are muted", pending=True) == "declined"
     assert _notification_loudness_decision("I did it but they are not muted", pending=True) == "confirmed"
