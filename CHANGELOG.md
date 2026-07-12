@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.174 - 2026-07-12
+
+- Handle absolute negative quantifier variants across languages.
+
 ## 1.9.173 - 2026-07-12
 
 - Handle partial and absolute notification-state quantifiers safely.

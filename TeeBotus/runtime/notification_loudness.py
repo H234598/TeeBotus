@@ -1556,6 +1556,13 @@ def _notification_loudness_has_absolute_negative_term(
         ("nicht", "eine", "einzige"),
         ("nicht", "eine"),
         ("nicht", "ein", "einziger"),
+        ("no",),
+        ("none",),
+        ("neither",),
+        ("kein",),
+        ("keine",),
+        ("keinerlei",),
+        ("weder",),
     )
     for pattern in quantifier_patterns:
         width = len(pattern)
@@ -1564,6 +1571,8 @@ def _notification_loudness_has_absolute_negative_term(
                 continue
             for index in range(start + width, len(tokens)):
                 if tokens[index] in NOTIFICATION_LOUDNESS_CLAUSE_BOUNDARIES:
+                    if width == 1 and tokens[index] in {"or", "nor", "oder", "noch"}:
+                        continue
                     break
                 if tokens[index] not in terms:
                     continue
