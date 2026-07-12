@@ -849,6 +849,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         )
     )
     has_notification_context = has_notification_context or has_volume_context
+    has_completed_action_positive, has_completed_action_negative = _notification_loudness_completed_action_polarity(
+        normalized, has_notification_context=has_notification_context
+    )
     polarity_normalized = _normalize_text_for_polarity(text)
     has_unnegated_mute, has_negated_mute = _notification_loudness_mute_polarity(polarity_normalized)
     has_unnegated_off, has_negated_off = _notification_loudness_term_polarity(
@@ -871,7 +874,9 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and not _notification_loudness_has_recent_completion_marker(normalized)
     ):
         return None
-    if has_notification_context and _notification_loudness_has_habitual_marker(normalized):
+    if has_notification_context and _notification_loudness_has_habitual_marker(normalized) and not (
+        has_completed_action_positive or has_completed_action_negative
+    ):
         return None
     if has_notification_context and normalized.startswith(NOTIFICATION_LOUDNESS_NON_ASSERTIVE_STARTS):
         return None
@@ -897,9 +902,6 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     )
     if has_volume_positive and has_volume_negative:
         return None
-    has_completed_action_positive, has_completed_action_negative = _notification_loudness_completed_action_polarity(
-        normalized, has_notification_context=has_notification_context
-    )
     if has_completed_action_positive and has_completed_action_negative:
         return None
     has_positive_current_status = _notification_loudness_has_positive_current_status(normalized)
@@ -1837,7 +1839,23 @@ def _notification_loudness_completed_action_polarity(
     if not has_notification_context:
         return False, False
     tokens = normalized.split()
-    actions = {"set", "put", "make", "made", "turn", "turned", "switch", "switched", "enable", "enabled", "activate", "activated"}
+    actions = {
+        "set",
+        "put",
+        "make",
+        "made",
+        "turn",
+        "turned",
+        "switch",
+        "switched",
+        "enable",
+        "enabled",
+        "activate",
+        "activated",
+        "muted",
+        "silenced",
+        "disabled",
+    }
     positive_targets = {
         "laut",
         "loud",
@@ -1891,6 +1909,8 @@ def _notification_loudness_completed_action_polarity(
             has_negative_target = bool(set(tail) & negative_targets)
             if action in {"enabled", "activated"} and set(tail) & subjects:
                 has_positive_target = True
+            if action in {"muted", "silenced", "disabled"} and set(tail) & subjects:
+                has_negative_target = True
             if not has_positive_target and not has_negative_target:
                 continue
             negated = _notification_loudness_scoped_negation_count(
@@ -1906,6 +1926,24 @@ def _notification_loudness_completed_action_polarity(
                     positive = True
                 else:
                     negative = True
+    has_perfect_never = bool(
+        {"habe", "haben", "hat", "have", "has"}.intersection(tokens)
+        and {"nie", "niemals", "never"}.intersection(tokens)
+    )
+    if has_perfect_never:
+        for phrase, action_is_positive in (
+            ("laut gestellt", True),
+            ("laut geschaltet", True),
+            ("stumm geschaltet", False),
+            ("stummgeschaltet", False),
+            ("ausgeschaltet", False),
+        ):
+            if not _contains_normalized_phrase(normalized, phrase):
+                continue
+            if action_is_positive:
+                negative = True
+            else:
+                positive = True
     return positive, negative
 
 

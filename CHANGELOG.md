@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.186 - 2026-07-12
+
+- Handle perfect never-actions without changing habitual present tense.
+
 ## 1.9.185 - 2026-07-12
 
 - Recognize variable English completed notification actions.

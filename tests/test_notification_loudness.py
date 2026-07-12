@@ -1616,6 +1616,16 @@ def test_loudness_free_text_recognizes_variable_english_completed_actions() -> N
     assert _notification_loudness_decision("I haven't enabled messages", pending=False) == "declined"
 
 
+def test_loudness_free_text_handles_perfect_never_actions() -> None:
+    assert _notification_loudness_decision("I have never set messages to loud", pending=True) == "declined"
+    assert _notification_loudness_decision("I have never muted messages", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I have never turned messages off", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I have never turned messages on", pending=False) == "declined"
+    assert _notification_loudness_decision("Ich habe die Nachrichten nie laut gestellt", pending=True) == "declined"
+    assert _notification_loudness_decision("Ich habe die Nachrichten nie stumm geschaltet", pending=False) == "confirmed"
+    assert _notification_loudness_decision("I never turn notifications off", pending=True) is None
+
+
 def test_loudness_free_text_does_not_decide_requests_as_completed() -> None:
     assert _notification_loudness_decision("I want notifications on", pending=True) is None
     assert _notification_loudness_decision("I want messages not muted", pending=False) is None
