@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.202 - 2026-07-12
+
+- Reject location and transport qualifiers that mimic notification on/off states.
+
 ## 1.9.201 - 2026-07-12
 
 - Keep clause-scoped negation and reject ambiguous transport/status phrases.

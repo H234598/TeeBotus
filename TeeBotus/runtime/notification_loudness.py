@@ -1049,6 +1049,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     if has_notification_context and _notification_loudness_has_ambiguous_status_qualifier(normalized):
         return None
+    if has_notification_context and _notification_loudness_has_ambiguous_location_status(normalized):
+        return None
     if (
         has_notification_context
         and not has_explicit_notification_context
@@ -2426,6 +2428,30 @@ def _notification_loudness_has_ambiguous_status_qualifier(normalized: str) -> bo
             "on whatsapp",
         )
     )
+
+
+def _notification_loudness_has_ambiguous_location_status(normalized: str) -> bool:
+    location_phrases = (
+        "on my phone",
+        "on the phone",
+        "on my device",
+        "on the device",
+        "on screen",
+        "on the screen",
+        "on the lock screen",
+        "off my phone",
+        "off the phone",
+        "off the record",
+    )
+    if not any(_contains_normalized_phrase(normalized, phrase) for phrase in location_phrases):
+        return False
+    other_state_terms = (
+        set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS) - {"on"}
+    ) | set(NOTIFICATION_LOUDNESS_MUTE_TERMS) | (set(NOTIFICATION_LOUDNESS_OFF_TERMS) - {"off"}) | {
+        "laut",
+        "loud",
+    }
+    return not any(_contains_normalized_phrase(normalized, term) for term in other_state_terms)
 
 
 def _notification_loudness_pending_pronoun_decision(normalized: str) -> str | None:
