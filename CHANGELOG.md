@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.9.156 - 2026-07-12
+
+- Handle indirect inability-to-know loudness statements.
+
 ## 1.9.155 - 2026-07-12
 
 - Handle inability-to-confirm loudness statements.
