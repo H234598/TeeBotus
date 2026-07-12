@@ -1147,6 +1147,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     normalized = _normalize_text(text)
     if not normalized:
         return None
+    if _notification_loudness_has_unrelated_identity_description(normalized):
+        return None
     proposition_negation_decision = _notification_loudness_explicit_negated_status_decision(
         normalized, pending=pending
     )
@@ -4656,6 +4658,55 @@ def _notification_loudness_has_unscoped_subject_status(normalized: str) -> bool:
     if normalized.startswith(tuple(f"{copula} " for copula in copulas)):
         return False
     return any(_contains_normalized_phrase(normalized, copula) for copula in copulas)
+
+
+def _notification_loudness_has_unrelated_identity_description(normalized: str) -> bool:
+    """Reject identity statements that only describe another notification object."""
+    tokens = normalized.split()
+    negative_identity_prefixes = (
+        ("i", "am", "not"),
+        ("i", "m", "not"),
+        ("that", "is", "not"),
+        ("that", "isn", "t"),
+        ("this", "is", "not"),
+        ("this", "isn", "t"),
+    )
+    subject_terms = {
+        "nachricht",
+        "nachrichten",
+        "message",
+        "messages",
+        "benachrichtigung",
+        "benachrichtigungen",
+        "notification",
+        "notifications",
+    }
+    state_terms = (
+        set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS)
+        | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
+        | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+    )
+    for prefix in negative_identity_prefixes:
+        if tokens[: len(prefix)] != list(prefix):
+            continue
+        for subject_index in range(len(prefix) + 1, len(tokens) - 1):
+            if tokens[subject_index - 1] not in {"a", "an", "the"}:
+                continue
+            if tokens[subject_index] not in subject_terms:
+                continue
+            relative_index = next(
+                (
+                    index
+                    for index in range(subject_index + 1, len(tokens))
+                    if tokens[index] in {"that", "which"}
+                ),
+                None,
+            )
+            if relative_index is not None and any(
+                token in state_terms for token in tokens[relative_index + 1 :]
+            ):
+                return True
+    return False
 
 
 def _notification_loudness_is_non_declarative(text: str, normalized: str) -> bool:
