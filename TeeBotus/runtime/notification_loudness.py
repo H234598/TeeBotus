@@ -1151,6 +1151,8 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         return None
     if _notification_loudness_has_negative_possession_description(normalized):
         return None
+    if _notification_loudness_has_negative_german_existential_description(normalized):
+        return None
     proposition_negation_decision = _notification_loudness_explicit_negated_status_decision(
         normalized, pending=pending
     )
@@ -4749,6 +4751,57 @@ def _notification_loudness_has_negative_possession_description(normalized: str) 
                     index
                     for index in range(subject_index + 1, len(tokens))
                     if tokens[index] in {"that", "which", "die", "welche"}
+                ),
+                None,
+            )
+            if relative_index is not None and any(
+                token in state_terms for token in tokens[relative_index + 1 :]
+            ):
+                return True
+    return False
+
+
+def _notification_loudness_has_negative_german_existential_description(normalized: str) -> bool:
+    """Reject German negative existential relative clauses as global status claims."""
+    tokens = normalized.split()
+    subject_terms = {
+        "nachricht",
+        "nachrichten",
+        "message",
+        "messages",
+        "benachrichtigung",
+        "benachrichtigungen",
+        "notification",
+        "notifications",
+    }
+    state_terms = (
+        set(NOTIFICATION_LOUDNESS_POSITIVE_STATUS_TERMS)
+        | set(NOTIFICATION_LOUDNESS_MUTE_TERMS)
+        | set(NOTIFICATION_LOUDNESS_OFF_TERMS)
+    )
+    negative_prefixes = (
+        ("keine",),
+        ("keinen",),
+        ("kein",),
+        ("keiner",),
+        ("keinerlei",),
+        ("es", "gibt", "keine"),
+        ("es", "gibt", "keinen"),
+        ("es", "gibt", "kein"),
+        ("es", "gibt", "keinerlei"),
+    )
+    relative_terms = {"die", "der", "das", "welche", "welcher", "welches", "welchen"}
+    for prefix in negative_prefixes:
+        if tokens[: len(prefix)] != list(prefix):
+            continue
+        for subject_index in range(len(prefix), len(tokens)):
+            if tokens[subject_index] not in subject_terms:
+                continue
+            relative_index = next(
+                (
+                    index
+                    for index in range(subject_index + 1, len(tokens))
+                    if tokens[index] in relative_terms
                 ),
                 None,
             )

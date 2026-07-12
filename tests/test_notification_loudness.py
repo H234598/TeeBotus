@@ -1411,6 +1411,9 @@ def test_loudness_free_text_ignores_unrelated_loudness_subjects() -> None:
     assert _notification_loudness_decision("I have no notification sound", pending=True) == "declined"
     assert _notification_loudness_decision("Ich habe keine Nachricht, die laut ist", pending=True) is None
     assert _notification_loudness_decision("Ich habe keine Nachrichten, welche stumm sind", pending=False) is None
+    assert _notification_loudness_decision("Es gibt keine Nachrichten, die laut sind", pending=True) is None
+    assert _notification_loudness_decision("Keine Benachrichtigung, die stumm ist", pending=False) is None
+    assert _notification_loudness_decision("Keine Nachrichten sind laut", pending=True) == "declined"
     assert _notification_loudness_decision("Die Nachrichten sind laut", pending=True) == "confirmed"
 
 
