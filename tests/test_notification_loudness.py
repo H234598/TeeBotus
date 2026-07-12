@@ -1520,6 +1520,20 @@ def test_loudness_free_text_recognizes_explicit_confirmation_evidence() -> None:
     assert _notification_loudness_decision("Ich habe die Benachrichtigungen bestätigt", pending=True) == "confirmed"
 
 
+def test_loudness_free_text_separates_verification_questions_from_results() -> None:
+    assert _notification_loudness_decision("I checked if notifications are on", pending=True) is None
+    assert _notification_loudness_decision("I checked whether messages are muted", pending=True) is None
+    assert _notification_loudness_decision("I verified whether notifications are on", pending=False) is None
+    assert _notification_loudness_decision("Ich habe geprüft, ob die Nachrichten laut sind", pending=True) is None
+    assert _notification_loudness_decision("I checked and notifications are on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I checked and they are on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I checked and they are not muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I made sure notifications are not muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I made sure they are on", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I made sure they are not muted", pending=True) == "confirmed"
+    assert _notification_loudness_decision("I confirmed that notifications are muted", pending=True) == "declined"
+
+
 def test_loudness_free_text_recognizes_negative_current_status_with_modifiers() -> None:
     assert _notification_loudness_decision("Die Nachrichten sind nicht jetzt laut", pending=True) == "declined"
     assert _notification_loudness_decision("Messages aren't currently loud", pending=False) == "declined"

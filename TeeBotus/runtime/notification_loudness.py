@@ -1110,6 +1110,11 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
     )
     has_notification_context = has_notification_context or has_volume_context
     polarity_normalized = _normalize_text_for_polarity(text)
+    has_explicit_confirmation = _notification_loudness_has_explicit_confirmation(normalized)
+    has_sequenced_action_status = _notification_loudness_has_sequenced_action_status(polarity_normalized)
+    has_notification_context = has_notification_context or has_explicit_confirmation or has_sequenced_action_status
+    if _notification_loudness_has_verification_question(normalized):
+        return None
     has_completed_action_positive, has_completed_action_negative = _notification_loudness_completed_action_polarity(
         polarity_normalized, has_notification_context=has_notification_context
     )
@@ -1203,10 +1208,10 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         and not has_explicit_notification_context
         and _notification_loudness_has_unscoped_subject_status(normalized)
         and not _notification_loudness_has_sequenced_action_status(polarity_normalized)
+        and not has_explicit_confirmation
     ):
         return None
     has_audibility_state = _notification_loudness_has_audibility_state(normalized)
-    has_explicit_confirmation = _notification_loudness_has_explicit_confirmation(normalized)
     if (
         has_notification_context
         and _notification_loudness_is_non_declarative(text, normalized)
@@ -1532,7 +1537,7 @@ def _notification_loudness_decision(text: str, *, pending: bool) -> str | None:
         or has_absolute_negative_still_inner_negation
         or has_absolute_negative_off_inner_negation
         or has_volume_negative
-        or has_completed_action_negative
+        or (has_completed_action_negative and not has_explicit_confirmation)
     )
     if has_absolute_negative_positive_inner_negation:
         has_declined_phrase = False
@@ -2931,6 +2936,13 @@ def _notification_loudness_has_sequenced_action_status(
         "geschaltet",
         "gemacht",
         "gesetzt",
+        "checked",
+        "verified",
+        "confirmed",
+        "noticed",
+        "saw",
+        "geprueft",
+        "sichergestellt",
     }
     subject_terms = {
         "nachricht",
@@ -3050,6 +3062,10 @@ def _notification_loudness_has_explicit_confirmation(normalized: str) -> bool:
     return any(
         _contains_normalized_phrase(normalized, phrase)
         for phrase in (
+            "made sure",
+            "verified that",
+            "confirmed that",
+            "sichergestellt",
             "ich kann bestaetigen",
             "ich kann belegen",
             "ich bestaetige",
@@ -3057,6 +3073,24 @@ def _notification_loudness_has_explicit_confirmation(normalized: str) -> bool:
             "ich kann bestätigen",
             "ich bestätige",
             "ich habe bestätigt",
+        )
+    )
+
+
+def _notification_loudness_has_verification_question(normalized: str) -> bool:
+    return any(
+        _contains_normalized_phrase(normalized, phrase)
+        for phrase in (
+            "checked if",
+            "checked whether",
+            "verified if",
+            "verified whether",
+            "checked to see if",
+            "geprueft ob",
+            "geprüft ob",
+            "nachgesehen ob",
+            "ueberprueft ob",
+            "überprüft ob",
         )
     )
 
