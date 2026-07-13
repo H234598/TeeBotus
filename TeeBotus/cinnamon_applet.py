@@ -410,7 +410,13 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     command_problem_count = 0 if command_ok else 1
     has_health_classification = "actionable_problem_status_count" in runtime_summary
     status_problem_count = sum(_safe_int(status_counts.get(status, 0)) for status in PROBLEM_STATUSES)
-    problem_count = max(0, _safe_int(runtime_summary.get("problem_status_count", 0)), status_problem_count)
+    declared_problem_status_counts = _problem_status_counts_from_text(runtime_summary.get("problem_statuses"))
+    problem_count = max(
+        0,
+        _safe_int(runtime_summary.get("problem_status_count", 0)),
+        status_problem_count,
+        sum(declared_problem_status_counts.values()),
+    )
     actionable_status_counts = (
         parsed_runtime.get("actionable_status_counts", {})
         if has_health_classification and isinstance(parsed_runtime, dict)
@@ -420,10 +426,16 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
         _safe_int(actionable_status_counts.get(status, 0))
         for status in PROBLEM_STATUSES
     )
+    declared_actionable_status_counts = _problem_status_counts_from_text(runtime_summary.get("actionable_problem_statuses"))
     declared_actionable_problem_count = _safe_int(
         runtime_summary.get("actionable_problem_status_count", max(problem_count, status_problem_count))
     )
-    actionable_problem_count = max(0, declared_actionable_problem_count, parsed_actionable_problem_count)
+    actionable_problem_count = max(
+        0,
+        declared_actionable_problem_count,
+        parsed_actionable_problem_count,
+        sum(declared_actionable_status_counts.values()),
+    )
     informational_status_counts = (
         parsed_runtime.get("informational_status_counts", {})
         if isinstance(parsed_runtime, dict)
@@ -433,10 +445,14 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
         _safe_int(informational_status_counts.get(status, 0))
         for status in PROBLEM_STATUSES
     )
+    declared_informational_status_counts = _problem_status_counts_from_text(
+        runtime_summary.get("informational_problem_statuses")
+    )
     informational_problem_count = max(
         0,
         _safe_int(runtime_summary.get("informational_problem_status_count", 0)),
         parsed_informational_problem_count,
+        sum(declared_informational_status_counts.values()),
     )
     qdrant_unit_problem_count = _unit_problem_count(qdrant_unit)
     qdrant_runtime_problem_count = _safe_int(
@@ -448,7 +464,10 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     # signal once in the top-level health total.
     qdrant_problem_count = max(qdrant_runtime_problem_count, qdrant_probe_problem_count, qdrant_unit_problem_count)
     severe_count = sum(
-        _safe_int(actionable_status_counts.get(status, 0))
+        max(
+            _safe_int(actionable_status_counts.get(status, 0)),
+            _safe_int(declared_actionable_status_counts.get(status, 0)),
+        )
         for status in ("broken", "config_conflict", "error", "failed", "invalid", "schema_mismatch")
     )
     runtime_problem_count = max(0, actionable_problem_count - qdrant_runtime_problem_count)
@@ -553,6 +572,20 @@ def _problem_statuses_from_counts(status_counts: Mapping[str, Any]) -> str:
         if count > 0:
             items.append(f"{status}:{count}")
     return ",".join(items)
+
+
+def _problem_status_counts_from_text(value: Any) -> dict[str, int]:
+    counts: dict[str, int] = {}
+    for part in str(value or "").split(","):
+        token, separator, raw_count = part.partition(":")
+        if not separator:
+            continue
+        status = _normalized_status_value(token)
+        count = _safe_int(raw_count, 0)
+        if status not in PROBLEM_STATUSES or count <= 0:
+            continue
+        counts[status] = max(counts.get(status, 0), count)
+    return counts
 
 
 def parse_runtime_status(output: str) -> dict[str, Any]:
