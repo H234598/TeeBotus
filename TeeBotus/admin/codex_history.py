@@ -84,6 +84,7 @@ HISTORY_DISPATCHER_SOCKET_ENV = "HISTORY_DISPATCHER_SOCKET"
 _CODEX_HISTORY_EVENT_LOCK = threading.RLock()
 _CODEX_HISTORY_EVENT_LOCK_FILENAME = ".Codex_History_Events.lock"
 CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT = 250
+CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT = 12
 CODEX_HISTORY_GRAPH_SVG_ENGINES = frozenset({"builtin", "auto", "mmdc"})
 CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
 CODEX_HISTORY_STRATEGY_PURPOSE = "codex_history_strategic_analysis"
@@ -6110,10 +6111,12 @@ def _emit_follow_scan_report(instance_name: str, scan_report: Mapping[str, Any],
     status_counts = scan_report.get("status_counts", {})
     if isinstance(status_counts, Mapping):
         lines.append("  statuses: " + ", ".join(f"{key}={value}" for key, value in sorted(status_counts.items())))
-    for item in _watch_detail_items(scan_report.get("items", [])):
+    details = _watch_detail_items(scan_report.get("items", []))
+    for item in details:
         if not isinstance(item, Mapping):
             continue
         lines.append(_watch_import_detail_line(item))
+    _append_watch_detail_limit_line(lines, scan_report.get("items", []), len(details))
     print("\n".join(lines) + "\n", flush=True)
 
 
@@ -6602,10 +6605,12 @@ def _render_watch_report(payload: Mapping[str, Any]) -> str:
         status_counts = instance.get("status_counts", {})
         if isinstance(status_counts, Mapping):
             lines.append("  statuses: " + ", ".join(f"{key}={value}" for key, value in sorted(status_counts.items())))
-        for item in _watch_detail_items(instance.get("items", [])):
+        details = _watch_detail_items(instance.get("items", []))
+        for item in details:
             if not isinstance(item, Mapping):
                 continue
             lines.append(_watch_import_detail_line(item))
+        _append_watch_detail_limit_line(lines, instance.get("items", []), len(details))
         post_index = instance.get("post_index")
         if isinstance(post_index, Mapping):
             export = post_index.get("export", {})
@@ -6665,7 +6670,29 @@ def _watch_detail_items(items: Any) -> list[Mapping[str, Any]]:
         if str(item.get("status") or "").strip().casefold() == "duplicate":
             continue
         details.append(item)
+        if len(details) >= CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT:
+            break
     return details
+
+
+def _watch_detail_count(items: Any) -> int:
+    if not isinstance(items, Sequence) or isinstance(items, (str, bytes, bytearray)):
+        return 0
+    return sum(
+        1
+        for item in items
+        if isinstance(item, Mapping) and str(item.get("status") or "").strip().casefold() != "duplicate"
+    )
+
+
+def _append_watch_detail_limit_line(lines: list[str], items: Any, shown: int) -> None:
+    omitted = _watch_detail_count(items) - int(shown or 0)
+    if omitted > 0:
+        lines.append(
+            "  import_details: "
+            f"shown={int(shown or 0)} omitted={omitted} "
+            f"limit={CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT} status_counts_complete=True"
+        )
 
 
 def _watch_import_detail_line(item: Mapping[str, Any]) -> str:

@@ -4423,6 +4423,32 @@ def test_render_watch_report_omits_duplicate_import_details_but_keeps_counts() -
     assert "import: status=skipped reason=missing_final_text summary= path=/tmp/sessions/skipped.jsonl" in rendered
 
 
+def test_render_watch_report_bounds_non_duplicate_import_details() -> None:
+    rendered = _render_watch_report(
+        {
+            "mode": "follow",
+            "instances": [
+                {
+                    "instance": "TeeBotus_Logger",
+                    "status_counts": {"skipped": 15},
+                    "items": [
+                        {
+                            "status": "skipped",
+                            "reason": "missing_final_text",
+                            "path": f"/tmp/sessions/skipped-{index}.jsonl",
+                        }
+                        for index in range(15)
+                    ],
+                }
+            ],
+        }
+    )
+
+    assert rendered.count("import: status=skipped") == 12
+    assert "import_details: shown=12 omitted=3 limit=12 status_counts_complete=True" in rendered
+    assert "statuses: skipped=15" in rendered
+
+
 def test_render_watch_report_formats_empty_dispatch_status_counts_as_none() -> None:
     rendered = _render_watch_report(
         {

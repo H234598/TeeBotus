@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.466`, lokaler Folgecommit nach `11496d09`
+**Quellstand:** TeeBotus `1.9.467`, lokaler Folgecommit nach `58c9a3f9`
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
 ## Auftrag
@@ -190,6 +190,12 @@ aus. Der Watchdog reicht nun die geaenderten JSONL-Pfade zurueck. Der Snapshot
 bleibt als Konsistenzpruefung bestehen, aber der Import verarbeitet bei einem
 reinen Datei-Update nur die betroffenen, noch vorhandenen Pfade.
 
+Auch die Follow-Textausgabe war ungebunden: Bei vielen erwarteten
+`missing_final_text`-Skips wurde jeder Detailpfad ins Journal geschrieben.
+Die Statuszaehler bleiben vollstaendig; pro Instanz werden aber hoechstens 12
+Nicht-Duplicate-Details ausgegeben und die Zahl der ausgelassenen Details wird
+explizit vermerkt.
+
 ## Offene Arbeitspakete
 
 ### A. TBL-Reconciliation schreibfrei beweisen
@@ -241,8 +247,9 @@ reinen Datei-Update nur die betroffenen, noch vorhandenen Pfade.
   Teststruktur pruefen.
 - [ ] Speicherprofil fuer Session-Import, Accountstore-Lesen, Post-Index und
   Dispatch aufnehmen.
-- [ ] `missing_final_text` und `invalid_repo_root` bounded loggen, damit ein
-  grosser Altbestand den Journal- und CPU-Pfad nicht dominiert.
+- [x] `missing_final_text` und `invalid_repo_root` bounded loggen, damit ein
+  grosser Altbestand den Journal- und CPU-Pfad nicht mit Detailzeilen
+  ueberlaedt; vollstaendige Statuszaehler bleiben erhalten.
 - [ ] Eine sichere Default-Grenze fuer Follow-Scans definieren, ohne neue
   Sessions zu verlieren; Grenzwert muss im Plan und in Tests dokumentiert
   werden.
@@ -273,6 +280,8 @@ reinen Datei-Update nur die betroffenen, noch vorhandenen Pfade.
 - [x] Regression pruefen, dass ein geaenderter Pfad allein importiert wird;
   der Test endet mit drei Importen statt einem zweiten Vollscan mit
   Duplicate-Ergebnissen.
+- [x] Regression fuer begrenzte Follow-Detailausgabe: 15 Skips ergeben 12
+  Detailzeilen, eine Auslassungszeile und weiterhin `skipped=15`.
 - [ ] Collector-Debounce-/Ressourcenbenchmark mit realistischem grossem
   Sessionroot ausfuehren.
 - [ ] Runtime-Status, Applet-Health und Dispatcher-Snapshot nach dem naechsten
