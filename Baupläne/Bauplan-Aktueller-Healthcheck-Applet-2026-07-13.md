@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.416`, Commit `1acfb5c2`.
+- Quellstand: TeeBotus `1.9.417`, Commit `d5f73b50`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -193,6 +193,29 @@ Nachweis:
 - Vollstaendige Applet-Suite: `197 passed in 42.73s`.
 - SemVer-Bump auf `1.9.416`, Commit `1acfb5c2`
   (`Align applet error classification`).
+
+### Befund 72: Codex-History-Fehlermetadaten konnten bei neutralem Status verschwinden
+
+Eine History-Zeile kann neben dem primaeren Status auch aggregierte Metadaten
+tragen. Bei `status=skipped failed=1` oder bei
+`status=ok problem_statuses=failed:1` enthielt die Zeile einen echten Fehler,
+aber der Parser uebernahm nur den neutralen Primaerstatus. Dadurch blieb der
+Fehler aus `status_counts`, der Projekt-Health und der actionable Aufteilung
+heraus. Die Parserlogik erkennt fuer `codex_history` und
+`codex_history_repo` jetzt positive `failed`-Zaehler sowie Problemmetadaten
+ausserhalb von `queued`/`skipped` als `warning`. Reine Queue-/Skip-Metadaten
+bleiben informativ bzw. neutral.
+
+Nachweis:
+
+- Regressionstest mit `status=skipped failed=1`,
+  `status=ok problem_statuses=failed:1,skipped:2` und einer reinen
+  `queued`-/`skipped`-Zeile: zwei actionable Warnungen, keine informative
+  Fehlklassifikation.
+- Fokussierte Codex-History-Suite: `3 passed, 195 deselected`.
+- Vollstaendige Applet-Suite: `198 passed in 46.65s`.
+- SemVer-Bump auf `1.9.417`, Commit `d5f73b50`
+  (`Classify codex history failure metadata`).
 
 ## Naechste Arbeitspakete
 
