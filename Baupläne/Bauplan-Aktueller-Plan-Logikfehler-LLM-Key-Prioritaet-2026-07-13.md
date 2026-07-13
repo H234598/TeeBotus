@@ -153,6 +153,25 @@ melden. Die Fallback-Statuszeile las den Key zudem nur global.
   meldet `128 passed in 3.80s`.
 - SemVer `1.9.449`, Commit `25151c00`.
 
+## Befund 106: Structured-Decision-Status nutzte keine Instanzauflösung
+
+`_runtime_status_structured_decision_line()` rief
+`_runtime_route_status()` ohne `instance_names` auf. Bei einer Route mit
+`api_key_env=OPENAI_API_KEY` blieb damit die instanzbezogene Aufloesung
+unberuecksichtigt und der Status konnte trotz
+`OPENAI_API_KEY_<INSTANCE>` falsch `missing_key` melden.
+
+### Umsetzung und Nachweis
+
+- Der aktuelle Instanzname wird an die gemeinsame Route-Key-Pruefung
+  weitergereicht.
+- Ein providerfreier Repro deckt den Unterschied zwischen fehlendem und
+  vorhandenem Instanzkontext auf.
+- Regression und vollstaendige Entrypoint-Suite sind gruen:
+  `139 passed in 42.61s`.
+- Syntax-/Whitespace-Pruefungen sind gruen.
+- SemVer `1.9.450`, Commit `d29b8a4c`.
+
 ## Zielvertrag fuer die Key-Aufloesung
 
 Fuer den echten Runtime-Pfad gilt diese Prioritaet:

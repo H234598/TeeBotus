@@ -414,6 +414,24 @@ erscheinen. Die Fallback-Zeile pruefte den Key ausserdem nur global.
 - Entrypoint-/Runtime-Status- und LLM-Suiten gruen; SemVer `1.9.449`, Commit
   `25151c00`.
 
+## Befund 106: Structured-Decision-Status verlor den Instanz-Key-Kontext
+
+Der normale LLM- und Entscheidungsstatus uebergab die Instanznamen an die
+OpenAI-Keypruefung. Die separate `structured_decision`-Zeile rief dieselbe
+Pruefung ohne Instanznamen auf und konnte deshalb
+`OPENAI_API_KEY_<INSTANCE>` trotz vorhandenem Key als `missing_key` melden.
+
+### Umsetzung und Nachweis
+
+- `_runtime_status_structured_decision_line()` uebergibt jetzt den aktuellen
+  Instanznamen an `_runtime_route_status()`.
+- Providerfreier Repro: ohne Instanzkontext `missing_key`, mit
+  `instance_names=(Demo,)` `configured`.
+- Neue Regression fuer eine instanzbezogene OpenAI-Route ist gruen.
+- Entrypoint-Suite: `139 passed in 42.61s`; `git diff --check` und
+  `compileall` gruen.
+- SemVer `1.9.450`, Commit `d29b8a4c`.
+
 ## Arbeitsplan
 
 1. **Healthpayload und Applet weiter synchron halten**

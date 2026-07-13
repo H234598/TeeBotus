@@ -637,6 +637,22 @@ geprueft.
   sind gruen; LLM-Suite: `128 passed in 3.80s`.
 - SemVer `1.9.449`, Commit `25151c00`.
 
+## Befund 106: Structured-Decision-Status verlor den Instanz-Key-Kontext
+
+Die `structured_decision`-Statuszeile pruefte die Route ohne den Namen der
+aktuellen Instanz. Dadurch wurde ein vorhandener
+`OPENAI_API_KEY_<INSTANCE>`-Fallback nicht beruecksichtigt, obwohl die
+allgemeine LLM-Statuszeile denselben Key korrekt fand.
+
+### Umsetzung und Nachweis
+
+- Der Structured-Decision-Status verwendet jetzt dieselbe
+  instanzbezogene Route-Key-Pruefung wie der restliche Statuspfad.
+- Providerfreier Repro und Regression fuer `OPENAI_API_KEY_DEMO` sind gruen.
+- Entrypoint-Suite: `139 passed in 42.61s`; `git diff --check` und
+  `compileall` gruen.
+- SemVer `1.9.450`, Commit `d29b8a4c`.
+
 ## Invarianten
 
 - Ein echter Fehler wird nicht durch einen Fallback, einen leeren Queue-Zustand
