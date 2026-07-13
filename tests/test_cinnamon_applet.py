@@ -3442,6 +3442,14 @@ def test_cinnamon_applet_js_marks_any_ready_line_with_error_as_problem() -> None
     assert result is True
 
 
+def test_cinnamon_applet_js_marks_error_without_status_as_problem() -> None:
+    result = _run_js_applet_expression(
+        "applet._lineHasProblemStatus(applet._parseFields('service=demo error=provider_failed'))"
+    )
+
+    assert result is True
+
+
 def test_cinnamon_applet_runtime_parser_counts_models_feed_secondary_status() -> None:
     parsed = parse_runtime_status(
         """

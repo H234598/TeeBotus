@@ -1317,7 +1317,7 @@ TeeBotusApplet.prototype = {
     if (this._codexUsageIsStale(values)) {
       return true;
     }
-    if (this._fieldsHaveReadyError(values)) {
+    if (this._statusFlagIsSet(values.error)) {
       return true;
     }
     if (this._statusFieldHasProblem(values, "status")) {
@@ -1339,12 +1339,6 @@ TeeBotusApplet.prototype = {
       }
     }
     return false;
-  },
-
-  _fieldsHaveReadyError: function(fields) {
-    let values = fields || {};
-    return Boolean(String(values.error || "").trim())
-      && String(values.status || "").trim().toLowerCase() === "ready";
   },
 
   _statusFlagIsSet: function(value) {
