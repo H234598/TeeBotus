@@ -2978,11 +2978,19 @@ def test_codex_history_acknowledge_marks_item_without_deleting_it(tmp_path: Path
     assert store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)[-1]["message_ref"] == "telegram-msg-2"
 
 
-def test_record_codex_history_reply_marks_dispatch_delivered_and_acknowledged(tmp_path: Path) -> None:
+def test_record_codex_history_reply_marks_dispatch_delivered_and_acknowledged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     repo = make_git_repo(tmp_path, "reply-ack-demo", version="1.8.2")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     admin_id = store.resolve_or_create_account(telegram_identity_key(42), display_label="Admin")
     item = append_codex_history_summary(store, repo_root=repo, title="Reply Ack", bullets=["Antworten markieren die Summary."])
+    mirrored_events: list[str] = []
+    monkeypatch.setattr(
+        codex_history_module,
+        "_mirror_codex_history_delivery_event_to_dispatcher",
+        lambda _match, *, event_type, occurred_at: mirrored_events.append(event_type),
+    )
     store.append_codex_history_dispatch_result(
         INSTANCE_STATE_ACCOUNT_ID,
         {
@@ -3022,6 +3030,7 @@ def test_record_codex_history_reply_marks_dispatch_delivered_and_acknowledged(tm
     assert dispatch_rows[-1]["message_ref"] == "101"
     assert dispatch_rows[-1]["reply_message_ref"] == "202"
     assert dispatch_rows[-1]["reply_text_preview"] == "ok, angekommen"
+    assert mirrored_events == ["acknowledged"]
 
     duplicate = record_codex_history_reply(
         store,
@@ -3121,11 +3130,19 @@ def test_record_codex_history_reply_requires_account_id(tmp_path: Path) -> None:
     assert len(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)) == 1
 
 
-def test_record_codex_history_delivery_receipt_marks_dispatch_delivered_only(tmp_path: Path) -> None:
+def test_record_codex_history_delivery_receipt_marks_dispatch_delivered_only(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     repo = make_git_repo(tmp_path, "receipt-demo", version="1.8.3")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     admin_id = store.resolve_or_create_account(telegram_identity_key(42), display_label="Admin")
     item = append_codex_history_summary(store, repo_root=repo, title="Native Receipt", bullets=["Receipts markieren Zustellung."])
+    mirrored_events: list[str] = []
+    monkeypatch.setattr(
+        codex_history_module,
+        "_mirror_codex_history_delivery_event_to_dispatcher",
+        lambda _match, *, event_type, occurred_at: mirrored_events.append(event_type),
+    )
     store.append_codex_history_dispatch_result(
         INSTANCE_STATE_ACCOUNT_ID,
         {
@@ -3167,6 +3184,7 @@ def test_record_codex_history_delivery_receipt_marks_dispatch_delivered_only(tmp
     assert [row["status"] for row in dispatch_rows] == ["accepted", "delivered"]
     assert dispatch_rows[-1]["message_ref"] == "$event-1"
     assert dispatch_rows[-1]["receipt_type"] == "read"
+    assert mirrored_events == ["delivered"]
 
     duplicate = record_codex_history_delivery_receipt(
         store,

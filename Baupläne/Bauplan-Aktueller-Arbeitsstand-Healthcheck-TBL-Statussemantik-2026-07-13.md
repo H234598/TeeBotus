@@ -1,14 +1,16 @@
-# Bauplan: Aktueller Plan Healthcheck, TBL-Reconciliation und Statussemantik
+# Bauplan: Aktueller Arbeitsstand Healthcheck, TBL-Reconciliation und Statussemantik
 
 **Stand:** 2026-07-13
 
-**Status:** Aktiv, noch nicht abgeschlossen
+**Status:** Aktiv; Receipt-Fix getestet, lokale Commits stehen noch aus
 
-**Quellstand bei Erstellung:** TeeBotus `1.9.493`
+**Quellstand bei Erstellung:** TeeBotus `1.9.496`
 
 **Aktueller Quellstand:** TeeBotus `1.9.496`; History-Dispatcher `0.2.12`
 
-**Arbeitsbereich:** `/home/teladi/TeeBotus`
+**Arbeitsbereich:** `/home/teladi/TeeBotus` und `/home/teladi/History-Dispatcher`
+
+**Arbeitskopie:** Neu angelegt am 2026-07-13 aus dem aktuell aktiven Plan; der vorherige Plan bleibt als Historie erhalten.
 
 ## Auftrag
 
@@ -265,8 +267,8 @@ Eventpfad pro Batch.
   werden als `acknowledged` gespiegelt.
 - [x] Regressionen fuer `accepted`, `accepted + skipped`, `delivered` und
   `acknowledged` in beiden Repositories ergaenzt.
-- [x] Beide Repository-Versionen mit SemVer gebumpt und lokal committed;
-  Testnachweise stehen unten.
+- [ ] Beide Repository-Versionen mit SemVer gebumpt und lokal committed;
+  Testnachweise stehen unten; der Commit ist der naechste Abschluss-Schritt.
 
 ### 3. Collector und Runtime-Live-Abnahme
 
@@ -363,4 +365,6 @@ Der Bauplan ist erst abgeschlossen, wenn:
   aufgenommen; TeeBotus steht bei `1.9.493`.
 - 2026-07-13: Statusvertrag, Append-Validierung und Receipt-Mapping behoben:
   TeeBotus `1.9.496`, History-Dispatcher `0.2.12`; TeeBotus `443 passed`,
-  History-Dispatcher `56 passed`. Push und Restart bleiben aus.
+  History-Dispatcher `56 passed`. Die Aenderungen sind getestet, lokale
+  Commits stehen noch aus; Push und Restart bleiben aus.
+

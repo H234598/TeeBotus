@@ -1622,7 +1622,7 @@ def record_codex_history_reply(
     )
     _mirror_codex_history_delivery_event_to_dispatcher(
         match,
-        event_type="read",
+        event_type="acknowledged",
         occurred_at=timestamp,
     )
     return {
@@ -1726,7 +1726,7 @@ def record_codex_history_delivery_receipt(
         )
     _mirror_codex_history_delivery_event_to_dispatcher(
         match,
-        event_type="acknowledged" if normalized_receipt_type in {"read", "viewed"} else "delivered",
+        event_type="delivered",
         occurred_at=timestamp,
     )
     return {
