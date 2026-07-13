@@ -422,19 +422,9 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
         if has_health_classification and isinstance(parsed_runtime, dict)
         else status_counts
     )
-    parsed_actionable_problem_count = sum(
-        _safe_int(actionable_status_counts.get(status, 0))
-        for status in PROBLEM_STATUSES
-    )
     declared_actionable_status_counts = _problem_status_counts_from_text(runtime_summary.get("actionable_problem_statuses"))
     declared_actionable_problem_count = _safe_int(
         runtime_summary.get("actionable_problem_status_count", max(problem_count, status_problem_count))
-    )
-    actionable_problem_count = max(
-        0,
-        declared_actionable_problem_count,
-        parsed_actionable_problem_count,
-        sum(declared_actionable_status_counts.values()),
     )
     informational_status_counts = (
         parsed_runtime.get("informational_status_counts", {})
@@ -447,6 +437,35 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     )
     declared_informational_status_counts = _problem_status_counts_from_text(
         runtime_summary.get("informational_problem_statuses")
+    )
+    effective_actionable_status_counts = {
+        status: max(
+            _safe_int(actionable_status_counts.get(status, 0)),
+            _safe_int(declared_actionable_status_counts.get(status, 0)),
+        )
+        for status in PROBLEM_STATUSES
+    }
+    if has_health_classification:
+        for status in PROBLEM_STATUSES:
+            source_count = max(
+                _safe_int(status_counts.get(status, 0)),
+                _safe_int(declared_problem_status_counts.get(status, 0)),
+            )
+            informational_count = max(
+                _safe_int(informational_status_counts.get(status, 0)),
+                _safe_int(declared_informational_status_counts.get(status, 0)),
+            )
+            if source_count > informational_count:
+                effective_actionable_status_counts[status] = max(
+                    effective_actionable_status_counts[status],
+                    source_count - informational_count,
+                )
+    parsed_actionable_problem_count = sum(effective_actionable_status_counts.values())
+    actionable_problem_count = max(
+        0,
+        declared_actionable_problem_count,
+        parsed_actionable_problem_count,
+        sum(declared_actionable_status_counts.values()),
     )
     informational_problem_count = max(
         0,
@@ -464,10 +483,7 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     # signal once in the top-level health total.
     qdrant_problem_count = max(qdrant_runtime_problem_count, qdrant_probe_problem_count, qdrant_unit_problem_count)
     severe_count = sum(
-        max(
-            _safe_int(actionable_status_counts.get(status, 0)),
-            _safe_int(declared_actionable_status_counts.get(status, 0)),
-        )
+        _safe_int(effective_actionable_status_counts.get(status, 0))
         for status in ("broken", "config_conflict", "error", "failed", "invalid", "schema_mismatch")
     )
     runtime_problem_count = max(0, actionable_problem_count - qdrant_runtime_problem_count)

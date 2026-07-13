@@ -3848,6 +3848,33 @@ def test_cinnamon_applet_health_summary_uses_declared_actionable_statuses_for_se
     assert health["severe_status_count"] == 1
 
 
+def test_cinnamon_applet_health_summary_classifies_uncovered_problem_statuses_actionable() -> None:
+    health = cinnamon_applet._health_summary(
+        command_ok=True,
+        parsed_runtime={
+            "summary": {
+                "problem_status_count": 1,
+                "problem_statuses": "broken:1",
+                "actionable_problem_status_count": 0,
+                "actionable_problem_statuses": "",
+                "informational_problem_status_count": 0,
+                "informational_problem_statuses": "",
+            },
+            "status_counts": {"broken": 1},
+            "actionable_status_counts": {},
+            "informational_status_counts": {},
+        },
+        qdrant={"collections": {}, "error": ""},
+        qdrant_unit={"active_state": "active", "sub_state": "running", "returncode": 0},
+    )
+
+    assert health["status"] == "broken"
+    assert health["actionable_problem_count"] == 1
+    assert health["runtime_problem_count"] == 1
+    assert health["total_problem_count"] == 1
+    assert health["severe_status_count"] == 1
+
+
 def test_cinnamon_applet_payload_rejects_empty_runtime_output(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "  \n", "stderr": ""})
     monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running", "returncode": 0})
