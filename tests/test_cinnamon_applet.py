@@ -3884,6 +3884,8 @@ def test_cinnamon_applet_health_summary_classifies_uncovered_problem_statuses_ac
     )
 
     assert health["status"] == "broken"
+    assert health["problem_statuses"] == "broken:1"
+    assert health["actionable_problem_statuses"] == "broken:1"
     assert health["actionable_problem_count"] == 1
     assert health["runtime_problem_count"] == 1
     assert health["total_problem_count"] == 1

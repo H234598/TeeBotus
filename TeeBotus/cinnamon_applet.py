@@ -411,11 +411,18 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     has_health_classification = "actionable_problem_status_count" in runtime_summary
     status_problem_count = sum(_safe_int(status_counts.get(status, 0)) for status in PROBLEM_STATUSES)
     declared_problem_status_counts = _problem_status_counts_from_text(runtime_summary.get("problem_statuses"))
+    effective_problem_status_counts = {
+        status: max(
+            _safe_int(status_counts.get(status, 0)),
+            _safe_int(declared_problem_status_counts.get(status, 0)),
+        )
+        for status in PROBLEM_STATUSES
+    }
     problem_count = max(
         0,
         _safe_int(runtime_summary.get("problem_status_count", 0)),
         status_problem_count,
-        sum(declared_problem_status_counts.values()),
+        sum(effective_problem_status_counts.values()),
     )
     actionable_status_counts = (
         parsed_runtime.get("actionable_status_counts", {})
@@ -438,6 +445,13 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     declared_informational_status_counts = _problem_status_counts_from_text(
         runtime_summary.get("informational_problem_statuses")
     )
+    effective_informational_status_counts = {
+        status: max(
+            _safe_int(informational_status_counts.get(status, 0)),
+            _safe_int(declared_informational_status_counts.get(status, 0)),
+        )
+        for status in PROBLEM_STATUSES
+    }
     effective_actionable_status_counts = {
         status: max(
             _safe_int(actionable_status_counts.get(status, 0)),
@@ -447,14 +461,8 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     }
     if has_health_classification:
         for status in PROBLEM_STATUSES:
-            source_count = max(
-                _safe_int(status_counts.get(status, 0)),
-                _safe_int(declared_problem_status_counts.get(status, 0)),
-            )
-            informational_count = max(
-                _safe_int(informational_status_counts.get(status, 0)),
-                _safe_int(declared_informational_status_counts.get(status, 0)),
-            )
+            source_count = effective_problem_status_counts.get(status, 0)
+            informational_count = effective_informational_status_counts.get(status, 0)
             if source_count > informational_count:
                 effective_actionable_status_counts[status] = max(
                     effective_actionable_status_counts[status],
@@ -471,7 +479,7 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
         0,
         _safe_int(runtime_summary.get("informational_problem_status_count", 0)),
         parsed_informational_problem_count,
-        sum(declared_informational_status_counts.values()),
+        sum(effective_informational_status_counts.values()),
     )
     qdrant_unit_problem_count = _unit_problem_count(qdrant_unit)
     qdrant_runtime_problem_count = max(
@@ -502,11 +510,11 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
         "command_ok": bool(command_ok),
         "command_problem_count": command_problem_count,
         "problem_status_count": problem_count,
-        "problem_statuses": str(runtime_summary.get("problem_statuses", "") or _problem_statuses_from_counts(status_counts)),
+        "problem_statuses": _problem_statuses_from_counts(effective_problem_status_counts),
         "actionable_problem_count": actionable_problem_count,
-        "actionable_problem_statuses": str(runtime_summary.get("actionable_problem_statuses", "")),
+        "actionable_problem_statuses": _problem_statuses_from_counts(effective_actionable_status_counts),
         "informational_problem_count": informational_problem_count,
-        "informational_problem_statuses": str(runtime_summary.get("informational_problem_statuses", "")),
+        "informational_problem_statuses": _problem_statuses_from_counts(effective_informational_status_counts),
         "runtime_problem_count": runtime_problem_count,
         "qdrant_problem_count": qdrant_problem_count,
         "qdrant_probe_problem_count": qdrant_probe_problem_count,
