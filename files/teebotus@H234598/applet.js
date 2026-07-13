@@ -727,7 +727,7 @@ TeeBotusApplet.prototype = {
                 throw new Error(_("Dispatcher-Snapshot zu groß"));
               }
               let payload = JSON.parse(text);
-              if (!payload || typeof payload !== "object" || payload.schema_version !== 1) {
+              if (!payload || typeof payload !== "object" || payload.schema_version !== 1 || typeof payload.ok !== "boolean") {
                 throw new Error(_("Ungültiger Dispatcher-Snapshot"));
               }
               this.historyDispatcherPayload = payload;
@@ -761,7 +761,7 @@ TeeBotusApplet.prototype = {
       let generated = Date.parse(String(payload.generated_at || ""));
       let stale = !Number.isFinite(generated) || (Date.now() - generated) > HISTORY_DISPATCHER_STALE_AFTER_SECONDS * 1000;
       let lastError = String(payload.last_error || "").trim();
-      let hasSnapshotError = payload.ok === false || Boolean(lastError) || Boolean(this.historyDispatcherError);
+      let hasSnapshotError = typeof payload.ok !== "boolean" || payload.ok === false || Boolean(lastError) || Boolean(this.historyDispatcherError);
       this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(hasSnapshotError ? _("Status: Warnung") : (stale ? _("Status: veraltet") : _("Status: bereit")), false));
       if (this.historyDispatcherError) {
         this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(this._shortText(this.historyDispatcherError, 160), false));
