@@ -482,10 +482,11 @@ actionable meldete.
 
 ### Live-Ergebnis
 
-Die aktuellen drei actionable Befunde sind weiterhin real und werden nicht
-wegklassifiziert: `hard_reasoning` ohne generischen Key, fehlende Signal-
-Identitaetsverknuepfung bei Depressionsbot und lokaler TBL-History-Rueckstand.
-Qdrant ist gesund; der zentrale Dispatcher meldet Queue `0`.
+Die aktuelle Live-Probe hat zwei actionable Befunde: `hard_reasoning` ohne
+generischen Key und die fehlende Signal-Identitaetsverknuepfung bei
+Depressionsbot. Der lokale TBL-History-Rueckstand bleibt sichtbar, ist bei
+expliziter `queued`/`skipped`- und `no_private_route`-Begruendung aber nur noch
+informational. Qdrant ist gesund; der zentrale Dispatcher meldet Queue `0`.
 
 ## Befund 96: Erklaertes History-Aggregat nicht doppelt als actionable zaehlen
 

@@ -273,11 +273,12 @@ Applet-Healthstatus dadurch erneut auf `warning`.
 
 ### Live-Ergebnis nach der Klassifikationskorrektur
 
-Die Korrektur ist im Quellstand getestet, aber der laufende Botprozess stammt
-noch aus der Zeit vor dem Fix und wurde wegen der 20-Commit-Restartregel nicht
-neu gestartet. Eine neue lesende Live-Probe nach dem naechsten erlaubten
-Reload muss bestaetigen, dass der TBL-Aggregatzustand nicht mehr als
-actionable zaehlt. Key- und Signalbefund bleiben davon unberuehrt.
+Die Korrektur ist im Quellstand getestet; eine lesende Live-Probe gegen den
+unveraenderten Dienst bestaetigt bereits `actionable_problem_count=2` mit
+`missing_key:1,warning:1` statt vorher `missing_key:1,warning:2`. Der laufende
+Botprozess stammt noch aus der Zeit vor dem Fix, wurde aber fuer diese reine
+Parserauswertung nicht neu gestartet. Key- und Signalbefund bleiben davon
+unberuehrt.
 
 ## Arbeitsplan
 
