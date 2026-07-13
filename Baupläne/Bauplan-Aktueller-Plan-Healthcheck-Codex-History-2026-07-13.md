@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen
 
-**Quellstand:** TeeBotus `1.9.472`, lokaler Stand nach `79ce3c30`
+**Quellstand:** TeeBotus `1.9.473`, lokaler Stand nach `cf5ef12f`
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
 ## Auftrag
@@ -95,6 +95,9 @@ Vorherige Detailplaene bleiben als Historie und Nachweis erhalten:
   statt der gesamten `limit`-Menge.
 - Bei validierten Ereignissen wird der zusaetzliche Vollsnapshot uebersprungen;
   Erstlauf und Timeout-/Fallbackpfad behalten die Snapshot-Pruefung.
+- Bei einem explizit konfigurierten JSONL-Root, dessen Datei beim Start noch
+  nicht existiert, wird jetzt der vorhandene Elternordner beobachtet. Eine
+  spaeter erzeugte Session kann dadurch als Ereignis erkannt werden.
 - Der Watchdog bleibt waehrend Import, Post-Index und Dispatch aktiv. Events
   aus dieser Zeit werden am naechsten Wartepunkt verarbeitet.
 - Ein aeusserer Cleanup-Pfad beendet den Watchdog auch bei Scan- oder
@@ -236,6 +239,8 @@ deren Kombination eingegrenzt.
 - [x] Watchdog-Lifecycle bei Exceptions schliessen.
 - [x] Snapshot-Baseline nach inkrementellen Events aktualisieren.
 - [x] Geloeschte/umbenannte Pfade aus der Baseline entfernen.
+- [x] Fehlende explizite JSONL-Roots ueber ihren vorhandenen Elternordner
+  beobachten, damit spaetere Dateierzeugung nicht verloren geht.
 - [ ] Event-Burst-Debounce und Scan-Deduplizierung separat messen.
 - [x] Read-only Realroot-Vergleich ausfuehren und im Plan dokumentieren.
 - [x] Scan-Auswahl-Wiederverwendung mit kleiner Teststruktur pruefen.
@@ -272,6 +277,8 @@ deren Kombination eingegrenzt.
 - [x] Exception-Regression fuer Watchdog-Cleanup.
 - [x] Timeout-Regression ohne dritten Vollscan.
 - [x] Delete-Regression ohne Importfehler und spaeteren Vollscan.
+- [x] Regression fuer einen beim Watcher-Start fehlenden expliziten JSONL-Root;
+  der Observer wird auf dessen Elternordner angesetzt.
 - [x] Regression fuer begrenzte Follow-Detailausgabe.
 - [x] Regression fuer den inkrementellen Ereignispfad.
 - [ ] Collector-Debounce-/Ressourcenbenchmark mit grossem Sessionroot.
@@ -318,5 +325,10 @@ Der Plan ist erst abgeschlossen, wenn:
 - 2026-07-13: Lokaler Poll-Benchmark ohne Provideraufrufe ausgefuehrt:
   10 Dateien, 10 Iterationen, `262.27 ms`, `38.13 Operationen/s`,
   `network_calls=0`.
+- 2026-07-13: Logikfehler bei fehlenden expliziten JSONL-Roots behoben:
+  `cf5ef12f` (`1.9.473`) beobachtet jetzt den Elternordner statt eines beim
+  Start nicht vorhandenen Dateipfads. Die fokussierten Watcher-Tests liefen
+  mit `6 passed`; die Codex-History- und Metadaten-Suite mit `146 passed in
+  7.68s`. Compile- und `git diff --check`-Pruefung waren ebenfalls sauber.
 - 2026-07-13: Der Plan bleibt bis zur TBL-Reconciliation, der Event-Burst-/
   Ressourcenmessung und der naechsten erlaubten Live-Abnahme aktiv.
