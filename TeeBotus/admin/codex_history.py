@@ -89,6 +89,7 @@ CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT = 24
 CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT = 12
 CODEX_HISTORY_WATCHDOG_DEBOUNCE_SECONDS = 0.25
 CODEX_HISTORY_WATCHDOG_MAX_DEBOUNCE_SECONDS = 2.0
+CODEX_HISTORY_WATCHDOG_MUTATING_EVENTS = frozenset({"created", "modified", "moved", "deleted", "closed"})
 CODEX_HISTORY_GRAPH_SVG_ENGINES = frozenset({"builtin", "auto", "mmdc"})
 CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
 CODEX_HISTORY_STRATEGY_PURPOSE = "codex_history_strategic_analysis"
@@ -5342,6 +5343,9 @@ def _build_codex_session_watchdog(roots: Sequence[str | Path]) -> _CodexSessionW
     class _CodexSessionEventHandler(FileSystemEventHandler):  # type: ignore[misc, valid-type]
         def on_any_event(self, event: Any) -> None:  # noqa: ANN401 - watchdog event type is optional.
             if getattr(event, "is_directory", False):
+                return
+            event_type = str(getattr(event, "event_type", "modified") or "modified").strip().casefold()
+            if event_type not in CODEX_HISTORY_WATCHDOG_MUTATING_EVENTS:
                 return
             src_path = str(getattr(event, "src_path", "") or "")
             dest_path = str(getattr(event, "dest_path", "") or "")

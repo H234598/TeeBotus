@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen; aktueller Snapshot
 
-**Quellstand:** TeeBotus `1.9.484`, lokaler Stand nach dem Bridge-Route-Preflight-Fix, dem Applet-Queue-Anzeigepatch und dem Watcher-Ressourcenfix
+**Quellstand:** TeeBotus `1.9.485`, lokaler Stand nach dem Bridge-Route-Preflight-Fix, dem Applet-Queue-Anzeigepatch und dem Watcher-Ressourcenfix
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -259,6 +259,14 @@ Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
   Dispatchdaten werden nicht geloescht oder gekuerzt.
 - [x] Regression fuer ein spaet eintreffendes Event waehrend der Debounce-
   Phase ergaenzen; beide Pfade bleiben erhalten.
+- [x] Watchdog-Ereignisse nach Typ filtern: `created`, `modified`, `moved`,
+  `deleted` und `closed` bleiben relevant; `opened` und `closed_no_write`
+  werden ignoriert, damit das reine Lesen durch den Collector keinen eigenen
+  Importzyklus ausloest.
+- [x] Die installierte Watchdog-Version gegen die Ereignistypen pruefen:
+  `FileCreatedEvent=created`, `FileModifiedEvent=modified`,
+  `FileMovedEvent=moved`, `FileClosedEvent=closed`,
+  `FileClosedNoWriteEvent=closed_no_write`, `FileOpenedEvent=opened`.
 - [ ] Nach dem naechsten erlaubten Restart RSS, CPU, Scanrate und WAL-
   Schreibvolumen erneut live messen. Der laufende Prozess hat den Fix noch
   nicht geladen.
@@ -501,3 +509,11 @@ Der Plan ist erst abgeschlossen, wenn:
   `network_calls=0`. Die Metadaten-Suite lief mit `6 passed in 0.07s`.
   Der Funktionsstand ist als `409206a3` committed. Live-Restart und
   Nachmessung bleiben wegen der Restart-Grenze offen.
+- 2026-07-13: Follow-Collector-Logikfehler in `1.9.485` behoben: Der
+  Watchdog verarbeitete zuvor jedes `on_any_event`, einschliesslich
+  `opened`/`closed_no_write`; das konnte durch die eigenen Lesezugriffe einen
+  Selbsttrigger verursachen. Eine Mutations-Allowlist filtert reine
+  Leseereignisse. Fokussiert liefen `42 passed in 3.68s`, die
+  History-/Metadaten-Suite mit `162 passed in 8.11s`; Compileall und
+  `git diff --check` waren sauber. Die Live-Ressourcenmessung nach Restart
+  bleibt offen.

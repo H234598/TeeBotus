@@ -4492,10 +4492,12 @@ def test_codex_session_watchdog_coalesces_event_burst_without_losing_paths(
     watchdog = codex_history_module._build_codex_session_watchdog((sessions_root,))
     assert watchdog is not None
     handler = watchdog._observer.handlers[0]
-    event = SimpleNamespace(is_directory=False, src_path=str(first.resolve()), dest_path="")
+    event = SimpleNamespace(is_directory=False, event_type="modified", src_path=str(first.resolve()), dest_path="")
     handler.on_any_event(event)
     handler.on_any_event(event)
-    handler.on_any_event(SimpleNamespace(is_directory=False, src_path=str(second.resolve()), dest_path=""))
+    handler.on_any_event(SimpleNamespace(is_directory=False, event_type="opened", src_path=str(first.resolve()), dest_path=""))
+    handler.on_any_event(SimpleNamespace(is_directory=False, event_type="closed_no_write", src_path=str(first.resolve()), dest_path=""))
+    handler.on_any_event(SimpleNamespace(is_directory=False, event_type="closed", src_path=str(second.resolve()), dest_path=""))
 
     assert watchdog.wait(0.0) == (first.resolve(), second.resolve())
     assert watchdog.wait(0.0) is False
