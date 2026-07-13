@@ -2255,6 +2255,29 @@ def test_codex_history_matching_local_row_accepts_matching_id_with_dedupe() -> N
     assert match is local_rows[0]
 
 
+def test_codex_history_matching_local_row_rejects_conflicting_item_dedupe_fields() -> None:
+    local_rows = ({"id": "same-id"},)
+    dispatcher_item = {
+        "id": "same-id",
+        "dedupe_key": "sha256:top-level",
+        "payload": {"codex": {"dedupe_key": "sha256:payload"}},
+    }
+
+    assert codex_history_module._history_dispatcher_matching_local_row(dispatcher_item, local_rows) is None
+
+
+def test_codex_history_legacy_conversion_rejects_conflicting_item_dedupe_fields() -> None:
+    dispatcher_item = {
+        "id": "inconsistent-item",
+        "kind": "codex_run_summary",
+        "dedupe_key": "sha256:top-level",
+        "payload": {"codex": {"dedupe_key": "sha256:payload"}},
+    }
+
+    with pytest.raises(codex_history_module.HistoryDispatcherError, match="conflicting dedupe keys"):
+        codex_history_module._history_dispatcher_item_to_legacy(dispatcher_item)
+
+
 def test_codex_history_dispatch_bridge_mirror_failure_keeps_local_item_queued(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

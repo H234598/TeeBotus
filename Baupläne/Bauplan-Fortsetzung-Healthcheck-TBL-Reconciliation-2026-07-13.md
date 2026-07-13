@@ -6,7 +6,7 @@
 
 **Quellstand bei Erstellung:** TeeBotus `1.9.491`
 
-**Aktueller Quellstand:** TeeBotus `1.9.492`
+**Aktueller Quellstand:** TeeBotus `1.9.493`
 
 **Arbeitsbereich:** `/home/teladi/TeeBotus`
 
@@ -80,6 +80,8 @@ Historie erhalten, insbesondere:
   terminale Resultate idempotent nachziehen.
 - [x] Der lokale Matcher akzeptiert keine widerspruechliche Kombination aus
   gleicher Item-ID und anderem Dedupe-Key; Kollisionen bleiben fail-closed.
+- [x] Top-Level- und Payload-Dedupe-Keys eines zentralen Items muessen
+  konsistent sein; widerspruechliche Dispatcher-Datensaetze werden verworfen.
 - [x] Eine pauschale Requeue- oder Loeschaktion fuer alte lokale Zeilen ist
   weiterhin ausgeschlossen.
 
@@ -190,8 +192,8 @@ Eventpfad pro Batch.
 - [x] Fokussierte Testausfuehrung nach dem Version-Bump wiederholen.
 - [x] Aenderungen lokal committen; der neue Fix und der aktualisierte Bauplan
   sind lokal als Commit `75efd545` festgehalten.
-- [x] SemVer von `1.9.491` auf `1.9.492` bumpen und den ID-/Dedupe-Kollisionsfix
-  mit Regressionen lokal festhalten.
+- [x] SemVer von `1.9.492` auf `1.9.493` bumpen und den erweiterten
+  ID-/Dedupe-Kollisionsfix mit Regressionen lokal festhalten.
 
 ### 2. TBL-Reconciliation schreibfrei abschliessen
 
@@ -222,8 +224,9 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
 - `pytest -q tests/test_admin_accounts.py tests/test_version_notifications.py`:
   `278 passed`.
 - `pytest -q tests/test_cinnamon_applet.py`: `235 passed`.
-- `pytest -q tests/test_codex_history.py`: `162 passed`.
-- Fokussierte Bridge-/Matcher-Regressionen: `25 passed`.
+- `pytest -q tests/test_codex_history.py`: `164 passed`.
+- Fokussierte Bridge-/Matcher-Regressionen: `4 passed` fuer den aktuellen Fix;
+  zuvor `25 passed` fuer den ersten Matcher-Fix.
 - Relevante Metadaten-/Kompatibilitaetstests: `97 passed, 51 deselected`.
 - Fokussierte Account-Identity-/Health-Tests: `38 passed`.
 - `python3 -m compileall -q TeeBotus tests` erfolgreich.
@@ -277,6 +280,10 @@ Der Bauplan ist erst abgeschlossen, wenn:
   fail-closed behoben. Eine gleiche Item-ID mit widerspruechlichem Dedupe-Key
   liefert nun keinen Treffer; passende IDs bleiben gueltig. Version `1.9.492`,
   Codex-History-Suite `162 passed`, fokussierte Regressionen `25 passed`.
+- 2026-07-13: Zweiten Identitaetsfehler reproduziert: widerspruechliche
+  Top-Level-/Payload-Dedupe-Keys werden nun vor Matching und Legacy-Konvertierung
+  fail-closed abgewiesen. Version `1.9.493`, Codex-History-Suite `164 passed`,
+  aktuelle Regressionen `4 passed`.
 - 2026-07-13: Der aktualisierte Bauplan-Nachweis wurde danach separat lokal
   festgehalten; Push und Restart bleiben weiterhin aus.
 - 2026-07-13: Laufende Prozesse bewusst noch nicht neu gestartet; die

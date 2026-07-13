@@ -659,6 +659,8 @@ def _history_dispatcher_item_to_legacy(item: Mapping[str, Any]) -> dict[str, Any
     item_id = str(item.get("id") or "").strip()
     if not item_id:
         raise HistoryDispatcherError("History-Dispatcher item has no id")
+    if not _history_dispatcher_item_identity_is_consistent(item):
+        raise HistoryDispatcherError(f"History-Dispatcher item {item_id} has conflicting dedupe keys")
     raw_payload = item.get("payload")
     if not isinstance(raw_payload, Mapping):
         raise HistoryDispatcherError(f"History-Dispatcher item {item_id} has invalid payload")
@@ -805,6 +807,14 @@ def _history_dispatcher_item_dedupe_key(item: Mapping[str, Any]) -> str:
     return str(codex.get("dedupe_key") or "").strip() if isinstance(codex, Mapping) else ""
 
 
+def _history_dispatcher_item_identity_is_consistent(item: Mapping[str, Any]) -> bool:
+    top_level = str(item.get("dedupe_key") or "").strip()
+    payload = item.get("payload")
+    codex = payload.get("codex") if isinstance(payload, Mapping) else None
+    payload_dedupe = str(codex.get("dedupe_key") or "").strip() if isinstance(codex, Mapping) else ""
+    return not top_level or not payload_dedupe or top_level == payload_dedupe
+
+
 def _history_dispatcher_enrich_item_from_local_rows(
     item: Mapping[str, Any], local_rows: Sequence[Mapping[str, Any]],
 ) -> Mapping[str, Any]:
@@ -819,6 +829,8 @@ def _history_dispatcher_enrich_item_from_local_rows(
 def _history_dispatcher_matching_local_row(
     item: Mapping[str, Any], local_rows: Sequence[Mapping[str, Any]],
 ) -> Mapping[str, Any] | None:
+    if not _history_dispatcher_item_identity_is_consistent(item):
+        return None
     item_id = str(item.get("id") or "").strip()
     dedupe_key = _history_dispatcher_item_dedupe_key(item)
     id_matches: list[Mapping[str, Any]] = []
