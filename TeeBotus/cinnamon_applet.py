@@ -870,25 +870,24 @@ def _line_health_statuses(
     )
     fallback_covered = not fallback_suppression_blocked and effective in HEALTHY_EFFECTIVE_STATUSES and _fallback_reference_is_set(fields)
     informational = (
-        primary == "fallback_defaults"
-        or (prefix == "codex_usage_account" and primary == "partial")
-        or (
-            prefix == "api_budget"
-            and _api_budget_status_is_informational(
-                fields,
-                fallback_covered=fallback_covered,
-                route_present=api_budget_route_present,
-                route_has_problem=api_budget_route_has_problem,
+        not fallback_suppression_blocked
+        and (
+            primary == "fallback_defaults"
+            or (prefix == "codex_usage_account" and primary == "partial")
+            or (
+                prefix == "api_budget"
+                and _api_budget_status_is_informational(
+                    fields,
+                    fallback_covered=fallback_covered,
+                    route_present=api_budget_route_present,
+                    route_has_problem=api_budget_route_has_problem,
+                )
             )
+            or (prefix == "account_identity" and _account_identity_status_is_informational(fields))
+            or (prefix == "codex_history_repo" and _codex_history_repo_status_is_informational(fields))
+            or (prefix == "structured_decision" and _fallback_reference_is_set(fields))
+            or fallback_covered
         )
-        or (prefix == "account_identity" and _account_identity_status_is_informational(fields))
-        or (prefix == "codex_history_repo" and _codex_history_repo_status_is_informational(fields))
-        or (
-            prefix == "structured_decision"
-            and not fallback_suppression_blocked
-            and _fallback_reference_is_set(fields)
-        )
-        or fallback_covered
     )
     return ((), problems) if informational else (problems, ())
 

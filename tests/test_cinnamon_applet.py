@@ -3344,6 +3344,22 @@ def test_cinnamon_applet_runtime_parser_does_not_hide_unknown_secondary_status_b
     assert parsed["summary"]["informational_problem_statuses"] == ""
 
 
+def test_cinnamon_applet_runtime_parser_blockers_override_informational_special_cases() -> None:
+    parsed = parse_runtime_status(
+        """
+        [LLM-Routen und Backends]
+        structured_decision=defaults status=fallback_defaults semantic=unknown
+        [Tools und Account-Memory]
+        account_identity=mixed status=warning identity_warnings=1 route_status=unknown
+        [API Keys, Limits und Kosten]
+        codex_usage_account=mixed status=partial semantic=unknown
+        """
+    )
+
+    assert parsed["summary"]["actionable_problem_statuses"] == "fallback_defaults:1,partial:1,unknown:3,warning:1"
+    assert parsed["summary"]["informational_problem_statuses"] == ""
+
+
 def test_cinnamon_applet_runtime_parser_does_not_treat_fallback_sentinels_as_configured() -> None:
     parsed = parse_runtime_status(
         """
