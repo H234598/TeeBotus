@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen; aktueller Snapshot
 
-**Quellstand:** TeeBotus `1.9.482`, lokaler Stand nach dem Bridge-Route-Preflight-Fix; Arbeitsbaum mit offenem Applet-Queue-Anzeigepatch
+**Quellstand:** TeeBotus `1.9.483`, lokaler Stand nach dem Bridge-Route-Preflight-Fix und dem Applet-Queue-Anzeigepatch
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -234,12 +234,12 @@ deren Kombination eingegrenzt.
   Queue <queued> / gesamt <total>` anzeigen und ihren Zustand als `bereit`,
   `veraltet` oder `Warnung` ausweisen.
 - [x] Den Queuebegriff auch im Repository-Drilldown konsistent verwenden.
-- [ ] Den vollstaendigen Cinnamon-Applet-Testlauf nach dem Patch stabil gruen
-  nachweisen; der Timeout-Test war in einem Vollauf intermittierend, isoliert
-  aber erfolgreich.
-- [ ] Applet nach bestandener Vollsuite installieren und Quell-/Installations-
-  parity erneut pruefen.
-- [ ] Version bumpen, den Patch lokal committen und den Nachweis hier ergaenzen.
+- [x] Den vollstaendigen Cinnamon-Applet-Testlauf nach dem Patch stabil gruen
+  nachweisen: `232 passed in 38.22s`.
+- [x] Applet nach bestandener Vollsuite installieren und Quell-/Installations-
+  parity mit `diff -qr` pruefen.
+- [x] Version auf `1.9.483` bumpen und den Funktionspatch lokal als
+  `7b6da19a` committen.
 - [ ] Keinen Bot-/Service-Restart ausserhalb des vereinbarten Restart-Fensters
   ausloesen.
 
@@ -458,3 +458,12 @@ Der Plan ist erst abgeschlossen, wenn:
   Applet-Lauf hatte einmal den bestehenden Timeout-Test als intermittierenden
   PID-/Reaping-Race markiert; der isolierte Wiederholungslauf lief mit
   `1 passed`. Vollsuite, Installation und Commit bleiben offen.
+- 2026-07-13: Applet-Queue-Anzeigepatch in `1.9.483` verifiziert: Die lokale
+  Bridge-Outbox und die zentrale Dispatcher-Queue werden getrennt und mit
+  unterschiedlichen Zustandsbegriffen angezeigt. Die komplette Suite lief
+  mit `232 passed in 38.22s`; die lokale Installation wurde erfolgreich
+  aktualisiert und `diff -qr` meldete Quell-/Installationsparitaet. Der
+  bestehende Timeout-Test war im isolierten Wiederholungslauf sowie im letzten
+  Vollauf erfolgreich; kein Produktionscode wurde dafuer geaendert. Der
+  Funktionsstand ist als `7b6da19a` committed, die Metadaten-Suite lief mit
+  `6 passed in 0.07s`.
