@@ -267,6 +267,7 @@ FALLBACK_SUPPRESSION_BLOCKERS = frozenset(
         "failed",
         "invalid",
         "schema_mismatch",
+        "unknown",
     }
 )
 SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"models_feed", "route_status", "semantic"})

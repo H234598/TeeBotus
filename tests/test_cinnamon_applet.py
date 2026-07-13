@@ -3291,6 +3291,19 @@ def test_cinnamon_applet_runtime_parser_only_suppresses_api_budget_with_matching
     assert parsed["summary"]["informational_problem_statuses"] == "missing_key:1"
 
 
+def test_cinnamon_applet_runtime_parser_does_not_hide_unknown_decision_route_behind_fallback() -> None:
+    parsed = parse_runtime_status(
+        """
+        [LLM-Routen und Backends]
+        structured_decision=orphan status=enabled route_status=unknown fallback=local
+        structured_decision=expected status=enabled route_status=unavailable fallback=local
+        """
+    )
+
+    assert parsed["summary"]["actionable_problem_statuses"] == "unknown:1"
+    assert parsed["summary"]["informational_problem_statuses"] == "unavailable:1"
+
+
 def test_cinnamon_applet_runtime_parser_marks_error_without_status_as_problem() -> None:
     parsed = parse_runtime_status(
         """
