@@ -504,3 +504,11 @@ Der Bauplan ist erst abgeschlossen, wenn:
   retrybarer `TelegramAPIError` behandelt. Fokussiert `6 passed`, komplette
   `tests/test_bot.py`: `185 passed`, `17 subtests passed`; Compileall und
   `git diff --check` sind sauber. Der Fix ist noch uncommitted.
+- 2026-07-13: Dritten Telegram-Adapterfehler reproduziert: Die Konvertierung
+  unterstuetzte `channel_post`, `getUpdates` abonnierte diesen Update-Typ aber
+  nicht. Channel-Posts konnten deshalb trotz vorhandenem Verarbeitungspfad nie
+  eintreffen. `allowed_updates` enthaelt nun `message`, `channel_post` und
+  `callback_query`; der Request-Vertrag ist mit einem echten Request-Test und
+  der bestehenden Channel-Post-Konvertierung abgesichert. Fokussiert `6 passed`,
+  Channel-Post-Adaptertest `1 passed`, komplette `tests/test_bot.py`:
+  `186 passed`, `17 subtests passed`. Der Fix ist noch uncommitted.

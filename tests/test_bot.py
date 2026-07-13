@@ -519,6 +519,27 @@ class BotTests(unittest.TestCase):
             with self.assertRaises(TelegramAPIError):
                 api.get_updates(None)
 
+    def test_telegram_get_updates_requests_channel_posts(self) -> None:
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def read(self):
+                return b'{"ok":true,"result":[]}'
+
+        import urllib.parse
+
+        api = TelegramAPI("123:test-token")
+        with patch("TeeBotus.bot.urllib.request.urlopen", return_value=Response()) as urlopen:
+            self.assertEqual(api.get_updates(None), [])
+
+        request = urlopen.call_args.args[0]
+        params = urllib.parse.parse_qs(request.data.decode("utf-8"))
+        self.assertEqual(json.loads(params["allowed_updates"][0]), ["message", "channel_post", "callback_query"])
+
     def test_telegram_multipart_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")
 

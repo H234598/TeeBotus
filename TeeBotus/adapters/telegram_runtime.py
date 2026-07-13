@@ -319,7 +319,7 @@ class TelegramAPI:
     def get_updates(self, offset: int | None, timeout: int = 50) -> list[dict[str, Any]]:
         params: dict[str, Any] = {
             "timeout": timeout,
-            "allowed_updates": json.dumps(["message", "callback_query"]),
+            "allowed_updates": json.dumps(["message", "channel_post", "callback_query"]),
         }
         if offset is not None:
             params["offset"] = offset
