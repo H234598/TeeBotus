@@ -728,7 +728,7 @@ TeeBotusApplet.prototype = {
                 throw new Error(_("Dispatcher-Snapshot zu groß"));
               }
               let payload = JSON.parse(text);
-              if (!payload || typeof payload !== "object" || payload.schema_version !== 1 || typeof payload.ok !== "boolean") {
+              if (!this._historyDispatcherSnapshotIsValid(payload)) {
                 throw new Error(_("Ungültiger Dispatcher-Snapshot"));
               }
               this.historyDispatcherPayload = payload;
@@ -764,7 +764,7 @@ TeeBotusApplet.prototype = {
       let timestampError = !Number.isFinite(generated) || age < -HISTORY_DISPATCHER_FUTURE_SKEW_TOLERANCE_SECONDS * 1000;
       let stale = !timestampError && age > HISTORY_DISPATCHER_STALE_AFTER_SECONDS * 1000;
       let lastError = String(payload.last_error || "").trim();
-      let hasSnapshotError = timestampError || typeof payload.ok !== "boolean" || payload.ok === false || Boolean(lastError) || Boolean(this.historyDispatcherError);
+      let hasSnapshotError = !this._historyDispatcherSnapshotIsValid(payload) || timestampError || payload.ok === false || Boolean(lastError) || Boolean(this.historyDispatcherError);
       this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(hasSnapshotError ? _("Status: Warnung") : (stale ? _("Status: veraltet") : _("Status: bereit")), false));
       if (this.historyDispatcherError) {
         this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(this._shortText(this.historyDispatcherError, 160), false));
@@ -1941,6 +1941,17 @@ TeeBotusApplet.prototype = {
 
   _isJsonObject: function(value) {
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+  },
+
+  _historyDispatcherSnapshotIsValid: function(payload) {
+    return this._isJsonObject(payload)
+      && payload.schema_version === 1
+      && typeof payload.ok === "boolean"
+      && typeof payload.generated_at === "string"
+      && Number.isFinite(Date.parse(payload.generated_at))
+      && this._isJsonObject(payload.collector)
+      && this._isJsonObject(payload.dispatch)
+      && Array.isArray(payload.queue_preview);
   },
 
   _isStatusPayload: function(payload) {
