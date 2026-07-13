@@ -544,6 +544,8 @@ def _history_dispatcher_mode(env: Mapping[str, str] | None) -> str:
 
 
 def _history_dispatcher_response_data(response: Mapping[str, Any], *, operation: str) -> Mapping[str, Any]:
+    if not isinstance(response, Mapping):
+        raise HistoryDispatcherError(f"History-Dispatcher {operation} returned invalid response")
     if response.get("ok") is not True:
         raise HistoryDispatcherError(str(response.get("error") or f"History-Dispatcher {operation} failed"))
     data = response.get("data")
@@ -554,11 +556,18 @@ def _history_dispatcher_response_data(response: Mapping[str, Any], *, operation:
     return data
 
 
-def _history_dispatcher_response_items(data: Mapping[str, Any], *, operation: str) -> list[object]:
+def _history_dispatcher_response_items(data: Mapping[str, Any], *, operation: str) -> list[Mapping[str, Any]]:
     items = data.get("items")
     if not isinstance(items, list):
         raise HistoryDispatcherError(f"History-Dispatcher {operation} returned invalid items")
-    return list(items)
+    validated: list[Mapping[str, Any]] = []
+    for index, item in enumerate(items):
+        if not isinstance(item, Mapping):
+            raise HistoryDispatcherError(f"History-Dispatcher {operation} returned invalid item at index {index}")
+        if not str(item.get("id") or "").strip():
+            raise HistoryDispatcherError(f"History-Dispatcher {operation} returned item without id at index {index}")
+        validated.append(item)
+    return validated
 
 
 def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any]) -> None:
@@ -600,8 +609,15 @@ def _history_dispatcher_socket_path(env: Mapping[str, str] | None) -> Path:
 
 
 def _history_dispatcher_item_to_legacy(item: Mapping[str, Any]) -> dict[str, Any]:
-    payload = item.get("payload", {})
-    payload = dict(payload) if isinstance(payload, Mapping) else {}
+    if not isinstance(item, Mapping):
+        raise HistoryDispatcherError("History-Dispatcher item is not an object")
+    item_id = str(item.get("id") or "").strip()
+    if not item_id:
+        raise HistoryDispatcherError("History-Dispatcher item has no id")
+    raw_payload = item.get("payload")
+    if not isinstance(raw_payload, Mapping):
+        raise HistoryDispatcherError(f"History-Dispatcher item {item_id} has invalid payload")
+    payload = dict(raw_payload)
     summary = payload.get("summary", {})
     summary = dict(summary) if isinstance(summary, Mapping) else {}
     if not str(summary.get("markdown") or "").strip() and str(summary.get("text") or "").strip():
@@ -614,12 +630,44 @@ def _history_dispatcher_item_to_legacy(item: Mapping[str, Any]) -> dict[str, Any
         project_text = str(project_value).strip()
         project = {"repo_name": Path(project_text).name or "project", "repo_root": project_text}
     payload["project"] = project
-    payload["id"] = str(item.get("id") or payload.get("id") or "")
+    payload["id"] = item_id
     payload["kind"] = str(item.get("kind") or payload.get("kind") or "codex_run_summary")
     payload["created_at"] = str(item.get("created_at") or payload.get("created_at") or "")
     payload.setdefault("version", {"semver": "untagged", "summary_number": 1, "summary_prefix": "untagged"})
     payload.setdefault("summary_prefix", "untagged")
     return payload
+
+
+def _history_dispatcher_recipient_results(item: Mapping[str, Any]) -> list[dict[str, Any]]:
+    raw_results = item.get("recipient_results", [])
+    if not isinstance(raw_results, list):
+        item_id = str(item.get("id") or "").strip() or "<unknown>"
+        raise HistoryDispatcherError(f"History-Dispatcher item {item_id} has invalid recipient_results")
+    normalized: list[dict[str, Any]] = []
+    for index, raw_result in enumerate(raw_results):
+        if not isinstance(raw_result, Mapping):
+            raise HistoryDispatcherError(
+                f"History-Dispatcher item {str(item.get('id') or '').strip() or '<unknown>'} "
+                f"has invalid recipient result at index {index}"
+            )
+        recipient_id = str(raw_result.get("recipient_id") or raw_result.get("account_id") or "").strip().casefold()
+        if not recipient_id:
+            raise HistoryDispatcherError(
+                f"History-Dispatcher item {str(item.get('id') or '').strip() or '<unknown>'} "
+                f"has recipient result without recipient_id at index {index}"
+            )
+        status = str(raw_result.get("status") or "").strip().casefold()
+        if not status:
+            raise HistoryDispatcherError(
+                f"History-Dispatcher item {str(item.get('id') or '').strip() or '<unknown>'} "
+                f"has recipient result without status at index {index}"
+            )
+        result = dict(raw_result)
+        result["recipient_id"] = recipient_id
+        result["account_id"] = recipient_id
+        result["status"] = status
+        normalized.append(result)
+    return normalized
 
 
 async def _dispatch_codex_history_outbox_via_dispatcher(
@@ -658,13 +706,16 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
     )
     try:
         if dry_run:
-            response = client.request("history.query", {"status": "queued", "limit": max(0, int(limit))})
+            response = client.request("history.query", {
+                "status": "queued",
+                "limit": max(0, int(limit)),
+                "include_payload": True,
+            })
             query_data = _history_dispatcher_response_data(response, operation="history.query")
             query_items = _history_dispatcher_response_items(query_data, operation="history.query")
             rows: list[dict[str, Any]] = []
             for item in query_items:
-                if isinstance(item, Mapping):
-                    rows.extend(_dry_run_dispatch_rows(_history_dispatcher_item_to_legacy(item), candidate_account_ids, store, instance_name=instance_name, instances_dir=instances_dir, secret_provider=secret_provider))
+                rows.extend(_dry_run_dispatch_rows(_history_dispatcher_item_to_legacy(item), candidate_account_ids, store, instance_name=instance_name, instances_dir=instances_dir, secret_provider=secret_provider))
             return {
                 "ok": True,
                 "dry_run": True,
@@ -682,21 +733,11 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
         claim_items = _history_dispatcher_response_items(claim_data, operation="dispatch.claim")
         result_rows: list[dict[str, Any]] = []
         for raw_item in claim_items:
-            if not isinstance(raw_item, Mapping):
-                continue
             item = _history_dispatcher_item_to_legacy(raw_item)
-            item_id = str(item.get("id") or "")
-            existing_results: list[dict[str, Any]] = []
-            for raw_result in raw_item.get("recipient_results", []):
-                if not isinstance(raw_result, Mapping):
-                    continue
-                result = dict(raw_result)
-                recipient_id = str(result.get("recipient_id") or result.get("account_id") or "").strip()
-                if recipient_id:
-                    result["account_id"] = recipient_id
-                existing_results.append(result)
+            item_id = str(item["id"])
+            existing_results = _history_dispatcher_recipient_results(raw_item)
             successful_accounts = {
-                str(result.get("recipient_id") or result.get("account_id") or "").strip()
+                str(result.get("recipient_id") or result.get("account_id") or "").strip().casefold()
                 for result in existing_results
                 if str(result.get("status") or "").strip().casefold() in {"delivered", "accepted", "acknowledged"}
             }
@@ -735,12 +776,9 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                 "recipient_results": completion_results,
                 "reason": _overall_dispatch_reason(item_results),
             })
-            completion_data = completed.get("data")
-            completion_error = completed.get("error")
-            if isinstance(completion_data, Mapping) and completion_data.get("ok") is False:
-                completion_error = completion_data.get("error") or completion_error
-            if completed.get("ok") is not True or completion_error:
-                raise HistoryDispatcherError(str(completion_error or "History-Dispatcher complete failed"))
+            completion_data = _history_dispatcher_response_data(completed, operation="dispatch.complete")
+            if completion_data.get("ok") is not True:
+                raise HistoryDispatcherError("History-Dispatcher dispatch.complete returned invalid data")
             result_rows.extend(item_results)
         return {
             "ok": not any(str(row.get("status") or "").casefold() in {"failed", "error"} for row in result_rows),

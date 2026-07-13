@@ -1456,6 +1456,173 @@ def test_codex_history_dispatch_bridge_rejects_malformed_claim_data(
     assert "invalid data" in result["items"][0]["error"]
 
 
+def test_codex_history_dispatch_bridge_rejects_non_object_claim_item(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            calls.append(operation)
+            if operation == "dispatch.claim":
+                return {"ok": True, "data": {"items": [None]}}
+            raise AssertionError(operation)
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            object(),
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["status_counts"] == {"failed": 1}
+    assert result["items"][0]["reason"] == "history_dispatcher_unavailable"
+    assert "invalid item" in result["items"][0]["error"]
+    assert calls == ["dispatch.claim"]
+
+
+def test_codex_history_dispatch_bridge_rejects_invalid_recipient_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            calls.append(operation)
+            if operation == "dispatch.claim":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "hd-item-invalid-recipients",
+                            "payload": {"summary": {"text": "Ungueltige Empfaenger"}},
+                            "recipient_results": None,
+                        }],
+                    },
+                }
+            raise AssertionError(operation)
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            object(),
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["status_counts"] == {"failed": 1}
+    assert "invalid recipient_results" in result["items"][0]["error"]
+    assert calls == ["dispatch.claim"]
+
+
+def test_codex_history_dispatch_bridge_rejects_incomplete_completion_data(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            calls.append(operation)
+            if operation == "dispatch.claim":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "hd-item-incomplete-completion",
+                            "payload": {"summary": {"text": "Completion fehlt"}},
+                            "recipient_results": [],
+                        }],
+                    },
+                }
+            if operation == "dispatch.complete":
+                return {"ok": True, "data": None}
+            raise AssertionError(operation)
+
+    async def fake_send(*_args, **kwargs):
+        return {"account_id": kwargs.get("account_id", "open"), "status": "accepted", "channel": "telegram"}
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_account_ids", lambda *args, **kwargs: ("open",))
+    monkeypatch.setattr(codex_history_module, "_dispatch_codex_history_item_to_account", fake_send)
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            object(),
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["status_counts"] == {"failed": 1}
+    assert "invalid data" in result["items"][0]["error"]
+    assert calls == ["dispatch.claim", "dispatch.complete"]
+
+
+def test_codex_history_dispatch_bridge_dry_run_requests_payload(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[str, dict[str, object]]] = []
+    seen_items: list[dict[str, object]] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            calls.append((operation, dict(body or {})))
+            if operation == "history.query":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "hd-item-dry-run",
+                            "kind": "codex_run_summary",
+                            "project": "/tmp/dry-run",
+                            "created_at": "2026-07-13T12:00:00+00:00",
+                            "payload": {
+                                "summary_prefix": "v1.9.380 #0001",
+                                "summary": {"text": "Dry-Run mit Payload"},
+                            },
+                        }],
+                    },
+                }
+            raise AssertionError(operation)
+
+    def fake_rows(item, *_args, **_kwargs):
+        seen_items.append(dict(item))
+        return [{"status": "would_skip", "summary_prefix": item["summary_prefix"]}]
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    monkeypatch.setattr(codex_history_module, "_dry_run_dispatch_rows", fake_rows)
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            object(),
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+            dry_run=True,
+        )
+    )
+
+    assert result["ok"] is True
+    assert calls == [("history.query", {"status": "queued", "limit": 100, "include_payload": True})]
+    assert seen_items[0]["summary_prefix"] == "v1.9.380 #0001"
+    assert result["items"] == [{"status": "would_skip", "summary_prefix": "v1.9.380 #0001"}]
+
+
 def test_history_dispatcher_digest_payload_becomes_markdown_attachment() -> None:
     item = codex_history_module._history_dispatcher_item_to_legacy(
         {
