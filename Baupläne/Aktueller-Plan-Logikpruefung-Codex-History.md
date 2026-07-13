@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.383`, Commit `a32dab73`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.384`, Commit `54e6d00d`.
 
 ## Arbeitsprinzipien
 
@@ -131,6 +131,14 @@ hatte dagegen keine `kind`-Pruefung und haette auch fremde Queue-Typen claimen
 koennen. Die gemeinsame Dispatch-Menge enthaelt jetzt Digests; unbekannte
 Typen werden in beiden Pfaden nicht als Codex-Summaries verarbeitet.
 
+**Zwoelfter Befund 2026-07-13:** Im Bridge-Modus wurde nach einem externen
+`dispatch.complete` der gleichnamige lokale TeeBotus-Outbox-Eintrag nie
+aktualisiert. `/status` konnte deshalb beim Dispatcher-Owner dauerhaft
+`queued` zeigen, obwohl TBL extern bereits zugestellt oder zur Wiederholung
+eingeplant hatte. Der externe Endstatus ist jetzt autoritativ; ein vorhandener
+lokaler Eintrag wird best-effort mit Status, Versuch und letzter
+Empfaengerliste synchronisiert.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -210,6 +218,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Socket-Fehlerbehandlung und SemVer-Bump auf `1.9.381` committed als `e500d915` (`Keep history dispatch socket errors contained`); gezielte Suite danach `116 passed`.
 - Shadow-Response-Pruefung und SemVer-Bump auf `1.9.382` committed als `57849ffb` (`Validate shadow dispatcher append responses`); gezielte Suite danach `117 passed`.
 - Kind-/Digest-Abgleich und SemVer-Bump auf `1.9.383` committed als `a32dab73` (`Align bridge dispatchable history kinds`); gezielte Suite danach `118 passed`.
+- Lokale Status-Reconciliation und SemVer-Bump auf `1.9.384` committed als `54e6d00d` (`Reconcile local history status after bridge completion`); gezielte Suite danach `119 passed`.
 
 ### Noch offen
 
