@@ -499,4 +499,5 @@ Der Plan ist erst abgeschlossen, wenn:
   `42 passed in 2.26s`. Ein synthetischer Burst mit `101` Ereignissen ergab
   `101` eindeutige Pfade in einem Batch, `784.2 ms` und
   `network_calls=0`. Die Metadaten-Suite lief mit `6 passed in 0.07s`.
-  Live-Restart und Nachmessung bleiben wegen der Restart-Grenze offen.
+  Der Funktionsstand ist als `409206a3` committed. Live-Restart und
+  Nachmessung bleiben wegen der Restart-Grenze offen.
