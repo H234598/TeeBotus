@@ -37,7 +37,7 @@ muessen in SQL, /status, Healthcheck und Applet dieselbe Bedeutung haben.
 
 ## Aktueller Stand
 
-- TeeBotus-Quellstand: 1.9.410.
+- TeeBotus-Quellstand: 1.9.411.
 - Laufender TeeBotus-Dienst: vor dem naechsten zulaessigen Restart noch
   1.9.404; der laufende History-Dispatcher: 0.2.9.
 - Die Health-Klassifikation nutzt classification_version=2 und trennt
@@ -177,15 +177,25 @@ Der Plan ist erst abgeschlossen, wenn:
 - Mirror-Fehler werden als `history_dispatcher_mirror_failed` ausgegeben; die
   lokale Zeile bleibt `queued`.
 - `tests/test_codex_history.py`: `128 passed`; Bridge-Teilmenge: `24 passed`.
-- SemVer: `1.9.410`.
+- SemVer: `1.9.411`.
 - Die schreibfreie Live-Probe meldete bei 44 lokalen queued-Zeilen
   `would_mirror=40` und `would_sync=4`.
 - Ein echter Produktions-Reconciliation-Lauf ist noch nicht ausgefuehrt;
   lokale TBL-Daten bleiben bis zu einer kontrollierten Freigabe unangetastet.
 
+## Befund 66: Status-Reason nach gemischter Zustellung
+
+Bei `accepted + skipped(no_private_route)` war der Gesamtstatus korrekt
+`delivered`, aber die alte Reason-Reihenfolge uebernahm trotzdem den Skip-Grund
+als Item-`last_reason`. Die Reason-Aggregation folgt jetzt zuerst dem
+Gesamtstatus: erfolgreiche Zustaende verwenden nur Erfolgsgruende, reine Skips
+behalten ihren Skip-Grund.
+
+Der direkte Regressionstest bestaetigt, dass ein alter Fehlergrund bei
+`accepted + skipped` entfernt wird. SemVer ist jetzt `1.9.411`.
+
 ## Aktueller naechster Schritt
 
-Als naechstes wird nur der Bridge-Reconciliation-Pfad in
-TeeBotus/admin/codex_history.py zusammen mit den zugehoerigen Tests
-bearbeitet. Vor einer Produktionsmutation bleibt der aktuelle TBL-Bestand
+Als naechstes bleibt nur eine kontrollierte echte Reconciliation-Probe mit
+expliziter Freigabe offen. Bis dahin bleibt der aktuelle TBL-Bestand
 unangetastet.

@@ -1698,10 +1698,43 @@ def test_history_dispatcher_recipient_results_reject_duplicate_or_conflicting_id
 
 
 def test_codex_history_overall_status_aligns_success_plus_skip_with_dispatcher() -> None:
-    assert codex_history_module._overall_dispatch_status([
+    rows = [
         {"status": "accepted"},
         {"status": "skipped", "reason": "no_private_route"},
-    ]) == "delivered"
+    ]
+    assert codex_history_module._overall_dispatch_status(rows) == "delivered"
+    assert codex_history_module._overall_dispatch_reason(rows) == ""
+
+
+def test_codex_history_success_plus_skip_clears_stale_item_reason(tmp_path: Path) -> None:
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "id": "mixed-success-skip",
+            "kind": "codex_run_summary",
+            "status": "queued",
+            "last_reason": "send_error:old_failure",
+            "summary": {"text": "Erfolg und begruendeter Skip."},
+        },
+    )
+    rows = [
+        {"status": "accepted", "reason": "accepted"},
+        {"status": "skipped", "reason": "no_private_route"},
+    ]
+
+    codex_history_module._update_codex_history_item_status(
+        store,
+        "mixed-success-skip",
+        codex_history_module._overall_dispatch_status(rows),
+        reason=codex_history_module._overall_dispatch_reason(rows),
+        now="2026-07-13T12:00:00+00:00",
+        dispatch_results=rows,
+    )
+
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "delivered"
+    assert "last_reason" not in persisted
 
 
 def test_codex_history_dispatch_bridge_rejects_incomplete_completion_data(

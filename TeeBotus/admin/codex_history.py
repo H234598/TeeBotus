@@ -4363,7 +4363,14 @@ def _codex_history_dispatch_failure_retryable(row: Mapping[str, Any]) -> bool:
 
 
 def _overall_dispatch_reason(rows: Sequence[Mapping[str, Any]]) -> str:
-    for status in ("failed", "skipped", "acknowledged", "delivered", "accepted"):
+    overall_status = _overall_dispatch_status(rows)
+    if overall_status in {"accepted", "delivered", "acknowledged"}:
+        statuses = ("acknowledged", "delivered", "accepted")
+    elif overall_status == "skipped":
+        statuses = ("skipped",)
+    else:
+        statuses = ("failed", "skipped")
+    for status in statuses:
         for row in rows:
             if not isinstance(row, Mapping) or str(row.get("status") or "").strip().casefold() != status:
                 continue
