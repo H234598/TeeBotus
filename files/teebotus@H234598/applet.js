@@ -1056,6 +1056,13 @@ TeeBotusApplet.prototype = {
       if (fields.api_key_env && (fields.status === "missing_key" || fields.fallback_api_key === "missing")) {
         text += "; Key fehlt: " + fields.api_key_env;
       }
+      if (fields.key_scope) {
+        let keyScope = {
+          instance_fallback: "instanzbezogener Fallback",
+          route_env: "Route-Umgebungsvariable"
+        }[fields.key_scope] || fields.key_scope;
+        text += "; Quelle " + keyScope;
+      }
       if (fields.free_tier_guard) {
         text += "; Free-Tier-Waechter " + fields.free_tier_guard;
       }
@@ -1113,6 +1120,13 @@ TeeBotusApplet.prototype = {
       text += "; Key " + String(fields.key || "?");
       if (fields.key_env) {
         text += " via " + fields.key_env;
+      }
+      if (fields.key_scope) {
+        let keyScope = {
+          instance_fallback: "instanzbezogener Fallback",
+          route_env: "Route-Umgebungsvariable"
+        }[fields.key_scope] || fields.key_scope;
+        text += "; Quelle " + keyScope;
       }
       if (fields.key_ring) {
         text += "; Ring " + fields.key_ring;

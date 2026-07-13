@@ -1758,6 +1758,31 @@ def test_runtime_status_resolves_purpose_route_api_key_env(monkeypatch, capsys, 
     assert "openai-profile-secret" not in captured.out
 
 
+def test_runtime_status_resolves_instance_scoped_key_for_litellm_openai_route(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text("# Bot\n", encoding="utf-8")
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_LLM_PURPOSE_DEMO", "hard_reasoning")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY_DEMO", "instance-openai-secret")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "llm=Demo/telegram:1 provider=openai model=gpt-5.5 status=configured purpose=hard_reasoning" in captured.out
+    assert (
+        "llm_route=hard_reasoning profile=openai_premium provider=litellm model=openai/gpt-5.5 "
+        "status=configured api_key_env=OPENAI_API_KEY key_scope=instance_fallback"
+    ) in captured.out
+    assert "instance-openai-secret" not in captured.out
+
+
 def test_runtime_status_reports_missing_key_for_remote_litellm_purpose_route(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"

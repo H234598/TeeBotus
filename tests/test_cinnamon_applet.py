@@ -2444,6 +2444,17 @@ def test_cinnamon_applet_status_formatters_keep_backend_and_budget_metadata() ->
     }
 
 
+def test_cinnamon_applet_formats_instance_scoped_api_key_source() -> None:
+    result = _run_js_applet_expression(
+        "applet._formatApiBudgetLine(\"api_budget=hard_reasoning provider=litellm model=openai/gpt-5.5 status=configured key=configured key_env=OPENAI_API_KEY key_scope=instance_fallback\")"
+    )
+
+    assert result == (
+        "Route hard_reasoning: litellm / openai/gpt-5.5 (konfiguriert); Key configured via OPENAI_API_KEY; "
+        "Quelle instanzbezogener Fallback"
+    )
+
+
 def test_cinnamon_applet_history_status_labels_are_localized() -> None:
     result = _run_js_applet_expression(
         """

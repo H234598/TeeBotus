@@ -459,6 +459,7 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
     key_configured = _llm_key_configured(
         account,
         provider,
+        model=model,
         route_api_key_env=route_api_key_env,
         instructions=instructions,
     )
@@ -863,6 +864,14 @@ def _runtime_status_decision_line(purpose: str, *, instance_names: Sequence[str]
         detail += f" base_url={_sanitize_status_url(route.base_url)}"
     if route.api_key_env:
         detail += f" api_key_env={_sanitize_status_text(route.api_key_env)}"
+    key_scope = _status_openai_key_scope(
+        instance_names,
+        provider=route.provider,
+        model=route.model,
+        api_key_env=route.api_key_env,
+    )
+    if key_scope:
+        detail += f" key_scope={key_scope}"
     gemini_key_ring_count = _status_gemini_key_ring_count_for_instances(instance_names, provider=route.provider, model=route.model)
     if gemini_key_ring_count > 1:
         detail += f" api_key_ring={gemini_key_ring_count}"
@@ -947,6 +956,14 @@ def _runtime_status_api_budget_route_line(route: Any, *, instance_names: Sequenc
     api_key_env = str(getattr(route, "api_key_env", "") or "").strip()
     if api_key_env:
         detail += f" key_env={_sanitize_status_text(api_key_env)}"
+    key_scope = _status_openai_key_scope(
+        instance_names,
+        provider=provider,
+        model=model,
+        api_key_env=api_key_env,
+    )
+    if key_scope:
+        detail += f" key_scope={key_scope}"
     gemini_key_ring_count = _status_gemini_key_ring_count_for_instances(instance_names, provider=provider, model=model)
     if gemini_key_ring_count > 1:
         detail += f" key_ring={gemini_key_ring_count}"
@@ -1302,6 +1319,7 @@ def _llm_key_configured(
     account: Any,
     provider: str,
     *,
+    model: object = "",
     route_api_key_env: str = "",
     instructions: Any | None = None,
 ) -> bool:
@@ -1312,6 +1330,14 @@ def _llm_key_configured(
         return True
     if route_api_key_env and os.environ.get(route_api_key_env, "").strip():
         return True
+    if _status_route_uses_openai_api(provider=provider, model=model):
+        if str(getattr(account, "openai_api_key", "") or "").strip():
+            return True
+        if _status_instance_api_key_configured(
+            route_api_key_env or "OPENAI_API_KEY",
+            str(getattr(account, "instance_name", "") or ""),
+        ):
+            return True
     instruction_api_key_env = _instruction_text(instructions, "llm_api_key_env")
     if provider != "openai" and instruction_api_key_env and os.environ.get(instruction_api_key_env, "").strip():
         return True
@@ -1378,6 +1404,14 @@ def _status_model_uses_remote_provider(model: object) -> bool:
             "together_ai/",
             "openrouter/",
         )
+    )
+
+
+def _status_route_uses_openai_api(*, provider: str, model: object) -> bool:
+    normalized_provider = _normalize_status_llm_provider(provider)
+    normalized_model = str(model or "").strip().casefold()
+    return normalized_provider == "openai" or (
+        normalized_provider == "litellm" and normalized_model.startswith("openai/")
     )
 
 
@@ -1503,13 +1537,32 @@ def _status_openai_key_instance_availability(
     model: object,
     api_key_env: str,
 ) -> tuple[int, int] | None:
-    if _normalize_status_llm_provider(provider) != "openai":
+    if not _status_route_uses_openai_api(provider=provider, model=model):
         return None
     names = _unique_status_instance_names(instance_names)
     if not names:
         return None
     configured = sum(1 for name in names if _status_instance_api_key_configured(api_key_env or "OPENAI_API_KEY", name))
     return configured, len(names)
+
+
+def _status_openai_key_scope(
+    instance_names: Sequence[str],
+    *,
+    provider: str,
+    model: object,
+    api_key_env: str,
+) -> str:
+    """Report where a non-secret OpenAI-compatible route gets its key."""
+    if not _status_route_uses_openai_api(provider=provider, model=model):
+        return ""
+    env_name = str(api_key_env or "").strip() or "OPENAI_API_KEY"
+    if os.environ.get(env_name, "").strip():
+        return "route_env"
+    names = _unique_status_instance_names(instance_names)
+    if names and any(_status_instance_api_key_configured(env_name, name) for name in names):
+        return "instance_fallback"
+    return ""
 
 
 def _status_instance_api_key_configured(api_key_env: str, instance_name: str) -> bool:
