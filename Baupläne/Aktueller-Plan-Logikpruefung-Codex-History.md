@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.385`, Commit `f3efbd38`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.386`, Commit `fd7400d7`.
 
 ## Arbeitsprinzipien
 
@@ -147,6 +147,13 @@ zweimal in der externen Queue landen. Der Mirror verwendet jetzt den
 vorhandenen `codex.dedupe_key` und faellt nur bei manuellen Summaries auf die
 Item-ID zurueck.
 
+**Vierzehnter Befund 2026-07-13:** Bei einem bereits extern importierten Turn
+liefert `history.append` die externe bestehende ID zurueck. Diese kann von der
+lokalen TeeBotus-ID abweichen; eine reine ID-Synchronisierung haette den lokalen
+Status weiterhin als `queued` stehen lassen. Die Reconciliation sucht jetzt
+zusaetzlich nach dem deterministischen Dedupe-Key. Fehlende `payload.codex`
+Metadaten werden dabei als leer behandelt, nicht als Laufzeitfehler.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -229,6 +236,8 @@ Der Plan ist erst abgeschlossen, wenn:
 - Lokale Status-Reconciliation und SemVer-Bump auf `1.9.384` committed als `54e6d00d` (`Reconcile local history status after bridge completion`); gezielte Suite danach `119 passed`.
 - Dedupe-Abgleich und SemVer-Bump auf `1.9.385` committed als `f3efbd38` (`Reuse Codex session dedupe keys in bridge`); gezielte Suite danach `119 passed`.
 - Lesende Live-Dispatcherprobe: `336` Zeilen, `0` doppelte Top-Level-Dedupe-Keys; Bestand `13 queued`, `13 delivered`, `310 compacted`.
+- Dedupe-Key-Reconciliation mit absichtlich verschiedener externer/lokaler ID verifiziert; lokale Queue wird ueber den Dedupe-Key synchronisiert.
+- Dedupe-Reconciliation und SemVer-Bump auf `1.9.386` committed als `fd7400d7` (`Reconcile mirrored history by dedupe key`); gezielte Suite danach `119 passed`.
 - Der laufende History-Dispatcher-Snapshot meldet noch `0.1.9`, die installierte Venv `0.2.5`; der Live-Cutover-/Restart-Nachweis bleibt offen.
 
 ### Noch offen
