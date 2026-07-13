@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.422`, Commit `ea2df35f`.
+- Quellstand: TeeBotus `1.9.423`, Commit `049a0427`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -317,6 +317,25 @@ Nachweis:
 - Vollstaendige Applet-Suite: `202 passed in 40.21s`.
 - SemVer-Bump auf `1.9.422`, Commit `ea2df35f`
   (`Reject disabled fallback references`).
+
+### Befund 78: Explizite Fallback-Deaktivierung wurde von Modellfeldern ueberstimmt
+
+Die Sentinelpruefung aus Befund 77 akzeptierte weiterhin widerspruechliche
+Mehrfachfelder: `fallback=disabled fallback_model=local_ollama` wurde als
+wirksamer Fallback gewertet, weil irgendein spaeteres Teilfeld plausibel war.
+Jetzt entscheidet das erste explizit gesetzte Fallbackfeld. Ein Sentinelwert
+beendet die Fallbackannahme; nur wenn kein frueheres Feld gesetzt ist, kann ein
+Profil-, Modell- oder Offload-Feld den Nachweis liefern.
+
+Nachweis:
+
+- Regressionstest mit `fallback=disabled` plus Modell,
+  `fallback=none` plus Profil, `fallback_profile=none` plus Modell und einem
+  reinen Modellfallback: drei Befunde actionable, einer informativ.
+- Fokussierte Fallback-Suite: `3 passed, 200 deselected`.
+- Vollstaendige Applet-Suite: `203 passed in 41.79s`.
+- SemVer-Bump auf `1.9.423`, Commit `049a0427`
+  (`Prioritize explicit fallback disablement`).
 
 ## Naechste Arbeitspakete
 
