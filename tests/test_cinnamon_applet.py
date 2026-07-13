@@ -3278,14 +3278,16 @@ def test_cinnamon_applet_runtime_parser_only_suppresses_api_budget_with_matching
         [API Keys, Limits und Kosten]
         api_budget=orphan status=missing_key error=missing api_key_env=ORPHAN_KEY
         api_budget=matched status=missing_key error=missing api_key_env=MATCHED_KEY
+        api_budget=conflict status=missing_key error=missing api_key_env=CONFLICT_KEY
         [LLM-Routen und Backends]
         llm_route=matched status=missing_key error=missing api_key_env=MATCHED_KEY
+        llm_route=conflict status=configured
         """
     )
 
-    assert parsed["summary"]["api_actionable_problem_status_count"] == 1
+    assert parsed["summary"]["api_actionable_problem_status_count"] == 2
     assert parsed["summary"]["api_informational_status_count"] == 1
-    assert parsed["summary"]["actionable_problem_statuses"] == "missing_key:2"
+    assert parsed["summary"]["actionable_problem_statuses"] == "missing_key:3"
     assert parsed["summary"]["informational_problem_statuses"] == "missing_key:1"
 
 

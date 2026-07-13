@@ -602,14 +602,18 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
     actionable_status_counts: dict[str, int] = {}
     informational_status_counts: dict[str, int] = {}
     redacted_output = _redact(str(output or ""))
-    llm_route_names: set[str] = set()
+    llm_route_statuses: dict[str, set[str]] = {}
     for raw_line in redacted_output.splitlines():
         line = raw_line.strip()
         if not line.startswith("llm_route="):
             continue
-        route_name = _normalized_status_value(_parse_status_fields(line).get("llm_route"))
+        route_fields = _parse_status_fields(line)
+        route_name = _normalized_status_value(route_fields.get("llm_route"))
         if route_name:
-            llm_route_names.add(route_name)
+            route_statuses = set(_line_status_values(route_fields))
+            if _line_has_error(route_fields):
+                route_statuses.add("warning")
+            llm_route_statuses.setdefault(route_name, set()).update(route_statuses)
     for raw_line in redacted_output.splitlines():
         line = raw_line.strip()
         if not line:
@@ -632,13 +636,19 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
         if line.startswith("codex_usage=") and _codex_usage_is_stale(fields):
             _append_status_value(line_statuses, "stale")
         api_budget_route_present = None
+        api_budget_route_has_problem = None
         if line.startswith("api_budget="):
-            api_budget_route_present = _normalized_status_value(fields.get("api_budget")) in llm_route_names
+            api_budget_name = _normalized_status_value(fields.get("api_budget"))
+            api_budget_route_present = api_budget_name in llm_route_statuses
+            api_budget_route_has_problem = any(
+                status in PROBLEM_STATUSES for status in llm_route_statuses.get(api_budget_name, set())
+            )
         actionable_statuses, informational_statuses = _line_health_statuses(
             line,
             fields,
             line_statuses,
             api_budget_route_present=api_budget_route_present,
+            api_budget_route_has_problem=api_budget_route_has_problem,
         )
         for status in line_statuses:
             status_counts[status] = status_counts.get(status, 0) + 1
@@ -759,6 +769,7 @@ def _line_health_statuses(
     statuses: list[str] | tuple[str, ...],
     *,
     api_budget_route_present: bool | None = None,
+    api_budget_route_has_problem: bool | None = None,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Split raw diagnostics into top-level actions and visible information.
 
@@ -787,6 +798,7 @@ def _line_health_statuses(
                 fields,
                 fallback_covered=fallback_covered,
                 route_present=api_budget_route_present,
+                route_has_problem=api_budget_route_has_problem,
             )
         )
         or (prefix == "account_identity" and _account_identity_status_is_informational(fields))
@@ -843,11 +855,17 @@ def _codex_history_metadata_requires_problem(line: str, fields: Mapping[str, Any
 
 
 def _api_budget_status_is_informational(
-    fields: Mapping[str, Any], *, fallback_covered: bool, route_present: bool | None = None
+    fields: Mapping[str, Any],
+    *,
+    fallback_covered: bool,
+    route_present: bool | None = None,
+    route_has_problem: bool | None = None,
 ) -> bool:
     if fallback_covered:
         return True
     if route_present is False:
+        return False
+    if route_present is True and route_has_problem is False:
         return False
     primary = _normalized_status_value(fields.get("status"))
     if primary in FALLBACK_SUPPRESSION_BLOCKERS | {"unknown", "unavailable", "unreachable"}:

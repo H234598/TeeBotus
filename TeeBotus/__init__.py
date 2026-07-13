@@ -1,3 +1,3 @@
 """TeeBotus package."""
 
-__version__ = "1.9.419"
+__version__ = "1.9.420"
