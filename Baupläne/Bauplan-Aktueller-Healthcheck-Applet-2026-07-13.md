@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.414`, Commit `a438803`.
+- Quellstand: TeeBotus `1.9.415`, Commit `245030e7`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -155,6 +155,27 @@ Nachweis:
 - Vollstaendige Applet-Suite: `195 passed in 38.41s`.
 - SemVer-Bump auf `1.9.414`, Commit `a4388030`
   (`Tighten applet diagnostic classification`).
+
+### Befund 70: Fehlerdiagnosen ohne explizites `status=` wurden ignoriert
+
+Eine Runtime-Diagnosezeile wie `service=demo error=provider_failed` enthielt
+einen echten Fehler, aber keinen der bekannten Statuswerte. Der Python-Parser
+erzeugte dafuer bisher weder `status_counts` noch einen actionable Befund. Das
+war inkonsistent zum JavaScript-Applet, das jedes nicht-neutrale `error` als
+Problem behandelt. Der Parser leitet deshalb jetzt fuer eine solche Zeile
+`warning` ab. Bereits klassifizierte Problemstatus wie `broken` oder
+`unavailable` erhalten keine zusaetzliche Warnung; neutrale Werte wie
+`error=none` bleiben gesund.
+
+Nachweis:
+
+- Regressionstest mit Fehler ohne Status, neutralem Fehler, `status=ok` plus
+  Fehler und `status=broken` plus Fehler: `broken:1,warning:2` und insgesamt
+  drei Problemstatus.
+- Fokussierte Parser-/Health-Suite: `32 passed, 164 deselected`.
+- Vollstaendige Applet-Suite: `196 passed in 39.72s`.
+- SemVer-Bump auf `1.9.415`, Commit `245030e7`
+  (`Detect error-only applet diagnostics`).
 
 ## Naechste Arbeitspakete
 
