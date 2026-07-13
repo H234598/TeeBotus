@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.467`, lokaler Folgecommit nach `58c9a3f9`
+**Quellstand:** TeeBotus `1.9.468`, lokaler Folgecommit nach `6934413e`
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
 ## Auftrag
@@ -196,6 +196,13 @@ Die Statuszaehler bleiben vollstaendig; pro Instanz werden aber hoechstens 12
 Nicht-Duplicate-Details ausgegeben und die Zahl der ausgelassenen Details wird
 explizit vermerkt.
 
+Der Ereignispfad benoetigte ausserdem bislang trotz bekanntem Watchdog-Pfad
+noch einen vollstaendigen Metadaten-Snapshot. Bei einem validierten
+Dateiereignis wird dieser Snapshot jetzt uebersprungen; ein Vollsnapshot bleibt
+fuer den Erstlauf und den Timeout-/Fallbackpfad erhalten. Ereignispfade werden
+gegen die konfigurierten Sessionroots geprueft und geloeschte Dateien nicht
+inkrementell importiert.
+
 ## Offene Arbeitspakete
 
 ### A. TBL-Reconciliation schreibfrei beweisen
@@ -238,6 +245,8 @@ explizit vermerkt.
   veraendertem Snapshot.
 - [x] Watchdog-Aenderungspfade bis zum Snapshot-Import weiterreichen; ein
   einzelnes JSONL-Ereignis verarbeitet nicht mehr die gesamte `limit`-Menge.
+- [x] Bei validierten Watchdog-Ereignissen den zusaetzlichen Vollsnapshot
+  ueberspringen; Erstlauf und Timeout-Fallback behalten die Snapshot-Pruefung.
 - [ ] Event-Burst-Debounce und Scan-Deduplizierung separat messen; ein
   Dateisystemereignis darf weiterhin zeitnah erkannt werden, aber nicht zu
   unnoetigen Vollscans fuer jede einzelne JSONL-Aenderung fuehren.
@@ -282,6 +291,8 @@ explizit vermerkt.
   Duplicate-Ergebnissen.
 - [x] Regression fuer begrenzte Follow-Detailausgabe: 15 Skips ergeben 12
   Detailzeilen, eine Auslassungszeile und weiterhin `skipped=15`.
+- [x] Regression fuer den inkrementellen Ereignispfad: ein geaenderter
+  Sessionpfad fuehrt nur zu einem Snapshot-Aufruf im Zweilauf-Test.
 - [ ] Collector-Debounce-/Ressourcenbenchmark mit realistischem grossem
   Sessionroot ausfuehren.
 - [ ] Runtime-Status, Applet-Health und Dispatcher-Snapshot nach dem naechsten

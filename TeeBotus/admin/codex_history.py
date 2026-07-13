@@ -1836,16 +1836,25 @@ def watch_codex_session_roots_for_instances(
     pending_session_files: tuple[Path, ...] | None = None
     while True:
         iterations += 1
-        current_snapshot = _codex_session_roots_snapshot(roots, limit=limit) if normalized_event_mode != "poll" else None
-        should_scan = normalized_event_mode == "poll" or last_snapshot is None or current_snapshot != last_snapshot
+        event_session_files = (
+            _codex_session_event_files_for_roots(roots, pending_session_files)
+            if pending_session_files
+            else ()
+        )
+        if event_session_files:
+            current_snapshot = last_snapshot
+            should_scan = True
+        else:
+            current_snapshot = _codex_session_roots_snapshot(roots, limit=limit) if normalized_event_mode != "poll" else None
+            should_scan = normalized_event_mode == "poll" or last_snapshot is None or current_snapshot != last_snapshot
         if should_scan:
             snapshot_session_files = (
                 tuple(Path(path) for path, _size, _mtime_ns in current_snapshot)
                 if current_snapshot is not None
                 else None
             )
-            selected_session_files = snapshot_session_files
-            if pending_session_files and snapshot_session_files is not None:
+            selected_session_files = event_session_files or snapshot_session_files
+            if pending_session_files and snapshot_session_files is not None and not event_session_files:
                 snapshot_paths = set(snapshot_session_files)
                 selected_session_files = tuple(path for path in pending_session_files if path in snapshot_paths)
             for instance_name, store in stores.items():
@@ -5010,6 +5019,36 @@ def _codex_session_roots_snapshot(roots: Sequence[str | Path], *, limit: int) ->
             continue
         snapshot.append((str(path), int(stat.st_size), int(stat.st_mtime_ns)))
     return tuple(snapshot)
+
+
+def _codex_session_event_files_for_roots(
+    roots: Sequence[str | Path], event_paths: Sequence[str | Path]
+) -> tuple[Path, ...]:
+    directory_roots: list[Path] = []
+    explicit_files: set[Path] = set()
+    for root_value in roots:
+        try:
+            root = _safe_repo_root(Path(root_value), operation="sessions root", allow_hidden_segments=True)
+        except ValueError:
+            continue
+        if root.is_file() and root.suffix == ".jsonl":
+            explicit_files.add(root)
+        elif root.is_dir():
+            directory_roots.append(root)
+
+    selected: set[Path] = set()
+    for raw_path in event_paths:
+        try:
+            path = _safe_repo_root(Path(raw_path), operation="session event", allow_hidden_segments=True)
+        except ValueError:
+            continue
+        if path.suffix != ".jsonl" or not path.is_file():
+            continue
+        if path in explicit_files or (
+            _is_codex_session_log_path(path) and any(root in path.parents for root in directory_roots)
+        ):
+            selected.add(path)
+    return tuple(sorted(selected, key=str))
 
 
 def _wait_for_codex_session_change(

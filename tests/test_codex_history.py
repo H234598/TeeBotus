@@ -4336,6 +4336,13 @@ def test_watch_codex_session_roots_snapshot_imports_only_changed_session_files(
     first = write_codex_session(sessions_root / "first.jsonl", repo=repo, session_id="sess-first", turn_id="turn-first")
     changed = write_codex_session(sessions_root / "changed.jsonl", repo=repo, session_id="sess-changed-before", turn_id="turn-before")
     wake_calls = 0
+    snapshot_calls = 0
+    original_snapshot = codex_history_module._codex_session_roots_snapshot
+
+    def tracked_snapshot(roots: Any, *, limit: int) -> tuple[tuple[str, int, int], ...]:
+        nonlocal snapshot_calls
+        snapshot_calls += 1
+        return original_snapshot(roots, limit=limit)
 
     def wake(_roots: Any, *, poll_interval_seconds: float, event_mode: str, sleep: Any) -> tuple[Path, ...]:
         nonlocal wake_calls
@@ -4346,6 +4353,7 @@ def test_watch_codex_session_roots_snapshot_imports_only_changed_session_files(
         return (changed,)
 
     monkeypatch.setattr(codex_history_module, "_wait_for_codex_session_change", wake)
+    monkeypatch.setattr(codex_history_module, "_codex_session_roots_snapshot", tracked_snapshot)
 
     result = watch_codex_session_roots(
         store,
@@ -4358,6 +4366,7 @@ def test_watch_codex_session_roots_snapshot_imports_only_changed_session_files(
 
     assert first.exists()
     assert wake_calls == 1
+    assert snapshot_calls == 1
     assert result["status_counts"] == {"imported": 3}
     assert len(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)) == 3
 
