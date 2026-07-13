@@ -3238,6 +3238,21 @@ def test_cinnamon_applet_runtime_parser_counts_section_problems() -> None:
     )
 
 
+def test_cinnamon_applet_runtime_parser_does_not_hide_codex_repo_failures_as_info() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Projekt-History]
+        codex_history_repo=Demo repo=TeeBotus status=warning queued=0 failed=1 total=1 problem_statuses=failed:1
+        codex_history_repo=Demo repo=Docs status=warning queued=0 failed=0 skipped=1 total=1 problem_statuses=skipped:1
+        """
+    )
+
+    assert parsed["summary"]["actionable_problem_status_count"] == 1
+    assert parsed["summary"]["actionable_problem_statuses"] == "warning:1"
+    assert parsed["summary"]["informational_problem_status_count"] == 1
+    assert parsed["summary"]["informational_problem_statuses"] == "warning:1"
+
+
 def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:
     parsed = parse_runtime_status(
         """

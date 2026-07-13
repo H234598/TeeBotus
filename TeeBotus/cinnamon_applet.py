@@ -742,7 +742,8 @@ def _line_health_statuses(
     informational = (
         primary == "fallback_defaults"
         or (prefix == "codex_usage_account" and primary == "partial")
-        or prefix in {"api_budget", "account_identity", "codex_history_repo"}
+        or prefix in {"api_budget", "account_identity"}
+        or (prefix == "codex_history_repo" and _codex_history_repo_status_is_informational(fields))
         or (
             prefix == "structured_decision"
             and not fallback_suppression_blocked
@@ -751,6 +752,29 @@ def _line_health_statuses(
         or fallback_covered
     )
     return ((), problems) if informational else (problems, ())
+
+
+def _codex_history_repo_status_is_informational(fields: Mapping[str, Any]) -> bool:
+    """Keep expected queue/skip states visible without hiding repo failures."""
+    primary = _normalized_status_value(fields.get("status"))
+    if primary == "skipped":
+        return True
+    if primary != "warning":
+        return False
+    if _safe_int(fields.get("failed"), 0) > 0:
+        return False
+    raw_statuses = str(fields.get("problem_statuses") or "").strip()
+    if raw_statuses:
+        statuses: list[str] = []
+        for part in raw_statuses.split(","):
+            token, separator, raw_count = part.partition(":")
+            if not separator or _safe_int(raw_count, 0) <= 0:
+                continue
+            normalized = token.strip().casefold()
+            if normalized:
+                statuses.append(normalized)
+        return bool(statuses) and all(status in {"queued", "skipped"} for status in statuses)
+    return _safe_int(fields.get("queued"), 0) > 0 or _safe_int(fields.get("skipped"), 0) > 0
 
 
 def _normalized_status_value(value: Any) -> str:
