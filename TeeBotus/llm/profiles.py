@@ -187,6 +187,7 @@ def build_profiled_text_llm_client(
     routing: Mapping[str, LLMRoutingRule] | None = None,
     env: Mapping[str, str] | None = None,
     allow_remote_fallback: bool = False,
+    instance_name: str = "",
 ) -> object | None:
     route = select_llm_route(
         purpose,
@@ -196,7 +197,13 @@ def build_profiled_text_llm_client(
         allow_remote_fallback=allow_remote_fallback,
     )
     source = os.environ if env is None else env
-    api_key = source.get(route.api_key_env, "").strip() if route.api_key_env else ""
+    api_key = resolve_profile_api_key(
+        source,
+        route.api_key_env,
+        provider=route.provider,
+        model=route.model,
+        instance_name=instance_name,
+    )
     fallback_api_key = source.get(route.fallback_api_key_env, "").strip() if route.fallback_api_key_env else ""
     gemini_key_model = _first_google_gemini_model(route)
     uses_gemini_api = _route_uses_gemini_api(route.provider, route.model) or _route_uses_gemini_api(
@@ -227,6 +234,36 @@ def build_profiled_text_llm_client(
         use_instruction_fallback_models=False,
         env=source,
     )
+
+
+def resolve_profile_api_key(
+    source: Mapping[str, str],
+    api_key_env: str,
+    *,
+    provider: str,
+    model: object,
+    instance_name: str = "",
+) -> str:
+    """Resolve instance-scoped OpenAI keys before the global profile key."""
+    env_name = str(api_key_env or "").strip()
+    if not env_name:
+        return ""
+    normalized_provider = normalize_llm_provider(provider)
+    normalized_model = str(model or "").strip().casefold()
+    uses_openai = normalized_provider == "openai" or (
+        normalized_provider == "litellm" and normalized_model.startswith("openai/")
+    )
+    if uses_openai:
+        token = _instance_env_token(instance_name)
+        if token:
+            candidates = [f"{env_name}_{token}"]
+            if env_name != "OPENAI_API_KEY":
+                candidates.append(f"OPENAI_API_KEY_{token}")
+            for candidate in candidates:
+                value = str(source.get(candidate, "") or "").strip()
+                if value:
+                    return value
+    return str(source.get(env_name, "") or "").strip()
 
 
 def normalize_llm_purpose(value: object) -> str:
@@ -266,6 +303,11 @@ def _optional_string(value: object) -> str:
 
 def _config_string(value: object) -> str:
     return value.strip() if isinstance(value, str) else ""
+
+
+def _instance_env_token(instance_name: str) -> str:
+    token = "".join(char if char.isalnum() else "_" for char in str(instance_name or "").strip().upper())
+    return "_".join(part for part in token.split("_") if part)
 
 
 def _load_yaml_mapping(path: Path) -> dict[str, Any]:

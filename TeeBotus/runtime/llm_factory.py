@@ -7,7 +7,7 @@ from typing import Any, Callable, Mapping
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.free_tier import resolve_gemini_free_tier_limits, route_uses_gemini_api, route_uses_google_gemini
 from TeeBotus.llm.keyring import resolve_gemini_api_key_ring
-from TeeBotus.llm.profiles import LLMProfile, LLMRoute, load_llm_profiles, select_llm_route
+from TeeBotus.llm.profiles import LLMProfile, LLMRoute, load_llm_profiles, resolve_profile_api_key, select_llm_route
 from TeeBotus.llm.service_tier import resolve_gemini_service_tier
 from TeeBotus.llm_client import build_text_llm_client, normalize_llm_provider, parse_fallback_models
 from TeeBotus.openai_client import OpenAIClient
@@ -283,7 +283,7 @@ def _build_route_client(
     openai_client_factory: Callable[[str], object],
 ) -> object | None:
     source = os.environ if env is None else env
-    profile_api_key = _resolve_runtime_api_key(
+    profile_api_key = resolve_profile_api_key(
         source,
         route.api_key_env,
         provider=route.provider,
@@ -373,7 +373,7 @@ def _build_profile_client(
     profiles = load_llm_profiles()
     profile = _require_profile(profiles, profile_name)
     source = os.environ if env is None else env
-    profile_api_key = _resolve_runtime_api_key(
+    profile_api_key = resolve_profile_api_key(
         source,
         profile.api_key_env,
         provider=profile.provider,
@@ -519,39 +519,6 @@ def _compatible_default_api_key(provider: str, model: str, default_api_key: str)
     if normalized_provider == "openai" or normalized_model.startswith("openai/"):
         return value
     return ""
-
-
-def _resolve_runtime_api_key(
-    source: Mapping[str, str],
-    api_key_env: str,
-    *,
-    provider: str,
-    model: str,
-    instance_name: str,
-) -> str:
-    """Resolve instance-scoped OpenAI keys before the global route key."""
-    env_name = str(api_key_env or "").strip()
-    if not env_name:
-        return ""
-    if _uses_openai_api(provider=provider, model=model):
-        token = _instance_env_token(instance_name)
-        if token:
-            candidates = [f"{env_name}_{token}"]
-            if env_name != "OPENAI_API_KEY":
-                candidates.append(f"OPENAI_API_KEY_{token}")
-            for candidate in candidates:
-                value = str(source.get(candidate, "") or "").strip()
-                if value:
-                    return value
-    return str(source.get(env_name, "") or "").strip()
-
-
-def _uses_openai_api(*, provider: str, model: str) -> bool:
-    normalized_provider = normalize_llm_provider(provider)
-    normalized_model = str(model or "").strip().casefold()
-    return normalized_provider == "openai" or (
-        normalized_provider == "litellm" and normalized_model.startswith("openai/")
-    )
 
 
 def _first_instance_env(env: Mapping[str, str], base_key: str, instance_name: str) -> str:

@@ -550,6 +550,29 @@ def test_profiled_text_client_builds_litellm_client_from_route(monkeypatch) -> N
     assert client.api_key == "hf-secret"
 
 
+def test_profiled_text_client_uses_instance_scoped_openai_key_before_global_key() -> None:
+    profiles = {
+        "openai_premium": LLMProfile("openai_premium", "litellm", "openai/gpt-test", api_key_env="OPENAI_API_KEY"),
+    }
+    routing = {"hard_reasoning": LLMRoutingRule("hard_reasoning", "openai_premium")}
+
+    client = build_profiled_text_llm_client(
+        purpose="hard_reasoning",
+        instructions=BotInstructions(),
+        openai_client=None,
+        profiles=profiles,
+        routing=routing,
+        instance_name="Demo",
+        env={
+            "OPENAI_API_KEY": "global-key",
+            "OPENAI_API_KEY_DEMO": "instance-key",
+        },
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.api_key == "instance-key"
+
+
 def test_profiled_text_client_passes_gemini_service_tier_from_profile() -> None:
     profiles = {
         "gemini_flex": LLMProfile(
