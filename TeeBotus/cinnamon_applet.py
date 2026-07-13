@@ -179,6 +179,9 @@ FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
 }
 FLAG_PROBLEM_STATUS_FIELDS = frozenset({"warning"})
 NEUTRAL_FLAG_VALUES = frozenset({"0", "false", "no", "none", "off"})
+FALLBACK_SENTINEL_VALUES = NEUTRAL_FLAG_VALUES | frozenset(
+    {"disabled", "missing", "unknown", "unavailable", "unconfigured", "not_configured", "not_applicable"}
+)
 FORCED_PROBLEM_STATUS_FIELDS = {"account_identity_warning": "warning"}
 SENSITIVE_ASSIGNMENT_KEY_PATTERN = (
     r"(?:api[_-]?key|private[_-]?key|signing[_-]?key|access[_-]?token|auth[_-]?token|bearer[_-]?token|authorization|cookie|token|secret|password)"
@@ -786,10 +789,7 @@ def _line_health_statuses(
     route_status = _normalized_status_value(fields.get("route_status"))
     effective = _normalized_status_value(fields.get("effective_status"))
     fallback_suppression_blocked = primary in FALLBACK_SUPPRESSION_BLOCKERS or route_status in FALLBACK_SUPPRESSION_BLOCKERS
-    fallback_covered = not fallback_suppression_blocked and effective in HEALTHY_EFFECTIVE_STATUSES and any(
-        str(fields.get(key, "") or "").strip()
-        for key in ("fallback", "fallback_profile", "fallback_model", "offload_profile")
-    )
+    fallback_covered = not fallback_suppression_blocked and effective in HEALTHY_EFFECTIVE_STATUSES and _fallback_reference_is_set(fields)
     informational = (
         primary == "fallback_defaults"
         or (prefix == "codex_usage_account" and primary == "partial")
@@ -807,7 +807,7 @@ def _line_health_statuses(
         or (
             prefix == "structured_decision"
             and not fallback_suppression_blocked
-            and bool(str(fields.get("fallback", "") or "").strip())
+            and _fallback_reference_is_set(fields)
         )
         or fallback_covered
     )
@@ -879,6 +879,14 @@ def _account_identity_status_is_informational(fields: Mapping[str, Any]) -> bool
         _normalized_status_value(fields.get("status")) == "warning"
         and _safe_int(fields.get("identity_warnings"), 0) > 0
     )
+
+
+def _fallback_reference_is_set(fields: Mapping[str, Any]) -> bool:
+    for key in ("fallback", "fallback_profile", "fallback_model", "offload_profile"):
+        value = _normalized_status_value(fields.get(key))
+        if value and value not in FALLBACK_SENTINEL_VALUES:
+            return True
+    return False
 
 
 def _normalized_status_value(value: Any) -> str:
