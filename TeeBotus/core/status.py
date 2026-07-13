@@ -1135,6 +1135,11 @@ def _codex_history_queue_is_delegated(instance_name: str) -> bool:
         re.sub(r"[^a-z0-9]+", "_", str(name or "").strip().casefold()).strip("_")
         for name in allowed
     }
+    # An explicitly empty allowlist leaves no dispatcher owner.  Do not mark
+    # every instance as delegated in that state, or queued history would look
+    # healthy even though nobody can claim it.
+    if raw_allowed is not None and not allowed_tokens and "*" not in allowed_markers:
+        return False
     return "*" not in allowed_markers and "all" not in allowed_tokens and instance_token not in allowed_tokens
 
 

@@ -225,6 +225,35 @@ def test_runtime_status_marks_non_dispatch_owner_history_as_delegated_in_bridge_
     ) in captured.out
 
 
+def test_runtime_status_does_not_hide_history_when_bridge_allowlist_is_empty(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    demo_dir = _configure_demo_instance(monkeypatch, tmp_path)
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"c" * 32))
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("TEEBOTUS_HISTORY_DISPATCHER_MODE", "bridge")
+    monkeypatch.setenv("TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES", "")
+    store = AccountStore(demo_dir / "data" / "accounts", "Demo", StaticSecretProvider(b"c" * 32))
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "queued",
+            "summary_prefix": "v1.8.0 #0001",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "Kein Dispatcher konfiguriert"},
+        },
+    )
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert (
+        "codex_history=Demo status=warning queued=1 failed=0 total=1 "
+        "problem_statuses=queued:1 latest_repo=TeeBotus latest_prefix=v1.8.0_#0001"
+    ) in captured.out
+    assert "dispatch_role=source" not in captured.out
+
+
 def test_runtime_status_reports_qdrant_default_collections(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION, QDRANT_USER_MEMORY_COLLECTION, QdrantCollectionResult, QdrantHealth
