@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, neue Momentaufnahme; noch nicht abgeschlossen
 
-**Quellstand:** TeeBotus `1.9.487`, lokaler Stand nach dem Bridge-Route-Preflight-Fix, dem Applet-Queue-Anzeigepatch, dem Watcher-Ressourcenfix und dem Mixed-Route-Dispatchfix. Der Funktionscommit ist `5c6992dc`.
+**Quellstand:** TeeBotus `1.9.488`, lokaler Stand nach dem Bridge-Route-Preflight-Fix, dem Applet-Queue-Anzeigepatch, dem Watcher-Ressourcenfix, dem Mixed-Route-Dispatchfix und dem Stale-Recipient-Fix. Der Funktionscommit ist `d49262ac`.
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -206,7 +206,7 @@ Eine schreibfreie Systemd-Pruefung am 2026-07-13 bestaetigte:
   Startzeit `2026-07-13 06:41:32 CEST`.
 - `teebotus.service` ist aktiv, MainPID `1014664`, Startzeit ebenfalls
   `2026-07-13 06:41:32 CEST`.
-- Der Quellstand ist inzwischen `1.9.487`; die laufenden Prozesse wurden vor
+- Der Quellstand ist inzwischen `1.9.488`; die laufenden Prozesse wurden vor
   den letzten Watcher-/Sessionroot- und Bridge-Route-Fixes gestartet und
   enthalten diese deshalb noch nicht. Das Journal bestaetigt den alten
   Laufzeitstand mit einer Versionsmeldung fuer `1.9.404`.
@@ -345,6 +345,24 @@ Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
 - [ ] Live-Nachweis nach Restart: gemischte Adminroute mit einer tatsaechlich
   nicht routbaren ID pruefen.
 
+### B2. Stale-Recipient-Status
+
+- [x] Logikfehler reproduzieren: Ein alter `failed`-Empfaenger ausserhalb der
+  aktuellen routbaren Adminmenge konnte eine neue erfolgreiche Zustellung im
+  zentralen Dispatcher weiterhin als `failed`/`queued` blockieren.
+- [x] Vorhandene alte Fehlereintraege bei einem neuen Retry als terminalen
+  `skipped`-Status mit `reason=recipient_not_routable` melden. Die bestehende
+  Empfaenger-ID und die Auditdaten bleiben erhalten; es wird kein neuer
+  Empfaenger erfunden.
+- [x] Regression bestaetigt, dass `dispatch.complete` den alten Empfaenger
+  als Skip und den aktuellen Empfaenger als Erfolg uebergibt.
+- [x] `pytest -q tests/test_codex_history.py`:
+  `158 passed in 7.17s`; History-/Metadaten-Suite:
+  `164 passed in 6.80s`; Compileall und `git diff --check` sauber.
+- [x] Patchversion auf `1.9.488` bumpen und als `d49262ac` committen.
+- [ ] Live-Nachweis mit einem realen historischen Fehlereintrag und einer
+  aktuell routbaren Adminroute nach Restart pruefen.
+
 ### C. Collector-Ressourcen begrenzen
 
 - [ ] Event-Burst- und Pollingpfad getrennt messen.
@@ -382,7 +400,7 @@ Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
 ### Snapshot-Update: Runtime-Version-Marker
 
 - [x] Laufende Units, MainPIDs und Startzeit schreibfrei erfasst.
-- [x] Abweichung zwischen aktuellem Quellstand `1.9.487` und dem vor dem Fix
+- [x] Abweichung zwischen aktuellem Quellstand `1.9.488` und dem vor dem Fix
   gestarteten Live-Prozess dokumentiert.
 - [x] Fehlenden Marker als `marker_missing` im Appletstatus bestaetigt.
 - [x] Marker-Lifecycle in `TeeBotus/runtime/version_marker.py` und
@@ -603,3 +621,9 @@ Der Plan ist erst abgeschlossen, wenn:
   Kandidatenliste versendet. `1.9.487` verwendet jetzt nur die routbare
   Teilmenge. Regression und History-/Metadaten-Suite liefen mit `164 passed in
   6.95s`; Commit `5c6992dc`. Kein Restart und kein Push ausgeloest.
+- 2026-07-13: Bridge-Logikfehler bei stale Recipient-Results behoben: Ein
+  alter `failed`-Empfaenger ausserhalb der aktuellen routbaren Menge wird beim
+  naechsten Retry als `skipped/recipient_not_routable` weitergegeben, damit
+  eine erfolgreiche aktuelle Route nicht global als `failed`/`queued` blockiert
+  bleibt. Version `1.9.488`, Commit `d49262ac`; `158` History-Tests und `164`
+  History-/Metadaten-Tests gruen. Kein Restart und kein Push ausgeloest.
