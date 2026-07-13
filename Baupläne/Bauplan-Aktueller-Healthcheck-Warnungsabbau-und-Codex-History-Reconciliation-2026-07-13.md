@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.471`, lokaler Folgecommit nach `afdbf53b`
+**Quellstand:** TeeBotus `1.9.472`, lokaler Folgecommit nach `0859d7d8`
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
 ## Auftrag
@@ -219,6 +219,11 @@ betroffenen Pfade anhand von `stat` aktualisiert. Dadurch interpretiert der
 naechste Timeout den bereits verarbeiteten Event nicht erneut als Aenderung und
 startet keinen unnoetigen Vollimport.
 
+Auch geloeschte oder umbenannte Quellpfade werden fuer die Baseline
+beruecksichtigt, ohne sie erneut importieren zu wollen. Damit bleibt ein
+entfernter Pfad nicht bis zum naechsten Timeout als scheinbar aktuelle Datei
+erhalten.
+
 ## Offene Arbeitspakete
 
 ### A. TBL-Reconciliation schreibfrei beweisen
@@ -269,6 +274,8 @@ startet keinen unnoetigen Vollimport.
   Cleanup-Pfad garantieren.
 - [x] Snapshot-Baseline nach inkrementellen Events aktualisieren, damit der
   folgende Timeout nicht nochmals alle bekannten Dateien importiert.
+- [x] Geloeschte/umbenannte Eventquellen aus der Baseline entfernen, aber nur
+  noch vorhandene Dateien inkrementell importieren.
 - [ ] Event-Burst-Debounce und Scan-Deduplizierung separat messen; ein
   Dateisystemereignis darf weiterhin zeitnah erkannt werden, aber nicht zu
   unnoetigen Vollscans fuer jede einzelne JSONL-Aenderung fuehren.
@@ -317,6 +324,8 @@ startet keinen unnoetigen Vollimport.
   trotzdem.
 - [x] Timeout-Regression: Eventlauf plus anschliessender Timeout bleibt bei
   zwei Imports und erzeugt keinen dritten Vollscan.
+- [x] Delete-Regression: geloeschtes Event erzeugt keinen Importfehler und
+  keinen spaeteren Vollscan.
 - [x] Regression fuer begrenzte Follow-Detailausgabe: 15 Skips ergeben 12
   Detailzeilen, eine Auslassungszeile und weiterhin `skipped=15`.
 - [x] Regression fuer den inkrementellen Ereignispfad: ein geaenderter

@@ -4475,6 +4475,61 @@ def test_watch_codex_session_roots_stops_watchdog_on_scan_exception(
     assert watchdog.stopped is True
 
 
+def test_watch_codex_session_roots_removes_deleted_event_from_snapshot_baseline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = make_git_repo(tmp_path, "watch-deleted-event", version="3.1.1")
+    sessions_root = tmp_path / "sessions"
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    deleted = write_codex_session(sessions_root / "deleted.jsonl", repo=repo, session_id="sess-deleted", turn_id="turn-deleted")
+
+    class FakeWatchdog:
+        def __init__(self) -> None:
+            self.pending: tuple[Path, ...] = ()
+            self.wait_calls = 0
+
+        def start(self) -> None:
+            return None
+
+        def wait(self, _timeout_seconds: float) -> bool | tuple[Path, ...]:
+            self.wait_calls += 1
+            if self.wait_calls > 1:
+                return False
+            pending = self.pending
+            self.pending = ()
+            return pending
+
+        def stop(self) -> None:
+            return None
+
+    watchdog = FakeWatchdog()
+    import_calls = 0
+    original_import = codex_history_module.import_codex_session_roots
+
+    def tracked_import(store_arg: AccountStore, roots: Any, *, limit: int, session_files: Any = None) -> dict[str, Any]:
+        nonlocal import_calls
+        import_calls += 1
+        report = original_import(store_arg, roots, limit=limit, session_files=session_files)
+        deleted.unlink()
+        watchdog.pending = (deleted,)
+        return report
+
+    monkeypatch.setattr(codex_history_module, "_build_codex_session_watchdog", lambda _roots: watchdog)
+    monkeypatch.setattr(codex_history_module, "import_codex_session_roots", tracked_import)
+
+    result = watch_codex_session_roots(
+        store,
+        (sessions_root,),
+        poll_interval_seconds=0.25,
+        max_iterations=3,
+        event_mode="auto",
+    )
+
+    assert watchdog.wait_calls == 2
+    assert import_calls == 1
+    assert result["status_counts"] == {"imported": 1}
+
+
 def test_watch_payload_ok_keeps_timer_successful_when_dispatch_has_channel_failure() -> None:
     assert (
         _watch_payload_ok(
