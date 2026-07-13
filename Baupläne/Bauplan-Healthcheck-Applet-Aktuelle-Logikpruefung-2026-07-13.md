@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.437`, `1f2eefdc`.
+- Aktueller gepruefter Quellstand: `1.9.438`, `a6bdbaf8`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -376,6 +376,31 @@ der nur der bekannte terminale Grund `no_private_route` informativ sein darf.
   Qdrant ohne Probleme.
 - SemVer `1.9.437`, lokaler Commit `1f2eefdc`
   (`Expose history skips without reasons`).
+- Kein Push und kein Bot-/Service-Restart ausgefuehrt.
+
+## Befund 94: History-Detail zeigte nicht den schwersten Befund
+
+Die Parseraggregation ersetzte eine bereits gefundene problematische
+`codex_history=`-Zeile nur dann, wenn vorher noch kein Problem gesehen worden
+war. Stand zuerst eine `warning`-Zeile und spaeter eine `broken`-Zeile im
+Runtime-Output, blieb die Warnung im Detailtext des Applets stehen. Die
+Gesamtzaehler konnten dabei bereits den schwereren Status enthalten; Anzeige
+und Zaehler waren damit widerspruechlich.
+
+### Umsetzung und Nachweis
+
+- History-Detailzeilen erhalten jetzt eine deterministische Statusprioritaet.
+- Ein spaeterer schwererer Status ersetzt den bisherigen Detailkandidaten;
+  gleich schwere Kandidaten bleiben in stabiler Eingabereihenfolge.
+- Die Rohzeilen, Gesamtzaehler und Actionable-/Info-Klassifikation bleiben
+  getrennt erhalten.
+- Regression fuer gesund -> Problem und warning -> broken:
+  `6 passed, 211 deselected`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `217 passed in 38.03s`.
+- Live-Probe: `actionable=missing_key:1,warning:2`, Qdrant ohne Probleme;
+  TBL-Detail zeigt weiterhin die aktuelle problematische Aggregatezeile.
+- SemVer `1.9.438`, lokaler Commit `a6bdbaf8`
+  (`Prefer severe history health details`).
 - Kein Push und kein Bot-/Service-Restart ausgefuehrt.
 
 ## Umsetzung

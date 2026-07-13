@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.437`, Commit `1f2eefdc`
+**Quellstand:** TeeBotus `1.9.438`, Commit `a6bdbaf8`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -190,6 +190,22 @@ ausgelassen wurde.
 - Vollstaendige Applet-Suite: `216 passed in 46.70s`.
 - Live unveraendert: `actionable=missing_key:1,warning:2`, Qdrant gesund.
 - SemVer `1.9.437`, Commit `1f2eefdc`.
+
+## Befund 94: Der History-Detailkandidat war nicht nach Schwere priorisiert
+
+Wenn zuerst eine `warning`- und danach eine `broken`-Zeile erschien, blieb die
+Warnung als `codex_history`-Detail stehen, obwohl die Zaehler den schwereren
+Befund bereits erfassten.
+
+### Umsetzung und Nachweis
+
+- Problemstatus erhalten eine feste Prioritaet fuer die Auswahl der
+  angezeigten History-Zeile.
+- Schwerere spaetere Befunde ersetzen leichtere; Gleichstand bleibt stabil.
+- Regression: `6 passed, 211 deselected`.
+- Vollstaendige Applet-Suite: `217 passed in 38.03s`.
+- Live unveraendert bei `actionable=missing_key:1,warning:2`, Qdrant gesund.
+- SemVer `1.9.438`, Commit `a6bdbaf8`.
 
 ## Informative Befunde, die nicht als Defekt hochgestuft werden sollen
 
