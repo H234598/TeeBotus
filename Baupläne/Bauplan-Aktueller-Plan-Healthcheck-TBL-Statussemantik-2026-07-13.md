@@ -93,11 +93,11 @@ Historie erhalten, insbesondere:
 
 - [x] `accepted` wird nicht automatisch zu `delivered` hochgestuft.
 - [x] `delivered` entsteht nur aus einer echten Zustellbestaetigung oder dem
-  ausdruecklich vereinbarten Messenger-Vertrag entstehen.
+  ausdruecklich vereinbarten Messenger-Vertrag.
 - [x] `acknowledged` beziehungsweise eine Lesebestaetigung bleibt gegenueber
-  `delivered` erhalten bleiben.
+  `delivered` erhalten.
 - [x] TeeBotus und der zentrale `History-Dispatcher` verwenden dieselbe
-  Aggregations- und Promotionslogik verwenden.
+  Aggregations- und Promotionslogik.
 
 ### Healthcheck und Cinnamon-Applet
 
