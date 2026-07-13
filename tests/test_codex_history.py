@@ -1327,6 +1327,7 @@ def test_codex_history_dispatch_bridge_claims_sends_and_completes_only_open_reci
         )
     )
     assert result["mode"] == "history-dispatcher"
+    assert result["status_counts"] == {"delivered": 2}
     assert [operation for operation, _body in calls] == ["dispatch.claim", "dispatch.complete"]
     assert calls[0][1]["limit"] == 0
     complete_body = calls[-1][1]
@@ -1609,6 +1610,33 @@ def test_codex_history_dispatch_bridge_rejects_unknown_recipient_status(
     assert calls == ["dispatch.claim"]
 
 
+def test_history_dispatcher_recipient_results_reject_duplicate_or_conflicting_identity() -> None:
+    with pytest.raises(codex_history_module.HistoryDispatcherError, match="duplicate recipient_id"):
+        codex_history_module._history_dispatcher_recipient_results(
+            {
+                "id": "duplicate-recipient",
+                "recipient_results": [
+                    {"recipient_id": "admin", "status": "delivered"},
+                    {"recipient_id": "ADMIN", "status": "failed"},
+                ],
+            }
+        )
+    with pytest.raises(codex_history_module.HistoryDispatcherError, match="conflicting recipient identity"):
+        codex_history_module._history_dispatcher_recipient_results(
+            {
+                "id": "conflicting-recipient",
+                "recipient_results": [{"recipient_id": "admin-a", "account_id": "admin-b", "status": "delivered"}],
+            }
+        )
+
+
+def test_codex_history_overall_status_aligns_success_plus_skip_with_dispatcher() -> None:
+    assert codex_history_module._overall_dispatch_status([
+        {"status": "accepted"},
+        {"status": "skipped", "reason": "no_private_route"},
+    ]) == "delivered"
+
+
 def test_codex_history_dispatch_bridge_rejects_incomplete_completion_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1794,13 +1822,80 @@ def test_codex_history_dispatch_bridge_reconciles_authoritative_local_status(
         )
     )
 
-    assert result["ok"] is True
+    assert result["ok"] is False
+    assert result["status_counts"] == {"delivered": 1, "failed": 1}
     assert sent_item["version"]["semver"] == "1.9.384"
     assert sent_item["summary"]["text"] == "Lokaler Status wird abgeglichen."
     persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
     assert persisted["status"] == "queued"
     assert persisted["delivery"]["attempts"] == 1
     assert persisted["status_history"][-1]["status"] == "queued"
+
+
+def test_codex_history_dispatch_bridge_clears_stale_failure_after_delivery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "id": "local-history-id",
+            "kind": "codex_run_summary",
+            "status": "queued",
+            "last_reason": "send_error:TimeoutError",
+            "created_at": "2026-07-13T12:00:00+00:00",
+            "project": {"repo_name": "TeeBotus"},
+            "codex": {"dedupe_key": "sha256:local-external"},
+            "summary": {"text": "Fehler wird durch erfolgreichen Retry abgeloest."},
+        },
+    )
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            if operation == "dispatch.claim":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "external-history-id",
+                            "kind": "codex_run_summary",
+                            "dedupe_key": "sha256:local-external",
+                            "payload": {"summary": {"text": "Externer Retry"}},
+                            "recipient_results": [{
+                                "recipient_id": "admin",
+                                "status": "failed",
+                                "reason": "send_error:TimeoutError",
+                            }],
+                        }],
+                    },
+                }
+            if operation == "dispatch.complete":
+                return {"ok": True, "data": {"ok": True, "status": "delivered"}}
+            raise AssertionError(operation)
+
+    async def fake_send(_store, _item, *_args, **kwargs):
+        return {"account_id": kwargs.get("account_id", "admin"), "status": "accepted", "channel": "telegram"}
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_account_ids", lambda *args, **kwargs: ("admin",))
+    monkeypatch.setattr(codex_history_module, "_dispatch_codex_history_item_to_account", fake_send)
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+            now=datetime(2026, 7, 13, 12, 5, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["ok"] is True
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "delivered"
+    assert "last_reason" not in persisted
 
 
 def test_history_dispatcher_digest_payload_becomes_markdown_attachment() -> None:
@@ -1854,11 +1949,13 @@ def test_codex_history_shadow_append_mirrors_after_legacy_write(
         repo_root=repo,
         title="Shadow",
         bullets=["Legacy bleibt lesbar."],
+        status="accepted",
         codex_metadata={"dedupe_key": "sha256:session-turn-final"},
     )
     assert item["id"] == mirrored[0]["id"]
     assert mirrored[0]["operation"] == "history.append"
     assert mirrored[0]["dedupe_key"] == "sha256:session-turn-final"
+    assert mirrored[0]["status"] == "accepted"
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["id"] == item["id"]
 
 

@@ -552,7 +552,7 @@ def _history_dispatcher_response_data(response: Mapping[str, Any], *, operation:
     data = response.get("data")
     if not isinstance(data, Mapping):
         raise HistoryDispatcherError(f"History-Dispatcher {operation} returned invalid data")
-    if data.get("ok") is False:
+    if "ok" in data and data.get("ok") is not True:
         raise HistoryDispatcherError(str(data.get("error") or f"History-Dispatcher {operation} rejected"))
     return data
 
@@ -582,6 +582,10 @@ def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any], *, store: 
         delivery = item.get("delivery") if isinstance(item.get("delivery"), Mapping) else {}
         codex = item.get("codex") if isinstance(item.get("codex"), Mapping) else {}
         dedupe_key = str(codex.get("dedupe_key") or item.get("id") or "").strip()
+        try:
+            attempt_count = max(0, int(delivery.get("attempts") or 0))
+        except (TypeError, ValueError):
+            attempt_count = 0
         response = client.request("history.append", {
             "id": str(item.get("id") or ""),
             "source": str(item.get("source") or "teebotus"),
@@ -589,6 +593,9 @@ def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any], *, store: 
             "target_group": str(item.get("target_group") or delivery.get("target_group") or CODEX_HISTORY_TARGET_GROUP),
             "project": str(project or ""),
             "created_at": str(item.get("created_at") or ""),
+            "status": str(item.get("status") or "queued").strip().casefold() or "queued",
+            "attempt_count": attempt_count,
+            "last_error": str(item.get("last_reason") or ""),
             "dedupe_key": dedupe_key,
             "payload": dict(item),
         })
@@ -667,18 +674,32 @@ def _history_dispatcher_recipient_results(item: Mapping[str, Any]) -> list[dict[
         item_id = str(item.get("id") or "").strip() or "<unknown>"
         raise HistoryDispatcherError(f"History-Dispatcher item {item_id} has invalid recipient_results")
     normalized: list[dict[str, Any]] = []
+    seen_recipient_ids: set[str] = set()
     for index, raw_result in enumerate(raw_results):
         if not isinstance(raw_result, Mapping):
             raise HistoryDispatcherError(
                 f"History-Dispatcher item {str(item.get('id') or '').strip() or '<unknown>'} "
                 f"has invalid recipient result at index {index}"
             )
-        recipient_id = str(raw_result.get("recipient_id") or raw_result.get("account_id") or "").strip().casefold()
+        raw_recipient_id = str(raw_result.get("recipient_id") or "").strip().casefold()
+        raw_account_id = str(raw_result.get("account_id") or "").strip().casefold()
+        if raw_recipient_id and raw_account_id and raw_recipient_id != raw_account_id:
+            raise HistoryDispatcherError(
+                f"History-Dispatcher item {str(item.get('id') or '').strip() or '<unknown>'} "
+                f"has conflicting recipient identity at index {index}"
+            )
+        recipient_id = raw_recipient_id or raw_account_id
         if not recipient_id:
             raise HistoryDispatcherError(
                 f"History-Dispatcher item {str(item.get('id') or '').strip() or '<unknown>'} "
                 f"has recipient result without recipient_id at index {index}"
             )
+        if recipient_id in seen_recipient_ids:
+            raise HistoryDispatcherError(
+                f"History-Dispatcher item {str(item.get('id') or '').strip() or '<unknown>'} "
+                f"has duplicate recipient_id at index {index}"
+            )
+        seen_recipient_ids.add(recipient_id)
         status = str(raw_result.get("status") or "").strip().casefold()
         if not status:
             raise HistoryDispatcherError(
@@ -696,6 +717,32 @@ def _history_dispatcher_recipient_results(item: Mapping[str, Any]) -> list[dict[
         result["status"] = status
         normalized.append(result)
     return normalized
+
+
+def _history_dispatcher_report_recipient_results(
+    existing_results: Sequence[Mapping[str, Any]],
+    current_results: Sequence[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    merged: dict[str, dict[str, Any]] = {}
+    order: list[str] = []
+    anonymous: list[dict[str, Any]] = []
+    for raw_result in (*existing_results, *current_results):
+        if not isinstance(raw_result, Mapping):
+            continue
+        recipient_id = str(raw_result.get("recipient_id") or raw_result.get("account_id") or "").strip()
+        key = recipient_id.casefold()
+        if not key:
+            anonymous.append(dict(raw_result))
+            continue
+        result = dict(raw_result)
+        result["recipient_id"] = recipient_id
+        result["account_id"] = str(result.get("account_id") or recipient_id).strip()
+        if str(result.get("status") or "").strip().casefold() == "accepted":
+            result["status"] = "delivered"
+        if key not in merged:
+            order.append(key)
+        merged[key] = result
+    return [merged[key] for key in order] + anonymous
 
 
 def _history_dispatcher_item_dedupe_key(item: Mapping[str, Any]) -> str:
@@ -864,10 +911,11 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                 ))
             if not item_results:
                 item_results = existing_results or [{"account_id": "", "status": "skipped", "reason": "no_recipient_accounts", "channel": ""}]
+            reported_item_results = _history_dispatcher_report_recipient_results(existing_results, item_results)
             completion_results = [
                 {
                     "recipient_id": str(result.get("account_id") or ""),
-                    "status": "delivered" if str(result.get("status") or "").casefold() == "accepted" else str(result.get("status") or "failed"),
+                    "status": str(result.get("status") or "failed").strip().casefold(),
                     "channel": str(result.get("channel") or ""),
                     "message_ref": str(result.get("message_ref") or ""),
                     "reason": str(result.get("reason") or ""),
@@ -888,18 +936,22 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
             external_status = str(completion_data.get("status") or "").strip().casefold()
             local_status = external_status if external_status in {"queued", "delivered", "failed", "skipped", "discarded", "compacted"} else ""
             if not local_status:
-                local_status = _overall_dispatch_status([*existing_results, *item_results])
+                local_status = _overall_dispatch_status([*existing_results, *reported_item_results])
             dispatcher_dedupe_key = _history_dispatcher_item_dedupe_key(raw_item)
+            if local_status in {"accepted", "delivered", "acknowledged", "sent", "compacted"}:
+                current_dispatch_results = reported_item_results or existing_results
+            else:
+                current_dispatch_results = [*existing_results, *reported_item_results]
             _sync_codex_history_local_dispatch_status(
                 store,
                 item_id,
                 local_status,
                 dedupe_key=dispatcher_dedupe_key,
-                reason=_overall_dispatch_reason([*existing_results, *item_results]),
+                reason=_overall_dispatch_reason(current_dispatch_results),
                 now=timestamp,
-                dispatch_results=item_results,
+                dispatch_results=reported_item_results,
             )
-            result_rows.extend(item_results)
+            result_rows.extend(reported_item_results)
         return {
             "ok": not any(str(row.get("status") or "").casefold() in {"failed", "error"} for row in result_rows),
             "dry_run": False,
@@ -3998,6 +4050,8 @@ def _update_codex_history_item_status(
                 delivery["acknowledged_at"] = now
             if normalized_reason:
                 item["last_reason"] = normalized_reason
+            elif normalized_status in {"accepted", "delivered", "acknowledged", "sent", "compacted"}:
+                item.pop("last_reason", None)
             if dispatch_results:
                 item["last_dispatch_results"] = [dict(row) for row in dispatch_results]
             history = item.setdefault("status_history", [])
@@ -4102,7 +4156,7 @@ def _overall_dispatch_status(rows: Sequence[Mapping[str, Any]]) -> str:
     if "delivered" in statuses:
         return "delivered"
     if "accepted" in statuses:
-        return "accepted"
+        return "delivered" if "skipped" in statuses else "accepted"
     if "skipped" in statuses:
         return "skipped"
     return "failed"
