@@ -228,11 +228,14 @@ Der Plan ist erst abgeschlossen, wenn:
 - Kind-/Digest-Abgleich und SemVer-Bump auf `1.9.383` committed als `a32dab73` (`Align bridge dispatchable history kinds`); gezielte Suite danach `118 passed`.
 - Lokale Status-Reconciliation und SemVer-Bump auf `1.9.384` committed als `54e6d00d` (`Reconcile local history status after bridge completion`); gezielte Suite danach `119 passed`.
 - Dedupe-Abgleich und SemVer-Bump auf `1.9.385` committed als `f3efbd38` (`Reuse Codex session dedupe keys in bridge`); gezielte Suite danach `119 passed`.
+- Lesende Live-Dispatcherprobe: `336` Zeilen, `0` doppelte Top-Level-Dedupe-Keys; Bestand `13 queued`, `13 delivered`, `310 compacted`.
+- Der laufende History-Dispatcher-Snapshot meldet noch `0.1.9`, die installierte Venv `0.2.5`; der Live-Cutover-/Restart-Nachweis bleibt offen.
 
 ### Noch offen
 
 - Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
 - Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
+- History-Dispatcher nach der Commit-Grenze neu starten und Snapshot-/Bridge-Version erneut pruefen.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
