@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, neue Momentaufnahme; noch nicht abgeschlossen
 
-**Quellstand:** TeeBotus `1.9.486`, lokaler Stand nach dem Bridge-Route-Preflight-Fix, dem Applet-Queue-Anzeigepatch und dem Watcher-Ressourcenfix. Der aktuelle HEAD ist `d86b8cdf`.
+**Quellstand:** TeeBotus `1.9.487`, lokaler Stand nach dem Bridge-Route-Preflight-Fix, dem Applet-Queue-Anzeigepatch, dem Watcher-Ressourcenfix und dem Mixed-Route-Dispatchfix. Der Funktionscommit ist `5c6992dc`.
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -206,10 +206,10 @@ Eine schreibfreie Systemd-Pruefung am 2026-07-13 bestaetigte:
   Startzeit `2026-07-13 06:41:32 CEST`.
 - `teebotus.service` ist aktiv, MainPID `1014664`, Startzeit ebenfalls
   `2026-07-13 06:41:32 CEST`.
-- Der Quellstand ist inzwischen `1.9.486`; die laufenden Prozesse wurden vor
-  den letzten Watcher-/Sessionroot-Fixes gestartet und enthalten diese deshalb
-  noch nicht. Das Journal bestaetigt den alten Laufzeitstand mit einer
-  Versionsmeldung fuer `1.9.404`.
+- Der Quellstand ist inzwischen `1.9.487`; die laufenden Prozesse wurden vor
+  den letzten Watcher-/Sessionroot- und Bridge-Route-Fixes gestartet und
+  enthalten diese deshalb noch nicht. Das Journal bestaetigt den alten
+  Laufzeitstand mit einer Versionsmeldung fuer `1.9.404`.
 - `INVOCATION_ID` ist in beiden laufenden Units vorhanden. Das schliesst die
   bisher vermutete fehlende Systemd-Umgebungsvariable als Ursache aus.
 - `data/runtime/teebotus-runtime-version.json` fehlt aktuell. Das passt zum
@@ -330,6 +330,21 @@ Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
 - [ ] Applet-Health so erweitern, dass zentrale Queue `0` und lokale
   historische Spiegelreste getrennt benannt werden.
 
+### B1. Mixed-Route-Dispatch
+
+- [x] Logikfehler reproduzieren: Der Bridge-Pfad berechnete zwar
+  `routable_account_ids`, versandte danach aber an alle
+  `candidate_account_ids`.
+- [x] Versand auf die bereits vorgepruefte routbare Teilmenge begrenzen.
+- [x] Regression fuer einen routbaren und einen nicht routbaren Admin-
+  Empfaenger ergaenzen; nur die routbare ID wird an den Sender und an
+  `dispatch.complete` weitergegeben.
+- [x] `pytest -q tests/test_codex_history.py tests/test_pyproject_metadata.py`:
+  `164 passed in 6.95s`; Compileall und `git diff --check` sauber.
+- [x] Patchversion auf `1.9.487` bumpen und als `5c6992dc` committen.
+- [ ] Live-Nachweis nach Restart: gemischte Adminroute mit einer tatsaechlich
+  nicht routbaren ID pruefen.
+
 ### C. Collector-Ressourcen begrenzen
 
 - [ ] Event-Burst- und Pollingpfad getrennt messen.
@@ -367,7 +382,7 @@ Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
 ### Snapshot-Update: Runtime-Version-Marker
 
 - [x] Laufende Units, MainPIDs und Startzeit schreibfrei erfasst.
-- [x] Abweichung zwischen aktuellem Quellstand `1.9.486` und dem vor dem Fix
+- [x] Abweichung zwischen aktuellem Quellstand `1.9.487` und dem vor dem Fix
   gestarteten Live-Prozess dokumentiert.
 - [x] Fehlenden Marker als `marker_missing` im Appletstatus bestaetigt.
 - [x] Marker-Lifecycle in `TeeBotus/runtime/version_marker.py` und
@@ -583,3 +598,8 @@ Der Plan ist erst abgeschlossen, wenn:
   Stand `1.9.404`. `marker_missing` ist deshalb erwarteter Versionsdrift und
   kein belegter Fehler des aktuellen Marker-Lifecycles. Live-Matching nach
   Restart bleibt als Nachweis offen.
+- 2026-07-13: Bridge-Logikfehler im Mixed-Route-Fall behoben: Obwohl der
+  Preflight `routable_account_ids` berechnete, wurde zuvor die vollstaendige
+  Kandidatenliste versendet. `1.9.487` verwendet jetzt nur die routbare
+  Teilmenge. Regression und History-/Metadaten-Suite liefen mit `164 passed in
+  6.95s`; Commit `5c6992dc`. Kein Restart und kein Push ausgeloest.
