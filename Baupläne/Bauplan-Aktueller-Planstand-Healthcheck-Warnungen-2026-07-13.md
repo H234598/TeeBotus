@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.440`, Commit `13eed576`
+**Quellstand:** TeeBotus `1.9.441`, Commit `ccb511cc`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -279,6 +279,26 @@ unveraenderten Dienst bestaetigt bereits `actionable_problem_count=2` mit
 Botprozess stammt noch aus der Zeit vor dem Fix, wurde aber fuer diese reine
 Parserauswertung nicht neu gestartet. Key- und Signalbefund bleiben davon
 unberuehrt.
+
+## Befund 97: Unvollstaendiger v2-Payload konnte Rohwarnungen verschlucken
+
+Wenn das Applet `classification_version=2` und
+`total_problem_count=0` erhielt, aber die dazugehoerigen Action-/Infofelder
+fehlten, ignorierte es `runtime.status_counts`. Ein Rohwert wie
+`warning:1` konnte dadurch als `Health ok` erscheinen.
+
+### Umsetzung und Nachweis
+
+- Der Applet-Pfad erkennt jetzt, ob v2-Klassifikationsfelder tatsaechlich
+  vorhanden sind.
+- Fehlen sie, werden Rohproblemstatusse fail-closed als actionable behandelt.
+- Explizit deklarierte Informationsstatusse werden weiterhin nicht
+  hochgestuft.
+- Der konkrete Status wird auch im Header-Breakdown angezeigt.
+- Fokussierter v2-Test: `4 passed, 217 deselected`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `221 passed in 33.45s`.
+- Applet lokal installiert und byte-identisch verifiziert.
+- SemVer `1.9.441`, Commit `ccb511cc`.
 
 ## Arbeitsplan
 

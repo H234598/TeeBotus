@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.440`, Commit `13eed576`.
+- Aktueller gepruefter Quellstand: `1.9.441`, Commit `ccb511cc`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -500,6 +500,17 @@ oder unbekannte Metadaten bleiben actionable.
 Nachweis: `8 passed, 212 deselected` fokussiert und `220 passed in 36.27s`
 vollstaendig; SemVer `1.9.440`, Commit `13eed576`. Der laufende Dienst ist noch der alte Prozess,
 daher steht der Live-Nachweis nach dem naechsten erlaubten Reload noch aus.
+
+## Befund 97: v2-Health ohne Klassifikationsfelder muss fail-closed bleiben
+
+Das Applet vertraute bei `classification_version=2` auf den deklarierten
+Gesamtzähler. Bei `total_problem_count=0` und fehlenden Action-/Infofeldern
+konnten gleichzeitig vorhandene Rohwerte aus `runtime.status_counts` verloren
+gehen. Der neue Fallback verwendet diese Rohwerte nur dann, wenn die v2-
+Klassifikation wirklich fehlt; explizite Informationsfelder behalten Vorrang.
+
+Nachweis: `4 passed, 217 deselected`, danach `221 passed in 33.45s`; SemVer
+`1.9.441`, Commit `ccb511cc`; installierte Applet-Kopie byte-identisch.
 
 ## Invarianten
 
