@@ -49,6 +49,24 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Fuer nicht wiederaufnehmbare Eintraege Quarantaene/Auditspur statt stiller Entfernung verwenden.
 - Keine Produktionsdaten veraendern, bevor die Ursache und das Zielverhalten getestet sind.
 
+**Befund 2026-07-13:** Im separaten History-Dispatcher wurde `skipped` bisher in
+`DispatcherStore.complete()` als `failed` behandelt und dadurch automatisch
+requeued. Das widersprach der TeeBotus-Semantik fuer `no_private_route` und
+konnte Endlos-Retries erzeugen.
+
+**Umsetzung:** Der Dispatcher klassifiziert jetzt nach den persistierten
+Empfaengerergebnissen:
+
+- nur `skipped` -> terminal `skipped`
+- erfolgreiche Zustellung plus `skipped` -> terminal `delivered`
+- mindestens ein echter Fehler -> bisherige Retry-/Max-Attempts-Logik
+- unbekannte Statuswerte -> echter Fehler, fail closed
+
+Die Korrektur ist als History-Dispatcher `0.2.1` vorgesehen. Die Empfaenger-
+Statuswerte werden nach dem Upsert erneut aus SQLite gelesen, damit bereits
+vorhandene Empfaengerresultate bei der Gesamtklassifikation nicht verloren
+gehen.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -101,6 +119,9 @@ Der Plan ist erst abgeschlossen, wenn:
 - Live-Chat-Status: `status=warning queued=0 failed=0 total=1467 skipped=101 problem_statuses=skipped:101 skip_reasons=no_private_route:101`
 - TBL-Produktionsbestand: `1.366 accepted`, `101 skipped`
 - Applet- und Statuslogik fuer Bridge-Delegation, malformed rows und `created_at`-Latest-Auswahl umgesetzt
+- Reproduktion des Dispatcherfehlers vor dem Fix: ein `skipped/no_private_route`-Resultat endete als `queued`
+- History-Dispatcher nach dem Fix: `31 passed`, davon zwei Regressionstests fuer terminale Skips und `delivered+skipped`
+- Lokale Dispatcher-Paketversion: `0.2.1` im TeeBotus-Bridge-Projektstand
 
 ### Noch einzutragen
 
