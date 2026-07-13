@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.432`, `ca5a1bdd`.
+- Aktueller gepruefter Quellstand: `1.9.433`, `7770e52a`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -226,6 +226,26 @@ verschwinden.
 - `git diff --check`: erfolgreich.
 - SemVer `1.9.432`, lokaler Commit `ca5a1bdd`
   (`Normalize quoted numeric health metadata`).
+
+## Befund 88: Informations-Sonderregeln konnten Health-Blocker ueberstimmen
+
+Die Klassifikation behandelte `fallback_defaults`, partielle Codex-Usage,
+bekannte Identity-Warnings und bestimmte History-/API-Zustaende direkt als
+informativ. Diese Sonderregeln hatten Vorrang, wenn dieselbe Zeile zusaetzlich
+einen blockierenden Sekundaerstatus wie `semantic=unknown` trug. Dadurch wurde
+ein unbekannter Zustand trotz globaler Blocker-Allowlist als Hinweis behandelt.
+
+### Umsetzung und Nachweis
+
+- Alle Informations-Sonderregeln laufen jetzt nur noch, wenn kein erkannter
+  Problemstatus ein Fallback-Suppression-Blocker ist.
+- Gemischte Zeilen werden konservativ actionable klassifiziert, sodass der
+  schwere Teil nicht durch eine Hinweis-Sonderregel verschwindet.
+- Fokussierte Fallback-/Sonderfall-Suite: `9 passed, 203 deselected in 1.25s`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `212 passed in 37.68s`.
+- `git diff --check`: erfolgreich.
+- SemVer `1.9.433`, lokaler Commit `7770e52a`
+  (`Let health blockers override informational rules`).
 
 ## Umsetzung
 
