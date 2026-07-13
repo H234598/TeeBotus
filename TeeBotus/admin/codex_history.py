@@ -1252,7 +1252,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
             }
             item_results: list[dict[str, Any]] = []
             new_item_results: list[dict[str, Any]] = []
-            for account_id in candidate_account_ids:
+            for account_id in routable_account_ids:
                 if account_id in successful_accounts:
                     continue
                 new_item_results.append(await _dispatch_codex_history_item_to_account(

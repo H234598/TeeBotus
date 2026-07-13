@@ -1967,6 +1967,79 @@ def test_codex_history_dispatch_bridge_does_not_claim_configured_unroutable_reci
     assert calls == ["history.query"]
 
 
+def test_codex_history_dispatch_bridge_sends_only_to_routable_recipients(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    sent_accounts: list[str] = []
+    completion_bodies: list[dict[str, object]] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            if operation == "dispatch.claim":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "central-mixed-route",
+                            "kind": "codex_run_summary",
+                            "status": "delivering",
+                            "dedupe_key": "sha256:mixed-route",
+                            "payload": {
+                                "summary": {"text": "Nur die erreichbare Route darf senden."},
+                                "codex": {"dedupe_key": "sha256:mixed-route"},
+                            },
+                            "recipient_results": [],
+                        }],
+                    },
+                }
+            if operation == "dispatch.complete":
+                completion_bodies.append(dict(body or {}))
+                return {"ok": True, "data": {"ok": True, "status": "delivered"}}
+            raise AssertionError(operation)
+
+    async def fake_send(_store, _item, account_id, *_args, **kwargs):
+        account_id = str(account_id or "")
+        sent_accounts.append(account_id)
+        return {"account_id": account_id, "status": "accepted", "reason": "accepted", "channel": "telegram"}
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    monkeypatch.setattr(
+        codex_history_module,
+        "_codex_history_dispatch_account_ids",
+        lambda *args, **kwargs: ("routable-admin", "unroutable-admin"),
+    )
+    monkeypatch.setattr(
+        codex_history_module,
+        "_codex_history_dispatch_routable_account_ids",
+        lambda *args, **kwargs: ("routable-admin",),
+    )
+    monkeypatch.setattr(codex_history_module, "_dispatch_codex_history_item_to_account", fake_send)
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+            now=datetime(2026, 7, 13, 12, 5, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["ok"] is True
+    assert sent_accounts == ["routable-admin"]
+    assert completion_bodies[0]["recipient_results"] == [{
+        "recipient_id": "routable-admin",
+        "status": "accepted",
+        "channel": "telegram",
+        "message_ref": "",
+        "reason": "accepted",
+        "possible_duplicate": False,
+    }]
+
+
 def test_codex_history_dispatch_bridge_reconciles_terminal_local_queue_after_empty_claim(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
