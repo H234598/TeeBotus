@@ -3876,6 +3876,18 @@ def test_cinnamon_applet_runtime_parser_prefers_later_codex_history_problem() ->
     assert parsed["summary"]["codex_history"] == "codex_history=Broken status=broken queued=1 failed=1 total=2"
 
 
+def test_cinnamon_applet_runtime_parser_prefers_more_severe_codex_history_problem() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Projekt-History]
+        codex_history=Warning status=warning queued=1 failed=0 total=2
+        codex_history=Broken status=broken queued=1 failed=1 total=2
+        """
+    )
+
+    assert parsed["summary"]["codex_history"] == "codex_history=Broken status=broken queued=1 failed=1 total=2"
+
+
 def test_cinnamon_applet_payload_ok_reflects_runtime_health(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(
         cinnamon_applet,

@@ -274,6 +274,30 @@ FALLBACK_SUPPRESSION_BLOCKERS = frozenset(
     }
 )
 CODEX_HISTORY_INFORMATIONAL_SKIP_REASONS = frozenset({"no_private_route"})
+CODEX_HISTORY_STATUS_PRIORITY = {
+    "broken": 5,
+    "config_conflict": 5,
+    "error": 5,
+    "failed": 5,
+    "invalid": 5,
+    "schema_mismatch": 5,
+    "unknown": 4,
+    "missing": 4,
+    "missing_key": 4,
+    "unavailable": 4,
+    "unreachable": 4,
+    "cooldown": 3,
+    "degraded": 3,
+    "empty": 3,
+    "never": 3,
+    "no_limits_found": 3,
+    "partial": 3,
+    "stale": 3,
+    "unsupported": 3,
+    "needed": 2,
+    "fallback_defaults": 2,
+    "warning": 1,
+}
 SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"models_feed", "route_status", "semantic"})
 STATUS_FIELD_BOUNDARY_KEYS = frozenset({"status"}) | SECONDARY_PROBLEM_STATUS_FIELDS
 STATUS_FIELD_BOUNDARY_VALUES = PROBLEM_STATUSES | frozenset(
@@ -648,6 +672,13 @@ def _codex_history_skip_reasons_are_informational(fields: Mapping[str, Any]) -> 
     return True
 
 
+def _codex_history_problem_priority(statuses: tuple[str, ...] | list[str]) -> int:
+    return max(
+        (CODEX_HISTORY_STATUS_PRIORITY.get(status, 1) for status in statuses if status in PROBLEM_STATUSES),
+        default=0,
+    )
+
+
 def _problem_status_counts_from_text(value: Any) -> dict[str, int]:
     return {
         status: count
@@ -660,7 +691,7 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
     sections: dict[str, list[str]] = {"Start": []}
     current = "Start"
     status_counts: dict[str, int] = {}
-    codex_history_has_problem = False
+    codex_history_problem_priority = 0
     summary: dict[str, Any] = {
         "instances": "",
         "channels": "",
@@ -792,10 +823,10 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             summary["codex_history_strategies"] += _safe_int(fields.get("strategies", 0))
             summary["codex_history_graphs"] += _safe_int(fields.get("graphs", 0))
             summary["codex_history_other"] += _safe_int(fields.get("other", 0))
-            line_has_problem = any(status in PROBLEM_STATUSES for status in line_statuses)
-            if not summary["codex_history"] or (line_has_problem and not codex_history_has_problem):
+            line_problem_priority = _codex_history_problem_priority(line_statuses)
+            if not summary["codex_history"] or line_problem_priority > codex_history_problem_priority:
                 summary["codex_history"] = line
-                codex_history_has_problem = line_has_problem
+                codex_history_problem_priority = line_problem_priority
         elif line.startswith("codex_history_repo="):
             summary["codex_history_repos"] += 1
         elif line.startswith("gemini_free_tier_limits "):
