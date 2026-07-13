@@ -14,6 +14,7 @@ import pytest
 import TeeBotus.cinnamon_applet as cinnamon_applet
 from TeeBotus.cinnamon_applet import FREE_TEXT_STATUS_FIELD_BOUNDARIES
 from TeeBotus.cinnamon_applet import FLAG_PROBLEM_STATUS_FIELDS
+from TeeBotus.cinnamon_applet import FALLBACK_SENTINEL_VALUES
 from TeeBotus.cinnamon_applet import FORCED_PROBLEM_STATUS_FIELDS
 from TeeBotus.cinnamon_applet import NEUTRAL_FLAG_VALUES
 from TeeBotus.cinnamon_applet import PROBLEM_STATUSES
@@ -590,6 +591,8 @@ def test_cinnamon_applet_problem_status_constants_match_helper() -> None:
     assert "key && !quoted[keyStart]" in source
     assert _js_const_array_values(source, "FLAG_PROBLEM_STATUS_FIELDS") == set(FLAG_PROBLEM_STATUS_FIELDS)
     assert NEUTRAL_FLAG_VALUES == frozenset({"0", "false", "no", "none", "off"})
+    for value in FALLBACK_SENTINEL_VALUES:
+        assert re.search(rf"[\"']{re.escape(value)}[\"']\s*:\s*true", source)
     for value in NEUTRAL_FLAG_VALUES:
         assert f'"{value}": true' in source
     assert "const FORCED_PROBLEM_STATUS_FIELDS = {" in source
