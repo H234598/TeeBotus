@@ -3243,7 +3243,7 @@ def test_cinnamon_applet_runtime_parser_does_not_hide_codex_repo_failures_as_inf
         """
         [Projekt-History]
         codex_history_repo=Demo repo=TeeBotus status=warning queued=0 failed=1 total=1 problem_statuses=failed:1
-        codex_history_repo=Demo repo=Docs status=warning queued=0 failed=0 skipped=1 total=1 problem_statuses=skipped:1
+        codex_history_repo=Demo repo=Docs status=warning queued=0 failed=0 skipped=1 total=1 problem_statuses=skipped:1 skip_reasons=no_private_route:1
         """
     )
 
@@ -3269,12 +3269,26 @@ def test_cinnamon_applet_runtime_parser_does_not_hide_unknown_codex_skip_reasons
     assert parsed["summary"]["informational_problem_statuses"] == "warning:1"
 
 
+def test_cinnamon_applet_runtime_parser_requires_a_reason_for_skipped_repo_rows() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Projekt-History]
+        codex_history_repo=Demo repo=MissingReason status=warning queued=0 failed=0 skipped=1 total=1 problem_statuses=skipped:1
+        codex_history_repo=Demo repo=QueuedOnly status=warning queued=1 failed=0 skipped=0 total=1 problem_statuses=queued:1
+        codex_history_repo=Demo repo=KnownReason status=warning queued=0 failed=0 skipped=1 total=1 problem_statuses=skipped:1 skip_reasons=no_private_route:1
+        """
+    )
+
+    assert parsed["summary"]["actionable_problem_statuses"] == "warning:1"
+    assert parsed["summary"]["informational_problem_statuses"] == "warning:2"
+
+
 def test_cinnamon_applet_runtime_parser_normalizes_quoted_codex_history_metadata() -> None:
     parsed = parse_runtime_status(
         """
         [Projekt-History]
         codex_history_repo=Demo repo=failed status=ok problem_statuses="failed:1,skipped:2"
-        codex_history_repo=Demo repo=queue status=warning queued=0 skipped=2 problem_statuses="queued:1,skipped:2"
+        codex_history_repo=Demo repo=queue status=warning queued=0 skipped=2 problem_statuses="queued:1,skipped:2" skip_reasons="no_private_route:2"
         """
     )
 

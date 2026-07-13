@@ -634,7 +634,9 @@ def _codex_history_skip_reasons_are_informational(fields: Mapping[str, Any]) -> 
     if len(text) >= 2 and text[0] == text[-1] and text[0] in {'"', "'", "`"}:
         text = text[1:-1].strip()
     if not text:
-        return True
+        # A queued-only repo row has no skip reason to explain. A real skipped
+        # row without a reason is malformed and must remain actionable.
+        return _safe_int(fields.get("skipped"), 0) <= 0
     for part in text.split(","):
         reason_token, separator, raw_count = part.partition(":")
         reason = _normalized_status_value(reason_token)
