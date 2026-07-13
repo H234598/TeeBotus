@@ -702,6 +702,22 @@ effektiven Pfad verschleiern konnte.
   vollstaendige Applet-Suite: `226 passed in 35.69s`.
 - SemVer `1.9.453`, Commit `417ef2ad`.
 
+## Befund 110: Python und JS ignorierten `effective_status`
+
+Die Statusaggregation kann eine effektive Route als `degraded` oder `broken`
+melden. Dieses Feld fehlte jedoch in `SECONDARY_PROBLEM_STATUS_FIELDS`; die
+Python- und JS-Parser konnten eine solche Verschlechterung nicht als Problem
+zaehlen.
+
+### Umsetzung und Nachweis
+
+- `effective_status` ist in beiden Parsern als sekundares Problemfeld
+  registriert.
+- Regression deckt `status=configured effective_status=degraded` ab.
+- Python-/JS-Konstanten sind synchron; Applet-Suite: `227 passed in 34.09s`.
+- `node --check files/teebotus@H234598/applet.js` erfolgreich.
+- SemVer `1.9.454`, Commit `a11e716a`.
+
 ## Invarianten
 
 - Ein echter Fehler wird nicht durch einen Fallback, einen leeren Queue-Zustand

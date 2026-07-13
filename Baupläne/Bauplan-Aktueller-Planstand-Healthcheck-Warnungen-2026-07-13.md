@@ -485,6 +485,24 @@ trotz `route_status=unavailable` als informational gelten.
 - Applet-Suite: `226 passed in 35.69s`.
 - SemVer `1.9.453`, Commit `417ef2ad`.
 
+## Befund 110: `effective_status=degraded` wurde uebersehen
+
+`effective_status` konnte `degraded`, `broken` oder `unavailable` enthalten,
+war aber weder in der Python- noch in der JS-Liste der sekundaren
+Problemstatusfelder. Ein gesunder Primaerstatus mit degradierter
+Offload-/Fallbackschicht konnte deshalb als gesund erscheinen.
+
+### Umsetzung und Nachweis
+
+- `effective_status` ist jetzt in Python und im Cinnamon-Applet ein
+  sekundaeres Statusfeld.
+- Die JS-Konstanten und die Fehlerfelder bleiben mit dem Python-Parser
+  synchron.
+- Providerfreier Repro fuer `status=configured effective_status=degraded`
+  ergibt jetzt `degraded:1` actionable.
+- Applet-Suite: `227 passed in 34.09s`; `node --check` gruen.
+- SemVer `1.9.454`, Commit `a11e716a`.
+
 ## Arbeitsplan
 
 1. **Healthpayload und Applet weiter synchron halten**
