@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.392`; der vorherige Implementierungsstand ist in `6ba97439`, der neue Fixblock ist noch nicht committed.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.392`, Fixblock-Commit `588abd30`.
 
 ## Arbeitsprinzipien
 
@@ -319,7 +319,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Payload-Enrichment aus lokalem Store committed als `70b66952` (`Enrich bridged history payloads from local store`); SemVer-Bump auf `1.9.390` committed als `c0d871f2`; gezielte Suite danach `122 passed`.
 - Deduplizierten Terminalstatus synchronisieren und SemVer-Bump auf `1.9.391` committed als `6ba97439` (`Reconcile terminal deduplicated mirror status`); gezielte Suite danach `123 passed`.
 - Vor dem 20er-Restart meldete der laufende Snapshot noch `0.1.9`; nach dem Restart ist der aktive History-Dispatcher nachweislich `0.2.5`.
-- Fixblock fuer Befunde 20-27 umgesetzt; SemVer-Bump auf `1.9.392` vorbereitet: stale Fehlergruende, Bridge-Statusnormalisierung, vollstaendige Empfaengeraggregation, Identitaetsvalidierung, gemischte Erfolg/Skip-Status, synthetische Skips, Mirror-Statusweitergabe und strikte `data.ok`-Pruefung.
+- Fixblock fuer Befunde 20-27 umgesetzt und als `588abd30` committed; SemVer-Bump auf `1.9.392`: stale Fehlergruende, Bridge-Statusnormalisierung, vollstaendige Empfaengeraggregation, Identitaetsvalidierung, gemischte Erfolg/Skip-Status, synthetische Skips, Mirror-Statusweitergabe und strikte `data.ok`-Pruefung.
 - Gezielte Regressionstests nach diesem Fixblock: `126 passed in 10.68s` in `tests/test_codex_history.py tests/test_history_dispatcher_bridge.py`.
 - Aktuelle lesende Dispatcherprobe: Version `0.2.5`, `queued=0`, `delivered=26`, `last_error` leer; Bridge-Dry-Run fuer TBL: `items=0`, `status_counts={}`, keine Mutation.
 

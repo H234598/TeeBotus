@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.391`; der letzte Implementierungsstand ist in `6ba97439`, der aktuelle Dokumentations-HEAD in `c3c93edd`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.392`, Fixblock-Commit `588abd30`.
 
 ## Arbeitsprinzipien
 
@@ -185,6 +185,49 @@ keinen neuen Claim. Der lokale Mirror blieb deshalb trotzdem `queued`. Der
 Mirror synchronisiert solche Append-Antworten jetzt direkt, ohne einen
 kuenstlichen Versandversuch zu zaehlen.
 
+**Zwanzigster Befund 2026-07-13:** Nach einem frueheren `failed`-Versuch blieb
+dessen `last_reason` lokal stehen, obwohl ein spaeterer Dispatcher-Endstatus
+bereits `delivered` meldete. Die Reconciliation verwendet jetzt den aktuellen
+Versuch fuer den Fehlergrund; erfolgreiche bzw. kompaktierte Endzustaende
+entfernen einen veralteten Grund.
+
+**Einundzwanzigster Befund 2026-07-13:** Die Bridge gab ein lokales
+`accepted`-Ergebnis aus, obwohl der History-Dispatcher dieselbe erfolgreiche
+Zustellung als `delivered` normalisiert. Bridge-Reports und lokale
+`last_dispatch_results` normalisieren diese Status jetzt ebenfalls.
+
+**Zweiundzwanzigster Befund 2026-07-13:** Wenn ein alter Empfaenger noch
+`failed` war und nur ein anderer Empfaenger erfolgreich erneut bedient wurde,
+meldete die Bridge bisher `ok=true` und unterschlug den offenen Fehler. Der
+Report fuehrt jetzt alte und aktuelle Empfaengerergebnisse pro Empfaenger
+zusammen; ein nicht behobener Fehler bleibt als `failed` sichtbar.
+
+**Dreiundzwanzigster Befund 2026-07-13:** Doppelte oder widerspruechliche
+`recipient_id`/`account_id`-Angaben konnten durch die Bridge bis zum
+Dispatcher gelangen; dort haette die letzte Zeile die erste ueberschrieben.
+Solche Antworten werden jetzt fail-closed abgewiesen.
+
+**Vierundzwanzigster Befund 2026-07-13:** Die lokale Gesamtstatuslogik
+behandelte `accepted + skipped` anders als der Dispatcher und lieferte
+`accepted` statt `delivered`. Die Aggregation ist jetzt fuer diese gemischte
+Erfolg/Skip-Konstellation angeglichen.
+
+**Fuenfundzwanzigster Befund 2026-07-13:** Ein synthetischer
+`no_recipient_accounts`-Skip besitzt absichtlich keine Empfaenger-ID und wurde
+bei der Empfaengerzusammenfuehrung aus dem Bridge-Report entfernt. Anonyme
+Skip-/Fehlerzeilen bleiben jetzt im Bericht, werden aber nicht als echte
+Completion-Ziele gesendet.
+
+**Sechsundzwanzigster Befund 2026-07-13:** Der Shadow-/Bridge-Append gab den
+lokalen Status und Versuchszahler nicht an `history.append` weiter. Ein lokal
+bereits akzeptierter Eintrag konnte dadurch extern wieder als `queued` angelegt
+werden. Status, sicher normalisierter Versuchszahler und letzter Fehler werden
+jetzt mitgespiegelt.
+
+**Siebenundzwanzigster Befund 2026-07-13:** Die verschachtelte
+Dispatcher-Antwortpruefung akzeptierte `data.ok=0`, `null` oder Textwerte. Wenn
+das optionale Feld vorhanden ist, muss es jetzt exakt Boolean `true` sein.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -276,12 +319,15 @@ Der Plan ist erst abgeschlossen, wenn:
 - Payload-Enrichment aus lokalem Store committed als `70b66952` (`Enrich bridged history payloads from local store`); SemVer-Bump auf `1.9.390` committed als `c0d871f2`; gezielte Suite danach `122 passed`.
 - Deduplizierten Terminalstatus synchronisieren und SemVer-Bump auf `1.9.391` committed als `6ba97439` (`Reconcile terminal deduplicated mirror status`); gezielte Suite danach `123 passed`.
 - Vor dem 20er-Restart meldete der laufende Snapshot noch `0.1.9`; nach dem Restart ist der aktive History-Dispatcher nachweislich `0.2.5`.
+- Fixblock fuer Befunde 20-27 umgesetzt und als `588abd30` committed; SemVer-Bump auf `1.9.392`: stale Fehlergruende, Bridge-Statusnormalisierung, vollstaendige Empfaengeraggregation, Identitaetsvalidierung, gemischte Erfolg/Skip-Status, synthetische Skips, Mirror-Statusweitergabe und strikte `data.ok`-Pruefung.
+- Gezielte Regressionstests nach diesem Fixblock: `126 passed in 10.68s` in `tests/test_codex_history.py tests/test_history_dispatcher_bridge.py`.
+- Aktuelle lesende Dispatcherprobe: Version `0.2.5`, `queued=0`, `delivered=26`, `last_error` leer; Bridge-Dry-Run fuer TBL: `items=0`, `status_counts={}`, keine Mutation.
 
 ### Noch offen
 
 - Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
 - Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
-- Der lokale TeeBotus-Code ist aktuell `1.9.391`; die Fixes ab `1.9.389` wurden nach dem letzten 20er-Restart committed und sind noch nicht live geladen. Live-Reload ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
+- Der lokale TeeBotus-Code ist aktuell `1.9.392`; die Fixes ab `1.9.389` wurden nach dem letzten 20er-Restart committed bzw. vorbereitet und sind noch nicht live geladen. Live-Reload ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
