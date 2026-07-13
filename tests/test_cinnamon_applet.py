@@ -3268,6 +3268,19 @@ def test_cinnamon_applet_runtime_parser_normalizes_quoted_codex_history_metadata
     assert parsed["summary"]["informational_problem_statuses"] == "warning:1"
 
 
+def test_cinnamon_applet_runtime_parser_normalizes_quoted_codex_history_counts() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Projekt-History]
+        codex_history_repo=Demo status=skipped failed="1" total="3"
+        """
+    )
+
+    assert parsed["status_counts"]["skipped"] == 1
+    assert parsed["status_counts"]["warning"] == 1
+    assert parsed["summary"]["actionable_problem_statuses"] == "warning:1"
+
+
 def test_cinnamon_applet_runtime_parser_does_not_hide_unknown_api_or_identity_statuses() -> None:
     parsed = parse_runtime_status(
         """
@@ -4084,6 +4097,9 @@ def test_cinnamon_applet_safe_int_rejects_boolean_and_overflow_values() -> None:
     assert cinnamon_applet._safe_int(float("inf"), 7) == 7
     assert cinnamon_applet._safe_int(float("-inf"), 7) == 7
     assert cinnamon_applet._safe_int("12", 7) == 12
+    assert cinnamon_applet._safe_int('"12"', 7) == 12
+    assert cinnamon_applet._safe_int("'12'", 7) == 12
+    assert cinnamon_applet._safe_int("`12`", 7) == 12
 
 
 def test_cinnamon_applet_rejects_active_unit_with_failed_substate() -> None:

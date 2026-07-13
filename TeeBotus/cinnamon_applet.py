@@ -584,6 +584,10 @@ def _qdrant_problem_count(qdrant: dict[str, Any]) -> int:
 def _safe_int(value: Any, default: int = 0) -> int:
     if isinstance(value, bool):
         return default
+    if isinstance(value, str):
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'", "`"}:
+            value = value[1:-1].strip()
     try:
         return int(value)
     except (OverflowError, TypeError, ValueError):
