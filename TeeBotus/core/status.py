@@ -97,7 +97,9 @@ CODEX_HISTORY_SUCCESS_STATUSES = frozenset({"accepted", "acknowledged", "deliver
 CODEX_HISTORY_NONPROBLEM_STATUSES = CODEX_HISTORY_SUCCESS_STATUSES | {"compacted"}
 CODEX_HISTORY_STATUS_TOKENS = CODEX_HISTORY_SUCCESS_STATUSES | {
     "compacted",
+    "discarded",
     "dispatching",
+    "delivering",
     "error",
     "failed",
     "ok",

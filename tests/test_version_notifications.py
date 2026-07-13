@@ -5505,6 +5505,35 @@ def test_codex_history_status_warns_for_skipped_item(tmp_path: Path) -> None:
     assert "problem_statuses=skipped:1 skip_reasons=unknown:1" in lines[1]
 
 
+def test_codex_history_status_preserves_dispatcher_terminal_status_tokens(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "discarded",
+            "summary_prefix": "v1.8.0 #0001",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "Verworfen"},
+        },
+    )
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "delivering",
+            "summary_prefix": "v1.8.0 #0002",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "In Zustellung"},
+        },
+    )
+
+    lines = codex_history_status_lines(instance_name="Demo", account_store=store)
+
+    assert "problem_statuses=delivering:1,discarded:1" in lines[0]
+    assert "problem_statuses=delivering:1,discarded:1" in lines[1]
+    assert "latest_status=delivering" in lines[1]
+    assert "unknown:2" not in "\n".join(lines)
+
+
 def test_codex_history_status_warns_for_malformed_backend_row() -> None:
     class MalformedHistoryStore:
         def read_codex_history_outbox(self, _account_id: str):
