@@ -54,7 +54,7 @@ def test_hf_pool_route_uses_instance_scoped_key_for_openai_fallback(monkeypatch)
             provider="hf_pool",
             model="pool:default",
             fallback_profile_name="openai_premium",
-            fallback_model="openai/gpt-test",
+            fallback_model="gpt-4.1-mini",
             fallback_api_key_env="OPENAI_API_KEY",
         )
 

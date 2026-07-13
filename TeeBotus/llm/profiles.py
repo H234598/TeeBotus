@@ -257,7 +257,8 @@ def resolve_profile_api_key(
     normalized_provider = normalize_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
     uses_openai = normalized_provider == "openai" or (
-        normalized_provider == "litellm" and normalized_model.startswith("openai/")
+        normalized_provider == "litellm"
+        and (normalized_model.startswith("openai/") or env_name.casefold() == "openai_api_key")
     )
     if uses_openai:
         token = _instance_env_token(instance_name)
