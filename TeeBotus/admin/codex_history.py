@@ -543,6 +543,24 @@ def _history_dispatcher_mode(env: Mapping[str, str] | None) -> str:
     return mode
 
 
+def _history_dispatcher_response_data(response: Mapping[str, Any], *, operation: str) -> Mapping[str, Any]:
+    if response.get("ok") is not True:
+        raise HistoryDispatcherError(str(response.get("error") or f"History-Dispatcher {operation} failed"))
+    data = response.get("data")
+    if not isinstance(data, Mapping):
+        raise HistoryDispatcherError(f"History-Dispatcher {operation} returned invalid data")
+    if data.get("ok") is False:
+        raise HistoryDispatcherError(str(data.get("error") or f"History-Dispatcher {operation} rejected"))
+    return data
+
+
+def _history_dispatcher_response_items(data: Mapping[str, Any], *, operation: str) -> list[object]:
+    items = data.get("items")
+    if not isinstance(items, list):
+        raise HistoryDispatcherError(f"History-Dispatcher {operation} returned invalid items")
+    return list(items)
+
+
 def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any]) -> None:
     if _history_dispatcher_mode(None) not in {"shadow", "bridge"}:
         return
@@ -641,10 +659,10 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
     try:
         if dry_run:
             response = client.request("history.query", {"status": "queued", "limit": max(0, int(limit))})
-            if not response.get("ok"):
-                raise HistoryDispatcherError(str(response.get("error") or "History-Dispatcher query failed"))
+            query_data = _history_dispatcher_response_data(response, operation="history.query")
+            query_items = _history_dispatcher_response_items(query_data, operation="history.query")
             rows: list[dict[str, Any]] = []
-            for item in response.get("data", {}).get("items", []):
+            for item in query_items:
                 if isinstance(item, Mapping):
                     rows.extend(_dry_run_dispatch_rows(_history_dispatcher_item_to_legacy(item), candidate_account_ids, store, instance_name=instance_name, instances_dir=instances_dir, secret_provider=secret_provider))
             return {
@@ -660,10 +678,10 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
             "worker_id": f"teebotus:{os.getpid()}:{_codex_history_instance_token(instance_name)}",
             "limit": max(0, int(limit)),
         })
-        if not claimed.get("ok"):
-            raise HistoryDispatcherError(str(claimed.get("error") or "History-Dispatcher claim failed"))
+        claim_data = _history_dispatcher_response_data(claimed, operation="dispatch.claim")
+        claim_items = _history_dispatcher_response_items(claim_data, operation="dispatch.claim")
         result_rows: list[dict[str, Any]] = []
-        for raw_item in claimed.get("data", {}).get("items", []):
+        for raw_item in claim_items:
             if not isinstance(raw_item, Mapping):
                 continue
             item = _history_dispatcher_item_to_legacy(raw_item)
