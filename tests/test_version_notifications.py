@@ -5493,7 +5493,7 @@ def test_codex_history_status_warns_for_malformed_backend_row() -> None:
     lines = codex_history_status_lines(instance_name="Demo", account_store=MalformedHistoryStore())
 
     assert lines == [
-        "codex_history=Demo status=warning queued=0 failed=0 total=1 latest_repo=<none> "
+        "codex_history=Demo status=warning queued=0 failed=0 total=1 problem_statuses=malformed:1 latest_repo=<none> "
         "latest_prefix=<none> latest_kind=<none> run_summaries=0 strategies=0 graphs=0 other=0"
     ]
 

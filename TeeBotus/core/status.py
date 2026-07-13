@@ -913,13 +913,14 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
     latest_kind = _codex_history_kind(latest) if valid_rows else "<none>"
     kind_counts = _codex_history_kind_counts(valid_rows)
     has_problem_status = malformed_rows > 0 or any(status not in CODEX_HISTORY_NONPROBLEM_STATUSES for status in status_counts)
-    problem_statuses = _codex_history_count_label(
-        {
-            status: count
-            for status, count in status_counts.items()
-            if status not in CODEX_HISTORY_NONPROBLEM_STATUSES
-        }
-    )
+    problem_status_counts = {
+        status: count
+        for status, count in status_counts.items()
+        if status not in CODEX_HISTORY_NONPROBLEM_STATUSES
+    }
+    if malformed_rows:
+        problem_status_counts["malformed"] = malformed_rows
+    problem_statuses = _codex_history_count_label(problem_status_counts)
     skip_reasons = _codex_history_skip_reason_label(valid_rows)
     non_delegable_problem_count = malformed_rows + sum(
         count
