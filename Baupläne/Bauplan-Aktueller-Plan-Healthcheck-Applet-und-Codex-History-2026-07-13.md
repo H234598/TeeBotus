@@ -515,5 +515,5 @@ Der Plan ist erst abgeschlossen, wenn:
   Selbsttrigger verursachen. Eine Mutations-Allowlist filtert reine
   Leseereignisse. Fokussiert liefen `42 passed in 3.68s`, die
   History-/Metadaten-Suite mit `162 passed in 8.11s`; Compileall und
-  `git diff --check` waren sauber. Die Live-Ressourcenmessung nach Restart
-  bleibt offen.
+  `git diff --check` waren sauber. Der Funktionsstand ist als `96523652`
+  committed. Die Live-Ressourcenmessung nach Restart bleibt offen.
