@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.413`, Commit `80def50`.
+- Quellstand: TeeBotus `1.9.414`, Commit `a438803`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -135,6 +135,26 @@ Nachweis:
   `informational_problem_status_count=23`.
 - SemVer-Bump auf `1.9.413`, Commit `80def506`
   (`Expose Codex history repository failures`).
+
+### Befund 69: Unbekannte API- und Identitaetszustaende wurden als Hinweise behandelt
+
+Die Duplikatunterdrueckung fuer `api_budget` und `account_identity` war zu
+breit. Dadurch wurden ein `ready`-Datensatz mit Fehler sowie `unknown` bei
+API-Route oder Account-Identitaet in den Informationszaehler verschoben. Die
+Logik behandelt jetzt nur belegte, erwartbare Detailzustaende als Hinweis:
+Fallback-abgedeckte API-Diagnosen sowie ein bekannter Identity-Warning mit
+positivem `identity_warnings`-Zaehler. Unbekannte, fehlerhafte oder
+unerreichbare Zustaende bleiben actionable.
+
+Nachweis:
+
+- Regressionstest fuer `api_budget status=ready error=...`,
+  `api_budget status=unknown`, `account_identity status=unknown` und einen
+  legitimen `identity_warnings=1`-Hinweis.
+- Fokussierte Suite: `2 passed`.
+- Vollstaendige Applet-Suite: `195 passed in 38.41s`.
+- SemVer-Bump auf `1.9.414`, Commit `a4388030`
+  (`Tighten applet diagnostic classification`).
 
 ## Naechste Arbeitspakete
 
