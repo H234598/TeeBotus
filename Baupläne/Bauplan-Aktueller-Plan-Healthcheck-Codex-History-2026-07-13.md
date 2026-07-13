@@ -4,7 +4,8 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen
 
-**Quellstand:** TeeBotus `1.9.474`, lokaler Stand nach `66e040a6`
+**Quellstand:** TeeBotus `1.9.475`, lokaler Stand nach `c0ce4201`
+
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
 ## Auftrag
@@ -104,6 +105,9 @@ Vorherige Detailplaene bleiben als Historie und Nachweis erhalten:
   Callback-Exceptions.
 - Auch eine Exception aus `Observer.start()` laeuft durch den aeusseren
   Cleanup-Pfad; ein teilweise gestarteter Observer wird best effort gestoppt.
+- Fehler aus `Observer.stop()` oder `join()` maskieren keinen Primaerfehler mehr;
+  beide Schritte werden versucht und der interne Started-Zustand wird garantiert
+  zurueckgesetzt.
 - Die Snapshot-Baseline wird nach inkrementellen Events aktualisiert, damit
   ein folgender Timeout bereits verarbeitete Dateien nicht erneut importiert.
 - Geloeschte oder umbenannte Eventquellen werden aus der Baseline entfernt,
@@ -245,6 +249,8 @@ deren Kombination eingegrenzt.
   beobachten, damit spaetere Dateierzeugung nicht verloren geht.
 - [x] Start-Exceptions des Watchdogs durch einen geschuetzten `try/finally`-
   Pfad abfangen und einen teilweise gestarteten Observer aufraeumen.
+- [x] Stop-/Join-Exceptions best effort behandeln, loggen und den Started-
+  Zustand auch bei Cleanup-Fehlern zuruecksetzen.
 - [ ] Event-Burst-Debounce und Scan-Deduplizierung separat messen.
 - [x] Read-only Realroot-Vergleich ausfuehren und im Plan dokumentieren.
 - [x] Scan-Auswahl-Wiederverwendung mit kleiner Teststruktur pruefen.
@@ -284,6 +290,7 @@ deren Kombination eingegrenzt.
 - [x] Regression fuer einen beim Watcher-Start fehlenden expliziten JSONL-Root;
   der Observer wird auf dessen Elternordner angesetzt.
 - [x] Regression fuer Watchdog-Start-Exception und Observer-Cleanup.
+- [x] Regression fuer fehlgeschlagenes Watchdog-Stop/Join ohne Zustands-Leak.
 - [x] Regression fuer begrenzte Follow-Detailausgabe.
 - [x] Regression fuer den inkrementellen Ereignispfad.
 - [ ] Collector-Debounce-/Ressourcenbenchmark mit grossem Sessionroot.
@@ -340,5 +347,9 @@ Der Plan ist erst abgeschlossen, wenn:
   `try/finally`-Pfad und raeumt einen teilweise gestarteten Observer best
   effort auf. Die fokussierten Watchdog-Tests liefen mit `8 passed`; die
   Codex-History- und Metadaten-Suite mit `148 passed in 6.52s`.
+- 2026-07-13: Cleanup-Logikfehler bei fehlgeschlagenem Stop/Join behoben:
+  `c0ce4201` (`1.9.475`) versucht beide Schritte best effort, protokolliert
+  beide Fehler und setzt den internen Zustand garantiert zurueck. Die
+  Codex-History- und Metadaten-Suite lief mit `149 passed in 7.10s`.
 - 2026-07-13: Der Plan bleibt bis zur TBL-Reconciliation, der Event-Burst-/
   Ressourcenmessung und der naechsten erlaubten Live-Abnahme aktiv.
