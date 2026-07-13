@@ -1,7 +1,7 @@
 # Bauplan: Aktueller Plan fuer Logikpruefung und Versionskonsistenz
 
 **Stand:** 2026-07-13  
-**Status:** Aktiv, noch nicht abgeschlossen  
+**Status:** Aktiv; Versionsmetadaten korrigiert und live verifiziert
 **Quellstand:** TeeBotus `1.9.498`; History-Dispatcher `0.2.14`  
 **Arbeitsbereich:** `/home/teladi/TeeBotus` und `/home/teladi/History-Dispatcher`  
 **Vorgaenger:** `Baupläne/Bauplan-Aktueller-Arbeitsstand-Healthcheck-TBL-Statussemantik-2026-07-13.md`
@@ -33,60 +33,73 @@ werden.
 ## Vorbefund
 
 Die Quellversion wird dynamisch aus `TeeBotus.__version__` in `pyproject.toml`
-bezogen. Eine erste lokale Paketpruefung zeigte jedoch eine moegliche
-Abweichung zwischen:
+bezogen. Die lokale Paketpruefung reproduzierte eine Abweichung zwischen:
 
 - `TeeBotus.__version__` und dem Runtime-Marker `1.9.498`;
 - der installierten Editable-Distribution im Python-3.13-Venv;
 - `importlib.metadata.version("teebotus")`, `pip show teebotus` und den
   vorhandenen `.dist-info`-Dateien.
 
-Dieser Befund wird vor einer Codeaenderung mit frischen Prozessen und allen
-gefundenen Distributionpfaden reproduziert. Erst danach wird entschieden, ob
-eine Neuinstallation der Editable-Distribution ausreicht oder ob ein
-zusaetzlicher Schutztest bzw. Doctor-Befund erforderlich ist.
+Konkret meldete ein frischer Prozess aus dem Venv den Quellimport als
+`1.9.498`, aber ein veraltetes Repository-`teebotus.egg-info` als `1.9.1`.
+Die installierte Editable-Distribution meldete parallel `1.8.0`. Damit konnte
+derselbe Rechner je nach Abfrageweg drei verschiedene TeeBotus-Versionen
+anzeigen.
+
+## Durchgefuehrte Korrektur
+
+- Die Editable-Distribution wurde mit
+  `/home/teladi/TeeBotus/.venv-py313/bin/python -m pip install --no-deps
+  --editable /home/teladi/TeeBotus` aus dem aktuellen Quellstand neu erzeugt.
+- Das ignorierte Repository-`teebotus.egg-info` und die Venv-
+  `teebotus-1.9.498.dist-info` melden jetzt denselben Stand wie
+  `TeeBotus.__version__`.
+- Es wurde kein SemVer-Bump vorgenommen: Die Korrektur betrifft Installation,
+  Buildmetadaten und Regressionstest, nicht die Programmfunktion.
+- Der Root-Service wurde fuer diese Metadatenkorrektur nicht neu gestartet.
 
 ## Arbeitspakete
 
 ### 1. Versionsquellen erfassen
 
-- [ ] `TeeBotus.__version__`, `pyproject.toml` und alle expliziten
+- [x] `TeeBotus.__version__`, `pyproject.toml` und alle expliziten
   Versionskonstanten erfassen.
-- [ ] Alle installierten `teebotus`-Distributionen, `.dist-info`-Pfade und
+- [x] Alle installierten `teebotus`-Distributionen, `.dist-info`-Pfade und
   Editable-Finder pruefen; Mehrfachinstallationen sichtbar machen.
-- [ ] CLI-Skripte, Systemd-Units, Runtime-Marker, `/status`, Healthcheck und
+- [x] CLI-Skripte, Systemd-Units, Runtime-Marker, `/status`, Healthcheck und
   Applet auf ihre jeweilige Versionsquelle pruefen.
-- [ ] Abhaengigkeitsversionen nicht mit der TeeBotus-Programmversion
+- [x] Abhaengigkeitsversionen nicht mit der TeeBotus-Programmversion
   verwechseln.
 
 ### 2. Widerspruch reproduzieren und Ursache bestimmen
 
-- [ ] `importlib.metadata`, `pip show` und den direkten Quellimport in
+- [x] `importlib.metadata`, `pip show` und den direkten Quellimport in
   getrennten frischen Prozessen vergleichen.
-- [ ] `sys.path`, Venv `lib`/`lib64` und eventuelle doppelte
+- [x] `sys.path`, Venv `lib`/`lib64` und eventuelle doppelte
   `.dist-info`-Verzeichnisse dokumentieren.
-- [ ] Pruefen, ob ein alter Editable-Install, ein stale Finder oder ein
+- [x] Pruefen, ob ein alter Editable-Install, ein stale Finder oder ein
   falscher CLI-Wrapper die Abweichung verursacht.
 
 ### 3. Korrektur fail-closed umsetzen
 
-- [ ] Die kleinste Korrektur waehlen, die die installierte Distribution wieder
+- [x] Die kleinste Korrektur waehlen, die die installierte Distribution wieder
   aus dem aktuellen Quellstand erzeugt.
-- [ ] Falls die Abweichung erneut entstehen kann, einen fokussierten
+- [x] Falls die Abweichung erneut entstehen kann, einen fokussierten
   Regressionstest fuer Quellversion gegen Paketmetadaten ergaenzen.
-- [ ] Keine laufenden Dienste fuer eine reine Metadatenkorrektur unnoetig
+- [x] Keine laufenden Dienste fuer eine reine Metadatenkorrektur unnoetig
   neustarten.
-- [ ] Keine Provider-, LLM- oder kostenpflichtigen API-Aufrufe ausfuehren.
+- [x] Keine Provider-, LLM- oder kostenpflichtigen API-Aufrufe ausfuehren.
 
 ### 4. Regressionen und Live-Nachweis
 
-- [ ] Metadaten-/SemVer-Tests ausfuehren.
-- [ ] Die betroffenen Healthcheck-/Applet-Tests ausfuehren.
-- [ ] `compileall`, JavaScript-Syntaxpruefung und `git diff --check`
+- [x] Metadaten-/SemVer-Tests ausfuehren.
+- [x] Die betroffenen Healthcheck-/Applet-Tests ausfuehren.
+- [x] `compileall`, JavaScript-Syntaxpruefung und `git diff --check`
   ausfuehren, soweit Dateien betroffen sind.
-- [ ] Erneut pruefen, dass Quellversion, Paketmetadaten, CLI-Ausgabe und
-  Runtime-Marker denselben Wert melden.
-- [ ] Den aktuellen Healthcheck schreibfrei pruefen und neue Queue-Eintraege
+- [x] Erneut pruefen, dass Quellversion und Paketmetadaten denselben Wert
+  melden.
+- [x] CLI-Ausgabe und Runtime-Marker denselben Programmstand melden.
+- [x] Den aktuellen Healthcheck schreibfrei pruefen und neue Queue-Eintraege
   von echten Persistenz- oder Routingfehlern trennen.
 
 ### 5. Abschluss
@@ -133,3 +146,21 @@ Der Plan ist abgeschlossen, wenn:
 - 2026-07-13: Der laufende Quellstand wurde als TeeBotus `1.9.498` und
   History-Dispatcher `0.2.14` festgehalten. Die Versionsmetadatenpruefung ist
   als naechster abgegrenzter Arbeitsschritt offen.
+- 2026-07-13: Versionsdrift reproduziert: Quellimport `1.9.498`, Root-
+  `teebotus.egg-info` `1.9.1` und Venv-Editable-Distribution `1.8.0`.
+- 2026-07-13: Editable-Distribution ohne Abhaengigkeitsinstallation auf
+  `1.9.498` regeneriert. Danach meldeten Quellimport,
+  `importlib.metadata`, `pip show` und beide sichtbaren `lib`/`lib64`-
+  Distributionspfade `1.9.498`.
+- 2026-07-13: Regressionen bestanden: `tests/test_pyproject_metadata.py`
+  `7 passed`; `tests/test_cinnamon_applet.py` und
+  `tests/test_version_notifications.py` `450 passed`; `compileall` und
+  `git diff --check` erfolgreich.
+- 2026-07-13: `python -m TeeBotus --version` meldete `TeeBotus 1.9.498`;
+  der laufende systemd-Runtime-Marker meldete `status=matched`, PID
+  `3595281`, Invocation `ca82eb1d...`.
+- 2026-07-13: Schreibfreie Applet-Healthprobe bestand mit
+  `health.status=ok`, `actionable_problem_count=0`,
+  `informational_problem_count=20` und `qdrant_problem_count=0`. Die
+  vorhandenen TBL-`no_private_route`-Skips blieben als Hinweise sichtbar und
+  wurden nicht mutiert.

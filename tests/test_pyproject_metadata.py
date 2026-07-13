@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import importlib.metadata as importlib_metadata
 import re
 import tomllib
 from pathlib import Path
+
+import pytest
 
 from TeeBotus import __version__
 
@@ -24,6 +27,18 @@ def _pyproject() -> dict:
 def test_package_version_is_semver() -> None:
     assert SEMVER_RE.fullmatch(__version__)
     assert _pyproject()["tool"]["setuptools"]["dynamic"]["version"] == {"attr": "TeeBotus.__version__"}
+
+
+def test_visible_teebotus_distributions_match_source_version() -> None:
+    versions = {
+        distribution.version
+        for distribution in importlib_metadata.distributions()
+        if (distribution.metadata.get("Name") or "").lower() == "teebotus"
+    }
+    if not versions:
+        pytest.skip("teebotus is not installed in this test environment")
+
+    assert versions == {__version__}
 
 
 def test_pyproject_declares_plan1_optional_dependency_groups() -> None:
