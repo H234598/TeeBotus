@@ -1783,6 +1783,48 @@ def test_runtime_status_resolves_instance_scoped_key_for_litellm_openai_route(mo
     assert "instance-openai-secret" not in captured.out
 
 
+def test_runtime_status_recognizes_unprefixed_litellm_openai_profile_scope(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY_DEMO", "instance-openai-secret")
+
+    assert bot._status_route_uses_openai_api(
+        provider="litellm",
+        model="gpt-4.1-mini",
+        api_key_env="OPENAI_API_KEY",
+    ) is True
+    assert bot._status_openai_key_scope(
+        ("Demo",),
+        provider="litellm",
+        model="gpt-4.1-mini",
+        api_key_env="OPENAI_API_KEY",
+    ) == "instance_fallback"
+
+
+def test_runtime_status_uses_instance_scoped_key_for_openai_fallback(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    from TeeBotus.llm.profiles import LLMRoute
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY_DEMO", "instance-openai-secret")
+    monkeypatch.setattr(
+        "TeeBotus.llm.profiles.select_llm_route",
+        lambda *_args, **_kwargs: LLMRoute(
+            purpose="hard_reasoning",
+            profile_name="local_ollama",
+            provider="litellm",
+            model="ollama_chat/qwen",
+            fallback_profile_name="openai_legacy",
+            fallback_model="gpt-4.1-mini",
+            fallback_api_key_env="OPENAI_API_KEY",
+        ),
+    )
+
+    line = bot._runtime_status_decision_line("hard_reasoning", instance_names=("Demo",))
+
+    assert "fallback_api_key=configured" in line
+
+
 def test_runtime_status_reports_missing_key_for_remote_litellm_purpose_route(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"

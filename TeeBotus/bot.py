@@ -440,6 +440,7 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
         route_fallback_count,
         route_api_key_env,
         route_fallback_api_key_env,
+        route_fallback_model,
         route_service_tier,
         route_error,
         route_mode,
@@ -477,7 +478,11 @@ def _runtime_status_llm_line(account: Any, *, instructions: Any | None = None, i
         base_url=base_url,
         route_api_key_env=route_api_key_env,
     )
-    fallback_key_configured = bool(route_fallback_api_key_env and os.environ.get(route_fallback_api_key_env, "").strip())
+    fallback_key_configured = _status_fallback_api_key_configured(
+        route_fallback_api_key_env,
+        route_fallback_model,
+        instance_names=(str(getattr(account, "instance_name", "") or ""),),
+    )
     direct_fallback_key_status = _direct_remote_fallback_key_status(
         account,
         instructions=instructions,
@@ -796,7 +801,11 @@ def _status_route_fallback_identity(account: Any, *, purpose: str, route_mode: s
     return _sanitize_status_text(" ".join(parts))
 
 
-def _status_llm_route(account: Any, *, instructions: Any | None = None) -> tuple[str, str, str, int, str, str, str, str, str]:
+def _status_llm_route(
+    account: Any,
+    *,
+    instructions: Any | None = None,
+) -> tuple[str, str, str, int, str, str, str, str, str, str]:
     account_provider = str(getattr(account, "llm_provider", "") or "").strip()
     account_model = str(getattr(account, "llm_model", "") or "").strip()
     account_base_url = str(getattr(account, "llm_base_url", "") or "").strip()
@@ -818,6 +827,7 @@ def _status_llm_route(account: Any, *, instructions: Any | None = None) -> tuple
                 0,
                 profile.api_key_env,
                 "",
+                "",
                 profile.service_tier,
                 "",
                 "profile",
@@ -834,14 +844,15 @@ def _status_llm_route(account: Any, *, instructions: Any | None = None) -> tuple
                 0 if account_fallbacks else len(route.fallback_models),
                 route.api_key_env,
                 "" if account_fallbacks else route.fallback_api_key_env,
+                "" if account_fallbacks else route.fallback_model,
                 route.service_tier,
                 "",
                 "purpose",
             )
     except Exception as exc:  # noqa: BLE001 - runtime-status should report bad routing config without crashing.
-        return provider, model, base_url, 0, "", "", "", f"{type(exc).__name__}: {exc}", "broken"
+        return provider, model, base_url, 0, "", "", "", "", f"{type(exc).__name__}: {exc}", "broken"
     service_tier = _effective_llm_text(account, instructions, "llm_service_tier", "llm_service_tier")
-    return provider, model, base_url, 0, "", "", service_tier, "", "direct"
+    return provider, model, base_url, 0, "", "", "", service_tier, "", "direct"
 
 
 def _runtime_status_decision_line(purpose: str, *, instance_names: Sequence[str] = ()) -> str:
@@ -896,7 +907,11 @@ def _runtime_status_decision_line(purpose: str, *, instance_names: Sequence[str]
         if route.fallback_base_url:
             detail += f" fallback_base_url={_sanitize_status_url(route.fallback_base_url)}"
         if route.fallback_api_key_env:
-            configured = bool(os.environ.get(route.fallback_api_key_env, "").strip())
+            configured = _status_fallback_api_key_configured(
+                route.fallback_api_key_env,
+                route.fallback_model,
+                instance_names=instance_names,
+            )
             detail += f" fallback_api_key={'configured' if configured else 'missing'}"
     if offload_detail := _runtime_status_local_ollama_offload_detail(route, instance_names=instance_names):
         detail += f" {offload_detail}"
@@ -1330,7 +1345,7 @@ def _llm_key_configured(
         return True
     if route_api_key_env and os.environ.get(route_api_key_env, "").strip():
         return True
-    if _status_route_uses_openai_api(provider=provider, model=model):
+    if _status_route_uses_openai_api(provider=provider, model=model, api_key_env=route_api_key_env):
         if str(getattr(account, "openai_api_key", "") or "").strip():
             return True
         if _status_instance_api_key_configured(
@@ -1407,11 +1422,13 @@ def _status_model_uses_remote_provider(model: object) -> bool:
     )
 
 
-def _status_route_uses_openai_api(*, provider: str, model: object) -> bool:
+def _status_route_uses_openai_api(*, provider: str, model: object, api_key_env: str = "") -> bool:
     normalized_provider = _normalize_status_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
+    normalized_api_key_env = str(api_key_env or "").strip().casefold()
     return normalized_provider == "openai" or (
-        normalized_provider == "litellm" and normalized_model.startswith("openai/")
+        normalized_provider == "litellm"
+        and (normalized_model.startswith("openai/") or normalized_api_key_env == "openai_api_key")
     )
 
 
@@ -1537,7 +1554,7 @@ def _status_openai_key_instance_availability(
     model: object,
     api_key_env: str,
 ) -> tuple[int, int] | None:
-    if not _status_route_uses_openai_api(provider=provider, model=model):
+    if not _status_route_uses_openai_api(provider=provider, model=model, api_key_env=api_key_env):
         return None
     names = _unique_status_instance_names(instance_names)
     if not names:
@@ -1554,7 +1571,7 @@ def _status_openai_key_scope(
     api_key_env: str,
 ) -> str:
     """Report where a non-secret OpenAI-compatible route gets its key."""
-    if not _status_route_uses_openai_api(provider=provider, model=model):
+    if not _status_route_uses_openai_api(provider=provider, model=model, api_key_env=api_key_env):
         return ""
     env_name = str(api_key_env or "").strip() or "OPENAI_API_KEY"
     if os.environ.get(env_name, "").strip():
@@ -1563,6 +1580,22 @@ def _status_openai_key_scope(
     if names and any(_status_instance_api_key_configured(env_name, name) for name in names):
         return "instance_fallback"
     return ""
+
+
+def _status_fallback_api_key_configured(
+    api_key_env: str,
+    model: object,
+    *,
+    instance_names: Sequence[str],
+) -> bool:
+    env_name = str(api_key_env or "").strip()
+    if not env_name:
+        return False
+    if _status_route_uses_openai_api(provider="litellm", model=model, api_key_env=env_name):
+        names = _unique_status_instance_names(instance_names)
+        if names and any(_status_instance_api_key_configured(env_name, name) for name in names):
+            return True
+    return bool(os.environ.get(env_name, "").strip())
 
 
 def _status_instance_api_key_configured(api_key_env: str, instance_name: str) -> bool:
@@ -1802,9 +1835,12 @@ def _normalize_status_llm_provider(provider: object) -> str:
 def _runtime_status_display_provider(*, provider: str, model: object, route_mode: str, route_api_key_env: str = "") -> str:
     normalized_provider = _normalize_status_llm_provider(provider)
     normalized_model = str(model or "").strip().casefold()
-    if route_mode in {"profile", "purpose"} and normalized_provider == "litellm":
-        if normalized_model.startswith("openai/") and str(route_api_key_env or "").strip() == "OPENAI_API_KEY":
-            return "openai"
+    if route_mode in {"profile", "purpose"} and _status_route_uses_openai_api(
+        provider=normalized_provider,
+        model=normalized_model,
+        api_key_env=route_api_key_env,
+    ):
+        return "openai"
     return normalized_provider
 
 
