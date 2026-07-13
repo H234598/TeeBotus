@@ -2333,9 +2333,9 @@ def _account_storage_preflight_broken_lines(config: Any) -> tuple[str, ...]:
 
 def _runtime_status_secret_provider() -> object:
     """Share one read-only Secret Service cache across one status/preflight pass."""
-    from TeeBotus.core.status import SecretToolInstanceSecretProvider
+    from TeeBotus.runtime.accounts import runtime_secret_provider
 
-    return SecretToolInstanceSecretProvider(create_if_missing=False)
+    return runtime_secret_provider()
 
 
 def _account_storage_preflight_instance_names(config: Any) -> tuple[str, ...]:

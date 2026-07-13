@@ -140,6 +140,20 @@ def test_runtime_status_admin_checks_reuse_status_secret_provider(monkeypatch, t
     assert seen_history_providers == [provider]
 
 
+def test_runtime_status_secret_provider_uses_runtime_retry_policy(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES", "2")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS", "0.25")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_TIMEOUT_SECONDS", "4")
+
+    provider = bot._runtime_status_secret_provider()
+
+    assert provider.create_if_missing is False
+    assert provider.lookup_retries == 2
+    assert provider.lookup_retry_delay_seconds == 0.25
+    assert provider.timeout_seconds == 4.0
+
+
 def test_runtime_status_all_uses_runtime_instance_discovery(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"
@@ -200,7 +214,7 @@ def test_runtime_status_reports_codex_history_counts(monkeypatch, capsys, tmp_pa
     bot = importlib.import_module("TeeBotus.bot")
     demo_dir = _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
-    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"c" * 32))
+    monkeypatch.setattr(bot, "_runtime_status_secret_provider", lambda: StaticSecretProvider(b"c" * 32))
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     store = AccountStore(demo_dir / "data" / "accounts", "Demo", StaticSecretProvider(b"c" * 32))
     store.append_codex_history_item(
@@ -224,7 +238,7 @@ def test_runtime_status_marks_non_dispatch_owner_history_as_delegated_in_bridge_
     bot = importlib.import_module("TeeBotus.bot")
     demo_dir = _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
-    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"c" * 32))
+    monkeypatch.setattr(bot, "_runtime_status_secret_provider", lambda: StaticSecretProvider(b"c" * 32))
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.setenv("TEEBOTUS_HISTORY_DISPATCHER_MODE", "bridge")
     monkeypatch.setenv("TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES", "TeeBotus_Logger")
@@ -253,7 +267,7 @@ def test_runtime_status_does_not_hide_history_when_bridge_allowlist_is_empty(mon
     bot = importlib.import_module("TeeBotus.bot")
     demo_dir = _configure_demo_instance(monkeypatch, tmp_path)
     monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
-    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"c" * 32))
+    monkeypatch.setattr(bot, "_runtime_status_secret_provider", lambda: StaticSecretProvider(b"c" * 32))
     monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
     monkeypatch.setenv("TEEBOTUS_HISTORY_DISPATCHER_MODE", "bridge")
     monkeypatch.setenv("TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES", "")
