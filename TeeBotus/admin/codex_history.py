@@ -882,11 +882,11 @@ def _sync_codex_history_local_dispatch_status(
     now: str,
     dispatch_results: Sequence[Mapping[str, Any]],
     increment_attempt: bool = True,
-) -> None:
+) -> bool:
     normalized_item_id = str(item_id or "").strip()
     normalized_dedupe_key = str(dedupe_key or "").strip()
     if (not normalized_item_id and not normalized_dedupe_key) or not isinstance(store, AccountStore):
-        return
+        return False
     try:
         local_rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
         local_item_id = ""
@@ -901,7 +901,7 @@ def _sync_codex_history_local_dispatch_status(
                 local_item_id = str(row.get("id") or "").strip()
                 break
         if not local_item_id:
-            return
+            return False
         _update_codex_history_item_status(
             store,
             local_item_id,
@@ -911,8 +911,66 @@ def _sync_codex_history_local_dispatch_status(
             increment_attempt=increment_attempt,
             dispatch_results=dispatch_results,
         )
+        return True
     except (AccountStoreError, OSError, ValueError) as exc:
         LOGGER.warning("Local Codex-History status sync failed: %s", str(exc)[:240])
+        return False
+
+
+def _reconcile_codex_history_local_rows_from_dispatcher(
+    store: AccountStore,
+    local_rows: Sequence[Mapping[str, Any]],
+    dispatcher_items: Sequence[Mapping[str, Any]],
+    *,
+    now: str,
+) -> list[dict[str, Any]]:
+    """Apply authoritative terminal dispatcher states to local queued rows.
+
+    The dispatcher may finish an item independently of the TeeBotus bridge
+    worker.  A subsequent ``dispatch.claim`` then returns no item, so a
+    claim-only bridge would leave the local mirror queued forever.  This
+    reconciliation is deliberately limited to matching terminal states and
+    never requeues, deletes, or invents a recipient result.
+    """
+
+    terminal_statuses = HISTORY_DISPATCHER_COMPLETION_STATUSES - {"queued"}
+    synchronized_rows: list[dict[str, Any]] = []
+    for local_row in local_rows:
+        if not isinstance(local_row, Mapping) or not _codex_history_item_dispatchable(local_row):
+            continue
+        matching_item = _history_dispatcher_matching_item_for_local_row(local_row, dispatcher_items)
+        if matching_item is None:
+            continue
+        external_status = str(matching_item.get("status") or "").strip().casefold()
+        local_status = str(local_row.get("status") or "queued").strip().casefold()
+        if external_status not in terminal_statuses or external_status == local_status:
+            continue
+        item_id = str(local_row.get("id") or "").strip()
+        if not item_id:
+            continue
+        reason = f"dispatcher_terminal_status_{external_status}"
+        if not _sync_codex_history_local_dispatch_status(
+            store,
+            item_id,
+            external_status,
+            dedupe_key=_history_dispatcher_item_dedupe_key(matching_item),
+            reason=reason,
+            now=now,
+            dispatch_results=(),
+            increment_attempt=False,
+        ):
+            continue
+        synchronized_rows.append(
+            {
+                "codex_history_item_id": item_id,
+                "account_id": "",
+                "status": "synchronized",
+                "reason": reason,
+                "channel": "",
+                "summary_prefix": str(local_row.get("summary_prefix") or ""),
+            }
+        )
+    return synchronized_rows
 
 
 async def _dispatch_codex_history_outbox_via_dispatcher(
@@ -953,15 +1011,16 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
     except (AccountStoreError, OSError, ValueError) as exc:
         LOGGER.warning("Local Codex-History payload enrichment unavailable: %s", str(exc)[:240])
         local_history_rows = []
-    local_dispatchable_rows = [
+    local_reconciliation_rows = [
         row
         for row in local_history_rows
         if isinstance(row, Mapping) and _codex_history_item_dispatchable(row, now=dispatch_now)
     ]
-    local_dispatchable_rows.sort(key=lambda item: _codex_history_dispatch_sort_key(item, now=dispatch_now), reverse=True)
+    local_reconciliation_rows.sort(key=lambda item: _codex_history_dispatch_sort_key(item, now=dispatch_now), reverse=True)
     normalized_limit = max(0, int(limit))
+    local_dispatchable_rows = local_reconciliation_rows
     if normalized_limit > 0:
-        local_dispatchable_rows = local_dispatchable_rows[:normalized_limit]
+        local_dispatchable_rows = local_reconciliation_rows[:normalized_limit]
     try:
         client = HistoryDispatcherClient(_history_dispatcher_socket_path(env), timeout_seconds=10)
         if dry_run:
@@ -1040,6 +1099,21 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
         })
         claim_data = _history_dispatcher_response_data(claimed, operation="dispatch.claim")
         claim_items = _history_dispatcher_response_items(claim_data, operation="dispatch.claim")
+        if not claim_items and local_reconciliation_rows:
+            response = client.request("history.query", {
+                "status": "",
+                "limit": 0,
+                "include_payload": False,
+            })
+            query_data = _history_dispatcher_response_data(response, operation="history.query")
+            query_items = _history_dispatcher_response_items(query_data, operation="history.query")
+            synchronized_rows = _reconcile_codex_history_local_rows_from_dispatcher(
+                store,
+                local_reconciliation_rows,
+                query_items,
+                now=timestamp,
+            )
+            result_rows.extend(synchronized_rows)
         for raw_item in claim_items:
             claim_status = str(raw_item.get("status") or "").strip().casefold()
             if claim_status and claim_status != "delivering":

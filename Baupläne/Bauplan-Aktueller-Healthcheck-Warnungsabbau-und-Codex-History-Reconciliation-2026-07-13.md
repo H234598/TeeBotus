@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.461`, Commit `78e2806a`  
+**Quellstand:** TeeBotus `1.9.462`, lokaler Folgecommit nach `c60f75cb`
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
 ## Auftrag
@@ -81,6 +81,11 @@ Nachweis bestehen:
 - TBL besitzt eine routbare Telegram-Adminroute auf Slot 1.
 - Delegierte Codex-History-Quellen werden im Bridge-Modus nicht als lokale
   Fehler hochgestuft.
+- Der Bridge-Pfad gleicht nach einem leeren `dispatch.claim` die lokalen
+  dispatchierbaren Zeilen nochmals mit dem zentralen `history.query` ab.
+  Eindeutig gematchte terminale Dispatcher-Zustaende werden idempotent in die
+  lokale Outbox uebernommen. Dabei werden keine lokalen Zeilen geloescht,
+  nicht erneut zugestellt und keine Recipient-Resultate erfunden.
 
 ## Aktueller Live-Befund
 
@@ -157,8 +162,9 @@ Qdrant-Indexierung oder einer Kombination entsteht.
   erreicht.
 - [ ] Pruefen, ob `dispatch statuses: none` nur bedeutet, dass kein neuer
   lokaler Kandidat vorliegt, oder ob ein Statusreport verworfen wird.
-- [ ] Sicherstellen, dass zentrale terminale Ergebnisse idempotent in den
-  lokalen TBL-Spiegel geschrieben werden.
+- [x] Sicherstellen, dass zentrale terminale Ergebnisse idempotent in den
+  lokalen TBL-Spiegel geschrieben werden, wenn nach dem Claim kein neuer
+  zentraler Claim vorliegt.
 - [ ] Keine pauschale Requeue-Aktion fuer alte `queued`-Zeilen. Requeue nur
   fuer nachweislich nicht zugestellte, noch gueltige Eintraege.
 - [ ] Den Applet-Healthstatus so erweitern, dass zentrale Queue `0` und lokale
@@ -190,7 +196,7 @@ Qdrant-Indexierung oder einer Kombination entsteht.
 
 ### E. Tests und Live-Abnahme
 
-- [ ] Regression fuer lokale queued-Zeile plus zentrale delivered-Zeile.
+- [x] Regression fuer lokale queued-Zeile plus zentrale delivered-Zeile.
 - [ ] Regression fuer zentrale queued-Zeile plus lokale queued-Zeile.
 - [ ] Regression fuer terminales `no_private_route` mit und ohne aktuell
   routbarer Adminroute.
@@ -230,3 +236,12 @@ Der Plan ist erst abgeschlossen, wenn:
   Resten sowie routbarer Telegram-Adminroute.
 - 2026-07-13: Collector als aktiv, aber ressourcenauffaellig beobachtet;
   weitere Messung ist offen.
+- 2026-07-13: Konkreten Bridge-Logikfehler behoben: Ein externer Dispatcher
+  konnte eine Summary zwischen `history.append` und dem naechsten Lauf
+  terminal verarbeiten; bei leerem `dispatch.claim` blieb die lokale Spiegelung
+  trotzdem auf `queued`. Der Bridge-Lauf fragt in diesem Fall den zentralen
+  Bestand ab und synchronisiert nur eindeutig gematchte terminale Statuswerte.
+- 2026-07-13: `pytest -q tests/test_codex_history.py` erfolgreich: `131 passed`
+  in `8.55s`. Der neue Regressionstest prueft den Ablauf
+  `history.append -> dispatch.claim (leer) -> history.query -> lokal delivered`;
+  Orphan- und Mirror-Fehler bleiben weiterhin queued bzw. failed sichtbar.

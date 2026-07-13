@@ -1880,6 +1880,8 @@ def test_codex_history_dispatch_bridge_mirrors_local_orphan_before_claim(
                 return {"ok": True, "data": {"id": "external-orphan", "deduplicated": False, "status": "queued"}}
             if operation == "dispatch.claim":
                 return {"ok": True, "data": {"items": []}}
+            if operation == "history.query":
+                return {"ok": True, "data": {"items": []}}
             raise AssertionError(operation)
 
     monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
@@ -1895,11 +1897,80 @@ def test_codex_history_dispatch_bridge_mirrors_local_orphan_before_claim(
     )
 
     assert result["ok"] is True
-    assert [operation for operation, _body in calls] == ["history.append", "dispatch.claim"]
+    assert [operation for operation, _body in calls] == ["history.append", "dispatch.claim", "history.query"]
     assert calls[0][1]["id"] == "local-orphan"
     assert calls[0][1]["dedupe_key"] == "sha256:local-orphan"
     assert calls[0][1]["payload"]["id"] == "local-orphan"
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status"] == "queued"
+
+
+def test_codex_history_dispatch_bridge_reconciles_terminal_local_queue_after_empty_claim(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "id": "local-terminal-sync",
+            "kind": "codex_run_summary",
+            "status": "queued",
+            "created_at": "2026-07-13T12:00:00+00:00",
+            "summary_prefix": "v1.9.409 #0004",
+            "codex": {"dedupe_key": "sha256:terminal-live"},
+            "summary": {"text": "Der zentrale Dispatcher ist bereits fertig."},
+        },
+    )
+    calls: list[str] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            calls.append(operation)
+            if operation == "history.append":
+                return {
+                    "ok": True,
+                    "data": {"id": "external-terminal-sync", "deduplicated": True, "status": "queued"},
+                }
+            if operation == "dispatch.claim":
+                return {"ok": True, "data": {"items": []}}
+            if operation == "history.query":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "external-terminal-sync",
+                            "kind": "codex_run_summary",
+                            "status": "delivered",
+                            "dedupe_key": "sha256:terminal-live",
+                        }],
+                    },
+                }
+            raise AssertionError(operation)
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_account_ids", lambda *args, **kwargs: ())
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+            now=datetime(2026, 7, 13, 12, 5, tzinfo=timezone.utc),
+            limit=1,
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["status_counts"] == {"synchronized": 1}
+    assert calls == ["history.append", "dispatch.claim", "history.query"]
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "delivered"
+    assert persisted["status_history"][-1] == {
+        "at": "2026-07-13T12:05:00+00:00",
+        "status": "delivered",
+        "reason": "dispatcher_terminal_status_delivered",
+    }
 
 
 def test_codex_history_dispatch_bridge_dry_run_reports_local_reconciliation_without_mutation(
@@ -1999,6 +2070,8 @@ def test_codex_history_dispatch_bridge_mirror_failure_keeps_local_item_queued(
             if operation == "history.append":
                 return {"ok": False, "error": "item_id_conflict"}
             if operation == "dispatch.claim":
+                return {"ok": True, "data": {"items": []}}
+            if operation == "history.query":
                 return {"ok": True, "data": {"items": []}}
             raise AssertionError(operation)
 
