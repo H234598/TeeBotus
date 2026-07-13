@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.426`, `d76614b8`.
+- Aktueller gepruefter Quellstand: `1.9.427`, `c2a87a32`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -99,6 +99,30 @@ auf `ok` oder `warning` herabsetzen.
 - Vollstaendige `tests/test_cinnamon_applet.py`: `206 passed in 42.84s`.
 - `git diff --check`: erfolgreich.
 - Lokaler Commit: `d76614b8` (`Honor declared health severity statuses`).
+
+## Befund 82: Nicht klassifizierte v2-Problemstatus wurden als gesund behandelt
+
+Auch nach Befund 81 konnte ein widerspruechlicher v2-Payload einen Fehler
+enthalten, der weder in den actionable- noch in den informativen Zaehlern
+auftauchte. Beispiel: `status_counts=broken:1`,
+`problem_statuses=broken:1`, aber beide getrennten Klassifikationen waren leer.
+`_health_summary()` vertraute dann auf `actionable_problem_status_count=0` und
+lieferte trotz des vorhandenen schweren Problems `status=ok`.
+
+### Umsetzung und Nachweis
+
+- Strukturierte und deklarative Gesamtstatus werden pro Status gegen die
+  actionable- und informative Klassifikation abgeglichen.
+- Ein nicht abgedeckter Rest wird fail-closed als actionable gewertet; ein
+  stale Gesamt-Integer allein wird weiterhin nicht automatisch hochgestuft.
+- `broken:1` liefert jetzt `actionable_problem_count=1`,
+  `runtime_problem_count=1`, `total_problem_count=1` und
+  `severe_status_count=1`.
+- Fokussierte Regression: `3 passed, 204 deselected in 1.13s`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `207 passed in 39.57s`.
+- `git diff --check`: erfolgreich.
+- SemVer `1.9.427`, lokaler Commit `c2a87a32`
+  (`Fail closed on unclassified health statuses`).
 
 ## Umsetzung
 
