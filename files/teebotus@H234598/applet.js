@@ -1342,10 +1342,7 @@ TeeBotusApplet.prototype = {
   },
 
   _statusFlagIsSet: function(value) {
-    let normalized = String(value || "").trim().toLowerCase();
-    if (normalized.length >= 2 && normalized.charAt(0) === normalized.charAt(normalized.length - 1) && ["\"", "'", "`"].indexOf(normalized.charAt(0)) >= 0) {
-      normalized = normalized.slice(1, -1).trim();
-    }
+    let normalized = this._stripOuterStatusQuotes(value).toLowerCase();
     return Boolean(normalized) && !_hasOwn(NEUTRAL_FLAG_VALUES, normalized);
   },
 
@@ -1358,7 +1355,7 @@ TeeBotusApplet.prototype = {
   },
 
   _statusValueIsProblem: function(value) {
-    let normalized = String(value || "").trim().toLowerCase();
+    let normalized = this._stripOuterStatusQuotes(value).toLowerCase();
     for (let status of PROBLEM_STATUSES) {
       if (normalized === status) {
         return true;
@@ -2957,12 +2954,20 @@ TeeBotusApplet.prototype = {
   },
 
   _strictInt: function(value) {
-    let text = String(value === null || value === undefined ? "" : value).trim();
+    let text = this._stripOuterStatusQuotes(value);
     if (!/^[0-9]+$/.test(text)) {
       return null;
     }
     let parsed = parseInt(text, 10);
     return Number.isSafeInteger(parsed) ? parsed : null;
+  },
+
+  _stripOuterStatusQuotes: function(value) {
+    let text = String(value === null || value === undefined ? "" : value).trim();
+    if (text.length >= 2 && text.charAt(0) === text.charAt(text.length - 1) && ["\"", "'", "`"].indexOf(text.charAt(0)) >= 0) {
+      return text.slice(1, -1).trim();
+    }
+    return text;
   },
 
   _statusTimeoutSeconds: function() {

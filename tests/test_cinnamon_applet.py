@@ -3650,6 +3650,24 @@ def test_cinnamon_applet_js_parser_normalizes_structured_status_case() -> None:
     assert result == {"problem": True, "word": "Warnung"}
 
 
+def test_cinnamon_applet_js_health_helpers_normalize_quoted_status_and_numbers() -> None:
+    result = _run_js_applet_expression(
+        "({"
+        "quotedStatus: applet._lineHasProblemStatus(applet._parseFields('route_status=\"unknown\" status=enabled')),"
+        "quotedStale: applet._codexUsageIsStale(applet._parseFields('codex_usage=local status=ready stale_hours=\"24\"')),"
+        "quotedNumber: applet._nonNegativeInt('\"12\"', -1),"
+        "quotedFlag: applet._statusFlagIsSet('\"warning\"')"
+        "})"
+    )
+
+    assert result == {
+        "quotedStatus": True,
+        "quotedStale": True,
+        "quotedNumber": 12,
+        "quotedFlag": True,
+    }
+
+
 def test_cinnamon_applet_js_marks_ready_memory_lines_with_errors_as_problems() -> None:
     result = _run_js_applet_expression(
         "({qdrant: applet._lineHasProblemStatus(applet._parseFields('qdrant_collection=demo status=READY error=probe failed')), "
