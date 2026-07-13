@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.390`, Commit `c0d871f2`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.391`, Commit `6ba97439`.
 
 ## Arbeitsprinzipien
 
@@ -179,6 +179,12 @@ dem lokalen Eintrag mit demselben Dedupe-Key an und konnte dadurch
 `Release <Repo> untagged` versenden. Lokale Payloaddaten werden jetzt bei
 gleicher ID oder gleichem Dedupe-Key vor Dry-Run und Versand uebernommen.
 
+**Neunzehnter Befund 2026-07-13:** Ein bereits terminal deduplizierter
+Dispatcher-Eintrag (`delivered`, `failed`, `skipped` oder `compacted`) erzeugte
+keinen neuen Claim. Der lokale Mirror blieb deshalb trotzdem `queued`. Der
+Mirror synchronisiert solche Append-Antworten jetzt direkt, ohne einen
+kuenstlichen Versandversuch zu zaehlen.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -268,6 +274,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Restart nach dem 20. Audit-Commit: `teebotus.service`, `history-dispatcher.service` und `teebotus-codex-history-collector.service` aktiv; History-Dispatcher-Snapshot danach `0.2.5`, Queue `13 queued`, `13 delivered`, `310 compacted`, `last_error` leer.
 - Unbekannte-Empfaengerstatus-Pruefung und SemVer-Bump auf `1.9.389` committed als `cdb005f6` (`Reject unknown dispatcher recipient statuses`); gezielte Suite danach `122 passed`.
 - Payload-Enrichment aus lokalem Store committed als `70b66952` (`Enrich bridged history payloads from local store`); SemVer-Bump auf `1.9.390` committed als `c0d871f2`; gezielte Suite danach `122 passed`.
+- Deduplizierten Terminalstatus synchronisieren und SemVer-Bump auf `1.9.391` committed als `6ba97439` (`Reconcile terminal deduplicated mirror status`); gezielte Suite danach `123 passed`.
 - Vor dem 20er-Restart meldete der laufende Snapshot noch `0.1.9`; nach dem Restart ist der aktive History-Dispatcher nachweislich `0.2.5`.
 
 ### Noch offen
