@@ -5516,6 +5516,35 @@ def test_codex_history_status_normalizes_unknown_status_token(tmp_path: Path) ->
     assert "latest_kind=codex_run_summary" in lines[0]
     assert "codex_history_repo=Demo repo=TeeBotus status=warning" in lines[1]
     assert "latest_status=unknown" in lines[1]
+
+
+def test_codex_history_status_uses_creation_time_for_latest_entry(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "accepted",
+            "summary_prefix": "v1.0.0 #0002",
+            "created_at": "2026-07-13T10:00:00+00:00",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "Neuere Summary"},
+        },
+    )
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "accepted",
+            "summary_prefix": "v1.0.0 #0001",
+            "created_at": "2026-07-12T10:00:00+00:00",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "Aeltere Summary"},
+        },
+    )
+
+    lines = codex_history_status_lines(instance_name="Demo", account_store=store)
+
+    assert "latest_prefix=v1.0.0_#0002" in lines[0]
+    assert "latest_prefix=v1.0.0_#0002" in lines[1]
     assert all("\n" not in line for line in lines)
 
 

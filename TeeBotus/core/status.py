@@ -7,6 +7,7 @@ import logging
 import os
 import re
 import shlex
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -894,7 +895,7 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
         rows = account_store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
     except Exception as exc:  # noqa: BLE001 - status should diagnose unreadable history without crashing.
         return {"error": redact_status_text(f"{type(exc).__name__}: {exc}")}
-    valid_rows = [row for row in rows if isinstance(row, Mapping)]
+    valid_rows = _codex_history_rows_in_creation_order([row for row in rows if isinstance(row, Mapping)])
     malformed_rows = max(0, len(rows) - len(valid_rows))
     status_counts: dict[str, int] = {}
     for row in valid_rows:
@@ -1037,6 +1038,35 @@ def _codex_history_count_label(counts: Mapping[str, Any]) -> str:
         for key, value in sorted(counts.items(), key=lambda item: str(item[0]))
         if isinstance(value, int) and value > 0
     )
+
+
+def _codex_history_rows_in_creation_order(rows: Sequence[Mapping[str, Any]]) -> list[Mapping[str, Any]]:
+    decorated: list[tuple[tuple[int, float, int], Mapping[str, Any]]] = []
+    for position, row in enumerate(rows):
+        parsed: datetime | None = None
+        for field in ("created_at", "updated_at"):
+            raw = str(row.get(field) or "").strip()
+            if not raw:
+                continue
+            try:
+                candidate = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+                if candidate.tzinfo is None:
+                    candidate = candidate.replace(tzinfo=timezone.utc)
+                parsed = candidate.astimezone(timezone.utc)
+                break
+            except (OverflowError, ValueError):
+                continue
+        if parsed is None:
+            sort_key = (0, 0.0, position)
+        else:
+            try:
+                timestamp = parsed.timestamp()
+            except (OverflowError, OSError, ValueError):
+                timestamp = 0.0
+            sort_key = (1, timestamp, position)
+        decorated.append((sort_key, row))
+    decorated.sort(key=lambda item: item[0])
+    return [row for _sort_key, row in decorated]
 
 
 def _codex_history_skip_reason(row: Mapping[str, Any]) -> str:
