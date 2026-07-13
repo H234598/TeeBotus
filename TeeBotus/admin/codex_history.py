@@ -675,6 +675,38 @@ def _history_dispatcher_recipient_results(item: Mapping[str, Any]) -> list[dict[
     return normalized
 
 
+def _sync_codex_history_local_dispatch_status(
+    store: AccountStore,
+    item_id: str,
+    status: str,
+    *,
+    reason: str,
+    now: str,
+    dispatch_results: Sequence[Mapping[str, Any]],
+) -> None:
+    normalized_item_id = str(item_id or "").strip()
+    if not normalized_item_id or not isinstance(store, AccountStore):
+        return
+    try:
+        local_rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+        if not any(
+            isinstance(row, Mapping) and str(row.get("id") or "").strip() == normalized_item_id
+            for row in local_rows
+        ):
+            return
+        _update_codex_history_item_status(
+            store,
+            normalized_item_id,
+            status,
+            reason=reason,
+            now=now,
+            increment_attempt=True,
+            dispatch_results=dispatch_results,
+        )
+    except (AccountStoreError, OSError, ValueError) as exc:
+        LOGGER.warning("Local Codex-History status sync failed: %s", str(exc)[:240])
+
+
 async def _dispatch_codex_history_outbox_via_dispatcher(
     store: AccountStore,
     *,
@@ -784,6 +816,18 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
             completion_data = _history_dispatcher_response_data(completed, operation="dispatch.complete")
             if completion_data.get("ok") is not True:
                 raise HistoryDispatcherError("History-Dispatcher dispatch.complete returned invalid data")
+            external_status = str(completion_data.get("status") or "").strip().casefold()
+            local_status = external_status if external_status in {"queued", "delivered", "failed", "skipped", "discarded", "compacted"} else ""
+            if not local_status:
+                local_status = _overall_dispatch_status([*existing_results, *item_results])
+            _sync_codex_history_local_dispatch_status(
+                store,
+                item_id,
+                local_status,
+                reason=_overall_dispatch_reason([*existing_results, *item_results]),
+                now=timestamp,
+                dispatch_results=item_results,
+            )
             result_rows.extend(item_results)
         return {
             "ok": not any(str(row.get("status") or "").casefold() in {"failed", "error"} for row in result_rows),

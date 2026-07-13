@@ -1689,6 +1689,73 @@ def test_codex_history_dispatch_bridge_reports_unsafe_socket_path(
     assert "unsafe" in result["items"][0]["error"]
 
 
+def test_codex_history_dispatch_bridge_reconciles_authoritative_local_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "id": "hd-local-status",
+            "kind": "codex_run_summary",
+            "status": "queued",
+            "created_at": "2026-07-13T12:00:00+00:00",
+            "project": {"repo_name": "TeeBotus"},
+            "version": {"semver": "1.9.384", "summary_number": 1},
+            "summary_prefix": "v1.9.384 #0001",
+            "summary": {"text": "Lokaler Status wird abgeglichen."},
+        },
+    )
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            if operation == "dispatch.claim":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "hd-local-status",
+                            "kind": "codex_run_summary",
+                            "project": "/tmp/TeeBotus",
+                            "payload": {"summary": {"text": "Extern bereits mit Fehlerhistorie"}},
+                            "recipient_results": [{
+                                "recipient_id": "old-admin",
+                                "status": "failed",
+                                "reason": "send_error:TimeoutError",
+                            }],
+                        }],
+                    },
+                }
+            if operation == "dispatch.complete":
+                return {"ok": True, "data": {"ok": True, "status": "queued"}}
+            raise AssertionError(operation)
+
+    async def fake_send(*_args, **kwargs):
+        return {"account_id": kwargs.get("account_id", "new-admin"), "status": "accepted", "channel": "telegram"}
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_account_ids", lambda *args, **kwargs: ("new-admin",))
+    monkeypatch.setattr(codex_history_module, "_dispatch_codex_history_item_to_account", fake_send)
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+            now=datetime(2026, 7, 13, 12, 5, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["ok"] is True
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "queued"
+    assert persisted["delivery"]["attempts"] == 1
+    assert persisted["status_history"][-1]["status"] == "queued"
+
+
 def test_history_dispatcher_digest_payload_becomes_markdown_attachment() -> None:
     item = codex_history_module._history_dispatcher_item_to_legacy(
         {
