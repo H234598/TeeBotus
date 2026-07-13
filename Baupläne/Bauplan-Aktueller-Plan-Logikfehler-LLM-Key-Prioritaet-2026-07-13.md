@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.447`, Commit `bdf427b4`
+**Quellstand:** TeeBotus `1.9.448`, Commit `de5bc5a6`
 **Geltungsbereich:** `TeeBotus/runtime/config.py`,
 `TeeBotus/runtime/llm_factory.py`, `TeeBotus/llm/profiles.py`, die
 Runtime-Runner und die zugehoerigen Regressionstests
@@ -114,6 +114,24 @@ Fallback-Client ohne Key, obwohl die Instanz korrekt konfiguriert war.
 - Router-, Package-, HF-Fallback-, Proactive- und Metadaten-Suite:
   `128 passed in 3.88s`.
 - SemVer `1.9.447`, Commit `bdf427b4`.
+
+## Befund 104: Unpraefixiertes OpenAI-Modell wurde nicht erkannt
+
+Ein gueltiges LiteLLM-Fallback-Profil kann ein Modell wie `gpt-4.1-mini`
+ohne `openai/`-Praefix fuehren. Das Routing behandelt `litellm` weiterhin als
+remote, der Profil-Key-Resolver erkannte aber nur `openai` oder
+`openai/...`. Ein vorhandener `OPENAI_API_KEY_<INSTANCE>` wurde dadurch fuer
+dieses Profil nicht verwendet.
+
+### Umsetzung und Nachweis
+
+- Bei explizitem `OPENAI_API_KEY`-Env wird ein LiteLLM-Profil auch mit
+  unpraefixiertem Modell als OpenAI-kompatibel behandelt.
+- Andere LiteLLM-Modelle ohne dieses Env-Signal bleiben unveraendert.
+- Unpraefixierter OpenAI-Fallback mit Instanz-Key: gruen.
+- Router-, Package-, HF-Fallback-, Proactive- und Metadaten-Suite:
+  `128 passed in 3.37s`.
+- SemVer `1.9.448`, Commit `de5bc5a6`.
 
 ## Zielvertrag fuer die Key-Aufloesung
 

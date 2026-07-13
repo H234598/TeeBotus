@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.447`, Commit `bdf427b4`
+**Quellstand:** TeeBotus `1.9.448`, Commit `de5bc5a6`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -381,6 +381,21 @@ waehrend der Fallback-Client ohne Key blieb.
 - Router-, Package-, HF-Fallback-, Proactive- und Metadaten-Suite:
   `128 passed in 3.88s`.
 - SemVer `1.9.447`, Commit `bdf427b4`.
+
+## Befund 104: Unpraefixiertes OpenAI-Fallback-Profil blieb ohne Instanz-Key
+
+Bei `provider=litellm`, `model=gpt-4.1-mini` und
+`api_key_env=OPENAI_API_KEY` wurde das Profil als remote behandelt, aber der
+Key-Resolver erkannte den OpenAI-Kontext nur am `openai/`-Praefix. Der
+Instanz-Fallback blieb dadurch leer.
+
+### Umsetzung und Nachweis
+
+- Das explizite `OPENAI_API_KEY`-Env aktiviert die Instanz-Key-Aufloesung auch
+  fuer unpraefixierte LiteLLM-OpenAI-Modelle.
+- Regression mit `OPENAI_API_KEY_<INSTANCE>` ist gruen.
+- Betroffene Suite: `128 passed in 3.37s`.
+- SemVer `1.9.448`, Commit `de5bc5a6`.
 
 ## Arbeitsplan
 

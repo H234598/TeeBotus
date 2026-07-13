@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.447`, Commit `bdf427b4`
+**Quellstand:** TeeBotus `1.9.448`, Commit `de5bc5a6`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet, Runtime-Healthpayload und `tests/test_cinnamon_applet.py`
 
 ## Auftrag
@@ -604,6 +604,21 @@ war der Request-Fallback in derselben Instanz ohne Key.
 - Router-, Package-, HF-Fallback-, Proactive- und Metadaten-Suite:
   `128 passed in 3.88s`.
 - SemVer `1.9.447`, Commit `bdf427b4`.
+
+## Befund 104: Modellpraefix und OpenAI-Key-Scope waren uneinheitlich
+
+Das Routing akzeptierte ein unpraefixiertes LiteLLM-Modell als remote, waehrend
+die Key-Aufloesung nur `openai/...` als OpenAI-Signal verwendete. Dadurch
+konnten Status-/Requestpfad bei einem OpenAI-Fallback auseinanderlaufen.
+
+### Umsetzung und Nachweis
+
+- `api_key_env=OPENAI_API_KEY` ist nun ein zusaetzliches, explizites
+  OpenAI-Signal fuer die Resolverlogik.
+- Die Instanz-vor-Global-Prioritaet bleibt dabei erhalten.
+- Unpraefixierter OpenAI-Fallback und die betroffene Suite sind gruen:
+  `128 passed in 3.37s`.
+- SemVer `1.9.448`, Commit `de5bc5a6`.
 
 ## Invarianten
 
