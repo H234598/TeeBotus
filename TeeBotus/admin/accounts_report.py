@@ -7,6 +7,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,9 +23,13 @@ from TeeBotus.runtime.accounts import (
     INSTANCE_KEY_SIZE_BYTES,
     INSTANCE_SECRET_SERVICE,
     SECRET_TOOL_COMMAND,
+    _runtime_secret_tool_lookup_retries,
+    _runtime_secret_tool_lookup_retry_delay_seconds,
+    _runtime_secret_tool_timeout_seconds,
     AccountStore,
     AccountStoreError,
     InstanceSecretProvider,
+    runtime_secret_provider,
     TOKEN_HEX_RE,
 )
 from TeeBotus.runtime.config import RuntimeConfigError, build_account_run_configs
@@ -41,6 +46,9 @@ class ReadOnlySecretToolInstanceSecretProvider:
     """Read-only Secret Service provider for admin reports."""
 
     command: str = SECRET_TOOL_COMMAND
+    lookup_retries: int = field(default_factory=_runtime_secret_tool_lookup_retries)
+    lookup_retry_delay_seconds: float = field(default_factory=_runtime_secret_tool_lookup_retry_delay_seconds)
+    timeout_seconds: float = field(default_factory=_runtime_secret_tool_timeout_seconds)
     _cache: dict[tuple[str, str], bytes] = field(default_factory=dict, init=False, repr=False, compare=False)
 
     def get_secret(self, instance_name: str, purpose: str) -> bytes:
@@ -51,31 +59,45 @@ class ReadOnlySecretToolInstanceSecretProvider:
         binary = shutil.which(self.command)
         if binary is None:
             raise AccountStoreError("secret-tool is not installed")
-        result = subprocess.run(
-            [
-                binary,
-                "lookup",
-                "application",
-                INSTANCE_SECRET_SERVICE,
-                "instance",
-                instance_name,
-                "purpose",
-                purpose,
-            ],
-            text=True,
-            capture_output=True,
-            check=False,
-        )
-        if result.returncode != 0 or not result.stdout.strip():
-            raise AccountStoreError(f"instance secret is missing for purpose={purpose}")
-        try:
-            secret = base64.urlsafe_b64decode(result.stdout.strip().encode("ascii"))
-        except Exception as exc:  # noqa: BLE001
-            raise AccountStoreError("secret-tool returned invalid instance secret data") from exc
-        if len(secret) != INSTANCE_KEY_SIZE_BYTES:
-            raise AccountStoreError("instance secret has invalid length")
-        self._cache[cache_key] = secret
-        return secret
+        argv = [
+            binary,
+            "lookup",
+            "application",
+            INSTANCE_SECRET_SERVICE,
+            "instance",
+            instance_name,
+            "purpose",
+            purpose,
+        ]
+        attempts = max(0, int(self.lookup_retries)) + 1
+        last_error = "instance secret is missing"
+        for attempt in range(attempts):
+            try:
+                result = subprocess.run(
+                    argv,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                    timeout=max(0.0, float(self.timeout_seconds)),
+                )
+            except subprocess.TimeoutExpired:
+                last_error = "secret-tool lookup timed out"
+            except OSError as exc:
+                last_error = f"secret-tool lookup failed: {type(exc).__name__}"
+            else:
+                if result.returncode == 0 and result.stdout.strip():
+                    try:
+                        secret = base64.urlsafe_b64decode(result.stdout.strip().encode("ascii"))
+                    except Exception as exc:  # noqa: BLE001
+                        raise AccountStoreError("secret-tool returned invalid instance secret data") from exc
+                    if len(secret) != INSTANCE_KEY_SIZE_BYTES:
+                        raise AccountStoreError("instance secret has invalid length")
+                    self._cache[cache_key] = secret
+                    return secret
+                last_error = "instance secret is missing"
+            if attempt + 1 < attempts and self.lookup_retry_delay_seconds > 0:
+                time.sleep(float(self.lookup_retry_delay_seconds))
+        raise AccountStoreError(f"{last_error} for purpose={purpose}")
 
 
 def utc_now() -> str:
@@ -111,7 +133,7 @@ def build_accounts_admin_report(
     runtime_channels: Sequence[str] = DEFAULT_RUNTIME_CHANNELS,
 ) -> dict[str, Any]:
     resolved_instances_dir = Path(instances_dir)
-    provider = provider or ReadOnlySecretToolInstanceSecretProvider()
+    provider = provider or runtime_secret_provider()
     env = {} if env is None else env
     selected_instances = discover_instances(resolved_instances_dir, instances)
     report: dict[str, Any] = {

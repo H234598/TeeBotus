@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from TeeBotus.admin.accounts_report import DEFAULT_INSTANCES_DIR, ReadOnlySecretToolInstanceSecretProvider, discover_instances, parse_csv
+from TeeBotus.admin.accounts_report import DEFAULT_INSTANCES_DIR, discover_instances, parse_csv
 from TeeBotus.core.status import redact_status_text
 from TeeBotus.runtime.accounts import (
     ACCOUNT_MEMORY_KEY_PURPOSE,
@@ -170,7 +170,7 @@ def build_status_auth_report(
     options = StatusAuthReportOptions(
         instances_dir=Path(instances_dir),
         instances=tuple(instances),
-        provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
+        provider=provider or runtime_secret_provider(),
     )
     selected_instances = discover_instances(options.instances_dir, options.instances)
     report: dict[str, Any] = {

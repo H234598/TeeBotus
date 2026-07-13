@@ -9,6 +9,9 @@ from pathlib import Path
 from typing import Any
 
 from TeeBotus.admin import __main__ as admin_entrypoint
+import TeeBotus.admin.account_memory_recovery as account_memory_recovery_module
+import TeeBotus.admin.accounts_report as accounts_report_module
+import TeeBotus.admin.status_auth_admin as status_auth_admin_module
 from TeeBotus.admin.account_memory_recovery import (
     _add_totals,
     _account_recovery_status,
@@ -44,6 +47,34 @@ from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMem
 
 def provider() -> StaticSecretProvider:
     return StaticSecretProvider(b"a" * 32)
+
+
+def test_admin_reports_use_runtime_secret_provider_defaults(monkeypatch, tmp_path: Path) -> None:
+    sentinels: list[object] = []
+
+    def fake_provider() -> StaticSecretProvider:
+        sentinels.append(object())
+        return provider()
+
+    monkeypatch.setattr(accounts_report_module, "runtime_secret_provider", fake_provider)
+    monkeypatch.setattr(status_auth_admin_module, "runtime_secret_provider", fake_provider)
+
+    build_accounts_admin_report(instances_dir=tmp_path)
+    build_status_auth_report(instances_dir=tmp_path)
+
+    assert len(sentinels) == 2
+
+
+def test_memory_recovery_default_provider_uses_readonly_runtime_policy(monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES", "2")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS", "0.25")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_TIMEOUT_SECONDS", "4")
+
+    provider = account_memory_recovery_module.ReadOnlySecretToolInstanceSecretProvider()
+
+    assert provider.lookup_retries == 2
+    assert provider.lookup_retry_delay_seconds == 0.25
+    assert provider.timeout_seconds == 4.0
 
 
 class RecordingBootstrapProvider:
@@ -91,6 +122,29 @@ def test_readonly_secret_provider_caches_secret_tool_lookup(monkeypatch) -> None
         assert provider.get_secret("TeeBotus_Logger", ACCOUNT_MEMORY_KEY_PURPOSE) == b"a" * 32
 
     assert len(calls) == 1
+
+
+def test_readonly_secret_provider_retries_transient_secret_tool_lookup(monkeypatch) -> None:
+    calls: list[list[str]] = []
+    encoded_secret = base64.urlsafe_b64encode(b"a" * 32).decode("ascii") + "\n"
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES", "2")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS", "0")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_TIMEOUT_SECONDS", "4")
+    monkeypatch.setattr("TeeBotus.admin.accounts_report.shutil.which", lambda _command: "/usr/bin/secret-tool")
+
+    def fake_run(args: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        calls.append(args)
+        if len(calls) == 1:
+            return subprocess.CompletedProcess(args, 1, stdout="", stderr="lookup unavailable")
+        return subprocess.CompletedProcess(args, 0, stdout=encoded_secret, stderr="")
+
+    monkeypatch.setattr("TeeBotus.admin.accounts_report.subprocess.run", fake_run)
+    provider = ReadOnlySecretToolInstanceSecretProvider()
+
+    assert provider.get_secret("TeeBotus_Logger", ACCOUNT_MEMORY_KEY_PURPOSE) == b"a" * 32
+    assert len(calls) == 2
+    assert provider.lookup_retries == 2
+    assert provider.timeout_seconds == 4.0
 
 
 def test_account_memory_recovery_runtime_detection_includes_module_proactive() -> None:
