@@ -1982,6 +1982,8 @@ def test_codex_history_bridge_persists_local_result_and_reply_match(
         codex_metadata={"dedupe_key": "sha256:bridge-local-result"},
     )
 
+    delivery_events: list[dict[str, object]] = []
+
     class FakeClient:
         def __init__(self, *_args, **_kwargs) -> None:
             pass
@@ -2003,6 +2005,9 @@ def test_codex_history_bridge_persists_local_result_and_reply_match(
                 }
             if operation == "dispatch.complete":
                 return {"ok": True, "data": {"ok": True, "status": "delivered"}}
+            if operation == "delivery.record":
+                delivery_events.append(dict(body or {}))
+                return {"ok": True, "data": {"ok": True, "event_id": body.get("event_id") if body else ""}}
             raise AssertionError(operation)
 
     def sender(_route: dict[str, object], _action: SendAttachment, _metadata: dict[str, object]) -> str:
@@ -2028,6 +2033,8 @@ def test_codex_history_bridge_persists_local_result_and_reply_match(
         and row.get("account_id") == admin_id
         for row in dispatch_rows
     )
+    monkeypatch.setenv("TEEBOTUS_HISTORY_DISPATCHER_MODE", "bridge")
+    monkeypatch.setenv("HISTORY_DISPATCHER_SOCKET", "/tmp/dispatcher.sock")
     receipt = record_codex_history_delivery_receipt(
         store,
         instance_name="TeeBotus_Logger",
@@ -2038,6 +2045,8 @@ def test_codex_history_bridge_persists_local_result_and_reply_match(
         now=datetime(2026, 7, 13, 13, 1, tzinfo=timezone.utc),
     )
     assert receipt["ok"] is True
+    assert delivery_events[0]["item_id"] == "external-bridge-local-result"
+    assert delivery_events[0]["event_type"] == "delivered"
 
 
 def test_history_dispatcher_digest_payload_becomes_markdown_attachment() -> None:

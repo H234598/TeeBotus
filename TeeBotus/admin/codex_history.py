@@ -1009,8 +1009,9 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                 item_results = existing_results or [{"account_id": "", "status": "skipped", "reason": "no_recipient_accounts", "channel": ""}]
             reported_item_results = _history_dispatcher_report_recipient_results(existing_results, item_results)
             local_reported_results = [dict(result) for result in reported_item_results]
-            if local_item_id:
-                for result in local_reported_results:
+            for result in local_reported_results:
+                result["dispatcher_item_id"] = item_id
+                if local_item_id:
                     result["codex_history_item_id"] = local_item_id
             _persist_codex_history_bridge_dispatch_results(
                 store,
@@ -1291,6 +1292,11 @@ def record_codex_history_reply(
         now=timestamp,
         dispatch_results=[acknowledged],
     )
+    _mirror_codex_history_delivery_event_to_dispatcher(
+        match,
+        event_type="read",
+        occurred_at=timestamp,
+    )
     return {
         "ok": True,
         "status": "acknowledged",
@@ -1390,6 +1396,11 @@ def record_codex_history_delivery_receipt(
             now=timestamp,
             dispatch_results=[delivered],
         )
+    _mirror_codex_history_delivery_event_to_dispatcher(
+        match,
+        event_type="acknowledged" if normalized_receipt_type in {"read", "viewed"} else "delivered",
+        occurred_at=timestamp,
+    )
     return {
         "ok": True,
         "status": "delivered" if current_status != "acknowledged" else "acknowledged",
@@ -4634,6 +4645,41 @@ def _find_codex_history_reply_result(
             continue
         return dict(row)
     return legacy_match
+
+
+def _mirror_codex_history_delivery_event_to_dispatcher(
+    match: Mapping[str, Any],
+    *,
+    event_type: str,
+    occurred_at: str,
+) -> None:
+    if _history_dispatcher_mode(None) != "bridge":
+        return
+    dispatcher_item_id = str(match.get("dispatcher_item_id") or "").strip()
+    recipient_id = str(match.get("account_id") or "").strip()
+    channel = str(match.get("channel") or "").strip().casefold()
+    message_ref = str(match.get("message_ref") or "").strip()
+    if not dispatcher_item_id or not recipient_id or not event_type:
+        return
+    event_id = "teebotus-" + hashlib.sha256(
+        "|".join((dispatcher_item_id, recipient_id, event_type, message_ref, str(occurred_at or ""))).encode("utf-8")
+    ).hexdigest()
+    try:
+        client = HistoryDispatcherClient(_history_dispatcher_socket_path(None), timeout_seconds=3)
+        response = client.request("delivery.record", {
+            "event_id": event_id,
+            "item_id": dispatcher_item_id,
+            "recipient_id": recipient_id,
+            "event_type": event_type,
+            "channel": channel,
+            "message_ref": message_ref,
+            "occurred_at": str(occurred_at or utc_now()),
+        })
+        data = _history_dispatcher_response_data(response, operation="delivery.record")
+        if data.get("ok") is not True:
+            raise HistoryDispatcherError("History-Dispatcher delivery.record returned invalid data")
+    except (HistoryDispatcherError, ValueError) as exc:
+        LOGGER.warning("History-Dispatcher delivery event mirror failed: %s", str(exc)[:240])
 
 
 def _find_codex_history_receipt_result(
