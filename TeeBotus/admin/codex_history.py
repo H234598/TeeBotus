@@ -45,7 +45,6 @@ from TeeBotus.history_dispatcher_bridge import (
 from TeeBotus.admin.accounts_report import (
     BOT_INSTRUCTION_FILENAME,
     DEFAULT_INSTANCES_DIR,
-    ReadOnlySecretToolInstanceSecretProvider,
     discover_instances,
     parse_csv,
 )
@@ -57,6 +56,7 @@ from TeeBotus.runtime.accounts import (
     AccountStore,
     AccountStoreError,
     InstanceSecretProvider,
+    runtime_secret_provider,
 )
 from TeeBotus.runtime.dotenv import load_project_dotenv_for_instances
 from TeeBotus.runtime.proactive_agent import ProactiveSender, select_proactive_route
@@ -3775,7 +3775,7 @@ def _codex_history_account_is_dispatch_admin(
             source_store = AccountStore(
                 accounts_root,
                 source_instance_name,
-                secret_provider=secret_provider or ReadOnlySecretToolInstanceSecretProvider(),
+                secret_provider=secret_provider or runtime_secret_provider(),
                 create_dirs=False,
             )
             if is_runtime_admin_account(source_store, normalized_account_id, instance_name=source_instance_name, env=env):
@@ -4010,7 +4010,7 @@ def _resolve_codex_history_dispatch_route(
                 store_factory=lambda accounts_root, source_instance_name: AccountStore(
                     accounts_root,
                     source_instance_name,
-                    secret_provider=secret_provider or ReadOnlySecretToolInstanceSecretProvider(),
+                    secret_provider=secret_provider or runtime_secret_provider(),
                     create_dirs=False,
                 ),
             )
@@ -4984,7 +4984,7 @@ def build_codex_history_report(
         instances=tuple(instances),
         repo=str(repo or "").strip(),
         summary_limit=max(0, int(summary_limit or 0)),
-        provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
+        provider=provider or runtime_secret_provider(),
     )
     selected_instances = discover_instances(options.instances_dir, options.instances)
     report: dict[str, Any] = {
@@ -5594,7 +5594,7 @@ def main(argv: Sequence[str] | None = None, *, provider: InstanceSecretProvider 
                         strategic_analysis_allow_remote=bool(args.strategic_analysis_allow_remote),
                         strategic_analysis_force=bool(args.strategic_analysis_force),
                         strategic_analysis_dry_run=bool(args.strategic_analysis_dry_run),
-                        secret_provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
+                        secret_provider=provider or runtime_secret_provider(),
                     )
                 )
             payload = {
@@ -5854,7 +5854,7 @@ def _store_for_instance(
     return AccountStore(
         safe_instances_dir / safe_instance_name / "data" / "accounts",
         safe_instance_name,
-        secret_provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
+        secret_provider=provider or runtime_secret_provider(),
         create_dirs=create_dirs,
     )
 
@@ -6005,7 +6005,7 @@ def _watch_dispatch_report(
             instance_name=instance_name,
             senders=senders,
             instances_dir=instances_dir,
-            secret_provider=ReadOnlySecretToolInstanceSecretProvider(),
+            secret_provider=runtime_secret_provider(),
             dry_run=dry_run,
             limit=int(getattr(args, "dispatch_limit", 0) or 0),
         )
@@ -6039,7 +6039,7 @@ def _watch_post_index_report(
         qdrant_url=str(getattr(args, "post_index_qdrant_url", "") or ""),
         qdrant_dry_run=bool(getattr(args, "post_index_qdrant_dry_run", False)),
         qdrant_ensure=qdrant_ensure,
-        secret_provider=provider or ReadOnlySecretToolInstanceSecretProvider(),
+        secret_provider=provider or runtime_secret_provider(),
     )
 
 

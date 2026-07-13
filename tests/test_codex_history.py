@@ -76,6 +76,22 @@ def authorize_codex_admin(store: AccountStore, account_id: str) -> None:
     store.write_status_auth_state(account_id, {"schema_version": 1, "authorized": True, "admin_opt_out": False})
 
 
+def test_codex_history_default_store_uses_runtime_secret_retry_policy(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES", "2")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS", "0.25")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_TIMEOUT_SECONDS", "4")
+    accounts_root = tmp_path / "Demo" / "data" / "accounts"
+    accounts_root.mkdir(parents=True)
+
+    store = codex_history_module._store_for_instance(tmp_path, "Demo", None)
+    provider = store.secret_provider.delegate
+
+    assert provider.create_if_missing is False
+    assert provider.lookup_retries == 2
+    assert provider.lookup_retry_delay_seconds == 0.25
+    assert provider.timeout_seconds == 4.0
+
+
 @pytest.fixture(autouse=True)
 def redirect_codex_history_obsidian(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     def fake_obsidian_incoming_path(*parts: str) -> Path:
