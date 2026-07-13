@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen
 
-**Quellstand:** TeeBotus `1.9.481`, lokaler Stand nach dem Applet-Health-Detail-Fix
+**Quellstand:** TeeBotus `1.9.482`, lokaler Stand nach dem Bridge-Route-Preflight-Fix
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -421,3 +421,11 @@ Der Plan ist erst abgeschlossen, wenn:
   Fallbacks mit `effective_status=configured` werden dort nicht als actionable
   Ursache wiederholt. `pytest -q tests/test_cinnamon_applet.py` erfolgreich:
   `231 passed in 37.28s`.
+- 2026-07-13: Bridge-Logikfehler in `1.9.482` behoben: Eine konfigurierte
+  Admin-ID ohne aktuelle private Route durfte zuvor trotzdem zentral geclaimt
+  und als terminales `skipped/no_private_route` abgeschlossen werden. Ein
+  schreibfreier Route-Preflight lässt solche Items jetzt zentral `queued` und
+  meldet sie als `deferred/no_private_route`; echte routbare Empfaenger gehen
+  unveraendert durch den Claim-/Complete-Pfad. Die fokussierte Bridge-/Shadow-
+  Suite lief mit `25 passed`, die History-/Metadaten-Suite mit `161 passed`;
+  Compileall und `git diff --check` waren sauber.

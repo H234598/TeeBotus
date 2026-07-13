@@ -974,6 +974,48 @@ def _reconcile_codex_history_local_rows_from_dispatcher(
     return synchronized_rows
 
 
+def _codex_history_dispatch_routable_account_ids(
+    store: AccountStore,
+    account_ids: Sequence[str],
+    *,
+    instance_name: str,
+    instances_dir: str | Path | None,
+    secret_provider: InstanceSecretProvider | None,
+) -> tuple[str, ...]:
+    """Return configured recipients with a currently usable private route.
+
+    The bridge must not claim a central item merely because an admin ID is
+    configured. A configured ID can still be non-local, unlinked, or missing
+    a private route. Test doubles without an AccountStore retain the old
+    claim-path behavior; production callers always pass a real store.
+    """
+
+    candidates = tuple(
+        dict.fromkeys(
+            str(account_id or "").strip().casefold()
+            for account_id in account_ids
+            if str(account_id or "").strip()
+        )
+    )
+    if not isinstance(store, AccountStore):
+        return candidates
+    routable: list[str] = []
+    for account_id in candidates:
+        try:
+            route, _reason = _resolve_codex_history_dispatch_route(
+                store,
+                account_id,
+                instance_name=instance_name,
+                instances_dir=instances_dir,
+                secret_provider=secret_provider,
+            )
+        except (AccountStoreError, OSError, ValueError):
+            route = None
+        if route is not None:
+            routable.append(account_id)
+    return tuple(routable)
+
+
 async def _dispatch_codex_history_outbox_via_dispatcher(
     store: AccountStore,
     *,
@@ -1004,6 +1046,13 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
         instance_name=instance_name,
         account_ids=account_ids,
         env=env,
+        instances_dir=instances_dir,
+        secret_provider=secret_provider,
+    )
+    routable_account_ids = _codex_history_dispatch_routable_account_ids(
+        store,
+        candidate_account_ids,
+        instance_name=instance_name,
         instances_dir=instances_dir,
         secret_provider=secret_provider,
     )
@@ -1094,7 +1143,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                 "channel": "",
                 "summary_prefix": str(local_row.get("summary_prefix") or ""),
             })
-        if not candidate_account_ids:
+        if not routable_account_ids:
             # Never claim a central item without a valid recipient.  The
             # dispatcher treats completion with an empty recipient list as a
             # terminal ``skipped`` state, which would lose a queued summary.
@@ -1133,7 +1182,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                     "codex_history_item_id": str(central_queued.get("id") or ""),
                     "account_id": "",
                     "status": "deferred",
-                    "reason": "no_recipient_accounts",
+                    "reason": "no_recipient_accounts" if not candidate_account_ids else "no_private_route",
                     "channel": "",
                     "summary_prefix": "",
                 })

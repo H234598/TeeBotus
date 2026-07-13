@@ -1920,6 +1920,52 @@ def test_codex_history_dispatch_bridge_mirrors_local_orphan_before_claim(
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status"] == "queued"
 
 
+def test_codex_history_dispatch_bridge_does_not_claim_configured_unroutable_recipient(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    instances_dir = tmp_path / "instances"
+    instances_dir.mkdir()
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    calls: list[str] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            calls.append(operation)
+            if operation == "history.query":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "central-no-route",
+                            "kind": "codex_run_summary",
+                            "status": "queued",
+                            "dedupe_key": "sha256:central-no-route",
+                        }],
+                    },
+                }
+            raise AssertionError(operation)
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_account_ids", lambda *args, **kwargs: ("configured-admin",))
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+            instances_dir=instances_dir,
+            now=datetime(2026, 7, 13, 12, 5, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["status_counts"] == {"deferred": 1}
+    assert result["items"][0]["reason"] == "no_private_route"
+    assert calls == ["history.query"]
+
+
 def test_codex_history_dispatch_bridge_reconciles_terminal_local_queue_after_empty_claim(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -2187,6 +2233,7 @@ def test_codex_history_dispatch_bridge_reconciles_authoritative_local_status(
 
     monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
     monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_account_ids", lambda *args, **kwargs: ("new-admin",))
+    monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_routable_account_ids", lambda *args, **kwargs: ("new-admin",))
     monkeypatch.setattr(codex_history_module, "_dispatch_codex_history_item_to_account", fake_send)
 
     result = asyncio.run(
@@ -2259,6 +2306,7 @@ def test_codex_history_dispatch_bridge_clears_stale_failure_after_delivery(
 
     monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
     monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_account_ids", lambda *args, **kwargs: ("admin",))
+    monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_routable_account_ids", lambda *args, **kwargs: ("admin",))
     monkeypatch.setattr(codex_history_module, "_dispatch_codex_history_item_to_account", fake_send)
 
     result = asyncio.run(
