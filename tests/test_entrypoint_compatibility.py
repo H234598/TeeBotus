@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -10,6 +11,7 @@ from TeeBotus.artifact_outputs import DEFAULT_OBSIDIAN_INCOMING_DIR
 from TeeBotus.core.status import account_memory_index_health_lines
 from TeeBotus.runtime.accounts import INSTANCE_STATE_ACCOUNT_ID, AccountStore, StaticSecretProvider, telegram_identity_key
 from TeeBotus.runtime.qdrant import USER_MEMORY_QDRANT_EMBEDDING_DIMENSIONS, USER_MEMORY_QDRANT_EMBEDDING_MODEL
+from TeeBotus.runtime.version_marker import runtime_version_marker_path
 
 
 def _configure_demo_instance(monkeypatch, tmp_path: Path, *, instructions: str = "# Bot\n") -> Path:
@@ -57,6 +59,28 @@ def test_help_flag_prints_usage_without_runtime_start(monkeypatch, capsys) -> No
     assert "Usage: python3 -m TeeBotus" in captured.out
     assert "--runtime-status" in captured.out
     assert captured.err == ""
+
+
+def test_normal_main_lifecycle_owns_and_removes_runtime_version_marker(monkeypatch, tmp_path: Path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    fake_file = tmp_path / "repo" / "TeeBotus" / "bot.py"
+    fake_file.parent.mkdir(parents=True)
+    monkeypatch.setattr(bot, "__file__", str(fake_file))
+    monkeypatch.setenv("INVOCATION_ID", "invocation-1")
+    observed: dict[str, object] = {}
+
+    def fake_main_impl(_argv: list[str] | None) -> int:
+        marker = runtime_version_marker_path(tmp_path / "repo")
+        observed["exists_during_main"] = marker.exists()
+        observed["payload_during_main"] = json.loads(marker.read_text(encoding="utf-8"))
+        return 0
+
+    monkeypatch.setattr(bot, "_main_impl", fake_main_impl)
+
+    assert bot.main([]) == 0
+    assert observed["exists_during_main"] is True
+    assert observed["payload_during_main"]["version"] == __version__
+    assert not runtime_version_marker_path(tmp_path / "repo").exists()
 
 
 def test_runtime_status_does_not_require_telegram_bot_start() -> None:

@@ -46,6 +46,34 @@ class TelegramBotMissingError(RuntimeError):
     """Raised when the Telegram bot implementation cannot be found."""
 
 
+def _write_service_runtime_version_marker() -> Path | None:
+    invocation_id = str(os.environ.get("INVOCATION_ID") or "").strip()
+    if not invocation_id:
+        return None
+    try:
+        from TeeBotus.runtime.version_marker import write_runtime_version_marker
+
+        return write_runtime_version_marker(
+            Path(__file__).resolve().parents[1],
+            version=__version__,
+            pid=os.getpid(),
+            invocation_id=invocation_id,
+        )
+    except Exception:  # noqa: BLE001 - the marker must never block bot startup.
+        return None
+
+
+def _remove_service_runtime_version_marker(path: Path | None) -> None:
+    if path is None:
+        return
+    try:
+        from TeeBotus.runtime.version_marker import remove_runtime_version_marker
+
+        remove_runtime_version_marker(path, pid=os.getpid(), invocation_id=str(os.environ.get("INVOCATION_ID") or ""))
+    except Exception:  # noqa: BLE001 - cleanup must never mask the runtime result.
+        return
+
+
 def _load_telegram_main() -> Callable[[list[str] | None], int] | None:
     module = _load_telegram_module()
     main = getattr(module, "main", None) if module is not None else None
@@ -2395,9 +2423,14 @@ def _start_gemini_free_tier_limit_refresh(config: Any) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     original = dict(os.environ)
+    marker_path: Path | None = None
     try:
+        args = list(sys.argv[1:] if argv is None else argv)
+        if not args or args[0] not in {"--version", "version", "--help", "-h", "help", "--runtime-status", "runtime-status"}:
+            marker_path = _write_service_runtime_version_marker()
         return _main_impl(argv)
     finally:
+        _remove_service_runtime_version_marker(marker_path)
         os.environ.clear()
         os.environ.update(original)
 

@@ -22,6 +22,7 @@ from TeeBotus.cinnamon_applet import STATUS_FIELD_BOUNDARY_KEYS
 from TeeBotus.cinnamon_applet import STATUS_FIELD_BOUNDARY_VALUES
 from TeeBotus.cinnamon_applet import build_status_payload, parse_runtime_status
 from TeeBotus.cinnamon_applet import CONFIRMED_ACTIVE_SUBSTATES
+from TeeBotus.runtime.version_marker import read_runtime_version_status, write_runtime_version_marker
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -2262,6 +2263,63 @@ def test_cinnamon_applet_status_menu_detail_lines_include_health_and_runtime_dat
         "Qdrant: http://127.0.0.1:6333; Collections 1/2; Fehler probe failed",
         "Runtime: Demo | Kanaele telegram | Version 1.2.3 | Commit abc1234",
     ]
+
+
+def test_cinnamon_applet_status_detail_distinguishes_source_and_runtime_version() -> None:
+    result = _run_js_applet_expression(
+        """
+        applet._statusDetailLines({
+          ok: true,
+          version: "1.9.406",
+          runtime_version: {status: "matched", version: "1.9.404"},
+          repo: {short_commit: "abc1234"},
+          unit: {name: "teebotus.service", active_state: "active", sub_state: "running", returncode: 0},
+          health: {status: "ok", total_problem_count: 0},
+          qdrant: {collections: {}},
+          runtime: {summary: {instances: "Demo", channels: "telegram"}, status_counts: {}}
+        })
+        """
+    )
+
+    assert result[-1] == "Runtime: Demo | Kanaele telegram | Version 1.9.406 | Runtime-Version 1.9.404 | Commit abc1234"
+
+
+def test_runtime_version_marker_matches_active_unit(tmp_path: Path) -> None:
+    marker = write_runtime_version_marker(
+        tmp_path,
+        version="1.9.406",
+        pid=1234,
+        invocation_id="invocation-1",
+        started_at="2026-07-13T06:41:32+00:00",
+    )
+
+    assert marker is not None
+    result = read_runtime_version_status(
+        tmp_path,
+        {"main_pid": "1234", "invocation_id": "invocation-1"},
+    )
+
+    assert result["status"] == "matched"
+    assert result["version"] == "1.9.406"
+
+
+def test_runtime_version_marker_rejects_stale_unit_identity(tmp_path: Path) -> None:
+    marker = write_runtime_version_marker(
+        tmp_path,
+        version="1.9.406",
+        pid=1234,
+        invocation_id="invocation-1",
+    )
+
+    assert marker is not None
+    assert read_runtime_version_status(
+        tmp_path,
+        {"main_pid": "1235", "invocation_id": "invocation-1"},
+    )["reason"] == "pid_mismatch"
+    assert read_runtime_version_status(
+        tmp_path,
+        {"main_pid": "1234", "invocation_id": "invocation-2"},
+    )["reason"] == "invocation_mismatch"
 
 
 def test_cinnamon_applet_formats_runtime_slot_and_admin_status_lines() -> None:

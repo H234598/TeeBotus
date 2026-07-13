@@ -645,7 +645,12 @@ TeeBotusApplet.prototype = {
     let channels = String(summary.channels || this._channels());
     let version = String(payload.version || "?");
     let commit = String(repo.short_commit || "?");
-    lines.push("Runtime: " + instances + " | Kanaele " + channels + " | Version " + version + " | Commit " + commit);
+    let runtimeVersion = this._runtimeVersionText(payload.runtime_version);
+    let versionText = "Version " + version;
+    if (runtimeVersion) {
+      versionText += " | Runtime-Version " + runtimeVersion;
+    }
+    lines.push("Runtime: " + instances + " | Kanaele " + channels + " | " + versionText + " | Commit " + commit);
     let runtimeDiagnostics = this._runtimeDiagnosticsText(payload);
     if (runtimeDiagnostics) {
       lines.push(runtimeDiagnostics.slice(3));
@@ -1494,6 +1499,24 @@ TeeBotusApplet.prototype = {
       warning: "Warnung"
     };
     return _hasOwn(labels, value) ? labels[value] : value;
+  },
+
+  _runtimeVersionText: function(payload) {
+    if (!this._isJsonObject(payload)) {
+      return "";
+    }
+    let version = String(payload.version || "").trim();
+    let status = String(payload.status || "").trim().toLowerCase();
+    if (status === "matched" && version) {
+      return version;
+    }
+    if (version) {
+      return version + " (" + this._statusWord(status || "unknown") + ")";
+    }
+    if (status === "missing") {
+      return "nicht ermittelt";
+    }
+    return status ? this._statusWord(status) : "unbekannt";
   },
 
   _booleanWord: function(value) {

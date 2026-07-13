@@ -18,6 +18,7 @@ from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from TeeBotus import __version__
 from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION, QDRANT_USER_MEMORY_COLLECTION
+from TeeBotus.runtime.version_marker import read_runtime_version_status
 
 
 DEFAULT_REPO_ROOT = Path.home() / "TeeBotus"
@@ -361,6 +362,7 @@ def build_status_payload(
     runtime = _runtime_status(root, channels=channels, python_executable=python_executable, timeout_seconds=timeout_seconds)
     parsed_runtime = parse_runtime_status(runtime["stdout"])
     unit = _systemd_unit_status(unit_name)
+    runtime_version = read_runtime_version_status(root, unit)
     qdrant_unit = _systemd_unit_status(qdrant_unit_name)
     qdrant = _qdrant_status(qdrant_url)
     repo = _repo_status(root)
@@ -377,6 +379,7 @@ def build_status_payload(
         "command_ok": command_ok,
         "health": health,
         "version": __version__,
+        "runtime_version": runtime_version,
         "repo": repo,
         "unit": unit,
         "qdrant": {
@@ -816,7 +819,7 @@ def _systemd_unit_status(unit_name: str) -> dict[str, Any]:
             "stderr": "systemd unit name is empty",
         }
     result = _run(
-        ["systemctl", "--user", "show", name, "--property=ActiveState,SubState,MainPID,FragmentPath,LoadState"],
+        ["systemctl", "--user", "show", name, "--property=ActiveState,SubState,MainPID,FragmentPath,LoadState,InvocationID"],
         timeout_seconds=5,
     )
     fields = _parse_key_value_lines(result["stdout"])
@@ -825,6 +828,7 @@ def _systemd_unit_status(unit_name: str) -> dict[str, Any]:
     main_pid = fields.get("MainPID", "")
     fragment_path = fields.get("FragmentPath", "")
     load_state = fields.get("LoadState", "")
+    invocation_id = fields.get("InvocationID", "")
     if result["returncode"] != 0 and active_state == "unknown":
         active_state = "missing"
     return {
@@ -834,6 +838,7 @@ def _systemd_unit_status(unit_name: str) -> dict[str, Any]:
         "main_pid": main_pid,
         "fragment_path": fragment_path,
         "load_state": load_state,
+        "invocation_id": invocation_id,
         "returncode": result["returncode"],
         "stderr": result["stderr"],
     }
