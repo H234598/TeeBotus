@@ -2769,6 +2769,31 @@ def test_cinnamon_applet_health_v2_does_not_hide_actionable_status_behind_stale_
     assert result["accepted"] is False
 
 
+def test_cinnamon_applet_health_v2_fails_closed_when_classification_fields_are_missing() -> None:
+    result = _run_js_applet_expression(
+        """
+        ({
+          total: applet._healthProblemTotal(
+            {classification_version: 2, status: "ok", total_problem_count: 0},
+            {},
+            {warning: 1}
+          ),
+          summary: applet._statusSummary({
+            ok: true,
+            unit: {active_state: "active"},
+            health: {classification_version: 2, status: "ok", total_problem_count: 0},
+            runtime: {summary: {}, status_counts: {warning: 1}},
+            qdrant: {collections: {}}
+          })
+        })
+        """
+    )
+
+    assert result["total"] == 1
+    assert result["summary"].startswith("Warnungen 1")
+    assert "Warnung:1" in result["summary"]
+
+
 def test_cinnamon_applet_health_v2_does_not_hide_command_or_qdrant_counts_behind_stale_total() -> None:
     result = _run_js_applet_expression(
         """

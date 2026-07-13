@@ -1748,6 +1748,12 @@ TeeBotusApplet.prototype = {
         this._problemBreakdownCount((health || {}).actionable_problem_statuses),
         this._problemBreakdownCount((summary || {}).actionable_problem_statuses)
       );
+      if (!this._healthV2HasClassification(health, summary)) {
+        actionableCount = Math.max(
+          actionableCount,
+          this._problemBreakdownCount(this._healthV2FallbackActionableStatuses(health, summary, counts))
+        );
+      }
       let commandTotal = this._nonNegativeInt((health || {}).command_problem_count, 0);
       let qdrantRuntimeTotal = this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0);
       let qdrantTotal = Math.max(
@@ -1802,6 +1808,70 @@ TeeBotusApplet.prototype = {
       derivedTotal = Math.max(derivedTotal, 1);
     }
     return Math.max(derivedTotal, Math.max(0, textProblemTotal - qdrantRuntimeTotal));
+  },
+
+  _healthV2HasClassification: function(health, summary) {
+    return [health || {}, summary || {}].some(function(source) {
+      return Object.prototype.hasOwnProperty.call(source, "actionable_problem_count")
+        || Object.prototype.hasOwnProperty.call(source, "actionable_problem_statuses")
+        || Object.prototype.hasOwnProperty.call(source, "informational_problem_count")
+        || Object.prototype.hasOwnProperty.call(source, "informational_problem_statuses");
+    });
+  },
+
+  _healthV2FallbackActionableStatuses: function(health, summary, counts) {
+    let rawCounts = this._problemStatusCountsFromSources(health, summary, counts);
+    let actionable = [];
+    for (let status of PROBLEM_STATUSES) {
+      let rawCount = this._nonNegativeInt(rawCounts[status], 0);
+      let informationalCount = Math.max(
+        this._problemBreakdownCountForStatus((health || {}).informational_problem_statuses, status),
+        this._problemBreakdownCountForStatus((summary || {}).informational_problem_statuses, status)
+      );
+      let count = Math.max(0, rawCount - informationalCount);
+      if (count > 0) {
+        actionable.push(status + ":" + String(count));
+      }
+    }
+    return actionable.join(",");
+  },
+
+  _problemStatusCountsFromSources: function(health, summary, counts) {
+    let merged = {};
+    let sources = [
+      counts || {},
+      this._problemCountsFromBreakdown((health || {}).problem_statuses),
+      this._problemCountsFromBreakdown((summary || {}).problem_statuses)
+    ];
+    for (let source of sources) {
+      for (let status of PROBLEM_STATUSES) {
+        let value = this._nonNegativeInt(source[status], 0);
+        merged[status] = Math.max(this._nonNegativeInt(merged[status], 0), value);
+      }
+    }
+    return merged;
+  },
+
+  _problemCountsFromBreakdown: function(value) {
+    let result = {};
+    for (let part of String(value || "").split(",")) {
+      let index = part.indexOf(":");
+      if (index < 1) {
+        continue;
+      }
+      let status = part.slice(0, index).trim();
+      if (PROBLEM_STATUSES.indexOf(status) < 0) {
+        continue;
+      }
+      let count = this._nonNegativeInt(part.slice(index + 1), 0);
+      result[status] = Math.max(this._nonNegativeInt(result[status], 0), count);
+    }
+    return result;
+  },
+
+  _problemBreakdownCountForStatus: function(value, status) {
+    let counts = this._problemCountsFromBreakdown(value);
+    return this._nonNegativeInt(counts[status], 0);
   },
 
   _problemBreakdownText: function(value) {
@@ -1914,6 +1984,9 @@ TeeBotusApplet.prototype = {
       let statuses = (health || {}).actionable_problem_statuses;
       if (!statuses) {
         statuses = (summary || {}).actionable_problem_statuses;
+      }
+      if (!this._healthV2HasClassification(health, summary)) {
+        statuses = this._healthV2FallbackActionableStatuses(health, summary, counts);
       }
       return this._problemBreakdownText(statuses || "");
     }
