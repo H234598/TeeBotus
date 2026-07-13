@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.377`, Commit `86796389`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.378`, Commit `1764b2b9`.
 
 ## Arbeitsprinzipien
 
@@ -89,6 +89,12 @@ parallele Aenderung konnte dadurch zwischen Pruefung und Loeschung eintreten.
 Die Revision wird jetzt innerhalb derselben `BEGIN IMMEDIATE`-Transaktion
 erneut berechnet.
 
+**Sechster Befund 2026-07-13:** Der History-Dispatcher kann einen technischen
+Transporterfolg mit einem fachlichen Fehler in `data.ok=false` beantworten.
+Der TeeBotus-Bridge-Worker pruefte bisher nur das aeussere `ok` und behandelte
+`claim_not_owned` dadurch als erfolgreichen Abschluss. Die Auswertung prueft
+jetzt beide Ebenen und bricht fail-closed ab.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -145,7 +151,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - History-Dispatcher nach dem Fix: `31 passed`, davon zwei Regressionstests fuer terminale Skips und `delivered+skipped`
 - Lokale Dispatcher-Paketversion: `0.2.5`, nach dem Delete-Revision-Fix in `.venv-py313` installiert
 - History-Dispatcher-Fixes committed als `943d349` (`Treat skipped recipients as terminal`), `bf78436` (`Report persisted history append status`), `162f978` (`Keep claim response timestamps current`), `90e4206` (`Preserve duplicate uncertainty across retries`) und `84fa05f` (`Bump history dispatcher to 0.2.4`)
-- TeeBotus-Plan-/Nachweisstaende committed als `18b36730`, `0cf5db99`, `0d1d2004`, `f3089e08`, `418ba283`, `e9bae24d` und `40c98557`
+- TeeBotus-Plan-/Nachweisstaende committed als `18b36730`, `0cf5db99`, `0d1d2004`, `f3089e08`, `418ba283`, `e9bae24d`, `40c98557` und `1764b2b9`
 
 ### In dieser Runde erledigt
 
@@ -154,12 +160,13 @@ Der Plan ist erst abgeschlossen, wenn:
 - History-Dispatcher-Gesamtsuite: `33 passed`.
 - History-Dispatcher-Gesamtsuite nach dem Duplicate-Flag-Fix: `35 passed`.
 - History-Dispatcher-Gesamtsuite nach dem Delete-Revision-Fix: `36 passed`.
-- TeeBotus Bridge-/Codex-History-Tests: `108 passed`.
+- TeeBotus Bridge-/Codex-History-Tests vor dem Nested-Response-Fix: `108 passed`; danach `109 passed`.
 - API-Statusprobe: vorher `api_status=queued, stored_status=delivered`; nach dem Fix bestaetigt `api_status=delivered, stored_status=delivered`.
 - Claim-Zeitprobe: vorher `claimed_updated_at` alt und `stored_updated_at` neu; nach dem Fix bestaetigt `claim_timestamps_match=True`.
 - Duplicate-Flag-Probe: vorher global `possible_duplicate=False` nach erfolgreichem Retry; nach dem Fix muss es global `True` bleiben.
 - Delete-Race-Probe: eine parallele Aenderung zwischen Preview und Execute muss jetzt `revision_changed` liefern und den Ziel-Eintrag erhalten.
 - Delete-Revision-Fix committed als `94556cb` (`Make delete revision checks atomic`).
+- Nested-Completion-Probe: `data.ok=false` mit `claim_not_owned` wird jetzt als fehlgeschlagener Dispatcher-Lauf gemeldet.
 
 ### Noch offen
 
