@@ -598,7 +598,7 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             continue
         fields = _parse_status_fields(line)
         line_statuses = list(_line_status_values(fields))
-        if _line_has_ready_error(line, fields) and not any(status in PROBLEM_STATUSES for status in line_statuses):
+        if _line_has_error(fields) and not any(status in PROBLEM_STATUSES for status in line_statuses):
             _append_status_value(line_statuses, "warning")
         if line.startswith("codex_usage=") and _codex_usage_is_stale(fields):
             _append_status_value(line_statuses, "stale")
@@ -805,10 +805,8 @@ def _status_is_ready_without_error(fields: Mapping[str, Any], key: str) -> bool:
     return _normalized_status_value(fields.get(key)) == "ready" and not str(fields.get("error", "") or "").strip()
 
 
-def _line_has_ready_error(line: str, fields: Mapping[str, Any]) -> bool:
-    if not str(fields.get("error", "") or "").strip():
-        return False
-    return _normalized_status_value(fields.get("status")) == "ready"
+def _line_has_error(fields: Mapping[str, Any]) -> bool:
+    return _status_flag_is_set(str(fields.get("error", "") or ""))
 
 
 def _append_status_value(values: list[str], status: str) -> None:

@@ -3272,6 +3272,23 @@ def test_cinnamon_applet_runtime_parser_does_not_hide_unknown_api_or_identity_st
     assert parsed["summary"]["informational_problem_statuses"] == "warning:1"
 
 
+def test_cinnamon_applet_runtime_parser_marks_error_without_status_as_problem() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Diagnose]
+        service=missing_status error=provider_failed
+        service=neutral_error error=none
+        service=ok_with_error status=ok error=provider_failed
+        service=broken_with_error status=broken error=provider_failed
+        """
+    )
+
+    assert parsed["status_counts"]["warning"] == 2
+    assert parsed["status_counts"]["broken"] == 1
+    assert parsed["summary"]["problem_status_count"] == 3
+    assert parsed["summary"]["problem_statuses"] == "broken:1,warning:2"
+
+
 def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:
     parsed = parse_runtime_status(
         """
