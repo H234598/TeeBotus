@@ -763,6 +763,39 @@ def _history_dispatcher_report_recipient_results(
     return [merged[key] for key in order] + anonymous
 
 
+def _history_dispatcher_inactive_failed_recipient_results(
+    existing_results: Sequence[Mapping[str, Any]],
+    active_account_ids: Sequence[str],
+) -> list[dict[str, Any]]:
+    """Turn obsolete recipient failures into terminal skips for this retry.
+
+    Dispatcher items retain recipient results across attempts. An admin that
+    was removed or is currently unroutable must not keep a new active admin's
+    successful delivery in a global failed/queued state.
+    """
+
+    active = {
+        str(account_id or "").strip().casefold()
+        for account_id in active_account_ids
+        if str(account_id or "").strip()
+    }
+    result: list[dict[str, Any]] = []
+    for raw_result in existing_results:
+        if not isinstance(raw_result, Mapping):
+            continue
+        status = str(raw_result.get("status") or "").strip().casefold()
+        recipient_id = str(raw_result.get("recipient_id") or raw_result.get("account_id") or "").strip()
+        if status != "failed" or not recipient_id or recipient_id.casefold() in active:
+            continue
+        skipped = dict(raw_result)
+        skipped["recipient_id"] = recipient_id
+        skipped["account_id"] = str(skipped.get("account_id") or recipient_id).strip()
+        skipped["status"] = "skipped"
+        skipped["reason"] = "recipient_not_routable"
+        result.append(skipped)
+    return result
+
+
 def _history_dispatcher_item_dedupe_key(item: Mapping[str, Any]) -> str:
     top_level = str(item.get("dedupe_key") or "").strip()
     if top_level:
@@ -1250,7 +1283,10 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                 for result in existing_results
                 if str(result.get("status") or "").strip().casefold() in {"delivered", "accepted", "acknowledged"}
             }
-            item_results: list[dict[str, Any]] = []
+            item_results: list[dict[str, Any]] = _history_dispatcher_inactive_failed_recipient_results(
+                existing_results,
+                routable_account_ids,
+            )
             new_item_results: list[dict[str, Any]] = []
             for account_id in routable_account_ids:
                 if account_id in successful_accounts:
@@ -1266,7 +1302,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                     now=timestamp,
                     persist_result=False,
                 ))
-            item_results = list(new_item_results)
+            item_results.extend(new_item_results)
             if not item_results:
                 item_results = existing_results or [{"account_id": "", "status": "skipped", "reason": "no_recipient_accounts", "channel": ""}]
             reported_item_results = _history_dispatcher_report_recipient_results(existing_results, item_results)

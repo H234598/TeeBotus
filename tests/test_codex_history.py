@@ -2270,6 +2270,8 @@ def test_codex_history_dispatch_bridge_reconciles_authoritative_local_status(
         },
     )
 
+    completion_body: dict[str, object] = {}
+
     class FakeClient:
         def __init__(self, *_args, **_kwargs) -> None:
             pass
@@ -2296,6 +2298,7 @@ def test_codex_history_dispatch_bridge_reconciles_authoritative_local_status(
                     },
                 }
             if operation == "dispatch.complete":
+                completion_body.update(body or {})
                 return {"ok": True, "data": {"ok": True, "status": "queued"}}
             raise AssertionError(operation)
 
@@ -2319,8 +2322,26 @@ def test_codex_history_dispatch_bridge_reconciles_authoritative_local_status(
         )
     )
 
-    assert result["ok"] is False
-    assert result["status_counts"] == {"delivered": 1, "failed": 1}
+    assert result["ok"] is True
+    assert result["status_counts"] == {"delivered": 1, "skipped": 1}
+    assert completion_body["recipient_results"] == [
+        {
+            "recipient_id": "old-admin",
+            "status": "skipped",
+            "channel": "",
+            "message_ref": "",
+            "reason": "recipient_not_routable",
+            "possible_duplicate": False,
+        },
+        {
+            "recipient_id": "new-admin",
+            "status": "accepted",
+            "channel": "telegram",
+            "message_ref": "",
+            "reason": "",
+            "possible_duplicate": False,
+        },
+    ]
     assert sent_item["version"]["semver"] == "1.9.384"
     assert sent_item["summary"]["text"] == "Lokaler Status wird abgeglichen."
     persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
