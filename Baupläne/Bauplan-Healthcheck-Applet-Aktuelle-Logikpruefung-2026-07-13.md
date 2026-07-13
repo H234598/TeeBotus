@@ -268,6 +268,26 @@ Dispatcher-Grund genauso aussehen wie der bekannte terminale Grund
 - SemVer `1.9.434`, lokaler Commit `b910dbc5`
   (`Expose unknown history skip reasons`).
 
+## Befund 90: Installierte Applet-Kopie war hinter dem Quellstand
+
+Der echte Python-Statuspayload war konsistent, aber die laufende Cinnamon-Installation
+verwendete eine aeltere `applet.js`. Die installierte Kopie enthielt weder die
+aktuelle Fehlerflag-Klassifikation noch die robuste v2-Health-Zaehllogik. Damit
+konnte das Applet einen korrekten Payload veraltet oder irrefuehrend anzeigen.
+
+### Umsetzung und Nachweis
+
+- `scripts/install_cinnamon_applet.py` erneut ausgefuehrt und die lokale Kopie
+  unter `~/.local/share/cinnamon/applets/teebotus@H234598` aktualisiert.
+- Repo- und Installationskopie stimmen jetzt bytegenau ueberein:
+  SHA-256 `ad336e8570b8a4d6aa49a874dd01bb5f4e3de924780b2cfd5f5577c1a5ab5183`.
+- Echter Python-Payload: `version=1.9.434`, `health=warning`,
+  `actionable=missing_key:1,warning:2`, `total=3`.
+- Derselbe Payload wird vom aktuellen JavaScript-Validator akzeptiert:
+  `valid=true`.
+- Cinnamon-Applet ueber `org.Cinnamon.ReloadXlet` neu geladen; kein Bot- oder
+  Service-Restart ausgefuehrt.
+
 ## Umsetzung
 
 ### 1. Deklarative Statusfelder auswerten
