@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.393`, Bridge-Result-Block-Commit `a5b524fa`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.394`, Receipt-Reconciliation-Commit `2e13c831`.
 
 ## Arbeitsprinzipien
 
@@ -284,7 +284,13 @@ und externen Item-IDs. Der externe `delivery.record`-Pfad schreibt derzeit aber
 nur ein Audit-Ereignis und aktualisiert keine `recipient_results`. Ein Receipt
 vor oder ohne erfolgreiches `dispatch.complete` kann deshalb extern weiter als
 retrybar gelten. Dafuer ist ein separater Cross-Repo-Protokoll-/Store-Fix
-noetig; dieser Befund ist noch offen.
+noetig; der Code-Fix ist umgesetzt, der Live-Nachweis bleibt offen.
+
+**Umsetzung zum achtunddreissigsten Befund:** History-Dispatcher `0.2.6`
+aktualisiert `recipient_results` bei idempotenten `delivered`-/`read`-Events
+monoton. TeeBotus spiegelt Bridge-Receipts und Replies mit der externen
+Dispatcher-ID und deterministischer Event-ID. Die lokalen Resultate behalten
+gleichzeitig die lokale Outbox-ID fuer Reply-/Receipt-Matching.
 
 ### 3. Ein einheitliches Statusmodell erzwingen
 
@@ -382,11 +388,13 @@ Der Plan ist erst abgeschlossen, wenn:
 - Aktuelle lesende Dispatcherprobe: Version `0.2.5`, `queued=0`, `delivered=26`, `last_error` leer; Bridge-Dry-Run fuer TBL: `items=0`, `status_counts={}`, keine Mutation.
 - Bridge-Result-/Reply-Probe mit externer ID `external-bridge-local-result` und lokaler Outbox-ID erfolgreich; lokale Receipt-Zuordnung funktioniert.
 - Gezielte Regressionstests nach dem zweiten Fixblock: `130 passed in 8.93s` in `tests/test_codex_history.py tests/test_history_dispatcher_bridge.py`.
+- History-Dispatcher-Receipt-Reconciliation: externe Suite `38 passed`; Commits `0a22881` und `4ff12fc`, installierte Venv-Version `0.2.6`.
+- Lokale Receipt-Mirror-Probe bestaetigt `delivery.record` mit externer Item-ID und Eventtyp `delivered`; lokale Bridge-Suite danach `130 passed in 12.14s`.
 
 ### Noch offen
 
 - Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
-- Cross-Repo-Fix fuer `delivery.record`: Recipient-Status und Gesamtstatus bei validierten `delivered`-/`read`-Ereignissen aktualisieren, danach mit TeeBotus-Receiptpfaden testen.
+- Receipt-/Reply-Reconciliation nach dem naechsten Live-Restart mit echtem laufendem Dispatcher pruefen.
 - Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
 - Der lokale TeeBotus-Code ist aktuell `1.9.393`; die Fixes ab `1.9.389` wurden nach dem letzten 20er-Restart committed und sind noch nicht live geladen. Live-Reload ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
