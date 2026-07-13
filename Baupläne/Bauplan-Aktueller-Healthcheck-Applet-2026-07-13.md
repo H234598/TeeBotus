@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.420`, Commit `6f9ed0f5`.
+- Quellstand: TeeBotus `1.9.421`, Commit `cd8a5761`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -279,6 +279,25 @@ Nachweis:
 - Vollstaendige Applet-Suite: `200 passed in 36.27s`.
 - SemVer-Bump auf `1.9.420`, Commit `6f9ed0f5`
   (`Expose API budget route conflicts`).
+
+### Befund 76: Unbekannter Structured-Decision-Zustand wurde durch Fallback verschluckt
+
+Die Fallback-Klassifikation behandelte eine Zeile mit
+`route_status=unknown fallback=local` als informativen Fallback-Hinweis. Ein
+unbekannter Primärzustand ist aber kein belegter Ausfall, den der Fallback
+zuverlaessig abdeckt. Dadurch konnte ein realer Routing-/Konfigurationsfehler
+aus dem actionable Healthzaehler verschwinden. `unknown` ist jetzt ein
+Fallback-Suppression-Blocker. Der erwartete `route_status=unavailable`-Fall
+mit lokalem Fallback bleibt weiterhin informativ.
+
+Nachweis:
+
+- Regressionstest mit `route_status=unknown` und `route_status=unavailable`,
+  jeweils mit Fallback: nur `unknown:1` actionable, `unavailable:1` informativ.
+- Fokussierte Fallback-Suite: `3 passed, 198 deselected`.
+- Vollstaendige Applet-Suite: `201 passed in 42.64s`.
+- SemVer-Bump auf `1.9.421`, Commit `cd8a5761`
+  (`Do not hide unknown decision routes`).
 
 ## Naechste Arbeitspakete
 
