@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist nach dem Snapshot-Schema-Fix Version `1.9.404`; der laufende Dienst ist nach dem 20-Commit-Restart ebenfalls auf dem aktuellen Quellstand.
+- Der aktuelle TeeBotus-Stand ist nach dem Snapshot-Schema-Fix Version `1.9.405`; der laufende Bot-Dienst bleibt bis zur naechsten 20-Commit-Grenze bei `1.9.404`.
 
 ## Arbeitsprinzipien
 
@@ -478,6 +478,9 @@ Der Plan ist erst abgeschlossen, wenn:
 - Umsetzung Befund 59: Der Applet-Statuspfad merkt einen konkurrierenden Refresh jetzt als Pending und fuehrt ihn nach Abschluss des laufenden Reads genau einmal aus. Beim Entfernen des Applets wird der Pending-Zustand verworfen. SemVer-Bump auf `1.9.404`.
 - Regressionstest Befund 59: Die vollstaendige `tests/test_cinnamon_applet.py` laeuft mit `185 passed`; der neue Test bestaetigt, dass ein Refresh waehrend eines laufenden Reads gepuffert wird.
 - Live-Nachweis nach Befund 59: Nach 23 Commits seit der letzten Restart-Grenze wurden `teebotus.service`, `history-dispatcher.service` und `teebotus-codex-history-collector.service` am `2026-07-13 06:41:31-32 CEST` kontrolliert neu gestartet. Alle drei sind `active`; der laufende TeeBotus meldet `v1.9.404`, der Dispatcher-Snapshot `version=0.2.9`, `ok=true`, `queued=0`, `total=336` und `last_error` leer. Die installierte Applet-Kopie ist byte-identisch zur Quelle; `ReloadExtension(teebotus@H234598, APPLET)` war erfolgreich.
+- Befund 60: Dispatcher-Fehler wurden nur im Untermenue bewertet. Bei ansonsten gesundem Bot zeigte der obere Applet-Header deshalb weiterhin `Health ok` und verschwieg den Fehler.
+- Umsetzung Befund 60: Dispatcher-Warnungen und veraltete Snapshots fliessen jetzt in die obere Problemzahl, den effektiven Health-Status und die Detailzeile ein. SemVer-Bump auf `1.9.405`.
+- Regressionstest Befund 60: Die vollstaendige `tests/test_cinnamon_applet.py` laeuft mit `186 passed`; der neue Test reproduziert einen gesunden Bot mit `last_error` im Dispatcher und erwartet `Warnungen 1`, `Health Warnung` sowie `Dispatcher Warnung`.
 
 ### Noch offen
 
@@ -485,7 +488,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.9` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
 - Live- und Applet-Abgleich ist abgeschlossen; die verbleibenden Warnungen sind jetzt getrennt von Timeout-/Parserfehlern sichtbar und muessen fachlich beziehungsweise durch Benutzeraktion bearbeitet werden.
 - Dispatcher-Dry-Run fuer `TeeBotus_Logger` liefert im Bridge-Modus `statuses: none`, waehrend die lokale Outbox noch `19 queued` Legacy-Zeilen enthaelt. Dieser Bestand bleibt als Warnung sichtbar; keine automatische Zustellung, Loeschung oder Quarantaene wurde ohne explizite Migrationsentscheidung ausgefuehrt.
-- Der lokale und laufende TeeBotus-Code ist aktuell `1.9.404`. Der lokale und aktive History-Dispatcher ist `0.2.9`. Die untracked Nutzerdaten (`.obsidian/`, `.stfolder/`, `Fusion_Packliste.txt`, `Unbenannt.base`, `Unbenannt.canvas`) bleiben bewusst unberuehrt.
+- Der lokale TeeBotus-Code ist aktuell `1.9.405`; der laufende Bot-Dienst ist noch `1.9.404`, der aktive History-Dispatcher `0.2.9`. Die Applet-Installation wird nach diesem Commit synchronisiert und reloaded. Die untracked Nutzerdaten (`.obsidian/`, `.stfolder/`, `Fusion_Packliste.txt`, `Unbenannt.base`, `Unbenannt.canvas`) bleiben bewusst unberuehrt.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen

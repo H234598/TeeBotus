@@ -2090,6 +2090,51 @@ def test_cinnamon_applet_dispatcher_refresh_queues_while_read_is_running() -> No
     assert result is True
 
 
+def test_cinnamon_applet_top_health_includes_dispatcher_warning() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let values = {};
+          applet.showHistoryDispatcherSection = true;
+          applet.historyDispatcherPayload = {
+            schema_version: 1,
+            ok: true,
+            generated_at: new Date().toISOString(),
+            last_error: "dispatch failed",
+            queued: 0,
+            total: 1,
+            collector: {enabled: true, sources: 1},
+            dispatch: {enabled: true, paused: false},
+            queue_preview: []
+          };
+          applet.historyDispatcherError = "";
+          applet.statusPayload = {
+            ok: true,
+            version: "1.2.3",
+            repo: {short_commit: "abc123"},
+            unit: {active_state: "active", sub_state: "running", returncode: 0},
+            health: {status: "ok", classification_version: 2, total_problem_count: 0, command_ok: true},
+            runtime: {returncode: 0, summary: {instances: "Demo", channels: "telegram"}, status_counts: {}},
+            qdrant: {collections: {teebotus_user_memory: {status: "ready", count: 1}, teebotus_bibliothekar_chunks: {status: "ready", count: 1}}}
+          };
+          values.statusSummary = applet._statusSummary(applet.statusPayload);
+          applet.headerItem = {label: {set_text: function(value) { values.header = value; }}};
+          applet.summaryItem = {label: {set_text: function(value) { values.summary = value; }}};
+          applet.versionItem = {label: {set_text: function(value) { values.version = value; }}};
+          applet._updateHeader();
+          return values;
+        })()
+        """
+    )
+
+    assert result["statusSummary"].startswith("Warnungen 1")
+    assert "Dispatcher Warnung" in result["statusSummary"]
+    assert "Health Warnung" in result["statusSummary"]
+    assert "Probleme 1" in result["version"]
+    assert "Health: Warnung" in result["version"]
+    assert "Dispatcher Warnung" in result["version"]
+
+
 def test_cinnamon_applet_spawn_json_does_not_reinvoke_throwing_consumer() -> None:
     result = _run_js_applet_expression(
         """

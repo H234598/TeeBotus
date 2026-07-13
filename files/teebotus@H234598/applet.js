@@ -764,6 +764,46 @@ TeeBotusApplet.prototype = {
     }
   },
 
+  _historyDispatcherSnapshotHasError: function(payload) {
+    if (this.historyDispatcherError) {
+      return true;
+    }
+    if (!this._historyDispatcherSnapshotIsValid(payload)) {
+      return true;
+    }
+    let generated = Date.parse(payload.generated_at);
+    let age = Date.now() - generated;
+    return payload.ok === false
+      || Boolean(String(payload.last_error || "").trim())
+      || age < -HISTORY_DISPATCHER_FUTURE_SKEW_TOLERANCE_SECONDS * 1000;
+  },
+
+  _historyDispatcherSnapshotIsStale: function(payload) {
+    if (!this._historyDispatcherSnapshotIsValid(payload)) {
+      return false;
+    }
+    let age = Date.now() - Date.parse(payload.generated_at);
+    return age > HISTORY_DISPATCHER_STALE_AFTER_SECONDS * 1000;
+  },
+
+  _historyDispatcherProblemCount: function() {
+    if (!this.showHistoryDispatcherSection || (!this.historyDispatcherPayload && !this.historyDispatcherError)) {
+      return 0;
+    }
+    return this._historyDispatcherSnapshotHasError(this.historyDispatcherPayload)
+      || this._historyDispatcherSnapshotIsStale(this.historyDispatcherPayload) ? 1 : 0;
+  },
+
+  _historyDispatcherHealthText: function() {
+    if (this._historyDispatcherProblemCount() <= 0) {
+      return "";
+    }
+    return this._historyDispatcherSnapshotIsStale(this.historyDispatcherPayload)
+      && !this._historyDispatcherSnapshotHasError(this.historyDispatcherPayload)
+      ? " | Dispatcher veraltet"
+      : " | Dispatcher Warnung";
+  },
+
   _populateHistoryDispatcherMenu: function() {
     if (!this.historyDispatcherMenu || !this.historyDispatcherMenu.menu) {
       return;
@@ -771,12 +811,9 @@ TeeBotusApplet.prototype = {
     try {
       this.historyDispatcherMenu.menu.removeAll();
       let payload = this.historyDispatcherPayload || {};
-      let generated = Date.parse(String(payload.generated_at || ""));
-      let age = Date.now() - generated;
-      let timestampError = !Number.isFinite(generated) || age < -HISTORY_DISPATCHER_FUTURE_SKEW_TOLERANCE_SECONDS * 1000;
-      let stale = !timestampError && age > HISTORY_DISPATCHER_STALE_AFTER_SECONDS * 1000;
+      let stale = this._historyDispatcherSnapshotIsStale(payload);
       let lastError = String(payload.last_error || "").trim();
-      let hasSnapshotError = !this._historyDispatcherSnapshotIsValid(payload) || timestampError || payload.ok === false || Boolean(lastError) || Boolean(this.historyDispatcherError);
+      let hasSnapshotError = this._historyDispatcherSnapshotHasError(payload);
       this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(hasSnapshotError ? _("Status: Warnung") : (stale ? _("Status: veraltet") : _("Status: bereit")), false));
       if (this.historyDispatcherError) {
         this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(this._shortText(this.historyDispatcherError, 160), false));
@@ -1654,14 +1691,20 @@ TeeBotusApplet.prototype = {
     let runtime = payload.runtime || {};
     let summary = runtime.summary || {};
     let counts = runtime.status_counts || {};
-    let bad = this._healthProblemTotal(health, summary, counts);
+    let dispatcherProblems = this._historyDispatcherProblemCount();
+    let bad = this._healthProblemTotal(health, summary, counts) + dispatcherProblems;
     let state = this._shortText(String(unit.active_state || "unknown"), 80);
     let instances = this._shortText(String(summary.instances || "?"), 160);
     let channels = this._shortText(String(summary.channels || this._channels()), 160);
     let qdrant = payload.qdrant || {};
     let vectors = this._qdrantCollectionCount(qdrant.collections || {}, "teebotus_user_memory");
     let vectorText = vectors > 0 ? " | Vektoren " + String(vectors) : "";
-    let healthText = this._statusWord(health.status || (payload.ok ? "ok" : "warning"));
+    let healthStatus = String(health.status || (payload.ok ? "ok" : "warning")).trim().toLowerCase();
+    if (dispatcherProblems > 0 && healthStatus === "ok") {
+      healthStatus = "warning";
+    }
+    let healthText = this._statusWord(healthStatus);
+    let dispatcherText = this._historyDispatcherHealthText();
     let breakdown = this._actionableProblemBreakdownText(health, summary, counts);
     let informational = this._informationalHealthText(health, summary);
     let commandBreakdown = this._commandProblemBreakdownText(health);
@@ -1670,9 +1713,9 @@ TeeBotusApplet.prototype = {
     let result;
     if (bad > 0) {
       let problemLabel = health.status === "broken" ? "Probleme " : "Warnungen ";
-      result = problemLabel + String(bad) + breakdown + informational + commandBreakdown + qdrantBreakdown + " | Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + runtimeDiagnostics;
+      result = problemLabel + String(bad) + breakdown + informational + commandBreakdown + qdrantBreakdown + dispatcherText + " | Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + runtimeDiagnostics;
     } else {
-      result = "Health " + healthText + informational + " | Unit " + state + " | " + instances + " | " + channels + vectorText + breakdown + commandBreakdown + qdrantBreakdown + runtimeDiagnostics;
+      result = "Health " + healthText + informational + " | Unit " + state + " | " + instances + " | " + channels + vectorText + breakdown + commandBreakdown + qdrantBreakdown + dispatcherText + runtimeDiagnostics;
     }
     return this._shortText(result, MAX_PANEL_STATUS_CHARS);
   },
@@ -1816,6 +1859,7 @@ TeeBotusApplet.prototype = {
     text += this._informationalHealthText(health, summary);
     text += this._commandProblemBreakdownText(health);
     text += this._qdrantProblemBreakdownText(health);
+    text += this._historyDispatcherHealthText();
     return text;
   },
 
@@ -1879,8 +1923,13 @@ TeeBotusApplet.prototype = {
     this.headerItem.label.set_text("TB " + String(payload.version || "?"));
     this.summaryItem.label.set_text(this._shortText(this.statusText || _("Status unbekannt"), MAX_PANEL_STATUS_CHARS));
     let commit = repo.short_commit ? " | " + repo.short_commit : "";
-    let problemTotal = this._healthProblemTotal(health, summary, counts);
-    let healthWord = this._statusWord(health.status || "unknown");
+    let dispatcherProblems = this._historyDispatcherProblemCount();
+    let problemTotal = this._healthProblemTotal(health, summary, counts) + dispatcherProblems;
+    let healthStatus = String(health.status || "unknown").trim().toLowerCase();
+    if (dispatcherProblems > 0 && healthStatus === "ok") {
+      healthStatus = "warning";
+    }
+    let healthWord = this._statusWord(healthStatus);
     let prefix = problemTotal > 0 ? "Probleme " + String(problemTotal) + " | " : "";
     this.versionItem.label.set_text(
       prefix +
