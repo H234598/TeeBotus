@@ -1723,7 +1723,13 @@ TeeBotusApplet.prototype = {
   _healthProblemTotal: function(health, summary, counts) {
     let total = this._nonNegativeInt((health || {}).total_problem_count, null);
     if (this._nonNegativeInt((health || {}).classification_version, 0) >= 2 && total !== null) {
-      return total;
+      let actionableCount = Math.max(
+        this._nonNegativeInt((health || {}).actionable_problem_count, 0),
+        this._nonNegativeInt((summary || {}).actionable_problem_status_count, 0),
+        this._problemBreakdownCount((health || {}).actionable_problem_statuses),
+        this._problemBreakdownCount((summary || {}).actionable_problem_statuses)
+      );
+      return Math.max(total, actionableCount);
     }
     let qdrantRuntimeTotal = this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0);
     let textProblemTotal = Math.max(

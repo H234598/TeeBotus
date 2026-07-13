@@ -2611,6 +2611,52 @@ def test_cinnamon_applet_health_v2_keeps_information_visible_without_promoting_i
     assert "Warnungen" not in result["summary"]
 
 
+def test_cinnamon_applet_health_v2_does_not_hide_actionable_status_behind_stale_total() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let health = {
+            classification_version: 2,
+            status: "warning",
+            total_problem_count: 0,
+            actionable_problem_count: 0,
+            actionable_problem_statuses: "missing_key:1"
+          };
+          return {
+            total: applet._healthProblemTotal(health, {actionable_problem_statuses: "missing_key:1"}, {}),
+            summary: applet._statusSummary({
+              ok: false,
+              unit: {active_state: "active"},
+              health: health,
+              runtime: {summary: {instances: "Demo", channels: "telegram"}, status_counts: {}},
+              qdrant: {collections: {}}
+            }),
+            accepted: applet._isStatusPayload({
+              ok: true,
+              repo: {},
+              unit: {active_state: "active", sub_state: "running", returncode: 0},
+              health: {
+                classification_version: 2,
+                status: "ok",
+                total_problem_count: 0,
+                actionable_problem_count: 0,
+                actionable_problem_statuses: "missing_key:1",
+                command_ok: true
+              },
+              qdrant: {collections: {}},
+              runtime: {returncode: 0, sections: {}, summary: {}, status_counts: {}}
+            })
+          };
+        })()
+        """
+    )
+
+    assert result["total"] == 1
+    assert result["summary"].startswith("Warnungen 1")
+    assert "Probleme Key fehlt:1" in result["summary"]
+    assert result["accepted"] is False
+
+
 def test_cinnamon_applet_menu_header_does_not_trust_zero_total_problem_count() -> None:
     result = _run_js_applet_expression(
         """

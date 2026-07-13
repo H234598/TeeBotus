@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist nach dem Snapshot-Schema-Fix Version `1.9.405`; der laufende Bot-Dienst bleibt bis zur naechsten 20-Commit-Grenze bei `1.9.404`.
+- Der aktuelle TeeBotus-Stand ist nach dem V2-Health-Aggregationsfix Version `1.9.406`; der laufende Bot-Dienst bleibt bis zur naechsten 20-Commit-Grenze bei `1.9.404`.
 
 ## Arbeitsprinzipien
 
@@ -482,6 +482,10 @@ Der Plan ist erst abgeschlossen, wenn:
 - Umsetzung Befund 60: Dispatcher-Warnungen und veraltete Snapshots fliessen jetzt in die obere Problemzahl, den effektiven Health-Status und die Detailzeile ein. SemVer-Bump auf `1.9.405`.
 - Regressionstest Befund 60: Die vollstaendige `tests/test_cinnamon_applet.py` laeuft mit `186 passed`; der neue Test reproduziert einen gesunden Bot mit `last_error` im Dispatcher und erwartet `Warnungen 1`, `Health Warnung` sowie `Dispatcher Warnung`.
 - Live-Nachweis Befund 60: Die Applet-Quelle wurde nach Commit `7807d650` installiert und per `ReloadExtension(teebotus@H234598, APPLET)` geladen; `cmp` bestaetigt Byte-Identitaet. Der Bot-Service bleibt bewusst bei `1.9.404`, bis die naechste 20-Commit-Restart-Grenze erreicht ist.
+- Befund 61: Bei `classification_version=2` vertraute der Applet-Healthpfad `health.total_problem_count` blind. Ein widerspruechlicher Payload mit `total_problem_count=0` und `actionable_problem_statuses=missing_key:1` wurde dadurch als akzeptabel behandelt beziehungsweise zeigte den Fehler nur ohne Warnungszaehler.
+- Umsetzung Befund 61: Die V2-Aggregation nimmt jetzt das Maximum aus dem Gesamtzaehler und den expliziten handlungsrelevanten V2-Zaehlern/Statuslisten. Informationsstatus bleiben bewusst ausgeschlossen. SemVer-Bump auf `1.9.406`.
+- Regressionstest Befund 61: Der neue Widerspruchstest prueft Zaehler, sichtbare Warnung und fail-closed Payload-Annahme; gezielt `11 passed`, vollstaendige `tests/test_cinnamon_applet.py` `187 passed in 33.78s`.
+- Live-Nachweis Befund 61: `scripts/install_cinnamon_applet.py` wurde erfolgreich ausgefuehrt, Quelle und installierte `applet.js` sind byte-identisch, und `ReloadExtension(teebotus@H234598, APPLET)` wurde erfolgreich angefordert. Kein Bot-/Service-Restart ausserhalb der 20-Commit-Grenze.
 
 ### Noch offen
 
@@ -489,7 +493,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.9` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
 - Live- und Applet-Abgleich ist abgeschlossen; die verbleibenden Warnungen sind jetzt getrennt von Timeout-/Parserfehlern sichtbar und muessen fachlich beziehungsweise durch Benutzeraktion bearbeitet werden.
 - Dispatcher-Dry-Run fuer `TeeBotus_Logger` liefert im Bridge-Modus `statuses: none`, waehrend die lokale Outbox noch `19 queued` Legacy-Zeilen enthaelt. Dieser Bestand bleibt als Warnung sichtbar; keine automatische Zustellung, Loeschung oder Quarantaene wurde ohne explizite Migrationsentscheidung ausgefuehrt.
-- Der lokale TeeBotus-Code und das laufende Applet sind aktuell `1.9.405`; der laufende Bot-Dienst ist noch `1.9.404`, der aktive History-Dispatcher `0.2.9`. Die untracked Nutzerdaten (`.obsidian/`, `.stfolder/`, `Fusion_Packliste.txt`, `Unbenannt.base`, `Unbenannt.canvas`) bleiben bewusst unberuehrt.
+- Der lokale TeeBotus-Code und das laufende Applet sind aktuell `1.9.406`; der laufende Bot-Dienst ist noch `1.9.404`, der aktive History-Dispatcher `0.2.9`. Die untracked Nutzerdaten (`.obsidian/`, `.stfolder/`, `Fusion_Packliste.txt`, `Unbenannt.base`, `Unbenannt.canvas`) bleiben bewusst unberuehrt.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
