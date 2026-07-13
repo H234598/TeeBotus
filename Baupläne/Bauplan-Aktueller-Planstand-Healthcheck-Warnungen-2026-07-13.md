@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.457`, Codecommit `f8e3881e`
+**Quellstand:** TeeBotus `1.9.458`, Codecommit `4285217b`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -571,6 +571,26 @@ Healthbefund anzeigen.
 - Vollstaendige `tests/test_cinnamon_applet.py`: `228 passed`.
 - `node --check` und `git diff --check`: erfolgreich.
 - SemVer `1.9.457`, Codecommit `f8e3881e`.
+
+## Befund 114: Partielles v2-Klassifikationspayload stufte Hinweise hoch
+
+Python erkannte die v2-Klassifikation bisher nur ueber den actionable
+Zaehler. Nach der Erkennung weiterer v2-Felder blieb der Default fuer einen
+fehlenden actionable-Zaehler jedoch auf dem gesamten Rohproblemzaehler. Ein
+Payload mit ausschliesslich `informational_problem_statuses` konnte dadurch
+weiterhin als actionable Warnung im Applet erscheinen.
+
+### Umsetzung und Nachweis
+
+- Die v2-Erkennung prueft jetzt alle actionable- und informationalen
+  Zaehler-/Breakdown-Felder.
+- Bei partieller v2-Klassifikation wird ein fehlender actionable-Zaehler nur
+  aus der expliziten actionable-Liste abgeleitet; ohne v2-Felder bleibt die
+  alte fail-closed Ableitung bestehen.
+- Regression fuer eine rein informative Warnung: `5 passed` fokussiert.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `229 passed`.
+- `compileall`, `node --check` und `git diff --check`: erfolgreich.
+- SemVer `1.9.458`, Codecommit `4285217b`.
 
 ## Arbeitsplan
 

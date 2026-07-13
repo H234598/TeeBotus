@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.457`, Codecommit `f8e3881e`
+**Quellstand:** TeeBotus `1.9.458`, Codecommit `4285217b`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet, Runtime-Healthpayload und `tests/test_cinnamon_applet.py`
 
 ## Auftrag
@@ -777,6 +777,22 @@ waehrend Python denselben Status ignorierte.
 - Vollstaendige Applet-Suite: `228 passed`.
 - `node --check files/teebotus@H234598/applet.js`: erfolgreich.
 - SemVer `1.9.457`, Codecommit `f8e3881e`.
+
+## Befund 114: Teilklassifikation machte informative Warnungen actionable
+
+Die JS-Seite behandelte bereits jedes v2-Klassifikationsfeld als Nachweis.
+Python verwendete dagegen nur den actionable Zaehler und setzte bei dessen
+Fehlen den gesamten Rohproblemzaehler als actionable an. Dadurch konnten
+partielle, rein informative Payloads im Header falsch als Warnung erscheinen.
+
+### Umsetzung und Nachweis
+
+- Python und JS erkennen v2 jetzt ueber dieselben vier Klassifikationsfelder.
+- Fehlt bei vorhandenem v2-Nachweis der actionable-Zaehler, wird nur die
+  explizite actionable-Liste verwendet.
+- Fokussierte Regression: `5 passed`.
+- Vollstaendige Applet-Suite: `229 passed`.
+- SemVer `1.9.458`, Codecommit `4285217b`.
 
 ## Invarianten
 
