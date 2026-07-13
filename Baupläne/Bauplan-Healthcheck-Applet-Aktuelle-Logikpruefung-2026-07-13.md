@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.436`, `8dc23e83`.
+- Aktueller gepruefter Quellstand: `1.9.437`, `1f2eefdc`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -351,6 +351,31 @@ weil allein das technische `error=` die Informationsregel blockierte.
   `informational=23`, Qdrant `0` Probleme.
 - SemVer `1.9.436`, lokaler Commit `8dc23e83`
   (`Classify verified fallback errors as informational`).
+- Kein Push und kein Bot-/Service-Restart ausgefuehrt.
+
+## Befund 93: Skips ohne Begruendung wurden als harmlose Hinweise behandelt
+
+`_codex_history_skip_reasons_are_informational()` gab bei einer leeren
+`skip_reasons`-Angabe bisher `True` zurueck. Damit konnte eine
+`codex_history_repo`-Zeile mit `skipped>0` und unbekannter Ursache als
+informativer Hinweis erscheinen. Das widersprach der fail-closed-Regel, nach
+der nur der bekannte terminale Grund `no_private_route` informativ sein darf.
+
+### Umsetzung und Nachweis
+
+- Eine leere Skip-Grundliste bleibt nur bei einer reinen `queued`-Zeile ohne
+  Skips informativ.
+- `skipped>0` ohne Grund wird als actionable `warning` klassifiziert.
+- `no_private_route` bleibt als bekannter terminaler Skip informativ.
+- Bestehende Testfixtures wurden fuer begruendete Skips explizit mit
+  `skip_reasons=no_private_route:N` versehen.
+- Regression fuer fehlenden, reinen queued- und bekannten Skip-Grund:
+  `4 passed, 212 deselected`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `216 passed in 46.70s`.
+- Live-Probe bleibt stabil bei `actionable=missing_key:1,warning:2` und
+  Qdrant ohne Probleme.
+- SemVer `1.9.437`, lokaler Commit `1f2eefdc`
+  (`Expose history skips without reasons`).
 - Kein Push und kein Bot-/Service-Restart ausgefuehrt.
 
 ## Umsetzung

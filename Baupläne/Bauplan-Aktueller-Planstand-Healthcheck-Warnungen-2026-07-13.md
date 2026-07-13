@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.436`, Commit `8dc23e83`
+**Quellstand:** TeeBotus `1.9.437`, Commit `1f2eefdc`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -174,6 +174,22 @@ lokaler Fallback vorhanden waren.
 - Live danach: `actionable=missing_key:1,warning:2`,
   `informational=23`, Qdrant ohne Probleme.
 - SemVer `1.9.436`, Commit `8dc23e83`.
+
+## Befund 93: Unbegruendete History-Skips wurden nicht fail-closed behandelt
+
+Eine leere `skip_reasons`-Angabe wurde bisher immer als informativer Zustand
+behandelt. Bei `skipped>0` fehlte damit der Nachweis, warum die Zustellung
+ausgelassen wurde.
+
+### Umsetzung und Nachweis
+
+- Reine `queued`-Zeilen ohne Skips bleiben Hinweise.
+- Ein Skip ohne Grund wird als actionable `warning` sichtbar.
+- Der bekannte terminale Grund `no_private_route` bleibt informativ.
+- Regression: `4 passed, 212 deselected`.
+- Vollstaendige Applet-Suite: `216 passed in 46.70s`.
+- Live unveraendert: `actionable=missing_key:1,warning:2`, Qdrant gesund.
+- SemVer `1.9.437`, Commit `1f2eefdc`.
 
 ## Informative Befunde, die nicht als Defekt hochgestuft werden sollen
 
