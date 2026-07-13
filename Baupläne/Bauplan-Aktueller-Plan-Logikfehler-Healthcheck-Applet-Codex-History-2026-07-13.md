@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, neue Momentaufnahme; noch nicht abgeschlossen
 
-**Quellstand:** TeeBotus `1.9.488`, lokaler Stand nach dem Bridge-Route-Preflight-Fix, dem Applet-Queue-Anzeigepatch, dem Watcher-Ressourcenfix, dem Mixed-Route-Dispatchfix und dem Stale-Recipient-Fix. Der Funktionscommit ist `d49262ac`.
+**Quellstand:** TeeBotus `1.9.489`, lokaler Stand nach dem Bridge-Route-Preflight-Fix, dem Applet-Queue-Anzeigepatch, dem Watcher-Ressourcenfix, dem Mixed-Route-Dispatchfix, dem Stale-Recipient-Fix und dem Mehrfach-Queue-Report-Fix. Der Funktionscommit ist `d412df5d`.
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -206,7 +206,7 @@ Eine schreibfreie Systemd-Pruefung am 2026-07-13 bestaetigte:
   Startzeit `2026-07-13 06:41:32 CEST`.
 - `teebotus.service` ist aktiv, MainPID `1014664`, Startzeit ebenfalls
   `2026-07-13 06:41:32 CEST`.
-- Der Quellstand ist inzwischen `1.9.488`; die laufenden Prozesse wurden vor
+- Der Quellstand ist inzwischen `1.9.489`; die laufenden Prozesse wurden vor
   den letzten Watcher-/Sessionroot- und Bridge-Route-Fixes gestartet und
   enthalten diese deshalb noch nicht. Das Journal bestaetigt den alten
   Laufzeitstand mit einer Versionsmeldung fuer `1.9.404`.
@@ -365,6 +365,21 @@ Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
 - [x] Patchversion auf `1.9.488` bumpen und als `d49262ac` committen.
 - [ ] Live-Nachweis mit einem realen historischen Fehlereintrag und einer
   aktuell routbaren Adminroute nach Restart pruefen.
+
+### B3. Mehrfach-Queue ohne Route
+
+- [x] Logikfehler reproduzieren: Im `not routable`-Pfad wurde bei mehreren
+  zentralen `queued`-Items nur das erste als `deferred` gemeldet.
+- [x] Alle zentralen wartenden Items ausgeben, wenn `limit=0` gilt; ein
+  positives Limit wird auf die gemeldete Menge angewendet.
+- [x] Regression fuer drei wartende Items mit `limit=0` und `limit=2`
+  ergaenzen; es gibt weiterhin keinen `dispatch.claim`-/`complete`-Aufruf.
+- [x] `pytest -q tests/test_codex_history.py`:
+  `160 passed in 7.45s`; History-/Metadaten-Suite:
+  `166 passed in 6.89s`; Compileall und `git diff --check` sauber.
+- [x] Patchversion auf `1.9.489` bumpen und als `d412df5d` committen.
+- [ ] Live-Nachweis mit mehreren zentral wartenden Items ohne private Route
+  nach Restart ausfuehren.
 
 ### C. Collector-Ressourcen begrenzen
 
@@ -629,4 +644,9 @@ Der Plan ist erst abgeschlossen, wenn:
   naechsten Retry als `skipped/recipient_not_routable` weitergegeben, damit
   eine erfolgreiche aktuelle Route nicht global als `failed`/`queued` blockiert
   bleibt. Version `1.9.488`, Commit `d49262ac`; `158` History-Tests und `164`
+  History-/Metadaten-Tests gruen. Kein Restart und kein Push ausgeloest.
+- 2026-07-13: Bridge-Logikfehler im `no_private_route`-Mehrfachfall behoben:
+  Der Pfad meldet jetzt alle wartenden zentralen Items bei `limit=0` und
+  respektiert ein positives Limit, statt nur das erste Item zu zeigen. Version
+  `1.9.489`, Commit `d412df5d`; `160` History-Tests und `166`
   History-/Metadaten-Tests gruen. Kein Restart und kein Push ausgeloest.
