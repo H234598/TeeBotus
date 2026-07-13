@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen
 
-**Quellstand:** TeeBotus `1.9.476`, lokaler Stand nach `75779b78`
+**Quellstand:** TeeBotus `1.9.477`, lokaler Stand nach `6d306f50`
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -120,6 +120,9 @@ Vorherige Detailplaene bleiben als Historie und Nachweis erhalten:
   ausgelassene Details werden explizit gezaehlt.
 - Post-Index und Dispatch laufen initial und danach nur bei echten Importen;
   der Idle-Dispatch bleibt als wartende Queue-Pruefung erhalten.
+- Post-Index- und Dispatch-Pending-Flags werden nur bei einem strikt echten
+  `ok=True` geloescht. Malformed Ergebnisse bleiben retryfaehig und werden als
+  fehlerhafte Reports gespeichert.
 
 ## Aktueller Live-Befund
 
@@ -295,6 +298,8 @@ deren Kombination eingegrenzt.
 - [x] Regression fuer fehlgeschlagenes Watchdog-Stop/Join ohne Zustands-Leak.
 - [x] Regression fuer malformed Watch-Payloads und String-/Zahlenwerte wie
   `"false"` oder `1`.
+- [x] Regression, dass malformed Post-Index-/Dispatch-Ergebnisse den naechsten
+  Versuch nicht unterdruecken.
 - [x] Regression fuer begrenzte Follow-Detailausgabe.
 - [x] Regression fuer den inkrementellen Ereignispfad.
 - [ ] Collector-Debounce-/Ressourcenbenchmark mit grossem Sessionroot.
@@ -359,5 +364,10 @@ Der Plan ist erst abgeschlossen, wenn:
   `75779b78` (`1.9.476`) lehnt malformed Reports sowie String-/Zahlenwerte fuer
   `ok` fail-closed ab. Die fokussierten Payload-Tests liefen mit `6 passed`; die
   Codex-History- und Metadaten-Suite mit `154 passed in 8.88s`.
+- 2026-07-13: Retry-Logikfehler im Watch-Post-Index-/Dispatch-Gate behoben:
+  `6d306f50` (`1.9.477`) setzt Pending nur noch bei strikt `ok=True` zurueck
+  und bewahrt malformed Reports fuer den naechsten Versuch. Die fokussierten
+  Tests liefen mit `10 passed`; die Codex-History- und Metadaten-Suite mit
+  `157 passed in 7.10s`.
 - 2026-07-13: Der Plan bleibt bis zur TBL-Reconciliation, der Event-Burst-/
   Ressourcenmessung und der naechsten erlaubten Live-Abnahme aktiv.
