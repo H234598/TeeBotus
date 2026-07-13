@@ -1696,13 +1696,14 @@ def test_codex_history_dispatch_bridge_reconciles_authoritative_local_status(
     store.append_codex_history_item(
         INSTANCE_STATE_ACCOUNT_ID,
         {
-            "id": "hd-local-status",
+            "id": "local-history-id",
             "kind": "codex_run_summary",
             "status": "queued",
             "created_at": "2026-07-13T12:00:00+00:00",
             "project": {"repo_name": "TeeBotus"},
             "version": {"semver": "1.9.384", "summary_number": 1},
             "summary_prefix": "v1.9.384 #0001",
+            "codex": {"dedupe_key": "sha256:local-external"},
             "summary": {"text": "Lokaler Status wird abgeglichen."},
         },
     )
@@ -1717,8 +1718,9 @@ def test_codex_history_dispatch_bridge_reconciles_authoritative_local_status(
                     "ok": True,
                     "data": {
                         "items": [{
-                            "id": "hd-local-status",
+                            "id": "external-history-id",
                             "kind": "codex_run_summary",
+                            "dedupe_key": "sha256:local-external",
                             "project": "/tmp/TeeBotus",
                             "payload": {"summary": {"text": "Extern bereits mit Fehlerhistorie"}},
                             "recipient_results": [{

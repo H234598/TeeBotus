@@ -682,23 +682,33 @@ def _sync_codex_history_local_dispatch_status(
     item_id: str,
     status: str,
     *,
+    dedupe_key: str = "",
     reason: str,
     now: str,
     dispatch_results: Sequence[Mapping[str, Any]],
 ) -> None:
     normalized_item_id = str(item_id or "").strip()
-    if not normalized_item_id or not isinstance(store, AccountStore):
+    normalized_dedupe_key = str(dedupe_key or "").strip()
+    if (not normalized_item_id and not normalized_dedupe_key) or not isinstance(store, AccountStore):
         return
     try:
         local_rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
-        if not any(
-            isinstance(row, Mapping) and str(row.get("id") or "").strip() == normalized_item_id
-            for row in local_rows
-        ):
+        local_item_id = ""
+        for row in local_rows:
+            if not isinstance(row, Mapping):
+                continue
+            if normalized_item_id and str(row.get("id") or "").strip() == normalized_item_id:
+                local_item_id = normalized_item_id
+                break
+            codex = row.get("codex") if isinstance(row.get("codex"), Mapping) else {}
+            if normalized_dedupe_key and str(codex.get("dedupe_key") or "").strip() == normalized_dedupe_key:
+                local_item_id = str(row.get("id") or "").strip()
+                break
+        if not local_item_id:
             return
         _update_codex_history_item_status(
             store,
-            normalized_item_id,
+            local_item_id,
             status,
             reason=reason,
             now=now,
@@ -822,10 +832,17 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
             local_status = external_status if external_status in {"queued", "delivered", "failed", "skipped", "discarded", "compacted"} else ""
             if not local_status:
                 local_status = _overall_dispatch_status([*existing_results, *item_results])
+            dispatcher_dedupe_key = str(raw_item.get("dedupe_key") or "").strip()
+            if not dispatcher_dedupe_key:
+                raw_payload = raw_item.get("payload")
+                raw_codex_value = raw_payload.get("codex") if isinstance(raw_payload, Mapping) else None
+                raw_codex = raw_codex_value if isinstance(raw_codex_value, Mapping) else {}
+                dispatcher_dedupe_key = str(raw_codex.get("dedupe_key") or "").strip()
             _sync_codex_history_local_dispatch_status(
                 store,
                 item_id,
                 local_status,
+                dedupe_key=dispatcher_dedupe_key,
                 reason=_overall_dispatch_reason([*existing_results, *item_results]),
                 now=timestamp,
                 dispatch_results=item_results,
