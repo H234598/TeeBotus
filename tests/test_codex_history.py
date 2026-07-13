@@ -1459,6 +1459,73 @@ def test_codex_history_dispatch_bridge_rejects_malformed_claim_data(
     assert "invalid data" in result["items"][0]["error"]
 
 
+def test_history_dispatcher_response_items_rejects_duplicate_ids() -> None:
+    with pytest.raises(codex_history_module.HistoryDispatcherError, match="duplicate item id"):
+        codex_history_module._history_dispatcher_response_items(
+            {"items": [{"id": "same"}, {"id": "same"}]},
+            operation="dispatch.claim",
+        )
+
+
+def test_codex_history_dispatch_bridge_rejects_invalid_claim_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            if operation == "dispatch.claim":
+                return {"ok": True, "data": {"items": [{"id": "wrong-status", "status": "delivered"}]}}
+            raise AssertionError(operation)
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            object(),
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["items"][0]["reason"] == "history_dispatcher_unavailable"
+    assert "invalid status" in result["items"][0]["error"]
+
+
+def test_codex_history_dispatch_bridge_rejects_missing_completion_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            if operation == "dispatch.claim":
+                return {"ok": True, "data": {"items": [{"id": "missing-completion-status", "kind": "codex_run_summary", "payload": {"summary": {"text": "Status fehlt"}}, "recipient_results": []}]}}
+            if operation == "dispatch.complete":
+                return {"ok": True, "data": {"ok": True}}
+            raise AssertionError(operation)
+
+    async def fake_send(*_args, **kwargs):
+        return {"account_id": kwargs.get("account_id", "open"), "status": "accepted", "channel": "telegram"}
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_account_ids", lambda *args, **kwargs: ("open",))
+    monkeypatch.setattr(codex_history_module, "_dispatch_codex_history_item_to_account", fake_send)
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            object(),
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["items"][0]["reason"] == "history_dispatcher_unavailable"
+    assert "invalid status" in result["items"][0]["error"]
+
+
 def test_codex_history_dispatch_bridge_rejects_non_object_claim_item(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1877,7 +1944,7 @@ def test_codex_history_dispatch_bridge_clears_stale_failure_after_delivery(
             raise AssertionError(operation)
 
     async def fake_send(_store, _item, *_args, **kwargs):
-        return {"account_id": kwargs.get("account_id", "admin"), "status": "accepted", "channel": "telegram"}
+        return {"account_id": kwargs.get("account_id", "admin"), "status": "accepted", "reason": "accepted", "channel": "telegram"}
 
     monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
     monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_account_ids", lambda *args, **kwargs: ("admin",))
@@ -1896,6 +1963,81 @@ def test_codex_history_dispatch_bridge_clears_stale_failure_after_delivery(
     persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
     assert persisted["status"] == "delivered"
     assert "last_reason" not in persisted
+
+
+def test_codex_history_bridge_persists_local_result_and_reply_match(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = make_git_repo(tmp_path, "bridge-local-result", version="1.9.0")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    admin_id = store.resolve_or_create_account(telegram_identity_key(777), display_label="Admin")
+    store.update_identity_route(telegram_identity_key(777), channel="telegram", chat_id="777", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, admin_id)
+    monkeypatch.delenv("TEEBOTUS_HISTORY_DISPATCHER_MODE", raising=False)
+    item = append_codex_history_summary(
+        store,
+        repo_root=repo,
+        title="Bridge lokal",
+        bullets=["Externe und lokale IDs unterscheiden sich."],
+        codex_metadata={"dedupe_key": "sha256:bridge-local-result"},
+    )
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            if operation == "dispatch.claim":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "external-bridge-local-result",
+                            "status": "delivering",
+                            "kind": "codex_run_summary",
+                            "dedupe_key": "sha256:bridge-local-result",
+                            "payload": {"summary": {"text": "unvollstaendig"}},
+                            "recipient_results": [],
+                        }],
+                    },
+                }
+            if operation == "dispatch.complete":
+                return {"ok": True, "data": {"ok": True, "status": "delivered"}}
+            raise AssertionError(operation)
+
+    def sender(_route: dict[str, object], _action: SendAttachment, _metadata: dict[str, object]) -> str:
+        return "telegram-bridge-local-1"
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="TeeBotus_Logger",
+            account_ids=(admin_id,),
+            senders={"telegram": sender},
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+            now=datetime(2026, 7, 13, 13, 0, tzinfo=timezone.utc),
+        )
+    )
+
+    assert result["ok"] is True
+    dispatch_rows = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+    assert any(
+        row.get("codex_history_item_id") == item["id"]
+        and row.get("message_ref") == "telegram-bridge-local-1"
+        and row.get("account_id") == admin_id
+        for row in dispatch_rows
+    )
+    receipt = record_codex_history_delivery_receipt(
+        store,
+        instance_name="TeeBotus_Logger",
+        channel="telegram",
+        chat_id="777",
+        message_ref="telegram-bridge-local-1",
+        account_id=admin_id,
+        now=datetime(2026, 7, 13, 13, 1, tzinfo=timezone.utc),
+    )
+    assert receipt["ok"] is True
 
 
 def test_history_dispatcher_digest_payload_becomes_markdown_attachment() -> None:

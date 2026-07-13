@@ -77,6 +77,7 @@ CODEX_HISTORY_DISPATCHING_STALE_AFTER_SECONDS = 15 * 60
 CODEX_HISTORY_DISPATCH_INSTANCES_ENV = "TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES"
 DEFAULT_CODEX_HISTORY_DISPATCH_INSTANCES = ("TeeBotus_Logger", "TeeBotusLogger", "TBL")
 HISTORY_DISPATCHER_RECIPIENT_STATUSES = frozenset({"accepted", "delivered", "acknowledged", "failed", "skipped"})
+HISTORY_DISPATCHER_COMPLETION_STATUSES = frozenset({"queued", "delivered", "failed", "skipped", "discarded", "compacted"})
 CODEX_HISTORY_RECEIPT_RANKS = {"delivered": 1, "viewed": 2, "read": 3}
 HISTORY_DISPATCHER_MODE_ENV = "TEEBOTUS_HISTORY_DISPATCHER_MODE"
 HISTORY_DISPATCHER_SOCKET_ENV = "HISTORY_DISPATCHER_SOCKET"
@@ -562,11 +563,16 @@ def _history_dispatcher_response_items(data: Mapping[str, Any], *, operation: st
     if not isinstance(items, list):
         raise HistoryDispatcherError(f"History-Dispatcher {operation} returned invalid items")
     validated: list[Mapping[str, Any]] = []
+    seen_item_ids: set[str] = set()
     for index, item in enumerate(items):
         if not isinstance(item, Mapping):
             raise HistoryDispatcherError(f"History-Dispatcher {operation} returned invalid item at index {index}")
-        if not str(item.get("id") or "").strip():
+        item_id = str(item.get("id") or "").strip()
+        if not item_id:
             raise HistoryDispatcherError(f"History-Dispatcher {operation} returned item without id at index {index}")
+        if item_id in seen_item_ids:
+            raise HistoryDispatcherError(f"History-Dispatcher {operation} returned duplicate item id at index {index}")
+        seen_item_ids.add(item_id)
         validated.append(item)
     return validated
 
@@ -596,6 +602,7 @@ def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any], *, store: 
             "status": str(item.get("status") or "queued").strip().casefold() or "queued",
             "attempt_count": attempt_count,
             "last_error": str(item.get("last_reason") or ""),
+            "possible_duplicate": bool(item.get("possible_duplicate") or delivery.get("possible_duplicate")),
             "dedupe_key": dedupe_key,
             "payload": dict(item),
         })
@@ -757,20 +764,94 @@ def _history_dispatcher_item_dedupe_key(item: Mapping[str, Any]) -> str:
 def _history_dispatcher_enrich_item_from_local_rows(
     item: Mapping[str, Any], local_rows: Sequence[Mapping[str, Any]],
 ) -> Mapping[str, Any]:
+    local_row = _history_dispatcher_matching_local_row(item, local_rows)
+    if local_row is None:
+        return item
+    enriched = dict(item)
+    enriched["payload"] = dict(local_row)
+    return enriched
+
+
+def _history_dispatcher_matching_local_row(
+    item: Mapping[str, Any], local_rows: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
     item_id = str(item.get("id") or "").strip()
     dedupe_key = _history_dispatcher_item_dedupe_key(item)
-    for local_row in local_rows:
+    dedupe_matches: list[tuple[int, datetime | None, Mapping[str, Any]]] = []
+    for position, local_row in enumerate(local_rows):
         if not isinstance(local_row, Mapping):
             continue
         local_id = str(local_row.get("id") or "").strip()
         local_codex = local_row.get("codex") if isinstance(local_row.get("codex"), Mapping) else {}
         same_id = bool(item_id and local_id and item_id == local_id)
         same_dedupe = bool(dedupe_key and str(local_codex.get("dedupe_key") or "").strip() == dedupe_key)
-        if same_id or same_dedupe:
-            enriched = dict(item)
-            enriched["payload"] = dict(local_row)
-            return enriched
-    return item
+        if same_id:
+            return local_row
+        if same_dedupe:
+            dedupe_matches.append((position, _parse_codex_history_timestamp(local_row.get("updated_at") or local_row.get("created_at")), local_row))
+    if not dedupe_matches:
+        return None
+    dated_matches = [match for match in dedupe_matches if match[1] is not None]
+    if dated_matches:
+        return max(dated_matches, key=lambda match: (match[1], match[0]))[2]
+    return max(dedupe_matches, key=lambda match: match[0])[2]
+
+
+def _persist_codex_history_bridge_dispatch_results(
+    store: AccountStore,
+    results: Sequence[Mapping[str, Any]],
+    *,
+    local_item_id: str = "",
+) -> None:
+    if not isinstance(store, AccountStore):
+        return
+    normalized_local_item_id = str(local_item_id or "").strip()
+    try:
+        existing = store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)
+        existing_keys = {
+            (
+                str(row.get("codex_history_item_id") or "").strip(),
+                str(row.get("account_id") or "").strip().casefold(),
+                str(row.get("channel") or "").strip().casefold(),
+                str(row.get("chat_id") or "").strip(),
+                str(row.get("message_ref") or "").strip(),
+                str(row.get("created_at") or row.get("updated_at") or "").strip(),
+                str(row.get("status") or "").strip().casefold(),
+            )
+            for row in existing
+            if isinstance(row, Mapping)
+        }
+        pending: list[dict[str, Any]] = []
+        for raw_result in results:
+            if not isinstance(raw_result, Mapping):
+                continue
+            result = dict(raw_result)
+            if normalized_local_item_id:
+                result["codex_history_item_id"] = normalized_local_item_id
+            item_key = str(result.get("codex_history_item_id") or "").strip()
+            account_key = str(result.get("account_id") or result.get("recipient_id") or "").strip().casefold()
+            if not item_key or not account_key:
+                continue
+            created_at = str(result.get("created_at") or result.get("updated_at") or utc_now()).strip()
+            result.setdefault("created_at", created_at)
+            result.setdefault("updated_at", created_at)
+            key = (
+                item_key,
+                account_key,
+                str(result.get("channel") or "").strip().casefold(),
+                str(result.get("chat_id") or "").strip(),
+                str(result.get("message_ref") or "").strip(),
+                created_at,
+                str(result.get("status") or "").strip().casefold(),
+            )
+            if key in existing_keys:
+                continue
+            existing_keys.add(key)
+            pending.append(result)
+        if pending:
+            store.append_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID, pending)
+    except (AccountStoreError, OSError, ValueError) as exc:
+        LOGGER.warning("Local bridged Codex-History result persistence failed: %s", str(exc)[:240])
 
 
 def _sync_codex_history_local_dispatch_status(
@@ -885,9 +966,22 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
         claim_items = _history_dispatcher_response_items(claim_data, operation="dispatch.claim")
         result_rows: list[dict[str, Any]] = []
         for raw_item in claim_items:
-            raw_item = _history_dispatcher_enrich_item_from_local_rows(raw_item, local_history_rows)
+            claim_status = str(raw_item.get("status") or "").strip().casefold()
+            if claim_status and claim_status != "delivering":
+                raise HistoryDispatcherError("History-Dispatcher dispatch.claim returned item with invalid status")
+            local_row = _history_dispatcher_matching_local_row(raw_item, local_history_rows)
+            enrichment_rows = local_history_rows
+            if local_row is None and isinstance(store, AccountStore):
+                try:
+                    enrichment_rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+                    local_row = _history_dispatcher_matching_local_row(raw_item, enrichment_rows)
+                except (AccountStoreError, OSError, ValueError) as exc:
+                    LOGGER.warning("Fresh local Codex-History identity lookup failed: %s", str(exc)[:240])
+                    enrichment_rows = local_history_rows
+            raw_item = _history_dispatcher_enrich_item_from_local_rows(raw_item, enrichment_rows)
             item = _history_dispatcher_item_to_legacy(raw_item)
             item_id = str(item["id"])
+            local_item_id = str(local_row.get("id") or "").strip() if isinstance(local_row, Mapping) else ""
             existing_results = _history_dispatcher_recipient_results(raw_item)
             successful_accounts = {
                 str(result.get("recipient_id") or result.get("account_id") or "").strip().casefold()
@@ -895,10 +989,11 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                 if str(result.get("status") or "").strip().casefold() in {"delivered", "accepted", "acknowledged"}
             }
             item_results: list[dict[str, Any]] = []
+            new_item_results: list[dict[str, Any]] = []
             for account_id in candidate_account_ids:
                 if account_id in successful_accounts:
                     continue
-                item_results.append(await _dispatch_codex_history_item_to_account(
+                new_item_results.append(await _dispatch_codex_history_item_to_account(
                     store,
                     item,
                     account_id,
@@ -909,9 +1004,19 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                     now=timestamp,
                     persist_result=False,
                 ))
+            item_results = list(new_item_results)
             if not item_results:
                 item_results = existing_results or [{"account_id": "", "status": "skipped", "reason": "no_recipient_accounts", "channel": ""}]
             reported_item_results = _history_dispatcher_report_recipient_results(existing_results, item_results)
+            local_reported_results = [dict(result) for result in reported_item_results]
+            if local_item_id:
+                for result in local_reported_results:
+                    result["codex_history_item_id"] = local_item_id
+            _persist_codex_history_bridge_dispatch_results(
+                store,
+                local_reported_results,
+                local_item_id=local_item_id,
+            )
             completion_results = [
                 {
                     "recipient_id": str(result.get("account_id") or ""),
@@ -934,9 +1039,9 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
             if completion_data.get("ok") is not True:
                 raise HistoryDispatcherError("History-Dispatcher dispatch.complete returned invalid data")
             external_status = str(completion_data.get("status") or "").strip().casefold()
-            local_status = external_status if external_status in {"queued", "delivered", "failed", "skipped", "discarded", "compacted"} else ""
-            if not local_status:
-                local_status = _overall_dispatch_status([*existing_results, *reported_item_results])
+            if external_status not in HISTORY_DISPATCHER_COMPLETION_STATUSES:
+                raise HistoryDispatcherError("History-Dispatcher dispatch.complete returned invalid status")
+            local_status = external_status
             dispatcher_dedupe_key = _history_dispatcher_item_dedupe_key(raw_item)
             if local_status in {"accepted", "delivered", "acknowledged", "sent", "compacted"}:
                 current_dispatch_results = reported_item_results or existing_results
@@ -949,7 +1054,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                 dedupe_key=dispatcher_dedupe_key,
                 reason=_overall_dispatch_reason(current_dispatch_results),
                 now=timestamp,
-                dispatch_results=reported_item_results,
+                dispatch_results=local_reported_results,
             )
             result_rows.extend(reported_item_results)
         return {
@@ -4048,7 +4153,11 @@ def _update_codex_history_item_status(
                 delivery.setdefault("accepted_at", now)
                 delivery.setdefault("delivered_at", now)
                 delivery["acknowledged_at"] = now
-            if normalized_reason:
+            generic_success_reason = normalized_reason.casefold() in {"accepted", "delivered", "acknowledged", "already_dispatched"}
+            if normalized_reason and not (
+                normalized_status in {"accepted", "delivered", "acknowledged", "sent", "compacted"}
+                and generic_success_reason
+            ):
                 item["last_reason"] = normalized_reason
             elif normalized_status in {"accepted", "delivered", "acknowledged", "sent", "compacted"}:
                 item.pop("last_reason", None)
@@ -4437,6 +4546,37 @@ def _find_codex_history_dispatch_for_message(
                 legacy_match = dict(row)
             continue
         return dict(row)
+    try:
+        outbox_rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    except (AccountStoreError, OSError, ValueError):
+        outbox_rows = []
+    for item in reversed(outbox_rows):
+        if not isinstance(item, Mapping):
+            continue
+        raw_results = item.get("last_dispatch_results")
+        if not isinstance(raw_results, list):
+            continue
+        item_id = str(item.get("id") or "").strip()
+        for raw_result in reversed(raw_results):
+            if not isinstance(raw_result, Mapping):
+                continue
+            row = dict(raw_result)
+            row["codex_history_item_id"] = str(row.get("codex_history_item_id") or item_id).strip()
+            if normalized_instance and str(row.get("instance") or "").strip() != normalized_instance:
+                continue
+            if str(row.get("channel") or "").strip().casefold() != normalized_channel:
+                continue
+            if str(row.get("chat_id") or "").strip() != normalized_chat_id:
+                continue
+            if str(row.get("message_ref") or "").strip() != normalized_message_ref:
+                continue
+            if normalized_account_id and str(row.get("account_id") or row.get("recipient_id") or "").strip().casefold() != normalized_account_id:
+                continue
+            row_adapter_slot = _normalize_codex_history_adapter_slot(row.get("adapter_slot"))
+            if normalized_adapter_slot:
+                if row_adapter_slot != normalized_adapter_slot:
+                    continue
+            return row
     return legacy_match
 
 

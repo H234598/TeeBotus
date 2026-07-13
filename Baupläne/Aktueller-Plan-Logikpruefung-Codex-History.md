@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.392`, Fixblock-Commit `588abd30`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.393`; der neue Bridge-Result-Block ist noch nicht committed.
 
 ## Arbeitsprinzipien
 
@@ -228,6 +228,56 @@ jetzt mitgespiegelt.
 Dispatcher-Antwortpruefung akzeptierte `data.ok=0`, `null` oder Textwerte. Wenn
 das optionale Feld vorhanden ist, muss es jetzt exakt Boolean `true` sein.
 
+**Achtundzwanzigster Befund 2026-07-13:** Im Bridge-Modus wurden neue
+Versandresultate wegen `persist_result=False` nicht in
+`codex_history_dispatch_results` abgelegt. Replys und Delivery-Receipts konnten
+die Summary lokal deshalb nicht wiederfinden. Neue Bridge-Resultate werden jetzt
+idempotent lokal gespiegelt.
+
+**Neunundzwanzigster Befund 2026-07-13:** Externe Dispatcher-IDs koennen von
+lokalen Outbox-IDs abweichen. Die lokale Resultatspur verwendet bei einem
+passenden Dedupe-Key jetzt die lokale ID, damit Reply-/Receipt-Matching und
+lokale Statusupdates denselben Eintrag referenzieren.
+
+**Dreissigster Befund 2026-07-13:** Bei mehrfach vorhandenen lokalen
+Dedupe-Keys konnte die erste, veraltete Zeile fuer Payload-Enrichment verwendet
+werden. Exakte IDs haben jetzt Vorrang; reine Dedupe-Treffer werden nach
+`updated_at`/`created_at` ausgewaehlt.
+
+**Einunddreissigster Befund 2026-07-13:** Wenn das Spiegeln der lokalen
+Resultat-Collection fehlschlaegt, liegt die Versandspur weiterhin im
+Outbox-Feld `last_dispatch_results`. Reply-/Receipt-Matching nutzt dieses Feld
+jetzt als lesenden Fallback.
+
+**Zweiunddreissigster Befund 2026-07-13:** Das lokale
+`possible_duplicate`-Signal wurde beim Mirror nicht an `history.append`
+weitergegeben. Der Warnmarker wird jetzt auf Top-Level und aus dem Delivery-
+Unterobjekt uebernommen.
+
+**Dreiunddreissigster Befund 2026-07-13:** Ein zwischen Snapshot und Claim
+angelegter lokaler Outbox-Eintrag konnte bei der ID-Zuordnung verpasst werden.
+Bei fehlendem Snapshot-Treffer erfolgt jetzt ein einmaliger frischer, lesender
+Abgleich.
+
+**Vierunddreissigster Befund 2026-07-13:** Generische Erfolgsgruende wie
+`accepted` oder `already_dispatched` konnten als `last_reason` stehen bleiben
+und wie ein Fehlergrund aussehen. Erfolgsendzustaende entfernen diese
+generischen Marker.
+
+**Fuenfunddreissigster Befund 2026-07-13:** Doppelte Item-IDs in einer
+Dispatcher-Antwort konnten denselben Claim mehrfach verarbeiten. Die
+Antwortvalidierung weist doppelte IDs jetzt vor der Verarbeitung ab.
+
+**Sechsunddreissigster Befund 2026-07-13:** Eine Completion-Antwort mit
+`data.ok=true`, aber ohne gueltigen Top-Level-Status konnte durch lokale
+Resultate ersetzt und als Erfolg behandelt werden. Completion-Statuswerte
+werden jetzt strikt gegen das Dispatcher-Schema validiert.
+
+**Siebenunddreissigster Befund 2026-07-13:** Ein Claim mit explizitem Status
+`delivered` oder anderem Nicht-`delivering`-Wert waere erneut versendet worden.
+Explizite Claim-Statuswerte muessen jetzt `delivering` sein; fehlende Werte
+bleiben fuer alte Dispatcher-Versionen kompatibel.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -322,12 +372,14 @@ Der Plan ist erst abgeschlossen, wenn:
 - Fixblock fuer Befunde 20-27 umgesetzt und als `588abd30` committed; SemVer-Bump auf `1.9.392`: stale Fehlergruende, Bridge-Statusnormalisierung, vollstaendige Empfaengeraggregation, Identitaetsvalidierung, gemischte Erfolg/Skip-Status, synthetische Skips, Mirror-Statusweitergabe und strikte `data.ok`-Pruefung.
 - Gezielte Regressionstests nach diesem Fixblock: `126 passed in 10.68s` in `tests/test_codex_history.py tests/test_history_dispatcher_bridge.py`.
 - Aktuelle lesende Dispatcherprobe: Version `0.2.5`, `queued=0`, `delivered=26`, `last_error` leer; Bridge-Dry-Run fuer TBL: `items=0`, `status_counts={}`, keine Mutation.
+- Bridge-Result-/Reply-Probe mit externer ID `external-bridge-local-result` und lokaler Outbox-ID erfolgreich; lokale Receipt-Zuordnung funktioniert.
+- Gezielte Regressionstests nach dem zweiten Fixblock: `130 passed in 8.93s` in `tests/test_codex_history.py tests/test_history_dispatcher_bridge.py`.
 
 ### Noch offen
 
 - Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
 - Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
-- Der lokale TeeBotus-Code ist aktuell `1.9.392`; die Fixes ab `1.9.389` wurden nach dem letzten 20er-Restart committed bzw. vorbereitet und sind noch nicht live geladen. Live-Reload ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
+- Der lokale TeeBotus-Code ist aktuell `1.9.393`; die Fixes ab `1.9.389` wurden nach dem letzten 20er-Restart committed bzw. vorbereitet und sind noch nicht live geladen. Live-Reload ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
