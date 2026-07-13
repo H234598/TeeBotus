@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen
 
-**Quellstand:** TeeBotus `1.9.478`, lokaler Stand nach `f7ad74a2`
+**Quellstand:** TeeBotus `1.9.479`, lokaler Stand nach `6b360544`
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -125,6 +125,10 @@ Vorherige Detailplaene bleiben als Historie und Nachweis erhalten:
   fehlerhafte Reports gespeichert.
 - Malformed Post-Index-/Dispatch-Reports werden vor Speicherung und
   Follow-Textausgabe in ein strukturiertes Fehlerobjekt normalisiert.
+- Benutzerdefinierte Sessionroots werden anhand ihrer tatsaechlichen Root-
+  Struktur akzeptiert; ein Pfadsegment `sessions` ist nicht mehr zwingend.
+  Agentenroots mit eigener `sessions`-Unterstruktur bleiben gegen fremde
+  JSONL-Dateien abgegrenzt.
 
 ## Aktueller Live-Befund
 
@@ -304,6 +308,8 @@ deren Kombination eingegrenzt.
   Versuch nicht unterdruecken.
 - [x] Regression, dass ein nicht-mappingfaehiger Dispatch-Report den
   Follow-Renderer nicht mehr zum Absturz bringt.
+- [x] Regression fuer Import und Eventfilter eines benutzerdefinierten Roots
+  ohne Pfadsegment `sessions`, bei Erhalt des Agentenroot-Schutzes.
 - [x] Regression fuer begrenzte Follow-Detailausgabe.
 - [x] Regression fuer den inkrementellen Ereignispfad.
 - [ ] Collector-Debounce-/Ressourcenbenchmark mit grossem Sessionroot.
@@ -378,5 +384,11 @@ Der Plan ist erst abgeschlossen, wenn:
   Dispatch-Ergebnisse vor Speicherung und Ausgabe. Die fokussierten Tests
   liefen mit `11 passed`; die Codex-History- und Metadaten-Suite mit
   `158 passed in 6.64s`.
+- 2026-07-13: Root-Logikfehler behoben: `6b360544` (`1.9.479`) akzeptiert
+  direkte JSONL-Dateien in benutzerdefinierten Sessionroots und verwendet den
+  gleichen Filter fuer Watchdog-Events. Ein Agentenroot mit eigener
+  `sessions`-Unterstruktur scannt weiterhin keine fremden Fixture-JSONL.
+  Die fokussierten Tests liefen mit `14 passed`; die Gesamtsuite mit
+  `159 passed in 5.85s`.
 - 2026-07-13: Der Plan bleibt bis zur TBL-Reconciliation, der Event-Burst-/
   Ressourcenmessung und der naechsten erlaubten Live-Abnahme aktiv.
