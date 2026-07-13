@@ -602,6 +602,14 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
     actionable_status_counts: dict[str, int] = {}
     informational_status_counts: dict[str, int] = {}
     redacted_output = _redact(str(output or ""))
+    llm_route_names: set[str] = set()
+    for raw_line in redacted_output.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("llm_route="):
+            continue
+        route_name = _normalized_status_value(_parse_status_fields(line).get("llm_route"))
+        if route_name:
+            llm_route_names.add(route_name)
     for raw_line in redacted_output.splitlines():
         line = raw_line.strip()
         if not line:
@@ -623,7 +631,15 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             _append_status_value(line_statuses, "warning")
         if line.startswith("codex_usage=") and _codex_usage_is_stale(fields):
             _append_status_value(line_statuses, "stale")
-        actionable_statuses, informational_statuses = _line_health_statuses(line, fields, line_statuses)
+        api_budget_route_present = None
+        if line.startswith("api_budget="):
+            api_budget_route_present = _normalized_status_value(fields.get("api_budget")) in llm_route_names
+        actionable_statuses, informational_statuses = _line_health_statuses(
+            line,
+            fields,
+            line_statuses,
+            api_budget_route_present=api_budget_route_present,
+        )
         for status in line_statuses:
             status_counts[status] = status_counts.get(status, 0) + 1
         for status in actionable_statuses:
@@ -741,6 +757,8 @@ def _line_health_statuses(
     line: str,
     fields: Mapping[str, Any],
     statuses: list[str] | tuple[str, ...],
+    *,
+    api_budget_route_present: bool | None = None,
 ) -> tuple[tuple[str, ...], tuple[str, ...]]:
     """Split raw diagnostics into top-level actions and visible information.
 
@@ -765,7 +783,11 @@ def _line_health_statuses(
         or (prefix == "codex_usage_account" and primary == "partial")
         or (
             prefix == "api_budget"
-            and _api_budget_status_is_informational(fields, fallback_covered=fallback_covered)
+            and _api_budget_status_is_informational(
+                fields,
+                fallback_covered=fallback_covered,
+                route_present=api_budget_route_present,
+            )
         )
         or (prefix == "account_identity" and _account_identity_status_is_informational(fields))
         or (prefix == "codex_history_repo" and _codex_history_repo_status_is_informational(fields))
@@ -820,9 +842,13 @@ def _codex_history_metadata_requires_problem(line: str, fields: Mapping[str, Any
     return False
 
 
-def _api_budget_status_is_informational(fields: Mapping[str, Any], *, fallback_covered: bool) -> bool:
+def _api_budget_status_is_informational(
+    fields: Mapping[str, Any], *, fallback_covered: bool, route_present: bool | None = None
+) -> bool:
     if fallback_covered:
         return True
+    if route_present is False:
+        return False
     primary = _normalized_status_value(fields.get("status"))
     if primary in FALLBACK_SUPPRESSION_BLOCKERS | {"unknown", "unavailable", "unreachable"}:
         return False

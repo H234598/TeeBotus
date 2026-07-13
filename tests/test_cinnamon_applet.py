@@ -3272,6 +3272,23 @@ def test_cinnamon_applet_runtime_parser_does_not_hide_unknown_api_or_identity_st
     assert parsed["summary"]["informational_problem_statuses"] == "warning:1"
 
 
+def test_cinnamon_applet_runtime_parser_only_suppresses_api_budget_with_matching_route() -> None:
+    parsed = parse_runtime_status(
+        """
+        [API Keys, Limits und Kosten]
+        api_budget=orphan status=missing_key error=missing api_key_env=ORPHAN_KEY
+        api_budget=matched status=missing_key error=missing api_key_env=MATCHED_KEY
+        [LLM-Routen und Backends]
+        llm_route=matched status=missing_key error=missing api_key_env=MATCHED_KEY
+        """
+    )
+
+    assert parsed["summary"]["api_actionable_problem_status_count"] == 1
+    assert parsed["summary"]["api_informational_status_count"] == 1
+    assert parsed["summary"]["actionable_problem_statuses"] == "missing_key:2"
+    assert parsed["summary"]["informational_problem_statuses"] == "missing_key:1"
+
+
 def test_cinnamon_applet_runtime_parser_marks_error_without_status_as_problem() -> None:
     parsed = parse_runtime_status(
         """
