@@ -3376,6 +3376,24 @@ def test_cinnamon_applet_runtime_parser_blockers_override_informational_special_
     assert parsed["summary"]["informational_problem_statuses"] == ""
 
 
+def test_cinnamon_applet_runtime_parser_does_not_hide_explicit_errors_in_fallback_special_cases() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Tools und Account-Memory]
+        account_identity=Demo status=warning identity_warnings=1 error=doctor_failed
+        [Projekt-History]
+        codex_history_repo=Demo repo=TeeBotus status=warning queued=0 failed=0 skipped=1 total=1 problem_statuses=skipped:1 skip_reasons=no_private_route:1 error=dispatcher_failed
+        [LLM-Routen und Backends]
+        structured_decision=Demo status=enabled route_status=unavailable fallback=local error=provider_failed
+        llm_route=generic status=unavailable effective_status=configured fallback=local error=provider_failed
+        gemini_free_tier_limits status=fallback_defaults error=public_source_incomplete
+        """
+    )
+
+    assert parsed["summary"]["actionable_problem_statuses"] == "unavailable:2,warning:2"
+    assert parsed["summary"]["informational_problem_statuses"] == "fallback_defaults:1"
+
+
 def test_cinnamon_applet_runtime_parser_does_not_treat_fallback_sentinels_as_configured() -> None:
     parsed = parse_runtime_status(
         """

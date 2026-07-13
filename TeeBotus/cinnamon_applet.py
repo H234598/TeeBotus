@@ -887,6 +887,7 @@ def _line_health_statuses(
     primary = _normalized_status_value(fields.get("status"))
     route_status = _normalized_status_value(fields.get("route_status"))
     effective = _normalized_status_value(fields.get("effective_status"))
+    line_has_error = _line_has_error(fields)
     fallback_suppression_blocked = (
         primary in FALLBACK_SUPPRESSION_BLOCKERS
         or route_status in FALLBACK_SUPPRESSION_BLOCKERS
@@ -909,8 +910,8 @@ def _line_health_statuses(
             )
             or (prefix == "account_identity" and _account_identity_status_is_informational(fields))
             or (prefix == "codex_history_repo" and _codex_history_repo_status_is_informational(fields))
-            or (prefix == "structured_decision" and _fallback_reference_is_set(fields))
-            or fallback_covered
+            or (prefix == "structured_decision" and not line_has_error and _fallback_reference_is_set(fields))
+            or (fallback_covered and not line_has_error)
         )
     )
     return ((), problems) if informational else (problems, ())
@@ -919,6 +920,8 @@ def _line_health_statuses(
 def _codex_history_repo_status_is_informational(fields: Mapping[str, Any]) -> bool:
     """Keep expected queue/skip states visible without hiding repo failures."""
     primary = _normalized_status_value(fields.get("status"))
+    if _line_has_error(fields):
+        return False
     if _safe_int(fields.get("failed"), 0) > 0:
         return False
     if not _codex_history_skip_reasons_are_informational(fields):
@@ -967,6 +970,7 @@ def _account_identity_status_is_informational(fields: Mapping[str, Any]) -> bool
     return (
         _normalized_status_value(fields.get("status")) == "warning"
         and _safe_int(fields.get("identity_warnings"), 0) > 0
+        and not _line_has_error(fields)
     )
 
 
