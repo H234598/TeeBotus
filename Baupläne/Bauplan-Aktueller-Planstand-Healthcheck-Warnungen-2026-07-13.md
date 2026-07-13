@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.443`, Commit `2fd7bf6d`
+**Quellstand:** TeeBotus `1.9.444`, Commit `50278e3d`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -307,6 +307,26 @@ den generischen Variablennamen und meldete deshalb faelschlich
 - Live: `hard_reasoning` ist `configured`; actionable bleibt nur die
   fehlende Depressionsbot-Signal-Identitaet.
 - SemVer `1.9.443`, Commit `2fd7bf6d`.
+
+## Befund 100: Diagnose und Request-Pfad verwendeten unterschiedliche Keys
+
+Nach Befund 99 meldete der Healthcheck den instanzbezogenen OpenAI-Key als
+vorhanden. Die Runtime-Factory las beim Erzeugen des LiteLLM-Clients aber noch
+direkt `source[OPENAI_API_KEY]`. Ohne globalen Key blieb der echte Client
+damit leer, obwohl der Status `configured` meldete.
+
+### Umsetzung und Nachweis
+
+- Profil- und Purpose-Routen der Runtime-Factory loesen
+  `OPENAI_API_KEY_<INSTANCE>` vor `OPENAI_API_KEY` auf.
+- Die Sonderbehandlung gilt nur fuer OpenAI-kompatible LiteLLM-Modelle;
+  lokale, Gemini- und andere Provider erben keinen OpenAI-Key.
+- Regression prueft Profil- und Purpose-Route sowie die Instanz-vor-Global-
+  Prioritaet ohne Provideraufruf.
+- Router-Suite: `60 passed in 1.95s`.
+- Factory-/Fallback-/Proactive-Suite: `50 passed in 1.86s`.
+- Direkter Client-Probe: `api_key_matches_instance=True`.
+- SemVer `1.9.444`, Commit `50278e3d`.
 
 ## Arbeitsplan
 

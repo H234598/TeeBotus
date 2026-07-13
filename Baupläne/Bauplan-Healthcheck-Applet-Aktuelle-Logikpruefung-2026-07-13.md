@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.443`, Commit `2fd7bf6d`
+**Quellstand:** TeeBotus `1.9.444`, Commit `50278e3d`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet, Runtime-Healthpayload und `tests/test_cinnamon_applet.py`
 
 ## Auftrag
@@ -540,6 +540,23 @@ Account- und Routenstatus nur den generischen `OPENAI_API_KEY`-Namen.
 - Live-Probe: actionable nur noch `warning:1` fuer die nicht verknuepfte
   Depressionsbot-Signal-Identitaet.
 - SemVer `1.9.443`, Commit `2fd7bf6d`.
+
+## Befund 100: Diagnose und Request-Pfad verwendeten unterschiedliche Keys
+
+Der Healthcheck erkannte den instanzbezogenen OpenAI-Key bereits, die
+Runtime-Factory verwendete beim Bau des LiteLLM-Clients jedoch weiterhin nur
+den globalen Variablennamen. Das konnte eine gruene Diagnose mit einem leeren
+echten Request-Key erzeugen.
+
+### Umsetzung und Nachweis
+
+- Profil- und Purpose-Routen loesen den instanzbezogenen OpenAI-Key jetzt vor
+  dem globalen Key auf.
+- Nicht-OpenAI-Routen erhalten diese Sonderbehandlung nicht.
+- Router: `60 passed in 1.95s`.
+- Factory-/Fallback-/Proactive-Tests: `50 passed in 1.86s`.
+- Direkter Client-Probe erfolgreich; kein Provideraufruf.
+- SemVer `1.9.444`, Commit `50278e3d`.
 
 ## Invarianten
 
