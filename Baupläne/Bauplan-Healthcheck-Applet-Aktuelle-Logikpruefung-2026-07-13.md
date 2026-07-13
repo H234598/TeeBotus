@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.431`, `fab67610`.
+- Aktueller gepruefter Quellstand: `1.9.432`, `ca5a1bdd`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -206,6 +206,26 @@ korrekten Sekundaerstatus-Erkennung.
 - `git diff --check`: erfolgreich.
 - SemVer `1.9.431`, lokaler Commit `fab67610`
   (`Expose blocked secondary health statuses`).
+
+## Befund 87: Gequotete numerische History-Metadaten wurden nicht gelesen
+
+Die Statusnormalisierung behandelte Quotes bei Statusnamen, aber nicht bei
+numerischen Feldern. `failed="1"` wurde von `_safe_int()` als ungueltig zu
+`0` und damit ein Datensatz `status=skipped failed="1"` als harmloser Skip
+behandelt. Ein echter History-Fehler konnte dadurch aus der Healthklassifikation
+verschwinden.
+
+### Umsetzung und Nachweis
+
+- `_safe_int()` entfernt jetzt passende einfache, doppelte und Backtick-Quotes
+  von Stringzahlen.
+- Quoted `failed`, `total` und vergleichbare Metadaten werden konsistent mit
+  ungequoteten Werten verarbeitet.
+- Fokussierte Zahlen-/Codex-Suite: `3 passed, 208 deselected in 1.02s`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `211 passed in 45.66s`.
+- `git diff --check`: erfolgreich.
+- SemVer `1.9.432`, lokaler Commit `ca5a1bdd`
+  (`Normalize quoted numeric health metadata`).
 
 ## Umsetzung
 
