@@ -88,6 +88,8 @@ _CODEX_HISTORY_EVENT_LOCK_FILENAME = ".Codex_History_Events.lock"
 # complete history remains in the AccountStore and is never truncated here.
 CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT = 24
 CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT = 12
+CODEX_HISTORY_FOLLOW_REPORT_RUNS_LIMIT = 4
+CODEX_HISTORY_FOLLOW_REPORT_STRING_LIMIT = 4096
 CODEX_HISTORY_WATCHDOG_DEBOUNCE_SECONDS = 0.25
 CODEX_HISTORY_WATCHDOG_MAX_DEBOUNCE_SECONDS = 2.0
 CODEX_HISTORY_WATCHDOG_MUTATING_EVENTS = frozenset({"created", "modified", "moved", "deleted", "closed"})
@@ -6430,6 +6432,7 @@ def _watch_post_index_callback(
     post_index_enabled = bool(getattr(args, "post_index", False)) or qdrant or qdrant_ensure
     post_index_pending = post_index_enabled
     dispatch_pending = dispatch
+    follow = bool(getattr(args, "follow", False))
 
     def _callback(scan_report: Mapping[str, Any]) -> None:
         nonlocal dispatch_pending, post_index_pending
@@ -6442,10 +6445,14 @@ def _watch_post_index_callback(
                     if isinstance(post_index, Mapping)
                     else {"ok": False, "error": "malformed_post_index_report"}
                 )
-                reports.append(normalized_post_index)
+                _append_watch_run_report(reports, normalized_post_index, follow=follow)
                 if _watch_result_ok(normalized_post_index):
                     post_index_pending = False
-        if dispatch_pending or has_imports:
+        # In auto/event mode a session event counts as a scan, so the idle
+        # callback is not guaranteed to run. Keep the durable dispatch queue
+        # moving on every follow scan even when the scan only found duplicates
+        # or skipped files.
+        if dispatch_pending or has_imports or (follow and dispatch):
             dispatch_report = _watch_dispatch_report(
                 store,
                 instances_dir,
@@ -6459,7 +6466,7 @@ def _watch_post_index_callback(
                     if isinstance(dispatch_report, Mapping)
                     else {"ok": False, "error": "malformed_dispatch_report"}
                 )
-                dispatch_reports.append(normalized_dispatch_report)
+                _append_watch_run_report(dispatch_reports, normalized_dispatch_report, follow=follow)
                 if _watch_result_ok(normalized_dispatch_report):
                     dispatch_pending = False
                 _emit_follow_dispatch_report(normalized_dispatch_report, args)
@@ -6490,6 +6497,58 @@ def _watch_result_ok(value: object) -> bool:
     return isinstance(value, Mapping) and value.get("ok") is True
 
 
+def _append_watch_run_report(
+    reports: list[dict[str, Any]],
+    report: Mapping[str, Any],
+    *,
+    follow: bool,
+) -> None:
+    """Retain bounded diagnostics without retaining the full index result.
+
+    A follow watcher can live for days. Index reports contain high-cardinality
+    export arrays, so limiting only the number of runs would still retain a
+    large copy of the complete history in memory. The durable AccountStore
+    remains the source of truth; follow output only needs a recent diagnostic
+    tail.
+    """
+
+    normalized = dict(report)
+    if follow:
+        normalized = _compact_watch_follow_value(normalized)
+    reports.append(normalized)
+    if follow and len(reports) > CODEX_HISTORY_FOLLOW_REPORT_RUNS_LIMIT:
+        del reports[:-CODEX_HISTORY_FOLLOW_REPORT_RUNS_LIMIT]
+
+
+def _compact_watch_follow_value(value: Any, *, depth: int = 0) -> Any:
+    """Make a JSON-like follow report bounded while preserving its shape."""
+
+    if depth >= 12:
+        return "<follow-report-depth-limit>"
+    if isinstance(value, Mapping):
+        compacted: dict[str, Any] = {}
+        for raw_key, raw_value in value.items():
+            key = str(raw_key)
+            if isinstance(raw_value, (list, tuple)):
+                original_length = len(raw_value)
+                compacted[key] = _compact_watch_follow_value(raw_value, depth=depth + 1)
+                if original_length > CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT:
+                    compacted[f"{key}_omitted"] = original_length - CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT
+            else:
+                compacted[key] = _compact_watch_follow_value(raw_value, depth=depth + 1)
+        return compacted
+    if isinstance(value, (list, tuple)):
+        values = list(value)
+        if len(values) > CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT:
+            values = values[-CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT:]
+        return [_compact_watch_follow_value(item, depth=depth + 1) for item in values]
+    if isinstance(value, str) and len(value) > CODEX_HISTORY_FOLLOW_REPORT_STRING_LIMIT:
+        head_size = CODEX_HISTORY_FOLLOW_REPORT_STRING_LIMIT // 2
+        tail_size = CODEX_HISTORY_FOLLOW_REPORT_STRING_LIMIT - head_size
+        return value[:head_size] + "\n...[follow-report-truncated]...\n" + value[-tail_size:]
+    return value
+
+
 def _watch_dispatch_idle_callback(
     store: AccountStore,
     instances_dir: Path,
@@ -6501,6 +6560,7 @@ def _watch_dispatch_idle_callback(
 ) -> Callable[[Mapping[str, Any]], None] | None:
     if not bool(getattr(args, "dispatch", False)):
         return None
+    follow = bool(getattr(args, "follow", False))
 
     def _callback(_idle_report: Mapping[str, Any]) -> None:
         dispatch_report = _watch_dispatch_report(
@@ -6511,8 +6571,13 @@ def _watch_dispatch_idle_callback(
             sender_factory=sender_factory,
         )
         if dispatch_report:
-            dispatch_reports.append(dispatch_report)
-            _emit_follow_dispatch_report(dispatch_report, args)
+            normalized_dispatch_report = (
+                dict(dispatch_report)
+                if isinstance(dispatch_report, Mapping)
+                else {"ok": False, "error": "malformed_dispatch_report"}
+            )
+            _append_watch_run_report(dispatch_reports, normalized_dispatch_report, follow=follow)
+            _emit_follow_dispatch_report(normalized_dispatch_report, args)
 
     return _callback
 

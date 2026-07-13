@@ -4539,6 +4539,50 @@ def test_watch_post_index_callback_skips_expensive_work_without_new_imports(
     assert len(dispatch_reports) == 2
 
 
+def test_watch_follow_dispatch_retries_after_scan_without_imports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    reports: list[dict[str, Any]] = []
+    dispatch_reports: list[dict[str, Any]] = []
+    index_calls: list[str] = []
+    dispatch_calls: list[str] = []
+    args = SimpleNamespace(
+        post_index=True,
+        post_index_qdrant=False,
+        post_index_qdrant_ensure=False,
+        dispatch=True,
+        follow=True,
+        format="json",
+    )
+
+    def fake_index(*args: Any, **_kwargs: Any) -> dict[str, Any]:
+        index_calls.append(str(args[2]))
+        return {"ok": True, "export": {"exported": 0}}
+
+    def fake_dispatch(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        dispatch_calls.append("dispatch")
+        return {"ok": True, "instances": []}
+
+    monkeypatch.setattr(codex_history_module, "_watch_post_index_report", fake_index)
+    monkeypatch.setattr(codex_history_module, "_watch_dispatch_report", fake_dispatch)
+    callback = codex_history_module._watch_post_index_callback(
+        object(),
+        tmp_path,
+        "TeeBotus_Logger",
+        args,
+        provider(),
+        reports,
+        dispatch_reports,
+    )
+    assert callback is not None
+
+    callback({"status_counts": {"duplicate": 12}, "items": []})
+    callback({"status_counts": {"duplicate": 12}, "items": []})
+
+    assert index_calls == ["TeeBotus_Logger"]
+    assert dispatch_calls == ["dispatch", "dispatch"]
+    assert len(reports) == 1
+    assert len(dispatch_reports) == 2
+
+
 def test_watch_codex_session_roots_for_instances_scans_all_instances_each_iteration(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "watch-multi-instance-demo", version="3.1.3")
     sessions_root = tmp_path / "sessions"
@@ -4603,6 +4647,104 @@ def test_watch_follow_report_retains_recent_items_but_counts_all_statuses() -> N
     assert report["status_counts"] == {"imported": total_items}
     assert items[0]["sequence"] == 3
     assert items[-1]["sequence"] == total_items - 1
+
+
+def test_watch_follow_run_reports_bound_runs_and_large_nested_values() -> None:
+    reports: list[dict[str, Any]] = []
+    total_files = codex_history_module.CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT + 5
+    long_text = "x" * (codex_history_module.CODEX_HISTORY_FOLLOW_REPORT_STRING_LIMIT + 100)
+
+    for run in range(codex_history_module.CODEX_HISTORY_FOLLOW_REPORT_RUNS_LIMIT + 3):
+        codex_history_module._append_watch_run_report(
+            reports,
+            {
+                "ok": True,
+                "run": run,
+                "export": {
+                    "files": [{"sequence": index} for index in range(total_files)],
+                    "detail": long_text,
+                },
+            },
+            follow=True,
+        )
+
+    assert len(reports) == codex_history_module.CODEX_HISTORY_FOLLOW_REPORT_RUNS_LIMIT
+    assert reports[0]["run"] == 3
+    export = reports[-1]["export"]
+    assert isinstance(export, dict)
+    assert len(export["files"]) == codex_history_module.CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT
+    assert export["files_omitted"] == 5
+    assert export["files"][0]["sequence"] == 5
+    assert len(export["detail"]) < len(long_text)
+    assert "follow-report-truncated" in export["detail"]
+
+
+def test_watch_post_index_callback_bounds_follow_run_reports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    reports: list[dict[str, Any]] = []
+    dispatch_reports: list[dict[str, Any]] = []
+    args = SimpleNamespace(
+        post_index=True,
+        post_index_qdrant=False,
+        post_index_qdrant_ensure=False,
+        dispatch=True,
+        follow=True,
+        format="json",
+    )
+    monkeypatch.setattr(
+        codex_history_module,
+        "_watch_post_index_report",
+        lambda *_args, **_kwargs: {"ok": True, "export": {"files": [{"id": index} for index in range(40)]}},
+    )
+    monkeypatch.setattr(
+        codex_history_module,
+        "_watch_dispatch_report",
+        lambda *_args, **_kwargs: {"ok": True, "items": [{"id": index} for index in range(40)]},
+    )
+    callback = codex_history_module._watch_post_index_callback(
+        object(),
+        tmp_path,
+        "TeeBotus_Logger",
+        args,
+        provider(),
+        reports,
+        dispatch_reports,
+    )
+    assert callback is not None
+
+    for _ in range(codex_history_module.CODEX_HISTORY_FOLLOW_REPORT_RUNS_LIMIT + 3):
+        callback({"status_counts": {"imported": 1}, "items": []})
+
+    assert len(reports) == codex_history_module.CODEX_HISTORY_FOLLOW_REPORT_RUNS_LIMIT
+    assert len(dispatch_reports) == codex_history_module.CODEX_HISTORY_FOLLOW_REPORT_RUNS_LIMIT
+    assert len(reports[-1]["export"]["files"]) == codex_history_module.CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT
+    assert reports[-1]["export"]["files_omitted"] == 28
+    assert len(dispatch_reports[-1]["items"]) == codex_history_module.CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT
+    assert dispatch_reports[-1]["items_omitted"] == 28
+
+
+def test_watch_dispatch_idle_callback_bounds_follow_run_reports(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    dispatch_reports: list[dict[str, Any]] = []
+    args = SimpleNamespace(dispatch=True, follow=True, format="json")
+    monkeypatch.setattr(
+        codex_history_module,
+        "_watch_dispatch_report",
+        lambda *_args, **_kwargs: {"ok": True, "items": [{"id": index} for index in range(40)]},
+    )
+    callback = codex_history_module._watch_dispatch_idle_callback(
+        object(),
+        tmp_path,
+        "TeeBotus_Logger",
+        args,
+        dispatch_reports,
+    )
+    assert callback is not None
+
+    for _ in range(codex_history_module.CODEX_HISTORY_FOLLOW_REPORT_RUNS_LIMIT + 3):
+        callback({"reason": "unchanged_snapshot"})
+
+    assert len(dispatch_reports) == codex_history_module.CODEX_HISTORY_FOLLOW_REPORT_RUNS_LIMIT
+    assert len(dispatch_reports[-1]["items"]) == codex_history_module.CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT
+    assert dispatch_reports[-1]["items_omitted"] == 28
 
 
 def test_watch_codex_session_roots_snapshot_skips_unchanged_iterations(tmp_path: Path) -> None:

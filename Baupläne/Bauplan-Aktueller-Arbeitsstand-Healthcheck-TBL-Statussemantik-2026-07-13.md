@@ -2,11 +2,11 @@
 
 **Stand:** 2026-07-13
 
-**Status:** Aktiv; Receipt-Fix getestet und lokal committed
+**Status:** Aktiv; Follow-/Dispatch-Fix getestet, lokaler Commit folgt
 
 **Quellstand bei Erstellung:** TeeBotus `1.9.496`
 
-**Aktueller Quellstand:** TeeBotus `1.9.497`; History-Dispatcher `0.2.14`
+**Aktueller Quellstand:** TeeBotus `1.9.498`; History-Dispatcher `0.2.14`
 
 **Arbeitsbereich:** `/home/teladi/TeeBotus` und `/home/teladi/History-Dispatcher`
 
@@ -74,6 +74,12 @@ Historie erhalten, insbesondere:
   behandelt und unterdruecken keinen Folgeversuch.
 - [x] Idle-Dispatch bleibt aktiv, ohne bei unveraendertem Bestand erneut den
   gesamten Import- und Post-Index-Pfad auszulosen.
+- [x] Follow-Diagnosereports behalten hoechstens vier Laeufe; grosse Listen und
+  Strings werden auf einen kleinen Detailausschnitt mit Omitted-Zaehler
+  begrenzt. Der vollstaendige Bestand bleibt im AccountStore.
+- [x] Follow+Dispatch versucht nach jedem Event-/Scanlauf erneut zu
+  reconciliieren. Damit haengt die lokale Queue nicht mehr davon ab, dass der
+  Event-Modus zufaellig den Idle-Callback erreicht.
 
 ### Codex-History-Bridge
 
@@ -171,13 +177,20 @@ gemeldet. Die 101 begruendeten `no_private_route`-Skips bleiben daneben als
 sichtbare Hinweise erhalten. Die Signal-Identity-Notice von `Depressionsbot`
 bleibt ebenfalls nicht-actionable.
 
+Die aktuellste schreibfreie Probe vom 2026-07-13 meldet `queued=182` bei
+`TeeBotus_Logger`, `failed=0`, `skipped=101` und weiterhin genau einen
+actionable Health-Befund. Der aktuelle Dry-Run klassifiziert 178 lokale Zeilen
+als `would_mirror` und vier als eindeutige `would_sync`-Faelle; die TBL-Route
+ist routbar. Es wurde dabei weiterhin nichts gesendet. Die Queue ist daher ein
+echter offener Versandbestand und kein Applet-Parserfehler.
+
 ### Schreibfreie Bridge-Abnahme
 
 Der aktuelle Bridge-Dry-Run fuer `TeeBotus_Logger` wurde ohne Mutation
 ausgefuehrt. Er meldete:
 
 ```text
-would_mirror=162
+would_mirror=178
 would_sync=4
 reasons=local_outbox_not_in_dispatcher:162,
         dispatcher_terminal_status_delivered:2,
@@ -229,10 +242,18 @@ gestartet. Die Quellprobe und das installierte Applet sind aktuell, der
 laufende Bot-/Collector-Prozess muss jedoch erst in einem erlaubten
 Restart-Fenster neu geladen werden. Bis dahin darf nicht behauptet werden,
 dass die laufenden Prozesse bereits den neuen Quellstand verwenden. Der
-laufende Collector zeigt weiterhin den alten Ressourcenbefund (ca. 2.7 GiB
+laufende Collector zeigt weiterhin den alten Ressourcenbefund (ca. 3.0 GiB
 RSS und ungefaehr eine CPU bei wiederholten 1000er-Scans); der aktuelle
 Quellpfad liefert in einer schreibfreien Watchdog-Probe dagegen nur einen
 Eventpfad pro Batch.
+
+Die Ursache ist im Follow-Callback reproduziert: `post_index` legte komplette
+Exportlisten je Lauf ab, und `dispatch` sammelte jeden Idle-Report unbegrenzt.
+Zusaetzlich wurde nach dem ersten erfolgreichen Dispatch bei weiteren
+Event-Scans nicht mehr dispatchiert, obwohl der Idle-Callback dort ausblieb.
+Das ist im Quellstand `1.9.498` behoben. Der laufende Prozess verwendet noch
+den vorher gestarteten Quellstand und muss deshalb in einem erlaubten
+Restart-Fenster neu geladen werden.
 
 ## Offene Arbeitspakete
 
@@ -309,6 +330,10 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
 - `git diff --check` erfolgreich.
 - `node --check files/teebotus@H234598/applet.js` erfolgreich.
 - Installationsparitaet des Applets mit `diff -qr` erfolgreich.
+- Aktuelle Watcher-/Health-Abnahme: `pytest -q tests/test_codex_history.py
+  tests/test_cinnamon_applet.py tests/test_admin_accounts.py
+  tests/test_version_notifications.py`: `683 passed`; fokussierter Follow- und
+  Dispatch-Lauf: `8 passed`.
 - Statussemantik-Regressionen decken Append, Completion, Receipt-Promotion und
   Empfaenger-Downgrade sowie die Trennung von Native-Receipt und Reply in
   beiden Repositories ab.
@@ -387,3 +412,13 @@ Der Bauplan ist erst abgeschlossen, wenn:
 - 2026-07-13: `history.append` verschluckte unbekannte Top-Level-Statuswerte
   und legte sie als `queued` an. Fail-closed behoben; der History-Dispatcher
   steht bei `0.2.14`, Vollsuite `59 passed`.
+- 2026-07-13: Follow-Collector-Logikfehler reproduziert: unbegrenzte
+  `post_index_runs`-/`dispatch_runs`-Reports hielten nach rund elf Stunden
+  etwa 3.0 GiB RSS. Reports werden im Follow-Modus nun auf vier kompakte
+  Diagnose-Laeufe begrenzt; der dauerhafte AccountStore bleibt unveraendert.
+- 2026-07-13: Zweiten Follow-Logikfehler behoben: Im Auto-/Eventmodus wird
+  Dispatch nach jedem Scan erneut versucht, auch bei reinen Duplicate-/Skip-
+  Ergebnissen. Dadurch kann eine offene TBL-Queue nicht mehr dauerhaft am
+  uebersprungenen Idle-Zweig haengen. Version `1.9.498`, relevante Suites
+  `683 passed`; Push und Restart bleiben aus, bis das Restart-Fenster bzw. eine
+  ausdrueckliche Freigabe vorliegt.
