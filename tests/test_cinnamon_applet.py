@@ -1888,6 +1888,38 @@ def test_cinnamon_applet_refreshes_existing_menu_in_place() -> None:
     assert result == ["static", "dynamic", "header"]
 
 
+def test_cinnamon_applet_dispatcher_last_error_is_not_reported_ready() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let lines = [];
+          applet.historyDispatcherMenu = {menu: {
+            removeAll: function() {},
+            addMenuItem: function(item) { lines.push(item); }
+          }};
+          applet.historyDispatcherPayload = {
+            schema_version: 1,
+            ok: true,
+            generated_at: new Date().toISOString(),
+            last_error: "dispatch failed",
+            queued: 0,
+            total: 1,
+            collector: {},
+            dispatch: {}
+          };
+          applet.historyDispatcherError = "";
+          applet._menuLine = function(text) { return String(text); };
+          applet._shortText = function(text) { return String(text); };
+          applet._populateHistoryDispatcherMenu();
+          return lines;
+        })()
+        """
+    )
+
+    assert result[0] == "Status: Warnung"
+    assert "Letzter Fehler: dispatch failed" in result
+
+
 def test_cinnamon_applet_spawn_json_does_not_reinvoke_throwing_consumer() -> None:
     result = _run_js_applet_expression(
         """
