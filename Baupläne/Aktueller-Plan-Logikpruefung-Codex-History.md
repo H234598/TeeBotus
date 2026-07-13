@@ -391,6 +391,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - History-Dispatcher-Receipt-Reconciliation: externe Suite `39 passed`; Commits `0a22881`, `4ff12fc` und `c255124`, installierte Venv-Version `0.2.7`.
 - Lokale Receipt-Mirror-Probe bestaetigt `delivery.record` mit externer Item-ID und Eventtyp `delivered`; lokale Bridge-Suite danach `130 passed in 12.14s`.
 - Spates Receipt nach bekanntem `failed`/`queued`-Empfaenger setzt den externen Gesamtstatus jetzt auf `delivered`, wenn alle bekannten Empfaenger erfolgreich oder uebersprungen sind.
+- Vor dem naechsten 20er-Restart laeuft der Dienst erwartungsgemaess noch mit Snapshot-Version `0.2.5`; die installierte Venv-Version ist bereits `0.2.7` und wird beim Boundary-Restart geladen.
 
 ### Noch offen
 
