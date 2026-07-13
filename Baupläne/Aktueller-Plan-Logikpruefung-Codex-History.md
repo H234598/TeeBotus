@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.391`, Commit `6ba97439`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.391`; der letzte Implementierungsstand ist in `6ba97439`, der aktuelle Dokumentations-HEAD in `c3c93edd`.
 
 ## Arbeitsprinzipien
 
@@ -281,7 +281,7 @@ Der Plan ist erst abgeschlossen, wenn:
 
 - Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
 - Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
-- Der lokale TeeBotus-Code `1.9.390` wurde nach dem 20er-Restart committed; Live-Reload dieses Fixes ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
+- Der lokale TeeBotus-Code ist aktuell `1.9.391`; die Fixes ab `1.9.389` wurden nach dem letzten 20er-Restart committed und sind noch nicht live geladen. Live-Reload ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
