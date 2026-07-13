@@ -4371,6 +4371,69 @@ def test_watch_codex_session_roots_snapshot_imports_only_changed_session_files(
     assert len(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)) == 3
 
 
+def test_watch_codex_session_roots_keeps_events_during_import(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = make_git_repo(tmp_path, "watch-events-during-import", version="3.1.1")
+    sessions_root = tmp_path / "sessions"
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    changed = write_codex_session(
+        sessions_root / "changed.jsonl",
+        repo=repo,
+        session_id="sess-before-import",
+        turn_id="turn-before-import",
+    )
+
+    class FakeWatchdog:
+        def __init__(self) -> None:
+            self.pending: tuple[Path, ...] = ()
+            self.started = False
+            self.stopped = False
+
+        def start(self) -> None:
+            self.started = True
+
+        def wait(self, _timeout_seconds: float) -> bool | tuple[Path, ...]:
+            pending = self.pending
+            self.pending = ()
+            return pending
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    watchdog = FakeWatchdog()
+    import_calls: list[tuple[Path, ...] | None] = []
+    original_import = codex_history_module.import_codex_session_roots
+
+    def tracked_import(store_arg: AccountStore, roots: Any, *, limit: int, session_files: Any = None) -> dict[str, Any]:
+        import_calls.append(tuple(session_files) if session_files is not None else None)
+        report = original_import(store_arg, roots, limit=limit, session_files=session_files)
+        if len(import_calls) == 1:
+            write_codex_session(
+                changed,
+                repo=repo,
+                session_id="sess-after-import",
+                turn_id="turn-after-import",
+            )
+            watchdog.pending = (changed,)
+        return report
+
+    monkeypatch.setattr(codex_history_module, "_build_codex_session_watchdog", lambda _roots: watchdog)
+    monkeypatch.setattr(codex_history_module, "import_codex_session_roots", tracked_import)
+
+    result = watch_codex_session_roots(
+        store,
+        (sessions_root,),
+        poll_interval_seconds=0.25,
+        max_iterations=2,
+        event_mode="auto",
+    )
+
+    assert watchdog.started is True
+    assert watchdog.stopped is True
+    assert len(import_calls) == 2
+    assert import_calls[1] == (changed.resolve(),)
+    assert result["status_counts"] == {"imported": 2}
+
+
 def test_watch_payload_ok_keeps_timer_successful_when_dispatch_has_channel_failure() -> None:
     assert (
         _watch_payload_ok(

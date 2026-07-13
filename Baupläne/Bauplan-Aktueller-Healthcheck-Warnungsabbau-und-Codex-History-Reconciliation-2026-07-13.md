@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.468`, lokaler Folgecommit nach `6934413e`
+**Quellstand:** TeeBotus `1.9.469`, lokaler Folgecommit nach `e2aef4cb`
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
 ## Auftrag
@@ -203,6 +203,12 @@ fuer den Erstlauf und den Timeout-/Fallbackpfad erhalten. Ereignispfade werden
 gegen die konfigurierten Sessionroots geprueft und geloeschte Dateien nicht
 inkrementell importiert.
 
+Der Watchdog bleibt nun waehrend des gesamten Watch-Laufs aktiv. Dadurch
+werden JSONL-Aenderungen, die waehrend Import, Post-Index oder Dispatch
+eintreffen, nicht bis zum naechsten Timeout verschluckt. Die aufgelaufenen
+Pfade werden am naechsten Wartepunkt abgeholt; ein Timeout laesst weiterhin den
+konservativen Vollsnapshot laufen.
+
 ## Offene Arbeitspakete
 
 ### A. TBL-Reconciliation schreibfrei beweisen
@@ -247,6 +253,8 @@ inkrementell importiert.
   einzelnes JSONL-Ereignis verarbeitet nicht mehr die gesamte `limit`-Menge.
 - [x] Bei validierten Watchdog-Ereignissen den zusaetzlichen Vollsnapshot
   ueberspringen; Erstlauf und Timeout-Fallback behalten die Snapshot-Pruefung.
+- [x] Watchdog ueber den gesamten Follow-Lauf offenhalten, damit Events
+  waehrend Import/Post-Index nicht bis zum Timeout verloren gehen.
 - [ ] Event-Burst-Debounce und Scan-Deduplizierung separat messen; ein
   Dateisystemereignis darf weiterhin zeitnah erkannt werden, aber nicht zu
   unnoetigen Vollscans fuer jede einzelne JSONL-Aenderung fuehren.
@@ -289,6 +297,8 @@ inkrementell importiert.
 - [x] Regression pruefen, dass ein geaenderter Pfad allein importiert wird;
   der Test endet mit drei Importen statt einem zweiten Vollscan mit
   Duplicate-Ergebnissen.
+- [x] Race-Regression fuer ein Event waehrend des Imports; der Pfad wird im
+  folgenden Lauf sofort verarbeitet.
 - [x] Regression fuer begrenzte Follow-Detailausgabe: 15 Skips ergeben 12
   Detailzeilen, eine Auslassungszeile und weiterhin `skipped=15`.
 - [x] Regression fuer den inkrementellen Ereignispfad: ein geaenderter

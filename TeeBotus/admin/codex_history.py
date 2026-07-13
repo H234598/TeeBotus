@@ -1834,6 +1834,13 @@ def watch_codex_session_roots_for_instances(
     skipped_unchanged = 0
     last_snapshot: tuple[tuple[str, int, int], ...] | None = None
     pending_session_files: tuple[Path, ...] | None = None
+    session_watchdog = (
+        _build_codex_session_watchdog(roots)
+        if poll_interval_seconds > 0 and normalized_event_mode in {"auto", "watchdog"}
+        else None
+    )
+    if session_watchdog is not None:
+        session_watchdog.start()
     while True:
         iterations += 1
         event_session_files = (
@@ -1891,14 +1898,20 @@ def watch_codex_session_roots_for_instances(
             last_snapshot = current_snapshot
         pending_session_files = None
         if not follow and max_iterations > 0 and iterations >= max_iterations:
+            if session_watchdog is not None:
+                session_watchdog.stop()
             break
         if poll_interval_seconds > 0:
-            pending_session_files = _wait_for_codex_session_change(
-                roots,
-                poll_interval_seconds=float(poll_interval_seconds),
-                event_mode=normalized_event_mode,
-                sleep=sleep,
-            )
+            if session_watchdog is not None:
+                watchdog_result = session_watchdog.wait(float(poll_interval_seconds))
+                pending_session_files = () if watchdog_result is False else watchdog_result
+            else:
+                pending_session_files = _wait_for_codex_session_change(
+                    roots,
+                    poll_interval_seconds=float(poll_interval_seconds),
+                    event_mode=normalized_event_mode,
+                    sleep=sleep,
+                )
     for instance_report in reports_by_instance.values():
         instance_report["iterations"] = iterations
         instance_report["skipped_unchanged_iterations"] = skipped_unchanged
@@ -5075,9 +5088,38 @@ def _wait_for_codex_session_change(
     return None
 
 
-def _wait_for_watchdog_codex_session_change(
-    roots: Sequence[str | Path], *, timeout_seconds: float
-) -> bool | tuple[Path, ...] | None:
+class _CodexSessionWatchdog:
+    def __init__(self, observer: Any, changed: threading.Event, changed_paths: set[Path], changed_lock: Any) -> None:
+        self._observer = observer
+        self._changed = changed
+        self._changed_paths = changed_paths
+        self._changed_lock = changed_lock
+        self._started = False
+
+    def start(self) -> None:
+        if self._started:
+            return
+        self._observer.start()
+        self._started = True
+
+    def wait(self, timeout_seconds: float) -> bool | tuple[Path, ...]:
+        if not self._changed.wait(max(0.0, float(timeout_seconds))):
+            return False
+        with self._changed_lock:
+            paths = tuple(sorted(self._changed_paths, key=str))
+            self._changed_paths.clear()
+            self._changed.clear()
+        return paths
+
+    def stop(self) -> None:
+        if not self._started:
+            return
+        self._observer.stop()
+        self._observer.join(timeout=5.0)
+        self._started = False
+
+
+def _build_codex_session_watchdog(roots: Sequence[str | Path]) -> _CodexSessionWatchdog | None:
     try:
         from watchdog.events import FileSystemEventHandler  # type: ignore[import-not-found]
         from watchdog.observers import Observer  # type: ignore[import-not-found]
@@ -5086,6 +5128,7 @@ def _wait_for_watchdog_codex_session_change(
 
     changed = threading.Event()
     changed_paths: set[Path] = set()
+    changed_lock = threading.Lock()
 
     class _CodexSessionEventHandler(FileSystemEventHandler):  # type: ignore[misc, valid-type]
         def on_any_event(self, event: Any) -> None:  # noqa: ANN401 - watchdog event type is optional.
@@ -5094,7 +5137,9 @@ def _wait_for_watchdog_codex_session_change(
             src_path = str(getattr(event, "src_path", "") or "")
             dest_path = str(getattr(event, "dest_path", "") or "")
             event_paths = tuple(Path(path) for path in (src_path, dest_path) if path.endswith(".jsonl"))
-            if event_paths:
+            if not event_paths:
+                return
+            with changed_lock:
                 changed_paths.update(event_paths)
                 changed.set()
 
@@ -5113,14 +5158,20 @@ def _wait_for_watchdog_codex_session_change(
         scheduled = True
     if not scheduled:
         return None
+    return _CodexSessionWatchdog(observer, changed, changed_paths, changed_lock)
+
+
+def _wait_for_watchdog_codex_session_change(
+    roots: Sequence[str | Path], *, timeout_seconds: float
+) -> bool | tuple[Path, ...] | None:
+    watchdog = _build_codex_session_watchdog(roots)
+    if watchdog is None:
+        return None
     try:
-        observer.start()
-        if not changed.wait(max(0.0, float(timeout_seconds))):
-            return False
-        return tuple(sorted(changed_paths, key=str))
+        watchdog.start()
+        return watchdog.wait(timeout_seconds)
     finally:
-        observer.stop()
-        observer.join(timeout=5.0)
+        watchdog.stop()
 
 
 def build_codex_history_report(
