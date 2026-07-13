@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.427`, `c2a87a32`.
+- Aktueller gepruefter Quellstand: `1.9.428`, `79e76b6b`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -123,6 +123,23 @@ lieferte trotz des vorhandenen schweren Problems `status=ok`.
 - `git diff --check`: erfolgreich.
 - SemVer `1.9.427`, lokaler Commit `c2a87a32`
   (`Fail closed on unclassified health statuses`).
+
+## Befund 83: Negative Qdrant-Laufzeitzaehler verfaelschten den Gesamtstatus
+
+`qdrant_runtime_problem_count` wurde direkt mit `_safe_int()` gelesen, aber
+nicht auf einen nichtnegativen Wert begrenzt. Ein negativer oder fehlerhaft
+stale Payloadwert wie `-5` erzeugte dadurch selbst fuenf Runtime-Probleme,
+einen negativen Qdrant-Zaehler und faelschlich `status=warning`.
+
+### Umsetzung und Nachweis
+
+- Der Qdrant-Laufzeitzaehler wird jetzt mit `max(0, ...)` normalisiert.
+- Negative Werte koennen weder Runtime-, Qdrant- noch Gesamtzaehler erhoehen.
+- Regression: `4 passed, 204 deselected in 1.41s`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `208 passed in 45.89s`.
+- `git diff --check`: erfolgreich.
+- SemVer `1.9.428`, lokaler Commit `79e76b6b`
+  (`Clamp qdrant health counters`).
 
 ## Umsetzung
 
