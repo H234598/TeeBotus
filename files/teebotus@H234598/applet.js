@@ -27,6 +27,7 @@ const DEFAULT_HISTORY_DISPATCHER_COMMAND = GLib.build_filenamev([GLib.get_home_d
 const DEFAULT_HISTORY_DISPATCHER_CONFIG = GLib.build_filenamev([GLib.get_home_dir(), ".config", "history-dispatcher", "config.toml"]);
 const MAX_HISTORY_DISPATCHER_SNAPSHOT_BYTES = 65536;
 const HISTORY_DISPATCHER_STALE_AFTER_SECONDS = 120;
+const HISTORY_DISPATCHER_FUTURE_SKEW_TOLERANCE_SECONDS = 300;
 const DEFAULT_GITHUB_URL = "https://github.com/H234598/TeeBotus";
 const DEFAULT_COMMITS_URL = "https://github.com/H234598/TeeBotus/commits/main";
 const DEFAULT_STATUS_REFRESH_SECONDS = 60;
@@ -759,9 +760,11 @@ TeeBotusApplet.prototype = {
       this.historyDispatcherMenu.menu.removeAll();
       let payload = this.historyDispatcherPayload || {};
       let generated = Date.parse(String(payload.generated_at || ""));
-      let stale = !Number.isFinite(generated) || (Date.now() - generated) > HISTORY_DISPATCHER_STALE_AFTER_SECONDS * 1000;
+      let age = Date.now() - generated;
+      let timestampError = !Number.isFinite(generated) || age < -HISTORY_DISPATCHER_FUTURE_SKEW_TOLERANCE_SECONDS * 1000;
+      let stale = !timestampError && age > HISTORY_DISPATCHER_STALE_AFTER_SECONDS * 1000;
       let lastError = String(payload.last_error || "").trim();
-      let hasSnapshotError = typeof payload.ok !== "boolean" || payload.ok === false || Boolean(lastError) || Boolean(this.historyDispatcherError);
+      let hasSnapshotError = timestampError || typeof payload.ok !== "boolean" || payload.ok === false || Boolean(lastError) || Boolean(this.historyDispatcherError);
       this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(hasSnapshotError ? _("Status: Warnung") : (stale ? _("Status: veraltet") : _("Status: bereit")), false));
       if (this.historyDispatcherError) {
         this.historyDispatcherMenu.menu.addMenuItem(this._menuLine(this._shortText(this.historyDispatcherError, 160), false));

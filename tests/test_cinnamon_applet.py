@@ -1981,6 +1981,36 @@ def test_cinnamon_applet_dispatcher_malformed_ok_is_not_reported_ready() -> None
     assert result[0] == "Status: Warnung"
 
 
+def test_cinnamon_applet_dispatcher_future_timestamp_is_not_reported_ready() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let lines = [];
+          applet.historyDispatcherMenu = {menu: {
+            removeAll: function() {},
+            addMenuItem: function(item) { lines.push(item); }
+          }};
+          applet.historyDispatcherPayload = {
+            schema_version: 1,
+            ok: true,
+            generated_at: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
+            queued: 0,
+            total: 0,
+            collector: {},
+            dispatch: {}
+          };
+          applet.historyDispatcherError = "";
+          applet._menuLine = function(text) { return String(text); };
+          applet._shortText = function(text) { return String(text); };
+          applet._populateHistoryDispatcherMenu();
+          return lines;
+        })()
+        """
+    )
+
+    assert result[0] == "Status: Warnung"
+
+
 def test_cinnamon_applet_spawn_json_does_not_reinvoke_throwing_consumer() -> None:
     result = _run_js_applet_expression(
         """
