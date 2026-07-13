@@ -391,14 +391,15 @@ Der Plan ist erst abgeschlossen, wenn:
 - History-Dispatcher-Receipt-Reconciliation: externe Suite `39 passed`; Commits `0a22881`, `4ff12fc` und `c255124`, installierte Venv-Version `0.2.7`.
 - Lokale Receipt-Mirror-Probe bestaetigt `delivery.record` mit externer Item-ID und Eventtyp `delivered`; lokale Bridge-Suite danach `130 passed in 12.14s`.
 - Spates Receipt nach bekanntem `failed`/`queued`-Empfaenger setzt den externen Gesamtstatus jetzt auf `delivered`, wenn alle bekannten Empfaenger erfolgreich oder uebersprungen sind.
-- Vor dem naechsten 20er-Restart laeuft der Dienst erwartungsgemaess noch mit Snapshot-Version `0.2.5`; die installierte Venv-Version ist bereits `0.2.7` und wird beim Boundary-Restart geladen.
+- Boundary-Restart am `2026-07-13 05:25:22-24 CEST`: `teebotus.service`, `history-dispatcher.service` und `teebotus-codex-history-collector.service` sind aktiv; TeeBotus `1.9.394`, History-Dispatcher-Snapshot `0.2.7`, `queued=0`, `delivered=26`, `last_error` leer.
+- Live-Bridge-Dry-Run fuer `TeeBotus_Logger`: `ok=true`, `items=0`, `status_counts={}`, keine Mutation. Nach dem Restart keine Runtime-Fehler; die einzige gefilterte Meldung ist die erwartete fehlende GitHub-Tag-Notification `v1.9.394`.
 
 ### Noch offen
 
 - Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
-- Receipt-/Reply-Reconciliation nach dem naechsten Live-Restart mit echtem laufendem Dispatcher pruefen.
+- Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.7` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
 - Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
-- Der lokale TeeBotus-Code ist aktuell `1.9.393`; die Fixes ab `1.9.389` wurden nach dem letzten 20er-Restart committed und sind noch nicht live geladen. Live-Reload ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
+- Der lokale TeeBotus-Code ist aktuell `1.9.394` und seit dem Boundary-Restart live geladen. Der aktive History-Dispatcher ist `0.2.7`.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
