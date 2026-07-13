@@ -5207,7 +5207,9 @@ def _build_codex_session_watchdog(roots: Sequence[str | Path]) -> _CodexSessionW
             root = _safe_repo_root(Path(root_value), operation="sessions root", allow_hidden_segments=True)
         except ValueError:
             continue
-        watch_root = root.parent if root.is_file() else root
+        # An explicit JSONL root may be created after the watcher starts. Watch
+        # its existing parent so the creation event can be observed.
+        watch_root = root.parent if root.suffix == ".jsonl" and not root.is_dir() else root
         if not watch_root.exists() or not watch_root.is_dir():
             continue
         observer.schedule(handler, str(watch_root), recursive=True)

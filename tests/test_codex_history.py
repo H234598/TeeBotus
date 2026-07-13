@@ -4,6 +4,8 @@ import asyncio
 import json
 import os
 import subprocess
+import sys
+import types
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -4325,6 +4327,47 @@ def test_watch_codex_session_roots_snapshot_reuses_selected_session_files(tmp_pa
 
     assert result["status_counts"] == {"imported": 1}
     assert iter_calls == 1
+
+
+def test_codex_session_watchdog_watches_parent_for_missing_explicit_file_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sessions_root = tmp_path / "sessions"
+    sessions_root.mkdir()
+    missing_session = sessions_root / "future.jsonl"
+
+    class FakeEventHandler:
+        pass
+
+    class FakeObserver:
+        def __init__(self) -> None:
+            self.schedules: list[tuple[str, bool]] = []
+
+        def schedule(self, _handler: object, path: str, *, recursive: bool) -> None:
+            self.schedules.append((path, recursive))
+
+        def start(self) -> None:
+            return None
+
+        def stop(self) -> None:
+            return None
+
+        def join(self, timeout: float) -> None:
+            del timeout
+
+    watchdog_package = types.ModuleType("watchdog")
+    watchdog_events = types.ModuleType("watchdog.events")
+    watchdog_observers = types.ModuleType("watchdog.observers")
+    watchdog_events.FileSystemEventHandler = FakeEventHandler
+    watchdog_observers.Observer = FakeObserver
+    monkeypatch.setitem(sys.modules, "watchdog", watchdog_package)
+    monkeypatch.setitem(sys.modules, "watchdog.events", watchdog_events)
+    monkeypatch.setitem(sys.modules, "watchdog.observers", watchdog_observers)
+
+    watchdog = codex_history_module._build_codex_session_watchdog((missing_session,))
+
+    assert watchdog is not None
+    assert watchdog._observer.schedules == [(str(sessions_root), True)]
 
 
 def test_watch_codex_session_roots_snapshot_imports_only_changed_session_files(
