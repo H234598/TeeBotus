@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.389`, Commit `cdb005f6`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.390`, Commit `c0d871f2`.
 
 ## Arbeitsprinzipien
 
@@ -172,6 +172,13 @@ der Bridge nur auf Nicht-Leerheit geprueft. Dadurch konnte ein Status wie
 behandelt. Zulassig sind jetzt nur `accepted`, `delivered`, `acknowledged`,
 `failed` und `skipped`; alles andere wird kontrolliert abgewiesen.
 
+**Achtzehnter Befund 2026-07-13:** Wenn der externe Collector einen Turn vor
+dem TeeBotus-Mirror anlegt, fehlen dort Version, Summary-Prefix und vollstaendige
+Markdown-Metadaten. Die Bridge reicherte den externen Payload bisher nicht aus
+dem lokalen Eintrag mit demselben Dedupe-Key an und konnte dadurch
+`Release <Repo> untagged` versenden. Lokale Payloaddaten werden jetzt bei
+gleicher ID oder gleichem Dedupe-Key vor Dry-Run und Versand uebernommen.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -260,13 +267,14 @@ Der Plan ist erst abgeschlossen, wenn:
 - Shadow-Append-ID-Pruefung und SemVer-Bump auf `1.9.388` committed als `ed4b2d0f` (`Require shadow append item identity`); gezielte Suite danach `121 passed`.
 - Restart nach dem 20. Audit-Commit: `teebotus.service`, `history-dispatcher.service` und `teebotus-codex-history-collector.service` aktiv; History-Dispatcher-Snapshot danach `0.2.5`, Queue `13 queued`, `13 delivered`, `310 compacted`, `last_error` leer.
 - Unbekannte-Empfaengerstatus-Pruefung und SemVer-Bump auf `1.9.389` committed als `cdb005f6` (`Reject unknown dispatcher recipient statuses`); gezielte Suite danach `122 passed`.
+- Payload-Enrichment aus lokalem Store committed als `70b66952` (`Enrich bridged history payloads from local store`); SemVer-Bump auf `1.9.390` committed als `c0d871f2`; gezielte Suite danach `122 passed`.
 - Vor dem 20er-Restart meldete der laufende Snapshot noch `0.1.9`; nach dem Restart ist der aktive History-Dispatcher nachweislich `0.2.5`.
 
 ### Noch offen
 
 - Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
 - Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
-- Der lokale TeeBotus-Code `1.9.389` wurde nach dem 20er-Restart committed; Live-Reload dieses Fixes ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
+- Der lokale TeeBotus-Code `1.9.390` wurde nach dem 20er-Restart committed; Live-Reload dieses Fixes ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
