@@ -859,7 +859,11 @@ def _line_health_statuses(
     primary = _normalized_status_value(fields.get("status"))
     route_status = _normalized_status_value(fields.get("route_status"))
     effective = _normalized_status_value(fields.get("effective_status"))
-    fallback_suppression_blocked = primary in FALLBACK_SUPPRESSION_BLOCKERS or route_status in FALLBACK_SUPPRESSION_BLOCKERS
+    fallback_suppression_blocked = (
+        primary in FALLBACK_SUPPRESSION_BLOCKERS
+        or route_status in FALLBACK_SUPPRESSION_BLOCKERS
+        or any(status in FALLBACK_SUPPRESSION_BLOCKERS for status in problems)
+    )
     fallback_covered = not fallback_suppression_blocked and effective in HEALTHY_EFFECTIVE_STATUSES and _fallback_reference_is_set(fields)
     informational = (
         primary == "fallback_defaults"
