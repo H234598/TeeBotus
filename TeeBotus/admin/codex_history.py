@@ -1809,6 +1809,50 @@ def watch_codex_session_roots_for_instances(
 ) -> list[dict[str, Any]]:
     if not stores:
         return []
+    effective_poll_interval = max(0.0, float(poll_interval_seconds))
+    normalized_event_mode = _normalize_watch_event_mode(event_mode)
+    session_watchdog = (
+        _build_codex_session_watchdog(roots)
+        if effective_poll_interval > 0 and normalized_event_mode in {"auto", "watchdog"}
+        else None
+    )
+    if session_watchdog is not None:
+        session_watchdog.start()
+    try:
+        return _watch_codex_session_roots_for_instances_impl(
+            stores,
+            roots,
+            poll_interval_seconds=poll_interval_seconds,
+            max_iterations=max_iterations,
+            follow=follow,
+            event_mode=event_mode,
+            limit=limit,
+            sleep=sleep,
+            post_scan=post_scan,
+            post_idle=post_idle,
+            session_watchdog=session_watchdog,
+        )
+    finally:
+        if session_watchdog is not None:
+            session_watchdog.stop()
+
+
+def _watch_codex_session_roots_for_instances_impl(
+    stores: Mapping[str, AccountStore],
+    roots: Sequence[str | Path],
+    *,
+    poll_interval_seconds: float = 1.0,
+    max_iterations: int = 1,
+    follow: bool = False,
+    event_mode: str = "poll",
+    limit: int = 1000,
+    sleep: Callable[[float], None] = time.sleep,
+    post_scan: Callable[[str, Mapping[str, Any]], None] | None = None,
+    post_idle: Callable[[str, Mapping[str, Any]], None] | None = None,
+    session_watchdog: _CodexSessionWatchdog | None = None,
+) -> list[dict[str, Any]]:
+    if not stores:
+        return []
     iterations = 0
     if not follow and max_iterations < 1:
         max_iterations = 1
@@ -1834,13 +1878,6 @@ def watch_codex_session_roots_for_instances(
     skipped_unchanged = 0
     last_snapshot: tuple[tuple[str, int, int], ...] | None = None
     pending_session_files: tuple[Path, ...] | None = None
-    session_watchdog = (
-        _build_codex_session_watchdog(roots)
-        if poll_interval_seconds > 0 and normalized_event_mode in {"auto", "watchdog"}
-        else None
-    )
-    if session_watchdog is not None:
-        session_watchdog.start()
     while True:
         iterations += 1
         event_session_files = (
@@ -1898,8 +1935,6 @@ def watch_codex_session_roots_for_instances(
             last_snapshot = current_snapshot
         pending_session_files = None
         if not follow and max_iterations > 0 and iterations >= max_iterations:
-            if session_watchdog is not None:
-                session_watchdog.stop()
             break
         if poll_interval_seconds > 0:
             if session_watchdog is not None:

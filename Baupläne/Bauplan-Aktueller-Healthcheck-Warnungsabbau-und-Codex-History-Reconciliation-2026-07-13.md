@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.469`, lokaler Folgecommit nach `e2aef4cb`
+**Quellstand:** TeeBotus `1.9.470`, lokaler Folgecommit nach `b03738df`
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
 ## Auftrag
@@ -209,6 +209,11 @@ eintreffen, nicht bis zum naechsten Timeout verschluckt. Die aufgelaufenen
 Pfade werden am naechsten Wartepunkt abgeholt; ein Timeout laesst weiterhin den
 konservativen Vollsnapshot laufen.
 
+Der Watchdog-Lifecycle ist jetzt auch bei Fehlern geschlossen: Der oeffentliche
+Watcher injiziert den Observer in die Schleife und beendet ihn in einem
+`finally`-Pfad. Ein Fehler aus Import oder Callback kann dadurch keinen
+verwaisten Observer-Thread zuruecklassen.
+
 ## Offene Arbeitspakete
 
 ### A. TBL-Reconciliation schreibfrei beweisen
@@ -255,6 +260,8 @@ konservativen Vollsnapshot laufen.
   ueberspringen; Erstlauf und Timeout-Fallback behalten die Snapshot-Pruefung.
 - [x] Watchdog ueber den gesamten Follow-Lauf offenhalten, damit Events
   waehrend Import/Post-Index nicht bis zum Timeout verloren gehen.
+- [x] Watchdog-Lifecycle bei Scan-/Callback-Exceptions ueber einen aeusseren
+  Cleanup-Pfad garantieren.
 - [ ] Event-Burst-Debounce und Scan-Deduplizierung separat messen; ein
   Dateisystemereignis darf weiterhin zeitnah erkannt werden, aber nicht zu
   unnoetigen Vollscans fuer jede einzelne JSONL-Aenderung fuehren.
@@ -299,6 +306,8 @@ konservativen Vollsnapshot laufen.
   Duplicate-Ergebnissen.
 - [x] Race-Regression fuer ein Event waehrend des Imports; der Pfad wird im
   folgenden Lauf sofort verarbeitet.
+- [x] Exception-Regression: ein fehlgeschlagener Scan beendet den Watchdog
+  trotzdem.
 - [x] Regression fuer begrenzte Follow-Detailausgabe: 15 Skips ergeben 12
   Detailzeilen, eine Auslassungszeile und weiterhin `skipped=15`.
 - [x] Regression fuer den inkrementellen Ereignispfad: ein geaenderter

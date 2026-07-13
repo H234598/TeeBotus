@@ -4434,6 +4434,42 @@ def test_watch_codex_session_roots_keeps_events_during_import(tmp_path: Path, mo
     assert result["status_counts"] == {"imported": 2}
 
 
+def test_watch_codex_session_roots_stops_watchdog_on_scan_exception(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FakeWatchdog:
+        def __init__(self) -> None:
+            self.started = False
+            self.stopped = False
+
+        def start(self) -> None:
+            self.started = True
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    watchdog = FakeWatchdog()
+
+    def fail_import(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("synthetic scan failure")
+
+    monkeypatch.setattr(codex_history_module, "_build_codex_session_watchdog", lambda _roots: watchdog)
+    monkeypatch.setattr(codex_history_module, "import_codex_session_roots", fail_import)
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+
+    with pytest.raises(RuntimeError, match="synthetic scan failure"):
+        watch_codex_session_roots(
+            store,
+            (tmp_path / "sessions",),
+            poll_interval_seconds=0.25,
+            max_iterations=1,
+            event_mode="auto",
+        )
+
+    assert watchdog.started is True
+    assert watchdog.stopped is True
+
+
 def test_watch_payload_ok_keeps_timer_successful_when_dispatch_has_channel_failure() -> None:
     assert (
         _watch_payload_ok(
