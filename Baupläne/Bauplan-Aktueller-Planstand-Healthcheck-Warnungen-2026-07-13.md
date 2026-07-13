@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.442`, Commit `3896e7c3`
+**Quellstand:** TeeBotus `1.9.443`, Commit `2fd7bf6d`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -83,36 +83,24 @@ Der uebergeordnete Arbeitsauftrag lautet:
 
 ## Aktueller Live-Befund
 
-Der letzte kostenfreie, lesende Runtime-Status liefert:
+Die letzte kostenfreie, lesende Live-Probe mit TeeBotus `1.9.443` liefert:
 
 - Gesamtstatus: `warning`
-- handlungsrelevant: `missing_key:1,warning:2`
+- handlungsrelevant: `warning:1`
 - informative Befunde: `23`
 - Qdrant: erreichbar; User-Memory-Vektor `64D` und
   Bibliothekar-Vektor `1024D` sind `ready`
 - Signal-Services: registriert und erreichbar; die Account-Verknuepfung fehlt
-  jedoch fuer einen Runtime-Slot
+  fuer einen Runtime-Slot
+- `hard_reasoning`: `configured`; die LiteLLM-OpenAI-Route nutzt einen
+  instanzbezogenen Key-Fallback, ohne Secret-Ausgabe
 - HF-Pool: deaktiviert; Structured Decision faellt lokal auf Ollama zurueck
+- TBL-History: erklaerte `queued`-/`skipped`- und `no_private_route`-Befunde
+  bleiben sichtbar, werden aber nicht als actionable Top-Level-Defekt gezaehlt
 
-Die drei handlungsrelevanten Ursachen sind:
+Die einzige actionable Ursache ist damit:
 
-### 1. `hard_reasoning` ohne bewusst verfuegbare Authentisierung
-
-Die Route verwendet das Profil `openai_premium` mit
-`openai/gpt-5.5`, erwartet `OPENAI_API_KEY` und hat aktuell keinen wirksamen
-Fallback. Der konfigurierte Gemini-Fallback wird bei deaktivierten Remote-
-Fallbacks absichtlich nicht als aktiver Ersatz gewertet.
-
-**Naechste Aktion:** bewusst entscheiden, ob
-
-- ein dafuer vorgesehener generischer Key bereitgestellt wird, oder
-- ein expliziter lokaler Fallback fuer diese Route konfiguriert wird.
-
-Ein Key einer anderen Instanz oder eines anderen Zwecks darf nicht still
-wiederverwendet werden. Wegen der frueheren OpenAI-Kostenprobleme wird hier
-nichts automatisch aktiviert.
-
-### 2. Depressionsbot ohne verknuepfte Signal-Identitaet
+### Depressionsbot ohne verknuepfte Signal-Identitaet
 
 Signal ist als Runtime-Slot konfiguriert und erreichbar, aber die beobachtete
 Signal-Identitaet ist keinem vorhandenen Account zugeordnet. Die Telegram-
@@ -123,30 +111,9 @@ ueber den bestaetigten `/login <account_id> <secret>`- beziehungsweise
 Linking-Flow verknuepfen. Erst danach darf der Healthcheck die Warnung als
 behoben ausweisen.
 
-### 3. TBL-Codex-History: lokale Queue und zentrale Bridge abgleichen
-
-Die TBL-History zeigt terminale `no_private_route`-Skips. Diese sind begruendet
-und duerfen nicht endlos erneut versucht werden. Zusaetzlich besteht eine
-Abweichung zwischen dem zentralen Dispatcher und dem lokalen TeeBotus-Store:
-
-- zentraler Bridge-Status: Queue `0`
-- lokaler read-only Report: `outbox_items=1545`, darunter
-  `queued=76`, `skipped=101`, `accepted=1366`, `delivered=2`
-- im aktuellen Live-Payload wurden `queued=78` und `total=1547` beobachtet;
-  die Snapshot-Differenz ist zu dokumentieren und
-  nicht als still behoben zu werten
-
-**Naechste Aktion:** erst einen Dry-Run mit Dedupe-Key, lokaler und zentraler
-ID, Empfaengerresultaten, Status und Versuchszahl ausfuehren. Danach getrennt
-behandeln:
-
-- `no_private_route`: terminaler, begruendeter Skip
-- `compacted`: terminaler Archiv-/Digest-Zustand
-- echte `failed`-Resultate: kontrollierter Retry oder Quarantaene
-- lokale `queued`-Zeilen ohne zentrale Entsprechung: Reconciliation-Fall
-
-Keine Summary, Outbox-Zeile oder Dispatch-Resultat darf ohne explizite
-Entscheidung geloescht oder pauschal requeued werden.
+Die TBL-History bleibt ein informativer Reconciliation-Kandidat. Es werden
+keine Summarys, Outbox-Zeilen oder Dispatch-Resultate ohne separaten Dry-Run
+geloescht oder pauschal requeued.
 
 ## Befund 92: Verifizierte Fallback-Fehler wurden ueberklassifiziert
 
@@ -317,6 +284,30 @@ Anzeige, v2-Fallback und Zaehlung nicht durchgehend konsistent.
 - Applet lokal installiert und byte-identisch verifiziert.
 - SemVer `1.9.442`, Commit `3896e7c3`.
 
+## Befund 99: LiteLLM-OpenAI-Instanzschluessel wurden als fehlend gemeldet
+
+Die Route `hard_reasoning` verwendet `provider=litellm` mit dem Modell
+`openai/gpt-5.5` und `api_key_env=OPENAI_API_KEY`. Die Runtime hatte jedoch
+nur instanzbezogene OpenAI-Schluessel, zum Beispiel
+`OPENAI_API_KEY_<INSTANCE>`. Der Healthcheck pruefte fuer LiteLLM bisher nur
+den generischen Variablennamen und meldete deshalb faelschlich
+`missing_key`.
+
+### Umsetzung und Nachweis
+
+- LiteLLM-Routen mit `openai/*` verwenden jetzt dieselbe
+  instanzbezogene Schluesselaufloesung wie direkte OpenAI-Routen.
+- Account-, Route- und API-Budget-Status verwenden dieselbe Logik.
+- Der Status zeigt die nichtgeheime Quelle `instance_fallback` an.
+- Der Applet-Formatter zeigt diese Quelle als `instanzbezogener Fallback`.
+- Regressionen fuer Runtime-Status und Applet-Formatierung ergaenzt.
+- Vollstaendige Kompatibilitaets- und Applet-Suite: `359 passed in 86.82s`.
+- `py_compile` und `git diff --check`: erfolgreich.
+- Applet installiert; Quell- und Installationskopie sind byte-identisch.
+- Live: `hard_reasoning` ist `configured`; actionable bleibt nur die
+  fehlende Depressionsbot-Signal-Identitaet.
+- SemVer `1.9.443`, Commit `2fd7bf6d`.
+
 ## Arbeitsplan
 
 1. **Healthpayload und Applet weiter synchron halten**
@@ -324,11 +315,10 @@ Anzeige, v2-Fallback und Zaehlung nicht durchgehend konsistent.
    - Detailursache, betroffene Route und sichere Aktion anzeigen.
    - Keine reine Kurzmeldung ohne zugrunde liegende Healthdaten zulassen.
 
-2. **`hard_reasoning` explizit klaeren**
-   - Konfiguration read-only pruefen.
-   - Entweder vorgesehenen Key oder lokalen Fallback bewusst eintragen.
-   - Tests fuer fehlenden Key, lokalen Fallback und absichtlich deaktivierten
-     Remote-Fallback ergaenzen.
+2. **`hard_reasoning` abgeschlossen**
+   - Instanzbezogene Key-Aufloesung ist implementiert und getestet.
+   - Kein generischer Key und kein kostenpflichtiger Provideraufruf wurden
+     fuer die Korrektur aktiviert.
 
 3. **Signal-Linking kontrolliert abschliessen**
    - Keine automatische Zuordnung anhand einer UUID oder Telegram-ID.

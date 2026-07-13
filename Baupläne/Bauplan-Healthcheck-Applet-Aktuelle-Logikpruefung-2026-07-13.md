@@ -2,6 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
+**Quellstand:** TeeBotus `1.9.443`, Commit `2fd7bf6d`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet, Runtime-Healthpayload und `tests/test_cinnamon_applet.py`
 
 ## Auftrag
@@ -450,16 +451,14 @@ Qdrant-Doppelzaehlung gruen.
 
 ## Weiterfuehrende Arbeit nach diesem Fix
 
-1. `hard_reasoning` konfigurationsseitig bewusst klaeren: echter Key oder
-   expliziter lokaler Fallback.
-2. Die Signal-Identitaet des Depressionsbots ausschliesslich ueber den
+1. Die Signal-Identitaet des Depressionsbots ausschliesslich ueber den
    bestaetigten Linking-Flow verknuepfen und danach lesend pruefen.
-3. TBL-History-Rueckstand mit Dry-Run, Dedupe-Key, Empfaengerresultaten und
+2. TBL-History-Rueckstand mit Dry-Run, Dedupe-Key, Empfaengerresultaten und
    `no_private_route` getrennt analysieren. Kein stilles Loeschen oder Requeue.
-4. Nach einer Applet-Aenderung Quellkopie und installierte Kopie vergleichen
+3. Nach einer Applet-Aenderung Quellkopie und installierte Kopie vergleichen
    und nur das Applet reloaden, wenn sich dessen Code tatsaechlich geaendert
    hat.
-5. Erst nach Tests, Live-Probe, Version-/Commit-Nachweis und geklaerten offenen
+4. Erst nach Tests, Live-Probe, Version-/Commit-Nachweis und geklaerten offenen
    Befunden den Plan abschliessen.
 
 ## Befund 95: Gequotete Status- und Zahlenwerte waren im Applet nicht parity
@@ -521,6 +520,26 @@ Quotes und normalisiert Statusnamen vor Darstellung, Count und v2-Fallback.
 Nachweis: `5 passed, 217 deselected` fokussiert und `222 passed in 33.33s`
 vollstaendig; SemVer `1.9.442`, Commit `3896e7c3`; Applet-Kopie
 byte-identisch installiert.
+
+## Befund 99: LiteLLM-OpenAI-Instanzschluessel wurden als fehlend gemeldet
+
+Die Runtime verwendete fuer `hard_reasoning` `provider=litellm` mit
+`openai/gpt-5.5`. Obwohl `OPENAI_API_KEY_<INSTANCE>` gesetzt war, prueften
+Account- und Routenstatus nur den generischen `OPENAI_API_KEY`-Namen.
+
+### Umsetzung und Nachweis
+
+- LiteLLM-OpenAI-Routen verwenden jetzt die instanzbezogene
+  OpenAI-Keyaufloesung.
+- Accountstatus, Route und API-Budgetstatus sind damit konsistent.
+- `key_scope=instance_fallback` ist nicht geheim und im Applet als
+  `instanzbezogener Fallback` sichtbar.
+- `359 passed in 86.82s` in der vollstaendigen Kompatibilitaets- und
+  Applet-Suite.
+- Applet-Installation und Quellvergleich: byte-identisch.
+- Live-Probe: actionable nur noch `warning:1` fuer die nicht verknuepfte
+  Depressionsbot-Signal-Identitaet.
+- SemVer `1.9.443`, Commit `2fd7bf6d`.
 
 ## Invarianten
 
