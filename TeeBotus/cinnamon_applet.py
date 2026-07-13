@@ -997,6 +997,10 @@ def _codex_history_status_is_informational(
         return False
     if _safe_int(fields.get("failed"), 0) > 0:
         return False
+    if aggregate and _safe_int(fields.get("queued"), 0) > 0:
+        # ``skip_reasons`` describes skipped recipients only. It does not
+        # explain an independently open local queue in the same aggregate row.
+        return False
     if not _codex_history_skip_reasons_are_informational(fields):
         return False
     status_counts = _status_counts_from_text(fields.get("problem_statuses"))

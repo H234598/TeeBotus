@@ -3483,11 +3483,11 @@ def test_cinnamon_applet_runtime_parser_normalizes_quoted_codex_history_metadata
     assert parsed["summary"]["informational_problem_statuses"] == "warning:1"
 
 
-def test_cinnamon_applet_runtime_parser_classifies_explained_codex_history_aggregate_as_info() -> None:
+def test_cinnamon_applet_runtime_parser_classifies_pure_explained_codex_history_aggregate_as_info() -> None:
     parsed = parse_runtime_status(
         """
         [Projekt-History]
-        codex_history=Logger status=warning queued=86 failed=0 skipped=101 total=1555 problem_statuses=queued:86,skipped:101 skip_reasons=no_private_route:101
+        codex_history=Logger status=warning queued=0 failed=0 skipped=101 total=1555 problem_statuses=skipped:101 skip_reasons=no_private_route:101
         """
     )
 
@@ -3495,6 +3495,20 @@ def test_cinnamon_applet_runtime_parser_classifies_explained_codex_history_aggre
     assert parsed["summary"]["actionable_problem_statuses"] == ""
     assert parsed["summary"]["informational_problem_status_count"] == 1
     assert parsed["summary"]["informational_problem_statuses"] == "warning:1"
+
+
+def test_cinnamon_applet_runtime_parser_does_not_hide_open_codex_history_queue() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Projekt-History]
+        codex_history=Logger status=warning queued=86 failed=0 skipped=101 total=1555 problem_statuses=queued:86,skipped:101 skip_reasons=no_private_route:101
+        """
+    )
+
+    assert parsed["summary"]["actionable_problem_status_count"] == 1
+    assert parsed["summary"]["actionable_problem_statuses"] == "warning:1"
+    assert parsed["summary"]["informational_problem_status_count"] == 0
+    assert parsed["summary"]["informational_problem_statuses"] == ""
 
 
 def test_cinnamon_applet_runtime_parser_keeps_undocumented_codex_history_aggregate_actionable() -> None:

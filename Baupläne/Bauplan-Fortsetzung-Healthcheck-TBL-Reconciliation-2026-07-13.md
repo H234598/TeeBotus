@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen
 
-**Quellstand bei Erstellung:** TeeBotus `1.9.490`
+**Quellstand bei Erstellung:** TeeBotus `1.9.491`
 
 **Arbeitsbereich:** `/home/teladi/TeeBotus`
 
@@ -91,6 +91,9 @@ Historie erhalten, insbesondere:
   behandelt.
 - [x] Die Applet-Detailansicht zeigt kurze Ursachen statt nur
   `Health defekt`.
+- [x] Eine Aggregate-Zeile mit offenen `queued`-Items wird nicht mehr durch
+  erklaerte `no_private_route`-Skips zu einem reinen Hinweis herabgestuft.
+  Reine Skip-Aggregate ohne offene Queue bleiben informational.
 - [x] Die installierte Applet-Kopie wurde aus dem aktuellen Quellstand
   installiert; Quelle und Installation sind byte-identisch.
 
@@ -122,20 +125,21 @@ Die direkte Probe mit:
 python3 -m TeeBotus.cinnamon_applet status --timeout 30
 ```
 
-ergab:
+ergab nach dem Queue-Klassifikationsfix:
 
 ```text
 payload_ok=True
-health.status=ok
-actionable_problem_count=0
-total_problem_count=0
-informational_problem_count=22
-Depressionsbot identity_warnings=0 identity_notices=1
+health.status=warning
+actionable_problem_count=1
+total_problem_count=1
+informational_problem_count=21
+TeeBotus_Logger queued=165 skipped=101 skip_reasons=no_private_route:101
 ```
 
-Damit ist der vorherige falsche Top-Level-Befund reproduziert und korrigiert:
-Der Hinweis bleibt sichtbar, macht aber nicht mehr die gesamte Applet-Health
-falsch rot.
+Damit wird die offene lokale TBL-Warteschlange wieder korrekt als actionable
+gemeldet. Die 101 begruendeten `no_private_route`-Skips bleiben daneben als
+sichtbare Hinweise erhalten. Die Signal-Identity-Notice von `Depressionsbot`
+bleibt ebenfalls nicht-actionable.
 
 ### Noch offene Live-Abweichung
 
@@ -154,10 +158,12 @@ dass die laufenden Prozesse bereits den neuen Quellstand verwenden.
 - [x] Aggregierte Notice-Zaehler in Pythonstatus und Applet darstellen.
 - [x] Regressionen fuer Notice-Parsing und bestehende echte
   `account_identity_warning`-Faelle ergaenzen.
-- [x] SemVer von `1.9.489` auf `1.9.490` bumpen.
+- [x] Regression fuer ein Aggregate mit `queued>0` und erklaerten Skips
+  ergaenzen; die offene Queue bleibt actionable.
+- [x] SemVer von `1.9.490` auf `1.9.491` bumpen.
 - [x] Fokussierte Testausfuehrung nach dem Version-Bump wiederholen.
-- [x] Aenderungen lokal committen; der Fix und dieser neue Bauplan sind lokal
-  als Commit `1e7542f0` festgehalten.
+- [ ] Aenderungen lokal committen; der neue Fix und der aktualisierte Bauplan
+  werden nach den Abschlusspruefungen lokal festgehalten.
 
 ### 2. TBL-Reconciliation schreibfrei abschliessen
 
@@ -187,7 +193,7 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
 
 - `pytest -q tests/test_admin_accounts.py tests/test_version_notifications.py`:
   `278 passed`.
-- `pytest -q tests/test_cinnamon_applet.py`: `234 passed`.
+- `pytest -q tests/test_cinnamon_applet.py`: `235 passed`.
 - Relevante Metadaten-/Kompatibilitaetstests: `97 passed, 51 deselected`.
 - Fokussierte Account-Identity-/Health-Tests: `38 passed`.
 - `python3 -m compileall -q TeeBotus tests` erfolgreich.
@@ -221,11 +227,17 @@ Der Bauplan ist erst abgeschlossen, wenn:
   Regressionen mit `426 passed`; der vollstaendige Applet-Lauf lief mit
   `234 passed`. Compileall, JavaScript-Syntax und `git diff --check` waren
   sauber.
+- 2026-07-13: Healthcheck-Logikfehler behoben: Aggregate mit
+  `queued>0` werden trotz erklaerter `no_private_route`-Skips nicht mehr als
+  rein informational eingestuft. Version `1.9.491`; fokussiert `9 passed`,
+  relevante Metadaten-/Kompatibilitaetstests `97 passed`, komplette
+  Applet-Suite `235 passed`.
 - 2026-07-13: Direkte Statusprobe mit aktuellem Quellstand bestaetigte
-  `version=1.9.490`, `health.status=ok`,
-  `actionable_problem_count=0`, `informational_problem_count=22` und
-  `qdrant_problem_count=0`. Der Prozessmarker fehlt nur beim noch nicht
-  neu gestarteten alten Dienstprozess.
+  `version=1.9.491`, `health.status=warning`,
+  `actionable_problem_count=1`, `total_problem_count=1`,
+  `informational_problem_count=21` und `qdrant_problem_count=0`. Die
+  actionable Zeile ist die offene TBL-Queue; der Prozessmarker fehlt nur beim
+  noch nicht neu gestarteten alten Dienstprozess.
 - 2026-07-13: Fix und neuer Bauplan lokal als `1e7542f0` committed; kein Push
   und kein Restart ausgeloest.
 - 2026-07-13: Laufende Prozesse bewusst noch nicht neu gestartet; die
