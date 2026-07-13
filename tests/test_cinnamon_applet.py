@@ -3707,6 +3707,30 @@ def test_cinnamon_applet_payload_ok_reflects_runtime_health(monkeypatch, tmp_pat
     }
 
 
+def test_cinnamon_applet_health_summary_does_not_hide_stale_v2_actionable_count() -> None:
+    health = cinnamon_applet._health_summary(
+        command_ok=True,
+        parsed_runtime={
+            "summary": {
+                "problem_status_count": 0,
+                "actionable_problem_status_count": 0,
+                "informational_problem_status_count": 0,
+            },
+            "status_counts": {"warning": 1},
+            "actionable_status_counts": {"warning": 1},
+            "informational_status_counts": {},
+        },
+        qdrant={"collections": {}, "error": ""},
+        qdrant_unit={"active_state": "active", "sub_state": "running", "returncode": 0},
+    )
+
+    assert health["status"] == "warning"
+    assert health["problem_status_count"] == 1
+    assert health["actionable_problem_count"] == 1
+    assert health["runtime_problem_count"] == 1
+    assert health["total_problem_count"] == 1
+
+
 def test_cinnamon_applet_payload_rejects_empty_runtime_output(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "  \n", "stderr": ""})
     monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running", "returncode": 0})
