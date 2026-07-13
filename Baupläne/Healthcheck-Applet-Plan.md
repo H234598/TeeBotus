@@ -1,7 +1,7 @@
 # Bauplan: Healthcheck, TeeBotus-Applet und Runtime-Warnungen
 
 **Stand:** 2026-07-13  
-**Status:** aktuelle Runde umgesetzt; zwei echte Betriebsmaßnahmen offen  
+**Status:** Klassifikations- und Applet-Fehler behoben; drei echte Betriebsbefunde offen
 **Geltungsbereich:** TeeBotus Healthcheck, Cinnamon-Applet, Signal-Diagnose und Codex-History-Dispatch
 
 ## Ziel
@@ -163,9 +163,18 @@ Der Healthcheck darf keine Memory-Dateien löschen oder reparieren. Recovery, Qu
 - Healthcheck-Kommando erfolgreich
 - Applet installiert und nach Reload geladen
 
+### Aktuelle Logikprüfung
+
+- Ein `status=broken` bleibt handlungsrelevant, auch wenn dieselbe Zeile einen Fallback nennt.
+- Ein Codex-History-`warning` wird nicht mehr wegen `queued=0` und `failed=0` ausgeblendet.
+- Das v2-Applet verwendet bei `classification_version>=2` ausschließlich die getrennten actionable-Status und zeigt reine Hinweise nicht zusätzlich als Probleme.
+- Applet-Testdatei: `177 passed`
+- Nach der Korrektur meldet der Live-Healthcheck `actionable_problem_count=3` und `informational_problem_count=21`.
+
 ### Versionen
 
-- TeeBotus: `1.9.372`, Commit `a732f5c8` (`Clarify applet health diagnostics`)
+- TeeBotus-Baseline: `1.9.372`, Commit `a732f5c8` (`Clarify applet health diagnostics`)
+- TeeBotus aktueller Fixstand: `1.9.373`
 - History-Dispatcher: `0.2.0`, Commit `b818cc1` (`Add encrypted history queue compaction`)
 
 ## 7. Offene Arbeitspakete
@@ -184,7 +193,14 @@ Der Healthcheck darf keine Memory-Dateien löschen oder reparieren. Recovery, Qu
 - Live-Nachricht testen
 - Healthcheck und Applet müssen danach keinen offenen Signal-Befund mehr zeigen
 
-### C. Regelmäßige Laufzeitprüfung
+### C. TBL-Codex-History-Warnung auflösen
+
+- nicht erfolgreiche Statuswerte in der TBL-History aus dem SQL-/Account-Store ermitteln
+- unterscheiden zwischen absichtlich übersprungenen, kompaktierten und fehlerhaften Einträgen
+- fehlerhafte oder unzustellbare Einträge reparieren beziehungsweise explizit quarantänisieren
+- danach Dispatcher- und Live-Healthcheck-Probe wiederholen
+
+### D. Regelmäßige Laufzeitprüfung
 
 - Healthcheck im Applet periodisch aktualisieren
 - Dispatcher-Erfolg und Queue-Alter überwachen
@@ -195,7 +211,7 @@ Der Healthcheck darf keine Memory-Dateien löschen oder reparieren. Recovery, Qu
 
 Der Bauplan gilt erst als abgeschlossen, wenn:
 
-- beide offenen Befunde behoben oder bewusst dokumentiert entschieden sind
+- alle drei offenen Befunde behoben oder bewusst dokumentiert entschieden sind
 - die Healthcheck-Suite und die History-Dispatcher-Suite erfolgreich laufen
 - eine Live-Probe ohne falschen Top-Level-Defekt erfolgreich ist
 - das Applet nach Reload die echten Daten anzeigt

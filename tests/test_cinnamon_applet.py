@@ -2349,6 +2349,7 @@ def test_cinnamon_applet_health_v2_keeps_information_visible_without_promoting_i
 
     assert result["total"] == 0
     assert result["summary"].startswith("Health ok | Hinweise nicht verfuegbar:3 | Unit active")
+    assert "Probleme" not in result["summary"]
     assert "Warnungen" not in result["summary"]
 
 
@@ -3040,20 +3041,35 @@ account_identity_warning=Demo code=runtime_channel_without_identity channel=sign
     )
 
     assert parsed["summary"]["problem_status_count"] == 12
-    assert parsed["summary"]["actionable_problem_status_count"] == 4
-    assert parsed["summary"]["actionable_problem_statuses"] == "missing_key:1,warning:3"
-    assert parsed["summary"]["informational_problem_status_count"] == 8
+    assert parsed["summary"]["actionable_problem_status_count"] == 5
+    assert parsed["summary"]["actionable_problem_statuses"] == "missing_key:1,warning:4"
+    assert parsed["summary"]["informational_problem_status_count"] == 7
     assert parsed["summary"]["informational_problem_statuses"] == (
-        "fallback_defaults:1,missing_key:1,partial:1,unavailable:2,warning:3"
+        "fallback_defaults:1,missing_key:1,partial:1,unavailable:2,warning:2"
     )
     assert parsed["summary"]["llm_actionable_problem_status_count"] == 1
     assert parsed["summary"]["llm_informational_status_count"] == 1
     assert parsed["summary"]["api_actionable_problem_status_count"] == 0
     assert parsed["summary"]["api_informational_status_count"] == 4
-    assert parsed["summary"]["codex_history_actionable_problem_status_count"] == 1
-    assert parsed["summary"]["codex_history_informational_status_count"] == 2
+    assert parsed["summary"]["codex_history_actionable_problem_status_count"] == 2
+    assert parsed["summary"]["codex_history_informational_status_count"] == 1
     assert parsed["summary"]["memory_actionable_problem_status_count"] == 2
     assert parsed["summary"]["memory_informational_status_count"] == 1
+
+
+def test_cinnamon_applet_runtime_parser_does_not_hide_broken_route_behind_fallback() -> None:
+    parsed = parse_runtime_status(
+        """
+[LLM-Routen und Backends]
+structured_decision=Demo status=broken route_status=broken fallback=local_ollama fallback_model=ollama_chat/llama3.2:3b
+llm_route=Demo status=broken effective_status=configured fallback=local_ollama
+[Projekt-History]
+codex_history=Logger status=warning queued=0 failed=0 total=4
+"""
+    )
+
+    assert parsed["summary"]["actionable_problem_statuses"] == "broken:2,warning:1"
+    assert parsed["summary"]["informational_problem_statuses"] == ""
 
 
 def test_cinnamon_applet_runtime_parser_keeps_fresh_codex_usage_neutral() -> None:

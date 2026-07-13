@@ -1626,7 +1626,7 @@ TeeBotusApplet.prototype = {
     let vectors = this._qdrantCollectionCount(qdrant.collections || {}, "teebotus_user_memory");
     let vectorText = vectors > 0 ? " | Vektoren " + String(vectors) : "";
     let healthText = this._statusWord(health.status || (payload.ok ? "ok" : "warning"));
-    let breakdown = this._problemBreakdownText(health.actionable_problem_statuses || health.problem_statuses || summary.actionable_problem_statuses || summary.problem_statuses || this._problemStatusesFromCounts(counts || {}));
+    let breakdown = this._actionableProblemBreakdownText(health, summary, counts);
     let informational = this._informationalHealthText(health, summary);
     let commandBreakdown = this._commandProblemBreakdownText(health);
     let qdrantBreakdown = this._qdrantProblemBreakdownText(health);
@@ -1776,11 +1776,25 @@ TeeBotusApplet.prototype = {
 
   _healthProblemDetailsText: function(health, summary, counts) {
     let text = "";
-    text += this._problemBreakdownText((health || {}).actionable_problem_statuses || (health || {}).problem_statuses || (summary || {}).actionable_problem_statuses || (summary || {}).problem_statuses || this._problemStatusesFromCounts(counts || {}));
+    text += this._actionableProblemBreakdownText(health, summary, counts);
     text += this._informationalHealthText(health, summary);
     text += this._commandProblemBreakdownText(health);
     text += this._qdrantProblemBreakdownText(health);
     return text;
+  },
+
+  _actionableProblemBreakdownText: function(health, summary, counts) {
+    let classificationVersion = this._nonNegativeInt((health || {}).classification_version, 0);
+    if (classificationVersion >= 2) {
+      let statuses = (health || {}).actionable_problem_statuses;
+      if (!statuses) {
+        statuses = (summary || {}).actionable_problem_statuses;
+      }
+      return this._problemBreakdownText(statuses || "");
+    }
+    return this._problemBreakdownText(
+      (health || {}).problem_statuses || (summary || {}).problem_statuses || this._problemStatusesFromCounts(counts || {})
+    );
   },
 
   _informationalHealthText: function(health, summary) {

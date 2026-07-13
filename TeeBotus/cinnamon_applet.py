@@ -258,6 +258,16 @@ HEALTHY_EFFECTIVE_STATUSES = frozenset(
         "routable",
     }
 )
+FALLBACK_SUPPRESSION_BLOCKERS = frozenset(
+    {
+        "broken",
+        "config_conflict",
+        "error",
+        "failed",
+        "invalid",
+        "schema_mismatch",
+    }
+)
 SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"models_feed", "route_status", "semantic"})
 STATUS_FIELD_BOUNDARY_KEYS = frozenset({"status"}) | SECONDARY_PROBLEM_STATUS_FIELDS
 STATUS_FIELD_BOUNDARY_VALUES = PROBLEM_STATUSES | frozenset(
@@ -719,8 +729,10 @@ def _line_health_statuses(
         return (), ()
     prefix = line.split("=", 1)[0].strip()
     primary = _normalized_status_value(fields.get("status"))
+    route_status = _normalized_status_value(fields.get("route_status"))
     effective = _normalized_status_value(fields.get("effective_status"))
-    fallback_covered = effective in HEALTHY_EFFECTIVE_STATUSES and any(
+    fallback_suppression_blocked = primary in FALLBACK_SUPPRESSION_BLOCKERS or route_status in FALLBACK_SUPPRESSION_BLOCKERS
+    fallback_covered = not fallback_suppression_blocked and effective in HEALTHY_EFFECTIVE_STATUSES and any(
         str(fields.get(key, "") or "").strip()
         for key in ("fallback", "fallback_profile", "fallback_model", "offload_profile")
     )
@@ -728,11 +740,10 @@ def _line_health_statuses(
         primary == "fallback_defaults"
         or (prefix == "codex_usage_account" and primary == "partial")
         or prefix in {"api_budget", "account_identity", "codex_history_repo"}
-        or (prefix == "structured_decision" and bool(str(fields.get("fallback", "") or "").strip()))
         or (
-            prefix == "codex_history"
-            and _safe_int(fields.get("queued", 0)) == 0
-            and _safe_int(fields.get("failed", 0)) == 0
+            prefix == "structured_decision"
+            and not fallback_suppression_blocked
+            and bool(str(fields.get("fallback", "") or "").strip())
         )
         or fallback_covered
     )
