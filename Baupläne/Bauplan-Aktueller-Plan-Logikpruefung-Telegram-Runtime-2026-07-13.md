@@ -146,6 +146,20 @@ Historie erhalten, insbesondere:
   separaten Hinweistext und werden nicht als scheinbare Warnungsaktion
   wiederholt.
 
+### Telegram-Runtime: Reply-Adressierung und Identitaets-Recovery
+
+- [x] Der moderne Telegram-Pfad markiert eine Nachricht, die auf eine eigene
+  Botnachricht antwortet, explizit im `IncomingEvent`.
+- [x] Das gemeinsame Gruppen-Gate beruecksichtigt diese Reply-Markierung schon
+  vor der Accountauflösung; echte Bot-Replies werden nicht mehr als
+  `not_addressed_to_bot` verworfen.
+- [x] Die Bot-ID wird beim Reply robust gegen Telegrams numerische JSON-ID und
+  stringfoermige Test-/Adapterwerte verglichen.
+- [x] Wenn `getMe` beim Bridge-Aufbau transient fehlschlaegt, wird die
+  Identitaet vor dem Polling einmal erneut aufgeloest. Bei Erfolg werden
+  Runtime-Kontext und Engine-Adressnamen gemeinsam aktualisiert; bei erneutem
+  Fehlen bleibt die Gruppenadressierung fail-closed eingeschraenkt.
+
 ### Live-Abnahme nach dem Restart
 
 - [x] `teebotus.service`, `teebotus-codex-history-collector.service` und
@@ -374,6 +388,9 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
 - Statussemantik-Regressionen decken Append, Completion, Receipt-Promotion und
   Empfaenger-Downgrade sowie die Trennung von Native-Receipt und Reply in
   beiden Repositories ab.
+- Moderne Telegram-Reply- und Identitaets-Recovery-Regressionen sowie die
+  betroffenen Adapter-/Engine-/Runtime-Suites: `601 passed`, `17 subtests
+  passed`.
 
 ## Abnahmekriterien
 
@@ -529,4 +546,10 @@ Der Bauplan ist erst abgeschlossen, wenn:
   `(instance_name, account.label)` beziehungsweise das konkrete Thread-Objekt
   verknuepft. Gemeinsame Telegram-Suite: `198 passed`, `17 subtests passed`;
   Compileall und `git diff --check` sauber.
-
+- 2026-07-13: Moderne Telegram-Reply-Logik reproduziert: Der Reply-Text wurde
+  zwar spaeter in den LLM-Kontext uebernommen, eine Gruppen-Reply auf eine
+  eigene Botnachricht wurde aber vor der Accountauflösung verworfen. Mit dem
+  expliziten `IncomingEvent.reply_to_bot`-Marker erreicht sie nun das Engine-
+  Routing; `getMe`-Ausfaelle werden vor dem Polling einmal retryt und bei Erfolg
+  in Kontext und Engine-Adressnamen uebernommen. Gemeinsame betroffene Suites:
+  `601 passed`, `17 subtests passed`; kein Provider- oder Netzwerkanruf.

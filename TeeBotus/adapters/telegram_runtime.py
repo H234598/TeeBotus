@@ -1006,6 +1006,7 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
             message.get("message_id", "unknown"),
         )
         return False
+    event = event.with_reply_to_bot(_is_reply_to_bot(message, getattr(context, "bot_identity", BotIdentity())))
     status_auth = _telegram_status_auth_pre_gate(context.account_store, event)
     if status_auth is not None:
         return _dispatch_telegram_status_auth_pre_gate(context.api, event, status_auth)
@@ -1431,6 +1432,7 @@ def _with_telegram_attachments(api: TelegramAPI, event: IncomingEvent, message: 
         attachments=tuple([*event.attachments, *attachments]),
         link_previews=event.link_previews,
         reply_to_text=event.reply_to_text,
+        reply_to_bot=event.reply_to_bot,
         raw=event.raw,
     )
 
@@ -3195,7 +3197,9 @@ def _is_reply_to_bot(message: dict[str, Any], bot_identity: BotIdentity) -> bool
     sender = reply.get("from")
     if not isinstance(sender, dict):
         return False
-    return sender.get("id") == bot_identity.id
+    sender_id = str(sender.get("id") or "").strip()
+    bot_id = str(bot_identity.id or "").strip()
+    return bool(sender_id and bot_id and sender_id == bot_id)
 
 
 def _command_targets_other_bot(text: str, bot_identity: BotIdentity, extra_names: set[str] | None = None) -> bool:
@@ -3662,6 +3666,7 @@ def run_polling(
             bot_identity=bot_identity,
             secret_provider=secret_provider,
         )
+        bridge.refresh_bot_identity_if_missing()
         runtime_context = bridge.context
         openai_client = bridge.openai_client
         user_memory_store = bridge.account_store

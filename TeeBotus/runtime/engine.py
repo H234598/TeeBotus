@@ -197,6 +197,13 @@ class TeeBotusEngine:
     def should_ignore_without_account(self, event: IncomingEvent) -> bool:
         return should_ignore_event_without_account(event, self._bot_address_names_for_event(event))
 
+    def set_bot_address_names(self, names: Iterable[str]) -> None:
+        self.bot_address_names = frozenset(
+            _normalize_address_name(name)
+            for name in names
+            if str(name or "").strip()
+        )
+
     def process(self, event: IncomingEvent) -> list[OutgoingAction]:
         return self.process_result(event).actions
 
@@ -1975,7 +1982,8 @@ def _event_is_addressed_to_bot(event: IncomingEvent, command: str, bot_address_n
     if command:
         return True
     return (
-        _text_addresses_bot(event.text, bot_address_names)
+        event.reply_to_bot
+        or _text_addresses_bot(event.text, bot_address_names)
         or _signal_mentions_bot(event.raw, bot_address_names)
         or _matrix_mentions_bot(event.raw, bot_address_names)
     )

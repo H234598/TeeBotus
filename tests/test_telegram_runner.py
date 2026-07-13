@@ -164,6 +164,50 @@ def test_telegram_runtime_bridge_builds_modern_context(monkeypatch, tmp_path: Pa
     assert bridge.chat_state.teladi_call_state_path == tmp_path / "Demo" / "data" / "Teladi_Emergency_State.json"
 
 
+def test_telegram_runtime_bridge_retries_missing_identity_before_polling(monkeypatch, tmp_path: Path) -> None:
+    instance_dir = tmp_path / "Demo"
+    instance_dir.mkdir()
+    (instance_dir / "Bot_Verhalten.md").write_text("# Demo\n", encoding="utf-8")
+    monkeypatch.setattr(telegram_runner.BibliothekarService, "from_instructions", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(telegram_runner, "build_runtime_text_llm_client", lambda **_kwargs: "llm-client")
+    monkeypatch.setattr(telegram_runner, "build_runtime_structured_decision_runner", lambda **_kwargs: "decision-runner")
+
+    class API:
+        token = "telegram-token"
+
+        def __init__(self) -> None:
+            self.get_me_calls = 0
+
+        def get_me(self):
+            self.get_me_calls += 1
+            if self.get_me_calls == 1:
+                raise telegram_runner.telegram_runtime.TelegramAPIError("temporary getMe failure")
+            return BotIdentity(id=42, first_name="DemoBot", username="demo_bot")
+
+    api = API()
+    bridge = TelegramRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="telegram",
+            slot=1,
+            label="telegram:1",
+            telegram_token="telegram-token",
+            openai_api_key="",
+        ),
+        api=api,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"t" * 32),
+    )
+
+    assert bridge.bot_identity.has_identity() is False
+    bridge.refresh_bot_identity_if_missing()
+
+    assert api.get_me_calls == 2
+    assert bridge.bot_identity.username == "demo_bot"
+    assert bridge.context.bot_identity.username == "demo_bot"
+    assert "demobot" in bridge.context.engine.bot_address_names
+
+
 def test_telegram_polling_transport_delegates_to_bridge() -> None:
     calls = []
     stop_event = object()

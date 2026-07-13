@@ -2003,6 +2003,65 @@ class BotTests(unittest.TestCase):
         self.assertIsNotNone(account_id)
         self.assertEqual(message_tracker.list_for_chat("123", instance_name="Demo", channel="telegram")[0].message_ref, "101")
 
+    def test_modern_group_reply_to_bot_reaches_engine_before_account_resolution(self) -> None:
+        from TeeBotus.runtime.actions import SendText
+        from TeeBotus.runtime.engine import EngineResult
+
+        class InstructionBox:
+            def get(self):
+                return BotInstructions()
+
+        api = FakeAPI()
+        seen_events = []
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            account_store = AccountStore(root / "accounts", "Demo", StaticSecretProvider(b"e" * 32))
+            state_store = RuntimeStateStore(root / "data", instance_name="Demo", secret_provider=StaticSecretProvider(b"e" * 32))
+            message_tracker = MessageTracker(root / "runtime" / "Sent_Message_Refs.json")
+            context = build_telegram_runtime_context(
+                api=api,
+                instance_name="Demo",
+                adapter_slot=1,
+                instruction_store=InstructionBox(),
+                account_store=account_store,
+                state_store=state_store,
+                message_tracker=message_tracker,
+                openai_client=None,
+                working_memory_store=None,
+                bibliothekar_store=None,
+                youtube_job_runner=None,
+                bot_identity=BotIdentity(id=99, first_name="Mondbot", username="MondBot"),
+            )
+
+            def process_result(event):
+                seen_events.append(event)
+                return EngineResult(event.account_id, [SendText(event.chat_id, "ok")], handled=True)
+
+            context.engine.process_result = process_result  # type: ignore[method-assign]
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "message_id": 2,
+                        "text": "Ja, bitte.",
+                        "chat": {"id": -100, "type": "group", "title": "Debatte"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                        "reply_to_message": {
+                            "message_id": 1,
+                            "text": "Botfrage",
+                            "from": {"id": "99", "is_bot": True, "username": "MondBot"},
+                        },
+                    }
+                },
+                chat_state=ChatState(),
+                runtime_context=context,
+            )
+
+        self.assertEqual(api.sent_messages, [("-100", "ok")])
+        self.assertEqual(len(seen_events), 1)
+        self.assertTrue(seen_events[0].reply_to_bot)
+        self.assertEqual(seen_events[0].reply_to_text, "Botfrage")
+
     def test_handle_update_with_runtime_context_answers_callback_query(self) -> None:
         from TeeBotus.runtime.actions import SendText
         from TeeBotus.runtime.engine import EngineResult

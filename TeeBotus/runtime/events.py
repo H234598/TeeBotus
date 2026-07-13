@@ -42,6 +42,7 @@ class IncomingEvent:
     sender_username: str
     sender_number: str
     reply_to_text: str | None
+    reply_to_bot: bool
     attachments: tuple[IncomingAttachment, ...]
     link_previews: tuple[IncomingLinkPreview, ...]
     raw: Any
@@ -66,6 +67,7 @@ class IncomingEvent:
         sender_username: str = "",
         sender_number: str = "",
         reply_to_text: str | None = None,
+        reply_to_bot: bool = False,
         attachments: tuple[IncomingAttachment, ...] = (),
         link_previews: tuple[IncomingLinkPreview, ...] = (),
         raw: Any = None,
@@ -85,6 +87,7 @@ class IncomingEvent:
         object.__setattr__(self, "sender_username", sender_username)
         object.__setattr__(self, "sender_number", sender_number)
         object.__setattr__(self, "reply_to_text", reply_to_text)
+        object.__setattr__(self, "reply_to_bot", bool(reply_to_bot))
         object.__setattr__(self, "attachments", attachments)
         object.__setattr__(self, "link_previews", link_previews)
         object.__setattr__(self, "raw", raw)
@@ -107,6 +110,7 @@ class IncomingEvent:
             text=self.text,
             message_ref=self.message_ref,
             reply_to_text=self.reply_to_text,
+            reply_to_bot=self.reply_to_bot,
             attachments=self.attachments,
             link_previews=self.link_previews,
             raw=self.raw,
@@ -129,6 +133,7 @@ class IncomingEvent:
             text=self.text,
             message_ref=self.message_ref,
             reply_to_text=self.reply_to_text,
+            reply_to_bot=self.reply_to_bot,
             attachments=attachments,
             link_previews=self.link_previews,
             raw=self.raw,
@@ -151,6 +156,7 @@ class IncomingEvent:
             text=self.text,
             message_ref=self.message_ref,
             reply_to_text=self.reply_to_text,
+            reply_to_bot=self.reply_to_bot,
             attachments=self.attachments,
             link_previews=link_previews,
             raw=self.raw,
@@ -173,6 +179,30 @@ class IncomingEvent:
             text=self.text,
             message_ref=self.message_ref,
             reply_to_text=reply_to_text,
+            reply_to_bot=self.reply_to_bot,
+            attachments=self.attachments,
+            link_previews=self.link_previews,
+            raw=self.raw,
+        )
+
+    def with_reply_to_bot(self, reply_to_bot: bool) -> "IncomingEvent":
+        return IncomingEvent(
+            event_id=self.event_id,
+            instance=self.instance,
+            channel=self.channel,
+            adapter_slot=self.adapter_slot,
+            account_id=self.account_id,
+            identity_key=self.identity_key,
+            chat_id=self.chat_id,
+            chat_type=self.chat_type,
+            sender_id=self.sender_id,
+            sender_name=self.sender_name,
+            sender_username=self.sender_username,
+            sender_number=self.sender_number,
+            text=self.text,
+            message_ref=self.message_ref,
+            reply_to_text=self.reply_to_text,
+            reply_to_bot=reply_to_bot,
             attachments=self.attachments,
             link_previews=self.link_previews,
             raw=self.raw,

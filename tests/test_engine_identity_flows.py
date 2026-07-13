@@ -942,7 +942,10 @@ def test_status_reports_codex_history_queue_and_failures(tmp_path):
     )
 
     assert "[Projekt-History]" in text
-    assert "- Codex-History: status=warning queued=1 failed=1 total=2 latest=TeeBotus v1.8.0 #0002" in text
+    assert (
+        "- Codex-History: status=warning queued=1 failed=1 total=2 "
+        "problem_statuses=failed:1,queued:1 latest=TeeBotus v1.8.0 #0002"
+    ) in text
 
 
 def test_status_warns_for_stateful_gemini_free_tier_interaction_retention(tmp_path):

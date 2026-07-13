@@ -111,7 +111,31 @@ class TelegramRuntimeBridge:
             structured_decision_runner=self.structured_decision_runner,
         )
 
+    def refresh_bot_identity_if_missing(self) -> None:
+        if self.bot_identity.has_identity():
+            return
+        refreshed_identity = telegram_runtime._resolve_bot_identity(self.api)
+        if not refreshed_identity.has_identity():
+            LOGGER.warning(
+                "Telegram bot identity is still unavailable before polling instance=%s slot=%s; "
+                "group replies and username addressing remain restricted.",
+                self.run_config.instance_name,
+                self.run_config.slot,
+            )
+            return
+        self.bot_identity = refreshed_identity
+        self.context.bot_identity = refreshed_identity
+        instructions = self.instruction_store.get()
+        self.context.engine.set_bot_address_names(
+            (
+                refreshed_identity.display_name,
+                refreshed_identity.mention,
+                *instructions.bot_aliases,
+            )
+        )
+
     def run_polling(self, *, stop_event: threading.Event | None = None, poll_timeout: int | None = None, youtube_job_runner: Any | None = None) -> None:
+        self.refresh_bot_identity_if_missing()
         telegram_runtime.run_polling(
             self.api,
             self.instruction_store,
