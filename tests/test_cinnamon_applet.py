@@ -3289,6 +3289,22 @@ def test_cinnamon_applet_runtime_parser_marks_error_without_status_as_problem() 
     assert parsed["summary"]["problem_statuses"] == "broken:1,warning:2"
 
 
+def test_cinnamon_applet_runtime_parser_promotes_codex_history_failure_metadata() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Projekt-History]
+        codex_history_repo=Demo repo=neutral status=skipped failed=1 total=3
+        codex_history_repo=Demo repo=metadata status=ok failed=0 total=3 problem_statuses=failed:1,skipped:2
+        codex_history_repo=Demo repo=queue status=ok failed=0 total=3 problem_statuses=queued:1,skipped:2
+        """
+    )
+
+    assert parsed["status_counts"]["warning"] == 2
+    assert parsed["summary"]["codex_history_problem_status_count"] == 2
+    assert parsed["actionable_status_counts"]["warning"] == 2
+    assert parsed["informational_status_counts"] == {}
+
+
 def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:
     parsed = parse_runtime_status(
         """

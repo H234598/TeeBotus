@@ -598,7 +598,10 @@ def parse_runtime_status(output: str) -> dict[str, Any]:
             continue
         fields = _parse_status_fields(line)
         line_statuses = list(_line_status_values(fields))
-        if _line_has_error(fields) and not any(status in PROBLEM_STATUSES for status in line_statuses):
+        if (
+            (_line_has_error(fields) or _codex_history_metadata_requires_problem(line, fields))
+            and not any(status in PROBLEM_STATUSES for status in line_statuses)
+        ):
             _append_status_value(line_statuses, "warning")
         if line.startswith("codex_usage=") and _codex_usage_is_stale(fields):
             _append_status_value(line_statuses, "stale")
@@ -761,10 +764,6 @@ def _line_health_statuses(
 def _codex_history_repo_status_is_informational(fields: Mapping[str, Any]) -> bool:
     """Keep expected queue/skip states visible without hiding repo failures."""
     primary = _normalized_status_value(fields.get("status"))
-    if primary == "skipped":
-        return True
-    if primary != "warning":
-        return False
     if _safe_int(fields.get("failed"), 0) > 0:
         return False
     raw_statuses = str(fields.get("problem_statuses") or "").strip()
@@ -778,7 +777,29 @@ def _codex_history_repo_status_is_informational(fields: Mapping[str, Any]) -> bo
             if normalized:
                 statuses.append(normalized)
         return bool(statuses) and all(status in {"queued", "skipped"} for status in statuses)
+    if primary == "skipped":
+        return True
+    if primary != "warning":
+        return False
     return _safe_int(fields.get("queued"), 0) > 0 or _safe_int(fields.get("skipped"), 0) > 0
+
+
+def _codex_history_metadata_requires_problem(line: str, fields: Mapping[str, Any]) -> bool:
+    prefix = line.split("=", 1)[0].strip()
+    if prefix not in {"codex_history", "codex_history_repo"}:
+        return False
+    if _safe_int(fields.get("failed"), 0) > 0:
+        return True
+    raw_statuses = str(fields.get("problem_statuses") or "").strip()
+    if not raw_statuses:
+        return False
+    for part in raw_statuses.split(","):
+        token, separator, raw_count = part.partition(":")
+        if not separator or _safe_int(raw_count, 0) <= 0:
+            continue
+        if token.strip().casefold() not in {"queued", "skipped"}:
+            return True
+    return False
 
 
 def _api_budget_status_is_informational(fields: Mapping[str, Any], *, fallback_covered: bool) -> bool:
