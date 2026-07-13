@@ -83,6 +83,12 @@ Duplikatwarnung, obwohl der urspruengliche Empfaenger sie weiterhin trug.
 Das Signal bleibt jetzt monoton erhalten und wird auch aus importierten
 Empfaengerresultaten abgeleitet.
 
+**Fuenfter Befund 2026-07-13:** `execute_delete()` pruefte die
+Optimistic-Concurrency-Revision vor dem Schreib-Transaction-Lock. Eine
+parallele Aenderung konnte dadurch zwischen Pruefung und Loeschung eintreten.
+Die Revision wird jetzt innerhalb derselben `BEGIN IMMEDIATE`-Transaktion
+erneut berechnet.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -137,7 +143,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Applet- und Statuslogik fuer Bridge-Delegation, malformed rows und `created_at`-Latest-Auswahl umgesetzt
 - Reproduktion des Dispatcherfehlers vor dem Fix: ein `skipped/no_private_route`-Resultat endete als `queued`
 - History-Dispatcher nach dem Fix: `31 passed`, davon zwei Regressionstests fuer terminale Skips und `delivered+skipped`
-- Lokale Dispatcher-Paketversion: `0.2.4`, nach dem Duplicate-Flag-Fix in `.venv-py313` installiert
+- Lokale Dispatcher-Paketversion: `0.2.5`, nach dem Delete-Revision-Fix in `.venv-py313` installiert
 - History-Dispatcher-Fixes committed als `943d349` (`Treat skipped recipients as terminal`), `bf78436` (`Report persisted history append status`), `162f978` (`Keep claim response timestamps current`), `90e4206` (`Preserve duplicate uncertainty across retries`) und `84fa05f` (`Bump history dispatcher to 0.2.4`)
 - TeeBotus-Plan-/Nachweisstaende committed als `18b36730`, `0cf5db99`, `0d1d2004`, `f3089e08`, `418ba283` und `e9bae24d`
 
@@ -147,10 +153,13 @@ Der Plan ist erst abgeschlossen, wenn:
 - Isolierte Vorher-/Nachher-Probe: vorher `queued`, nachher `skipped`.
 - History-Dispatcher-Gesamtsuite: `33 passed`.
 - History-Dispatcher-Gesamtsuite nach dem Duplicate-Flag-Fix: `35 passed`.
+- History-Dispatcher-Gesamtsuite nach dem Delete-Revision-Fix: `36 passed`.
 - TeeBotus Bridge-/Codex-History-Tests: `108 passed`.
 - API-Statusprobe: vorher `api_status=queued, stored_status=delivered`; nach dem Fix bestaetigt `api_status=delivered, stored_status=delivered`.
 - Claim-Zeitprobe: vorher `claimed_updated_at` alt und `stored_updated_at` neu; nach dem Fix bestaetigt `claim_timestamps_match=True`.
 - Duplicate-Flag-Probe: vorher global `possible_duplicate=False` nach erfolgreichem Retry; nach dem Fix muss es global `True` bleiben.
+- Delete-Race-Probe: eine parallele Aenderung zwischen Preview und Execute muss jetzt `revision_changed` liefern und den Ziel-Eintrag erhalten.
+- Delete-Revision-Fix committed als `94556cb` (`Make delete revision checks atomic`).
 
 ### Noch offen
 
