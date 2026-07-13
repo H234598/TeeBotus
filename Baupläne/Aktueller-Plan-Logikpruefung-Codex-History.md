@@ -76,6 +76,13 @@ jetzt der normalisierte, tatsaechlich gespeicherte Status.
 Claim-Antwort setzt `updated_at` jetzt auf denselben Zeitpunkt wie die
 persistierte `delivering`-Zeile.
 
+**Vierter Befund 2026-07-13:** `complete()` loeschte das globale
+`possible_duplicate`-Signal bei einem spaeteren erfolgreichen Retry, wenn nur
+der aktuelle Empfaenger `false` meldete. Das verlor eine wichtige
+Duplikatwarnung, obwohl der urspruengliche Empfaenger sie weiterhin trug.
+Das Signal bleibt jetzt monoton erhalten und wird auch aus importierten
+Empfaengerresultaten abgeleitet.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -130,7 +137,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Applet- und Statuslogik fuer Bridge-Delegation, malformed rows und `created_at`-Latest-Auswahl umgesetzt
 - Reproduktion des Dispatcherfehlers vor dem Fix: ein `skipped/no_private_route`-Resultat endete als `queued`
 - History-Dispatcher nach dem Fix: `31 passed`, davon zwei Regressionstests fuer terminale Skips und `delivered+skipped`
-- Lokale Dispatcher-Paketversion: `0.2.3`, nach dem Claim-Zeitfix in `.venv-py313` installiert
+- Lokale Dispatcher-Paketversion: `0.2.4`, nach dem Duplicate-Flag-Fix in `.venv-py313` installiert
 - History-Dispatcher-Fixes committed als `943d349` (`Treat skipped recipients as terminal`), `bf78436` (`Report persisted history append status`) und `162f978` (`Keep claim response timestamps current`)
 - TeeBotus-Plan-/Nachweisstaende committed als `18b36730`, `0cf5db99` und `0d1d2004`
 
@@ -139,9 +146,11 @@ Der Plan ist erst abgeschlossen, wenn:
 - Dispatch-Statussequenztests: erfolgreich; `failed` bleibt retrybar, `skipped` terminal.
 - Isolierte Vorher-/Nachher-Probe: vorher `queued`, nachher `skipped`.
 - History-Dispatcher-Gesamtsuite: `33 passed`.
+- History-Dispatcher-Gesamtsuite nach dem Duplicate-Flag-Fix: `35 passed`.
 - TeeBotus Bridge-/Codex-History-Tests: `108 passed`.
 - API-Statusprobe: vorher `api_status=queued, stored_status=delivered`; nach dem Fix bestaetigt `api_status=delivered, stored_status=delivered`.
 - Claim-Zeitprobe: vorher `claimed_updated_at` alt und `stored_updated_at` neu; nach dem Fix bestaetigt `claim_timestamps_match=True`.
+- Duplicate-Flag-Probe: vorher global `possible_duplicate=False` nach erfolgreichem Retry; nach dem Fix muss es global `True` bleiben.
 
 ### Noch offen
 
