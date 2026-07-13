@@ -570,6 +570,10 @@ TeeBotusApplet.prototype = {
         + " | Graphen " + String(summary.codex_history_graphs || 0)
         + this._sectionHealthText(summary.codex_history_actionable_problem_status_count, summary.codex_history_informational_status_count, summary.codex_history_problem_status_count)
       );
+      let dispatcherQueueLine = this._historyDispatcherQueueLine();
+      if (dispatcherQueueLine) {
+        projectHistoryLines.push(dispatcherQueueLine);
+      }
       projectHistoryLines = projectHistoryLines.concat(this._formatLines(this._problemStatusLines(sections["Projekt-History"] || []), (line) => this._formatProjectHistoryLine(line)));
       this.projectMenu.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
       this._appendLines(this.projectMenu.menu, projectHistoryLines, _("Keine Codex-History-Statuszeilen."));
@@ -818,6 +822,18 @@ TeeBotusApplet.prototype = {
       && !this._historyDispatcherSnapshotHasError(this.historyDispatcherPayload)
       ? " | Dispatcher veraltet"
       : " | Dispatcher Warnung";
+  },
+
+  _historyDispatcherQueueLine: function() {
+    if (!this.showHistoryDispatcherSection || !this._historyDispatcherSnapshotIsValid(this.historyDispatcherPayload)) {
+      return "";
+    }
+    let payload = this.historyDispatcherPayload;
+    let state = this._historyDispatcherSnapshotHasError(payload)
+      ? "Warnung"
+      : (this._historyDispatcherSnapshotIsStale(payload) ? "veraltet" : "bereit");
+    return "Zentraler Dispatcher: Queue " + String(payload.queued)
+      + " / gesamt " + String(payload.total) + " (" + state + ")";
   },
 
   _populateHistoryDispatcherMenu: function() {
@@ -1183,7 +1199,7 @@ TeeBotusApplet.prototype = {
       let latestStatus = fields.latest_status ? "; letzter Status " + this._statusWord(fields.latest_status) : "";
       let latestKind = fields.latest_kind ? "; Typ " + this._codexHistoryKindLabel(fields.latest_kind) : "";
       return "Repo-History " + repo + " (" + fields.codex_history_repo + "): " + this._statusWord(fields.status)
-        + "; offen " + String(fields.queued || "0")
+        + "; " + this._codexHistoryQueueLabel(fields) + " " + String(fields.queued || "0")
         + "; fehlgeschlagen " + String(fields.failed || "0")
         + "; gesamt " + String(fields.total || "0")
         + this._codexHistoryProblemText(fields)
@@ -1195,7 +1211,7 @@ TeeBotusApplet.prototype = {
       let latestPrefix = fields.latest_prefix ? " " + String(fields.latest_prefix).replace(/_/g, " ") : "";
       let latestKind = fields.latest_kind ? "; Typ " + this._codexHistoryKindLabel(fields.latest_kind) : "";
       return "Codex-History " + fields.codex_history + ": " + this._statusWord(fields.status)
-        + "; offen " + String(fields.queued || "0")
+        + "; " + this._codexHistoryQueueLabel(fields) + " " + String(fields.queued || "0")
         + "; fehlgeschlagen " + String(fields.failed || "0")
         + "; gesamt " + String(fields.total || "0")
         + this._codexHistoryProblemText(fields)
@@ -1203,6 +1219,12 @@ TeeBotusApplet.prototype = {
         + latestRepo + latestPrefix + latestKind + this._errorText(fields);
     }
     return line;
+  },
+
+  _codexHistoryQueueLabel: function(fields) {
+    return fields && fields.dispatch_mode === "bridge" && fields.dispatch_role === "source"
+      ? "lokale Outbox offen"
+      : "offen";
   },
 
   _codexHistoryProblemText: function(fields) {
@@ -1262,7 +1284,7 @@ TeeBotusApplet.prototype = {
       let item = new PopupMenu.PopupSubMenuMenuItem(this._shortText("Repo " + repo.repo + " (" + repo.instance + ")", 72));
       this._styleSubmenu(item);
       item.menu.addMenuItem(this._menuLine("Status: " + this._statusWord(repo.status), false));
-      item.menu.addMenuItem(this._menuLine("Queue: offen " + String(repo.queued) + " | fehlgeschlagen " + String(repo.failed) + " | gesamt " + String(repo.total), false));
+      item.menu.addMenuItem(this._menuLine("Queue: " + repo.queueLabel + " " + String(repo.queued) + " | fehlgeschlagen " + String(repo.failed) + " | gesamt " + String(repo.total), false));
       item.menu.addMenuItem(this._menuLine("Typen: " + repo.mix, false));
       item.menu.addMenuItem(this._menuLine("Letzter Eintrag: " + repo.latest, false));
       this.projectMenu.menu.addMenuItem(item);
@@ -1299,6 +1321,7 @@ TeeBotusApplet.prototype = {
         queued: this._nonNegativeInt(fields.queued, 0),
         failed: this._nonNegativeInt(fields.failed, 0),
         total: this._nonNegativeInt(fields.total, 0),
+        queueLabel: this._codexHistoryQueueLabel(fields),
         mix: (this._codexHistoryMixText(fields).replace(/^; /, "") || "keine Typdaten"),
         latest: latestParts.join(" | ") || "kein Eintrag"
       });

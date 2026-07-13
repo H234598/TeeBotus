@@ -2559,6 +2559,38 @@ def test_cinnamon_applet_history_status_shows_skip_reason() -> None:
     )
 
 
+def test_cinnamon_applet_separates_local_bridge_queue_from_central_dispatcher_queue() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          applet.showHistoryDispatcherSection = true;
+          applet.historyDispatcherError = "";
+          applet.historyDispatcherPayload = {
+            schema_version: 1,
+            ok: true,
+            generated_at: new Date().toISOString(),
+            queued: 0,
+            total: 336,
+            collector: {enabled: true, sources: 1},
+            dispatch: {enabled: true, paused: false},
+            queue_preview: []
+          };
+          return {
+            local: applet._formatProjectHistoryLine(
+              "codex_history=TeeBotus_Logger status=warning queued=152 failed=0 total=1621 dispatch_mode=bridge dispatch_role=source"
+            ),
+            central: applet._historyDispatcherQueueLine()
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "local": "Codex-History TeeBotus_Logger: Warnung; lokale Outbox offen 152; fehlgeschlagen 0; gesamt 1621",
+        "central": "Zentraler Dispatcher: Queue 0 / gesamt 336 (bereit)",
+    }
+
+
 def test_cinnamon_applet_formats_runtime_directory_and_agent_pilot_lines() -> None:
     result = _run_js_applet_expression(
         """
