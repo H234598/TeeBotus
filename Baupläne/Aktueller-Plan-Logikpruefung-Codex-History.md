@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist nach dem Snapshot-Lesefehler-Fix Version `1.9.399`; der laufende Dienst bleibt bis zum naechsten vereinbarten Restart bei `1.9.394`.
+- Der aktuelle TeeBotus-Stand ist nach dem Snapshot-Schema-Fix Version `1.9.400`; der laufende Dienst bleibt bis zum naechsten vereinbarten Restart bei `1.9.394`.
 
 ## Arbeitsprinzipien
 
@@ -462,6 +462,9 @@ Der Plan ist erst abgeschlossen, wenn:
 - Befund 54: Ein fehlgeschlagener oder ungueltiger Snapshot-Lesevorgang setzte zwar `historyDispatcherError`, der Statuskopf ignorierte diesen Fehler aber und konnte einen alten Snapshot als `bereit` anzeigen.
 - Umsetzung Befund 54: `historyDispatcherError` wird jetzt selbst als Snapshotfehler klassifiziert. Dadurch zeigt das Applet `Status: Warnung` und den Lesefehler auch dann, wenn noch ein alter Payload im Speicher liegt. SemVer-Bump auf `1.9.399`, committed als `eee73e94` (`Treat dispatcher snapshot read errors as warnings`).
 - Regressionstest Befund 54: Die vollstaendige `tests/test_cinnamon_applet.py` laeuft mit `180 passed`; der neue Test prueft einen alten gueltigen Payload zusammen mit einem ungueltigen Snapshot-Lesefehler. Die installierte Applet-Kopie ist weiterhin nicht synchronisiert.
+- Befund 55: Der Snapshot-Loader validierte nur `schema_version`. Ein Payload mit `ok: "false"` oder ohne Boolean-`ok` konnte deshalb als gueltig und im Statuskopf als bereit erscheinen.
+- Umsetzung Befund 55: Der Loader akzeptiert jetzt nur `schema_version=1` mit echtem Boolean-`ok`; die Anzeige klassifiziert malformed `ok` zusaetzlich fail-closed als Warnung. SemVer-Bump auf `1.9.400`, committed als `14e9d332` (`Reject malformed dispatcher snapshot status`).
+- Regressionstest Befund 55: Die vollstaendige `tests/test_cinnamon_applet.py` laeuft mit `181 passed`; der neue Test prueft `ok="false"`. Die installierte Applet-Kopie ist weiterhin nicht synchronisiert.
 
 ### Noch offen
 
@@ -469,7 +472,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.8` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
 - Live- und Applet-Abgleich ist abgeschlossen; die verbleibenden Warnungen sind jetzt getrennt von Timeout-/Parserfehlern sichtbar und muessen fachlich beziehungsweise durch Benutzeraktion bearbeitet werden.
 - Dispatcher-Dry-Run fuer `TeeBotus_Logger` liefert im Bridge-Modus `statuses: none`, waehrend die lokale Outbox noch `19 queued` Legacy-Zeilen enthaelt. Dieser Bestand bleibt als Warnung sichtbar; keine automatische Zustellung, Loeschung oder Quarantaene wurde ohne explizite Migrationsentscheidung ausgefuehrt.
-- Der lokale TeeBotus-Code ist aktuell `1.9.399`; der laufende Dienst ist noch `1.9.394`, weil kein ausserplanmaessiger Restart ausgefuehrt wird. Der History-Dispatcher-Fix liegt lokal bei `0.2.9`, der aktive Dienst ist noch `0.2.8`.
+- Der lokale TeeBotus-Code ist aktuell `1.9.400`; der laufende Dienst ist noch `1.9.394`, weil kein ausserplanmaessiger Restart ausgefuehrt wird. Der History-Dispatcher-Fix liegt lokal bei `0.2.9`, der aktive Dienst ist noch `0.2.8`.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
