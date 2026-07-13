@@ -140,8 +140,8 @@ Der Plan ist erst abgeschlossen, wenn:
 - Isolierte Vorher-/Nachher-Probe: vorher `queued`, nachher `skipped`.
 - History-Dispatcher-Gesamtsuite: `33 passed`.
 - TeeBotus Bridge-/Codex-History-Tests: `108 passed`.
-- API-Statusprobe: vorher `api_status=queued, stored_status=delivered`; nach dem Fix muessen beide `delivered` sein.
-- Claim-Zeitprobe: vorher `claimed_updated_at` alt und `stored_updated_at` neu; nach dem Fix muessen beide identisch sein.
+- API-Statusprobe: vorher `api_status=queued, stored_status=delivered`; nach dem Fix bestaetigt `api_status=delivered, stored_status=delivered`.
+- Claim-Zeitprobe: vorher `claimed_updated_at` alt und `stored_updated_at` neu; nach dem Fix bestaetigt `claim_timestamps_match=True`.
 
 ### Noch offen
 
