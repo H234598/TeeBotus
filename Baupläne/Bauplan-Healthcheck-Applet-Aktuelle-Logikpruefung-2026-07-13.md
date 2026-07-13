@@ -687,6 +687,21 @@ unterscheiden.
   36.26s`; Live-Probe ohne Provideraufruf gruen.
 - SemVer `1.9.452`, Commit `34729c1b`.
 
+## Befund 109: Fallback-/Offload-Fehler wurden nicht als Fehler erkannt
+
+Die Statusausgabe kann neben `error` auch `fallback_error` und
+`offload_error` enthalten. Beide Felder wurden vom Parser nicht als
+Fehlerindikator ausgewertet, wodurch die Fallback-Sonderlogik einen defekten
+effektiven Pfad verschleiern konnte.
+
+### Umsetzung und Nachweis
+
+- Beide Felder sind jetzt Freitext-Statusfelder mit korrekten Grenzen.
+- `_line_has_error()` wertet sie gemeinsam mit `error` und `route_error` aus.
+- Regression fuer `effective_status=broken fallback_error=...` ist gruen;
+  vollstaendige Applet-Suite: `226 passed in 35.69s`.
+- SemVer `1.9.453`, Commit `417ef2ad`.
+
 ## Invarianten
 
 - Ein echter Fehler wird nicht durch einen Fallback, einen leeren Queue-Zustand

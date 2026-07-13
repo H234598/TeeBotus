@@ -468,6 +468,23 @@ Applet fehlte damit der Nachweis, dass `local_ollama` den Ausfall uebernimmt.
   36.26s`.
 - SemVer `1.9.452`, Commit `34729c1b`.
 
+## Befund 109: Fallback- und Offload-Fehlerfelder wurden nicht bewertet
+
+Der Applet-Parser behandelte `fallback_error` und `offload_error` nicht als
+Fehlertext. Ein defektes Fallback mit `effective_status=broken` konnte dadurch
+trotz `route_status=unavailable` als informational gelten.
+
+### Umsetzung und Nachweis
+
+- Freitextparser und `_line_has_error()` erkennen jetzt `fallback_error` und
+  `offload_error` zusaetzlich zu `error` und `route_error`.
+- Mehrteilige Fehlertexte bleiben bis zum naechsten strukturierten Feld
+  erhalten.
+- Providerfreier Repro fuer einen kaputten Fallback ist actionable; ein
+  verifiziert konfigurierter Fallback bleibt informational.
+- Applet-Suite: `226 passed in 35.69s`.
+- SemVer `1.9.453`, Commit `417ef2ad`.
+
 ## Arbeitsplan
 
 1. **Healthpayload und Applet weiter synchron halten**
