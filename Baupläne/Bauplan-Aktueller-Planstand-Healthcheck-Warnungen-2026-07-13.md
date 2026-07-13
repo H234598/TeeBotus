@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.444`, Commit `50278e3d`
+**Quellstand:** TeeBotus `1.9.446`, Commit `b877409f`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -346,6 +346,26 @@ auf den Instanz-Key fiel.
 - Direkter Profil-Builder-Test mit Instanz-Key: erfolgreich.
 - SemVer `1.9.445`, Commit `27338c58`.
 
+## Befund 102: Kanal-/Slot-Key wurde vom Runtime-Builder ueberschrieben
+
+`resolve_openai_key()` loeste einen vorhandenen
+`OPENAI_API_KEY_<INSTANCE>_<CHANNEL>_<SLOT>` korrekt auf. Die Runtime-Factory
+verwendete danach aber den allgemeineren Profil-Fallback
+`OPENAI_API_KEY_<INSTANCE>`. Dadurch konnten Healthcheck und Request-Pfad
+verschiedene effektive Keys verwenden.
+
+### Umsetzung und Nachweis
+
+- Runtime-Factory priorisiert jetzt `override > resolved runtime key >
+  profile fallback` in Profil- und Purpose-Routen.
+- Nicht-OpenAI-Routen bleiben von der Sonderlogik getrennt.
+- Slot-vor-Instanz-Regressionen fuer beide Factory-Pfade sind gruen.
+- Router-/Package-Suite: `70 passed in 2.06s`; inklusive Metadaten `76 passed
+  in 1.96s`.
+- Read-only-Runtime-Probe: `hard_reasoning` bleibt `configured` mit
+  `key_scope=instance_fallback`, ohne Provideraufruf.
+- SemVer `1.9.446`, Commit `b877409f`.
+
 ## Arbeitsplan
 
 1. **Healthpayload und Applet weiter synchron halten**
@@ -355,6 +375,8 @@ auf den Instanz-Key fiel.
 
 2. **`hard_reasoning` abgeschlossen**
    - Instanzbezogene Key-Aufloesung ist implementiert und getestet.
+   - Kanal-/Slot-spezifische Runtime-Keys werden nicht mehr durch einen
+     allgemeineren Instanz-Fallback ersetzt.
    - Kein generischer Key und kein kostenpflichtiger Provideraufruf wurden
      fuer die Korrektur aktiviert.
 

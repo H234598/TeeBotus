@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.445`, Commit `fb7b5776`  
+**Quellstand:** TeeBotus `1.9.446`, Commit `b877409f`
 **Geltungsbereich:** `TeeBotus/runtime/config.py`,
 `TeeBotus/runtime/llm_factory.py`, `TeeBotus/llm/profiles.py`, die
 Runtime-Runner und die zugehoerigen Regressionstests
@@ -65,7 +65,7 @@ Nachweis fuer Befund 101:
 - Commit: `27338c58`
 - Plan-/Dokumentationsnachweis: `fb7b5776`
 
-## Aktueller offener Befund 102
+## Befund 102: Spezifischer Runtime-Key wurde durch Instanz-Fallback ersetzt
 
 `resolve_openai_key()` kennt eine spezifischere Reihenfolge als der Profil-
 und Route-Builder. Fuer eine Instanz kann zum Beispiel ein Kanal-/Slot-Key
@@ -76,14 +76,25 @@ OPENAI_API_KEY_DEMO_TELEGRAM_1 = slot-key
 OPENAI_API_KEY_DEMO            = instance-key
 ```
 
-Die Runtime-Konfiguration liefert dann korrekt `slot-key`. Die Factory kann
-diesen bereits aufgeloesten `default_api_key` derzeit jedoch mit dem weniger
-spezifischen Profil-Fallback `OPENAI_API_KEY_DEMO` ueberschreiben. Das waere
-eine Verletzung der Kanal-/Slot-Isolation und kann zu falschem Monitoring,
-unerwarteter Keyrotation oder einem unpassenden Benutzerkontext fuehren.
+Die Runtime-Konfiguration lieferte korrekt `slot-key`. Die Factory
+ueberschrieb diesen bereits aufgeloesten `default_api_key` jedoch mit dem
+weniger spezifischen Profil-Fallback `OPENAI_API_KEY_DEMO`. Das verletzte die
+Kanal-/Slot-Isolation und konnte zu falschem Monitoring, unerwarteter
+Keyrotation oder einem unpassenden Benutzerkontext fuehren.
 
-Der Befund muss zuerst mit Platzhalterwerten reproduziert werden. Erst danach
-wird die kleinste gemeinsame Korrektur vorgenommen.
+### Umsetzung und Nachweis
+
+- `_build_route_client()` und `_build_profile_client()` verwenden jetzt die
+  Reihenfolge `override > resolved runtime key > profile fallback`.
+- Der Fix gilt nur fuer OpenAI-kompatible Routen; Gemini-, lokale und andere
+  Provider erben keinen OpenAI-Runtime-Key.
+- Slot-vor-Instanz-Regression fuer Profil- und Purpose-Route: gruen.
+- Router-/Package-Suite: `70 passed in 2.06s`.
+- Mit Pyproject-Metadaten: `76 passed in 1.96s`.
+- `py_compile` und `git diff --check`: erfolgreich.
+- Read-only-Probe: `hard_reasoning ... status=configured
+  key_scope=instance_fallback`; kein Provideraufruf.
+- SemVer `1.9.446`, Commit `b877409f`.
 
 ## Zielvertrag fuer die Key-Aufloesung
 
@@ -106,7 +117,7 @@ werden muss.
 
 ## Arbeitsplan
 
-### 1. Vertragsabgleich
+### 1. Vertragsabgleich (abgeschlossen)
 
 - `resolve_openai_key()` und alle Runner-Aufrufer auf Kanal-/Slot-Kontext
   pruefen.
@@ -114,21 +125,21 @@ werden muss.
   `override > resolved default > profile fallback` abgleichen.
 - Nur die beteiligten Factory-/Profil-Dateien aendern.
 
-### 2. Fehler reproduzieren
+### 2. Fehler reproduzieren (abgeschlossen)
 
 - Eine isolierte Konfiguration mit `slot-key` und `instance-key` verwenden.
 - Nachweisen, dass die Konfiguration den Slot-Key liefert.
 - Den resultierenden Client-Key ohne Provideraufruf pruefen.
 - Keine Secretwerte ausgeben; nur stabile Testmarker verwenden.
 
-### 3. Minimalen Fix umsetzen
+### 3. Minimalen Fix umsetzen (abgeschlossen)
 
 - Bereits aufgeloesten `default_api_key` vor dem Profil-Fallback bewahren.
 - Explizite Overrides weiterhin an erster Stelle behandeln.
 - Nicht-OpenAI-Provider unveraendert lassen.
 - SemVer patch-bump nach erfolgreicher Korrektur.
 
-### 4. Regressionen absichern
+### 4. Regressionen absichern (abgeschlossen)
 
 - Test fuer Slot-vor-Instanz-Prioritaet im Runtime-Builder.
 - Test fuer expliziten Override.
@@ -136,15 +147,15 @@ werden muss.
 - Test, dass Nicht-OpenAI-Routen keinen OpenAI-Key erben.
 - Relevante Router-/Package-/Factory-Suiten ohne echte Provideraufrufe.
 
-### 5. Laufzeit- und Plan-Nachweis
+### 5. Laufzeit- und Plan-Nachweis (laufend fuer den uebergeordneten Plan)
 
 - `py_compile` und `git diff --check` ausfuehren.
-- Read-only-`--runtime-status` nach dem Quellfix auswerten.
+- Read-only-`--runtime-status` nach dem Quellfix auswerten (erledigt).
 - Keine automatische Reparatur einer Signal-Identitaet aus dem Healthcheck
   ausloesen.
 - Aktive Warnungen und verbleibende externe Handlungen getrennt dokumentieren.
 - Diesen Plan und die verknuepften Healthcheck-Plaene mit Version, Commit,
-  Testergebnis und Live-Befund aktualisieren.
+  Testergebnis und Live-Befund aktualisieren (dieser Nachweis).
 
 ## Invarianten
 

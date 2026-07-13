@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.444`, Commit `50278e3d`
+**Quellstand:** TeeBotus `1.9.446`, Commit `b877409f`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet, Runtime-Healthpayload und `tests/test_cinnamon_applet.py`
 
 ## Auftrag
@@ -571,6 +571,24 @@ blieb dieser Pfad hinter der Runtime-Factory zurueck.
 - `68 passed in 1.97s` in Router- und Package-Suite.
 - Direkter Profil-Builder-Test mit Instanz-vor-Global-Prioritaet gruen.
 - SemVer `1.9.445`, Commit `27338c58`.
+
+## Befund 102: Healthcheck- und Request-Key konnten auseinanderlaufen
+
+Die Runtime-Konfiguration konnte einen kanal-/slot-spezifischen Key bereits
+korrekt bestimmen. Die Factory ersetzte ihn anschliessend mit dem weniger
+spezifischen Instanz-Key aus dem Profil. Der Healthcheck konnte dadurch
+`configured` melden, obwohl der Request-Pfad einen anderen Key verwendete.
+
+### Umsetzung und Nachweis
+
+- Beide Runtime-Factory-Pfade bewahren jetzt den bereits aufgeloesten
+  `default_api_key` vor dem Profil-Fallback.
+- Explizite Overrides bleiben vorrangig; Nicht-OpenAI-Routen bleiben getrennt.
+- Vier fokussierte Key-Prioritaetsregressionen und die Router-/Package-Suite
+  sind gruen; Gesamt mit Metadaten: `76 passed in 1.96s`.
+- Read-only-Runtime-Probe bestaetigt `hard_reasoning ... configured` und
+  `key_scope=instance_fallback` ohne Provideraufruf.
+- SemVer `1.9.446`, Commit `b877409f`.
 
 ## Invarianten
 
