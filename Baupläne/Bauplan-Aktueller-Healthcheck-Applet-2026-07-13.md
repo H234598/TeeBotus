@@ -1,0 +1,174 @@
+# Bauplan: Aktueller Healthcheck- und Applet-Logikstand
+
+**Stand:** 2026-07-13
+**Status:** Aktiv, noch nicht abgeschlossen
+**Geltungsbereich:** TeeBotus Healthcheck, Cinnamon-Applet, Runtime-Status, LLM-Routen, Signal-Identitaet und Codex-History-Dispatcher
+
+## Ziel
+
+Der Healthcheck soll echte Betriebsprobleme von erwartbaren Hinweisen und
+funktionierenden Fallbacks trennen. Das Cinnamon-Applet soll oben den
+tatsaechlichen Zustand mit Zaehlern und einer kurzen Ursache anzeigen. Die
+Detailansicht muss die betroffene Komponente, Route, Statusursache und eine
+sichere naechste Aktion erhalten.
+
+Keine Diagnose darf durch eine reine Textkuerzung zu `Health defekt` werden.
+Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
+
+## Arbeitsregeln
+
+1. Sicherheit vor Bequemlichkeit: fehlende Authentisierung, Datenfehler und
+   nicht erreichbare Pflichtdienste bleiben handlungsrelevant.
+2. Ein konfigurierter und funktionierender Fallback unterdrueckt keinen
+   Originalfehler, stuft ihn aber als Hinweis ein, wenn der Betrieb dadurch
+   nicht eingeschraenkt ist.
+3. Healthcheck, `/status` und Applet verwenden dieselbe Klassifikation.
+4. Healthchecks lesen nur. Reparaturen, Reconciliation, Linking und
+   Konfigurationsaenderungen sind explizite Aktionen.
+5. Keine kostenpflichtigen Provider- oder LLM-Aufrufe fuer diese Pruefung.
+6. Secrets werden weder in Plan, Applet noch Statusausgabe geschrieben.
+7. Tests, Version, Commit und Live-Nachweise werden fortlaufend ergaenzt.
+
+## Aktueller Quell- und Laufzeitstand
+
+- Quellstand: TeeBotus `1.9.411`, Commit `0a3ef27`.
+- Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
+  durch diesen Plan angefasst.
+- Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
+  gestarteten Runtime-Stand `1.9.404`; deshalb kein automatischer Restart in
+  diesem Audit.
+- Qdrant: Service aktiv, beide benoetigten Collections `ready`.
+- Codex-History-Collector: aktiv; Bridge-Modus mit Follow und Dispatch.
+- Healthcheck-Kommando: erfolgreich, Runtime-Ausgabe strukturiert.
+
+## Live-Befund vom 2026-07-13
+
+Der lokale Healthcheck liefert aktuell:
+
+- `status=warning`
+- `total_problem_count=3`
+- `actionable_problem_count=3`
+- `actionable_problem_statuses=missing_key:1,warning:2`
+- `informational_problem_count=23`
+- `qdrant_problem_count=0`
+- `command_ok=true`
+
+Die drei handlungsrelevanten Signale sind konkret:
+
+1. `llm_route=hard_reasoning`: Profil `openai_premium` hat keinen
+   `OPENAI_API_KEY` und keinen wirksamen Fallback.
+2. `account_identity_warning=Depressionsbot`: Signal ist als Runtime-Slot
+   konfiguriert, aber noch keiner Signal-Identitaet zugeordnet.
+3. `codex_history=TeeBotus_Logger`: `queued=46`, `skipped=101`, davon
+   `skip_reasons=no_private_route:101`. Die Skips sind terminale, begruendete
+   Nichtzustellungen und keine fehlgeschlagenen Zustellungen; der offene
+   lokale Queue-Rueckstand muss trotzdem kontrolliert geklaert werden.
+
+Weitere sichtbare Zustande sind derzeit Hinweise, keine Top-Level-Defekte:
+
+- HF-Pool ist deaktiviert, strukturierte Entscheidungen fallen lokal auf
+  Ollama zurueck.
+- Groq-Key fehlt, aber die Route hat einen lokalen Fallback.
+- Gemini-Free-Tier-Limits kommen teilweise aus konservativen Defaults.
+- einzelne Codex-Usage-Konten liefern nur Teilmetriken.
+- die delegierten Codex-History-Queues der Quellen werden im Bridge-Modus
+  nicht als lokale Fehler gemeldet.
+
+## Bereits umgesetzt
+
+### Healthcheck und Applet
+
+- `classification_version=2` trennt actionable Probleme von Informationen.
+- Fallback-abgedeckte Routefehler werden im Detail sichtbar, aber nicht als
+  Top-Level-Defekt gezaehlt.
+- `missing_key` ohne Fallback bleibt handlungsrelevant.
+- Applet-Header und Detailansicht zeigen Healthstatus, Zaehler,
+  Problemdetails, Kommando-/Qdrant-Diagnose und Runtime-Version getrennt.
+- Statuspayloads mit fehlerhaftem Dienst, Qdrant, Runtime-Returncode oder
+  unstrukturierter Ausgabe werden fail-closed abgewiesen.
+
+### Codex-History und Bridge
+
+- lokale dispatchbare Outbox-Zeilen werden vor `dispatch.claim` idempotent in
+  die zentrale Bridge nachgefuehrt.
+- Dry-Run bleibt schreibfrei und meldet `would_mirror` beziehungsweise
+  `would_sync`.
+- terminale Dispatcher-Statuswerte werden lokal synchronisiert.
+- erfolgreiche gemischte Ergebnisse (`accepted` plus `skipped`) behalten den
+  Erfolgsstatus und keinen irrefuehrenden Skip-Grund als letzte Reason.
+- `created_at` bestimmt stabil den neuesten History-Eintrag.
+- unbekannte und malformierte Statuswerte werden nicht als Erfolg behandelt.
+
+## Naechste Arbeitspakete
+
+### 1. `hard_reasoning` bewusst entscheiden
+
+- pruefen, ob die Route aktuell wirklich verwendet werden soll.
+- entweder den dafuer vorgesehenen Key korrekt bereitstellen oder im Profil
+  einen expliziten lokalen Fallback konfigurieren.
+- keinen generischen Key aus einem anderen Zweck oder einer anderen Instanz
+  still uebernehmen.
+- Regressionstest fuer `missing_key` ohne Fallback und fuer einen gesunden
+  Fallback ergaenzen.
+
+### 2. Depressionsbot-Signal verknuepfen
+
+- bestehende Telegram-Account-ID und das vorgesehene Linking-Verfahren
+  verwenden.
+- Signal-Identitaet nur ueber den bestaetigten `/login`-/Linking-Flow
+  zuordnen.
+- anschliessend einen lesenden Healthcheck und einen kontrollierten
+  Nachrichtenpfad testen.
+- bis dahin die Warnung sichtbar lassen.
+
+### 3. TBL-History-Rueckstand klaeren
+
+- lokale und zentrale Statuswerte, Dedupe-Keys und Empfaengerresultate
+  vergleichen.
+- `no_private_route`, `compacted`, terminale Skips und echte Fehler getrennt
+  behandeln.
+- zuerst Dry-Run; der aktuelle Nachweis meldete `would_mirror=40` und
+  `would_sync=4` bei `44` lokalen queued-Zeilen.
+- einen echten Reconciliation-Lauf nur nach ausdruecklicher Freigabe
+  ausfuehren.
+- keine Summary, kein Artefakt und keine lokale Outbox-Zeile still loeschen.
+
+### 4. Applet- und Installationsnachweis
+
+- nach Codeaenderungen Repository-Applet mit der installierten Kopie
+  vergleichen.
+- Applet nur bei tatsaechlicher Applet-Aenderung reloaden.
+- oben muessen Status, Healthzaehler und Ursachen sichtbar sein; reine
+  Hinweise duerfen nicht als `Health defekt` erscheinen.
+
+### 5. Verifikation und Abschluss
+
+- fokussierte Healthcheck-/Applet-/Codex-History-Tests ausfuehren.
+- relevante Gesamtsuite ausfuehren, sofern sie ohne Provideraufrufe bleibt.
+- Live-Status erneut lesen und Version/Commit dokumentieren.
+- Plan erst abschliessen, wenn die drei offenen Befunde behoben oder bewusst
+  entschieden und nachvollziehbar dokumentiert sind.
+
+## Invarianten
+
+- Ein echter Fehler wird nicht durch einen Fallback oder `queued=0`
+  unsichtbar.
+- Ein terminaler Erfolg wird nicht erneut versendet.
+- Ein terminaler `no_private_route`-Skip wird nicht endlos erneut versucht.
+- Keine unbekannte Payload oder Statusform wird als gesund angenommen.
+- Der Healthcheck veraendert weder Account-Memory noch Outbox.
+- Status- und Applet-Zaehler zaehlen ueberlappende Qdrant-Signale nur einmal,
+  zeigen die Detailfelder aber weiterhin getrennt.
+
+## Abschlusskriterien
+
+Der Bauplan bleibt aktiv, bis:
+
+- `hard_reasoning` konfigurationsseitig geklaert ist,
+- die Depressionsbot-Signalidentitaet bewusst verknuepft oder als bewusst
+  deaktiviert dokumentiert ist,
+- der TBL-History-Rueckstand kontrolliert reconciliert oder begruendet
+  quarantainiert ist,
+- Tests und Live-Probe ohne falschen Top-Level-Defekt erfolgreich sind,
+- das installierte Applet nach Reload die echten Healthdaten anzeigt,
+- Version, Commit und Nachweise hier aktualisiert sind.
