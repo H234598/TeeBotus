@@ -4579,6 +4579,35 @@ def test_codex_session_watchdog_closes_observer_after_start_failure() -> None:
     assert observer.joined is True
 
 
+def test_codex_session_watchdog_resets_state_when_stop_or_join_fails(caplog: pytest.LogCaptureFixture) -> None:
+    class FailingStopObserver:
+        def start(self) -> None:
+            return None
+
+        def stop(self) -> None:
+            raise RuntimeError("synthetic stop failure")
+
+        def join(self, timeout: float) -> None:
+            del timeout
+            raise RuntimeError("synthetic join failure")
+
+    observer = FailingStopObserver()
+    watchdog = codex_history_module._CodexSessionWatchdog(
+        observer,
+        threading.Event(),
+        set(),
+        threading.Lock(),
+    )
+    watchdog.start()
+
+    watchdog.stop()
+
+    assert watchdog._started is False
+    messages = [record.getMessage() for record in caplog.records]
+    assert "watchdog stop failed" in " ".join(messages)
+    assert "watchdog join failed" in " ".join(messages)
+
+
 def test_watch_codex_session_roots_removes_deleted_event_from_snapshot_baseline(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

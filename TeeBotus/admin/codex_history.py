@@ -5183,9 +5183,16 @@ class _CodexSessionWatchdog:
     def stop(self) -> None:
         if not self._started:
             return
-        self._observer.stop()
-        self._observer.join(timeout=5.0)
-        self._started = False
+        try:
+            self._observer.stop()
+        except Exception as exc:
+            LOGGER.warning("Codex history watchdog stop failed: %s", exc)
+        try:
+            self._observer.join(timeout=5.0)
+        except Exception as exc:
+            LOGGER.warning("Codex history watchdog join failed: %s", exc)
+        finally:
+            self._started = False
 
 
 def _build_codex_session_watchdog(roots: Sequence[str | Path]) -> _CodexSessionWatchdog | None:
