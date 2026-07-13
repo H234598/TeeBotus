@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.429`, `9bf13bf3`.
+- Aktueller gepruefter Quellstand: `1.9.430`, `97a67599`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -162,6 +162,29 @@ klassifiziert.
 - `git diff --check`: erfolgreich.
 - SemVer `1.9.429`, lokaler Commit `9bf13bf3`
   (`Normalize quoted history status lists`).
+
+## Befund 85: Zaehler und Breakdown-Text konnten auseinanderlaufen
+
+Die fail-closed Ergaenzung aus Befund 82 erhoehte bei einem unklassifizierten
+`broken:1` zwar den actionable Zaehler, gab aber weiterhin den leeren
+Rohwert `actionable_problem_statuses` aus. Das Applet zeigte damit eine Zahl
+ohne die zugehoerige Ursache. Zusaetzlich verwendete die Aggregation fuer
+unterschiedliche strukturierte und deklarative Statuslisten nur einen
+Gesamt-`max()` und konnte dadurch verschiedene Statusarten unterzaehlen.
+
+### Umsetzung und Nachweis
+
+- Problem-, actionable- und informative Breakdowns werden pro Status mit
+  sicheren Maximalwerten zusammengefuehrt.
+- Die Healthpayload-Ausgabe wird aus diesen kanonischen Breakdowns erzeugt,
+  statt stale Rohtext unveraendert weiterzureichen.
+- Ein unklassifiziertes `broken:1` erscheint jetzt sowohl in
+  `problem_statuses` als auch in `actionable_problem_statuses`.
+- Fokussierte Health-Suite: `4 passed, 205 deselected in 0.21s`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `209 passed in 36.13s`.
+- `git diff --check`: erfolgreich.
+- SemVer `1.9.430`, lokaler Commit `97a67599`
+  (`Canonicalize health status breakdowns`).
 
 ## Umsetzung
 
