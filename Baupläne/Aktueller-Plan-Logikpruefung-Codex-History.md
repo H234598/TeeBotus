@@ -388,8 +388,9 @@ Der Plan ist erst abgeschlossen, wenn:
 - Aktuelle lesende Dispatcherprobe: Version `0.2.5`, `queued=0`, `delivered=26`, `last_error` leer; Bridge-Dry-Run fuer TBL: `items=0`, `status_counts={}`, keine Mutation.
 - Bridge-Result-/Reply-Probe mit externer ID `external-bridge-local-result` und lokaler Outbox-ID erfolgreich; lokale Receipt-Zuordnung funktioniert.
 - Gezielte Regressionstests nach dem zweiten Fixblock: `130 passed in 8.93s` in `tests/test_codex_history.py tests/test_history_dispatcher_bridge.py`.
-- History-Dispatcher-Receipt-Reconciliation: externe Suite `38 passed`; Commits `0a22881` und `4ff12fc`, installierte Venv-Version `0.2.6`.
+- History-Dispatcher-Receipt-Reconciliation: externe Suite `39 passed`; Commits `0a22881`, `4ff12fc` und `c255124`, installierte Venv-Version `0.2.7`.
 - Lokale Receipt-Mirror-Probe bestaetigt `delivery.record` mit externer Item-ID und Eventtyp `delivered`; lokale Bridge-Suite danach `130 passed in 12.14s`.
+- Spates Receipt nach bekanntem `failed`/`queued`-Empfaenger setzt den externen Gesamtstatus jetzt auf `delivered`, wenn alle bekannten Empfaenger erfolgreich oder uebersprungen sind.
 
 ### Noch offen
 
