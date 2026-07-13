@@ -1,7 +1,7 @@
 # Bauplan: Aktueller Plan fuer Logikpruefung und Versionskonsistenz
 
 **Stand:** 2026-07-13  
-**Status:** Aktiv; Versionsmetadaten korrigiert und live verifiziert
+**Status:** Versionsaudit abgeschlossen; uebergeordneter Logikpruefungs-Goal aktiv
 **Quellstand:** TeeBotus `1.9.498`; History-Dispatcher `0.2.14`  
 **Arbeitsbereich:** `/home/teladi/TeeBotus` und `/home/teladi/History-Dispatcher`  
 **Vorgaenger:** `Baupläne/Bauplan-Aktueller-Arbeitsstand-Healthcheck-TBL-Statussemantik-2026-07-13.md`
@@ -104,9 +104,9 @@ anzeigen.
 
 ### 5. Abschluss
 
-- [ ] Testergebnisse und den reproduzierten Befund hier nachtragen.
+- [x] Testergebnisse und den reproduzierten Befund hier nachtragen.
 - [ ] SemVer nur bei einer tatsaechlichen Programmcodeaenderung bumpen.
-- [ ] Einen lokalen Commit erstellen.
+- [x] Einen lokalen Commit erstellen.
 - [ ] Push nur nach ausdruecklicher Anweisung ausfuehren.
 - [ ] Restart nur im vereinbarten 20-Commit-Fenster oder nach ausdruecklicher
   Freigabe ausfuehren.
@@ -164,3 +164,6 @@ Der Plan ist abgeschlossen, wenn:
   `informational_problem_count=20` und `qdrant_problem_count=0`. Die
   vorhandenen TBL-`no_private_route`-Skips blieben als Hinweise sichtbar und
   wurden nicht mutiert.
+- 2026-07-13: Test, Korrektur und Planstand lokal als `6d51712d`
+  (`fix: keep installed version metadata in sync`) committed. Kein Push und
+  kein Restart wurden ausgeloest.
