@@ -1949,9 +1949,19 @@ TeeBotusApplet.prototype = {
       && typeof payload.ok === "boolean"
       && typeof payload.generated_at === "string"
       && Number.isFinite(Date.parse(payload.generated_at))
+      && this._historyDispatcherSnapshotNonNegativeInt(payload.queued)
+      && this._historyDispatcherSnapshotNonNegativeInt(payload.total)
       && this._isJsonObject(payload.collector)
+      && typeof payload.collector.enabled === "boolean"
+      && this._historyDispatcherSnapshotNonNegativeInt(payload.collector.sources)
       && this._isJsonObject(payload.dispatch)
+      && typeof payload.dispatch.enabled === "boolean"
+      && typeof payload.dispatch.paused === "boolean"
       && Array.isArray(payload.queue_preview);
+  },
+
+  _historyDispatcherSnapshotNonNegativeInt: function(value) {
+    return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
   },
 
   _isStatusPayload: function(payload) {
