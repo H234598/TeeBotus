@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.470`, lokaler Folgecommit nach `b03738df`
+**Quellstand:** TeeBotus `1.9.471`, lokaler Folgecommit nach `afdbf53b`
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
 ## Auftrag
@@ -214,6 +214,11 @@ Watcher injiziert den Observer in die Schleife und beendet ihn in einem
 `finally`-Pfad. Ein Fehler aus Import oder Callback kann dadurch keinen
 verwaisten Observer-Thread zuruecklassen.
 
+Nach einem inkrementellen Event wird die Snapshot-Baseline nun fuer die
+betroffenen Pfade anhand von `stat` aktualisiert. Dadurch interpretiert der
+naechste Timeout den bereits verarbeiteten Event nicht erneut als Aenderung und
+startet keinen unnoetigen Vollimport.
+
 ## Offene Arbeitspakete
 
 ### A. TBL-Reconciliation schreibfrei beweisen
@@ -262,6 +267,8 @@ verwaisten Observer-Thread zuruecklassen.
   waehrend Import/Post-Index nicht bis zum Timeout verloren gehen.
 - [x] Watchdog-Lifecycle bei Scan-/Callback-Exceptions ueber einen aeusseren
   Cleanup-Pfad garantieren.
+- [x] Snapshot-Baseline nach inkrementellen Events aktualisieren, damit der
+  folgende Timeout nicht nochmals alle bekannten Dateien importiert.
 - [ ] Event-Burst-Debounce und Scan-Deduplizierung separat messen; ein
   Dateisystemereignis darf weiterhin zeitnah erkannt werden, aber nicht zu
   unnoetigen Vollscans fuer jede einzelne JSONL-Aenderung fuehren.
@@ -308,6 +315,8 @@ verwaisten Observer-Thread zuruecklassen.
   folgenden Lauf sofort verarbeitet.
 - [x] Exception-Regression: ein fehlgeschlagener Scan beendet den Watchdog
   trotzdem.
+- [x] Timeout-Regression: Eventlauf plus anschliessender Timeout bleibt bei
+  zwei Imports und erzeugt keinen dritten Vollscan.
 - [x] Regression fuer begrenzte Follow-Detailausgabe: 15 Skips ergeben 12
   Detailzeilen, eine Auslassungszeile und weiterhin `skipped=15`.
 - [x] Regression fuer den inkrementellen Ereignispfad: ein geaenderter

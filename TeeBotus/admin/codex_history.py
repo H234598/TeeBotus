@@ -1931,7 +1931,9 @@ def _watch_codex_session_roots_for_instances_impl(
                 instance_report["skipped_unchanged_iterations"] = skipped_unchanged
                 if callable(post_idle):
                     post_idle(instance_name, idle_report)
-        if current_snapshot is not None:
+        if event_session_files and current_snapshot is not None:
+            last_snapshot = _codex_session_snapshot_after_events(current_snapshot, event_session_files, limit=limit)
+        elif current_snapshot is not None:
             last_snapshot = current_snapshot
         pending_session_files = None
         if not follow and max_iterations > 0 and iterations >= max_iterations:
@@ -5067,6 +5069,24 @@ def _codex_session_roots_snapshot(roots: Sequence[str | Path], *, limit: int) ->
             continue
         snapshot.append((str(path), int(stat.st_size), int(stat.st_mtime_ns)))
     return tuple(snapshot)
+
+
+def _codex_session_snapshot_after_events(
+    snapshot: tuple[tuple[str, int, int], ...], event_paths: Sequence[str | Path], *, limit: int
+) -> tuple[tuple[str, int, int], ...]:
+    entries = {path: (path, int(size), int(mtime_ns)) for path, size, mtime_ns in snapshot}
+    for raw_path in event_paths:
+        path = str(raw_path)
+        try:
+            stat = Path(raw_path).stat()
+        except OSError:
+            entries.pop(path, None)
+            continue
+        entries[path] = (path, int(stat.st_size), int(stat.st_mtime_ns))
+    newest_first = sorted(entries.values(), key=lambda entry: (-entry[2], entry[0]))
+    if limit > 0:
+        newest_first = newest_first[:limit]
+    return tuple(sorted(newest_first, key=lambda entry: (entry[2], entry[0])))
 
 
 def _codex_session_event_files_for_roots(

@@ -4387,11 +4387,15 @@ def test_watch_codex_session_roots_keeps_events_during_import(tmp_path: Path, mo
             self.pending: tuple[Path, ...] = ()
             self.started = False
             self.stopped = False
+            self.wait_calls = 0
 
         def start(self) -> None:
             self.started = True
 
         def wait(self, _timeout_seconds: float) -> bool | tuple[Path, ...]:
+            self.wait_calls += 1
+            if self.wait_calls > 1:
+                return False
             pending = self.pending
             self.pending = ()
             return pending
@@ -4423,12 +4427,13 @@ def test_watch_codex_session_roots_keeps_events_during_import(tmp_path: Path, mo
         store,
         (sessions_root,),
         poll_interval_seconds=0.25,
-        max_iterations=2,
+        max_iterations=3,
         event_mode="auto",
     )
 
     assert watchdog.started is True
     assert watchdog.stopped is True
+    assert watchdog.wait_calls == 2
     assert len(import_calls) == 2
     assert import_calls[1] == (changed.resolve(),)
     assert result["status_counts"] == {"imported": 2}
