@@ -133,7 +133,7 @@ health.status=warning
 actionable_problem_count=1
 total_problem_count=1
 informational_problem_count=21
-TeeBotus_Logger queued=165 skipped=101 skip_reasons=no_private_route:101
+TeeBotus_Logger queued=166 skipped=101 skip_reasons=no_private_route:101
 ```
 
 Damit wird die offene lokale TBL-Warteschlange wieder korrekt als actionable
@@ -141,13 +141,35 @@ gemeldet. Die 101 begruendeten `no_private_route`-Skips bleiben daneben als
 sichtbare Hinweise erhalten. Die Signal-Identity-Notice von `Depressionsbot`
 bleibt ebenfalls nicht-actionable.
 
+### Schreibfreie Bridge-Abnahme
+
+Der aktuelle Bridge-Dry-Run fuer `TeeBotus_Logger` wurde ohne Mutation
+ausgefuehrt. Er meldete:
+
+```text
+would_mirror=162
+would_sync=4
+reasons=local_outbox_not_in_dispatcher:162,
+        dispatcher_terminal_status_delivered:2,
+        dispatcher_terminal_status_compacted:2
+```
+
+Die konfigurierte TBL-Adminroute ist lokal vorhanden und privat per Telegram
+auflosbar. Es wurde trotzdem keine Nachricht gesendet: Das waere eine
+unreviewte Alt-Summary-Flut. Die Queue bleibt daher bis zu einer expliziten,
+idempotenten Reconciliation oder einem kontrollierten Dispatch bewusst offen.
+
 ### Noch offene Live-Abweichung
 
 Die laufenden Systemd-Prozesse wurden vor den letzten Quellstand-Fixes
 gestartet. Die Quellprobe und das installierte Applet sind aktuell, der
 laufende Bot-/Collector-Prozess muss jedoch erst in einem erlaubten
 Restart-Fenster neu geladen werden. Bis dahin darf nicht behauptet werden,
-dass die laufenden Prozesse bereits den neuen Quellstand verwenden.
+dass die laufenden Prozesse bereits den neuen Quellstand verwenden. Der
+laufende Collector zeigt weiterhin den alten Ressourcenbefund (ca. 2.7 GiB
+RSS und ungefaehr eine CPU bei wiederholten 1000er-Scans); der aktuelle
+Quellpfad liefert in einer schreibfreien Watchdog-Probe dagegen nur einen
+Eventpfad pro Batch.
 
 ## Offene Arbeitspakete
 
@@ -238,6 +260,9 @@ Der Bauplan ist erst abgeschlossen, wenn:
   `informational_problem_count=21` und `qdrant_problem_count=0`. Die
   actionable Zeile ist die offene TBL-Queue; der Prozessmarker fehlt nur beim
   noch nicht neu gestarteten alten Dienstprozess.
+- 2026-07-13: Schreibfreier Bridge-Dry-Run fuer TBL klassifizierte 162 lokale
+  `would_mirror`-Items und vier terminale `would_sync`-Items. Keine Outbox-,
+  Dispatcher- oder Empfaengerdaten wurden veraendert.
 - 2026-07-13: Fix lokal als `75efd545` committed; kein Push und kein Restart
   ausgeloest.
 - 2026-07-13: Der aktualisierte Bauplan-Nachweis wurde danach separat lokal
