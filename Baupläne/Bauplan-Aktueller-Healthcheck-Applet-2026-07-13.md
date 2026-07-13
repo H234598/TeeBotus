@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.412`, Commit `5b3f0c2`.
+- Quellstand: TeeBotus `1.9.413`, Commit `80def50`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -116,6 +116,25 @@ Nachweis:
 - Fokussierte Suite: `10 passed, 183 deselected`.
 - Vollstaendige Applet-Suite: `193 passed in 36.48s`.
 - SemVer-Bump auf `1.9.412`, Commit `5b3f0c26` (`Harden applet health aggregation`).
+
+### Befund 68: Codex-History-Repofehler wurden als Hinweise verschluckt
+
+Die Parserlogik stufte jede Zeile mit dem Praefix `codex_history_repo` als
+rein informativ ein. Dadurch konnte ein Repo mit `failed:1`, `unknown` oder
+anderen echten Fehlerstatuswerten den Top-Level-Healthcheck nicht erhoehen.
+Die Ausnahme ist jetzt enger: reine `queued`-/`skipped`-Zustaende bleiben
+Hinweise; fehlgeschlagene oder unklare Repo-Zustaende werden actionable.
+
+Nachweis:
+
+- Regressionstest mit einem `failed:1`-Repo und einem terminalen
+  `skipped:1`-Repo: genau ein actionable und ein informativer Befund.
+- Fokussierte Suite: `2 passed`.
+- Vollstaendige Applet-Suite: `194 passed in 36.56s`.
+- Live-Parser nach dem Fix: `actionable_problem_status_count=3`,
+  `informational_problem_status_count=23`.
+- SemVer-Bump auf `1.9.413`, Commit `80def506`
+  (`Expose Codex history repository failures`).
 
 ## Naechste Arbeitspakete
 
