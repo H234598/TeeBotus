@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen
 
-**Quellstand:** TeeBotus `1.9.475`, lokaler Stand nach `c0ce4201`
+**Quellstand:** TeeBotus `1.9.476`, lokaler Stand nach `75779b78`
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -65,6 +65,8 @@ Vorherige Detailplaene bleiben als Historie und Nachweis erhalten:
   Fallback wird nicht unnoetig als Top-Level-Defekt gewertet.
 - Unbekannte oder widerspruechliche Statuswerte werden nicht still als `ok`
   behandelt.
+- Die Watch-Payload-Healthpruefung akzeptiert nur echte Boolean-`ok`-Werte;
+  malformed Instanz- oder Post-Index-Berichte werden fail-closed abgelehnt.
 - Quell- und installierte Applet-Kopie waren zuletzt byte-identisch.
 
 ### Secret-Service- und Adminstatus
@@ -291,6 +293,8 @@ deren Kombination eingegrenzt.
   der Observer wird auf dessen Elternordner angesetzt.
 - [x] Regression fuer Watchdog-Start-Exception und Observer-Cleanup.
 - [x] Regression fuer fehlgeschlagenes Watchdog-Stop/Join ohne Zustands-Leak.
+- [x] Regression fuer malformed Watch-Payloads und String-/Zahlenwerte wie
+  `"false"` oder `1`.
 - [x] Regression fuer begrenzte Follow-Detailausgabe.
 - [x] Regression fuer den inkrementellen Ereignispfad.
 - [ ] Collector-Debounce-/Ressourcenbenchmark mit grossem Sessionroot.
@@ -351,5 +355,9 @@ Der Plan ist erst abgeschlossen, wenn:
   `c0ce4201` (`1.9.475`) versucht beide Schritte best effort, protokolliert
   beide Fehler und setzt den internen Zustand garantiert zurueck. Die
   Codex-History- und Metadaten-Suite lief mit `149 passed in 7.10s`.
+- 2026-07-13: Health-Logikfehler in `_watch_payload_ok` behoben:
+  `75779b78` (`1.9.476`) lehnt malformed Reports sowie String-/Zahlenwerte fuer
+  `ok` fail-closed ab. Die fokussierten Payload-Tests liefen mit `6 passed`; die
+  Codex-History- und Metadaten-Suite mit `154 passed in 8.88s`.
 - 2026-07-13: Der Plan bleibt bis zur TBL-Reconciliation, der Event-Burst-/
   Ressourcenmessung und der naechsten erlaubten Live-Abnahme aktiv.
