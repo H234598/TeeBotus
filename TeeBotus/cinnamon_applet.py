@@ -437,7 +437,15 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
     runtime_summary = parsed_runtime.get("summary", {}) if isinstance(parsed_runtime, dict) else {}
     status_counts = parsed_runtime.get("status_counts", {}) if isinstance(parsed_runtime, dict) else {}
     command_problem_count = 0 if command_ok else 1
-    has_health_classification = "actionable_problem_status_count" in runtime_summary
+    has_health_classification = any(
+        key in runtime_summary
+        for key in (
+            "actionable_problem_status_count",
+            "actionable_problem_statuses",
+            "informational_problem_status_count",
+            "informational_problem_statuses",
+        )
+    )
     status_problem_count = sum(_safe_int(status_counts.get(status, 0)) for status in PROBLEM_STATUSES)
     declared_problem_status_counts = _problem_status_counts_from_text(runtime_summary.get("problem_statuses"))
     effective_problem_status_counts = {
@@ -459,8 +467,13 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
         else status_counts
     )
     declared_actionable_status_counts = _problem_status_counts_from_text(runtime_summary.get("actionable_problem_statuses"))
+    default_actionable_problem_count = (
+        sum(declared_actionable_status_counts.values())
+        if has_health_classification
+        else max(problem_count, status_problem_count)
+    )
     declared_actionable_problem_count = _safe_int(
-        runtime_summary.get("actionable_problem_status_count", max(problem_count, status_problem_count))
+        runtime_summary.get("actionable_problem_status_count", default_actionable_problem_count)
     )
     informational_status_counts = (
         parsed_runtime.get("informational_status_counts", {})

@@ -4180,6 +4180,29 @@ def test_cinnamon_applet_health_summary_classifies_uncovered_problem_statuses_ac
     assert health["severe_status_count"] == 1
 
 
+def test_cinnamon_applet_health_summary_respects_partial_informational_v2_classification() -> None:
+    health = cinnamon_applet._health_summary(
+        command_ok=True,
+        parsed_runtime={
+            "summary": {
+                "problem_status_count": 1,
+                "problem_statuses": "warning:1",
+                "informational_problem_statuses": "warning:1",
+            },
+            "status_counts": {"warning": 1},
+            "actionable_status_counts": {},
+            "informational_status_counts": {"warning": 1},
+        },
+        qdrant={"collections": {}, "error": ""},
+        qdrant_unit={"active_state": "active", "sub_state": "running", "returncode": 0},
+    )
+
+    assert health["status"] == "ok"
+    assert health["actionable_problem_count"] == 0
+    assert health["informational_problem_count"] == 1
+    assert health["total_problem_count"] == 0
+
+
 def test_cinnamon_applet_health_summary_clamps_negative_qdrant_runtime_count() -> None:
     health = cinnamon_applet._health_summary(
         command_ok=True,
