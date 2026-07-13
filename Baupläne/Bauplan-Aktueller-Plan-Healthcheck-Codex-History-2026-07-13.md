@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen
 
-**Quellstand:** TeeBotus `1.9.479`, lokaler Stand nach `6b360544`
+**Quellstand:** TeeBotus `1.9.479`, lokaler Stand nach `3374e6eb`
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -262,10 +262,10 @@ deren Kombination eingegrenzt.
   Pfad abfangen und einen teilweise gestarteten Observer aufraeumen.
 - [x] Stop-/Join-Exceptions best effort behandeln, loggen und den Started-
   Zustand auch bei Cleanup-Fehlern zuruecksetzen.
-- [ ] Event-Burst-Debounce und Scan-Deduplizierung separat messen.
+- [x] Event-Burst-Debounce und Scan-Deduplizierung separat messen.
 - [x] Read-only Realroot-Vergleich ausfuehren und im Plan dokumentieren.
 - [x] Scan-Auswahl-Wiederverwendung mit kleiner Teststruktur pruefen.
-- [ ] Event-Burst-Debounce mit kleiner reproduzierbarer Teststruktur pruefen.
+- [x] Event-Burst-Debounce mit kleiner reproduzierbarer Teststruktur pruefen.
 - [ ] Speicherprofil fuer Session-Import, Accountstore, Post-Index und
   Dispatch aufnehmen.
 - [x] Detail-Logs fuer erwartete Altbestand-Skips begrenzen.
@@ -310,6 +310,9 @@ deren Kombination eingegrenzt.
   Follow-Renderer nicht mehr zum Absturz bringt.
 - [x] Regression fuer Import und Eventfilter eines benutzerdefinierten Roots
   ohne Pfadsegment `sessions`, bei Erhalt des Agentenroot-Schutzes.
+- [x] Regression fuer Burst-Koaleszenz: doppelte Pfade werden entfernt,
+  unterschiedliche Pfade bleiben erhalten und die Queue wird geleert.
+- [x] Lokalen Burst-Benchmark ohne Provideraufrufe ausfuehren.
 - [x] Regression fuer begrenzte Follow-Detailausgabe.
 - [x] Regression fuer den inkrementellen Ereignispfad.
 - [ ] Collector-Debounce-/Ressourcenbenchmark mit grossem Sessionroot.
@@ -390,5 +393,11 @@ Der Plan ist erst abgeschlossen, wenn:
   `sessions`-Unterstruktur scannt weiterhin keine fremden Fixture-JSONL.
   Die fokussierten Tests liefen mit `14 passed`; die Gesamtsuite mit
   `159 passed in 5.85s`.
+- 2026-07-13: Event-Burst-Verhalten verifiziert; `3374e6eb` ergaenzt die
+  Regression fuer Deduplizierung und Pfaderhalt. Ein lokaler Benchmark mit
+  `10000` Events und `100` eindeutigen Pfaden ergab `166.543 ms`,
+  `60044.5 Events/s` und `network_calls=0`. Die Gesamtsuite lief mit
+  `160 passed in 6.70s`; ein weiterer Produktionslogikfehler wurde dabei
+  nicht reproduziert.
 - 2026-07-13: Der Plan bleibt bis zur TBL-Reconciliation, der Event-Burst-/
   Ressourcenmessung und der naechsten erlaubten Live-Abnahme aktiv.
