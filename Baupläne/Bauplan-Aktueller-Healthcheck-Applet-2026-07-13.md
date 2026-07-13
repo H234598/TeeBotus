@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.411`, Commit `0a3ef27`.
+- Quellstand: TeeBotus `1.9.412`, Commit `5b3f0c2`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -98,6 +98,24 @@ Weitere sichtbare Zustande sind derzeit Hinweise, keine Top-Level-Defekte:
   Erfolgsstatus und keinen irrefuehrenden Skip-Grund als letzte Reason.
 - `created_at` bestimmt stabil den neuesten History-Eintrag.
 - unbekannte und malformierte Statuswerte werden nicht als Erfolg behandelt.
+
+### Befund 67: Veralteter v2-Gesamtzaehler im Applet
+
+`_healthProblemTotal()` vertraute bei `classification_version=2` bisher zu
+stark auf `total_problem_count`. Wenn dieser Wert veraltet oder versehentlich
+`0` war, konnten ein vorhandener `command_problem_count` und Qdrant-Probleme
+im Applet-Kopf verschwinden. Die v2-Aggregation beruecksichtigt jetzt neben
+dem Gesamtwert auch actionable Status, Kommandozaehler, Runtimezaehler und
+Qdrant-Zaehler. Der bekannte Qdrant-Runtimezaehler wird dabei nicht doppelt
+gezaehlt.
+
+Nachweis:
+
+- Regressionstest mit `total_problem_count=0`, `command_problem_count=1` und
+  `qdrant_problem_count=2`: Ergebnis `3` statt `0`.
+- Fokussierte Suite: `10 passed, 183 deselected`.
+- Vollstaendige Applet-Suite: `193 passed in 36.48s`.
+- SemVer-Bump auf `1.9.412`, Commit `5b3f0c26` (`Harden applet health aggregation`).
 
 ## Naechste Arbeitspakete
 
