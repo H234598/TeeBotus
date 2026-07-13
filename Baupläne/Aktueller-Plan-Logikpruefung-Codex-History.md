@@ -278,6 +278,14 @@ werden jetzt strikt gegen das Dispatcher-Schema validiert.
 Explizite Claim-Statuswerte muessen jetzt `delivering` sein; fehlende Werte
 bleiben fuer alte Dispatcher-Versionen kompatibel.
 
+**Achtunddreissigster Befund 2026-07-13:** Lokales Reply-/Receipt-Matching
+funktioniert fuer bridged Resultate jetzt auch bei unterschiedlichen lokalen
+und externen Item-IDs. Der externe `delivery.record`-Pfad schreibt derzeit aber
+nur ein Audit-Ereignis und aktualisiert keine `recipient_results`. Ein Receipt
+vor oder ohne erfolgreiches `dispatch.complete` kann deshalb extern weiter als
+retrybar gelten. Dafuer ist ein separater Cross-Repo-Protokoll-/Store-Fix
+noetig; dieser Befund ist noch offen.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -378,6 +386,7 @@ Der Plan ist erst abgeschlossen, wenn:
 ### Noch offen
 
 - Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
+- Cross-Repo-Fix fuer `delivery.record`: Recipient-Status und Gesamtstatus bei validierten `delivered`-/`read`-Ereignissen aktualisieren, danach mit TeeBotus-Receiptpfaden testen.
 - Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
 - Der lokale TeeBotus-Code ist aktuell `1.9.393`; die Fixes ab `1.9.389` wurden nach dem letzten 20er-Restart committed und sind noch nicht live geladen. Live-Reload ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
