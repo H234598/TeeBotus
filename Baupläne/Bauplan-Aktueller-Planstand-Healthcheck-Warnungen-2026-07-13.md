@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.435`, Commit `97513246`  
+**Quellstand:** TeeBotus `1.9.436`, Commit `8dc23e83`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -132,8 +132,8 @@ Abweichung zwischen dem zentralen Dispatcher und dem lokalen TeeBotus-Store:
 - zentraler Bridge-Status: Queue `0`
 - lokaler read-only Report: `outbox_items=1545`, darunter
   `queued=76`, `skipped=101`, `accepted=1366`, `delivered=2`
-- im Live-Payload wurden waehrend der letzten Probe `queued=75` und
-  `total=1544` beobachtet; die Snapshot-Differenz ist zu dokumentieren und
+- im aktuellen Live-Payload wurden `queued=78` und `total=1547` beobachtet;
+  die Snapshot-Differenz ist zu dokumentieren und
   nicht als still behoben zu werten
 
 **Naechste Aktion:** erst einen Dry-Run mit Dedupe-Key, lokaler und zentraler
@@ -147,6 +147,33 @@ behandeln:
 
 Keine Summary, Outbox-Zeile oder Dispatch-Resultat darf ohne explizite
 Entscheidung geloescht oder pauschal requeued werden.
+
+## Befund 92: Verifizierte Fallback-Fehler wurden ueberklassifiziert
+
+Die explizite Fehlerbehandlung aus Befund 91 schuetzte echte Fehler korrekt,
+zaehlte aber auch funktionierende Ersatzrouten als Top-Level-Problem. Das
+betraf live die deaktivierte HF-Structured-Decision-Route und die fehlende
+Groq-Konfiguration, obwohl jeweils `effective_status=configured` und ein
+lokaler Fallback vorhanden waren.
+
+### Umsetzung
+
+- Ein technischer `error=`-Text wird bei einer Fallback-Zeile nur dann
+  informativ, wenn der Ersatz durch gesunden `effective_status`, eine echte
+  Fallback-Referenz und einen bekannten problematischen Primar-/Routenstatus
+  belegt ist.
+- Ohne effektiven Gesundheitsnachweis bleibt der Fehler actionable.
+- Blockierende Statuswerte wie `unknown` und `broken` werden nicht durch den
+  Fallback unterdrueckt.
+- Die Rohzeile und ihre Fehlerursache bleiben in der Detaildiagnose erhalten.
+
+### Nachweis
+
+- Fokussiert: `2 passed, 213 deselected`.
+- Vollstaendige Applet-Suite: `215 passed in 46.34s`.
+- Live danach: `actionable=missing_key:1,warning:2`,
+  `informational=23`, Qdrant ohne Probleme.
+- SemVer `1.9.436`, Commit `8dc23e83`.
 
 ## Informative Befunde, die nicht als Defekt hochgestuft werden sollen
 

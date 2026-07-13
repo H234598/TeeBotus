@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.435`, `97513246`.
+- Aktueller gepruefter Quellstand: `1.9.436`, `8dc23e83`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -319,6 +319,39 @@ Der aktuelle Live-Payload bleibt damit transparent bei
 Depressionsbot-Signal-Identitaet und der nicht abgearbeitete TBL-History-
 Rueckstand. Diese drei Befunde werden nicht still als Fallback-Hinweise
 versteckt und sind die naechsten separaten Reparaturthemen.
+
+## Befund 92: Verifizierte Fallback-Fehler wurden als Handlungsprobleme gezaehlt
+
+Die Korrektur aus Befund 91 war fuer echte, ungeklaerte Fehler notwendig, war
+aber fuer bereits verifizierte Fallback-Routen zu streng. Eine Zeile wie
+`status=missing_key effective_status=configured fallback=local error=missing`
+oder `status=unavailable effective_status=configured fallback=local
+error=HFPoolUnavailable` beschreibt einen ausgefallenen Primaerweg mit
+funktionierendem Ersatz. Sie wurde trotzdem als Top-Level-Problem gezahlt,
+weil allein das technische `error=` die Informationsregel blockierte.
+
+### Umsetzung und Nachweis
+
+- Ein Fallback gilt mit Fehler nur dann als informational, wenn
+  `effective_status` gesund ist, eine echte Fallback-Referenz existiert und
+  `status` oder `route_status` einen bekannten Problemstatus des
+  Primaerweges benennt.
+- `unknown`, `broken`, `config_conflict`, `failed`, `invalid` und
+  `schema_mismatch` bleiben durch die Blocker-Allowlist actionable.
+- Ein Fallback ohne gesunden `effective_status` bleibt actionable; die
+  Existenz eines Fallback-Feldes allein beweist keine funktionierende
+  Ersatzroute.
+- Identity-, Codex-History- und sonstige explizite Sonderfehler bleiben
+  handlungsrelevant, solange sie nicht durch genau diese verifizierte
+  Routenabdeckung belegt sind.
+- Regression fuer verifizierte, unverifizierte und blockierte Fallbacks:
+  `2 passed, 213 deselected`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `215 passed in 46.34s`.
+- Lesende Live-Probe danach: `actionable=missing_key:1,warning:2`,
+  `informational=23`, Qdrant `0` Probleme.
+- SemVer `1.9.436`, lokaler Commit `8dc23e83`
+  (`Classify verified fallback errors as informational`).
+- Kein Push und kein Bot-/Service-Restart ausgefuehrt.
 
 ## Umsetzung
 
