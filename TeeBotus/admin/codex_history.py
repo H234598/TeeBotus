@@ -6359,12 +6359,15 @@ def _watch_post_index_report(
 def _watch_payload_ok(instance_reports: Sequence[Mapping[str, Any]]) -> bool:
     for report in instance_reports:
         if not isinstance(report, Mapping):
-            continue
-        if not bool(report.get("ok", True)):
+            return False
+        if "ok" in report and report["ok"] is not True:
             return False
         post_index = report.get("post_index")
-        if isinstance(post_index, Mapping) and not bool(post_index.get("ok", True)):
-            return False
+        if "post_index" in report:
+            if not isinstance(post_index, Mapping):
+                return False
+            if "ok" in post_index and post_index["ok"] is not True:
+                return False
         # Dispatch failures are persisted per item; retryable channel send
         # errors are requeued by dispatch status handling. The watcher itself
         # should still exit successfully so systemd timers do not enter a

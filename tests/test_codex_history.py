@@ -4684,6 +4684,20 @@ def test_watch_payload_ok_keeps_timer_successful_when_dispatch_has_channel_failu
     )
 
 
+@pytest.mark.parametrize(
+    "instance_reports",
+    [
+        [None],
+        [{"ok": "false"}],
+        [{"ok": 1}],
+        [{"post_index": None}],
+        [{"post_index": {"ok": "false"}}],
+    ],
+)
+def test_watch_payload_ok_fails_closed_for_malformed_health_values(instance_reports: list[object]) -> None:
+    assert _watch_payload_ok(instance_reports) is False
+
+
 def test_render_watch_report_omits_duplicate_import_details_but_keeps_counts() -> None:
     rendered = _render_watch_report(
         {
