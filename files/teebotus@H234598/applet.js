@@ -1877,9 +1877,13 @@ TeeBotusApplet.prototype = {
 
   _healthDetailText: function(health, summary, counts) {
     let total = this._healthProblemTotal(health, summary, counts || {});
-    let text = total > 0 ? " | Probleme " + String(total) : "";
+    let text = total > 0 ? " | " + this._healthCountLabel((health || {}).status) + " " + String(total) : "";
     text += this._healthProblemDetailsText(health, summary, counts);
     return text;
+  },
+
+  _healthCountLabel: function(status) {
+    return String(status || "").trim().toLowerCase() === "warning" ? "Warnungen" : "Probleme";
   },
 
   _healthProblemDetailsText: function(health, summary, counts) {
@@ -1959,7 +1963,7 @@ TeeBotusApplet.prototype = {
       healthStatus = "warning";
     }
     let healthWord = this._statusWord(healthStatus);
-    let prefix = problemTotal > 0 ? "Probleme " + String(problemTotal) + " | " : "";
+    let prefix = problemTotal > 0 ? this._healthCountLabel(healthStatus) + " " + String(problemTotal) + " | " : "";
     this.versionItem.label.set_text(
       prefix +
         "Health: " +

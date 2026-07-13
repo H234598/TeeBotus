@@ -2131,7 +2131,7 @@ def test_cinnamon_applet_top_health_includes_dispatcher_warning() -> None:
     assert result["statusSummary"].startswith("Warnungen 1")
     assert "Dispatcher Warnung" in result["statusSummary"]
     assert "Health Warnung" in result["statusSummary"]
-    assert "Probleme 1" in result["version"]
+    assert "Warnungen 1" in result["version"]
     assert "Health: Warnung" in result["version"]
     assert "Dispatcher Warnung" in result["version"]
 
@@ -2263,6 +2263,29 @@ def test_cinnamon_applet_status_menu_detail_lines_include_health_and_runtime_dat
         "Qdrant: http://127.0.0.1:6333; Collections 1/2; Fehler probe failed",
         "Runtime: Demo | Kanaele telegram | Version 1.2.3 | Commit abc1234",
     ]
+
+
+def test_cinnamon_applet_warning_health_uses_warning_label_in_detail() -> None:
+    result = _run_js_applet_expression(
+        """
+        applet._statusDetailLines({
+          ok: false,
+          version: "1.2.3",
+          health: {
+            status: "warning",
+            classification_version: 2,
+            total_problem_count: 2,
+            actionable_problem_count: 2,
+            actionable_problem_statuses: "warning:2"
+          },
+          unit: {active_state: "active", sub_state: "running", returncode: 0},
+          qdrant: {collections: {}},
+          runtime: {summary: {}, status_counts: {}}
+        })
+        """
+    )
+
+    assert result[0] == "Health: Warnung | Warnungen 2 | Probleme Warnung:2"
 
 
 def test_cinnamon_applet_status_detail_distinguishes_source_and_runtime_version() -> None:
@@ -2540,7 +2563,7 @@ def test_cinnamon_applet_menu_header_derives_total_from_command_and_qdrant_probl
     )
 
     assert "Warnungen 2" in result["statusSummary"]
-    assert "Probleme 2" in result["version"]
+    assert "Warnungen 2" in result["version"]
     assert "Kommando:1" in result["version"]
     assert "Qdrant Runtime:1, Probe:1" in result["version"]
 
@@ -2604,7 +2627,7 @@ def test_cinnamon_applet_menu_header_uses_runtime_counts_in_detail_text() -> Non
         """
     )
 
-    assert "Probleme 4" in result["version"]
+    assert "Warnungen 4" in result["version"]
     assert "Warnung:1" in result["version"]
 
 
@@ -3027,8 +3050,8 @@ def test_cinnamon_applet_menu_header_problem_counts_come_before_health_status() 
     )
 
     assert result["summary"].startswith("Warnungen 2")
-    assert result["version"].startswith("Probleme 2")
-    assert result["version"].index("Probleme 2") < result["version"].index("Health: Warnung")
+    assert result["version"].startswith("Warnungen 2")
+    assert result["version"].index("Warnungen 2") < result["version"].index("Health: Warnung")
 
 
 def test_cinnamon_applet_helper_parses_runtime_status_sections() -> None:
