@@ -158,7 +158,9 @@ SECRET_ASSIGNMENT_REDACTION_HINTS = frozenset(
     }
 )
 STATUS_FIELD_RE = re.compile(r"(?<!\S)([A-Za-z_][A-Za-z0-9_-]*)=")
-FREE_TEXT_STATUS_FIELDS = frozenset({"action", "command", "error", "message", "route_error"})
+FREE_TEXT_STATUS_FIELDS = frozenset(
+    {"action", "command", "error", "fallback_error", "message", "offload_error", "route_error"}
+)
 FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
     "action": frozenset({"warning"}),
     "command": frozenset({"apply_command"}),
@@ -176,6 +178,8 @@ FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
             "warning",
         }
     ),
+    "fallback_error": frozenset({"remote_fallback", "route_error", "warning"}),
+    "offload_error": frozenset({"warning"}),
 }
 FLAG_PROBLEM_STATUS_FIELDS = frozenset({"warning"})
 NEUTRAL_FLAG_VALUES = frozenset({"0", "false", "no", "none", "off"})
@@ -1058,7 +1062,7 @@ def _status_is_ready_without_error(fields: Mapping[str, Any], key: str) -> bool:
 def _line_has_error(fields: Mapping[str, Any]) -> bool:
     return any(
         _status_flag_is_set(str(fields.get(field, "") or ""))
-        for field in ("error", "route_error")
+        for field in ("error", "fallback_error", "offload_error", "route_error")
     )
 
 
