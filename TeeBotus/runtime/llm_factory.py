@@ -290,7 +290,13 @@ def _build_route_client(
         model=route.model,
         instance_name=instance_name,
     )
-    fallback_api_key = source.get(route.fallback_api_key_env, "").strip() if route.fallback_api_key_env else ""
+    fallback_api_key = resolve_profile_api_key(
+        source,
+        route.fallback_api_key_env,
+        provider="litellm",
+        model=route.fallback_model,
+        instance_name=instance_name,
+    )
     resolved_runtime_api_key = _compatible_default_api_key(route.provider, route.model, default_api_key)
     resolved_api_key = str(override_api_key or "").strip() or resolved_runtime_api_key or profile_api_key
     resolved_api_base = str(api_base or "").strip() or route.base_url

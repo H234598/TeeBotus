@@ -204,7 +204,13 @@ def build_profiled_text_llm_client(
         model=route.model,
         instance_name=instance_name,
     )
-    fallback_api_key = source.get(route.fallback_api_key_env, "").strip() if route.fallback_api_key_env else ""
+    fallback_api_key = resolve_profile_api_key(
+        source,
+        route.fallback_api_key_env,
+        provider="litellm",
+        model=route.fallback_model,
+        instance_name=instance_name,
+    )
     gemini_key_model = _first_google_gemini_model(route)
     uses_gemini_api = _route_uses_gemini_api(route.provider, route.model) or _route_uses_gemini_api(
         route.provider,

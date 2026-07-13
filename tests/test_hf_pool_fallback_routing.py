@@ -46,6 +46,33 @@ def test_hf_pool_route_uses_remote_fallback_only_when_explicitly_allowed(monkeyp
     assert allowed.fallback_client.fallback_api_keys == {}
 
 
+def test_hf_pool_route_uses_instance_scoped_key_for_openai_fallback(monkeypatch):
+    def route(*_args, **_kwargs):
+        return LLMRoute(
+            purpose="structured_decision",
+            profile_name="hf_pool_structured",
+            provider="hf_pool",
+            model="pool:default",
+            fallback_profile_name="openai_premium",
+            fallback_model="openai/gpt-test",
+            fallback_api_key_env="OPENAI_API_KEY",
+        )
+
+    monkeypatch.setattr("TeeBotus.runtime.llm_factory.select_llm_route", route)
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="structured_decision",
+        allow_remote_fallback=True,
+        instance_name="Demo",
+        env={"OPENAI_API_KEY_DEMO": "instance-key"},
+    )
+
+    assert isinstance(client, HFPoolProvider)
+    assert isinstance(client.fallback_client, LiteLLMTextClient)
+    assert client.fallback_client.api_key == "instance-key"
+
+
 def test_hf_pool_unavailable_uses_configured_fallback_client(monkeypatch):
     calls: list[dict[str, object]] = []
 

@@ -624,6 +624,29 @@ def test_profiled_text_client_uses_instance_scoped_openai_key_before_global_key(
     assert client.api_key == "instance-key"
 
 
+def test_profiled_text_client_uses_instance_scoped_key_for_openai_fallback() -> None:
+    profiles = {
+        "hf_pool": LLMProfile("hf_pool", "hf_pool", "pool:default"),
+        "openai_premium": LLMProfile("openai_premium", "litellm", "openai/gpt-test", api_key_env="OPENAI_API_KEY"),
+    }
+    routing = {"structured_decision": LLMRoutingRule("structured_decision", "hf_pool", "openai_premium")}
+
+    client = build_profiled_text_llm_client(
+        purpose="structured_decision",
+        instructions=BotInstructions(),
+        openai_client=None,
+        profiles=profiles,
+        routing=routing,
+        allow_remote_fallback=True,
+        instance_name="Demo",
+        env={"OPENAI_API_KEY_DEMO": "instance-key"},
+    )
+
+    assert isinstance(client, HFPoolProvider)
+    assert isinstance(client.fallback_client, LiteLLMTextClient)
+    assert client.fallback_client.api_key == "instance-key"
+
+
 def test_profiled_text_client_passes_gemini_service_tier_from_profile() -> None:
     profiles = {
         "gemini_flex": LLMProfile(
