@@ -6204,8 +6204,11 @@ def _watch_post_index_callback(
         if post_index_pending or has_imports:
             post_index = _watch_post_index_report(store, instances_dir, instance_name, args, provider)
             if post_index:
-                reports.append(post_index)
-                if bool(post_index.get("ok", True)):
+                if isinstance(post_index, Mapping):
+                    reports.append(dict(post_index))
+                else:
+                    reports.append({"ok": False, "error": "malformed_post_index_report"})
+                if _watch_result_ok(post_index):
                     post_index_pending = False
         if dispatch_pending or has_imports:
             dispatch_report = _watch_dispatch_report(
@@ -6216,8 +6219,11 @@ def _watch_post_index_callback(
                 sender_factory=sender_factory,
             )
             if dispatch_report:
-                dispatch_reports.append(dispatch_report)
-                if bool(dispatch_report.get("ok", True)):
+                if isinstance(dispatch_report, Mapping):
+                    dispatch_reports.append(dict(dispatch_report))
+                else:
+                    dispatch_reports.append({"ok": False, "error": "malformed_dispatch_report"})
+                if _watch_result_ok(dispatch_report):
                     dispatch_pending = False
                 _emit_follow_dispatch_report(dispatch_report, args)
 
@@ -6241,6 +6247,10 @@ def _watch_scan_has_imports(scan_report: Mapping[str, Any]) -> bool:
         isinstance(item, Mapping) and str(item.get("status") or "").strip().casefold() == "imported"
         for item in items
     )
+
+
+def _watch_result_ok(value: object) -> bool:
+    return isinstance(value, Mapping) and value.get("ok") is True
 
 
 def _watch_dispatch_idle_callback(
@@ -6358,16 +6368,11 @@ def _watch_post_index_report(
 
 def _watch_payload_ok(instance_reports: Sequence[Mapping[str, Any]]) -> bool:
     for report in instance_reports:
-        if not isinstance(report, Mapping):
-            return False
-        if "ok" in report and report["ok"] is not True:
+        if not _watch_result_ok(report):
             return False
         post_index = report.get("post_index")
-        if "post_index" in report:
-            if not isinstance(post_index, Mapping):
-                return False
-            if "ok" in post_index and post_index["ok"] is not True:
-                return False
+        if "post_index" in report and not _watch_result_ok(post_index):
+            return False
         # Dispatch failures are persisted per item; retryable channel send
         # errors are requeued by dispatch status handling. The watcher itself
         # should still exit successfully so systemd timers do not enter a

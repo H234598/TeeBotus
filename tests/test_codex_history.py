@@ -4688,14 +4688,62 @@ def test_watch_payload_ok_keeps_timer_successful_when_dispatch_has_channel_failu
     "instance_reports",
     [
         [None],
+        [{}],
         [{"ok": "false"}],
         [{"ok": 1}],
         [{"post_index": None}],
+        [{"ok": True, "post_index": {}}],
         [{"post_index": {"ok": "false"}}],
     ],
 )
 def test_watch_payload_ok_fails_closed_for_malformed_health_values(instance_reports: list[object]) -> None:
     assert _watch_payload_ok(instance_reports) is False
+
+
+def test_watch_post_index_callback_retries_malformed_results(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    reports: list[dict[str, Any]] = []
+    dispatch_reports: list[dict[str, Any]] = []
+    args = SimpleNamespace(
+        post_index=True,
+        post_index_qdrant=False,
+        post_index_qdrant_ensure=False,
+        dispatch=True,
+        follow=False,
+        format="json",
+    )
+    index_calls = 0
+    dispatch_calls = 0
+
+    def malformed_index(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        nonlocal index_calls
+        index_calls += 1
+        return {"error": "missing_ok"}
+
+    def malformed_dispatch(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        nonlocal dispatch_calls
+        dispatch_calls += 1
+        return {"ok": "false"}
+
+    monkeypatch.setattr(codex_history_module, "_watch_post_index_report", malformed_index)
+    monkeypatch.setattr(codex_history_module, "_watch_dispatch_report", malformed_dispatch)
+    callback = codex_history_module._watch_post_index_callback(
+        object(),
+        tmp_path,
+        "TeeBotus_Logger",
+        args,
+        provider(),
+        reports,
+        dispatch_reports,
+    )
+    assert callback is not None
+
+    callback({"status_counts": {}, "items": []})
+    callback({"status_counts": {}, "items": []})
+
+    assert index_calls == 2
+    assert dispatch_calls == 2
+    assert reports == [{"error": "missing_ok"}, {"error": "missing_ok"}]
+    assert dispatch_reports == [{"ok": "false"}, {"ok": "false"}]
 
 
 def test_render_watch_report_omits_duplicate_import_details_but_keeps_counts() -> None:
