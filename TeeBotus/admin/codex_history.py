@@ -64,7 +64,7 @@ from TeeBotus.runtime.proactive_agent import ProactiveSender, select_proactive_r
 CODEX_HISTORY_SCHEMA_VERSION = 1
 CODEX_HISTORY_TARGET_GROUP = "status_admins"
 CODEX_HISTORY_DISPATCHABLE_STATUSES = frozenset({"queued"})
-CODEX_HISTORY_DISPATCHABLE_KINDS = frozenset({"codex_run_summary", "codex_strategy_analysis", "codex_graph_artifact"})
+CODEX_HISTORY_DISPATCHABLE_KINDS = frozenset({"codex_run_summary", "codex_strategy_analysis", "codex_graph_artifact", "codex_history_digest"})
 CODEX_HISTORY_INDEXABLE_KINDS = frozenset({"codex_run_summary", "codex_strategy_analysis"})
 CODEX_HISTORY_BIBLIOTHEKAR_DIRNAME = "Codex_History_Bibliothek"
 CODEX_HISTORY_BIBLIOTHEKAR_README = "README.md"
@@ -633,7 +633,10 @@ def _history_dispatcher_item_to_legacy(item: Mapping[str, Any]) -> dict[str, Any
         project = {"repo_name": Path(project_text).name or "project", "repo_root": project_text}
     payload["project"] = project
     payload["id"] = item_id
-    payload["kind"] = str(item.get("kind") or payload.get("kind") or "codex_run_summary")
+    kind = str(item.get("kind") or payload.get("kind") or "").strip()
+    if kind not in CODEX_HISTORY_DISPATCHABLE_KINDS:
+        raise HistoryDispatcherError(f"History-Dispatcher item {item_id} has unsupported kind")
+    payload["kind"] = kind
     payload["created_at"] = str(item.get("created_at") or payload.get("created_at") or "")
     payload.setdefault("version", {"semver": "untagged", "summary_number": 1, "summary_prefix": "untagged"})
     payload.setdefault("summary_prefix", "untagged")

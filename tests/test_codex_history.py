@@ -1350,6 +1350,7 @@ def test_codex_history_dispatch_bridge_preserves_already_delivered_recipients(
                     "data": {
                         "items": [{
                             "id": "hd-item-already-delivered",
+                            "kind": "codex_run_summary",
                             "payload": {"summary": {"text": "Already delivered"}},
                             "recipient_results": [{"recipient_id": "already", "status": "delivered"}],
                         }],
@@ -1399,6 +1400,7 @@ def test_codex_history_dispatch_bridge_rejects_nested_completion_failure(
                     "data": {
                         "items": [{
                             "id": "hd-item-claim-lost",
+                            "kind": "codex_run_summary",
                             "payload": {"summary": {"text": "Claim verloren"}},
                             "recipient_results": [],
                         }],
@@ -1504,6 +1506,7 @@ def test_codex_history_dispatch_bridge_rejects_invalid_recipient_results(
                     "data": {
                         "items": [{
                             "id": "hd-item-invalid-recipients",
+                            "kind": "codex_run_summary",
                             "payload": {"summary": {"text": "Ungueltige Empfaenger"}},
                             "recipient_results": None,
                         }],
@@ -1526,6 +1529,46 @@ def test_codex_history_dispatch_bridge_rejects_invalid_recipient_results(
     assert calls == ["dispatch.claim"]
 
 
+def test_codex_history_dispatch_bridge_rejects_foreign_kind(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            calls.append(operation)
+            if operation == "dispatch.claim":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "hd-item-foreign-kind",
+                            "kind": "other_runtime_event",
+                            "payload": {"summary": {"text": "Fremder Typ"}},
+                            "recipient_results": [],
+                        }],
+                    },
+                }
+            raise AssertionError(operation)
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            object(),
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["status_counts"] == {"failed": 1}
+    assert "unsupported kind" in result["items"][0]["error"]
+    assert calls == ["dispatch.claim"]
+
+
 def test_codex_history_dispatch_bridge_rejects_incomplete_completion_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1543,6 +1586,7 @@ def test_codex_history_dispatch_bridge_rejects_incomplete_completion_data(
                     "data": {
                         "items": [{
                             "id": "hd-item-incomplete-completion",
+                            "kind": "codex_run_summary",
                             "payload": {"summary": {"text": "Completion fehlt"}},
                             "recipient_results": [],
                         }],
@@ -1667,6 +1711,7 @@ def test_history_dispatcher_digest_payload_becomes_markdown_attachment() -> None
     action = codex_history_module._codex_history_attachment_action(item, "42")
 
     assert item["summary_prefix"] == "digest_abc123"
+    assert codex_history_module._codex_history_item_dispatchable(item) is True
     assert action.caption == "Release TeeBotus digest"
     assert action.filename == "TeeBotus_release_digest_0001.md"
     assert action.data.startswith(b"# digest_abc123 Codex-History-Sammelbericht")
