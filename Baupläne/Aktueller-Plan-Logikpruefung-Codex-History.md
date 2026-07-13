@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.380` (lokaler Arbeitsstand; Commit folgt nach Nachweis).
+- Der aktuelle TeeBotus-Stand ist Version `1.9.381`, Commit `e500d915`.
 
 ## Arbeitsprinzipien
 
@@ -111,6 +111,13 @@ nicht an und verlor dadurch Summary-Metadaten. Items, Payload, Empfaenger und
 Completion-Antwort werden jetzt fail-closed validiert; der Dry-Run fordert die
 Payload explizit an.
 
+**Neunter Befund 2026-07-13:** Die Socket-Pfadvalidierung lief vor dem
+Bridge-Fehlerhandler. Ein relativer oder anderweitig unsicherer
+`HISTORY_DISPATCHER_SOCKET` konnte deshalb den Bot aus dem Dispatch-Aufruf
+werfen; im Shadow-Modus konnte derselbe Konfigurationsfehler sogar das
+eigentliche Legacy-Summary-Schreiben abbrechen. Beide Pfade melden den Fehler
+jetzt kontrolliert bzw. lassen den Legacy-Pfad unveraendert fortsetzen.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -187,6 +194,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Bridge-Schema-Proben: nicht-objektartiges Claim-Item, `recipient_results=null` und `dispatch.complete data=null` werden kontrolliert abgewiesen; Dry-Run uebernimmt `summary_prefix` wieder aus der Payload.
 - Gezielt verifizierte TeeBotus-Suite nach der Bridge-Haertung: `114 passed`.
 - Bridge-Haertung und SemVer-Bump auf `1.9.380` committed als `8376977e` (`Harden history dispatcher bridge validation`).
+- Socket-Fehlerbehandlung und SemVer-Bump auf `1.9.381` committed als `e500d915` (`Keep history dispatch socket errors contained`); gezielte Suite danach `116 passed`.
 
 ### Noch offen
 
