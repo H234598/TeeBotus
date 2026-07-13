@@ -205,6 +205,17 @@ MEMORY_STOPWORDS = {
 class TelegramAPIError(RuntimeError):
     """Raised when Telegram returns an unsuccessful response."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        retry_after: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code if isinstance(status_code, int) and not isinstance(status_code, bool) else None
+        self.retry_after = retry_after if isinstance(retry_after, int) and not isinstance(retry_after, bool) and retry_after > 0 else None
+
 
 class TelegramNetworkError(TelegramAPIError):
     """Raised when a transient network error prevents a Telegram request."""
@@ -247,12 +258,22 @@ class TelegramAPI:
             raise TelegramNetworkError(f"Telegram network timeout: {exc}") from exc
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            raise TelegramAPIError(f"Telegram HTTP error {exc.code}: {detail}") from exc
+            status_code, retry_after = _telegram_error_metadata(detail, fallback_status_code=exc.code)
+            raise TelegramAPIError(
+                f"Telegram HTTP error {exc.code}: {detail}",
+                status_code=status_code,
+                retry_after=retry_after,
+            ) from exc
         except urllib.error.URLError as exc:
             raise TelegramNetworkError(f"Telegram network error: {exc.reason}") from exc
 
         if not payload.get("ok"):
-            raise TelegramAPIError(f"Telegram API error: {payload}")
+            status_code, retry_after = _telegram_error_metadata(payload)
+            raise TelegramAPIError(
+                f"Telegram API error: {payload}",
+                status_code=status_code,
+                retry_after=retry_after,
+            )
         return payload
 
     def request_multipart(
@@ -277,12 +298,22 @@ class TelegramAPI:
             raise TelegramNetworkError(f"Telegram network timeout: {exc}") from exc
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            raise TelegramAPIError(f"Telegram HTTP error {exc.code}: {detail}") from exc
+            status_code, retry_after = _telegram_error_metadata(detail, fallback_status_code=exc.code)
+            raise TelegramAPIError(
+                f"Telegram HTTP error {exc.code}: {detail}",
+                status_code=status_code,
+                retry_after=retry_after,
+            ) from exc
         except urllib.error.URLError as exc:
             raise TelegramNetworkError(f"Telegram network error: {exc.reason}") from exc
 
         if not payload.get("ok"):
-            raise TelegramAPIError(f"Telegram API error: {payload}")
+            status_code, retry_after = _telegram_error_metadata(payload)
+            raise TelegramAPIError(
+                f"Telegram API error: {payload}",
+                status_code=status_code,
+                retry_after=retry_after,
+            )
         return payload
 
     def get_updates(self, offset: int | None, timeout: int = 50) -> list[dict[str, Any]]:
@@ -489,7 +520,12 @@ class TelegramAPI:
             raise TelegramNetworkError(f"Telegram file network timeout: {exc}") from exc
         except urllib.error.HTTPError as exc:
             detail = exc.read().decode("utf-8", errors="replace")
-            raise TelegramAPIError(f"Telegram file HTTP error {exc.code}: {detail}") from exc
+            status_code, retry_after = _telegram_error_metadata(detail, fallback_status_code=exc.code)
+            raise TelegramAPIError(
+                f"Telegram file HTTP error {exc.code}: {detail}",
+                status_code=status_code,
+                retry_after=retry_after,
+            ) from exc
         except urllib.error.URLError as exc:
             raise TelegramNetworkError(f"Telegram file network error: {exc.reason}") from exc
 
@@ -3701,6 +3737,7 @@ def run_polling(
                 time.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
             except TelegramAPIError as exc:
+                current_retry_delay = _telegram_retry_delay(exc, retry_delay)
                 if _is_telegram_getupdates_conflict(exc):
                     LOGGER.error(
                         "Telegram getUpdates conflict instance=%s token_slot=%s bot_username=%s. "
@@ -3708,7 +3745,7 @@ def run_polling(
                         instance,
                         token_label,
                         bot_identity.mention or "unknown",
-                        retry_delay,
+                        current_retry_delay,
                     )
                 else:
                     LOGGER.exception(
@@ -3716,10 +3753,10 @@ def run_polling(
                         instance,
                         token_label,
                         bot_identity.mention or "unknown",
-                        retry_delay,
+                        current_retry_delay,
                     )
-                time.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
+                time.sleep(current_retry_delay)
+                retry_delay = min(max(retry_delay * 2, current_retry_delay), MAX_RETRY_DELAY_SECONDS)
     finally:
         if owns_youtube_job_runner:
             youtube_job_runner.shutdown(wait=False)
@@ -3733,6 +3770,32 @@ def run_polling_many(configs: list[BotTokenConfig], instruction_path: str, insta
 def _is_telegram_getupdates_conflict(exc: TelegramAPIError) -> bool:
     text = str(exc)
     return "409" in text and "getUpdates" in text
+
+
+def _telegram_error_metadata(value: Any, *, fallback_status_code: int | None = None) -> tuple[int | None, int | None]:
+    payload: Any = value
+    if isinstance(value, str):
+        try:
+            payload = json.loads(value)
+        except (TypeError, ValueError):
+            payload = None
+    if not isinstance(payload, dict):
+        return fallback_status_code, None
+    status_code = payload.get("error_code")
+    if not isinstance(status_code, int) or isinstance(status_code, bool):
+        status_code = fallback_status_code
+    parameters = payload.get("parameters")
+    retry_after = parameters.get("retry_after") if isinstance(parameters, dict) else None
+    if not isinstance(retry_after, int) or isinstance(retry_after, bool) or retry_after <= 0:
+        retry_after = None
+    return status_code, retry_after
+
+
+def _telegram_retry_delay(exc: TelegramAPIError, fallback: int) -> int:
+    retry_after = getattr(exc, "retry_after", None)
+    if isinstance(retry_after, int) and not isinstance(retry_after, bool) and retry_after > 0:
+        return max(fallback, retry_after)
+    return fallback
 
 
 def run_polling_all(instance_configs: list[InstanceRunConfig]) -> None:

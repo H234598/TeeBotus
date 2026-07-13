@@ -1,4 +1,5 @@
 import base64
+import io
 import json
 import os
 import subprocess
@@ -448,6 +449,41 @@ class BotTests(unittest.TestCase):
         with patch("TeeBotus.bot.urllib.request.urlopen", side_effect=TimeoutError("read timed out")):
             with self.assertRaises(TelegramNetworkError):
                 api.request("getUpdates", {})
+
+    def test_telegram_http_rate_limit_exposes_retry_after(self) -> None:
+        import urllib.error
+
+        api = TelegramAPI("123:test-token")
+        response = io.BytesIO(
+            b'{"ok":false,"error_code":429,"description":"Too Many Requests","parameters":{"retry_after":137}}'
+        )
+        error = urllib.error.HTTPError("https://api.telegram.org", 429, "Too Many Requests", {}, response)
+
+        with patch("TeeBotus.bot.urllib.request.urlopen", side_effect=error):
+            with self.assertRaises(TelegramAPIError) as raised:
+                api.request("getUpdates", {})
+
+        self.assertEqual(raised.exception.status_code, 429)
+        self.assertEqual(raised.exception.retry_after, 137)
+
+    def test_telegram_api_rate_limit_exposes_retry_after(self) -> None:
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def read(self):
+                return b'{"ok":false,"error_code":429,"description":"Too Many Requests","parameters":{"retry_after":23}}'
+
+        api = TelegramAPI("123:test-token")
+        with patch("TeeBotus.bot.urllib.request.urlopen", return_value=Response()):
+            with self.assertRaises(TelegramAPIError) as raised:
+                api.get_updates(None)
+
+        self.assertEqual(raised.exception.status_code, 429)
+        self.assertEqual(raised.exception.retry_after, 23)
 
     def test_telegram_multipart_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")
@@ -4564,6 +4600,36 @@ class BotTests(unittest.TestCase):
         sleep.assert_any_call(5)
         self.assertEqual(api.calls, 2)
         self.assertIn("Retrying in 5 seconds", "\n".join(logs.output))
+
+    def test_run_polling_honors_telegram_retry_after(self) -> None:
+        class RateLimitedPollingAPI(FakeAPI):
+            def __init__(self) -> None:
+                super().__init__()
+                self.calls = 0
+
+            def get_updates(self, offset, timeout=50):
+                self.calls += 1
+                if self.calls == 1:
+                    raise TelegramAPIError(
+                        'Telegram HTTP error 429: {"error_code":429,"parameters":{"retry_after":137}}',
+                        status_code=429,
+                        retry_after=137,
+                    )
+                raise KeyboardInterrupt
+
+        api = RateLimitedPollingAPI()
+        with tempfile.TemporaryDirectory() as directory:
+            with patch("TeeBotus.adapters.telegram_runtime.time.sleep") as sleep:
+                run_polling(
+                    api,
+                    FakeInstructionStore(),
+                    instance_name="TestPolling",
+                    instances_dir=directory,
+                    secret_provider=StaticSecretProvider(b"t" * 32),
+                    youtube_job_runner=FakeJobRunner(),
+                )
+
+        sleep.assert_called_once_with(137)
 
     def test_run_polling_passes_modern_runtime_context_to_handle_update(self) -> None:
         api = OneUpdatePollingAPI()

@@ -486,3 +486,13 @@ Der Bauplan ist erst abgeschlossen, wenn:
   `qdrant_problem_count=0`. TBL bleibt bei `skipped=101` mit
   `no_private_route`; diese Zeilen sind weiterhin informational. Kein
   Restart und kein Push ausgeloest.
+- 2026-07-13: Telegram-Retry-Logikfehler reproduziert: HTTP-429-/Telegram-JSON-
+  Fehler wurden bisher nur als Text gespeichert; `parameters.retry_after` ging
+  verloren. Der Poller konnte dadurch trotz einer laengeren Telegram-Sperrfrist
+  zu frueh erneut pollen. `TelegramAPIError` traegt nun `status_code` und
+  `retry_after`; HTTP-, JSON-, Multipart- und Datei-Fehler werden strukturiert
+  ausgewertet. Der Poller wartet mindestens die von Telegram geforderte Dauer,
+  ohne die lokale Backoff-Grenze fuer nachfolgende Fehler zu entfernen.
+  Regressionen fuer beide 429-Pfade und den Poller bestehen; komplette
+  `tests/test_bot.py`: `183 passed`, `17 subtests passed`. Der Fix ist noch
+  uncommitted; Restart und Push bleiben gemaess Arbeitsregeln aus.
