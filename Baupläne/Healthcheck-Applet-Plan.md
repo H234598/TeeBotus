@@ -171,13 +171,14 @@ Der Healthcheck darf keine Memory-Dateien löschen oder reparieren. Recovery, Qu
 - TBL-Codex-History zeigt die 101 terminalen `no_private_route`-Skips explizit; delegierte Queues werden nicht als Problemstatus ausgegeben.
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` ausgewiesen.
 - `latest` wird stabil nach `created_at` bestimmt; `updated_at`-Änderungen alter Einträge verschieben nicht die angezeigte neueste Summary.
+- Der `/status`-Chatpfad verwendet dieselbe Bridge-/Skip-Semantik wie Runtime-Status und Cinnamon-Applet.
 - Applet-Testdatei: `178 passed`
 - Nach der Korrektur meldet der Live-Healthcheck `actionable_problem_count=3` und `informational_problem_count=21`.
 
 ### Versionen
 
 - TeeBotus-Baseline: `1.9.372`, Commit `a732f5c8` (`Clarify applet health diagnostics`)
-- TeeBotus aktueller Fixstand: `1.9.376`
+- TeeBotus aktueller Fixstand: `1.9.377`
 - History-Dispatcher: `0.2.0`, Commit `b818cc1` (`Add encrypted history queue compaction`)
 
 ## 7. Offene Arbeitspakete

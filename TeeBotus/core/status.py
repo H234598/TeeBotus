@@ -195,7 +195,7 @@ def build_status_reply(
             f"- Nutzermemory: {_memory_status_text(account_resolved=account_resolved, memory_size=memory_size)}",
             f"- Userfiles: {encryption_status}",
             "",
-            *_codex_history_chat_status_lines(account_store=account_store),
+            *_codex_history_chat_status_lines(account_store=account_store, instance_name=instance_name),
             "",
             *mcp_tool_status_lines(mcp_tools),
             "",
@@ -869,7 +869,7 @@ def codex_history_status_lines(
     return lines
 
 
-def _codex_history_chat_status_lines(*, account_store: AccountStore | None) -> list[str]:
+def _codex_history_chat_status_lines(*, account_store: AccountStore | None, instance_name: str = "") -> list[str]:
     if account_store is None:
         return []
     summary = _codex_history_summary(account_store)
@@ -878,14 +878,27 @@ def _codex_history_chat_status_lines(*, account_store: AccountStore | None) -> l
             "[Projekt-History]",
             f"- Codex-History: status=unknown error={redact_status_text(summary['error'])}",
         ]
+    safe_instance_name = str(instance_name or getattr(account_store, "instance_name", "") or "").strip()
+    delegated_source = _codex_history_queue_is_delegated(safe_instance_name)
+    delegated_problem_count = int(summary.get("non_delegable_problem_count", 0) or 0)
+    status = "ok" if delegated_source and delegated_problem_count == 0 else summary["status"]
+    problem_statuses = "" if delegated_source and delegated_problem_count == 0 else str(summary.get("problem_statuses") or "")
+    detail_parts: list[str] = []
+    if summary.get("skipped"):
+        detail_parts.append(f"skipped={summary['skipped']}")
+    if problem_statuses:
+        detail_parts.append(f"problem_statuses={_status_field_value(problem_statuses)}")
+    if summary.get("skip_reasons"):
+        detail_parts.append(f"skip_reasons={_status_field_value(summary['skip_reasons'])}")
+    detail = (" " + " ".join(detail_parts)) if detail_parts else ""
     latest = ""
     if summary["latest_repo"] != "<none>" or summary["latest_prefix"] != "<none>":
         latest = f" latest={summary['latest_repo']} {summary['latest_prefix']}"
     return [
         "[Projekt-History]",
         (
-            f"- Codex-History: status={summary['status']} queued={summary['queued']} "
-            f"failed={summary['failed']} total={summary['total']}{latest}"
+            f"- Codex-History: status={status} queued={summary['queued']} "
+            f"failed={summary['failed']} total={summary['total']}{detail}{latest}"
         ),
     ]
 

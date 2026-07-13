@@ -328,6 +328,26 @@ def test_status_display_name_cannot_break_status_lines(tmp_path: Path) -> None:
     assert text.splitlines()[0] == "Demo Injected [2J Status:"
 
 
+def test_status_chat_history_respects_bridge_delegation(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("TEEBOTUS_HISTORY_DISPATCHER_MODE", "bridge")
+    monkeypatch.setenv("TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES", "TeeBotus_Logger")
+    store = _store(tmp_path)
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "status": "queued",
+            "summary_prefix": "v1.0.0 #0001",
+            "project": {"repo_name": "TeeBotus"},
+            "summary": {"title": "Delegiert"},
+        },
+    )
+
+    text = build_status_reply(instance_name="Demo", project_root=tmp_path, account_store=store)
+
+    assert "- Codex-History: status=ok queued=1 failed=0 total=1" in text
+    assert "problem_statuses=queued:1" not in text
+
+
 def test_mcp_status_reports_invalid_configuration() -> None:
     assert mcp_tool_status_lines(["not", "a", "mapping"]) == [
         "MCP Tools",
