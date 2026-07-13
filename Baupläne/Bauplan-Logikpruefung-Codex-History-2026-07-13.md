@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist nach dem Snapshot-Schema-Fix Version `1.9.404`; der laufende Dienst bleibt bis zum naechsten vereinbarten Restart bei `1.9.394`.
+- Der aktuelle TeeBotus-Stand ist nach dem Snapshot-Schema-Fix Version `1.9.404`; der laufende Dienst ist nach dem 20-Commit-Restart ebenfalls auf dem aktuellen Quellstand.
 
 ## Arbeitsprinzipien
 
@@ -477,14 +477,15 @@ Der Plan ist erst abgeschlossen, wenn:
 - Befund 59: Ein zweiter Dispatcher-Refresh waehrend eines laufenden asynchronen Snapshot-Reads wurde verworfen. Bei deaktiviertem Auto-Refresh konnte dadurch ein alter Runtime-Pfad beziehungsweise Snapshot dauerhaft stehenbleiben.
 - Umsetzung Befund 59: Der Applet-Statuspfad merkt einen konkurrierenden Refresh jetzt als Pending und fuehrt ihn nach Abschluss des laufenden Reads genau einmal aus. Beim Entfernen des Applets wird der Pending-Zustand verworfen. SemVer-Bump auf `1.9.404`.
 - Regressionstest Befund 59: Die vollstaendige `tests/test_cinnamon_applet.py` laeuft mit `185 passed`; der neue Test bestaetigt, dass ein Refresh waehrend eines laufenden Reads gepuffert wird.
+- Live-Nachweis nach Befund 59: Nach 23 Commits seit der letzten Restart-Grenze wurden `teebotus.service`, `history-dispatcher.service` und `teebotus-codex-history-collector.service` am `2026-07-13 06:41:31-32 CEST` kontrolliert neu gestartet. Alle drei sind `active`; der laufende TeeBotus meldet `v1.9.404`, der Dispatcher-Snapshot `version=0.2.9`, `ok=true`, `queued=0`, `total=336` und `last_error` leer. Die installierte Applet-Kopie ist byte-identisch zur Quelle; `ReloadExtension(teebotus@H234598, APPLET)` war erfolgreich.
 
 ### Noch offen
 
 - Retry-Semantik geprueft: `dispatch.retry` downgradet terminale `delivered`-/`acknowledged`-Zustaende nicht; automatische Retries bleiben auf `failed`/`skipped`/`discarded` begrenzt.
-- Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.8` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
+- Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.9` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
 - Live- und Applet-Abgleich ist abgeschlossen; die verbleibenden Warnungen sind jetzt getrennt von Timeout-/Parserfehlern sichtbar und muessen fachlich beziehungsweise durch Benutzeraktion bearbeitet werden.
 - Dispatcher-Dry-Run fuer `TeeBotus_Logger` liefert im Bridge-Modus `statuses: none`, waehrend die lokale Outbox noch `19 queued` Legacy-Zeilen enthaelt. Dieser Bestand bleibt als Warnung sichtbar; keine automatische Zustellung, Loeschung oder Quarantaene wurde ohne explizite Migrationsentscheidung ausgefuehrt.
-- Der lokale TeeBotus-Code ist aktuell `1.9.404`; der laufende Dienst ist noch `1.9.394`, weil kein ausserplanmaessiger Restart ausgefuehrt wird. Der History-Dispatcher-Fix liegt lokal bei `0.2.9`, der aktive Dienst ist noch `0.2.8`.
+- Der lokale und laufende TeeBotus-Code ist aktuell `1.9.404`. Der lokale und aktive History-Dispatcher ist `0.2.9`. Die untracked Nutzerdaten (`.obsidian/`, `.stfolder/`, `Fusion_Packliste.txt`, `Unbenannt.base`, `Unbenannt.canvas`) bleiben bewusst unberuehrt.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
