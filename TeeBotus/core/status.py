@@ -44,6 +44,9 @@ from TeeBotus.runtime.accounts import (
     _instance_secret_fingerprint,
     _looks_like_teebotus_encrypted_payload,
     _postgres_memory_has_instance_payload_rows,
+    _runtime_secret_tool_lookup_retries,
+    _runtime_secret_tool_lookup_retry_delay_seconds,
+    _runtime_secret_tool_timeout_seconds,
     _secret_verifier_file_has_payload,
     _sqlite_memory_has_instance_payload_rows,
     telegram_identity_key,
@@ -111,6 +114,17 @@ CODEX_HISTORY_STATUS_TOKENS = CODEX_HISTORY_SUCCESS_STATUSES | {
 HISTORY_DISPATCHER_MODE_ENV = "TEEBOTUS_HISTORY_DISPATCHER_MODE"
 CODEX_HISTORY_DISPATCH_INSTANCES_ENV = "TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES"
 DEFAULT_CODEX_HISTORY_DISPATCH_INSTANCES = ("TeeBotus_Logger", "TeeBotusLogger", "TBL")
+
+
+def _status_secret_provider() -> SecretToolInstanceSecretProvider:
+    """Create a read-only status provider with the runtime Secret Service policy."""
+
+    return SecretToolInstanceSecretProvider(
+        create_if_missing=False,
+        lookup_retries=_runtime_secret_tool_lookup_retries(),
+        lookup_retry_delay_seconds=_runtime_secret_tool_lookup_retry_delay_seconds(),
+        timeout_seconds=_runtime_secret_tool_timeout_seconds(),
+    )
 
 
 def build_status_reply(
@@ -801,7 +815,7 @@ def codex_history_status_lines(
             account_store = AccountStore(
                 root,
                 safe_instance_name,
-                secret_provider=secret_provider or SecretToolInstanceSecretProvider(create_if_missing=False),
+                secret_provider=secret_provider or _status_secret_provider(),
                 create_dirs=False,
             )
         except Exception as exc:  # noqa: BLE001 - runtime-status should diagnose store/key mismatches.
@@ -1172,7 +1186,7 @@ def account_identity_health_lines(
         report = build_accounts_admin_report(
             instances_dir=project_root.resolve() / "instances",
             instances=(safe_instance_name,),
-            provider=secret_provider or SecretToolInstanceSecretProvider(create_if_missing=False),
+            provider=secret_provider or _status_secret_provider(),
             env=os.environ if env is None else env,
             runtime_channels=runtime_channels,
         )
@@ -1243,7 +1257,7 @@ def account_secret_health_lines(*, instance_name: str, project_root: Path, secre
     root = project_root.resolve() / "instances" / safe_instance_name / "data" / "accounts"
     if not root.exists():
         return [f"account_crypto={safe_instance_name} status=none"]
-    provider = secret_provider or SecretToolInstanceSecretProvider(create_if_missing=False)
+    provider = secret_provider or _status_secret_provider()
     presence: dict[str, bool | None] = {}
     presence_errors: dict[str, str] = {}
     purposes = (
@@ -1734,7 +1748,7 @@ def account_memory_dir_for_sender(sender_id: str, *, instance_name: str, project
         store = AccountStore(
             project_root / "instances" / safe_instance_name / "data" / "accounts",
             safe_instance_name,
-            secret_provider=SecretToolInstanceSecretProvider(create_if_missing=False),
+            secret_provider=_status_secret_provider(),
             create_dirs=False,
         )
         account_id = store.get_account_for_identity(telegram_identity_key(sender_id))
@@ -1856,7 +1870,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
         store = AccountStore(
             root,
             safe_instance_name,
-            secret_provider=secret_provider or SecretToolInstanceSecretProvider(create_if_missing=False),
+            secret_provider=secret_provider or _status_secret_provider(),
             create_dirs=False,
             memory_backend_enabled=_status_memory_backend_enabled(root),
         )

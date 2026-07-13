@@ -154,6 +154,30 @@ def test_runtime_status_secret_provider_uses_runtime_retry_policy(monkeypatch) -
     assert provider.timeout_seconds == 4.0
 
 
+def test_core_status_secret_provider_uses_runtime_retry_policy(monkeypatch) -> None:
+    status = importlib.import_module("TeeBotus.core.status")
+    seen: dict[str, object] = {}
+
+    def fake_secret_provider(**kwargs: object) -> StaticSecretProvider:
+        seen.update(kwargs)
+        return StaticSecretProvider(b"s" * 32)
+
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES", "2")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS", "0.25")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_TIMEOUT_SECONDS", "4")
+    monkeypatch.setattr(status, "SecretToolInstanceSecretProvider", fake_secret_provider)
+
+    provider = status._status_secret_provider()
+
+    assert provider.secret == b"s" * 32
+    assert seen == {
+        "create_if_missing": False,
+        "lookup_retries": 2,
+        "lookup_retry_delay_seconds": 0.25,
+        "timeout_seconds": 4.0,
+    }
+
+
 def test_runtime_status_all_uses_runtime_instance_discovery(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"
