@@ -717,8 +717,12 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                 "recipient_results": completion_results,
                 "reason": _overall_dispatch_reason(item_results),
             })
-            if not completed.get("ok"):
-                raise HistoryDispatcherError(str(completed.get("error") or "History-Dispatcher complete failed"))
+            completion_data = completed.get("data")
+            completion_error = completed.get("error")
+            if isinstance(completion_data, Mapping) and completion_data.get("ok") is False:
+                completion_error = completion_data.get("error") or completion_error
+            if completed.get("ok") is not True or completion_error:
+                raise HistoryDispatcherError(str(completion_error or "History-Dispatcher complete failed"))
             result_rows.extend(item_results)
         return {
             "ok": not any(str(row.get("status") or "").casefold() in {"failed", "error"} for row in result_rows),

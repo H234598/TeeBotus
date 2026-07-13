@@ -1385,6 +1385,50 @@ def test_codex_history_dispatch_bridge_preserves_already_delivered_recipients(
     }]
 
 
+def test_codex_history_dispatch_bridge_rejects_nested_completion_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            if operation == "dispatch.claim":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "hd-item-claim-lost",
+                            "payload": {"summary": {"text": "Claim verloren"}},
+                            "recipient_results": [],
+                        }],
+                    },
+                }
+            if operation == "dispatch.complete":
+                return {"ok": True, "data": {"ok": False, "error": "claim_not_owned"}}
+            raise AssertionError(operation)
+
+    async def fake_send(*_args, **kwargs):
+        return {"account_id": kwargs.get("account_id", "open"), "status": "accepted", "channel": "telegram"}
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_account_ids", lambda *args, **kwargs: ("open",))
+    monkeypatch.setattr(codex_history_module, "_dispatch_codex_history_item_to_account", fake_send)
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            object(),
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["status_counts"] == {"failed": 1}
+    assert result["items"][0]["reason"] == "history_dispatcher_unavailable"
+    assert "claim_not_owned" in result["items"][0]["error"]
+
+
 def test_history_dispatcher_digest_payload_becomes_markdown_attachment() -> None:
     item = codex_history_module._history_dispatcher_item_to_legacy(
         {
