@@ -6,7 +6,7 @@
 
 **Quellstand bei Erstellung:** TeeBotus `1.9.493`
 
-**Aktueller Quellstand:** TeeBotus `1.9.496`; History-Dispatcher `0.2.12`
+**Aktueller Quellstand:** TeeBotus `1.9.496`; History-Dispatcher `0.2.13`
 
 **Arbeitsbereich:** `/home/teladi/TeeBotus`
 
@@ -98,6 +98,9 @@ Historie erhalten, insbesondere:
   `delivered` erhalten.
 - [x] TeeBotus und der zentrale `History-Dispatcher` verwenden dieselbe
   Aggregations- und Promotionslogik.
+- [x] `maintenance.prune` loescht keine History-Items mehr; alte Summarys
+  bleiben als verschluesselte Originale erhalten. Nur abgeleitete Audit-,
+  Tombstone- und Cursor-Metadaten unterliegen weiter der Aufraeumfrist.
 
 ### Healthcheck und Cinnamon-Applet
 
@@ -288,7 +291,8 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
 - `pytest -q tests/test_codex_history.py`: `164 passed`.
 - `pytest -q tests/test_codex_history.py tests/test_admin_accounts.py tests/test_version_notifications.py`:
   `443 passed` nach dem Statusvertrag-Fix.
-- `/home/teladi/History-Dispatcher`: `pytest -q`: `56 passed`.
+- `/home/teladi/History-Dispatcher`: `pytest -q`: `57 passed`.
+- Fokussierter Prune-/Statuslauf im History-Dispatcher: `7 passed`.
 - Fokussierte Bridge-/Matcher-Regressionen: `4 passed` fuer den aktuellen Fix;
   zuvor `25 passed` fuer den ersten Matcher-Fix.
 - Relevante Metadaten-/Kompatibilitaetstests: `97 passed, 51 deselected`.
@@ -364,3 +368,6 @@ Der Bauplan ist erst abgeschlossen, wenn:
 - 2026-07-13: Statusvertrag, Append-Validierung und Receipt-Mapping behoben:
   TeeBotus `1.9.496`, History-Dispatcher `0.2.12`; TeeBotus `443 passed`,
   History-Dispatcher `56 passed`. Push und Restart bleiben aus.
+- 2026-07-13: Logikfehler in `maintenance.prune` reproduziert und behoben:
+  abgeschlossene History-Items wurden trotz Append-only-Vertrag geloescht.
+  Der History-Dispatcher steht jetzt bei `0.2.13`; fokussiert `7 passed`.
