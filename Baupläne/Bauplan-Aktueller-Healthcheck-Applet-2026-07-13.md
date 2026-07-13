@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.415`, Commit `245030e7`.
+- Quellstand: TeeBotus `1.9.416`, Commit `1acfb5c2`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -156,14 +156,13 @@ Nachweis:
 - SemVer-Bump auf `1.9.414`, Commit `a4388030`
   (`Tighten applet diagnostic classification`).
 
-### Befund 70: Fehlerdiagnosen ohne explizites `status=` wurden ignoriert
+### Befund 70: Fehlerdiagnosen ohne explizites `status=` wurden im Python-Parser ignoriert
 
 Eine Runtime-Diagnosezeile wie `service=demo error=provider_failed` enthielt
 einen echten Fehler, aber keinen der bekannten Statuswerte. Der Python-Parser
-erzeugte dafuer bisher weder `status_counts` noch einen actionable Befund. Das
-war inkonsistent zum JavaScript-Applet, das jedes nicht-neutrale `error` als
-Problem behandelt. Der Parser leitet deshalb jetzt fuer eine solche Zeile
-`warning` ab. Bereits klassifizierte Problemstatus wie `broken` oder
+erzeugte dafuer bisher weder `status_counts` noch einen actionable Befund. Der
+Parser leitet deshalb jetzt fuer eine solche Zeile `warning` ab. Bereits
+klassifizierte Problemstatus wie `broken` oder
 `unavailable` erhalten keine zusaetzliche Warnung; neutrale Werte wie
 `error=none` bleiben gesund.
 
@@ -176,6 +175,24 @@ Nachweis:
 - Vollstaendige Applet-Suite: `196 passed in 39.72s`.
 - SemVer-Bump auf `1.9.415`, Commit `245030e7`
   (`Detect error-only applet diagnostics`).
+
+### Befund 71: Python- und JavaScript-Klassifikation liefen bei Fehlerzeilen auseinander
+
+Nach Befund 70 meldete der Python-Healthpayload `service=demo
+error=provider_failed` korrekt als `warning`, waehrend das JavaScript-Applet
+die Zeile weiterhin nur bei `status=ready` plus Fehler als Problemzeile
+sortierte. Dadurch konnte der Healthkopf eine Warnung anzeigen, waehrend der
+konkrete Eintrag im Menue unter den normalen Zeilen blieb. Der gemeinsame
+Klassifikator prueft jetzt in beiden Pfaden jedes nicht-neutrale `error` direkt;
+die bisherige Ready-Sonderbehandlung ist entfallen.
+
+Nachweis:
+
+- JS-Regressionstest fuer `error=provider_failed` ohne `status=`; zusammen mit
+  den bestehenden Ready-/Neutralfaellen: `3 passed, 194 deselected`.
+- Vollstaendige Applet-Suite: `197 passed in 42.73s`.
+- SemVer-Bump auf `1.9.416`, Commit `1acfb5c2`
+  (`Align applet error classification`).
 
 ## Naechste Arbeitspakete
 
