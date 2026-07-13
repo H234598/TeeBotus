@@ -3253,6 +3253,25 @@ def test_cinnamon_applet_runtime_parser_does_not_hide_codex_repo_failures_as_inf
     assert parsed["summary"]["informational_problem_statuses"] == "warning:1"
 
 
+def test_cinnamon_applet_runtime_parser_does_not_hide_unknown_api_or_identity_statuses() -> None:
+    parsed = parse_runtime_status(
+        """
+        [API Keys, Limits und Kosten]
+        api_budget=ready_with_error status=ready error=provider_failed
+        api_budget=unknown_route status=unknown
+
+        [Tools und Account-Memory]
+        account_identity=broken_identity status=unknown error=doctor_failed
+        account_identity=known_warning status=warning identity_warnings=1
+        """
+    )
+
+    assert parsed["summary"]["actionable_problem_status_count"] == 3
+    assert parsed["summary"]["actionable_problem_statuses"] == "unknown:2,warning:1"
+    assert parsed["summary"]["informational_problem_status_count"] == 1
+    assert parsed["summary"]["informational_problem_statuses"] == "warning:1"
+
+
 def test_cinnamon_applet_runtime_summary_counts_problem_statuses() -> None:
     parsed = parse_runtime_status(
         """

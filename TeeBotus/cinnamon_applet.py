@@ -742,7 +742,11 @@ def _line_health_statuses(
     informational = (
         primary == "fallback_defaults"
         or (prefix == "codex_usage_account" and primary == "partial")
-        or prefix in {"api_budget", "account_identity"}
+        or (
+            prefix == "api_budget"
+            and _api_budget_status_is_informational(fields, fallback_covered=fallback_covered)
+        )
+        or (prefix == "account_identity" and _account_identity_status_is_informational(fields))
         or (prefix == "codex_history_repo" and _codex_history_repo_status_is_informational(fields))
         or (
             prefix == "structured_decision"
@@ -775,6 +779,22 @@ def _codex_history_repo_status_is_informational(fields: Mapping[str, Any]) -> bo
                 statuses.append(normalized)
         return bool(statuses) and all(status in {"queued", "skipped"} for status in statuses)
     return _safe_int(fields.get("queued"), 0) > 0 or _safe_int(fields.get("skipped"), 0) > 0
+
+
+def _api_budget_status_is_informational(fields: Mapping[str, Any], *, fallback_covered: bool) -> bool:
+    if fallback_covered:
+        return True
+    primary = _normalized_status_value(fields.get("status"))
+    if primary in FALLBACK_SUPPRESSION_BLOCKERS | {"unknown", "unavailable", "unreachable"}:
+        return False
+    return primary != "ready" or not str(fields.get("error") or "").strip()
+
+
+def _account_identity_status_is_informational(fields: Mapping[str, Any]) -> bool:
+    return (
+        _normalized_status_value(fields.get("status")) == "warning"
+        and _safe_int(fields.get("identity_warnings"), 0) > 0
+    )
 
 
 def _normalized_status_value(value: Any) -> str:
