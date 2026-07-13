@@ -738,7 +738,10 @@ def _runtime_status_structured_decision_line(account: Any, *, instructions: Any 
             f"structured_decision={label} status=broken route_status=broken "
             f"error={_sanitize_status_text(f'{type(exc).__name__}: {exc}')}"
         )
-    route_status, route_error = _runtime_route_status(route)
+    route_status, route_error = _runtime_route_status(
+        route,
+        instance_names=(str(getattr(account, "instance_name", "") or ""),),
+    )
     detail = (
         f"structured_decision={label} status=enabled source={reason} "
         f"profile={route.profile_name} provider={route.provider} model={route.model} route_status={route_status}"

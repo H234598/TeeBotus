@@ -1825,6 +1825,35 @@ def test_runtime_status_uses_instance_scoped_key_for_openai_fallback(monkeypatch
     assert "fallback_api_key=configured" in line
 
 
+def test_structured_decision_status_uses_instance_scoped_openai_key(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    from TeeBotus.llm.profiles import LLMRoute
+
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY_DEMO", "instance-openai-secret")
+    monkeypatch.setattr(
+        "TeeBotus.llm.profiles.select_llm_route",
+        lambda *_args, **_kwargs: LLMRoute(
+            purpose="structured_decision",
+            profile_name="openai_premium",
+            provider="litellm",
+            model="openai/gpt-test",
+            api_key_env="OPENAI_API_KEY",
+        ),
+    )
+
+    account = SimpleNamespace(
+        instance_name="Demo",
+        label="telegram:1",
+        structured_decision_enabled="yes",
+        llm_allow_remote_fallback="",
+    )
+    line = bot._runtime_status_structured_decision_line(account)
+
+    assert "structured_decision=Demo/telegram:1 status=enabled" in line
+    assert "route_status=configured" in line
+
+
 def test_runtime_status_reports_missing_key_for_remote_litellm_purpose_route(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"
