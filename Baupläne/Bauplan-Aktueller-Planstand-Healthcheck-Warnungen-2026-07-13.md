@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.446`, Commit `b877409f`
+**Quellstand:** TeeBotus `1.9.447`, Commit `bdf427b4`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -365,6 +365,22 @@ verschiedene effektive Keys verwenden.
 - Read-only-Runtime-Probe: `hard_reasoning` bleibt `configured` mit
   `key_scope=instance_fallback`, ohne Provideraufruf.
 - SemVer `1.9.446`, Commit `b877409f`.
+
+## Befund 103: OpenAI-Fallback ignorierte den Instanz-Key
+
+Der Runtime-Builder las den Key des OpenAI-Fallbacks bisher direkt aus dem
+globalen `fallback_api_key_env`. Bei einer vorhandenen
+`OPENAI_API_KEY_<INSTANCE>` konnte der Primaerpfad daher konfiguriert sein,
+waehrend der Fallback-Client ohne Key blieb.
+
+### Umsetzung und Nachweis
+
+- Fallback-Keys werden in Runtime- und exportiertem Profil-Builder jetzt mit
+  dem gemeinsamen instanzbezogenen Resolver aufgeloest.
+- HF-Pool-zu-OpenAI-Fallbacks verwenden den Instanz-Key vor dem globalen Key.
+- Router-, Package-, HF-Fallback-, Proactive- und Metadaten-Suite:
+  `128 passed in 3.88s`.
+- SemVer `1.9.447`, Commit `bdf427b4`.
 
 ## Arbeitsplan
 

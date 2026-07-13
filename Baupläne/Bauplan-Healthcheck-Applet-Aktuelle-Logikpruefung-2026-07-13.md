@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.446`, Commit `b877409f`
+**Quellstand:** TeeBotus `1.9.447`, Commit `bdf427b4`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet, Runtime-Healthpayload und `tests/test_cinnamon_applet.py`
 
 ## Auftrag
@@ -589,6 +589,21 @@ spezifischen Instanz-Key aus dem Profil. Der Healthcheck konnte dadurch
 - Read-only-Runtime-Probe bestaetigt `hard_reasoning ... configured` und
   `key_scope=instance_fallback` ohne Provideraufruf.
 - SemVer `1.9.446`, Commit `b877409f`.
+
+## Befund 103: Fallback-Key war nicht instanzbezogen
+
+Der Healthcheck konnte die Primaerroute mit einem Instanz-Key als konfiguriert
+anzeigen, waehrend ein OpenAI-Fallback nur den globalen Keynamen las. Dadurch
+war der Request-Fallback in derselben Instanz ohne Key.
+
+### Umsetzung und Nachweis
+
+- Runtime- und exportierter Profil-Builder verwenden fuer OpenAI-Fallbacks
+  nun denselben Instanz-vor-Global-Resolver.
+- Lokale HF-Pool-Fallback-Regressionen fuer beide Builder sind gruen.
+- Router-, Package-, HF-Fallback-, Proactive- und Metadaten-Suite:
+  `128 passed in 3.88s`.
+- SemVer `1.9.447`, Commit `bdf427b4`.
 
 ## Invarianten
 

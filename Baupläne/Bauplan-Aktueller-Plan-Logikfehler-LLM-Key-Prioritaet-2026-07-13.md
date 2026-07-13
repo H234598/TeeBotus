@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.446`, Commit `b877409f`
+**Quellstand:** TeeBotus `1.9.447`, Commit `bdf427b4`
 **Geltungsbereich:** `TeeBotus/runtime/config.py`,
 `TeeBotus/runtime/llm_factory.py`, `TeeBotus/llm/profiles.py`, die
 Runtime-Runner und die zugehoerigen Regressionstests
@@ -95,6 +95,25 @@ Keyrotation oder einem unpassenden Benutzerkontext fuehren.
 - Read-only-Probe: `hard_reasoning ... status=configured
   key_scope=instance_fallback`; kein Provideraufruf.
 - SemVer `1.9.446`, Commit `b877409f`.
+
+## Befund 103: OpenAI-Fallback ignorierte den Instanz-Key
+
+Der Primärpfad bewahrte den aufgeloesten Runtime-Key bereits korrekt. Ein
+OpenAI-Fallback wurde jedoch separat nur mit `source[OPENAI_API_KEY]`
+aufgebaut. Wenn nur `OPENAI_API_KEY_<INSTANCE>` gesetzt war, blieb der
+Fallback-Client ohne Key, obwohl die Instanz korrekt konfiguriert war.
+
+### Umsetzung und Nachweis
+
+- Runtime-Factory und exportierter Profil-Builder loesen den Fallback-Key
+  jetzt ueber denselben instanzbezogenen Resolver auf.
+- Ein OpenAI-Fallback verwendet damit `OPENAI_API_KEY_<INSTANCE>` vor dem
+  globalen Profil-Key; Gemini-, lokale und andere Fallbacks behalten ihre
+  bisherige Env-Aufloesung.
+- Runtime- und exportierter HF-Pool-Fallback-Test mit Instanz-Key: gruen.
+- Router-, Package-, HF-Fallback-, Proactive- und Metadaten-Suite:
+  `128 passed in 3.88s`.
+- SemVer `1.9.447`, Commit `bdf427b4`.
 
 ## Zielvertrag fuer die Key-Aufloesung
 
