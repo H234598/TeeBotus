@@ -1623,6 +1623,28 @@ def test_codex_history_dispatch_bridge_dry_run_requests_payload(
     assert result["items"] == [{"status": "would_skip", "summary_prefix": "v1.9.380 #0001"}]
 
 
+def test_codex_history_dispatch_bridge_reports_unsafe_socket_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class UnexpectedClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            raise AssertionError("unsafe socket path must be rejected before client creation")
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", UnexpectedClient)
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            object(),
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "relative.sock"},
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["status_counts"] == {"failed": 1}
+    assert result["items"][0]["reason"] == "history_dispatcher_unavailable"
+    assert "unsafe" in result["items"][0]["error"]
+
+
 def test_history_dispatcher_digest_payload_becomes_markdown_attachment() -> None:
     item = codex_history_module._history_dispatcher_item_to_legacy(
         {
@@ -1672,6 +1694,25 @@ def test_codex_history_shadow_append_mirrors_after_legacy_write(
     assert item["id"] == mirrored[0]["id"]
     assert mirrored[0]["operation"] == "history.append"
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["id"] == item["id"]
+
+
+def test_codex_history_shadow_append_keeps_legacy_write_on_unsafe_socket(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = make_git_repo(tmp_path, "shadow-invalid-socket", version="1.9.0")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    monkeypatch.setenv("TEEBOTUS_HISTORY_DISPATCHER_MODE", "shadow")
+    monkeypatch.setenv("HISTORY_DISPATCHER_SOCKET", "relative.sock")
+
+    item = append_codex_history_summary(
+        store,
+        repo_root=repo,
+        title="Shadow bleibt intakt",
+        bullets=["Ein fehlerhafter Dispatcher-Socket darf den Legacy-Pfad nicht abbrechen."],
+    )
+
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+    assert [row["id"] for row in persisted] == [item["id"]]
 
 
 def test_codex_history_dispatch_uses_cross_instance_admin_route(tmp_path: Path) -> None:

@@ -591,7 +591,7 @@ def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any]) -> None:
         })
         if not response.get("ok"):
             LOGGER.warning("History-Dispatcher shadow append failed: %s", str(response.get("error") or "")[:240])
-    except HistoryDispatcherError as exc:
+    except (HistoryDispatcherError, ValueError) as exc:
         LOGGER.warning("History-Dispatcher shadow append unavailable: %s", str(exc)[:240])
 
 
@@ -695,7 +695,6 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
             "status_counts": {},
             "mode": "history-dispatcher",
         }
-    client = HistoryDispatcherClient(_history_dispatcher_socket_path(env), timeout_seconds=10)
     candidate_account_ids = _codex_history_dispatch_account_ids(
         store,
         instance_name=instance_name,
@@ -705,6 +704,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
         secret_provider=secret_provider,
     )
     try:
+        client = HistoryDispatcherClient(_history_dispatcher_socket_path(env), timeout_seconds=10)
         if dry_run:
             response = client.request("history.query", {
                 "status": "queued",
@@ -789,7 +789,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
             "status_counts": _status_counts(result_rows),
             "mode": "history-dispatcher",
         }
-    except HistoryDispatcherError as exc:
+    except (HistoryDispatcherError, ValueError) as exc:
         return {
             "ok": False,
             "dry_run": dry_run,
