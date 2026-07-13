@@ -1862,6 +1862,46 @@ def test_codex_history_shadow_append_mirrors_after_legacy_write(
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["id"] == item["id"]
 
 
+def test_codex_history_shadow_append_reconciles_deduplicated_terminal_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = make_git_repo(tmp_path, "shadow-deduplicated", version="1.9.0")
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, _operation: str, _body: dict[str, object]) -> dict[str, object]:
+            return {
+                "ok": True,
+                "data": {
+                    "ok": True,
+                    "id": "external-existing-id",
+                    "deduplicated": True,
+                    "status": "delivered",
+                },
+            }
+
+    monkeypatch.setenv("TEEBOTUS_HISTORY_DISPATCHER_MODE", "shadow")
+    monkeypatch.setenv("HISTORY_DISPATCHER_SOCKET", str(tmp_path / "control.sock"))
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+
+    item = append_codex_history_summary(
+        store,
+        repo_root=repo,
+        title="Dedupliziert",
+        bullets=["Der externe Status ist bereits terminal."],
+        codex_metadata={"dedupe_key": "sha256:already-delivered"},
+    )
+
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert item["id"] == persisted["id"]
+    assert persisted["status"] == "delivered"
+    assert persisted["delivery"]["attempts"] == 0
+    assert persisted["last_reason"] == "dispatcher_deduplicated"
+
+
 def test_codex_history_shadow_append_reports_inner_dispatcher_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

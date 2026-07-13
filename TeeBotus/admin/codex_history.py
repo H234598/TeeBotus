@@ -387,7 +387,7 @@ def append_codex_history_summary(
         if isinstance(project, Mapping):
             _upsert_project(store, account_id, project, item, timestamp)
         result = dict(item)
-    _mirror_codex_history_item_to_dispatcher(result)
+    _mirror_codex_history_item_to_dispatcher(result, store=store)
     return result
 
 
@@ -571,7 +571,7 @@ def _history_dispatcher_response_items(data: Mapping[str, Any], *, operation: st
     return validated
 
 
-def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any]) -> None:
+def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any], *, store: AccountStore | None = None) -> None:
     if _history_dispatcher_mode(None) not in {"shadow", "bridge"}:
         return
     try:
@@ -596,6 +596,19 @@ def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any]) -> None:
             append_data = _history_dispatcher_response_data(response, operation="history.append")
             if not str(append_data.get("id") or "").strip():
                 raise HistoryDispatcherError("History-Dispatcher history.append returned no item id")
+            if bool(append_data.get("deduplicated")):
+                external_status = str(append_data.get("status") or "").strip().casefold()
+                if external_status in {"delivered", "failed", "skipped", "compacted"}:
+                    _sync_codex_history_local_dispatch_status(
+                        store,
+                        str(item.get("id") or ""),
+                        external_status,
+                        dedupe_key=dedupe_key,
+                        reason="dispatcher_deduplicated",
+                        now=str(item.get("updated_at") or utc_now()),
+                        dispatch_results=(),
+                        increment_attempt=False,
+                    )
         except HistoryDispatcherError as exc:
             LOGGER.warning("History-Dispatcher shadow append failed: %s", str(exc)[:240])
     except (HistoryDispatcherError, ValueError) as exc:
@@ -722,6 +735,7 @@ def _sync_codex_history_local_dispatch_status(
     reason: str,
     now: str,
     dispatch_results: Sequence[Mapping[str, Any]],
+    increment_attempt: bool = True,
 ) -> None:
     normalized_item_id = str(item_id or "").strip()
     normalized_dedupe_key = str(dedupe_key or "").strip()
@@ -748,7 +762,7 @@ def _sync_codex_history_local_dispatch_status(
             status,
             reason=reason,
             now=now,
-            increment_attempt=True,
+            increment_attempt=increment_attempt,
             dispatch_results=dispatch_results,
         )
     except (AccountStoreError, OSError, ValueError) as exc:
