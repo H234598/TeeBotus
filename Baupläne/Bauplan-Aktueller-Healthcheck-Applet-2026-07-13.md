@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.419`, Commit `b8ee21cf`.
+- Quellstand: TeeBotus `1.9.420`, Commit `6f9ed0f5`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -259,6 +259,26 @@ Nachweis:
   `200 passed in 35.26s`; danach fokussierter Test erneut gruen.
 - SemVer-Bump auf `1.9.419`, Commit `b8ee21cf`
   (`Require matching route for API budget suppression`).
+
+### Befund 75: Gesunde Route konnte einen widerspruechlichen API-Budgetfehler verdecken
+
+Die neue Namenspruefung aus Befund 74 war noch zu schwach: Schon eine
+gleichnamige `llm_route` reichte aus, um den `api_budget`-Fehler als Duplikat zu
+behandeln. Bei `llm_route=conflict status=configured` und
+`api_budget=conflict status=missing_key` wurde damit ein echter
+Statuswiderspruch nicht actionable. Der Parser sammelt jetzt pro Route auch
+die Problemstatus. Eine API-Budgetzeile wird nur dann unterdrueckt, wenn die
+korrespondierende Route selbst einen Problemstatus oder einen wirksamen
+Fallbackpfad ausweist. Eine gesunde Route macht den Budgetwiderspruch sichtbar.
+
+Nachweis:
+
+- Regressionstest mit orphan, matched-failing und matched-healthy/conflicting
+  Route: zwei API-Budgetbefunde actionable, nur das echte Duplikat informativ.
+- Fokussierte Klassifikationssuite: `3 passed, 197 deselected`.
+- Vollstaendige Applet-Suite: `200 passed in 36.27s`.
+- SemVer-Bump auf `1.9.420`, Commit `6f9ed0f5`
+  (`Expose API budget route conflicts`).
 
 ## Naechste Arbeitspakete
 
