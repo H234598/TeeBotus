@@ -101,11 +101,11 @@ def test_account_identity_health_warns_when_signal_runtime_has_no_linked_identit
     lines = account_identity_health_lines(instance_name="Demo", project_root=tmp_path, env=env)
 
     assert lines[0] == (
-        "account_identity=Demo status=warning identity_warnings=1 "
+        "account_identity=Demo status=ok identity_warnings=0 identity_notices=1 "
         "runtime_slots=signal:1,telegram:1 identities=telegram:1"
     )
     assert any(
-        "account_identity_warning=Demo code=runtime_channel_without_identity channel=signal" in line
+        "account_identity_notice=Demo code=runtime_channel_without_identity channel=signal" in line
         and "configured_runtime_slots=1" in line
         and "runtime_labels=signal:1" in line
         and "identity_channels=telegram:1" in line
@@ -141,7 +141,7 @@ def test_account_identity_health_does_not_require_memory_secret(tmp_path: Path, 
     lines = account_identity_health_lines(instance_name="Demo", project_root=tmp_path, env=env)
 
     assert lines[0] == (
-        "account_identity=Demo status=warning identity_warnings=1 "
+        "account_identity=Demo status=ok identity_warnings=0 identity_notices=1 "
         "runtime_slots=signal:1,telegram:1 identities=telegram:1"
     )
 

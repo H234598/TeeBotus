@@ -1220,14 +1220,19 @@ def account_identity_health_lines(
         if isinstance(identity_health, Mapping)
         else "0"
     )
-    lines = [
-        (
-            f"account_identity={safe_instance_name} status={status} "
-            f"identity_warnings={warning_count} "
-            f"runtime_slots={_runtime_status_count_label(runtime_slots.get('configured_channels', {}) if isinstance(runtime_slots, Mapping) else {})} "
-            f"identities={_runtime_status_count_label(store_report.get('identities_by_channel', {}) if isinstance(store_report, Mapping) else {})}"
-        )
-    ]
+    notice_count = (
+        _status_integer_label(identity_health.get("notice_count", 0))
+        if isinstance(identity_health, Mapping)
+        else "0"
+    )
+    notice_field = f" identity_notices={notice_count}" if notice_count != "0" else ""
+    identity_line = (
+        f"account_identity={safe_instance_name} status={status} "
+        f"identity_warnings={warning_count}{notice_field} "
+        f"runtime_slots={_runtime_status_count_label(runtime_slots.get('configured_channels', {}) if isinstance(runtime_slots, Mapping) else {})} "
+        f"identities={_runtime_status_count_label(store_report.get('identities_by_channel', {}) if isinstance(store_report, Mapping) else {})}"
+    )
+    lines = [identity_line]
     if isinstance(identity_health, Mapping):
         for warning in identity_health.get("warnings", []) if isinstance(identity_health.get("warnings"), list) else []:
             if not isinstance(warning, Mapping):
@@ -1242,6 +1247,21 @@ def account_identity_health_lines(
                     f"identity_channels={_runtime_status_count_label(warning.get('identity_channels', {}))} "
                     f"message={redact_status_text(warning.get('message', ''))} "
                     f"action={redact_status_text(warning.get('recommended_action', ''))}"
+                )
+            )
+        for notice in identity_health.get("notices", []) if isinstance(identity_health.get("notices"), list) else []:
+            if not isinstance(notice, Mapping):
+                continue
+            lines.append(
+                (
+                    f"account_identity_notice={safe_instance_name} "
+                    f"code={redact_status_text(notice.get('code', 'unknown'))} "
+                    f"channel={redact_status_text(notice.get('channel', '<none>'))} "
+                    f"configured_runtime_slots={redact_status_text(notice.get('configured_runtime_slots', '<none>'))} "
+                    f"runtime_labels={_runtime_status_sequence_label(notice.get('configured_runtime_labels', []))} "
+                    f"identity_channels={_runtime_status_count_label(notice.get('identity_channels', {}))} "
+                    f"message={redact_status_text(notice.get('message', ''))} "
+                    f"action={redact_status_text(notice.get('recommended_action', ''))}"
                 )
             )
     return lines

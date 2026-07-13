@@ -1414,6 +1414,17 @@ TeeBotusApplet.prototype = {
 
   _formatAccountLine: function(line) {
     let fields = this._parseFields(line);
+    if (fields.account_identity_notice) {
+      if (String(fields.code || "").trim() === "runtime_channel_without_identity" && String(fields.channel || "").trim() === "signal") {
+        return "Signal-Verknuepfung " + fields.account_identity_notice
+          + ": Hinweis; 1. in einem bereits verknuepften privaten Chat /register oder /rotate_secret ausfuehren"
+          + "; 2. im privaten Signal-Chat /login <account_id> <secret> senden"
+          + "; /register in Signal nur fuer ein absichtlich getrenntes Konto verwenden";
+      }
+      let message = fields.message ? "; " + fields.message : "";
+      let action = fields.action ? "; Aktion " + fields.action : "";
+      return "Account-Identitaet " + fields.account_identity_notice + ": Hinweis" + message + action;
+    }
     if (fields.account_identity_warning) {
       if (String(fields.code || "").trim() === "runtime_channel_without_identity" && String(fields.channel || "").trim() === "signal") {
         return "Signal-Verknuepfung " + fields.account_identity_warning

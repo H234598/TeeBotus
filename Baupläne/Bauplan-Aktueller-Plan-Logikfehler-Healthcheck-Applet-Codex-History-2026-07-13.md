@@ -429,8 +429,10 @@ Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
 
 ### D. Weitere actionable Befunde
 
-- [ ] Nicht verknuepfte optionale Signal-Identitaet von `Depressionsbot` nur
-  ueber den bestaetigten Account-Linking-Flow pruefen.
+- [x] Nicht verknuepfte optionale Signal-Identitaet von `Depressionsbot` als
+  sichtbaren Hinweis statt Top-Level-Healthfehler klassifizieren; explizites
+  Linking bleibt ausschliesslich ueber den bestaetigten Account-Linking-Flow
+  erlaubt.
 - [ ] Fehlende Provider-Keys nur dann actionable ausweisen, wenn die Route
   aktiviert ist und kein gesunder Fallback wirkt.
 - [ ] Matrix-/optionale Slots ohne Credentials als Konfigurationshinweise,
@@ -650,3 +652,9 @@ Der Plan ist erst abgeschlossen, wenn:
   respektiert ein positives Limit, statt nur das erste Item zu zeigen. Version
   `1.9.489`, Commit `d412df5d`; `160` History-Tests und `166`
   History-/Metadaten-Tests gruen. Kein Restart und kein Push ausgeloest.
+- 2026-07-13: Eine konfigurierte, aber noch nicht sicher verknuepfte
+  Signal-Identitaet wird als `account_identity_notice` statt als actionable
+  Top-Level-Warnung gemeldet. Die Quellprobe ergab `health.status=ok`,
+  `actionable_problem_count=0` und eine sichtbare Notice. Automatisches
+  Linking bleibt aus Sicherheitsgruenden verboten; der bestaetigte
+  `/login`-Flow bleibt die einzige Aktion.

@@ -168,7 +168,7 @@ def test_admin_report_counts_accounts_and_identities(tmp_path: Path) -> None:
     assert report["totals"]["linked_identities"] == 1
     assert report["totals"]["identity_warnings"] == 0
     instance_report = report["instances"][0]
-    assert set(report["totals"]) == {"account_dirs", "identity_warnings", "indexed_accounts", "linked_identities", "store_errors"}
+    assert set(report["totals"]) == {"account_dirs", "identity_notices", "identity_warnings", "indexed_accounts", "linked_identities", "store_errors"}
     assert set(instance_report) == {
         "account_store",
         "accounts_root",
@@ -180,7 +180,7 @@ def test_admin_report_counts_accounts_and_identities(tmp_path: Path) -> None:
         "instruction_file_exists",
         "runtime_slots",
     }
-    assert instance_report["identity_health"] == {"status": "ok", "warning_count": 0, "warnings": []}
+    assert instance_report["identity_health"] == {"status": "ok", "warning_count": 0, "warnings": [], "notice_count": 0, "notices": []}
 
 
 def test_admin_report_marks_store_errors(tmp_path: Path) -> None:
@@ -234,7 +234,7 @@ def test_admin_report_ignores_account_directory_with_only_transient_locks(tmp_pa
     assert store_report["account_directories"] == 0
     assert store_report["dangling_account_dirs"] == 0
     assert store_report["warnings"] == []
-    assert report["instances"][0]["identity_health"] == {"status": "ok", "warning_count": 0, "warnings": []}
+    assert report["instances"][0]["identity_health"] == {"status": "ok", "warning_count": 0, "warnings": [], "notice_count": 0, "notices": []}
 
 
 def test_text_report_contains_account_store_and_identity_summary(tmp_path: Path) -> None:
@@ -253,7 +253,7 @@ def test_text_report_contains_account_store_and_identity_summary(tmp_path: Path)
     assert "identity_health: ok" in text
 
 
-def test_admin_report_warns_when_configured_signal_has_no_linked_identity(tmp_path: Path) -> None:
+def test_admin_report_notices_when_configured_signal_has_no_linked_identity(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
     store.resolve_or_create_account("telegram:user:2", display_label="Ada")
@@ -271,26 +271,28 @@ def test_admin_report_warns_when_configured_signal_has_no_linked_identity(tmp_pa
         "signal": ["signal:1"],
         "telegram": ["telegram:1"],
     }
-    assert report["totals"]["identity_warnings"] == 1
+    assert report["totals"]["identity_warnings"] == 0
+    assert report["totals"]["identity_notices"] == 1
     identity_health = instance_report["identity_health"]
-    assert identity_health["status"] == "warning"
-    assert identity_health["warning_count"] == 1
-    warning = identity_health["warnings"][0]
-    assert warning["code"] == "runtime_channel_without_identity"
-    assert warning["channel"] == "signal"
-    assert warning["configured_runtime_slots"] == 1
-    assert warning["configured_runtime_labels"] == ["signal:1"]
-    assert warning["identity_channels"] == {"telegram": 1}
-    assert warning["other_linked_identities"] == 1
-    assert "Incoming chats on this channel will use a separate account" in warning["message"]
-    assert warning["recommended_action"] == (
+    assert identity_health["status"] == "ok"
+    assert identity_health["warning_count"] == 0
+    assert identity_health["notice_count"] == 1
+    notice = identity_health["notices"][0]
+    assert notice["code"] == "runtime_channel_without_identity"
+    assert notice["channel"] == "signal"
+    assert notice["configured_runtime_slots"] == 1
+    assert notice["configured_runtime_labels"] == ["signal:1"]
+    assert notice["identity_channels"] == {"telegram": 1}
+    assert notice["other_linked_identities"] == 1
+    assert "Incoming chats on this channel will use a separate account" in notice["message"]
+    assert notice["recommended_action"] == (
         "First run /register or /rotate_secret in an already linked private chat, then open a private "
         "signal chat and link the existing account with /login <account_id> <secret>; "
         "use /register there only for a deliberately separate account."
     )
     text = render_text_report(report)
     assert "runtime_slots_by_channel: signal=1, telegram=1" in text
-    assert "identity_warning: runtime_channel_without_identity channel=signal slots=1 labels=signal:1 identities=telegram=1" in text
+    assert "identity_notice: runtime_channel_without_identity channel=signal slots=1 labels=signal:1 identities=telegram=1" in text
     assert "action=First run /register or /rotate_secret in an already linked private chat" in text
     assert "then open a private signal chat and link the existing account with /login <account_id> <secret>" in text
 
@@ -311,7 +313,7 @@ def test_admin_report_accepts_configured_signal_with_linked_identity(tmp_path: P
 
     instance_report = report["instances"][0]
     assert instance_report["account_store"]["identities_by_channel"] == {"signal": 1, "telegram": 1}
-    assert instance_report["identity_health"] == {"status": "ok", "warning_count": 0, "warnings": []}
+    assert instance_report["identity_health"] == {"status": "ok", "warning_count": 0, "warnings": [], "notice_count": 0, "notices": []}
     assert report["totals"]["identity_warnings"] == 0
 
 

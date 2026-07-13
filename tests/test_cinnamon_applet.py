@@ -2175,6 +2175,24 @@ def test_cinnamon_applet_top_health_includes_actionable_runtime_detail() -> None
     }
 
 
+def test_cinnamon_applet_formats_unlinked_signal_identity_as_notice() -> None:
+    result = _run_js_applet_expression(
+        """
+        applet._formatAccountLine(
+          "account_identity_notice=Depressionsbot code=runtime_channel_without_identity channel=signal "
+          + "message=signal runtime is configured action=link_account"
+        )
+        """
+    )
+
+    assert result == (
+        "Signal-Verknuepfung Depressionsbot: Hinweis; "
+        "1. in einem bereits verknuepften privaten Chat /register oder /rotate_secret ausfuehren; "
+        "2. im privaten Signal-Chat /login <account_id> <secret> senden; "
+        "/register in Signal nur fuer ein absichtlich getrenntes Konto verwenden"
+    )
+
+
 def test_cinnamon_applet_top_health_does_not_detail_verified_fallback_as_actionable() -> None:
     result = _run_js_applet_expression(
         """
@@ -6011,6 +6029,21 @@ def test_cinnamon_applet_runtime_parser_counts_account_identity_warning_lines() 
     assert parsed["summary"]["memory_problem_status_count"] == 1
     assert parsed["summary"]["problem_status_count"] == 1
     assert parsed["summary"]["problem_statuses"] == "warning:1"
+
+
+def test_cinnamon_applet_runtime_parser_keeps_unlinked_identity_notice_out_of_health_problems() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Tools und Account-Memory]
+        account_identity=Demo status=ok identity_warnings=0 identity_notices=1
+        account_identity_notice=Demo code=runtime_channel_without_identity channel=signal message=link_needed action=run_login
+        """
+    )
+
+    assert parsed["status_counts"].get("warning", 0) == 0
+    assert parsed["summary"]["problem_status_count"] == 0
+    assert parsed["summary"]["actionable_problem_status_count"] == 0
+    assert parsed["summary"]["memory_informational_status_count"] == 0
 
 
 def test_cinnamon_applet_runtime_parser_splits_legacy_recovery_commands() -> None:

@@ -144,6 +144,7 @@ def build_accounts_admin_report(
         "instances": [],
         "totals": {
             "account_dirs": 0,
+            "identity_notices": 0,
             "identity_warnings": 0,
             "indexed_accounts": 0,
             "linked_identities": 0,
@@ -284,6 +285,7 @@ def _add_instance_totals(totals: dict[str, int], instance_report: Mapping[str, A
     identity_health = instance_report.get("identity_health", {}) if isinstance(instance_report, Mapping) else {}
     if isinstance(identity_health, Mapping):
         totals["identity_warnings"] = totals.get("identity_warnings", 0) + int(identity_health.get("warning_count", 0) or 0)
+        totals["identity_notices"] = totals.get("identity_notices", 0) + int(identity_health.get("notice_count", 0) or 0)
 
 
 def _build_runtime_slot_report(
@@ -322,6 +324,7 @@ def _build_runtime_slot_report(
 
 def _build_identity_health(account_store: Mapping[str, Any], runtime_slots: Mapping[str, Any]) -> dict[str, Any]:
     warnings: list[dict[str, Any]] = []
+    notices: list[dict[str, Any]] = []
     identity_counts = _string_int_mapping(account_store.get("identities_by_channel", {}))
     runtime_counts = _string_int_mapping(runtime_slots.get("configured_channels", {}))
     runtime_labels = _string_list_mapping(runtime_slots.get("configured_slot_labels_by_channel", {}))
@@ -359,7 +362,7 @@ def _build_identity_health(account_store: Mapping[str, Any], runtime_slots: Mapp
             identity_count = identity_counts.get(channel, 0)
             other_identity_count = _other_identity_count(identity_counts, channel)
             if slot_count > 0 and identity_count == 0 and other_identity_count > 0:
-                warnings.append(
+                notices.append(
                     {
                         "code": "runtime_channel_without_identity",
                         "channel": channel,
@@ -401,6 +404,8 @@ def _build_identity_health(account_store: Mapping[str, Any], runtime_slots: Mapp
         "status": "warning" if warnings else "ok",
         "warning_count": len(warnings),
         "warnings": warnings,
+        "notice_count": len(notices),
+        "notices": notices,
     }
 
 
@@ -543,6 +548,18 @@ def render_text_report(report: Mapping[str, Any]) -> str:
                         f" identities={_format_counts(warning.get('identity_channels', {}))}"
                         f" message={warning.get('message', '')}"
                         f" action={warning.get('recommended_action', '')}"
+                    )
+            for notice in identity_health.get("notices", []) if isinstance(identity_health.get("notices"), list) else []:
+                if isinstance(notice, Mapping):
+                    lines.append(
+                        "  identity_notice: "
+                        f"{notice.get('code', 'unknown')}"
+                        f" channel={notice.get('channel', '<none>')}"
+                        f" slots={notice.get('configured_runtime_slots', '<none>')}"
+                        f" labels={_format_sequence(notice.get('configured_runtime_labels', []))}"
+                        f" identities={_format_counts(notice.get('identity_channels', {}))}"
+                        f" message={notice.get('message', '')}"
+                        f" action={notice.get('recommended_action', '')}"
                     )
     return "\n".join(lines) + "\n"
 
