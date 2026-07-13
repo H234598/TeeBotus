@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.441`, Commit `ccb511cc`
+**Quellstand:** TeeBotus `1.9.442`, Commit `3896e7c3`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -299,6 +299,23 @@ fehlten, ignorierte es `runtime.status_counts`. Ein Rohwert wie
 - Vollstaendige `tests/test_cinnamon_applet.py`: `221 passed in 33.45s`.
 - Applet lokal installiert und byte-identisch verifiziert.
 - SemVer `1.9.441`, Commit `ccb511cc`.
+
+## Befund 98: Gequotete Health-Breakdowns verloren ihre Paritaet
+
+Python normalisiert bei `problem_statuses` aeussere Quotes und die
+Gross-/Kleinschreibung des Statusnamens. Das Applet behandelte einen Wert wie
+`"WARNING:1,BROKEN:2"` bisher teilweise als unbekannten Status. Dadurch waren
+Anzeige, v2-Fallback und Zaehlung nicht durchgehend konsistent.
+
+### Umsetzung und Nachweis
+
+- Aeussere Quotes werden vor dem Split entfernt.
+- Statusnamen werden bei Breakdown-Anzeige und v2-Rohfallback normalisiert.
+- Quoted Counts bleiben ueber `_strictInt` numerisch nutzbar.
+- Fokussierter Health/v2-Test: `5 passed, 217 deselected`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `222 passed in 33.33s`.
+- Applet lokal installiert und byte-identisch verifiziert.
+- SemVer `1.9.442`, Commit `3896e7c3`.
 
 ## Arbeitsplan
 

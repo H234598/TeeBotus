@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.441`, Commit `ccb511cc`.
+- Aktueller gepruefter Quellstand: `1.9.442`, Commit `3896e7c3`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -511,6 +511,16 @@ Klassifikation wirklich fehlt; explizite Informationsfelder behalten Vorrang.
 
 Nachweis: `4 passed, 217 deselected`, danach `221 passed in 33.45s`; SemVer
 `1.9.441`, Commit `ccb511cc`; installierte Applet-Kopie byte-identisch.
+
+## Befund 98: Quoted Breakdown-Werte muessen wie Python normalisiert werden
+
+Bei gequoteten `problem_statuses`-Strings konnte das Applet die erste und
+letzte Statuskennung mit Quote anreichern. Der neue Pfad strippt aeussere
+Quotes und normalisiert Statusnamen vor Darstellung, Count und v2-Fallback.
+
+Nachweis: `5 passed, 217 deselected` fokussiert und `222 passed in 33.33s`
+vollstaendig; SemVer `1.9.442`, Commit `3896e7c3`; Applet-Kopie
+byte-identisch installiert.
 
 ## Invarianten
 
