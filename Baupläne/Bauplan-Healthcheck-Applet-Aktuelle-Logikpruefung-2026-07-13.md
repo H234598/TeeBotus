@@ -670,6 +670,23 @@ fallen.
   vorhandene `effective_status=configured`-Fallbacks bleiben informational.
 - SemVer `1.9.451`, Commit `7eb2efa3`.
 
+## Befund 108: Fallback-Effektivitaet fehlte in per-Account-Zeilen
+
+`structured_decision` zeigte bei einem deaktivierten HF-Pool zwar den lokalen
+Fallbacknamen, aber keinen Status des Fallbackprofils. Die Appletlogik konnte
+deshalb nicht zwischen einem belegten und einem nur behaupteten Fallback
+unterscheiden.
+
+### Umsetzung und Nachweis
+
+- Neue providerfreie Fallback-Statusauflösung in `bot.py` verwendet Profil,
+  Modell, Base-URL und Instanz-Key-Scope.
+- `effective_status=configured` wird pro Account ausgegeben, wenn der lokale
+  Fallback konfiguriert ist; kaputte oder fehlende Fallbacks bleiben sichtbar.
+- Entrypoint-Suite: `140 passed in 44.13s`; Applet-Suite: `225 passed in
+  36.26s`; Live-Probe ohne Provideraufruf gruen.
+- SemVer `1.9.452`, Commit `34729c1b`.
+
 ## Invarianten
 
 - Ein echter Fehler wird nicht durch einen Fallback, einen leeren Queue-Zustand

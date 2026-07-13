@@ -450,6 +450,24 @@ Fallback konnte dadurch als rein informativ erscheinen.
   informational.
 - SemVer `1.9.451`, Commit `7eb2efa3`.
 
+## Befund 108: Per-Account-Structured-Decision meldete keinen effektiven Fallback
+
+Die aggregierte Route konnte den lokalen Fallback als konfiguriert ausweisen,
+die per-Account-Zeile enthielt dagegen nur `route_status=unavailable`. Dem
+Applet fehlte damit der Nachweis, dass `local_ollama` den Ausfall uebernimmt.
+
+### Umsetzung und Nachweis
+
+- `bot.py` loest das konkrete Fallbackprofil jetzt instanzbezogen auf und
+  schreibt `effective_status` in die per-Account-Zeile.
+- Fallback-Key- und Poolfehler bleiben actionable; ein belegtes
+  `effective_status=configured` wird nur informational klassifiziert.
+- Live-Parser: nur die echte Signal-Identitaetswarnung bleibt actionable;
+  die HF-Pool-Ausfaelle mit lokalem Fallback sind informational.
+- Entrypoint-Suite: `140 passed in 44.13s`; Applet-Suite: `225 passed in
+  36.26s`.
+- SemVer `1.9.452`, Commit `34729c1b`.
+
 ## Arbeitsplan
 
 1. **Healthpayload und Applet weiter synchron halten**
