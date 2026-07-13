@@ -1967,6 +1967,58 @@ def test_codex_history_dispatch_bridge_does_not_claim_configured_unroutable_reci
     assert calls == ["history.query"]
 
 
+@pytest.mark.parametrize(("limit", "expected_count"), [(0, 3), (2, 2)])
+def test_codex_history_dispatch_bridge_reports_queued_items_without_route(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, limit: int, expected_count: int,
+) -> None:
+    instances_dir = tmp_path / "instances"
+    instances_dir.mkdir()
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    calls: list[str] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            calls.append(operation)
+            if operation == "history.query":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [
+                            {
+                                "id": f"central-queued-{index}",
+                                "kind": "codex_run_summary",
+                                "status": "queued",
+                                "dedupe_key": f"sha256:central-queued-{index}",
+                            }
+                            for index in range(3)
+                        ],
+                    },
+                }
+            raise AssertionError(operation)
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    monkeypatch.setattr(codex_history_module, "_codex_history_dispatch_account_ids", lambda *args, **kwargs: ("configured-admin",))
+
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+            instances_dir=instances_dir,
+            limit=limit,
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["status_counts"] == {"deferred": expected_count}
+    assert [row["codex_history_item_id"] for row in result["items"]] == [f"central-queued-{index}" for index in range(expected_count)]
+    assert all(row["reason"] == "no_private_route" for row in result["items"])
+    assert calls == ["history.query"]
+
+
 def test_codex_history_dispatch_bridge_sends_only_to_routable_recipients(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -1207,15 +1207,14 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                         now=timestamp,
                     )
                 )
-            central_queued = next(
-                (
-                    item
-                    for item in query_items
-                    if str(item.get("status") or "").strip().casefold() == "queued"
-                ),
-                None,
-            )
-            if central_queued is not None:
+            central_queued_items = [
+                item
+                for item in query_items
+                if str(item.get("status") or "").strip().casefold() == "queued"
+            ]
+            if normalized_limit > 0:
+                central_queued_items = central_queued_items[:normalized_limit]
+            for central_queued in central_queued_items:
                 result_rows.append({
                     "codex_history_item_id": str(central_queued.get("id") or ""),
                     "account_id": "",
@@ -1225,7 +1224,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                     "summary_prefix": "",
                 })
             return {
-                "ok": not any(row.get("status") == "failed" for row in result_rows) and central_queued is None,
+                "ok": not any(row.get("status") == "failed" for row in result_rows) and not central_queued_items,
                 "dry_run": False,
                 "instance": instance_name,
                 "generated_at": timestamp,
