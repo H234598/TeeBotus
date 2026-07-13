@@ -260,13 +260,12 @@ Der Plan ist erst abgeschlossen, wenn:
 - Shadow-Append-ID-Pruefung und SemVer-Bump auf `1.9.388` committed als `ed4b2d0f` (`Require shadow append item identity`); gezielte Suite danach `121 passed`.
 - Restart nach dem 20. Audit-Commit: `teebotus.service`, `history-dispatcher.service` und `teebotus-codex-history-collector.service` aktiv; History-Dispatcher-Snapshot danach `0.2.5`, Queue `13 queued`, `13 delivered`, `310 compacted`, `last_error` leer.
 - Unbekannte-Empfaengerstatus-Pruefung und SemVer-Bump auf `1.9.389` committed als `cdb005f6` (`Reject unknown dispatcher recipient statuses`); gezielte Suite danach `122 passed`.
-- Der laufende History-Dispatcher-Snapshot meldet noch `0.1.9`, die installierte Venv `0.2.5`; der Live-Cutover-/Restart-Nachweis bleibt offen.
+- Vor dem 20er-Restart meldete der laufende Snapshot noch `0.1.9`; nach dem Restart ist der aktive History-Dispatcher nachweislich `0.2.5`.
 
 ### Noch offen
 
 - Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
 - Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
-- History-Dispatcher nach der Commit-Grenze neu starten und Snapshot-/Bridge-Version erneut pruefen.
 - Der lokale TeeBotus-Code `1.9.389` wurde nach dem 20er-Restart committed; Live-Reload dieses Fixes ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 

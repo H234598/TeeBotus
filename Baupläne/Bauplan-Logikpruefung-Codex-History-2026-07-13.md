@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.379`, Commit `33b383a6`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.389`, Commit `cdb005f6`.
 
 ## Arbeitsprinzipien
 
@@ -102,6 +102,76 @@ einen ungefangenen `AttributeError` ausloesen; fehlende oder falsch typisierte
 und `items` jetzt vor der Verarbeitung und wandelt Abweichungen in einen
 kontrollierten Dispatcher-Fehler um.
 
+**Achter Befund 2026-07-13:** Die Bridge uebersprang nicht-objektartige Claim-
+Items, akzeptierte `recipient_results=null` bzw. unvollstaendige Empfaengerzeilen
+und behandelte `dispatch.complete` mit `data=null` als Erfolg. Dadurch konnte ein
+Claim ohne Abschluss im `delivering`-Zustand haengen oder eine leere/ungueltige
+Zustellung als erfolgreich erscheinen. Ausserdem fragte der Dry-Run die Payload
+nicht an und verlor dadurch Summary-Metadaten. Items, Payload, Empfaenger und
+Completion-Antwort werden jetzt fail-closed validiert; der Dry-Run fordert die
+Payload explizit an.
+
+**Neunter Befund 2026-07-13:** Die Socket-Pfadvalidierung lief vor dem
+Bridge-Fehlerhandler. Ein relativer oder anderweitig unsicherer
+`HISTORY_DISPATCHER_SOCKET` konnte deshalb den Bot aus dem Dispatch-Aufruf
+werfen; im Shadow-Modus konnte derselbe Konfigurationsfehler sogar das
+eigentliche Legacy-Summary-Schreiben abbrechen. Beide Pfade melden den Fehler
+jetzt kontrolliert bzw. lassen den Legacy-Pfad unveraendert fortsetzen.
+
+**Zehnter Befund 2026-07-13:** Der Shadow-Append pruefte nur das aeussere
+Response-`ok`. Ein technischer Transporterfolg mit `data.ok=false` konnte
+deshalb als erfolgreiches Spiegeln erscheinen. Die Shadow-Antwort wird jetzt
+mit derselben verschachtelten Schema-Pruefung wie der Bridge-Completionpfad
+ausgewertet; der Legacy-Eintrag bleibt bei einem Shadow-Fehler erhalten.
+
+**Elfter Befund 2026-07-13:** Der Legacy-Pfad behandelte
+`codex_history_digest` als nicht dispatchbar, obwohl die Kompaktierungslogik
+Digests ausdruecklich als Markdown-Dateien fuer TBL erzeugt. Der Bridge-Pfad
+hatte dagegen keine `kind`-Pruefung und haette auch fremde Queue-Typen claimen
+koennen. Die gemeinsame Dispatch-Menge enthaelt jetzt Digests; unbekannte
+Typen werden in beiden Pfaden nicht als Codex-Summaries verarbeitet.
+
+**Zwoelfter Befund 2026-07-13:** Im Bridge-Modus wurde nach einem externen
+`dispatch.complete` der gleichnamige lokale TeeBotus-Outbox-Eintrag nie
+aktualisiert. `/status` konnte deshalb beim Dispatcher-Owner dauerhaft
+`queued` zeigen, obwohl TBL extern bereits zugestellt oder zur Wiederholung
+eingeplant hatte. Der externe Endstatus ist jetzt autoritativ; ein vorhandener
+lokaler Eintrag wird best-effort mit Status, Versuch und letzter
+Empfaengerliste synchronisiert.
+
+**Dreizehnter Befund 2026-07-13:** Der externe Collector und der TeeBotus-
+Watcher scannen dieselben Codex-Sessiondateien. Der Collector nutzt den
+deterministischen Session-/Turn-/Final-Hash als `dedupe_key`, der Mirror
+ueberschrieb ihn bisher mit der lokalen UUID. Dadurch konnten identische Turns
+zweimal in der externen Queue landen. Der Mirror verwendet jetzt den
+vorhandenen `codex.dedupe_key` und faellt nur bei manuellen Summaries auf die
+Item-ID zurueck.
+
+**Vierzehnter Befund 2026-07-13:** Bei einem bereits extern importierten Turn
+liefert `history.append` die externe bestehende ID zurueck. Diese kann von der
+lokalen TeeBotus-ID abweichen; eine reine ID-Synchronisierung haette den lokalen
+Status weiterhin als `queued` stehen lassen. Die Reconciliation sucht jetzt
+zusaetzlich nach dem deterministischen Dedupe-Key. Fehlende `payload.codex`
+Metadaten werden dabei als leer behandelt, nicht als Laufzeitfehler.
+
+**Fuenfzehnter Befund 2026-07-13:** Die Legacy-Retryauswahl nahm pro Konto
+einfach die letzte Zeile aus der Storage-Reihenfolge. Nach SQL-Rebuilds oder
+Importen kann diese Reihenfolge von der fachlichen Ereigniszeit abweichen.
+Resultate werden jetzt zuerst nach `updated_at`/`created_at` und nur bei
+fehlenden Zeitstempeln nach Positionsreihenfolge bewertet.
+
+**Sechzehnter Befund 2026-07-13:** Der Shadow-Append akzeptierte ein
+aeusseres `ok=true` mit `data.ok=true`, aber ohne persistierte Item-ID als
+erfolgreiches Spiegeln. Damit waere unklar geblieben, ob ein Eintrag neu
+angelegt oder dedupliziert wurde. Erfolgreiche Append-Antworten muessen jetzt
+eine ID enthalten; der Legacy-Pfad bleibt bei Verstoessen erhalten.
+
+**Siebzehnter Befund 2026-07-13:** Unbekannte Empfaengerstatuswerte wurden in
+der Bridge nur auf Nicht-Leerheit geprueft. Dadurch konnte ein Status wie
+`sent` erneut versendet werden, obwohl der Dispatcher ihn fachlich als Fehler
+behandelt. Zulassig sind jetzt nur `accepted`, `delivered`, `acknowledged`,
+`failed` und `skipped`; alles andere wird kontrolliert abgewiesen.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -175,11 +245,28 @@ Der Plan ist erst abgeschlossen, wenn:
 - Delete-Revision-Fix committed als `94556cb` (`Make delete revision checks atomic`).
 - Nested-Completion-Probe: `data.ok=false` mit `claim_not_owned` wird jetzt als fehlgeschlagener Dispatcher-Lauf gemeldet.
 - Malformed-Claim-Probe: `data=null` wird jetzt als kontrollierter `history_dispatcher_unavailable`-Fehler gemeldet.
+- Bridge-Schema-Proben: nicht-objektartiges Claim-Item, `recipient_results=null` und `dispatch.complete data=null` werden kontrolliert abgewiesen; Dry-Run uebernimmt `summary_prefix` wieder aus der Payload.
+- Gezielt verifizierte TeeBotus-Suite nach der Bridge-Haertung: `114 passed`.
+- Bridge-Haertung und SemVer-Bump auf `1.9.380` committed als `8376977e` (`Harden history dispatcher bridge validation`).
+- Socket-Fehlerbehandlung und SemVer-Bump auf `1.9.381` committed als `e500d915` (`Keep history dispatch socket errors contained`); gezielte Suite danach `116 passed`.
+- Shadow-Response-Pruefung und SemVer-Bump auf `1.9.382` committed als `57849ffb` (`Validate shadow dispatcher append responses`); gezielte Suite danach `117 passed`.
+- Kind-/Digest-Abgleich und SemVer-Bump auf `1.9.383` committed als `a32dab73` (`Align bridge dispatchable history kinds`); gezielte Suite danach `118 passed`.
+- Lokale Status-Reconciliation und SemVer-Bump auf `1.9.384` committed als `54e6d00d` (`Reconcile local history status after bridge completion`); gezielte Suite danach `119 passed`.
+- Dedupe-Abgleich und SemVer-Bump auf `1.9.385` committed als `f3efbd38` (`Reuse Codex session dedupe keys in bridge`); gezielte Suite danach `119 passed`.
+- Lesende Live-Dispatcherprobe: `336` Zeilen, `0` doppelte Top-Level-Dedupe-Keys; Bestand `13 queued`, `13 delivered`, `310 compacted`.
+- Dedupe-Key-Reconciliation mit absichtlich verschiedener externer/lokaler ID verifiziert; lokale Queue wird ueber den Dedupe-Key synchronisiert.
+- Dedupe-Reconciliation und SemVer-Bump auf `1.9.386` committed als `fd7400d7` (`Reconcile mirrored history by dedupe key`); gezielte Suite danach `119 passed`.
+- Retry-Statusauswahl nach Zeitstempel und SemVer-Bump auf `1.9.387` committed als `0ecbc32f` (`Order dispatch results by update time`); gezielte Suite danach `120 passed`.
+- Shadow-Append-ID-Pruefung und SemVer-Bump auf `1.9.388` committed als `ed4b2d0f` (`Require shadow append item identity`); gezielte Suite danach `121 passed`.
+- Restart nach dem 20. Audit-Commit: `teebotus.service`, `history-dispatcher.service` und `teebotus-codex-history-collector.service` aktiv; History-Dispatcher-Snapshot danach `0.2.5`, Queue `13 queued`, `13 delivered`, `310 compacted`, `last_error` leer.
+- Unbekannte-Empfaengerstatus-Pruefung und SemVer-Bump auf `1.9.389` committed als `cdb005f6` (`Reject unknown dispatcher recipient statuses`); gezielte Suite danach `122 passed`.
+- Vor dem 20er-Restart meldete der laufende Snapshot noch `0.1.9`; nach dem Restart ist der aktive History-Dispatcher nachweislich `0.2.5`.
 
 ### Noch offen
 
 - Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
 - Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
+- Der lokale TeeBotus-Code `1.9.389` wurde nach dem 20er-Restart committed; Live-Reload dieses Fixes ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
