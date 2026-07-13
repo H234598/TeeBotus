@@ -2769,6 +2769,42 @@ def test_cinnamon_applet_health_v2_does_not_hide_actionable_status_behind_stale_
     assert result["accepted"] is False
 
 
+def test_cinnamon_applet_health_v2_does_not_hide_command_or_qdrant_counts_behind_stale_total() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let health = {
+            classification_version: 2,
+            status: "warning",
+            total_problem_count: 0,
+            actionable_problem_count: 0,
+            actionable_problem_statuses: "",
+            command_problem_count: 1,
+            qdrant_problem_count: 2,
+            qdrant_runtime_problem_count: 0,
+            qdrant_probe_problem_count: 2,
+            qdrant_unit_problem_count: 0
+          };
+          return {
+            total: applet._healthProblemTotal(health, {}, {}),
+            summary: applet._statusSummary({
+              ok: false,
+              unit: {active_state: "active"},
+              health: health,
+              runtime: {summary: {instances: "Demo", channels: "telegram"}, status_counts: {}},
+              qdrant: {collections: {}}
+            })
+          };
+        })()
+        """
+    )
+
+    assert result["total"] == 3
+    assert result["summary"].startswith("Warnungen 3")
+    assert "Kommando:1" in result["summary"]
+    assert "Qdrant Probe:2" in result["summary"]
+
+
 def test_cinnamon_applet_menu_header_does_not_trust_zero_total_problem_count() -> None:
     result = _run_js_applet_expression(
         """

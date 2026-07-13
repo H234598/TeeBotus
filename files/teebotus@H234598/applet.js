@@ -1757,7 +1757,22 @@ TeeBotusApplet.prototype = {
         this._problemBreakdownCount((health || {}).actionable_problem_statuses),
         this._problemBreakdownCount((summary || {}).actionable_problem_statuses)
       );
-      return Math.max(total, actionableCount);
+      let commandTotal = this._nonNegativeInt((health || {}).command_problem_count, 0);
+      let qdrantRuntimeTotal = this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0);
+      let qdrantTotal = Math.max(
+        this._nonNegativeInt((health || {}).qdrant_problem_count, 0),
+        qdrantRuntimeTotal,
+        this._nonNegativeInt((health || {}).qdrant_probe_problem_count, 0),
+        this._nonNegativeInt((health || {}).qdrant_unit_problem_count, 0)
+      );
+      let runtimeTotal = this._nonNegativeInt((health || {}).runtime_problem_count, 0);
+      runtimeTotal = Math.max(runtimeTotal, Math.max(0, actionableCount - qdrantRuntimeTotal));
+      let derivedTotal = commandTotal + runtimeTotal + qdrantTotal;
+      let healthStatus = String((health || {}).status || "").trim().toLowerCase();
+      if (healthStatus === "broken" || healthStatus === "warning") {
+        derivedTotal = Math.max(derivedTotal, 1);
+      }
+      return Math.max(total, actionableCount, derivedTotal);
     }
     let qdrantRuntimeTotal = this._nonNegativeInt((health || {}).qdrant_runtime_problem_count, 0);
     let textProblemTotal = Math.max(
