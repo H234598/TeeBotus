@@ -14,7 +14,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from contextvars import copy_context
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -48,9 +48,9 @@ from TeeBotus.llm.base import LLMAPIError
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIClient
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, InstanceSecretProvider, runtime_secret_provider, telegram_identity_key
 from TeeBotus.runtime.action_buttons import LEGAL_CONSENT_BUTTONS, MEMORY_RESET_BUTTONS, YOUTUBE_LOCAL_OPTIONS_BUTTONS
-from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, MessageButton, SendAttachment, SendEdit, SendPoll, SendText
+from TeeBotus.runtime.actions import DeleteTrackedMessages, ExportFile, MessageButton, NotifyLinkedIdentity, SendAttachment, SendEdit, SendPoll, SendText
 from TeeBotus.runtime.admin_accounts import is_runtime_admin_account
-from TeeBotus.runtime.engine import TeeBotusEngine, account_bot_address_names
+from TeeBotus.runtime.engine import EngineResult, TeeBotusEngine, account_bot_address_names
 from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.maintenance import configure_runtime_logging
 from TeeBotus.runtime.log_context import logging_context
@@ -892,6 +892,14 @@ class TelegramRuntimeContext:
     message_tracker: MessageTracker
     engine: TeeBotusEngine
     bot_identity: BotIdentity
+    dispatch_retries: dict[str, "_TelegramDispatchRetry"] = field(default_factory=dict)
+
+
+@dataclass
+class _TelegramDispatchRetry:
+    event: IncomingEvent
+    engine_result: EngineResult
+    completed_action_indices: set[int] = field(default_factory=set)
 
 
 def build_telegram_runtime_context(
@@ -959,6 +967,13 @@ def build_telegram_runtime_context(
     )
 
 
+def _telegram_dispatch_retry_key(context: TelegramRuntimeContext, update: dict[str, Any], event: IncomingEvent) -> str:
+    update_id = _safe_telegram_update_id(update)
+    if update_id is not None:
+        return f"{context.instance_name}:{context.adapter_slot}:update:{update_id}"
+    return f"{context.instance_name}:{context.adapter_slot}:event:{event.event_id}:{event.chat_id}"
+
+
 def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update: dict[str, Any], chat_state: ChatState) -> bool:
     message = telegram_update_message(update)
     if not isinstance(message, dict):
@@ -1008,6 +1023,10 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
         return False
     event = event.with_reply_to_bot(_is_reply_to_bot(message, getattr(context, "bot_identity", BotIdentity())))
     event = _with_telegram_reply_text(event, message)
+    retry_key = _telegram_dispatch_retry_key(context, update, event)
+    if not isinstance(getattr(context, "dispatch_retries", None), dict):
+        context.dispatch_retries = {}
+    retry_state = context.dispatch_retries.get(retry_key)
     status_auth = _telegram_status_auth_pre_gate(context.account_store, event)
     if status_auth is not None:
         return _dispatch_telegram_status_auth_pre_gate(context.api, event, status_auth)
@@ -1071,7 +1090,6 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
             )
         return True
     event = event.with_account(account_id)
-    _record_codex_history_telegram_reply(context, event, message)
     process_timeout = _telegram_runtime_timeout_seconds(
         TELEGRAM_RUNTIME_PROCESS_TIMEOUT_ENV,
         TELEGRAM_RUNTIME_PROCESS_TIMEOUT_SECONDS,
@@ -1089,82 +1107,96 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
         dispatch_timeout,
     )
     instructions = context.instruction_store.get()
-    try:
+    if retry_state is not None:
+        event = retry_state.event
+        engine_result = retry_state.engine_result
         LOGGER.info(
-            "Telegram runtime processing started instance=%s slot=%s event_id=%s chat_id=%s message_id=%s has_text=%s",
+            "Reusing Telegram engine result for dispatch retry instance=%s slot=%s event_id=%s completed_action_indices=%s",
             context.instance_name,
             context.adapter_slot,
             event.event_id,
-            chat_id,
-            message.get("message_id", "unknown"),
-            bool(event.text),
+            tuple(sorted(retry_state.completed_action_indices)),
         )
-        engine_started_at = time.perf_counter()
-        with logging_context(
-            instance=context.instance_name,
-            channel=event.channel,
-            slot=context.adapter_slot,
-            event_id=event.event_id,
-            chat_id=chat_id,
-            message_id=message.get("message_id", "unknown"),
-        ):
-            timeout_hit, engine_result = _run_with_runtime_timeout(
-                "engine processing",
-                lambda: context.engine.process_result(event),
-                timeout_seconds=process_timeout,
-            )
-        if timeout_hit or engine_result is None:
-            LOGGER.warning(
-                "Telegram runtime processing timed out instance=%s slot=%s event_id=%s chat_id=%s message_id=%s elapsed_ms=%s timeout_seconds=%s",
+    else:
+        _record_codex_history_telegram_reply(context, event, message)
+        try:
+            LOGGER.info(
+                "Telegram runtime processing started instance=%s slot=%s event_id=%s chat_id=%s message_id=%s has_text=%s",
                 context.instance_name,
                 context.adapter_slot,
                 event.event_id,
                 chat_id,
                 message.get("message_id", "unknown"),
+                bool(event.text),
+            )
+            engine_started_at = time.perf_counter()
+            with logging_context(
+                instance=context.instance_name,
+                channel=event.channel,
+                slot=context.adapter_slot,
+                event_id=event.event_id,
+                chat_id=chat_id,
+                message_id=message.get("message_id", "unknown"),
+            ):
+                timeout_hit, engine_result = _run_with_runtime_timeout(
+                    "engine processing",
+                    lambda: context.engine.process_result(event),
+                    timeout_seconds=process_timeout,
+                )
+            if timeout_hit or engine_result is None:
+                LOGGER.warning(
+                    "Telegram runtime processing timed out instance=%s slot=%s event_id=%s chat_id=%s message_id=%s elapsed_ms=%s timeout_seconds=%s",
+                    context.instance_name,
+                    context.adapter_slot,
+                    event.event_id,
+                    chat_id,
+                    message.get("message_id", "unknown"),
+                    int((time.perf_counter() - engine_started_at) * 1000),
+                    process_timeout,
+                )
+                try:
+                    context.api.send_message(str(chat_id), _runtime_timeout_fallback_text(instructions, message))
+                except (TelegramAPIError, TelegramNetworkError, OSError):
+                    LOGGER.exception(
+                        "Telegram runtime timeout reply failed instance=%s chat_id=%s.",
+                        context.instance_name,
+                        chat_id,
+                    )
+                return True
+            LOGGER.info(
+                "Telegram engine result instance=%s slot=%s event_id=%s handled=%s actions=%s action_types=%s",
+                context.instance_name,
+                context.adapter_slot,
+                event.event_id,
+                engine_result.handled,
+                len(engine_result.actions),
+                tuple(type(action).__name__ for action in engine_result.actions),
+            )
+            LOGGER.debug(
+                "Telegram engine processing duration_ms=%s instance=%s slot=%s event_id=%s",
                 int((time.perf_counter() - engine_started_at) * 1000),
-                process_timeout,
+                context.instance_name,
+                context.adapter_slot,
+                event.event_id,
+            )
+        except Exception:
+            LOGGER.exception(
+                "Telegram engine processing failed instance=%s chat_id=%s message_id=%s.",
+                context.instance_name,
+                chat_id,
+                message.get("message_id", "unknown"),
             )
             try:
-                context.api.send_message(str(chat_id), _runtime_timeout_fallback_text(instructions, message))
+                context.api.send_message(str(chat_id), context.instruction_store.get().user_memory_error)
             except (TelegramAPIError, TelegramNetworkError, OSError):
                 LOGGER.exception(
-                    "Telegram runtime timeout reply failed instance=%s chat_id=%s.",
+                    "Telegram memory error notification failed instance=%s chat_id=%s.",
                     context.instance_name,
                     chat_id,
                 )
             return True
-        LOGGER.info(
-            "Telegram engine result instance=%s slot=%s event_id=%s handled=%s actions=%s action_types=%s",
-            context.instance_name,
-            context.adapter_slot,
-            event.event_id,
-            engine_result.handled,
-            len(engine_result.actions),
-            tuple(type(action).__name__ for action in engine_result.actions),
-        )
-        LOGGER.debug(
-            "Telegram engine processing duration_ms=%s instance=%s slot=%s event_id=%s",
-            int((time.perf_counter() - engine_started_at) * 1000),
-            context.instance_name,
-            context.adapter_slot,
-            event.event_id,
-        )
-    except Exception:
-        LOGGER.exception(
-            "Telegram engine processing failed instance=%s chat_id=%s message_id=%s.",
-            context.instance_name,
-            chat_id,
-            message.get("message_id", "unknown"),
-        )
-        try:
-            context.api.send_message(str(chat_id), context.instruction_store.get().user_memory_error)
-        except (TelegramAPIError, TelegramNetworkError, OSError):
-            LOGGER.exception(
-                "Telegram memory error notification failed instance=%s chat_id=%s.",
-                context.instance_name,
-                chat_id,
-            )
-        return True
+        retry_state = _TelegramDispatchRetry(event=event, engine_result=engine_result)
+        context.dispatch_retries[retry_key] = retry_state
     event = event.with_account(engine_result.account_id)
     try:
         dispatch_started_at = time.perf_counter()
@@ -1177,6 +1209,7 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
                 engine_result.actions,
                 account_store=context.account_store,
                 instance_name=context.instance_name,
+                completed_action_indices=retry_state.completed_action_indices,
             ),
             timeout_seconds=dispatch_timeout,
         )
@@ -1202,7 +1235,9 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
                     context.instance_name,
                     chat_id,
                 )
+            context.dispatch_retries.pop(retry_key, None)
             return True
+        context.dispatch_retries.pop(retry_key, None)
     except Exception:
         LOGGER.exception(
             "Telegram action dispatch failed hard instance=%s slot=%s event_id=%s chat_id=%s actions=%s",
@@ -1476,6 +1511,7 @@ def _dispatch_modern_telegram_actions(
     *,
     account_store: AccountStore,
     instance_name: str,
+    completed_action_indices: set[int] | None = None,
 ) -> None:
     LOGGER.info(
         "Dispatching %s Telegram actions instance=%s slot=%s event_id=%s chat_id=%s",
@@ -1501,47 +1537,58 @@ def _dispatch_modern_telegram_actions(
         event.event_id,
         tuple(type(action).__name__ for action in actions),
     )
-    _notify_telegram_linked_identities(api, message_tracker, account_store, actions, instance_name=instance_name)
-    _delete_tracked_telegram_messages(api, message_tracker, event, actions)
-    sent_refs = send_telegram_actions(api, actions)
-    if len(sent_refs) != len(actions):
-        LOGGER.warning(
-            "Telegram action dispatch returned ref count mismatch instance=%s slot=%s event_id=%s expected=%s returned=%s",
-            event.instance,
-            event.adapter_slot,
-            event.event_id,
-            len(actions),
-            len(sent_refs),
-        )
-    for action, sent_ref in zip(actions, sent_refs):
-        if sent_ref is None:
+    completed = completed_action_indices if completed_action_indices is not None else set()
+    for index, action in enumerate(actions):
+        if index in completed or not isinstance(action, NotifyLinkedIdentity):
             continue
-        should_track = isinstance(action, (SendText, SendAttachment, SendEdit, SendPoll, ExportFile)) and getattr(action, "track", True)
-        if not should_track:
+        _notify_telegram_linked_identities(api, message_tracker, account_store, [action], instance_name=instance_name)
+        # The helper deliberately keeps linked-identity notifications non-fatal.
+        # Mark the attempt complete so a later retry cannot duplicate it.
+        completed.add(index)
+    for index, action in enumerate(actions):
+        if index in completed or not isinstance(action, DeleteTrackedMessages):
             continue
-        action_name = type(action).__name__
-        LOGGER.info(
-            "Outgoing Telegram action dispatched instance=%s slot=%s event_id=%s chat_id=%s action=%s track=%s message_ref=%s",
-            event.instance,
-            event.adapter_slot,
-            event.event_id,
-            event.chat_id,
-            action_name,
-            should_track,
-            sent_ref,
-        )
-        _record_telegram_sent_ref(
-            message_tracker,
-            SentMessageRef(
-                channel="telegram",
-                instance_name=event.instance,
-                account_id=event.account_id,
-                chat_id=event.chat_id,
-                message_ref=str(sent_ref),
-                ref_kind="telegram_message_id",
-            ),
-            context="action",
-        )
+        _delete_tracked_telegram_messages(api, message_tracker, event, [action])
+        completed.add(index)
+    for index, action in enumerate(actions):
+        if index in completed:
+            continue
+        sent_refs = send_telegram_actions(api, [action])
+        if len(sent_refs) != 1:
+            raise RuntimeError(
+                f"Telegram action dispatch returned ref count mismatch for action index {index}: {len(sent_refs)}"
+            )
+        sent_ref = sent_refs[0]
+        if sent_ref is not None:
+            should_track = isinstance(action, (SendText, SendAttachment, SendEdit, SendPoll, ExportFile)) and getattr(action, "track", True)
+            if should_track:
+                action_name = type(action).__name__
+                LOGGER.info(
+                    "Outgoing Telegram action dispatched instance=%s slot=%s event_id=%s chat_id=%s action_index=%s action=%s track=%s message_ref=%s",
+                    event.instance,
+                    event.adapter_slot,
+                    event.event_id,
+                    event.chat_id,
+                    index,
+                    action_name,
+                    should_track,
+                    sent_ref,
+                )
+                _record_telegram_sent_ref(
+                    message_tracker,
+                    SentMessageRef(
+                        channel="telegram",
+                        instance_name=event.instance,
+                        account_id=event.account_id,
+                        chat_id=event.chat_id,
+                        message_ref=str(sent_ref),
+                        ref_kind="telegram_message_id",
+                    ),
+                    context="action",
+                )
+        # A returned None is still a completed no-op (typing, delay, reaction,
+        # or a channel-neutral action that Telegram intentionally ignores).
+        completed.add(index)
 
 
 def _notify_telegram_linked_identities(

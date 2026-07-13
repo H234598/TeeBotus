@@ -2062,6 +2062,74 @@ class BotTests(unittest.TestCase):
         self.assertTrue(seen_events[0].reply_to_bot)
         self.assertEqual(seen_events[0].reply_to_text, "Botfrage")
 
+    def test_modern_dispatch_retry_skips_completed_actions_and_reuses_engine_result(self) -> None:
+        from TeeBotus.runtime.actions import SendText
+        from TeeBotus.runtime.engine import EngineResult
+
+        class InstructionBox:
+            def get(self):
+                return BotInstructions()
+
+        class PartialFailureAPI(FakeAPI):
+            def __init__(self) -> None:
+                super().__init__()
+                self.failed_once = False
+
+            def send_message(self, chat_id: int, text: str) -> int:
+                if text == "second" and not self.failed_once:
+                    self.failed_once = True
+                    raise TelegramAPIError("temporary second action failure")
+                return super().send_message(chat_id, text)
+
+        api = PartialFailureAPI()
+        process_calls = 0
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            account_store = AccountStore(root / "accounts", "Demo", StaticSecretProvider(b"e" * 32))
+            state_store = RuntimeStateStore(root / "data", instance_name="Demo", secret_provider=StaticSecretProvider(b"e" * 32))
+            message_tracker = MessageTracker(root / "runtime" / "Sent_Message_Refs.json")
+            context = build_telegram_runtime_context(
+                api=api,
+                instance_name="Demo",
+                adapter_slot=1,
+                instruction_store=InstructionBox(),
+                account_store=account_store,
+                state_store=state_store,
+                message_tracker=message_tracker,
+                openai_client=None,
+                working_memory_store=None,
+                bibliothekar_store=None,
+                youtube_job_runner=None,
+                bot_identity=BotIdentity(first_name="Mondbot", username="MondBot"),
+            )
+
+            def process_result(event):
+                nonlocal process_calls
+                process_calls += 1
+                return EngineResult(
+                    event.account_id,
+                    [SendText(event.chat_id, "first"), SendText(event.chat_id, "second")],
+                    handled=True,
+                )
+
+            context.engine.process_result = process_result  # type: ignore[method-assign]
+            update = {
+                "update_id": 41,
+                "message": {
+                    "message_id": 7,
+                    "text": "/ping",
+                    "chat": {"id": 123, "type": "private"},
+                    "from": {"id": 456},
+                },
+            }
+
+            with self.assertRaisesRegex(TelegramAPIError, "temporary second action failure"):
+                handle_update(api, update, chat_state=ChatState(), runtime_context=context)
+            handle_update(api, update, chat_state=ChatState(), runtime_context=context)
+
+        self.assertEqual(api.sent_messages, [("123", "first"), ("123", "second")])
+        self.assertEqual(process_calls, 1)
+
     def test_modern_unaddressed_group_attachment_is_not_downloaded(self) -> None:
         class InstructionBox:
             def get(self):

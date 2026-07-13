@@ -34,8 +34,8 @@ Der uebergeordnete Arbeitsauftrag lautet:
   fail-closed.
 - Telegram-Anhaenge werden erst nach Reply-, Adressierungs- und Status-Gate
   heruntergeladen. Unadressierte Gruppenanhaenge loesen keinen Download aus.
-- Die relevante Testsuite meldete zuletzt `602 passed, 17 subtests passed`.
-- Seit dem letzten Live-Restart am 2026-07-13 um 18:17 CEST liegen 17 lokale
+- Die relevante Testsuite meldet jetzt `603 passed, 17 subtests passed`.
+- Seit dem letzten Live-Restart am 2026-07-13 um 18:17 CEST liegen 18 lokale
   Commits vor. Der naechste Restart ist erst am 20-Commit-Fenster faellig.
 - Push ist nicht angefordert und bleibt aus.
 - Die uncommitteten Benutzerdateien `.obsidian/`, `.stfolder/`,
@@ -46,35 +46,50 @@ Der uebergeordnete Arbeitsauftrag lautet:
 
 ### 1. Dispatcher-Vertrag pruefen
 
-- [ ] `handle_update` und `_dispatch_modern_telegram_actions` gemeinsam lesen.
-- [ ] Festhalten, wann ein Poll-Offset fortgeschrieben wird.
-- [ ] Pruefen, ob ein Fehler nach bereits erfolgreicher Aktion den gesamten
+- [x] `handle_update` und `_dispatch_modern_telegram_actions` gemeinsam lesen.
+- [x] Festhalten, wann ein Poll-Offset fortgeschrieben wird: erst nach
+  erfolgreichem `handle_update`; ein Dispatchfehler fuehrt zum Retry desselben
+  Updates.
+- [x] Pruefen, ob ein Fehler nach bereits erfolgreicher Aktion den gesamten
   Update-Retry ausloest.
-- [ ] `message_tracking` auf vorhandene Sent-Message-, Dedupe- und
+- [x] `message_tracking` auf vorhandene Sent-Message-, Dedupe- und
   Restore-Mechanismen pruefen.
-- [ ] Den Unterschied zwischen absichtlich erneut versendbaren Aktionen und
+- [x] Den Unterschied zwischen absichtlich erneut versendbaren Aktionen und
   nicht idempotenten Seiteneffekten dokumentieren.
 
 ### 2. Fehler reproduzieren und minimal beheben
 
-- [ ] Einen lokalen Fake-API-Fall mit mindestens zwei Aktionen aufbauen:
+- [x] Einen lokalen Fake-API-Fall mit mindestens zwei Aktionen aufbauen:
   Aktion 1 erfolgreich, Aktion 2 fehlschlaegt, anschliessender Update-Retry.
-- [ ] Beweisen, ob Aktion 1 doppelt gesendet wird oder bereits sicher
-  unterdrueckt wird.
-- [ ] Nur bei bestaetigtem Fehler die kleinste passende Korrektur einbauen.
-- [ ] Identitaet des Updates, Aktionsreihenfolge, Retry-Verhalten und
+- [x] Beweisen: Vor dem Fix wurde Aktion 1 bei der Wiederholung doppelt
+  gesendet, weil Message-Tracking erst nach der vollstaendigen Aktionsliste
+  schrieb.
+- [x] Die kleinste passende Korrektur einbauen: Aktionen werden einzeln
+  versendet, der Fortschritt wird pro Update im laufenden Runtime-Prozess
+  gehalten, und das Engine-Ergebnis wird bei diesem Retry wiederverwendet.
+- [x] Identitaet des Updates, Aktionsreihenfolge, Retry-Verhalten und
   Fehlermeldung erhalten.
-- [ ] Keine kostenpflichtigen Provider- oder LLM-Aufrufe verwenden.
+- [x] Keine kostenpflichtigen Provider- oder LLM-Aufrufe verwenden.
+
+Offen fuer einen Folgeabschnitt:
+
+- [ ] Den Dispatch-Fortschritt ueber einen Prozessneustart hinweg persistent
+  machen. Der aktuelle Fix verhindert doppelte Aktionen bei Poller-Retries im
+  laufenden Prozess; nach einem Neustart bleibt wegen des noch nicht
+  persistierten Aktionsplans ein at-least-once-Fenster bestehen.
+- [ ] Den Timeout-Pfad separat korrigieren: `_run_with_runtime_timeout`
+  beendet den Versandthread nicht. Ein Timeout kann deshalb noch einen
+  laufenden Versand und gleichzeitig eine Fallback-Antwort erzeugen.
 
 ### 3. Regression und Nachweis
 
-- [ ] Fokussierte Dispatcher-/Telegram-Tests ergaenzen.
-- [ ] Die relevante Suite vollstaendig ausfuehren.
-- [ ] `git diff --check` ausfuehren.
-- [ ] Testergebnis und allfaellige Restunsicherheit hier dokumentieren.
-- [ ] Nach abgeschlossenem Fix lokal committen.
-- [ ] Keinen Push ohne ausdrueckliche Anforderung ausfuehren.
-- [ ] Keinen Restart vor dem 20-Commit-Fenster ausfuehren, sofern nicht
+- [x] Fokussierte Dispatcher-/Telegram-Tests ergaenzen.
+- [x] Die relevante Suite vollstaendig ausfuehren.
+- [x] `git diff --check` ausfuehren.
+- [x] Testergebnis und allfaellige Restunsicherheit hier dokumentieren.
+- [x] Nach abgeschlossenem Fix lokal committen.
+- [x] Keinen Push ohne ausdrueckliche Anforderung ausfuehren.
+- [x] Keinen Restart vor dem 20-Commit-Fenster ausfuehren, sofern nicht
   ausdruecklich angefordert.
 
 ## Leitplanken
@@ -100,12 +115,20 @@ Der Plan ist abgeschlossen, wenn:
 
 ## Testnachweis
 
-Noch offen. Nach Abschluss mindestens dokumentieren:
+Der Teilfehler-Regressionstest ist gruen:
+
+```text
+.venv-py313/bin/pytest -q tests/test_bot.py -k 'modern_dispatch_retry_skips_completed_actions_and_reuses_engine_result'
+1 passed, 188 deselected
+```
+
+Die relevante Suite ist gruen:
 
 ```text
 .venv-py313/bin/pytest -q tests/test_bot.py tests/test_telegram_runner.py \
   tests/test_engine_identity_flows.py tests/test_adapters.py \
   tests/test_runtime_state.py
+603 passed, 17 subtests passed in 10.79s
+
 git diff --check
 ```
-
