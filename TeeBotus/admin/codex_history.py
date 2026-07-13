@@ -589,8 +589,10 @@ def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any]) -> None:
             "dedupe_key": str(item.get("id") or ""),
             "payload": dict(item),
         })
-        if not response.get("ok"):
-            LOGGER.warning("History-Dispatcher shadow append failed: %s", str(response.get("error") or "")[:240])
+        try:
+            _history_dispatcher_response_data(response, operation="history.append")
+        except HistoryDispatcherError as exc:
+            LOGGER.warning("History-Dispatcher shadow append failed: %s", str(exc)[:240])
     except (HistoryDispatcherError, ValueError) as exc:
         LOGGER.warning("History-Dispatcher shadow append unavailable: %s", str(exc)[:240])
 
