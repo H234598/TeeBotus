@@ -1910,6 +1910,9 @@ TeeBotusApplet.prototype = {
         continue;
       }
       let status = this._stripOuterStatusQuotes(part.slice(0, index)).toLowerCase();
+      if (PROBLEM_STATUSES.indexOf(status) < 0) {
+        continue;
+      }
       let count = this._nonNegativeInt(part.slice(index + 1), 0);
       if (!status || !(count > 0)) {
         continue;
@@ -1935,6 +1938,10 @@ TeeBotusApplet.prototype = {
     for (let part of this._stripOuterStatusQuotes(value).split(",")) {
       let index = part.indexOf(":");
       if (index < 1) {
+        continue;
+      }
+      let status = this._stripOuterStatusQuotes(part.slice(0, index)).toLowerCase();
+      if (PROBLEM_STATUSES.indexOf(status) < 0) {
         continue;
       }
       let count = this._nonNegativeInt(part.slice(index + 1), 0);

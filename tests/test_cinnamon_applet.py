@@ -2825,6 +2825,28 @@ def test_cinnamon_applet_normalizes_quoted_health_breakdowns() -> None:
     assert result["fallback"] == "broken:2,warning:1"
 
 
+def test_cinnamon_applet_ignores_unknown_health_breakdown_statuses() -> None:
+    result = _run_js_applet_expression(
+        """
+        ({
+          text: applet._problemBreakdownText('bogus:999,warning:1'),
+          count: applet._problemBreakdownCount('bogus:999,warning:1'),
+          total: applet._healthProblemTotal(
+            {classification_version: 2, status: "warning", total_problem_count: 1, actionable_problem_statuses: "bogus:999,warning:1"},
+            {},
+            {}
+          )
+        })
+        """
+    )
+
+    assert result == {
+        "text": " | Probleme Warnung:1",
+        "count": 1,
+        "total": 1,
+    }
+
+
 def test_cinnamon_applet_health_v2_does_not_hide_command_or_qdrant_counts_behind_stale_total() -> None:
     result = _run_js_applet_expression(
         """
