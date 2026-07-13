@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.379`, Commit `33b383a6`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.380` (lokaler Arbeitsstand; Commit folgt nach Nachweis).
 
 ## Arbeitsprinzipien
 
@@ -102,6 +102,15 @@ einen ungefangenen `AttributeError` ausloesen; fehlende oder falsch typisierte
 und `items` jetzt vor der Verarbeitung und wandelt Abweichungen in einen
 kontrollierten Dispatcher-Fehler um.
 
+**Achter Befund 2026-07-13:** Die Bridge uebersprang nicht-objektartige Claim-
+Items, akzeptierte `recipient_results=null` bzw. unvollstaendige Empfaengerzeilen
+und behandelte `dispatch.complete` mit `data=null` als Erfolg. Dadurch konnte ein
+Claim ohne Abschluss im `delivering`-Zustand haengen oder eine leere/ungueltige
+Zustellung als erfolgreich erscheinen. Ausserdem fragte der Dry-Run die Payload
+nicht an und verlor dadurch Summary-Metadaten. Items, Payload, Empfaenger und
+Completion-Antwort werden jetzt fail-closed validiert; der Dry-Run fordert die
+Payload explizit an.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -175,6 +184,9 @@ Der Plan ist erst abgeschlossen, wenn:
 - Delete-Revision-Fix committed als `94556cb` (`Make delete revision checks atomic`).
 - Nested-Completion-Probe: `data.ok=false` mit `claim_not_owned` wird jetzt als fehlgeschlagener Dispatcher-Lauf gemeldet.
 - Malformed-Claim-Probe: `data=null` wird jetzt als kontrollierter `history_dispatcher_unavailable`-Fehler gemeldet.
+- Bridge-Schema-Proben: nicht-objektartiges Claim-Item, `recipient_results=null` und `dispatch.complete data=null` werden kontrolliert abgewiesen; Dry-Run uebernimmt `summary_prefix` wieder aus der Payload.
+- Gezielt verifizierte TeeBotus-Suite nach der Bridge-Haertung: `114 passed`.
+- Bridge-Haertung und SemVer-Bump auf `1.9.380` committed als `8376977e` (`Harden history dispatcher bridge validation`).
 
 ### Noch offen
 
