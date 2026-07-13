@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.438`, `a6bdbaf8`.
+- Aktueller gepruefter Quellstand: `1.9.439`, `bfd641a8`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -461,6 +461,31 @@ Qdrant-Doppelzaehlung gruen.
    hat.
 5. Erst nach Tests, Live-Probe, Version-/Commit-Nachweis und geklaerten offenen
    Befunden den Plan abschliessen.
+
+## Befund 95: Gequotete Status- und Zahlenwerte waren im Applet nicht parity
+
+Python entfernt aeussere Quotes vor der Healthklassifikation, das Applet-
+JavaScript tat dies bei `route_status`, Problemflags und numerischen
+Stale-/Zaehlerfeldern nicht. Ein gequoteter `unknown`-Status konnte deshalb in
+der Detailansicht normal erscheinen, obwohl Python denselben Befund als
+actionable meldete.
+
+### Umsetzung und Nachweis
+
+- Gemeinsamer `_stripOuterStatusQuotes`-Helper im Applet fuer Statusflags,
+  Problemstatus und strikte Integerwerte.
+- Regression fuer `route_status="unknown"`, `stale_hours="24"`,
+  `"12"` und `"warning"`.
+- Vollstaendige Applet-Suite: `218 passed in 44.40s`.
+- Installierte Applet-Kopie byte-identisch zur Quelle.
+- SemVer `1.9.439`, Commit `bfd641a8` (`Normalize quoted applet health values`).
+
+### Live-Ergebnis
+
+Die aktuellen drei actionable Befunde sind weiterhin real und werden nicht
+wegklassifiziert: `hard_reasoning` ohne generischen Key, fehlende Signal-
+Identitaetsverknuepfung bei Depressionsbot und lokaler TBL-History-Rueckstand.
+Qdrant ist gesund; der zentrale Dispatcher meldet Queue `0`.
 
 ## Invarianten
 

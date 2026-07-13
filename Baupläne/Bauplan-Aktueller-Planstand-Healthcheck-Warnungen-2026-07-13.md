@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.438`, Commit `a6bdbaf8`
+**Quellstand:** TeeBotus `1.9.439`, Commit `bfd641a8`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -219,6 +219,39 @@ Befund bereits erfassten.
   Fehler gemeldet.
 - Terminale `no_private_route`-Skips sind nachvollziehbare Nichtzustellungen,
   solange kein neuer privater Empfaengerweg eingerichtet wurde.
+
+## Befund 95: Quoted Healthwerte liefen zwischen Python und Applet auseinander
+
+Der Python-Parser normalisiert Status- und Zahlenwerte auch bei einfachen,
+doppelten und Backtick-Quotes. Das Cinnamon-Applet uebernahm diese Werte zwar
+beim Feldparsing, erkannte aber beispielsweise `route_status="unknown"` nicht
+als Problem und wertete `stale_hours="24"` nicht als veraltet. Dadurch konnten
+Header und Detailmenue denselben Runtime-Befund unterschiedlich darstellen.
+
+### Umsetzung und Nachweis
+
+- Das Applet verwendet jetzt eine gemeinsame Normalisierung fuer aeussere
+  Statusquotes bei Problemstatus und Flagwerten.
+- Die numerische Statusnormalisierung entfernt dieselben Quotes, bevor
+  Healthzaehler und Stale-Pruefungen ausgewertet werden.
+- Regression fuer gequoteten unbekannten Status, gequotete Stale-Stunden,
+  gequotete Integer und gequotete Warnflags.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `218 passed in 44.40s`.
+- Applet lokal installiert; Quell- und Installationskopie sind byte-identisch.
+- SemVer `1.9.439`, Commit `bfd641a8`.
+
+### Aktuelle Live-Probe nach dem Fix
+
+- Der lesende Runtime-Status bleibt `warning` mit
+  `missing_key:1,warning:2`; das ist kein Parserfehler.
+- Qdrant und der History-Dispatcher sind gesund; dessen zentrale Queue ist
+  `0`.
+- Die offenen Ursachen bleiben bewusst sichtbar: fehlender
+  `hard_reasoning`-Key, fehlende Depressionsbot-Signal-Identitaet und lokale
+  TBL-History-Zeilen mit `queued=84` sowie terminalen
+  `no_private_route`-Skips.
+- Kein Secret, keine Account-Verknuepfung, keine Outbox-Zeile und kein
+  Servicezustand wurde durch die Diagnose veraendert.
 
 ## Arbeitsplan
 
