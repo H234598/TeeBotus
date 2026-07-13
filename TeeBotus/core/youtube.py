@@ -15,6 +15,7 @@ import threading
 import time
 import urllib.parse
 from contextlib import suppress
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -827,6 +828,7 @@ def _transcribe_audio_with_openai_whisper_cli(audio_path: Path, workdir: Path, i
     return _read_first_srt_as_text(workdir)
 
 
+@lru_cache(maxsize=32)
 def _has_python_module(module_name: str) -> bool:
     result = subprocess.run(
         [sys.executable, "-c", f"import {module_name}"],

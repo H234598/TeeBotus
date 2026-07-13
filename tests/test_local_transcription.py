@@ -7,6 +7,24 @@ import TeeBotus.core.local_transcription as local_transcription
 import TeeBotus.core.youtube as youtube
 
 
+def test_python_module_probe_is_cached(monkeypatch) -> None:
+    calls = []
+
+    class Result:
+        returncode = 0
+
+    def fake_run(*args, **kwargs):
+        calls.append((args, kwargs))
+        return Result()
+
+    monkeypatch.setattr(youtube.subprocess, "run", fake_run)
+    youtube._has_python_module.cache_clear()
+
+    assert youtube._has_python_module("faster_whisper") is True
+    assert youtube._has_python_module("faster_whisper") is True
+    assert len(calls) == 1
+
+
 def test_local_transcription_passes_language_to_faster_whisper(monkeypatch) -> None:
     calls: dict[str, object] = {}
 

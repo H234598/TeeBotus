@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.394`, Receipt-Reconciliation-Commit `2e13c831`.
+- Der aktuelle TeeBotus-Stand wird mit dem Cache-Fix auf Version `1.9.395` angehoben; der laufende Dienst bleibt bis zum naechsten vereinbarten Restart bei `1.9.394`.
 
 ## Arbeitsprinzipien
 
@@ -442,13 +442,18 @@ Der Plan ist erst abgeschlossen, wenn:
 - Boundary-Restart am `2026-07-13 05:25:22-24 CEST`: `teebotus.service`, `history-dispatcher.service` und `teebotus-codex-history-collector.service` sind aktiv; TeeBotus `1.9.394`, History-Dispatcher-Snapshot `0.2.7`, `queued=0`, `delivered=26`, `last_error` leer.
 - Zweiter Boundary-Restart am `2026-07-13 05:37:28-29 CEST`: alle drei Services aktiv; Dispatcher live `0.2.8`, `queued=0`, `delivered=26`, `last_error` leer. Der Bridge-Dry-Run bleibt `ok=true`, `items=0`, ohne Mutation.
 - Live-Bridge-Dry-Run fuer `TeeBotus_Logger`: `ok=true`, `items=0`, `status_counts={}`, keine Mutation. Nach dem Restart keine Runtime-Fehler; die einzige gefilterte Meldung ist die erwartete fehlende GitHub-Tag-Notification `v1.9.394`.
+- Befund 49: Der Healthcheck fuehrte fuer jede Instanz erneut `import faster_whisper` in einem Unterprozess aus. Drei lokale Transkriptionsproben dauerten dadurch live etwa `5.6 s + 6.7 s + 6.8 s`; der vollstaendige Runtime-Status ueberschritt den Applet-Timeout von 30 Sekunden und wurde faelschlich als `broken`/`health defekt` angezeigt.
+- Umsetzung Befund 49: `TeeBotus.core.youtube._has_python_module()` ist jetzt mit einem prozessweiten `lru_cache(maxsize=32)` versehen. Die Probe bleibt ein echter Importtest, wird innerhalb eines Statuslaufs aber nur einmal pro Modul ausgefuehrt. SemVer-Bump auf `1.9.395`.
+- Regressionstest fuer die Cache-Idempotenz: derselbe Modulname erzeugt nur einen Unterprozessaufruf; lokale Transkriptionssuite bleibt gruen.
+- Live-Applet-Abgleich nach dem Fix: Statushelper beendet sich mit `runtime_returncode=0` in `15.47 s`, `command_ok=true`, `output_truncated=false`; `health.status=warning` mit `total_problem_count=3` statt eines kuenstlichen Timeout-`broken`. Die verbleibenden drei Handlungszaehler sind konkret: fehlender `OPENAI_API_KEY` fuer `hard_reasoning`, eine nicht verknuepfte Signal-Identitaet der Depressionsbot-Instanz und der lokale TBL-History-Rueckstand; Qdrant und alle zwei Collections sind `ready`.
+- Applet-/Installationsvergleich: `files/teebotus@H234598/applet.js` und die installierte `/home/teladi/.local/share/cinnamon/applets/teebotus@H234598/applet.js` sind byte-identisch. Gezielt verifizierte Suite nach dem Fix: `314 passed in 86.61s` (`tests/test_local_transcription.py`, `tests/test_cinnamon_applet.py`, `tests/test_entrypoint_compatibility.py`).
 
 ### Noch offen
 
 - Retry-Semantik geprueft: `dispatch.retry` downgradet terminale `delivered`-/`acknowledged`-Zustaende nicht; automatische Retries bleiben auf `failed`/`skipped`/`discarded` begrenzt.
 - Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.8` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
-- Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
-- Der lokale TeeBotus-Code ist aktuell `1.9.394` und seit dem Boundary-Restart live geladen. Der aktive History-Dispatcher ist `0.2.8`.
+- Live- und Applet-Abgleich ist abgeschlossen; die verbleibenden Warnungen sind jetzt getrennt von Timeout-/Parserfehlern sichtbar und muessen fachlich beziehungsweise durch Benutzeraktion bearbeitet werden.
+- Der lokale TeeBotus-Code ist aktuell `1.9.395`; der laufende Dienst ist noch `1.9.394`, weil kein ausserplanmaessiger Restart ausgefuehrt wird. Der aktive History-Dispatcher ist `0.2.8`.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
