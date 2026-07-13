@@ -4,6 +4,7 @@ import json
 import os
 import subprocess
 import tempfile
+import threading
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -2129,6 +2130,76 @@ class BotTests(unittest.TestCase):
 
         self.assertEqual(api.sent_messages, [("123", "first"), ("123", "second")])
         self.assertEqual(process_calls, 1)
+
+    def test_modern_dispatch_timeout_does_not_send_fallback_while_worker_is_in_flight(self) -> None:
+        from TeeBotus.runtime.actions import SendText
+        from TeeBotus.runtime.engine import EngineResult
+
+        class InstructionBox:
+            def get(self):
+                return BotInstructions()
+
+        class BlockingAPI(FakeAPI):
+            def __init__(self) -> None:
+                super().__init__()
+                self.started = threading.Event()
+                self.release = threading.Event()
+                self.finished = threading.Event()
+
+            def send_message(self, chat_id: int, text: str) -> int:
+                self.started.set()
+                self.release.wait(timeout=5)
+                try:
+                    return super().send_message(chat_id, text)
+                finally:
+                    self.finished.set()
+
+        api = BlockingAPI()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            account_store = AccountStore(root / "accounts", "Demo", StaticSecretProvider(b"e" * 32))
+            state_store = RuntimeStateStore(root / "data", instance_name="Demo", secret_provider=StaticSecretProvider(b"e" * 32))
+            message_tracker = MessageTracker(root / "runtime" / "Sent_Message_Refs.json")
+            context = build_telegram_runtime_context(
+                api=api,
+                instance_name="Demo",
+                adapter_slot=1,
+                instruction_store=InstructionBox(),
+                account_store=account_store,
+                state_store=state_store,
+                message_tracker=message_tracker,
+                openai_client=None,
+                working_memory_store=None,
+                bibliothekar_store=None,
+                youtube_job_runner=None,
+                bot_identity=BotIdentity(first_name="Mondbot", username="MondBot"),
+            )
+            context.engine.process_result = lambda event: EngineResult(  # type: ignore[method-assign]
+                event.account_id,
+                [SendText(event.chat_id, "slow")],
+                handled=True,
+            )
+            update = {
+                "update_id": 42,
+                "message": {
+                    "message_id": 8,
+                    "text": "/ping",
+                    "chat": {"id": 123, "type": "private"},
+                    "from": {"id": 456},
+                },
+            }
+
+            with patch.dict(os.environ, {"TELEGRAM_RUNTIME_DISPATCH_TIMEOUT_SECONDS": "1"}, clear=False):
+                with self.assertRaisesRegex(RuntimeError, "dispatch timed out"):
+                    handle_update(api, update, chat_state=ChatState(), runtime_context=context)
+            self.assertTrue(api.started.wait(timeout=1))
+            self.assertEqual(api.sent_messages, [])
+
+            api.release.set()
+            self.assertTrue(api.finished.wait(timeout=2))
+            handle_update(api, update, chat_state=ChatState(), runtime_context=context)
+
+        self.assertEqual(api.sent_messages, [("123", "slow")])
 
     def test_modern_unaddressed_group_attachment_is_not_downloaded(self) -> None:
         class InstructionBox:

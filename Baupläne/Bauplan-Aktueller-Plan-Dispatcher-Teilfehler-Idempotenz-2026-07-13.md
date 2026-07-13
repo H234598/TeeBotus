@@ -34,8 +34,9 @@ Der uebergeordnete Arbeitsauftrag lautet:
   fail-closed.
 - Telegram-Anhaenge werden erst nach Reply-, Adressierungs- und Status-Gate
   heruntergeladen. Unadressierte Gruppenanhaenge loesen keinen Download aus.
-- Die relevante Testsuite meldet jetzt `603 passed, 17 subtests passed`.
-- Seit dem letzten Live-Restart am 2026-07-13 um 18:17 CEST liegen 18 lokale
+- Die relevante Testsuite meldet jetzt `604 passed, 17 subtests passed`.
+- Vor dem aktuellen Timeout-Fix lagen seit dem letzten Live-Restart am
+  2026-07-13 um 18:17 CEST 19 lokale Commits vor.
   Commits vor. Der naechste Restart ist erst am 20-Commit-Fenster faellig.
 - Push ist nicht angefordert und bleibt aus.
 - Die uncommitteten Benutzerdateien `.obsidian/`, `.stfolder/`,
@@ -77,9 +78,10 @@ Offen fuer einen Folgeabschnitt:
   machen. Der aktuelle Fix verhindert doppelte Aktionen bei Poller-Retries im
   laufenden Prozess; nach einem Neustart bleibt wegen des noch nicht
   persistierten Aktionsplans ein at-least-once-Fenster bestehen.
-- [ ] Den Timeout-Pfad separat korrigieren: `_run_with_runtime_timeout`
-  beendet den Versandthread nicht. Ein Timeout kann deshalb noch einen
-  laufenden Versand und gleichzeitig eine Fallback-Antwort erzeugen.
+- [x] Den Timeout-Pfad absichern: Ein laufender Versand wird durch einen
+  In-Flight-Lock nicht parallel erneut gestartet. Der Timeout bleibt ein
+  Retry-Fehler und sendet keine konkurrierende Fallback-Antwort; das Update
+  wird erst nach einem belastbaren Dispatch-Ergebnis bestaetigt.
 
 ### 3. Regression und Nachweis
 
@@ -122,13 +124,20 @@ Der Teilfehler-Regressionstest ist gruen:
 1 passed, 188 deselected
 ```
 
+Der Timeout-Regressionstest ist ebenfalls gruen:
+
+```text
+.venv-py313/bin/pytest -q tests/test_bot.py -k 'modern_dispatch_retry or modern_dispatch_timeout'
+2 passed, 188 deselected in 1.61s
+```
+
 Die relevante Suite ist gruen:
 
 ```text
 .venv-py313/bin/pytest -q tests/test_bot.py tests/test_telegram_runner.py \
   tests/test_engine_identity_flows.py tests/test_adapters.py \
   tests/test_runtime_state.py
-603 passed, 17 subtests passed in 10.79s
+604 passed, 17 subtests passed in 12.48s
 
 git diff --check
 ```

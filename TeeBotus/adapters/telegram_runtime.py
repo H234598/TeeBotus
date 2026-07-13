@@ -893,6 +893,7 @@ class TelegramRuntimeContext:
     engine: TeeBotusEngine
     bot_identity: BotIdentity
     dispatch_retries: dict[str, "_TelegramDispatchRetry"] = field(default_factory=dict)
+    dispatch_lock: Any = field(default_factory=threading.Lock)
 
 
 @dataclass
@@ -922,6 +923,7 @@ def build_telegram_runtime_context(
     structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> TelegramRuntimeContext:
     instructions = instruction_store.get()
+    dispatch_lock = threading.Lock()
     engine = TeeBotusEngine(
         account_store,
         state=state_store,
@@ -952,6 +954,7 @@ def build_telegram_runtime_context(
             actions,
             account_store=account_store,
             instance_name=instance_name,
+            dispatch_lock=dispatch_lock,
         ),
     )
     return TelegramRuntimeContext(
@@ -964,6 +967,7 @@ def build_telegram_runtime_context(
         message_tracker=message_tracker,
         engine=engine,
         bot_identity=bot_identity,
+        dispatch_lock=dispatch_lock,
     )
 
 
@@ -1210,6 +1214,7 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
                 account_store=context.account_store,
                 instance_name=context.instance_name,
                 completed_action_indices=retry_state.completed_action_indices,
+                dispatch_lock=getattr(context, "dispatch_lock", None),
             ),
             timeout_seconds=dispatch_timeout,
         )
@@ -1224,19 +1229,10 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
                 int((time.perf_counter() - dispatch_started_at) * 1000),
                 dispatch_timeout,
             )
-            try:
-                context.api.send_message(
-                    str(chat_id),
-                    _runtime_timeout_fallback_text(instructions, message),
-                )
-            except (TelegramAPIError, TelegramNetworkError, OSError):
-                LOGGER.exception(
-                    "Telegram dispatch-timeout fallback failed instance=%s chat_id=%s.",
-                    context.instance_name,
-                    chat_id,
-                )
-            context.dispatch_retries.pop(retry_key, None)
-            return True
+            raise RuntimeError(
+                f"Telegram action dispatch timed out; update remains unacknowledged instance={context.instance_name} "
+                f"slot={context.adapter_slot} event_id={event.event_id}"
+            )
         context.dispatch_retries.pop(retry_key, None)
     except Exception:
         LOGGER.exception(
@@ -1512,7 +1508,25 @@ def _dispatch_modern_telegram_actions(
     account_store: AccountStore,
     instance_name: str,
     completed_action_indices: set[int] | None = None,
+    dispatch_lock: Any | None = None,
 ) -> None:
+    if dispatch_lock is not None:
+        acquired = dispatch_lock.acquire(blocking=False)
+        if not acquired:
+            raise RuntimeError("Telegram action dispatch already in flight; retry remains unacknowledged")
+        try:
+            _dispatch_modern_telegram_actions(
+                api,
+                message_tracker,
+                event,
+                actions,
+                account_store=account_store,
+                instance_name=instance_name,
+                completed_action_indices=completed_action_indices,
+            )
+        finally:
+            dispatch_lock.release()
+        return
     LOGGER.info(
         "Dispatching %s Telegram actions instance=%s slot=%s event_id=%s chat_id=%s",
         len(actions),
