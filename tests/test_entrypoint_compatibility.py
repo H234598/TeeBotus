@@ -193,7 +193,7 @@ def test_runtime_status_reports_codex_history_counts(monkeypatch, capsys, tmp_pa
 
     captured = capsys.readouterr()
     assert "[Projekt-History]" in captured.out
-    assert "codex_history=Demo status=warning queued=1 failed=0 total=1 latest_repo=TeeBotus latest_prefix=v1.8.0_#0001" in captured.out
+    assert "codex_history=Demo status=warning queued=1 failed=0 total=1 problem_statuses=queued:1 latest_repo=TeeBotus latest_prefix=v1.8.0_#0001" in captured.out
 
 
 def test_runtime_status_marks_non_dispatch_owner_history_as_delegated_in_bridge_mode(monkeypatch, capsys, tmp_path) -> None:

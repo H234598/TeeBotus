@@ -168,13 +168,14 @@ Der Healthcheck darf keine Memory-Dateien löschen oder reparieren. Recovery, Qu
 - Ein `status=broken` bleibt handlungsrelevant, auch wenn dieselbe Zeile einen Fallback nennt.
 - Ein Codex-History-`warning` wird nicht mehr wegen `queued=0` und `failed=0` ausgeblendet.
 - Das v2-Applet verwendet bei `classification_version>=2` ausschließlich die getrennten actionable-Status und zeigt reine Hinweise nicht zusätzlich als Probleme.
-- Applet-Testdatei: `177 passed`
+- TBL-Codex-History zeigt die 101 terminalen `no_private_route`-Skips explizit; delegierte Queues werden nicht als Problemstatus ausgegeben.
+- Applet-Testdatei: `178 passed`
 - Nach der Korrektur meldet der Live-Healthcheck `actionable_problem_count=3` und `informational_problem_count=21`.
 
 ### Versionen
 
 - TeeBotus-Baseline: `1.9.372`, Commit `a732f5c8` (`Clarify applet health diagnostics`)
-- TeeBotus aktueller Fixstand: `1.9.373`
+- TeeBotus aktueller Fixstand: `1.9.374`
 - History-Dispatcher: `0.2.0`, Commit `b818cc1` (`Add encrypted history queue compaction`)
 
 ## 7. Offene Arbeitspakete

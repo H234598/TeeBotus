@@ -2121,6 +2121,17 @@ def test_cinnamon_applet_history_status_labels_are_localized() -> None:
     }
 
 
+def test_cinnamon_applet_history_status_shows_skip_reason() -> None:
+    result = _run_js_applet_expression(
+        'applet._formatProjectHistoryLine("codex_history=TBL status=warning queued=0 failed=0 total=1467 skipped=101 problem_statuses=skipped:101 skip_reasons=no_private_route:101")'
+    )
+
+    assert result == (
+        "Codex-History TBL: Warnung; offen 0; fehlgeschlagen 0; gesamt 1467; "
+        "uebersprungen 101; Grund no private route:101"
+    )
+
+
 def test_cinnamon_applet_formats_runtime_directory_and_agent_pilot_lines() -> None:
     result = _run_js_applet_expression(
         """

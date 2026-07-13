@@ -1099,6 +1099,7 @@ TeeBotusApplet.prototype = {
         + "; offen " + String(fields.queued || "0")
         + "; fehlgeschlagen " + String(fields.failed || "0")
         + "; gesamt " + String(fields.total || "0")
+        + this._codexHistoryProblemText(fields)
         + this._codexHistoryMixText(fields)
         + latestPrefix + latestTitle + latestStatus + latestKind + this._errorText(fields);
     }
@@ -1110,10 +1111,25 @@ TeeBotusApplet.prototype = {
         + "; offen " + String(fields.queued || "0")
         + "; fehlgeschlagen " + String(fields.failed || "0")
         + "; gesamt " + String(fields.total || "0")
+        + this._codexHistoryProblemText(fields)
         + this._codexHistoryMixText(fields)
         + latestRepo + latestPrefix + latestKind + this._errorText(fields);
     }
     return line;
+  },
+
+  _codexHistoryProblemText: function(fields) {
+    let parts = [];
+    let skipped = this._nonNegativeInt((fields || {}).skipped, 0);
+    if (skipped > 0) {
+      parts.push("uebersprungen " + String(skipped));
+    }
+    if (fields && fields.skip_reasons) {
+      parts.push("Grund " + String(fields.skip_reasons).replace(/_/g, " "));
+    } else if (fields && fields.problem_statuses) {
+      parts.push("Status " + String(fields.problem_statuses).replace(/_/g, " "));
+    }
+    return parts.length > 0 ? "; " + parts.join("; ") : "";
   },
 
   _codexHistoryMixText: function(fields) {

@@ -817,36 +817,53 @@ def codex_history_status_lines(
             )
         ]
     delegated_source = _codex_history_queue_is_delegated(safe_instance_name)
-    summary_status = "ok" if delegated_source and int(summary.get("non_delegable_problem_count", 0) or 0) == 0 else summary["status"]
+    delegated_problem_count = int(summary.get("non_delegable_problem_count", 0) or 0)
+    summary_status = "ok" if delegated_source and delegated_problem_count == 0 else summary["status"]
     delegation_fields = " dispatch_mode=bridge dispatch_role=source" if delegated_source else ""
+    history_problem_statuses = "" if delegated_source and delegated_problem_count == 0 else str(summary.get("problem_statuses") or "")
+    history_problem_details = (
+        (f"skipped={summary['skipped']} " if summary.get("skipped") else "")
+        + (f"problem_statuses={_status_field_value(history_problem_statuses)} " if history_problem_statuses else "")
+        + (f"skip_reasons={_status_field_value(summary['skip_reasons'])} " if summary.get("skip_reasons") else "")
+    )
     lines = [
         (
             f"codex_history={_status_field_value(safe_instance_name)} status={summary_status} "
             f"queued={summary['queued']} failed={summary['failed']} total={summary['total']} "
-            f"latest_repo={_status_field_value(summary['latest_repo'])} "
-            f"latest_prefix={_status_field_value(summary['latest_prefix'])} "
-            f"latest_kind={_status_field_value(summary['latest_kind'])} "
-            f"run_summaries={summary['run_summaries']} strategies={summary['strategies']} "
-            f"graphs={summary['graphs']} other={summary['other']}{delegation_fields}"
+            + history_problem_details
+            + f"latest_repo={_status_field_value(summary['latest_repo'])} "
+            + f"latest_prefix={_status_field_value(summary['latest_prefix'])} "
+            + f"latest_kind={_status_field_value(summary['latest_kind'])} "
+            + f"run_summaries={summary['run_summaries']} strategies={summary['strategies']} "
+            + f"graphs={summary['graphs']} other={summary['other']}{delegation_fields}"
         )
     ]
     for repo in summary.get("repos", []):
         if not isinstance(repo, Mapping):
             continue
-        repo_status = "ok" if delegated_source and not bool(repo.get("non_delegable_problem")) else repo.get("status", "unknown")
+        delegated_repo = delegated_source and not bool(repo.get("non_delegable_problem"))
+        repo_status = "ok" if delegated_repo else repo.get("status", "unknown")
+        repo_problem_statuses = "" if delegated_repo else str(repo.get("problem_statuses") or "")
+        repo_problem_details = (
+            (f"skipped={repo['skipped']} " if repo.get("skipped") else "")
+            + (f"problem_statuses={_status_field_value(repo_problem_statuses)} " if repo_problem_statuses else "")
+            + (f"skip_reasons={_status_field_value(repo.get('skip_reasons'))} " if repo.get("skip_reasons") else "")
+        )
+        repo_line = (
+            f"codex_history_repo={_status_field_value(safe_instance_name)} "
+            f"repo={_status_field_value(repo.get('repo_name', '<none>'))} "
+            f"status={_codex_history_status_token(repo_status)} "
+            f"queued={repo.get('queued', 0)} failed={repo.get('failed', 0)} total={repo.get('total', 0)} "
+            + repo_problem_details
+            + f"run_summaries={repo.get('run_summaries', 0)} strategies={repo.get('strategies', 0)} "
+            + f"graphs={repo.get('graphs', 0)} other={repo.get('other', 0)} "
+            + f"latest_prefix={_status_field_value(repo.get('latest_prefix', '<none>'))} "
+            + f"latest_status={_status_field_value(repo.get('latest_status', '<none>'))} "
+            + f"latest_kind={_status_field_value(repo.get('latest_kind', '<none>'))} "
+            + f"latest_title={_status_field_value(repo.get('latest_title', '<none>'))}{delegation_fields}"
+        )
         lines.append(
-            (
-                f"codex_history_repo={_status_field_value(safe_instance_name)} "
-                f"repo={_status_field_value(repo.get('repo_name', '<none>'))} "
-                f"status={_codex_history_status_token(repo_status)} "
-                f"queued={repo.get('queued', 0)} failed={repo.get('failed', 0)} total={repo.get('total', 0)} "
-                f"run_summaries={repo.get('run_summaries', 0)} strategies={repo.get('strategies', 0)} "
-                f"graphs={repo.get('graphs', 0)} other={repo.get('other', 0)} "
-                f"latest_prefix={_status_field_value(repo.get('latest_prefix', '<none>'))} "
-                f"latest_status={_status_field_value(repo.get('latest_status', '<none>'))} "
-                f"latest_kind={_status_field_value(repo.get('latest_kind', '<none>'))} "
-                f"latest_title={_status_field_value(repo.get('latest_title', '<none>'))}{delegation_fields}"
-            )
+            repo_line
         )
     return lines
 
@@ -896,6 +913,14 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
     latest_kind = _codex_history_kind(latest) if valid_rows else "<none>"
     kind_counts = _codex_history_kind_counts(valid_rows)
     has_problem_status = malformed_rows > 0 or any(status not in CODEX_HISTORY_NONPROBLEM_STATUSES for status in status_counts)
+    problem_statuses = _codex_history_count_label(
+        {
+            status: count
+            for status, count in status_counts.items()
+            if status not in CODEX_HISTORY_NONPROBLEM_STATUSES
+        }
+    )
+    skip_reasons = _codex_history_skip_reason_label(valid_rows)
     non_delegable_problem_count = malformed_rows + sum(
         count
         for status, count in status_counts.items()
@@ -905,11 +930,14 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
         "status": "warning" if has_problem_status else "ok",
         "queued": queued,
         "failed": failed,
+        "skipped": status_counts.get("skipped", 0),
         "total": len(rows),
         "latest_repo": latest_repo,
         "latest_prefix": latest_prefix,
         "latest_kind": latest_kind,
         "non_delegable_problem_count": non_delegable_problem_count,
+        "problem_statuses": problem_statuses,
+        "skip_reasons": skip_reasons,
         **kind_counts,
         "repos": _codex_history_repo_summaries(valid_rows),
     }
@@ -930,6 +958,7 @@ def _codex_history_repo_summaries(rows: Sequence[Mapping[str, Any]]) -> list[dic
                 "repo_name": repo_name,
                 "queued": 0,
                 "failed": 0,
+                "skipped": 0,
                 "total": 0,
                 "latest_prefix": "<none>",
                 "latest_status": "<none>",
@@ -941,17 +970,26 @@ def _codex_history_repo_summaries(rows: Sequence[Mapping[str, Any]]) -> list[dic
                 "other": 0,
                 "problem": False,
                 "non_delegable_problem": False,
+                "_problem_status_counts": {},
+                "_skip_reason_counts": {},
             },
         )
         entry["total"] += 1
         if status not in CODEX_HISTORY_NONPROBLEM_STATUSES:
             entry["problem"] = True
+            problem_counts = entry["_problem_status_counts"]
+            problem_counts[status] = problem_counts.get(status, 0) + 1
             if status != "queued":
                 entry["non_delegable_problem"] = True
         if status == "queued":
             entry["queued"] += 1
         elif status == "failed":
             entry["failed"] += 1
+        elif status == "skipped":
+            entry["skipped"] += 1
+            reason = _codex_history_skip_reason(row)
+            reason_counts = entry["_skip_reason_counts"]
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
         summary = row.get("summary", {})
         if not isinstance(summary, Mapping):
             summary = {}
@@ -970,6 +1008,8 @@ def _codex_history_repo_summaries(rows: Sequence[Mapping[str, Any]]) -> list[dic
         entry["latest_title"] = redact_status_text(summary.get("title") or "<none>") or "<none>"
     result = []
     for entry in grouped.values():
+        entry["problem_statuses"] = _codex_history_count_label(entry.pop("_problem_status_counts", {}))
+        entry["skip_reasons"] = _codex_history_count_label(entry.pop("_skip_reason_counts", {}))
         entry["status"] = "warning" if entry.pop("problem", False) else "ok"
         result.append(entry)
     return sorted(result, key=lambda item: str(item.get("repo_name") or "").casefold())
@@ -988,6 +1028,40 @@ def _codex_history_kind_counts(rows: Sequence[Mapping[str, Any]]) -> dict[str, i
         else:
             counts["other"] += 1
     return counts
+
+
+def _codex_history_count_label(counts: Mapping[str, Any]) -> str:
+    return ",".join(
+        f"{_status_field_value(key)}:{int(value)}"
+        for key, value in sorted(counts.items(), key=lambda item: str(item[0]))
+        if isinstance(value, int) and value > 0
+    )
+
+
+def _codex_history_skip_reason(row: Mapping[str, Any]) -> str:
+    reason = str(row.get("last_reason") or "").strip()
+    if not reason:
+        history = row.get("status_history")
+        if isinstance(history, (list, tuple)):
+            for item in reversed(history):
+                if not isinstance(item, Mapping):
+                    continue
+                if _codex_history_status_token(item.get("status")) != "skipped":
+                    continue
+                reason = str(item.get("reason") or "").strip()
+                if reason:
+                    break
+    return _status_field_value(reason or "unknown")
+
+
+def _codex_history_skip_reason_label(rows: Sequence[Mapping[str, Any]]) -> str:
+    counts: dict[str, int] = {}
+    for row in rows:
+        if _codex_history_status_token(row.get("status")) != "skipped":
+            continue
+        reason = _codex_history_skip_reason(row)
+        counts[reason] = counts.get(reason, 0) + 1
+    return _codex_history_count_label(counts)
 
 
 def _codex_history_kind(row: Mapping[str, Any]) -> str:

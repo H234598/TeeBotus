@@ -5453,12 +5453,12 @@ def test_codex_history_status_lines_report_counts_and_latest(tmp_path: Path) -> 
 
     assert codex_history_status_lines(instance_name="Demo", account_store=store) == [
         (
-            "codex_history=Demo status=warning queued=1 failed=1 total=3 latest_repo=TeeBotus "
+            "codex_history=Demo status=warning queued=1 failed=1 total=3 problem_statuses=failed:1,queued:1 latest_repo=TeeBotus "
             "latest_prefix=v1.8.0_#0003 latest_kind=codex_graph_artifact "
             "run_summaries=1 strategies=1 graphs=1 other=0"
         ),
         (
-            "codex_history_repo=Demo repo=TeeBotus status=warning queued=1 failed=1 total=3 "
+            "codex_history_repo=Demo repo=TeeBotus status=warning queued=1 failed=1 total=3 problem_statuses=failed:1,queued:1 "
             "run_summaries=1 strategies=1 graphs=1 other=0 latest_prefix=v1.8.0_#0003 "
             "latest_status=queued latest_kind=codex_graph_artifact latest_title=Noch_offen"
         ),
@@ -5479,7 +5479,10 @@ def test_codex_history_status_warns_for_skipped_item(tmp_path: Path) -> None:
 
     lines = codex_history_status_lines(instance_name="Demo", account_store=store)
 
-    assert lines[0].startswith("codex_history=Demo status=warning queued=0 failed=0 total=1")
+    assert "codex_history=Demo status=warning queued=0 failed=0 total=1 skipped=1" in lines[0]
+    assert "problem_statuses=skipped:1 skip_reasons=unknown:1" in lines[0]
+    assert "codex_history_repo=Demo repo=TeeBotus status=warning queued=0 failed=0 total=1 skipped=1" in lines[1]
+    assert "problem_statuses=skipped:1 skip_reasons=unknown:1" in lines[1]
 
 
 def test_codex_history_status_warns_for_malformed_backend_row() -> None:
