@@ -20,6 +20,7 @@ from TeeBotus.llm.profiles import (
     select_llm_route,
 )
 from TeeBotus.llm_client import LLMAPIError, LiteLLMTextClient, normalize_llm_provider
+from TeeBotus.runtime.config import resolve_openai_key
 from TeeBotus.runtime.llm_factory import build_runtime_structured_decision_runner, build_runtime_text_llm_client
 
 
@@ -176,6 +177,56 @@ def test_runtime_openai_clients_use_instance_scoped_key_before_global_key(monkey
     assert isinstance(route_client, LiteLLMTextClient)
     assert profile_client.api_key == "instance-key"
     assert route_client.api_key == "instance-key"
+
+
+def test_runtime_profile_client_preserves_more_specific_resolved_slot_key() -> None:
+    env = {
+        "OPENAI_API_KEY_DEMO_TELEGRAM_1": "slot-key",
+        "OPENAI_API_KEY_DEMO": "instance-key",
+    }
+    resolved_runtime_key = resolve_openai_key("Demo", "telegram", 1, env)
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="openai_premium",
+        default_api_key=resolved_runtime_key,
+        instance_name="Demo",
+        env=env,
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert resolved_runtime_key == "slot-key"
+    assert client.api_key == resolved_runtime_key
+
+
+def test_runtime_route_client_preserves_more_specific_resolved_slot_key(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "TeeBotus.runtime.llm_factory.select_llm_route",
+        lambda *_args, **_kwargs: LLMRoute(
+            purpose="hard_reasoning",
+            profile_name="openai_premium",
+            provider="litellm",
+            model="openai/gpt-test",
+            api_key_env="OPENAI_API_KEY",
+        ),
+    )
+    env = {
+        "OPENAI_API_KEY_DEMO_TELEGRAM_1": "slot-key",
+        "OPENAI_API_KEY_DEMO": "instance-key",
+    }
+    resolved_runtime_key = resolve_openai_key("Demo", "telegram", 1, env)
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="hard_reasoning",
+        default_api_key=resolved_runtime_key,
+        instance_name="Demo",
+        env=env,
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert resolved_runtime_key == "slot-key"
+    assert client.api_key == resolved_runtime_key
 
 
 def test_runtime_gemini_profile_does_not_reuse_openai_default_key() -> None:

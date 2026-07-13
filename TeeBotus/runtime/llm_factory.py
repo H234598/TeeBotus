@@ -291,7 +291,8 @@ def _build_route_client(
         instance_name=instance_name,
     )
     fallback_api_key = source.get(route.fallback_api_key_env, "").strip() if route.fallback_api_key_env else ""
-    resolved_api_key = str(override_api_key or "").strip() or profile_api_key
+    resolved_runtime_api_key = _compatible_default_api_key(route.provider, route.model, default_api_key)
+    resolved_api_key = str(override_api_key or "").strip() or resolved_runtime_api_key or profile_api_key
     resolved_api_base = str(api_base or "").strip() or route.base_url
     resolved_provider = normalize_llm_provider(route.provider)
     resolved_openai_client = openai_client
@@ -306,7 +307,7 @@ def _build_route_client(
     return build_text_llm_client(
         instructions=instructions,
         openai_client=resolved_openai_client,
-        default_api_key=resolved_api_key or _compatible_default_api_key(route.provider, route.model, default_api_key),
+        default_api_key=resolved_api_key,
         provider=route.provider,
         model=route.model,
         fallback_models=resolved_fallback_models,
@@ -380,13 +381,14 @@ def _build_profile_client(
         model=profile.model,
         instance_name=instance_name,
     )
-    resolved_api_key = str(override_api_key or "").strip() or profile_api_key
+    resolved_runtime_api_key = _compatible_default_api_key(profile.provider, profile.model, default_api_key)
+    resolved_api_key = str(override_api_key or "").strip() or resolved_runtime_api_key or profile_api_key
     resolved_api_base = str(api_base or "").strip() or profile.base_url
     resolved_openai_client = openai_client
     return build_text_llm_client(
         instructions=instructions,
         openai_client=resolved_openai_client,
-        default_api_key=resolved_api_key or _compatible_default_api_key(profile.provider, profile.model, default_api_key),
+        default_api_key=resolved_api_key,
         provider=profile.provider,
         model=profile.model,
         fallback_models=filter_runtime_fallback_models(
