@@ -959,17 +959,11 @@ def _sync_codex_history_local_dispatch_status(
         return False
     try:
         local_rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
-        local_item_id = ""
-        for row in local_rows:
-            if not isinstance(row, Mapping):
-                continue
-            if normalized_item_id and str(row.get("id") or "").strip() == normalized_item_id:
-                local_item_id = normalized_item_id
-                break
-            codex = row.get("codex") if isinstance(row.get("codex"), Mapping) else {}
-            if normalized_dedupe_key and str(codex.get("dedupe_key") or "").strip() == normalized_dedupe_key:
-                local_item_id = str(row.get("id") or "").strip()
-                break
+        matching_row = _history_dispatcher_matching_local_row(
+            {"id": normalized_item_id, "dedupe_key": normalized_dedupe_key},
+            local_rows,
+        )
+        local_item_id = str(matching_row.get("id") or "").strip() if matching_row is not None else ""
         if not local_item_id:
             return False
         _update_codex_history_item_status(

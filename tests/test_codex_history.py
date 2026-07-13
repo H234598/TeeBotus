@@ -2264,6 +2264,33 @@ def test_codex_history_matching_local_row_accepts_matching_id_with_dedupe() -> N
     assert match is local_rows[0]
 
 
+def test_codex_history_status_sync_rejects_id_dedupe_collision(tmp_path: Path) -> None:
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "id": "same-id",
+            "kind": "codex_run_summary",
+            "status": "queued",
+            "codex": {"dedupe_key": "sha256:local-a"},
+            "summary": {"text": "Kollision darf nicht synchronisieren."},
+        },
+    )
+
+    synchronized = codex_history_module._sync_codex_history_local_dispatch_status(
+        store,
+        "same-id",
+        "delivered",
+        dedupe_key="sha256:local-b",
+        reason="test_collision",
+        now="2026-07-13T12:00:00+00:00",
+        dispatch_results=(),
+    )
+
+    assert synchronized is False
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status"] == "queued"
+
+
 def test_codex_history_matching_local_row_rejects_conflicting_item_dedupe_fields() -> None:
     local_rows = ({"id": "same-id"},)
     dispatcher_item = {
