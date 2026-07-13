@@ -292,6 +292,52 @@ monoton. TeeBotus spiegelt Bridge-Receipts und Replies mit der externen
 Dispatcher-ID und deterministischer Event-ID. Die lokalen Resultate behalten
 gleichzeitig die lokale Outbox-ID fuer Reply-/Receipt-Matching.
 
+**Neununddreissigster Befund 2026-07-13:** `delivery.record` verwendete die
+vom Channel gelieferte `occurred_at`-Zeit als persistierte Update-Zeit. Alte oder
+zukuenftige Events konnten dadurch Queue-Reihenfolge und Statushistorie
+verfaelschen. Persistierte Zustandszeiten verwenden jetzt Serverzeit; die
+Ereigniszeit bleibt im Audit erhalten.
+
+**Vierzigster Befund 2026-07-13:** Malformierte `delivery`-Metadaten wurden
+beim Attempt-Count toleriert, beim Duplikatflag aber direkt als Mapping benutzt.
+Der Append-Pfad normalisiert das Unterobjekt jetzt einmal defensiv.
+
+**Einundvierzigster Befund 2026-07-13:** Eine Receipt fuer eine nicht mehr
+existierende Item-ID konnte wegen der Foreign-Key-Relation als interner
+SQLite-Fehler aus dem Handler fallen. `delivery.record` liefert jetzt
+kontrolliert `unknown_item`.
+
+**Zweiundvierzigster Befund 2026-07-13:** Leere oder nur aus Whitespace
+bestehende Dedupe-Keys kollidierten beim Append. Nach der Normalisierung faellt
+ein leerer Key jetzt auf die individuelle Item-ID zurueck.
+
+**Dreiundvierzigster Befund 2026-07-13:** Eine explizite Item-ID aus
+Whitespace wurde als gueltiger Primärschluessel gespeichert. Item-IDs werden
+jetzt vor dem Fallback ebenfalls getrimmt.
+
+**Vierundvierzigster Befund 2026-07-13:** Dedupe-Keys mit mehr als 512 Zeichen
+wurden abgeschnitten und konnten bei gleichem Praefix kollidieren. Ueberlange
+Keys werden jetzt durch einen stabilen SHA-256-Schluessel ersetzt.
+
+**Fuenfundvierzigster Befund 2026-07-13:** Eine bereits verwendete Item-ID mit
+anderem Dedupe-Key loeste einen unbehandelten Primary-Key-Fehler aus. Der
+Append-Pfad meldet jetzt explizit `item_id_conflict`.
+
+**Sechsundvierzigster Befund 2026-07-13:** Direkte `dispatch.complete`-Clients
+konnten doppelte, widerspruechliche oder unbekannte Empfaengerstatus senden;
+SQLite uebernahm sonst still die letzte Zeile. Der Store validiert Identitaeten
+und Statuswerte jetzt selbst fail-closed.
+
+**Siebenundvierzigster Befund 2026-07-13:** Eine fehlerhafte Completion liess
+den bereits geclaimten Eintrag bis zum Claim-TTL blockiert. Nach validierter
+Ownership wird ein malformed Completion-Body jetzt auf `queued` zurueckgesetzt,
+ohne einen Versuch zu zaehlen.
+
+**Achtundvierzigster Befund 2026-07-13:** Die Service-Schicht wies
+`recipient_results` ausserhalb des Stores ab und umging damit die Claim-
+Recovery. Die Array-Validierung liegt jetzt zentral im Store hinter der
+Ownership-Pruefung.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -388,10 +434,12 @@ Der Plan ist erst abgeschlossen, wenn:
 - Aktuelle lesende Dispatcherprobe: Version `0.2.5`, `queued=0`, `delivered=26`, `last_error` leer; Bridge-Dry-Run fuer TBL: `items=0`, `status_counts={}`, keine Mutation.
 - Bridge-Result-/Reply-Probe mit externer ID `external-bridge-local-result` und lokaler Outbox-ID erfolgreich; lokale Receipt-Zuordnung funktioniert.
 - Gezielte Regressionstests nach dem zweiten Fixblock: `130 passed in 8.93s` in `tests/test_codex_history.py tests/test_history_dispatcher_bridge.py`.
-- History-Dispatcher-Receipt-Reconciliation: externe Suite `39 passed`; Commits `0a22881`, `4ff12fc` und `c255124`, installierte Venv-Version `0.2.7`.
+- History-Dispatcher-Receipt-Reconciliation und Input-Haertung: externe Suite `47 passed`; Commits `0a22881`, `4ff12fc`, `c255124` und `22b0fee`, installierte Venv-Version `0.2.8`.
 - Lokale Receipt-Mirror-Probe bestaetigt `delivery.record` mit externer Item-ID und Eventtyp `delivered`; lokale Bridge-Suite danach `130 passed in 12.14s`.
 - Spates Receipt nach bekanntem `failed`/`queued`-Empfaenger setzt den externen Gesamtstatus jetzt auf `delivered`, wenn alle bekannten Empfaenger erfolgreich oder uebersprungen sind.
+- Dedupe-/ID-/Completion-Haertung fuer Befunde 39-48: `47 passed in 1.32s`; malformed Append-, Receipt- und Completion-Inputs bleiben kontrolliert und Claims werden nicht unnoetig blockiert.
 - Boundary-Restart am `2026-07-13 05:25:22-24 CEST`: `teebotus.service`, `history-dispatcher.service` und `teebotus-codex-history-collector.service` sind aktiv; TeeBotus `1.9.394`, History-Dispatcher-Snapshot `0.2.7`, `queued=0`, `delivered=26`, `last_error` leer.
+- Nach dem Dispatcher-Update ist Venv-Version `0.2.8` installiert; der laufende Snapshot bleibt bis zum naechsten TeeBotus-Restart nachweislich `0.2.7`.
 - Live-Bridge-Dry-Run fuer `TeeBotus_Logger`: `ok=true`, `items=0`, `status_counts={}`, keine Mutation. Nach dem Restart keine Runtime-Fehler; die einzige gefilterte Meldung ist die erwartete fehlende GitHub-Tag-Notification `v1.9.394`.
 
 ### Noch offen
