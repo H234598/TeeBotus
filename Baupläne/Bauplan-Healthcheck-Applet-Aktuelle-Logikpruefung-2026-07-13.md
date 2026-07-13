@@ -718,6 +718,22 @@ zaehlen.
 - `node --check files/teebotus@H234598/applet.js` erfolgreich.
 - SemVer `1.9.454`, Commit `a11e716a`.
 
+## Befund 111: Status-/Preflight-Secretprovider nutzte keine Runtime-Retries
+
+Die Applet-Statusausgabe kann mehrere Account- und History-Pruefungen in einem
+Lauf ausfuehren. Die gemeinsame Providerinstanz wurde aber ohne die globale
+Runtime-Retry-Policy angelegt; Secret-Service-Transienten wurden dadurch nicht
+abgefangen.
+
+### Umsetzung und Nachweis
+
+- `bot.py` bezieht den gemeinsamen read-only Provider jetzt aus
+  `runtime_secret_provider()`.
+- Der Providercache bleibt pro Statuslauf geteilt; Erstellung neuer Secrets
+  bleibt deaktiviert.
+- Entrypoint-Suite: `141 passed in 42.41s`; Live-History danach `status=ok`.
+- SemVer `1.9.455`, Commit `bc3941c7`.
+
 ## Invarianten
 
 - Ein echter Fehler wird nicht durch einen Fallback, einen leeren Queue-Zustand

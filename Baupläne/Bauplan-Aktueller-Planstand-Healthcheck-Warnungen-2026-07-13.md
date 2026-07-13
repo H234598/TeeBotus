@@ -503,6 +503,24 @@ Offload-/Fallbackschicht konnte deshalb als gesund erscheinen.
 - Applet-Suite: `227 passed in 34.09s`; `node --check` gruen.
 - SemVer `1.9.454`, Commit `a11e716a`.
 
+## Befund 111: Statusprovider umging die Secret-Service-Retry-Policy
+
+`_runtime_status_secret_provider()` erzeugte direkt einen
+`SecretToolInstanceSecretProvider` mit `lookup_retries=0`. Die Runtime-Policy
+mit Wiederholungen, Delay und Timeout wurde dadurch fuer Status, Preflight und
+Codex-History nicht verwendet. Ein intermittierender Lookup konnte so als
+AccountStore-Fehler erscheinen.
+
+### Umsetzung und Nachweis
+
+- Die Statusfactory verwendet jetzt `runtime_secret_provider()` und bleibt
+  mit `create_if_missing=False` strikt read-only.
+- Env-gesteuerte Retry-, Delay- und Timeout-Werte sind providerfrei getestet.
+- Entrypoint-Suite: `141 passed in 42.41s`.
+- Read-only Live-Probe: Depressionsbot-History `status=ok`; nur die bekannte
+  Signal-Identitaetswarnung bleibt actionable.
+- SemVer `1.9.455`, Commit `bc3941c7`.
+
 ## Arbeitsplan
 
 1. **Healthpayload und Applet weiter synchron halten**
