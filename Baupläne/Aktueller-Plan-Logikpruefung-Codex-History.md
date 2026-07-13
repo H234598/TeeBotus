@@ -67,6 +67,10 @@ Statuswerte werden nach dem Upsert erneut aus SQLite gelesen, damit bereits
 vorhandene Empfaengerresultate bei der Gesamtklassifikation nicht verloren
 gehen.
 
+**Zweiter Befund 2026-07-13:** `history.append` speicherte einen gelieferten
+Status korrekt, meldete im API-Ergebnis aber immer `queued`. Die Rueckgabe ist
+jetzt der normalisierte, tatsaechlich gespeicherte Status.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -121,7 +125,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Applet- und Statuslogik fuer Bridge-Delegation, malformed rows und `created_at`-Latest-Auswahl umgesetzt
 - Reproduktion des Dispatcherfehlers vor dem Fix: ein `skipped/no_private_route`-Resultat endete als `queued`
 - History-Dispatcher nach dem Fix: `31 passed`, davon zwei Regressionstests fuer terminale Skips und `delivered+skipped`
-- Lokale Dispatcher-Paketversion: `0.2.1`, installiert in `.venv-py313`
+- Lokale Dispatcher-Paketversion: `0.2.2`, nach dem API-Rueckgabefix erneut in `.venv-py313` zu installieren
 - History-Dispatcher-Fix committed als `943d349` (`Treat skipped recipients as terminal`)
 - TeeBotus-Plan-/Nachweisstand committed als `18b36730` (`Document dispatcher skip retry fix`)
 
@@ -130,6 +134,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Dispatch-Statussequenztests: erfolgreich; `failed` bleibt retrybar, `skipped` terminal.
 - Isolierte Vorher-/Nachher-Probe: vorher `queued`, nachher `skipped`.
 - TeeBotus Bridge-/Codex-History-Tests: `108 passed`.
+- API-Statusprobe: vorher `api_status=queued, stored_status=delivered`; nach dem Fix muessen beide `delivered` sein.
 
 ### Noch offen
 
