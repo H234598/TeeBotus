@@ -89,6 +89,42 @@ Nachweis bestehen:
 
 ## Aktueller Live-Befund
 
+### Applet-Health nach dem Patch
+
+Eine direkte Probe mit `python -m TeeBotus.cinnamon_applet status` ergibt
+aktuell:
+
+```text
+health.status=warning
+health.actionable_problem_count=1
+health.informational_problem_count=23
+health.runtime_problem_count=1
+health.qdrant_problem_count=0
+command_ok=true
+```
+
+Der einzige actionable Befund ist:
+
+```text
+account_identity_warning=Depressionsbot code=runtime_channel_without_identity
+channel=signal configured_runtime_slots=1 identity_channels=telegram:3
+```
+
+Das ist kein Applet- oder Parserfehler. Der Signal-Runtime-Slot ist fuer
+`Depressionsbot` konfiguriert und erreichbar, aber noch keiner bestehenden
+Signal-Identitaet zugeordnet. Ohne explizites Account-Linking wuerde ein
+Signal-Eingang einen separaten Account verwenden. Der Zustand bleibt deshalb
+bewusst handlungsbeduerftig; automatisches Linken waere eine unzulaessige
+Account-/Sicherheitsmutation.
+
+Die installierte Cinnamon-Datei
+`~/.local/share/cinnamon/applets/teebotus@H234598/applet.js` ist byte-identisch
+mit `files/teebotus@H234598/applet.js` (SHA-256 `9a105af5d2c1c0e6dbfb1c88825991ac0d04cef4f9109d2e4da070b6509733b0`).
+Ein altes Applet ist damit als Ursache ausgeschlossen. Die 23 weiteren
+Statusbefunde werden durch die Klassifikation als Hinweise angezeigt:
+optionale Fallbacks, fehlende optionale Keys, unvollstaendige Codex-Usage-
+Snapshots und bekannte `no_private_route`-History-Skips.
+
 ### TBL-Codex-History
 
 Die lokale TBL-Statusaggregation zeigt aktuell sinngemaess:
@@ -245,3 +281,7 @@ Der Plan ist erst abgeschlossen, wenn:
   in `8.55s`. Der neue Regressionstest prueft den Ablauf
   `history.append -> dispatch.claim (leer) -> history.query -> lokal delivered`;
   Orphan- und Mirror-Fehler bleiben weiterhin queued bzw. failed sichtbar.
+- 2026-07-13: Live-Appletprobe mit TeeBotus `1.9.462`: `command_ok=true`,
+  Qdrant-/Unit-Fehler `0`, genau ein actionable Health-Befund wegen der
+  fehlenden Signal-Identitaetsverknuepfung von `Depressionsbot`; die
+  installierte Applet-Kopie ist byte-identisch zur Repo-Kopie.
