@@ -6,7 +6,7 @@
 
 **Quellstand bei Erstellung:** TeeBotus `1.9.493`
 
-**Aktueller Quellstand:** TeeBotus `1.9.497`; History-Dispatcher `0.2.13`
+**Aktueller Quellstand:** TeeBotus `1.9.497`; History-Dispatcher `0.2.14`
 
 **Arbeitsbereich:** `/home/teladi/TeeBotus`
 
@@ -101,6 +101,8 @@ Historie erhalten, insbesondere:
 - [x] Der lokale Status-Sync verwendet denselben fail-closed ID-/Dedupe-Matcher
   wie die Bridge-Anreicherung; kollidierende Identitaeten koennen keine fremde
   lokale Summary aktualisieren.
+- [x] `history.append` akzeptiert keine unbekannten oder leeren Top-Level-
+  Statuswerte mehr; fehlerhafte Datensaetze werden vor der Mutation abgewiesen.
 - [x] `maintenance.prune` loescht keine History-Items mehr; alte Summarys
   bleiben als verschluesselte Originale erhalten. Nur abgeleitete Audit-,
   Tombstone- und Cursor-Metadaten unterliegen weiter der Aufraeumfrist.
@@ -294,7 +296,7 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
 - `pytest -q tests/test_codex_history.py`: `165 passed`.
 - `pytest -q tests/test_codex_history.py tests/test_admin_accounts.py tests/test_version_notifications.py`:
   `444 passed` nach dem Status-Sync-Fix.
-- `/home/teladi/History-Dispatcher`: `pytest -q`: `57 passed`.
+- `/home/teladi/History-Dispatcher`: `pytest -q`: `59 passed`.
 - Fokussierter Prune-/Statuslauf im History-Dispatcher: `7 passed`.
 - Fokussierte Bridge-/Matcher-Regressionen: `4 passed` fuer den aktuellen Fix;
   zuvor `25 passed` fuer den ersten Matcher-Fix.
@@ -378,3 +380,6 @@ Der Bauplan ist erst abgeschlossen, wenn:
   ID-/Dedupe-Matcher und konnte bei einer ID-Kollision die falsche Summary
   aktualisieren. Fail-closed behoben; TeeBotus `1.9.497`, relevante Suite
   `444 passed`, Push und Restart bleiben aus.
+- 2026-07-13: `history.append` verschluckte unbekannte Top-Level-Statuswerte
+  und legte sie als `queued` an. Fail-closed behoben; der History-Dispatcher
+  steht bei `0.2.14`, Vollsuite `59 passed`.
