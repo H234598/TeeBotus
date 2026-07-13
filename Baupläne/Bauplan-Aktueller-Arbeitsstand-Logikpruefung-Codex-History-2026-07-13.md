@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist nach dem Status-Token-Fix Version `1.9.397`; der laufende Dienst bleibt bis zum naechsten vereinbarten Restart bei `1.9.394`.
+- Der aktuelle TeeBotus-Stand ist nach dem Applet-Dispatcher-Fehlerfix Version `1.9.398`; der laufende Dienst bleibt bis zum naechsten vereinbarten Restart bei `1.9.394`.
 
 ## Arbeitsprinzipien
 
@@ -446,7 +446,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Umsetzung Befund 49: `TeeBotus.core.youtube._has_python_module()` ist jetzt mit einem prozessweiten `lru_cache(maxsize=32)` versehen. Die Probe bleibt ein echter Importtest, wird innerhalb eines Statuslaufs aber nur einmal pro Modul ausgefuehrt. SemVer-Bump auf `1.9.395`, committed als `32d7d379` (`Cache local module health probes`).
 - Regressionstest fuer die Cache-Idempotenz: derselbe Modulname erzeugt nur einen Unterprozessaufruf; lokale Transkriptionssuite bleibt gruen.
 - Live-Applet-Abgleich nach dem Fix: Statushelper beendet sich mit `runtime_returncode=0` in `15.47 s`, `command_ok=true`, `output_truncated=false`; `health.status=warning` mit `total_problem_count=3` statt eines kuenstlichen Timeout-`broken`. Die verbleibenden drei Handlungszaehler sind konkret: fehlender `OPENAI_API_KEY` fuer `hard_reasoning`, eine nicht verknuepfte Signal-Identitaet der Depressionsbot-Instanz und der lokale TBL-History-Rueckstand; Qdrant und alle zwei Collections sind `ready`.
-- Applet-/Installationsvergleich: `files/teebotus@H234598/applet.js` und die installierte `/home/teladi/.local/share/cinnamon/applets/teebotus@H234598/applet.js` sind byte-identisch. Gezielt verifizierte Suite nach dem Fix: `314 passed in 86.61s` (`tests/test_local_transcription.py`, `tests/test_cinnamon_applet.py`, `tests/test_entrypoint_compatibility.py`).
+- Applet-/Installationsvergleich vor Befund 53: `files/teebotus@H234598/applet.js` und die installierte `/home/teladi/.local/share/cinnamon/applets/teebotus@H234598/applet.js` waren byte-identisch; die damalige gezielte Suite lief mit `314 passed in 86.61s`.
 - Befund 50: Bei `TEEBOTUS_HISTORY_DISPATCHER_MODE=bridge` und einer explizit leeren `TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES`-Allowlist behandelte der Dispatcher keine Instanz als Ziel, waehrend der Statuspfad jede Instanz als delegierte Quelle markierte. Dadurch konnten nicht zustellbare Queues faelschlich als `status=ok` erscheinen.
 - Umsetzung Befund 50: `_codex_history_queue_is_delegated()` erkennt eine explizit leere Allowlist jetzt als "kein Dispatcher konfiguriert" und delegiert in diesem Zustand keine Instanz. Queued-History bleibt dadurch als Warnung sichtbar. SemVer-Bump auf `1.9.396`, committed als `c7964a4c` (`Do not hide history with empty bridge allowlist`).
 - Regressionstest Befund 50: Die vollstaendige `tests/test_entrypoint_compatibility.py` laeuft mit `134 passed`; der neue Test verifiziert `status=warning`, `queued=1` und das Fehlen von `dispatch_role=source` bei leerer Allowlist.
@@ -456,6 +456,9 @@ Der Plan ist erst abgeschlossen, wenn:
 - Befund 52: Der History-Dispatcher hatte `status_heartbeat_seconds` zwar in seiner Konfiguration, verwendete den Wert aber nirgends. Der Applet-Snapshot konnte dadurch trotz laufendem Dienst stundenlang veraltet bleiben und einen falschen Dispatcher-Zustand anzeigen.
 - Umsetzung Befund 52: `DispatcherService` schreibt den Snapshot jetzt in einem stoppbaren Daemon-Heartbeat, der nur im echten `serve()`-Lifecycle gestartet wird und bei Shutdown sauber beendet wird. Dispatcher-SemVer `0.2.9`, committed im separaten Repo als `a90cb48` (`Refresh dispatcher status snapshot heartbeat`).
 - Regressionstest Befund 52: Die vollstaendige History-Dispatcher-Suite laeuft mit `49 passed`; der neue Test bestaetigt eine Snapshot-Aktualisierung ohne API-Aufruf. Der laufende Dienst ist weiterhin `0.2.8`, weil kein ausserplanmaessiger Restart ausgefuehrt wird.
+- Befund 53: Das TeeBotus-Applet pruefte beim History-Dispatcher nur `payload.ok`; ein Snapshot mit `ok=true` und vorhandenem `last_error` wurde deshalb als `Status: bereit` angezeigt und der Fehler nicht ausgegeben.
+- Umsetzung Befund 53: Das Applet behandelt `last_error` jetzt als Warnung und zeigt ihn als `Letzter Fehler` an. SemVer-Bump auf `1.9.398`, committed als `0eda1cd9` (`Surface dispatcher snapshot errors in applet`). Die Quellkopie ist korrigiert; die installierte Kopie ist noch nicht synchronisiert und der laufende Cinnamon-Prozess wurde nicht reloadet.
+- Regressionstest Befund 53: Die vollstaendige `tests/test_cinnamon_applet.py` laeuft mit `179 passed`; der neue JavaScript-Test prueft `ok=true + last_error` gegen `Status: Warnung`.
 
 ### Noch offen
 
@@ -463,7 +466,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.8` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
 - Live- und Applet-Abgleich ist abgeschlossen; die verbleibenden Warnungen sind jetzt getrennt von Timeout-/Parserfehlern sichtbar und muessen fachlich beziehungsweise durch Benutzeraktion bearbeitet werden.
 - Dispatcher-Dry-Run fuer `TeeBotus_Logger` liefert im Bridge-Modus `statuses: none`, waehrend die lokale Outbox noch `19 queued` Legacy-Zeilen enthaelt. Dieser Bestand bleibt als Warnung sichtbar; keine automatische Zustellung, Loeschung oder Quarantaene wurde ohne explizite Migrationsentscheidung ausgefuehrt.
-- Der lokale TeeBotus-Code ist aktuell `1.9.397`; der laufende Dienst ist noch `1.9.394`, weil kein ausserplanmaessiger Restart ausgefuehrt wird. Der History-Dispatcher-Fix liegt lokal bei `0.2.9`, der aktive Dienst ist noch `0.2.8`.
+- Der lokale TeeBotus-Code ist aktuell `1.9.398`; der laufende Dienst ist noch `1.9.394`, weil kein ausserplanmaessiger Restart ausgefuehrt wird. Der History-Dispatcher-Fix liegt lokal bei `0.2.9`, der aktive Dienst ist noch `0.2.8`.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
