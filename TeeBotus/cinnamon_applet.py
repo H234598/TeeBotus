@@ -302,7 +302,7 @@ CODEX_HISTORY_STATUS_PRIORITY = {
     "fallback_defaults": 2,
     "warning": 1,
 }
-SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"models_feed", "route_status", "semantic"})
+SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"effective_status", "models_feed", "route_status", "semantic"})
 STATUS_FIELD_BOUNDARY_KEYS = frozenset({"status"}) | SECONDARY_PROBLEM_STATUS_FIELDS
 STATUS_FIELD_BOUNDARY_VALUES = PROBLEM_STATUSES | frozenset(
     {

@@ -83,6 +83,7 @@ const PROBLEM_STATUSES = [
   "warning"
 ];
 const SECONDARY_PROBLEM_STATUS_FIELDS = [
+  "effective_status",
   "models_feed",
   "route_status",
   "semantic"
@@ -99,6 +100,7 @@ const CONFIRMED_ACTIVE_SUBSTATES = {
 };
 const STATUS_FIELD_BOUNDARY_KEYS = {
   status: true,
+  effective_status: true,
   models_feed: true,
   route_status: true,
   semantic: true
@@ -128,14 +130,18 @@ const FREE_TEXT_STATUS_FIELDS = {
   action: true,
   command: true,
   error: true,
+  fallback_error: true,
   message: true,
+  offload_error: true,
   route_error: true
 };
 const FREE_TEXT_STATUS_FIELD_BOUNDARIES = {
   action: { warning: true },
   command: { apply_command: true },
   error: { warning: true },
+  fallback_error: { remote_fallback: true, route_error: true, warning: true },
   message: { action: true, warning: true },
+  offload_error: { warning: true },
   route_error: {
     fallback: true,
     fallback_api_key: true,
@@ -1443,7 +1449,15 @@ TeeBotusApplet.prototype = {
   },
 
   _errorText: function(fields) {
-    let value = String((fields || {}).error || (fields || {}).route_error || "").trim();
+    let values = ["error", "route_error", "fallback_error", "offload_error"];
+    let value = "";
+    for (let key of values) {
+      let candidate = String((fields || {})[key] || "").trim();
+      if (candidate) {
+        value = candidate;
+        break;
+      }
+    }
     let warning = String((fields || {}).warning || "").trim();
     if (!this._statusFlagIsSet(warning)) {
       warning = "";

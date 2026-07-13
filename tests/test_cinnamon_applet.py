@@ -3941,7 +3941,21 @@ structured_decision=Demo status=enabled route_status=unavailable fallback=local 
 """
     )
 
-    assert parsed["summary"]["actionable_problem_statuses"] == "unavailable:1"
+    assert parsed["summary"]["actionable_problem_statuses"] == "broken:1,unavailable:1"
+    assert parsed["summary"]["informational_problem_statuses"] == ""
+
+
+def test_cinnamon_applet_runtime_parser_counts_degraded_effective_status() -> None:
+    parsed = parse_runtime_status(
+        """
+[LLM-Routen und Backends]
+llm_route=degraded status=configured effective_status=degraded fallback=local
+llm_route=healthy status=configured effective_status=configured fallback=local
+"""
+    )
+
+    assert parsed["status_counts"]["degraded"] == 1
+    assert parsed["summary"]["actionable_problem_statuses"] == "degraded:1"
     assert parsed["summary"]["informational_problem_statuses"] == ""
 
 
