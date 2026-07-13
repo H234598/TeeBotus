@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.384`, Commit `54e6d00d`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.385`, Commit `f3efbd38`.
 
 ## Arbeitsprinzipien
 
@@ -139,6 +139,14 @@ eingeplant hatte. Der externe Endstatus ist jetzt autoritativ; ein vorhandener
 lokaler Eintrag wird best-effort mit Status, Versuch und letzter
 Empfaengerliste synchronisiert.
 
+**Dreizehnter Befund 2026-07-13:** Der externe Collector und der TeeBotus-
+Watcher scannen dieselben Codex-Sessiondateien. Der Collector nutzt den
+deterministischen Session-/Turn-/Final-Hash als `dedupe_key`, der Mirror
+ueberschrieb ihn bisher mit der lokalen UUID. Dadurch konnten identische Turns
+zweimal in der externen Queue landen. Der Mirror verwendet jetzt den
+vorhandenen `codex.dedupe_key` und faellt nur bei manuellen Summaries auf die
+Item-ID zurueck.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -219,6 +227,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Shadow-Response-Pruefung und SemVer-Bump auf `1.9.382` committed als `57849ffb` (`Validate shadow dispatcher append responses`); gezielte Suite danach `117 passed`.
 - Kind-/Digest-Abgleich und SemVer-Bump auf `1.9.383` committed als `a32dab73` (`Align bridge dispatchable history kinds`); gezielte Suite danach `118 passed`.
 - Lokale Status-Reconciliation und SemVer-Bump auf `1.9.384` committed als `54e6d00d` (`Reconcile local history status after bridge completion`); gezielte Suite danach `119 passed`.
+- Dedupe-Abgleich und SemVer-Bump auf `1.9.385` committed als `f3efbd38` (`Reuse Codex session dedupe keys in bridge`); gezielte Suite danach `119 passed`.
 
 ### Noch offen
 
