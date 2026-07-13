@@ -3892,6 +3892,26 @@ def test_import_codex_session_roots_skips_invalid_repo_root_without_aborting(tmp
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID) == []
 
 
+def test_import_codex_session_roots_accepts_custom_session_root_without_sessions_name(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "custom-session-root-demo", version="3.0.5")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    custom_root = tmp_path / "codex-logs"
+    session_file = write_codex_session(
+        custom_root / "rollout.jsonl",
+        repo=repo,
+        session_id="sess-custom-root",
+        turn_id="turn-custom-root",
+        final_text="Custom roots sind gueltige Sessionroots.",
+    )
+
+    report = import_codex_session_roots(store, (custom_root,), limit=10)
+    event_files = codex_history_module._codex_session_event_files_for_roots((custom_root,), (session_file,))
+
+    assert report["status_counts"] == {"imported": 1}
+    assert event_files == (session_file.resolve(),)
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["codex"]["session_id"] == "sess-custom-root"
+
+
 def test_import_codex_session_roots_limit_prefers_newest_session_mtime(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "watch-newest-limit-demo", version="3.0.0")
     store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())

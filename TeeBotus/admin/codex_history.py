@@ -5017,7 +5017,8 @@ def _iter_codex_session_files(roots: Sequence[str | Path], *, limit: int) -> tup
             continue
         if not root.is_dir():
             continue
-        files.extend(path for path in root.rglob("*.jsonl") if path.is_file() and _is_codex_session_log_path(path))
+        for session_root in _codex_session_directory_roots(root):
+            files.extend(path for path in session_root.rglob("*.jsonl") if path.is_file())
     files = sorted(set(files), key=_codex_session_file_import_sort_key)
     if limit > 0:
         files = files[:limit]
@@ -5034,8 +5035,11 @@ def _explicit_codex_session_file_roots(roots: Sequence[str | Path]) -> set[Path]
     return files
 
 
-def _is_codex_session_log_path(path: Path) -> bool:
-    return "sessions" in path.parts
+def _codex_session_directory_roots(root: Path) -> tuple[Path, ...]:
+    if root.name == "sessions":
+        return (root,)
+    nested_session_roots = tuple(path for path in root.rglob("sessions") if path.is_dir())
+    return nested_session_roots or (root,)
 
 
 def _codex_session_file_import_sort_key(path: Path) -> tuple[int, str]:
@@ -5103,7 +5107,7 @@ def _codex_session_event_files_for_roots(
         if root.suffix == ".jsonl" and not root.is_dir():
             explicit_files.add(root)
         elif root.is_dir():
-            directory_roots.append(root)
+            directory_roots.extend(_codex_session_directory_roots(root))
 
     selected: set[Path] = set()
     for raw_path in event_paths:
@@ -5113,9 +5117,7 @@ def _codex_session_event_files_for_roots(
             continue
         if path.suffix != ".jsonl" or (existing_only and not path.is_file()):
             continue
-        if path in explicit_files or (
-            _is_codex_session_log_path(path) and any(root in path.parents for root in directory_roots)
-        ):
+        if path in explicit_files or any(root in path.parents for root in directory_roots):
             selected.add(path)
     return tuple(sorted(selected, key=str))
 
