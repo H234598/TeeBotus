@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.433`, `7770e52a`.
+- Aktueller gepruefter Quellstand: `1.9.434`, `b910dbc5`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -246,6 +246,27 @@ ein unbekannter Zustand trotz globaler Blocker-Allowlist als Hinweis behandelt.
 - `git diff --check`: erfolgreich.
 - SemVer `1.9.433`, lokaler Commit `7770e52a`
   (`Let health blockers override informational rules`).
+
+## Befund 89: Unbekannte History-Skip-Gruende wurden als Hinweis verborgen
+
+Eine `codex_history_repo`-Zeile mit `problem_statuses=skipped:1` wurde auch
+dann als rein informativ klassifiziert, wenn `skip_reasons=unknown:1` oder
+malformierte Reason-Tokens vorlagen. Damit konnte ein fehlender oder kaputter
+Dispatcher-Grund genauso aussehen wie der bekannte terminale Grund
+`no_private_route`.
+
+### Umsetzung und Nachweis
+
+- Die Informationsregel erlaubt jetzt nur noch den belegten terminalen Grund
+  `no_private_route`.
+- Unbekannte, nicht erlaubte und syntaktisch ungueltige Skip-Grundlisten
+  werden fail-closed als actionable `warning` behandelt.
+- Regressionstest deckt `unknown`, `no_private_route` und malformed gemischt
+  ab: `3 passed, 210 deselected in 1.04s`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `213 passed in 42.72s`.
+- `git diff --check`: erfolgreich.
+- SemVer `1.9.434`, lokaler Commit `b910dbc5`
+  (`Expose unknown history skip reasons`).
 
 ## Umsetzung
 
