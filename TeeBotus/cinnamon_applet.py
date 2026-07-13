@@ -883,7 +883,10 @@ def _account_identity_status_is_informational(fields: Mapping[str, Any]) -> bool
 
 def _fallback_reference_is_set(fields: Mapping[str, Any]) -> bool:
     for key in ("fallback", "fallback_profile", "fallback_model", "offload_profile"):
-        value = _normalized_status_value(fields.get(key))
+        value = str(fields.get(key, "") or "").strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in {'"', "'", "`"}:
+            value = value[1:-1].strip()
+        value = value.casefold()
         if not value:
             continue
         return value not in FALLBACK_SENTINEL_VALUES
