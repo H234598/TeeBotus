@@ -438,13 +438,14 @@ Der Plan ist erst abgeschlossen, wenn:
 - Lokale Receipt-Mirror-Probe bestaetigt `delivery.record` mit externer Item-ID und Eventtyp `delivered`; lokale Bridge-Suite danach `130 passed in 12.14s`.
 - Spates Receipt nach bekanntem `failed`/`queued`-Empfaenger setzt den externen Gesamtstatus jetzt auf `delivered`, wenn alle bekannten Empfaenger erfolgreich oder uebersprungen sind.
 - Dedupe-/ID-/Completion-Haertung fuer Befunde 39-48: `47 passed in 1.32s`; malformed Append-, Receipt- und Completion-Inputs bleiben kontrolliert und Claims werden nicht unnoetig blockiert.
+- Retry-Regressionsprobe: terminaler `delivered`-Eintrag bleibt bei `dispatch.retry` unveraendert `delivered`; externe Suite danach `48 passed in 2.07s`, Test-Commit `9af5985`.
 - Boundary-Restart am `2026-07-13 05:25:22-24 CEST`: `teebotus.service`, `history-dispatcher.service` und `teebotus-codex-history-collector.service` sind aktiv; TeeBotus `1.9.394`, History-Dispatcher-Snapshot `0.2.7`, `queued=0`, `delivered=26`, `last_error` leer.
 - Zweiter Boundary-Restart am `2026-07-13 05:37:28-29 CEST`: alle drei Services aktiv; Dispatcher live `0.2.8`, `queued=0`, `delivered=26`, `last_error` leer. Der Bridge-Dry-Run bleibt `ok=true`, `items=0`, ohne Mutation.
 - Live-Bridge-Dry-Run fuer `TeeBotus_Logger`: `ok=true`, `items=0`, `status_counts={}`, keine Mutation. Nach dem Restart keine Runtime-Fehler; die einzige gefilterte Meldung ist die erwartete fehlende GitHub-Tag-Notification `v1.9.394`.
 
 ### Noch offen
 
-- Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
+- Retry-Semantik geprueft: `dispatch.retry` downgradet terminale `delivered`-/`acknowledged`-Zustaende nicht; automatische Retries bleiben auf `failed`/`skipped`/`discarded` begrenzt.
 - Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.8` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
 - Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
 - Der lokale TeeBotus-Code ist aktuell `1.9.394` und seit dem Boundary-Restart live geladen. Der aktive History-Dispatcher ist `0.2.8`.
