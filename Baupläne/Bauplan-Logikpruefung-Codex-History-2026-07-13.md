@@ -286,7 +286,7 @@ vor oder ohne erfolgreiches `dispatch.complete` kann deshalb extern weiter als
 retrybar gelten. Dafuer ist ein separater Cross-Repo-Protokoll-/Store-Fix
 noetig; der Code-Fix ist umgesetzt, der Live-Nachweis bleibt offen.
 
-**Umsetzung zum achtunddreissigsten Befund:** History-Dispatcher `0.2.6`
+**Umsetzung zum achtunddreissigsten Befund:** History-Dispatcher `0.2.8`
 aktualisiert `recipient_results` bei idempotenten `delivered`-/`read`-Events
 monoton. TeeBotus spiegelt Bridge-Receipts und Replies mit der externen
 Dispatcher-ID und deterministischer Event-ID. Die lokalen Resultate behalten
@@ -439,15 +439,15 @@ Der Plan ist erst abgeschlossen, wenn:
 - Spates Receipt nach bekanntem `failed`/`queued`-Empfaenger setzt den externen Gesamtstatus jetzt auf `delivered`, wenn alle bekannten Empfaenger erfolgreich oder uebersprungen sind.
 - Dedupe-/ID-/Completion-Haertung fuer Befunde 39-48: `47 passed in 1.32s`; malformed Append-, Receipt- und Completion-Inputs bleiben kontrolliert und Claims werden nicht unnoetig blockiert.
 - Boundary-Restart am `2026-07-13 05:25:22-24 CEST`: `teebotus.service`, `history-dispatcher.service` und `teebotus-codex-history-collector.service` sind aktiv; TeeBotus `1.9.394`, History-Dispatcher-Snapshot `0.2.7`, `queued=0`, `delivered=26`, `last_error` leer.
-- Nach dem Dispatcher-Update ist Venv-Version `0.2.8` installiert; der laufende Snapshot bleibt bis zum naechsten TeeBotus-Restart nachweislich `0.2.7`.
+- Zweiter Boundary-Restart am `2026-07-13 05:37:28-29 CEST`: alle drei Services aktiv; Dispatcher live `0.2.8`, `queued=0`, `delivered=26`, `last_error` leer. Der Bridge-Dry-Run bleibt `ok=true`, `items=0`, ohne Mutation.
 - Live-Bridge-Dry-Run fuer `TeeBotus_Logger`: `ok=true`, `items=0`, `status_counts={}`, keine Mutation. Nach dem Restart keine Runtime-Fehler; die einzige gefilterte Meldung ist die erwartete fehlende GitHub-Tag-Notification `v1.9.394`.
 
 ### Noch offen
 
 - Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
-- Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.7` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
+- Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.8` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
 - Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
-- Der lokale TeeBotus-Code ist aktuell `1.9.394` und seit dem Boundary-Restart live geladen. Der aktive History-Dispatcher ist `0.2.7`.
+- Der lokale TeeBotus-Code ist aktuell `1.9.394` und seit dem Boundary-Restart live geladen. Der aktive History-Dispatcher ist `0.2.8`.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
