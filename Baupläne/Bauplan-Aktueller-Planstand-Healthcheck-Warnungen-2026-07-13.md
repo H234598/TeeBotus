@@ -328,6 +328,24 @@ damit leer, obwohl der Status `configured` meldete.
 - Direkter Client-Probe: `api_key_matches_instance=True`.
 - SemVer `1.9.444`, Commit `50278e3d`.
 
+## Befund 101: Exportierter Profil-Builder blieb hinter dem Runtime-Builder
+
+Der weiterhin exportierte `build_profiled_text_llm_client` hatte keinen
+`instance_name`-Parameter und las deshalb bei OpenAI-Profilen nur den
+globalen `api_key_env`. Damit konnte dieser öffentliche Kompatibilitätspfad
+einen leeren Client-Key erzeugen, obwohl die Runtime-Factory bereits korrekt
+auf den Instanz-Key fiel.
+
+### Umsetzung und Nachweis
+
+- Gemeinsame `resolve_profile_api_key`-Logik für Profil- und Runtime-Builder.
+- `instance_name` ist beim exportierten Builder optional und
+  rückwärtskompatibel.
+- Instanz-Key gewinnt vor globalem Key; Nicht-OpenAI-Routen bleiben getrennt.
+- Router-/Package-Suite: `68 passed in 1.97s`.
+- Direkter Profil-Builder-Test mit Instanz-Key: erfolgreich.
+- SemVer `1.9.445`, Commit `27338c58`.
+
 ## Arbeitsplan
 
 1. **Healthpayload und Applet weiter synchron halten**

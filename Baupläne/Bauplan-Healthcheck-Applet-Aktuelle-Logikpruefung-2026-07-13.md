@@ -31,7 +31,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.442`, Commit `3896e7c3`.
+- Aktueller gepruefter Quellstand: `1.9.445`, Commit `27338c58`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -557,6 +557,20 @@ echten Request-Key erzeugen.
 - Factory-/Fallback-/Proactive-Tests: `50 passed in 1.86s`.
 - Direkter Client-Probe erfolgreich; kein Provideraufruf.
 - SemVer `1.9.444`, Commit `50278e3d`.
+
+## Befund 101: Exportierter Profil-Builder blieb hinter dem Runtime-Builder
+
+Der oeffentlich exportierte `build_profiled_text_llm_client` hatte keinen
+Instanzkontext und las fuer OpenAI-Profile nur den globalen Key. Dadurch
+blieb dieser Pfad hinter der Runtime-Factory zurueck.
+
+### Umsetzung und Nachweis
+
+- Gemeinsame `resolve_profile_api_key`-Logik fuer beide Builder.
+- Optionales `instance_name` ergaenzt, ohne bestehende Aufrufer zu brechen.
+- `68 passed in 1.97s` in Router- und Package-Suite.
+- Direkter Profil-Builder-Test mit Instanz-vor-Global-Prioritaet gruen.
+- SemVer `1.9.445`, Commit `27338c58`.
 
 ## Invarianten
 
