@@ -6203,12 +6203,14 @@ def _watch_post_index_callback(
         has_imports = _watch_scan_has_imports(scan_report)
         if post_index_pending or has_imports:
             post_index = _watch_post_index_report(store, instances_dir, instance_name, args, provider)
-            if post_index:
-                if isinstance(post_index, Mapping):
-                    reports.append(dict(post_index))
-                else:
-                    reports.append({"ok": False, "error": "malformed_post_index_report"})
-                if _watch_result_ok(post_index):
+            if post_index is not None:
+                normalized_post_index = (
+                    dict(post_index)
+                    if isinstance(post_index, Mapping)
+                    else {"ok": False, "error": "malformed_post_index_report"}
+                )
+                reports.append(normalized_post_index)
+                if _watch_result_ok(normalized_post_index):
                     post_index_pending = False
         if dispatch_pending or has_imports:
             dispatch_report = _watch_dispatch_report(
@@ -6218,14 +6220,16 @@ def _watch_post_index_callback(
                 args,
                 sender_factory=sender_factory,
             )
-            if dispatch_report:
-                if isinstance(dispatch_report, Mapping):
-                    dispatch_reports.append(dict(dispatch_report))
-                else:
-                    dispatch_reports.append({"ok": False, "error": "malformed_dispatch_report"})
-                if _watch_result_ok(dispatch_report):
+            if dispatch_report is not None:
+                normalized_dispatch_report = (
+                    dict(dispatch_report)
+                    if isinstance(dispatch_report, Mapping)
+                    else {"ok": False, "error": "malformed_dispatch_report"}
+                )
+                dispatch_reports.append(normalized_dispatch_report)
+                if _watch_result_ok(normalized_dispatch_report):
                     dispatch_pending = False
-                _emit_follow_dispatch_report(dispatch_report, args)
+                _emit_follow_dispatch_report(normalized_dispatch_report, args)
 
     return _callback
 

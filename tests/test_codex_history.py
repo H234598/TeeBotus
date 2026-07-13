@@ -4746,6 +4746,38 @@ def test_watch_post_index_callback_retries_malformed_results(tmp_path: Path, mon
     assert dispatch_reports == [{"ok": "false"}, {"ok": "false"}]
 
 
+def test_watch_post_index_callback_normalizes_non_mapping_dispatch_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reports: list[dict[str, Any]] = []
+    dispatch_reports: list[dict[str, Any]] = []
+    args = SimpleNamespace(
+        post_index=True,
+        post_index_qdrant=False,
+        post_index_qdrant_ensure=False,
+        dispatch=True,
+        follow=True,
+        format="text",
+    )
+    monkeypatch.setattr(codex_history_module, "_watch_post_index_report", lambda *_args, **_kwargs: {"ok": True})
+    monkeypatch.setattr(codex_history_module, "_watch_dispatch_report", lambda *_args, **_kwargs: "broken-report")
+    callback = codex_history_module._watch_post_index_callback(
+        object(),
+        tmp_path,
+        "TeeBotus_Logger",
+        args,
+        provider(),
+        reports,
+        dispatch_reports,
+    )
+    assert callback is not None
+
+    callback({"status_counts": {}, "items": []})
+
+    assert reports == [{"ok": True}]
+    assert dispatch_reports == [{"ok": False, "error": "malformed_dispatch_report"}]
+
+
 def test_render_watch_report_omits_duplicate_import_details_but_keeps_counts() -> None:
     rendered = _render_watch_report(
         {
