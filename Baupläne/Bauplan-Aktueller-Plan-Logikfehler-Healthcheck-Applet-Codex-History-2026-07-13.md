@@ -310,6 +310,9 @@ Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
 
 - [ ] Lokale TBL-Outbox, lokale Dispatch-Results und zentrale
   `history_items`/`recipient_results` ueber Item-ID und Dedupe-Key abgleichen.
+- [x] Aktuellen Bridge-Dry-Run mit dem Quellstand `1.9.488` schreibfrei
+  ausfuehren: `155` lokale Zeilen `would_mirror`, `4` terminale zentrale
+  Treffer `would_sync`, `ok=true`; keine Mutation und kein Provideraufruf.
 - [ ] Jede lokale `queued`-Zeile als zentral nicht vorhanden, zentral terminal,
   zentral weiterhin queued oder lokale Legacy-Zeile klassifizieren.
 - [ ] Jeden `no_private_route`-Skip gegen die zum Skip-Zeitpunkt gueltige
