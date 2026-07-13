@@ -162,8 +162,8 @@ dass die laufenden Prozesse bereits den neuen Quellstand verwenden.
   ergaenzen; die offene Queue bleibt actionable.
 - [x] SemVer von `1.9.490` auf `1.9.491` bumpen.
 - [x] Fokussierte Testausfuehrung nach dem Version-Bump wiederholen.
-- [ ] Aenderungen lokal committen; der neue Fix und der aktualisierte Bauplan
-  werden nach den Abschlusspruefungen lokal festgehalten.
+- [x] Aenderungen lokal committen; der neue Fix und der aktualisierte Bauplan
+  sind lokal als Commit `75efd545` festgehalten.
 
 ### 2. TBL-Reconciliation schreibfrei abschliessen
 
@@ -238,7 +238,9 @@ Der Bauplan ist erst abgeschlossen, wenn:
   `informational_problem_count=21` und `qdrant_problem_count=0`. Die
   actionable Zeile ist die offene TBL-Queue; der Prozessmarker fehlt nur beim
   noch nicht neu gestarteten alten Dienstprozess.
-- 2026-07-13: Fix und neuer Bauplan lokal als `1e7542f0` committed; kein Push
-  und kein Restart ausgeloest.
+- 2026-07-13: Fix lokal als `75efd545` committed; kein Push und kein Restart
+  ausgeloest.
+- 2026-07-13: Der aktualisierte Bauplan-Nachweis wurde danach separat lokal
+  festgehalten; Push und Restart bleiben weiterhin aus.
 - 2026-07-13: Laufende Prozesse bewusst noch nicht neu gestartet; die
   20-Commit-Restart-Regel und die fehlende explizite Freigabe bleiben bestehen.
