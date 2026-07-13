@@ -132,6 +132,11 @@ Historie erhalten, insbesondere:
   Reine Skip-Aggregate ohne offene Queue bleiben informational.
 - [x] Die installierte Applet-Kopie wurde aus dem aktuellen Quellstand
   installiert; Quelle und Installation sind byte-identisch.
+- [x] Die JavaScript-Detailklassifikation verwendet dieselbe
+  Fallback-Sentinel-Logik wie Python: `none`, `disabled`, `unknown`,
+  `unavailable` und weitere Nicht-Konfigurationen bestaetigen keinen
+  funktionierenden Fallback. Echte Warnungsdetails werden dadurch nicht mehr
+  aus der oberen Applet-Anzeige entfernt.
 
 ### Live-Abnahme nach dem Restart
 
@@ -347,6 +352,9 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
 - `git diff --check` erfolgreich.
 - `node --check files/teebotus@H234598/applet.js` erfolgreich.
 - Installationsparitaet des Applets mit `diff -qr` erfolgreich.
+- Fallback-Sentinel-Regression des Applets: `16 passed`; komplette
+  `tests/test_cinnamon_applet.py`: `236 passed`; installierte Applet-Kopie,
+  JavaScript-Syntax und `git diff --check` erfolgreich.
 - Aktuelle Watcher-/Health-Abnahme: `pytest -q tests/test_codex_history.py
   tests/test_cinnamon_applet.py tests/test_admin_accounts.py
   tests/test_version_notifications.py`: `683 passed`; fokussierter Follow- und
@@ -444,3 +452,9 @@ Der Bauplan ist erst abgeschlossen, wenn:
   bei `0 failed`. Die abschliessende Applet-Probe meldet
   `health.status=ok`, `actionable_problem_count=0`,
   `total_problem_count=0` und `qdrant_problem_count=0`.
+- 2026-07-13: Applet-Logikfehler reproduziert: Die Python-Klassifikation
+  behandelte `fallback=none` korrekt als nicht konfiguriert, die JavaScript-
+  Detailansicht unterdrueckte dieselbe Zeile jedoch wegen des bloss
+  nichtleeren Textes. Die Sentinel-Pruefung wurde angeglichen; Regression
+  `16 passed`, komplette Applet-Suite `236 passed`. Der lokale Applet-Stand
+  ist byte-identisch installiert; Restart und Push bleiben aus.

@@ -163,6 +163,20 @@ const NEUTRAL_FLAG_VALUES = {
   "none": true,
   "off": true
 };
+const FALLBACK_SENTINEL_VALUES = {
+  "0": true,
+  "false": true,
+  "no": true,
+  "none": true,
+  "off": true,
+  "disabled": true,
+  "missing": true,
+  "unknown": true,
+  "unavailable": true,
+  "unconfigured": true,
+  "not_configured": true,
+  "not_applicable": true
+};
 const FORCED_PROBLEM_STATUS_FIELDS = {
   account_identity_warning: "warning"
 };
@@ -1407,6 +1421,17 @@ TeeBotusApplet.prototype = {
     return false;
   },
 
+  _fallbackReferenceIsSet: function(fields) {
+    for (let key of ["fallback", "fallback_profile", "fallback_model", "offload_profile"]) {
+      let value = this._stripOuterStatusQuotes((fields || {})[key]).toLowerCase();
+      if (!value) {
+        continue;
+      }
+      return !_hasOwn(FALLBACK_SENTINEL_VALUES, value);
+    }
+    return false;
+  },
+
   _codexUsageIsStale: function(fields) {
     let staleHours = this._strictInt((fields || {}).stale_hours);
     return Boolean((fields || {}).codex_usage) && staleHours >= CODEX_USAGE_STALE_WARNING_HOURS;
@@ -2067,7 +2092,7 @@ TeeBotusApplet.prototype = {
         let fallbackCovered = Boolean(
           fields.effective_status
           && !this._statusValueIsProblem(fields.effective_status)
-          && (fields.fallback || fields.fallback_profile || fields.fallback_model || fields.local_ollama_offload)
+          && this._fallbackReferenceIsSet(fields)
         );
         if (!forced && (fallbackCovered || !this._lineHasProblemStatus(fields))) {
           continue;

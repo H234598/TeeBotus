@@ -2211,6 +2211,24 @@ def test_cinnamon_applet_top_health_does_not_detail_verified_fallback_as_actiona
     assert result == ""
 
 
+def test_cinnamon_applet_top_health_keeps_unconfigured_fallback_detail_actionable() -> None:
+    result = _run_js_applet_expression(
+        """
+        applet._actionableRuntimeDetailsText({
+          runtime: {
+            sections: {
+              "LLM-Routen und Backends": [
+                "llm_route=blocked status=unavailable effective_status=configured fallback=none fallback_profile=local_ollama"
+              ]
+            }
+          }
+        })
+        """
+    )
+
+    assert "LLM-Route blocked" in result
+
+
 def test_cinnamon_applet_spawn_json_does_not_reinvoke_throwing_consumer() -> None:
     result = _run_js_applet_expression(
         """
