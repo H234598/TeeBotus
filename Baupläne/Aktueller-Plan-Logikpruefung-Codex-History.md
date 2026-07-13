@@ -121,15 +121,21 @@ Der Plan ist erst abgeschlossen, wenn:
 - Applet- und Statuslogik fuer Bridge-Delegation, malformed rows und `created_at`-Latest-Auswahl umgesetzt
 - Reproduktion des Dispatcherfehlers vor dem Fix: ein `skipped/no_private_route`-Resultat endete als `queued`
 - History-Dispatcher nach dem Fix: `31 passed`, davon zwei Regressionstests fuer terminale Skips und `delivered+skipped`
-- Lokale Dispatcher-Paketversion: `0.2.1` im TeeBotus-Bridge-Projektstand
+- Lokale Dispatcher-Paketversion: `0.2.1`, installiert in `.venv-py313`
+- History-Dispatcher-Fix committed als `943d349` (`Treat skipped recipients as terminal`)
+- TeeBotus-Plan-/Nachweisstand committed als `18b36730` (`Document dispatcher skip retry fix`)
 
-### Noch einzutragen
+### In dieser Runde erledigt
 
-- Ergebnis der Dispatch-Statussequenztests
-- Entscheidung zur Semantik von spaeten Fehlern nach `delivered`/`acknowledged`
-- Ergebnis der isolierten SQL-Integrationsprobe
-- Ergebnis des abschliessenden Live- und Applet-Abgleichs
-- Abschlussversion und Commit-ID
+- Dispatch-Statussequenztests: erfolgreich; `failed` bleibt retrybar, `skipped` terminal.
+- Isolierte Vorher-/Nachher-Probe: vorher `queued`, nachher `skipped`.
+- TeeBotus Bridge-/Codex-History-Tests: `108 passed`.
+
+### Noch offen
+
+- Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
+- Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
+- Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
 
