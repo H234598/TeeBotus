@@ -1094,6 +1094,58 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                 "channel": "",
                 "summary_prefix": str(local_row.get("summary_prefix") or ""),
             })
+        if not candidate_account_ids:
+            # Never claim a central item without a valid recipient.  The
+            # dispatcher treats completion with an empty recipient list as a
+            # terminal ``skipped`` state, which would lose a queued summary.
+            response = client.request("history.query", {
+                "status": "",
+                "limit": 0,
+                "include_payload": False,
+            })
+            query_data = _history_dispatcher_response_data(response, operation="history.query")
+            query_items = _history_dispatcher_response_items(query_data, operation="history.query")
+            if local_reconciliation_rows:
+                latest_local_rows = local_reconciliation_rows
+                if isinstance(store, AccountStore):
+                    try:
+                        latest_local_rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+                    except (AccountStoreError, OSError, ValueError) as exc:
+                        LOGGER.warning("Fresh local Codex-History reconciliation lookup failed: %s", str(exc)[:240])
+                result_rows.extend(
+                    _reconcile_codex_history_local_rows_from_dispatcher(
+                        store,
+                        latest_local_rows,
+                        query_items,
+                        now=timestamp,
+                    )
+                )
+            central_queued = next(
+                (
+                    item
+                    for item in query_items
+                    if str(item.get("status") or "").strip().casefold() == "queued"
+                ),
+                None,
+            )
+            if central_queued is not None:
+                result_rows.append({
+                    "codex_history_item_id": str(central_queued.get("id") or ""),
+                    "account_id": "",
+                    "status": "deferred",
+                    "reason": "no_recipient_accounts",
+                    "channel": "",
+                    "summary_prefix": "",
+                })
+            return {
+                "ok": not any(row.get("status") == "failed" for row in result_rows) and central_queued is None,
+                "dry_run": False,
+                "instance": instance_name,
+                "generated_at": timestamp,
+                "items": result_rows,
+                "status_counts": _status_counts(result_rows),
+                "mode": "history-dispatcher",
+            }
         claimed = client.request("dispatch.claim", {
             "worker_id": f"teebotus:{os.getpid()}:{_codex_history_instance_token(instance_name)}",
             "limit": normalized_limit,
@@ -1108,9 +1160,15 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
             })
             query_data = _history_dispatcher_response_data(response, operation="history.query")
             query_items = _history_dispatcher_response_items(query_data, operation="history.query")
+            latest_local_rows = local_reconciliation_rows
+            if isinstance(store, AccountStore):
+                try:
+                    latest_local_rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+                except (AccountStoreError, OSError, ValueError) as exc:
+                    LOGGER.warning("Fresh local Codex-History reconciliation lookup failed: %s", str(exc)[:240])
             synchronized_rows = _reconcile_codex_history_local_rows_from_dispatcher(
                 store,
-                local_reconciliation_rows,
+                latest_local_rows,
                 query_items,
                 now=timestamp,
             )

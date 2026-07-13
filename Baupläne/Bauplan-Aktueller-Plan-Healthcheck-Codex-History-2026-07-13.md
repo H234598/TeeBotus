@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen
 
-**Quellstand:** TeeBotus `1.9.479`, lokaler Stand nach `3374e6eb`
+**Quellstand:** TeeBotus `1.9.480`, lokaler Stand nach dem Bridge-Fix
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -286,7 +286,8 @@ deren Kombination eingegrenzt.
 ### E. Tests und Live-Abnahme
 
 - [x] Regression lokale queued-Zeile plus zentrale delivered-Zeile.
-- [ ] Regression zentrale queued-Zeile plus lokale queued-Zeile.
+- [x] Regression zentrale queued-Zeile plus lokale queued-Zeile; ohne
+  Empfaenger darf kein zentraler Claim/Complete erfolgen.
 - [ ] Regression terminales `no_private_route` mit und ohne routbare
   Adminroute.
 - [ ] Regression mehrerer Instanzen mit delegierter Quelle, Logger-Ziel und
@@ -399,5 +400,14 @@ Der Plan ist erst abgeschlossen, wenn:
   `60044.5 Events/s` und `network_calls=0`. Die Gesamtsuite lief mit
   `160 passed in 6.70s`; ein weiterer Produktionslogikfehler wurde dabei
   nicht reproduziert.
+- 2026-07-13: Bridge-Verlustpfad behoben: Ohne gueltige Admin-Empfaenger
+  fuehrt der TeeBotus-Bridge-Worker keinen zentralen `dispatch.claim` und
+  keinen leeren `dispatch.complete` mehr aus. Solche Items bleiben zentral
+  `queued` und werden als `deferred/no_recipient_accounts` sichtbar. Bereits
+  terminale zentrale Zustaende duerfen weiterhin lokal synchronisiert werden.
+  Die lokale Reconciliation liest nach dem Mirror den aktuellen Store erneut,
+  damit keine doppelten Statushistorien entstehen. Patchstand `1.9.480`.
+- 2026-07-13: `pytest -q tests/test_codex_history.py tests/test_pyproject_metadata.py`
+  erfolgreich: `160 passed in 7.22s`; Compileall und `git diff --check` sauber.
 - 2026-07-13: Der Plan bleibt bis zur TBL-Reconciliation, der Event-Burst-/
   Ressourcenmessung und der naechsten erlaubten Live-Abnahme aktiv.

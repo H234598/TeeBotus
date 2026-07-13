@@ -1885,7 +1885,17 @@ def test_codex_history_dispatch_bridge_mirrors_local_orphan_before_claim(
             if operation == "dispatch.claim":
                 return {"ok": True, "data": {"items": []}}
             if operation == "history.query":
-                return {"ok": True, "data": {"items": []}}
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "external-orphan",
+                            "kind": "codex_run_summary",
+                            "status": "queued",
+                            "dedupe_key": "sha256:local-orphan",
+                        }],
+                    },
+                }
             raise AssertionError(operation)
 
     monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
@@ -1900,11 +1910,13 @@ def test_codex_history_dispatch_bridge_mirrors_local_orphan_before_claim(
         )
     )
 
-    assert result["ok"] is True
-    assert [operation for operation, _body in calls] == ["history.append", "dispatch.claim", "history.query"]
+    assert result["ok"] is False
+    assert result["status_counts"] == {"deferred": 1}
+    assert [operation for operation, _body in calls] == ["history.append", "history.query"]
     assert calls[0][1]["id"] == "local-orphan"
     assert calls[0][1]["dedupe_key"] == "sha256:local-orphan"
     assert calls[0][1]["payload"]["id"] == "local-orphan"
+    assert result["items"][-1]["reason"] == "no_recipient_accounts"
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status"] == "queued"
 
 
@@ -1967,7 +1979,7 @@ def test_codex_history_dispatch_bridge_reconciles_terminal_local_queue_after_emp
 
     assert result["ok"] is True
     assert result["status_counts"] == {"synchronized": 1}
-    assert calls == ["history.append", "dispatch.claim", "history.query"]
+    assert calls == ["history.append", "history.query"]
     persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
     assert persisted["status"] == "delivered"
     assert persisted["status_history"][-1] == {
