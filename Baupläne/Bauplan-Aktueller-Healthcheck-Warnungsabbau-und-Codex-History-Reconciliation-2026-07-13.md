@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.465`, lokaler Folgecommit nach `61e311eb`
+**Quellstand:** TeeBotus `1.9.466`, lokaler Folgecommit nach `11496d09`
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
 ## Auftrag
@@ -184,6 +184,12 @@ sortiert. Der Watcher reicht diese Auswahl nun direkt an den Import weiter.
 Der Poll-Modus bleibt unveraendert; bei mehreren Instanzen wird dieselbe
 read-only Dateiauswahl bewusst wiederverwendet.
 
+Der zweite konkrete Fehler lag im Ereignispfad: Ein einzelnes JSONL-Ereignis
+loeste bislang den Import der kompletten Auswahl von bis zu 1000 Sessiondateien
+aus. Der Watchdog reicht nun die geaenderten JSONL-Pfade zurueck. Der Snapshot
+bleibt als Konsistenzpruefung bestehen, aber der Import verarbeitet bei einem
+reinen Datei-Update nur die betroffenen, noch vorhandenen Pfade.
+
 ## Offene Arbeitspakete
 
 ### A. TBL-Reconciliation schreibfrei beweisen
@@ -224,6 +230,8 @@ read-only Dateiauswahl bewusst wiederverwendet.
 - [x] Snapshot-Dateiauswahl zwischen Zustandsvergleich und Import wiederver-
   wenden; dadurch entfaellt der zweite rekursive Sessionroot-Scan pro
   veraendertem Snapshot.
+- [x] Watchdog-Aenderungspfade bis zum Snapshot-Import weiterreichen; ein
+  einzelnes JSONL-Ereignis verarbeitet nicht mehr die gesamte `limit`-Menge.
 - [ ] Event-Burst-Debounce und Scan-Deduplizierung separat messen; ein
   Dateisystemereignis darf weiterhin zeitnah erkannt werden, aber nicht zu
   unnoetigen Vollscans fuer jede einzelne JSONL-Aenderung fuehren.
@@ -261,7 +269,10 @@ read-only Dateiauswahl bewusst wiederverwendet.
 - [ ] Applet-Payload/Python-Paritaet mit allen neuen Feldern pruefen.
 - [x] Lokalen Collector-Benchmark ohne Provideraufrufe ausfuehren:
   `codex_history_watcher_poll_loop`, 10 Sessiondateien, 10 Iterationen,
-  `ok=true`, 237.81 ms, 42.05 Operationen/s, `network_calls=0`.
+  `ok=true`, 262.27 ms, 38.13 Operationen/s, `network_calls=0`.
+- [x] Regression pruefen, dass ein geaenderter Pfad allein importiert wird;
+  der Test endet mit drei Importen statt einem zweiten Vollscan mit
+  Duplicate-Ergebnissen.
 - [ ] Collector-Debounce-/Ressourcenbenchmark mit realistischem grossem
   Sessionroot ausfuehren.
 - [ ] Runtime-Status, Applet-Health und Dispatcher-Snapshot nach dem naechsten

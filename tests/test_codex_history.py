@@ -4327,6 +4327,41 @@ def test_watch_codex_session_roots_snapshot_reuses_selected_session_files(tmp_pa
     assert iter_calls == 1
 
 
+def test_watch_codex_session_roots_snapshot_imports_only_changed_session_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = make_git_repo(tmp_path, "watch-changed-files", version="3.1.1")
+    sessions_root = tmp_path / "sessions"
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    first = write_codex_session(sessions_root / "first.jsonl", repo=repo, session_id="sess-first", turn_id="turn-first")
+    changed = write_codex_session(sessions_root / "changed.jsonl", repo=repo, session_id="sess-changed-before", turn_id="turn-before")
+    wake_calls = 0
+
+    def wake(_roots: Any, *, poll_interval_seconds: float, event_mode: str, sleep: Any) -> tuple[Path, ...]:
+        nonlocal wake_calls
+        wake_calls += 1
+        assert poll_interval_seconds == 0.25
+        assert event_mode == "snapshot"
+        write_codex_session(changed, repo=repo, session_id="sess-changed-after", turn_id="turn-after")
+        return (changed,)
+
+    monkeypatch.setattr(codex_history_module, "_wait_for_codex_session_change", wake)
+
+    result = watch_codex_session_roots(
+        store,
+        (sessions_root,),
+        poll_interval_seconds=0.25,
+        max_iterations=2,
+        event_mode="snapshot",
+        sleep=lambda _seconds: None,
+    )
+
+    assert first.exists()
+    assert wake_calls == 1
+    assert result["status_counts"] == {"imported": 3}
+    assert len(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)) == 3
+
+
 def test_watch_payload_ok_keeps_timer_successful_when_dispatch_has_channel_failure() -> None:
     assert (
         _watch_payload_ok(
