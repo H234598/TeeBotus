@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.448`, Commit `de5bc5a6`
+**Quellstand:** TeeBotus `1.9.449`, Commit `25151c00`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -396,6 +396,23 @@ Instanz-Fallback blieb dadurch leer.
 - Regression mit `OPENAI_API_KEY_<INSTANCE>` ist gruen.
 - Betroffene Suite: `128 passed in 3.37s`.
 - SemVer `1.9.448`, Commit `de5bc5a6`.
+
+## Befund 105: Healthcheck und Fallback-Status nutzten den falschen Key-Scope
+
+Die Statusklassifikation erkannte bei LiteLLM nur `openai/...` als
+OpenAI-Route. Ein unpraefixiertes OpenAI-Modell mit explizitem
+`OPENAI_API_KEY`-Env konnte dadurch trotz vorhandenem Instanz-Key als fehlend
+erscheinen. Die Fallback-Zeile pruefte den Key ausserdem nur global.
+
+### Umsetzung und Nachweis
+
+- Explizites `OPENAI_API_KEY`-Env ist nun auch im Healthcheck ein
+  OpenAI-Signal.
+- Primaer- und Fallback-Status verwenden Instanz-vor-Global-Aufloesung.
+- Status-Regressionen fuer unpraefixierte Profile und OpenAI-Fallbacks sind
+  gruen.
+- Entrypoint-/Runtime-Status- und LLM-Suiten gruen; SemVer `1.9.449`, Commit
+  `25151c00`.
 
 ## Arbeitsplan
 

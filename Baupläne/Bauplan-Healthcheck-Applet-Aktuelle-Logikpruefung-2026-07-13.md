@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.448`, Commit `de5bc5a6`
+**Quellstand:** TeeBotus `1.9.449`, Commit `25151c00`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet, Runtime-Healthpayload und `tests/test_cinnamon_applet.py`
 
 ## Auftrag
@@ -619,6 +619,23 @@ konnten Status-/Requestpfad bei einem OpenAI-Fallback auseinanderlaufen.
 - Unpraefixierter OpenAI-Fallback und die betroffene Suite sind gruen:
   `128 passed in 3.37s`.
 - SemVer `1.9.448`, Commit `de5bc5a6`.
+
+## Befund 105: Statusaggregation war nicht keyvertragsgleich zur Factory
+
+Die Factory erkannte OpenAI-Kompatibilitaet bei explizitem
+`OPENAI_API_KEY`-Env auch ohne `openai/`-Modellpraefix. Der Statuspfad tat das
+nicht und meldete fuer einen vorhandenen Instanz-Key einen falschen Fehler.
+OpenAI-Fallbacks wurden im Status ebenfalls nur gegen den globalen Key
+geprueft.
+
+### Umsetzung und Nachweis
+
+- Statusklassifikation und Darstellung teilen jetzt das OpenAI-Env-Signal mit
+  dem Resolver.
+- Fallback-Status prueft `OPENAI_API_KEY_<INSTANCE>` vor `OPENAI_API_KEY`.
+- Drei neue providerfreie Statusregressionen und die relevante Gesamtsuite
+  sind gruen; LLM-Suite: `128 passed in 3.80s`.
+- SemVer `1.9.449`, Commit `25151c00`.
 
 ## Invarianten
 

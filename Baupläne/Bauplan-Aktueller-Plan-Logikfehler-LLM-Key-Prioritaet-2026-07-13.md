@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.448`, Commit `de5bc5a6`
+**Quellstand:** TeeBotus `1.9.449`, Commit `25151c00`
 **Geltungsbereich:** `TeeBotus/runtime/config.py`,
 `TeeBotus/runtime/llm_factory.py`, `TeeBotus/llm/profiles.py`, die
 Runtime-Runner und die zugehoerigen Regressionstests
@@ -132,6 +132,26 @@ dieses Profil nicht verwendet.
 - Router-, Package-, HF-Fallback-, Proactive- und Metadaten-Suite:
   `128 passed in 3.37s`.
 - SemVer `1.9.448`, Commit `de5bc5a6`.
+
+## Befund 105: Healthcheck erkannte unpraefixierte OpenAI-Routen nicht
+
+Der Request-Resolver behandelte ein LiteLLM-Profil mit explizitem
+`api_key_env=OPENAI_API_KEY` auch bei einem Modell ohne `openai/`-Praefix als
+OpenAI-kompatibel. Der Healthcheck klassifizierte dagegen nur das Modell-
+Praefix und konnte deshalb denselben vorhandenen Instanz-Key als fehlend
+melden. Die Fallback-Statuszeile las den Key zudem nur global.
+
+### Umsetzung und Nachweis
+
+- Statusklassifikation verwendet jetzt ebenfalls das explizite
+  `OPENAI_API_KEY`-Signal.
+- `_runtime_status_llm_line()` und `_runtime_status_decision_line()` pruefen
+  OpenAI-Fallbacks instanzbezogen vor dem globalen Env-Key.
+- Der Fallback-Modellname bleibt im Statuspfad erhalten, damit die
+  Keyklassifikation nicht vom Primärmodell abhaengt.
+- Entrypoint-/Runtime-Status-Suite und LLM-Suite sind gruen; die LLM-Suite
+  meldet `128 passed in 3.80s`.
+- SemVer `1.9.449`, Commit `25151c00`.
 
 ## Zielvertrag fuer die Key-Aufloesung
 
