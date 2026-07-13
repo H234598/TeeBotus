@@ -37,7 +37,7 @@ muessen in SQL, /status, Healthcheck und Applet dieselbe Bedeutung haben.
 
 ## Aktueller Stand
 
-- TeeBotus-Quellstand: 1.9.409.
+- TeeBotus-Quellstand: 1.9.410.
 - Laufender TeeBotus-Dienst: vor dem naechsten zulaessigen Restart noch
   1.9.404; der laufende History-Dispatcher: 0.2.9.
 - Die Health-Klassifikation nutzt classification_version=2 und trennt
@@ -54,7 +54,7 @@ muessen in SQL, /status, Healthcheck und Applet dieselbe Bedeutung haben.
 Die aktuelle lesende Probe fuer TeeBotus_Logger zeigt einen echten
 Reconciliation-Rueckstand:
 
-- lokale TeeBotus-Outbox: zuletzt 42 queued-History-Zeilen
+- lokale TeeBotus-Outbox: zuletzt 44 queued-History-Zeilen
 - zentraler History-Dispatcher: queued=0
 - Bridge-Dry-Run: statuses: none
 - zentrale Dispatcher-Queue kann diese alten lokalen Zeilen daher nicht
@@ -165,10 +165,27 @@ Der Plan ist erst abgeschlossen, wenn:
 - Tests, Version, Commit-ID und Live-Nachweis hier eingetragen sind
 - erst danach eine fertige Planfassung nach Plaene und Regeln/ archiviert wird
 
+## Umsetzungsnachweis dieses Plans
+
+- Der Bridge-Dispatchpfad spiegelt lokale dispatchbare Zeilen vor
+  `dispatch.claim` idempotent per `history.append`.
+- Terminale Dedupe-Antworten werden ohne neuen Versandversuch in die lokale
+  Outbox synchronisiert.
+- Der Dry-Run fragt bei lokalem Rueckstand den Dispatcher-Bestand lesend ab
+  und meldet `would_mirror` oder `would_sync`; er ruft keinen Append-, Claim-
+  oder lokalen Schreibpfad auf.
+- Mirror-Fehler werden als `history_dispatcher_mirror_failed` ausgegeben; die
+  lokale Zeile bleibt `queued`.
+- `tests/test_codex_history.py`: `128 passed`; Bridge-Teilmenge: `24 passed`.
+- SemVer: `1.9.410`.
+- Die schreibfreie Live-Probe meldete bei 44 lokalen queued-Zeilen
+  `would_mirror=40` und `would_sync=4`.
+- Ein echter Produktions-Reconciliation-Lauf ist noch nicht ausgefuehrt;
+  lokale TBL-Daten bleiben bis zu einer kontrollierten Freigabe unangetastet.
+
 ## Aktueller naechster Schritt
 
 Als naechstes wird nur der Bridge-Reconciliation-Pfad in
 TeeBotus/admin/codex_history.py zusammen mit den zugehoerigen Tests
 bearbeitet. Vor einer Produktionsmutation bleibt der aktuelle TBL-Bestand
 unangetastet.
-

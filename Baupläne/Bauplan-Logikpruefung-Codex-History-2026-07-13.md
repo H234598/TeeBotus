@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist nach der Dispatcher-Detailstatus-Korrektur Version `1.9.409`; der laufende Bot-Dienst bleibt bis zur naechsten 20-Commit-Grenze bei `1.9.404`.
+- Der aktuelle TeeBotus-Stand ist nach der Dispatcher-Detailstatus-Korrektur Version `1.9.410`; der laufende Bot-Dienst bleibt bis zur naechsten 20-Commit-Grenze bei `1.9.404`.
 
 ## Arbeitsprinzipien
 
@@ -499,13 +499,37 @@ Der Plan ist erst abgeschlossen, wenn:
 - Regressionstest Befund 64: Der neue Dispatcher-Detailtest reproduziert den Fehlerfall; die vollstaendige `tests/test_cinnamon_applet.py` laeuft mit `192 passed`.
 - Live-Nachweis Befund 64: Die installierte Applet-Kopie wird nach dem Fix erneut byte-identisch aktualisiert und per Cinnamon-`ReloadXlet` geladen. Kein Bot-/Service-Restart ausserhalb der 20-Commit-Grenze.
 
+**Befund 65 2026-07-13:** Im Bridge-Modus wurden alte lokale TBL-History-Zeilen
+nicht in die zentrale Dispatcher-Queue nachgefuehrt. Der Bridge-Worker
+claimte nur zentrale Eintraege; der lokale Mirror lief bisher nur beim
+Erzeugen neuer Summaries. Dadurch blieben lokale queued-Zeilen dauerhaft als
+Warnung sichtbar, obwohl der zentrale Dry-Run `statuses: none` meldete.
+
+**Umsetzung Befund 65:** Der Bridge-Dispatchpfad spiegelt jetzt vor
+`dispatch.claim` alle lokalen dispatchbaren Zeilen idempotent per
+`history.append`. Dedupe-Antworten mit terminalem Status synchronisieren
+die lokale Outbox ohne kuenstlichen Versandversuch. Der Dry-Run fragt bei
+lokalem Rueckstand den zentralen Bestand nicht mutierend ab und meldet
+`would_mirror` beziehungsweise `would_sync`; Append-Fehler bleiben lokal
+queued und werden als Fehler zurueckgegeben.
+
+**Regressionstest Befund 65:** Die vollstaendige
+`tests/test_codex_history.py`-Suite laeuft mit `128 passed`. Die Bridge-
+Teilmenge laeuft mit `24 passed`. SemVer-Bump auf `1.9.410`.
+
+**Live-Dry-Run Befund 65:** Die reale TBL-Probe mit `--dry-run --limit 1000`
+meldete `would_mirror=40` und `would_sync=4` bei `44` lokalen queued-Zeilen.
+Es wurden weder `history.append` noch `dispatch.claim` oder lokale Schreibungen
+ausgefuehrt. Der Bestand bleibt bis zur kontrollierten Freigabe unangetastet.
+
+
 ### Noch offen
 
 - Retry-Semantik geprueft: `dispatch.retry` downgradet terminale `delivered`-/`acknowledged`-Zustaende nicht; automatische Retries bleiben auf `failed`/`skipped`/`discarded` begrenzt.
 - Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.9` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
 - Live- und Applet-Abgleich ist abgeschlossen; die verbleibenden Warnungen sind jetzt getrennt von Timeout-/Parserfehlern sichtbar und muessen fachlich beziehungsweise durch Benutzeraktion bearbeitet werden.
-- Dispatcher-Dry-Run fuer `TeeBotus_Logger` liefert im Bridge-Modus `statuses: none`, waehrend die lokale Outbox noch `19 queued` Legacy-Zeilen enthaelt. Dieser Bestand bleibt als Warnung sichtbar; keine automatische Zustellung, Loeschung oder Quarantaene wurde ohne explizite Migrationsentscheidung ausgefuehrt.
-- Der lokale TeeBotus-Code und das laufende Applet sind aktuell `1.9.409`; der laufende Bot-Dienst ist noch `1.9.404`, der aktive History-Dispatcher `0.2.9`. Die untracked Nutzerdaten (`.obsidian/`, `.stfolder/`, `Fusion_Packliste.txt`, `Unbenannt.base`, `Unbenannt.canvas`) bleiben bewusst unberuehrt.
+- Dispatcher-Dry-Run fuer `TeeBotus_Logger` lieferte vor der Reconciliation im Bridge-Modus `statuses: none`, waehrend die lokale Outbox `44 queued` Legacy-Zeilen enthielt. Die schreibfreie Live-Probe meldete danach `would_mirror=40` und `would_sync=4`; keine automatische Loeschung oder Quarantaene erfolgt.
+- Der lokale TeeBotus-Code und das laufende Applet sind aktuell `1.9.410`; der laufende Bot-Dienst ist noch `1.9.404`, der aktive History-Dispatcher `0.2.9`. Die untracked Nutzerdaten (`.obsidian/`, `.stfolder/`, `Fusion_Packliste.txt`, `Unbenannt.base`, `Unbenannt.canvas`) bleiben bewusst unberuehrt.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen

@@ -577,14 +577,20 @@ def _history_dispatcher_response_items(data: Mapping[str, Any], *, operation: st
     return validated
 
 
-def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any], *, store: AccountStore | None = None) -> None:
-    if _history_dispatcher_mode(None) not in {"shadow", "bridge"}:
-        return
+def _mirror_codex_history_item_to_dispatcher(
+    item: Mapping[str, Any],
+    *,
+    store: AccountStore | None = None,
+    env: Mapping[str, str] | None = None,
+    client: HistoryDispatcherClient | None = None,
+) -> bool:
+    if _history_dispatcher_mode(env) not in {"shadow", "bridge"}:
+        return False
     try:
         project = item.get("project")
         if isinstance(project, Mapping):
             project = str(project.get("repo_root") or project.get("repo_name") or "")
-        client = HistoryDispatcherClient(_history_dispatcher_socket_path(None), timeout_seconds=3)
+        dispatcher_client = client or HistoryDispatcherClient(_history_dispatcher_socket_path(env), timeout_seconds=3)
         delivery = item.get("delivery") if isinstance(item.get("delivery"), Mapping) else {}
         codex = item.get("codex") if isinstance(item.get("codex"), Mapping) else {}
         dedupe_key = str(codex.get("dedupe_key") or item.get("id") or "").strip()
@@ -592,7 +598,7 @@ def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any], *, store: 
             attempt_count = max(0, int(delivery.get("attempts") or 0))
         except (TypeError, ValueError):
             attempt_count = 0
-        response = client.request("history.append", {
+        response = dispatcher_client.request("history.append", {
             "id": str(item.get("id") or ""),
             "source": str(item.get("source") or "teebotus"),
             "kind": str(item.get("kind") or "codex_run_summary"),
@@ -606,27 +612,26 @@ def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any], *, store: 
             "dedupe_key": dedupe_key,
             "payload": dict(item),
         })
-        try:
-            append_data = _history_dispatcher_response_data(response, operation="history.append")
-            if not str(append_data.get("id") or "").strip():
-                raise HistoryDispatcherError("History-Dispatcher history.append returned no item id")
-            if bool(append_data.get("deduplicated")):
-                external_status = str(append_data.get("status") or "").strip().casefold()
-                if external_status in {"delivered", "failed", "skipped", "compacted"}:
-                    _sync_codex_history_local_dispatch_status(
-                        store,
-                        str(item.get("id") or ""),
-                        external_status,
-                        dedupe_key=dedupe_key,
-                        reason="dispatcher_deduplicated",
-                        now=str(item.get("updated_at") or utc_now()),
-                        dispatch_results=(),
-                        increment_attempt=False,
-                    )
-        except HistoryDispatcherError as exc:
-            LOGGER.warning("History-Dispatcher shadow append failed: %s", str(exc)[:240])
+        append_data = _history_dispatcher_response_data(response, operation="history.append")
+        if not str(append_data.get("id") or "").strip():
+            raise HistoryDispatcherError("History-Dispatcher history.append returned no item id")
+        if bool(append_data.get("deduplicated")):
+            external_status = str(append_data.get("status") or "").strip().casefold()
+            if external_status in {"delivered", "failed", "skipped", "compacted"}:
+                _sync_codex_history_local_dispatch_status(
+                    store,
+                    str(item.get("id") or ""),
+                    external_status,
+                    dedupe_key=dedupe_key,
+                    reason="dispatcher_deduplicated",
+                    now=str(item.get("updated_at") or utc_now()),
+                    dispatch_results=(),
+                    increment_attempt=False,
+                )
+        return True
     except (HistoryDispatcherError, ValueError) as exc:
-        LOGGER.warning("History-Dispatcher shadow append unavailable: %s", str(exc)[:240])
+        LOGGER.warning("History-Dispatcher append unavailable: %s", str(exc)[:240])
+        return False
 
 
 def _history_dispatcher_socket_path(env: Mapping[str, str] | None) -> Path:
@@ -797,6 +802,19 @@ def _history_dispatcher_matching_local_row(
     return max(dedupe_matches, key=lambda match: match[0])[2]
 
 
+def _history_dispatcher_matching_item_for_local_row(
+    local_row: Mapping[str, Any], dispatcher_items: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any] | None:
+    if not isinstance(local_row, Mapping):
+        return None
+    for dispatcher_item in dispatcher_items:
+        if not isinstance(dispatcher_item, Mapping):
+            continue
+        if _history_dispatcher_matching_local_row(dispatcher_item, (local_row,)) is not None:
+            return dispatcher_item
+    return None
+
+
 def _persist_codex_history_bridge_dispatch_results(
     store: AccountStore,
     results: Sequence[Mapping[str, Any]],
@@ -935,20 +953,61 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
     except (AccountStoreError, OSError, ValueError) as exc:
         LOGGER.warning("Local Codex-History payload enrichment unavailable: %s", str(exc)[:240])
         local_history_rows = []
+    local_dispatchable_rows = [
+        row
+        for row in local_history_rows
+        if isinstance(row, Mapping) and _codex_history_item_dispatchable(row, now=dispatch_now)
+    ]
+    local_dispatchable_rows.sort(key=lambda item: _codex_history_dispatch_sort_key(item, now=dispatch_now), reverse=True)
+    normalized_limit = max(0, int(limit))
+    if normalized_limit > 0:
+        local_dispatchable_rows = local_dispatchable_rows[:normalized_limit]
     try:
         client = HistoryDispatcherClient(_history_dispatcher_socket_path(env), timeout_seconds=10)
         if dry_run:
             response = client.request("history.query", {
-                "status": "queued",
-                "limit": max(0, int(limit)),
+                "status": "" if local_dispatchable_rows else "queued",
+                "limit": 0 if local_dispatchable_rows else normalized_limit,
                 "include_payload": True,
             })
             query_data = _history_dispatcher_response_data(response, operation="history.query")
             query_items = _history_dispatcher_response_items(query_data, operation="history.query")
             rows: list[dict[str, Any]] = []
-            for item in query_items:
+            claimable_query_items = query_items
+            if local_dispatchable_rows:
+                claimable_query_items = [
+                    item
+                    for item in query_items
+                    if str(item.get("status") or "").strip().casefold() == "queued"
+                ]
+            for item in claimable_query_items:
                 item = _history_dispatcher_enrich_item_from_local_rows(item, local_history_rows)
                 rows.extend(_dry_run_dispatch_rows(_history_dispatcher_item_to_legacy(item), candidate_account_ids, store, instance_name=instance_name, instances_dir=instances_dir, secret_provider=secret_provider))
+            for local_row in local_dispatchable_rows:
+                matching_item = _history_dispatcher_matching_item_for_local_row(local_row, query_items)
+                local_item_id = str(local_row.get("id") or "").strip()
+                summary_prefix = str(local_row.get("summary_prefix") or "")
+                if matching_item is None:
+                    rows.append({
+                        "codex_history_item_id": local_item_id,
+                        "account_id": "",
+                        "status": "would_mirror",
+                        "reason": "local_outbox_not_in_dispatcher",
+                        "channel": "",
+                        "summary_prefix": summary_prefix,
+                    })
+                    continue
+                external_status = str(matching_item.get("status") or "").strip().casefold()
+                local_status = str(local_row.get("status") or "queued").strip().casefold()
+                if external_status in (HISTORY_DISPATCHER_COMPLETION_STATUSES - {"queued"}) and external_status != local_status:
+                    rows.append({
+                        "codex_history_item_id": local_item_id,
+                        "account_id": "",
+                        "status": "would_sync",
+                        "reason": f"dispatcher_terminal_status_{external_status}",
+                        "channel": "",
+                        "summary_prefix": summary_prefix,
+                    })
             return {
                 "ok": True,
                 "dry_run": True,
@@ -958,13 +1017,29 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
                 "status_counts": _status_counts(rows),
                 "mode": "history-dispatcher",
             }
+        result_rows: list[dict[str, Any]] = []
+        for local_row in local_dispatchable_rows:
+            if _mirror_codex_history_item_to_dispatcher(
+                local_row,
+                store=store,
+                env=env,
+                client=client,
+            ):
+                continue
+            result_rows.append({
+                "codex_history_item_id": str(local_row.get("id") or ""),
+                "account_id": "",
+                "status": "failed",
+                "reason": "history_dispatcher_mirror_failed",
+                "channel": "",
+                "summary_prefix": str(local_row.get("summary_prefix") or ""),
+            })
         claimed = client.request("dispatch.claim", {
             "worker_id": f"teebotus:{os.getpid()}:{_codex_history_instance_token(instance_name)}",
-            "limit": max(0, int(limit)),
+            "limit": normalized_limit,
         })
         claim_data = _history_dispatcher_response_data(claimed, operation="dispatch.claim")
         claim_items = _history_dispatcher_response_items(claim_data, operation="dispatch.claim")
-        result_rows: list[dict[str, Any]] = []
         for raw_item in claim_items:
             claim_status = str(raw_item.get("status") or "").strip().casefold()
             if claim_status and claim_status != "delivering":
