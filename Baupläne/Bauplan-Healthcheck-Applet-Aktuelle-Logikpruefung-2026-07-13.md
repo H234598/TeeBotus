@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.449`, Commit `25151c00`
+**Quellstand:** TeeBotus `1.9.456`, Codecommit `893899eb`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet, Runtime-Healthpayload und `tests/test_cinnamon_applet.py`
 
 ## Auftrag
@@ -733,6 +733,33 @@ abgefangen.
   bleibt deaktiviert.
 - Entrypoint-Suite: `141 passed in 42.41s`; Live-History danach `status=ok`.
 - SemVer `1.9.455`, Commit `bc3941c7`.
+
+## Befund 112: Status-Provider hatten eine andere Secret-Service-Policy
+
+Mehrere Python-Statushelfer erzeugten den read-only Secret-Service-Provider
+direkt ohne Runtime-Retries. Damit konnte der Python-Healthpayload bei einem
+transienten Lookupfehler `unknown` oder einen Storefehler melden, waehrend der
+Runtimepfad denselben Secretzugriff noch erfolgreich wiederholen konnte. Das
+fuehrte zu einem moeglichen falschen oder flackernden Healthcheck im Applet.
+
+### Umsetzung und Nachweis
+
+- `TeeBotus/core/status.py` nutzt jetzt eine gemeinsame
+  `_status_secret_provider()`-Factory mit der Runtime-Konfiguration fuer
+  Retries, Delay und Timeout.
+- Der Appletvertrag bleibt unveraendert: keine Secrets werden ausgegeben und
+  keine fehlenden Secrets angelegt.
+- Providerfreier Regressionstest bestaetigt `create_if_missing=False` und die
+  env-gesteuerten Werte.
+- Entrypoint-Suite: `142 passed`.
+- Vollstaendige Status-/Version-Suite: `215 passed`.
+- Live-Appletstatus: `status=warning`, actionable `warning:1`,
+  informational `23`; der einzige actionable Befund ist die fehlende
+  Signal-Identitaet fuer den Depressionsbot.
+- Die lokale Installation wurde mit `scripts/install_cinnamon_applet.py`
+  aktualisiert; Quell- und Installationskopie sind byte-identisch.
+- `node --check files/teebotus@H234598/applet.js`: erfolgreich.
+- SemVer `1.9.456`, Codecommit `893899eb`.
 
 ## Invarianten
 

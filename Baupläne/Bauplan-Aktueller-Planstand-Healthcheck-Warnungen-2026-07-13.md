@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.449`, Commit `25151c00`
+**Quellstand:** TeeBotus `1.9.456`, Codecommit `893899eb`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -520,6 +520,38 @@ AccountStore-Fehler erscheinen.
 - Read-only Live-Probe: Depressionsbot-History `status=ok`; nur die bekannte
   Signal-Identitaetswarnung bleibt actionable.
 - SemVer `1.9.455`, Commit `bc3941c7`.
+
+## Befund 112: Direkte Status-Provider umgingen die Runtime-Retry-Policy
+
+Neben dem gemeinsamen Runtime-Statusprovider erzeugten mehrere Standalone-
+Pruefungen in `TeeBotus/core/status.py` ihren Secret-Service-Provider direkt
+mit den impliziten Nullwerten fuer Retries und Delay. Ein kurzzeitiger
+Secret-Service-Lookupfehler konnte deshalb in Codex-History-, Account- und
+Memory-Status als echter Store-/Decrypt-Fehler erscheinen, obwohl der normale
+Runtimepfad bereits eine Retry-Policy besass.
+
+### Umsetzung und Nachweis
+
+- Eine read-only `_status_secret_provider()`-Factory verwendet jetzt dieselben
+  env-gesteuerten Lookup-Retries, Delays und Timeouts wie die Runtime.
+- `create_if_missing=False` bleibt unveraendert; der Healthcheck legt keine
+  Secrets an und veraendert keine Accountdaten.
+- Der direkte Factory-Aufruf ist providerfrei mit `2` Retries, `0.25` Sekunden
+  Delay und `4` Sekunden Timeout getestet.
+- Entrypoint-Suite: `142 passed`.
+- Relevante Status-/Account-/Codex-History-Tests: `31 passed`.
+- Vollstaendige Version-/Statussuite: `215 passed`.
+- `git diff --check`: erfolgreich.
+- Live read-only: `status=warning`, actionable `warning:1`,
+  `codex_history=Depressionsbot status=ok`; Qdrant und Messenger-Dienste
+  erreichbar.
+- Der einzige actionable Befund bleibt die fehlende Signal-Identitaet des
+  Depressionsbots. Die bestehende Account-ID wird nicht automatisch mit einem
+  Signal-Absender verknuepft; dafuer bleibt der bestaetigte Linking-Flow
+  erforderlich.
+- Applet erneut lokal installiert; `applet.js` aus Quelle und Installation
+  sind byte-identisch; `node --check` erfolgreich.
+- SemVer `1.9.456`, Codecommit `893899eb`.
 
 ## Arbeitsplan
 
