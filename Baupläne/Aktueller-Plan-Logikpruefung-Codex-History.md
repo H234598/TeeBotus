@@ -130,14 +130,15 @@ Der Plan ist erst abgeschlossen, wenn:
 - Applet- und Statuslogik fuer Bridge-Delegation, malformed rows und `created_at`-Latest-Auswahl umgesetzt
 - Reproduktion des Dispatcherfehlers vor dem Fix: ein `skipped/no_private_route`-Resultat endete als `queued`
 - History-Dispatcher nach dem Fix: `31 passed`, davon zwei Regressionstests fuer terminale Skips und `delivered+skipped`
-- Lokale Dispatcher-Paketversion: `0.2.3`, nach dem Claim-Zeitfix erneut in `.venv-py313` zu installieren
-- History-Dispatcher-Fix committed als `943d349` (`Treat skipped recipients as terminal`)
-- TeeBotus-Plan-/Nachweisstand committed als `18b36730` (`Document dispatcher skip retry fix`)
+- Lokale Dispatcher-Paketversion: `0.2.3`, nach dem Claim-Zeitfix in `.venv-py313` installiert
+- History-Dispatcher-Fixes committed als `943d349` (`Treat skipped recipients as terminal`), `bf78436` (`Report persisted history append status`) und `162f978` (`Keep claim response timestamps current`)
+- TeeBotus-Plan-/Nachweisstaende committed als `18b36730`, `0cf5db99` und `0d1d2004`
 
 ### In dieser Runde erledigt
 
 - Dispatch-Statussequenztests: erfolgreich; `failed` bleibt retrybar, `skipped` terminal.
 - Isolierte Vorher-/Nachher-Probe: vorher `queued`, nachher `skipped`.
+- History-Dispatcher-Gesamtsuite: `33 passed`.
 - TeeBotus Bridge-/Codex-History-Tests: `108 passed`.
 - API-Statusprobe: vorher `api_status=queued, stored_status=delivered`; nach dem Fix muessen beide `delivered` sein.
 - Claim-Zeitprobe: vorher `claimed_updated_at` alt und `stored_updated_at` neu; nach dem Fix muessen beide identisch sein.
