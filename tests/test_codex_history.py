@@ -1569,6 +1569,46 @@ def test_codex_history_dispatch_bridge_rejects_foreign_kind(
     assert calls == ["dispatch.claim"]
 
 
+def test_codex_history_dispatch_bridge_rejects_unknown_recipient_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[str] = []
+
+    class FakeClient:
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def request(self, operation: str, body: dict[str, object] | None = None) -> dict[str, object]:
+            calls.append(operation)
+            if operation == "dispatch.claim":
+                return {
+                    "ok": True,
+                    "data": {
+                        "items": [{
+                            "id": "hd-item-unknown-status",
+                            "kind": "codex_run_summary",
+                            "payload": {"summary": {"text": "Unbekannter Status"}},
+                            "recipient_results": [{"recipient_id": "admin", "status": "sent"}],
+                        }],
+                    },
+                }
+            raise AssertionError(operation)
+
+    monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
+    result = asyncio.run(
+        dispatch_codex_history_outbox(
+            object(),
+            instance_name="TeeBotus_Logger",
+            env={"TEEBOTUS_HISTORY_DISPATCHER_MODE": "bridge", "HISTORY_DISPATCHER_SOCKET": "/tmp/dispatcher.sock"},
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["status_counts"] == {"failed": 1}
+    assert "unsupported recipient status" in result["items"][0]["error"]
+    assert calls == ["dispatch.claim"]
+
+
 def test_codex_history_dispatch_bridge_rejects_incomplete_completion_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

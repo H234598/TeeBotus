@@ -76,6 +76,7 @@ CODEX_HISTORY_DEFAULT_DISPATCH_LIMIT = 0
 CODEX_HISTORY_DISPATCHING_STALE_AFTER_SECONDS = 15 * 60
 CODEX_HISTORY_DISPATCH_INSTANCES_ENV = "TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES"
 DEFAULT_CODEX_HISTORY_DISPATCH_INSTANCES = ("TeeBotus_Logger", "TeeBotusLogger", "TBL")
+HISTORY_DISPATCHER_RECIPIENT_STATUSES = frozenset({"accepted", "delivered", "acknowledged", "failed", "skipped"})
 CODEX_HISTORY_RECEIPT_RANKS = {"delivered": 1, "viewed": 2, "read": 3}
 HISTORY_DISPATCHER_MODE_ENV = "TEEBOTUS_HISTORY_DISPATCHER_MODE"
 HISTORY_DISPATCHER_SOCKET_ENV = "HISTORY_DISPATCHER_SOCKET"
@@ -670,6 +671,11 @@ def _history_dispatcher_recipient_results(item: Mapping[str, Any]) -> list[dict[
             raise HistoryDispatcherError(
                 f"History-Dispatcher item {str(item.get('id') or '').strip() or '<unknown>'} "
                 f"has recipient result without status at index {index}"
+            )
+        if status not in HISTORY_DISPATCHER_RECIPIENT_STATUSES:
+            raise HistoryDispatcherError(
+                f"History-Dispatcher item {str(item.get('id') or '').strip() or '<unknown>'} "
+                f"has unsupported recipient status at index {index}"
             )
         result = dict(raw_result)
         result["recipient_id"] = recipient_id
