@@ -159,6 +159,9 @@ Historie erhalten, insbesondere:
   Identitaet vor dem Polling einmal erneut aufgeloest. Bei Erfolg werden
   Runtime-Kontext und Engine-Adressnamen gemeinsam aktualisiert; bei erneutem
   Fehlen bleibt die Gruppenadressierung fail-closed eingeschraenkt.
+- [x] Der Modernpfad laedt Telegram-Anhaenge erst nach Reply-/Adressierungs-
+  und Status-Gate. Unadressierte Gruppen-Dateien oder Sprachnachrichten
+  loesen dadurch weder `getFile` noch einen Download aus.
 
 ### Live-Abnahme nach dem Restart
 
@@ -388,8 +391,9 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
 - Statussemantik-Regressionen decken Append, Completion, Receipt-Promotion und
   Empfaenger-Downgrade sowie die Trennung von Native-Receipt und Reply in
   beiden Repositories ab.
-- Moderne Telegram-Reply- und Identitaets-Recovery-Regressionen sowie die
-  betroffenen Adapter-/Engine-/Runtime-Suites: `601 passed`, `17 subtests
+- Moderne Telegram-Reply-, Identitaets-Recovery- und Attachment-Gate-
+  Regressionen sowie die betroffenen Adapter-/Engine-/Runtime-Suites:
+  `602 passed`, `17 subtests
   passed`.
 
 ## Abnahmekriterien
@@ -553,3 +557,9 @@ Der Bauplan ist erst abgeschlossen, wenn:
   Routing; `getMe`-Ausfaelle werden vor dem Polling einmal retryt und bei Erfolg
   in Kontext und Engine-Adressnamen uebernommen. Gemeinsame betroffene Suites:
   `601 passed`, `17 subtests passed`; kein Provider- oder Netzwerkanruf.
+- 2026-07-13: Zweiten Modern-/Legacy-Paritaetsfehler reproduziert: Der moderne
+  Pfad lud Gruppenanhaenge bereits vor der Adressierungspruefung herunter und
+  verwarf die Nachricht erst danach. Der Download liegt nun hinter dem Gate;
+  der Regressionstest bestaetigt fuer eine unadressierte Gruppen-Datei keine
+  `getFile`-/Download-Aufrufe. Betroffene Suites: `602 passed`, `17 subtests
+  passed`; kein Provider- oder Netzwerkanruf.

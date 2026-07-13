@@ -1007,19 +1007,10 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
         )
         return False
     event = event.with_reply_to_bot(_is_reply_to_bot(message, getattr(context, "bot_identity", BotIdentity())))
+    event = _with_telegram_reply_text(event, message)
     status_auth = _telegram_status_auth_pre_gate(context.account_store, event)
     if status_auth is not None:
         return _dispatch_telegram_status_auth_pre_gate(context.api, event, status_auth)
-    event = _with_telegram_reply_text(event, message)
-    event = _with_telegram_attachments(context.api, event, message)
-    LOGGER.debug(
-        "Telegram runtime event prepared instance=%s slot=%s event_id=%s message_id=%s attachments=%s",
-        context.instance_name,
-        context.adapter_slot,
-        event.event_id,
-        message.get("message_id", "unknown"),
-        len(event.attachments),
-    )
     try:
         should_ignore = context.engine.should_ignore_without_account(event)
     except (AccountStoreError, OSError, ValueError, AttributeError):
@@ -1045,6 +1036,15 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
             message.get("message_id", "unknown"),
         )
         return True
+    event = _with_telegram_attachments(context.api, event, message)
+    LOGGER.debug(
+        "Telegram runtime event prepared instance=%s slot=%s event_id=%s message_id=%s attachments=%s",
+        context.instance_name,
+        context.adapter_slot,
+        event.event_id,
+        message.get("message_id", "unknown"),
+        len(event.attachments),
+    )
     try:
         account_id = context.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
         context.account_store.update_identity_route(

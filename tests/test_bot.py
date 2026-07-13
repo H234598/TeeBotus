@@ -2062,6 +2062,52 @@ class BotTests(unittest.TestCase):
         self.assertTrue(seen_events[0].reply_to_bot)
         self.assertEqual(seen_events[0].reply_to_text, "Botfrage")
 
+    def test_modern_unaddressed_group_attachment_is_not_downloaded(self) -> None:
+        class InstructionBox:
+            def get(self):
+                return BotInstructions()
+
+        api = FakeAPI()
+        api.file_paths["doc-1"] = "documents/doc.bin"
+        api.file_data["documents/doc.bin"] = b"private document"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            account_store = AccountStore(root / "accounts", "Demo", StaticSecretProvider(b"e" * 32))
+            state_store = RuntimeStateStore(root / "data", instance_name="Demo", secret_provider=StaticSecretProvider(b"e" * 32))
+            message_tracker = MessageTracker(root / "runtime" / "Sent_Message_Refs.json")
+            context = build_telegram_runtime_context(
+                api=api,
+                instance_name="Demo",
+                adapter_slot=1,
+                instruction_store=InstructionBox(),
+                account_store=account_store,
+                state_store=state_store,
+                message_tracker=message_tracker,
+                openai_client=None,
+                working_memory_store=None,
+                bibliothekar_store=None,
+                youtube_job_runner=None,
+                bot_identity=BotIdentity(id=99, first_name="Mondbot", username="MondBot"),
+            )
+            context.engine.should_ignore_without_account = lambda _event: True  # type: ignore[method-assign]
+
+            handle_update(
+                api,
+                {
+                    "message": {
+                        "message_id": 3,
+                        "chat": {"id": -100, "type": "group", "title": "Debatte"},
+                        "from": {"id": 456, "first_name": "Ada"},
+                        "document": {"file_id": "doc-1", "file_name": "privat.txt"},
+                    }
+                },
+                chat_state=ChatState(),
+                runtime_context=context,
+            )
+
+        self.assertEqual(api.file_path_requests, [])
+        self.assertEqual(api.download_requests, [])
+
     def test_handle_update_with_runtime_context_answers_callback_query(self) -> None:
         from TeeBotus.runtime.actions import SendText
         from TeeBotus.runtime.engine import EngineResult
