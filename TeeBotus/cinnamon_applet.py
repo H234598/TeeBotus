@@ -946,7 +946,13 @@ def _line_health_statuses(
                 )
             )
             or (prefix == "account_identity" and _account_identity_status_is_informational(fields))
-            or (prefix == "codex_history_repo" and _codex_history_repo_status_is_informational(fields))
+            or (
+                prefix in {"codex_history", "codex_history_repo"}
+                and _codex_history_status_is_informational(
+                    fields,
+                    aggregate=prefix == "codex_history",
+                )
+            )
             or (
                 prefix == "structured_decision"
                 and _fallback_reference_is_set(fields)
@@ -958,8 +964,17 @@ def _line_health_statuses(
     return ((), problems) if informational else (problems, ())
 
 
-def _codex_history_repo_status_is_informational(fields: Mapping[str, Any]) -> bool:
-    """Keep expected queue/skip states visible without hiding repo failures."""
+def _codex_history_status_is_informational(
+    fields: Mapping[str, Any],
+    *,
+    aggregate: bool = False,
+) -> bool:
+    """Keep explicitly explained queue/skip states visible without hiding failures.
+
+    Aggregate rows need an explicit ``problem_statuses`` field before they can
+    be downgraded.  Without that metadata, a queue-only warning may represent
+    work that still needs dispatch and must remain actionable.
+    """
     primary = _normalized_status_value(fields.get("status"))
     if _line_has_error(fields):
         return False
@@ -971,6 +986,8 @@ def _codex_history_repo_status_is_informational(fields: Mapping[str, Any]) -> bo
     if status_counts:
         statuses = tuple(status_counts)
         return bool(statuses) and all(status in {"queued", "skipped"} for status in statuses)
+    if aggregate:
+        return False
     if primary == "skipped":
         return True
     if primary != "warning":
