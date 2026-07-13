@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.388`, Commit `ed4b2d0f`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.389`, Commit `cdb005f6`.
 
 ## Arbeitsprinzipien
 
@@ -166,6 +166,12 @@ erfolgreiches Spiegeln. Damit waere unklar geblieben, ob ein Eintrag neu
 angelegt oder dedupliziert wurde. Erfolgreiche Append-Antworten muessen jetzt
 eine ID enthalten; der Legacy-Pfad bleibt bei Verstoessen erhalten.
 
+**Siebzehnter Befund 2026-07-13:** Unbekannte Empfaengerstatuswerte wurden in
+der Bridge nur auf Nicht-Leerheit geprueft. Dadurch konnte ein Status wie
+`sent` erneut versendet werden, obwohl der Dispatcher ihn fachlich als Fehler
+behandelt. Zulassig sind jetzt nur `accepted`, `delivered`, `acknowledged`,
+`failed` und `skipped`; alles andere wird kontrolliert abgewiesen.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -252,6 +258,8 @@ Der Plan ist erst abgeschlossen, wenn:
 - Dedupe-Reconciliation und SemVer-Bump auf `1.9.386` committed als `fd7400d7` (`Reconcile mirrored history by dedupe key`); gezielte Suite danach `119 passed`.
 - Retry-Statusauswahl nach Zeitstempel und SemVer-Bump auf `1.9.387` committed als `0ecbc32f` (`Order dispatch results by update time`); gezielte Suite danach `120 passed`.
 - Shadow-Append-ID-Pruefung und SemVer-Bump auf `1.9.388` committed als `ed4b2d0f` (`Require shadow append item identity`); gezielte Suite danach `121 passed`.
+- Restart nach dem 20. Audit-Commit: `teebotus.service`, `history-dispatcher.service` und `teebotus-codex-history-collector.service` aktiv; History-Dispatcher-Snapshot danach `0.2.5`, Queue `13 queued`, `13 delivered`, `310 compacted`, `last_error` leer.
+- Unbekannte-Empfaengerstatus-Pruefung und SemVer-Bump auf `1.9.389` committed als `cdb005f6` (`Reject unknown dispatcher recipient statuses`); gezielte Suite danach `122 passed`.
 - Der laufende History-Dispatcher-Snapshot meldet noch `0.1.9`, die installierte Venv `0.2.5`; der Live-Cutover-/Restart-Nachweis bleibt offen.
 
 ### Noch offen
@@ -259,6 +267,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Semantik spaeter Fehler nach `delivered`/`acknowledged` in einem expliziten neuen Retry-Versuch weiter pruefen.
 - Ergebnis des abschliessenden Live- und Applet-Abgleichs eintragen.
 - History-Dispatcher nach der Commit-Grenze neu starten und Snapshot-/Bridge-Version erneut pruefen.
+- Der lokale TeeBotus-Code `1.9.389` wurde nach dem 20er-Restart committed; Live-Reload dieses Fixes ist erst an der naechsten Restart-Grenze oder auf ausdrueckliche Anforderung noetig.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
