@@ -33,7 +33,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.434`, `b910dbc5`.
+- Aktueller gepruefter Quellstand: `1.9.435`, `97513246`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -290,6 +290,38 @@ konnte das Applet einen korrekten Payload veraltet oder irrefuehrend anzeigen.
   `valid=true`.
 - Cinnamon-Applet ueber `org.Cinnamon.ReloadXlet` neu geladen; kein Bot- oder
   Service-Restart ausgefuehrt.
+
+## Befund 91: Explizite Fehler wurden von Fallback-Hinweisen verdeckt
+
+Die Informations-Sonderregeln fuer bekannte Identity-Warnings, terminale
+Codex-History-Skips, strukturierte Entscheidungs-Fallbacks und allgemein
+abgedeckte Fallback-Routen prueften bisher nicht, ob dieselbe Diagnosezeile
+zusaetzlich ein nicht-neutrales `error=` enthielt. Dadurch konnte zum Beispiel
+`status=warning identity_warnings=1 error=doctor_failed` als reiner Hinweis
+oder `route_status=unavailable fallback=local error=provider_failed` als
+erfolgreich abgefangener Fallback erscheinen.
+
+### Umsetzung und Nachweis
+
+- `_line_health_statuses()` merkt sich pro Zeile, ob ein echtes `error=`
+  vorhanden ist, ohne die bestehenden Rohstatuszaehler zu veraendern.
+- Identity-, Codex-History-Repo-, strukturierte Entscheidungs- und generische
+  Fallback-Sonderregeln stufen solche Zeilen jetzt actionable ein.
+- Der absichtlich informative `gemini_free_tier_limits`-Defaultbefund und die
+  deduplizierte API-Budget-Sonderregel bleiben unveraendert.
+- Regression mit allen betroffenen Sonderfaellen: `5 passed, 209 deselected`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `214 passed in 39.92s`.
+- `git diff --check`: erfolgreich.
+- SemVer `1.9.435`, lokaler Commit `97513246`
+  (`Keep explicit health errors actionable`).
+- Kein Push und kein Bot-/Service-Restart ausgefuehrt.
+
+Der aktuelle Live-Payload bleibt damit transparent bei
+`actionable=missing_key:1,warning:2`: Das sind derzeit der fehlende
+`OPENAI_API_KEY`-Zugang fuer `hard_reasoning`, die nicht verknuepfte
+Depressionsbot-Signal-Identitaet und der nicht abgearbeitete TBL-History-
+Rueckstand. Diese drei Befunde werden nicht still als Fallback-Hinweise
+versteckt und sind die naechsten separaten Reparaturthemen.
 
 ## Umsetzung
 
