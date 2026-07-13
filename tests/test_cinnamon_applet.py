@@ -2073,6 +2073,23 @@ def test_cinnamon_applet_dispatcher_string_booleans_are_not_reported_ready() -> 
     assert result[0] == "Status: Warnung"
 
 
+def test_cinnamon_applet_dispatcher_refresh_queues_while_read_is_running() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          applet.showHistoryDispatcherSection = true;
+          applet.appletRemoved = false;
+          applet.historyDispatcherRunning = true;
+          applet.historyDispatcherRefreshPending = false;
+          applet._refreshHistoryDispatcherStatus();
+          return applet.historyDispatcherRefreshPending;
+        })()
+        """
+    )
+
+    assert result is True
+
+
 def test_cinnamon_applet_spawn_json_does_not_reinvoke_throwing_consumer() -> None:
     result = _run_js_applet_expression(
         """

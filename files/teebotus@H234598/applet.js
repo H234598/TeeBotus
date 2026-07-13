@@ -240,6 +240,7 @@ TeeBotusApplet.prototype = {
     this.historyDispatcherPayload = null;
     this.historyDispatcherError = "";
     this.historyDispatcherRunning = false;
+    this.historyDispatcherRefreshPending = false;
     this.historyDispatcherCancellable = Gio.Cancellable ? new Gio.Cancellable() : null;
     this.historyDispatcherCollectorEnabled = true;
     this.historyDispatcherCollectorIntervalSeconds = 300;
@@ -701,9 +702,14 @@ TeeBotusApplet.prototype = {
   },
 
   _refreshHistoryDispatcherStatus: function() {
-    if (!this.showHistoryDispatcherSection || this.appletRemoved || this.historyDispatcherRunning) {
+    if (!this.showHistoryDispatcherSection || this.appletRemoved) {
       return;
     }
+    if (this.historyDispatcherRunning) {
+      this.historyDispatcherRefreshPending = true;
+      return;
+    }
+    this.historyDispatcherRefreshPending = false;
     this.historyDispatcherRunning = true;
     let generation = this.spawnGeneration;
     let file = Gio.file_new_for_path(this._historyDispatcherSnapshotPath());
@@ -736,19 +742,25 @@ TeeBotusApplet.prototype = {
             } catch (error) {
               this.historyDispatcherError = String(error);
             }
-            this.historyDispatcherRunning = false;
-            this._populateHistoryDispatcherMenu();
+            this._finishHistoryDispatcherStatusRefresh();
           });
         } catch (error) {
           this.historyDispatcherError = String(error);
-          this.historyDispatcherRunning = false;
-          this._populateHistoryDispatcherMenu();
+          this._finishHistoryDispatcherStatusRefresh();
         }
       });
     } catch (error) {
-      this.historyDispatcherRunning = false;
       this.historyDispatcherError = String(error);
-      this._populateHistoryDispatcherMenu();
+      this._finishHistoryDispatcherStatusRefresh();
+    }
+  },
+
+  _finishHistoryDispatcherStatusRefresh: function() {
+    this.historyDispatcherRunning = false;
+    this._populateHistoryDispatcherMenu();
+    if (this.historyDispatcherRefreshPending && !this.appletRemoved && this.showHistoryDispatcherSection) {
+      this.historyDispatcherRefreshPending = false;
+      this._refreshHistoryDispatcherStatus();
     }
   },
 
@@ -3001,6 +3013,7 @@ TeeBotusApplet.prototype = {
     this.statusRunning = false;
     this.statusRefreshPending = false;
     this.historyDispatcherRunning = false;
+    this.historyDispatcherRefreshPending = false;
     if (this.statusTimer) {
       Mainloop.source_remove(this.statusTimer);
       this.statusTimer = 0;
