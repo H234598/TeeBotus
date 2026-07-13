@@ -4301,6 +4301,32 @@ def test_watch_codex_session_roots_snapshot_skips_unchanged_iterations(tmp_path:
     assert len(rows) == 1
 
 
+def test_watch_codex_session_roots_snapshot_reuses_selected_session_files(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = make_git_repo(tmp_path, "watch-snapshot-reuse", version="3.1.1")
+    sessions_root = tmp_path / "sessions"
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    write_codex_session(sessions_root / "first.jsonl", repo=repo, session_id="sess-snapshot-reuse", turn_id="turn-1")
+    original_iter = codex_history_module._iter_codex_session_files
+    iter_calls = 0
+
+    def tracked_iter(roots: Any, *, limit: int) -> tuple[Path, ...]:
+        nonlocal iter_calls
+        iter_calls += 1
+        return original_iter(roots, limit=limit)
+
+    monkeypatch.setattr(codex_history_module, "_iter_codex_session_files", tracked_iter)
+
+    result = watch_codex_session_roots(
+        store,
+        (sessions_root,),
+        max_iterations=1,
+        event_mode="snapshot",
+    )
+
+    assert result["status_counts"] == {"imported": 1}
+    assert iter_calls == 1
+
+
 def test_watch_payload_ok_keeps_timer_successful_when_dispatch_has_channel_failure() -> None:
     assert (
         _watch_payload_ok(

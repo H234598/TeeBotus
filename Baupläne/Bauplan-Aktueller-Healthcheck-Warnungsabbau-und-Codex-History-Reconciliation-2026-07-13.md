@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.464`, lokaler Folgecommit nach `8dc6bf1e`
+**Quellstand:** TeeBotus `1.9.465`, lokaler Folgecommit nach `61e311eb`
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
 ## Auftrag
@@ -177,6 +177,13 @@ vermischt werden. Vor einer Optimierung muss geklaert werden, ob die Last aus
 Event-Burst-Debouncing, wiederholtem Lesen grosser Accountstores, Export,
 Qdrant-Indexierung oder einer Kombination entsteht.
 
+Der erste konkrete Performancefehler ist jetzt reproduziert und behoben: Im
+Snapshot-/Auto-Watcher wurde die bereits fuer den Snapshot ermittelte Liste
+der Sessiondateien beim anschliessenden Import nochmals rekursiv gesucht und
+sortiert. Der Watcher reicht diese Auswahl nun direkt an den Import weiter.
+Der Poll-Modus bleibt unveraendert; bei mehreren Instanzen wird dieselbe
+read-only Dateiauswahl bewusst wiederverwendet.
+
 ## Offene Arbeitspakete
 
 ### A. TBL-Reconciliation schreibfrei beweisen
@@ -214,11 +221,16 @@ Qdrant-Indexierung oder einer Kombination entsteht.
 - [x] Post-Index und Dispatch nicht nach jedem unveraenderten oder nur
   uebersprungenen Scan erneut ausfuehren. Der erste Scan wird weiterhin
   verarbeitet; danach triggern echte neue Importe den teuren Nachlauf.
+- [x] Snapshot-Dateiauswahl zwischen Zustandsvergleich und Import wiederver-
+  wenden; dadurch entfaellt der zweite rekursive Sessionroot-Scan pro
+  veraendertem Snapshot.
 - [ ] Event-Burst-Debounce und Scan-Deduplizierung separat messen; ein
   Dateisystemereignis darf weiterhin zeitnah erkannt werden, aber nicht zu
   unnoetigen Vollscans fuer jede einzelne JSONL-Aenderung fuehren.
-- [ ] Scan-Deduplizierung und Debounce anhand einer kleinen reproduzierbaren
+- [x] Scan-Auswahl-Wiederverwendung anhand einer kleinen reproduzierbaren
   Sessionroot-Teststruktur pruefen.
+- [ ] Event-Burst-Debounce anhand einer kleinen reproduzierbaren Sessionroot-
+  Teststruktur pruefen.
 - [ ] Speicherprofil fuer Session-Import, Accountstore-Lesen, Post-Index und
   Dispatch aufnehmen.
 - [ ] `missing_final_text` und `invalid_repo_root` bounded loggen, damit ein
@@ -247,7 +259,11 @@ Qdrant-Indexierung oder einer Kombination entsteht.
 - [ ] Regression fuer mehrere Instanzen: delegierte Quelle, Logger-Ziel und
   nicht zugelassene Dispatch-Instanz.
 - [ ] Applet-Payload/Python-Paritaet mit allen neuen Feldern pruefen.
-- [ ] Collector-Debounce-/Ressourcenbenchmark ohne Provideraufrufe ausfuehren.
+- [x] Lokalen Collector-Benchmark ohne Provideraufrufe ausfuehren:
+  `codex_history_watcher_poll_loop`, 10 Sessiondateien, 10 Iterationen,
+  `ok=true`, 237.81 ms, 42.05 Operationen/s, `network_calls=0`.
+- [ ] Collector-Debounce-/Ressourcenbenchmark mit realistischem grossem
+  Sessionroot ausfuehren.
 - [ ] Runtime-Status, Applet-Health und Dispatcher-Snapshot nach dem naechsten
   erlaubten Restart erneut vergleichen.
 

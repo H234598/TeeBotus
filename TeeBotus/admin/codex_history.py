@@ -1579,15 +1579,25 @@ def import_codex_session_file(store: AccountStore, session_file: str | Path) -> 
     return result
 
 
-def import_codex_session_roots(store: AccountStore, roots: Sequence[str | Path], *, limit: int = 1000) -> dict[str, Any]:
+def import_codex_session_roots(
+    store: AccountStore,
+    roots: Sequence[str | Path],
+    *,
+    limit: int = 1000,
+    session_files: Sequence[str | Path] | None = None,
+) -> dict[str, Any]:
     results: list[dict[str, Any]] = []
     imported_items: list[dict[str, Any]] = []
     account_id = INSTANCE_STATE_ACCOUNT_ID
-    session_files = _iter_codex_session_files(roots, limit=limit)
+    selected_session_files = (
+        tuple(Path(path) for path in session_files)
+        if session_files is not None
+        else _iter_codex_session_files(roots, limit=limit)
+    )
     explicit_session_files = _explicit_codex_session_file_roots(roots)
     with store.codex_history_outbox_lock(account_id):
         rows = store.read_codex_history_outbox(account_id)
-        for session_file in session_files:
+        for session_file in selected_session_files:
             try:
                 file_results = _build_codex_session_import_results(
                     rows,
@@ -1827,10 +1837,20 @@ def watch_codex_session_roots_for_instances(
         current_snapshot = _codex_session_roots_snapshot(roots, limit=limit) if normalized_event_mode != "poll" else None
         should_scan = normalized_event_mode == "poll" or last_snapshot is None or current_snapshot != last_snapshot
         if should_scan:
+            selected_session_files = (
+                tuple(Path(path) for path, _size, _mtime_ns in current_snapshot)
+                if current_snapshot is not None
+                else None
+            )
             for instance_name, store in stores.items():
                 instance_report = reports_by_instance[instance_name]
                 instance_report["iterations"] = iterations
-                scan_report = import_codex_session_roots(store, roots, limit=limit)
+                scan_report = import_codex_session_roots(
+                    store,
+                    roots,
+                    limit=limit,
+                    session_files=selected_session_files,
+                )
                 _update_watch_instance_report(
                     instance_report,
                     status_counters_by_instance[instance_name],
