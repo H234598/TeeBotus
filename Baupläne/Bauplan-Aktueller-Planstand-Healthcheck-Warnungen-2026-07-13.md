@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.458`, Codecommit `4285217b`
+**Quellstand:** TeeBotus `1.9.459`, Codecommit `26688145`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -591,6 +591,25 @@ weiterhin als actionable Warnung im Applet erscheinen.
 - Vollstaendige `tests/test_cinnamon_applet.py`: `229 passed`.
 - `compileall`, `node --check` und `git diff --check`: erfolgreich.
 - SemVer `1.9.458`, Codecommit `4285217b`.
+
+## Befund 115: Standalone-Admin-Healthcheck nutzte keine Runtime-Retries
+
+Der normale Botlauf injiziert bereits einen gemeinsamen Runtime-Provider. Der
+eigenstaendige Fallbackpfad in `runtime/admin_accounts.py` erzeugte jedoch
+noch einen read-only Provider mit impliziten Null-Retries. Ein transienter
+Secret-Service-Fehler konnte deshalb bei direkter Admin-Gruppenpruefung weiter
+als Store-/Routewarnung erscheinen.
+
+### Umsetzung und Nachweis
+
+- `_default_account_store()` verwendet jetzt `runtime_secret_provider()`.
+- `create_if_missing=False` und der Account-Keyring-Guard bleiben erhalten.
+- Der Delegate-Provider ist mit env-gesteuerten Retries, Delay und Timeout
+  getestet.
+- Admin-Account-Suite: `27 passed`.
+- Entrypoint-Suite: `142 passed`.
+- Status-/Version-/Secret-Hygiene-Suite: `221 passed`.
+- SemVer `1.9.459`, Codecommit `26688145`.
 
 ## Arbeitsplan
 

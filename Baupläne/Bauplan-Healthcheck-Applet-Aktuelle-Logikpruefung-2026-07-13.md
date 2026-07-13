@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.458`, Codecommit `4285217b`
+**Quellstand:** TeeBotus `1.9.459`, Codecommit `26688145`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet, Runtime-Healthpayload und `tests/test_cinnamon_applet.py`
 
 ## Auftrag
@@ -793,6 +793,21 @@ partielle, rein informative Payloads im Header falsch als Warnung erscheinen.
 - Fokussierte Regression: `5 passed`.
 - Vollstaendige Applet-Suite: `229 passed`.
 - SemVer `1.9.458`, Codecommit `4285217b`.
+
+## Befund 115: Admin-Healthcheck-Fallback umging Secret-Service-Retries
+
+Die Applet-Statuskette kann Admin-Gruppen separat auswerten. Deren
+`_default_account_store()` verwendete bisher keine Runtime-Retry-Policy,
+obwohl der gemeinsame Botpfad bereits eine besass. Dadurch blieb ein
+transienter Secret-Service-Fehler als moeglicher falscher Healthbefund.
+
+### Umsetzung und Nachweis
+
+- Der Admin-Healthcheck nutzt jetzt die zentrale read-only
+  `runtime_secret_provider()`-Factory.
+- Der Manifest-Guard und die Fail-Closed-Eigenschaften bleiben unveraendert.
+- Admin-Account-Suite: `27 passed`; Entrypoint-Suite: `142 passed`.
+- SemVer `1.9.459`, Codecommit `26688145`.
 
 ## Invarianten
 
