@@ -6,7 +6,7 @@
 
 **Quellstand bei Erstellung:** TeeBotus `1.9.493`
 
-**Aktueller Quellstand:** TeeBotus `1.9.494`; History-Dispatcher `0.2.10`
+**Aktueller Quellstand:** TeeBotus `1.9.495`; History-Dispatcher `0.2.11`
 
 **Arbeitsbereich:** `/home/teladi/TeeBotus`
 
@@ -192,6 +192,8 @@ Quellstand verletzte diese Trennung an mehreren Stellen:
 - `/home/teladi/History-Dispatcher/history_dispatcher/store.py` normalisiert
   `accepted` und `acknowledged` beim Persistieren zu `delivered` und kollabiert
   diese Stati erneut in `complete()`.
+- Der externe `history.append`-Pfad setzte bei einem Empfaenger ohne Status
+  stillschweigend `delivered` und akzeptierte unbekannte Statuswerte.
 - Eine Telegram-API-Annahme war damit faelschlich als Zustellung sichtbar; eine
   Lesebestaetigung kann nicht mehr sauber von einer Zustellung unterschieden
   werden.
@@ -199,9 +201,12 @@ Quellstand verletzte diese Trennung an mehreren Stellen:
 Behoben wurde das mit einer monotonen Statusaggregation in beiden Repositories:
 `accepted` bleibt `accepted`, `accepted + skipped` bleibt `accepted`, und
 Receipts koennen nur auf `delivered` beziehungsweise `acknowledged` anheben.
+Der Append-Eingang validiert Empfaengeridentitaet, Duplikate und Status vor
+der ersten Datenbankmutation; ein fehlender oder unbekannter Status erzeugt
+keinen falschen Zustellnachweis.
 Auch ein spaeteres `accepted` kann einen bereits gespeicherten
-`delivered`-Empfaenger nicht mehr downgraden. TeeBotus steht bei `1.9.494`,
-der History-Dispatcher bei `0.2.10`.
+`delivered`-Empfaenger nicht mehr downgraden. TeeBotus steht bei `1.9.495`,
+der History-Dispatcher bei `0.2.11`.
 
 ### Noch offene Live-Abweichung
 
@@ -277,7 +282,7 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
 - `pytest -q tests/test_codex_history.py`: `164 passed`.
 - `pytest -q tests/test_codex_history.py tests/test_admin_accounts.py tests/test_version_notifications.py`:
   `443 passed` nach dem Statusvertrag-Fix.
-- `/home/teladi/History-Dispatcher`: `pytest -q`: `54 passed`.
+- `/home/teladi/History-Dispatcher`: `pytest -q`: `56 passed`.
 - Fokussierte Bridge-/Matcher-Regressionen: `4 passed` fuer den aktuellen Fix;
   zuvor `25 passed` fuer den ersten Matcher-Fix.
 - Relevante Metadaten-/Kompatibilitaetstests: `97 passed, 51 deselected`.
@@ -349,6 +354,6 @@ Der Bauplan ist erst abgeschlossen, wenn:
   erstellt. Der Statusvertrag `accepted` versus `delivered` versus
   `acknowledged` wurde als reproduzierter, noch offener Bridge-Logikfehler
   aufgenommen; TeeBotus steht bei `1.9.493`.
-- 2026-07-13: Statusvertrag behoben: TeeBotus `1.9.494`,
-  History-Dispatcher `0.2.10`; TeeBotus `443 passed`, History-Dispatcher
-  `54 passed`. Push und Restart bleiben aus.
+- 2026-07-13: Statusvertrag und Append-Validierung behoben: TeeBotus
+  `1.9.495`, History-Dispatcher `0.2.11`; TeeBotus `443 passed`,
+  History-Dispatcher `56 passed`. Push und Restart bleiben aus.
