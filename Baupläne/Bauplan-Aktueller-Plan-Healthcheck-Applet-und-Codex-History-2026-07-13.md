@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen; aktueller Snapshot
 
-**Quellstand:** TeeBotus `1.9.485`, lokaler Stand nach dem Bridge-Route-Preflight-Fix, dem Applet-Queue-Anzeigepatch und dem Watcher-Ressourcenfix
+**Quellstand:** TeeBotus `1.9.486`, lokaler Stand nach dem Bridge-Route-Preflight-Fix, dem Applet-Queue-Anzeigepatch und dem Watcher-Ressourcenfix
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -267,6 +267,13 @@ Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
   `FileCreatedEvent=created`, `FileModifiedEvent=modified`,
   `FileMovedEvent=moved`, `FileClosedEvent=closed`,
   `FileClosedNoWriteEvent=closed_no_write`, `FileOpenedEvent=opened`.
+- [x] Die verschachtelten Sessionroots im langlebigen Watcher cachen und nur
+  bei einem noch existierenden, vom Cache abgewiesenen Eventpfad neu ermitteln.
+  Neue Agentenroots bleiben damit erkennbar, waehrend der Normalpfad nicht
+  mehr rekursiv ueber alle Agentenverzeichnisse laeuft.
+- [x] Read-only-Echtmessung des Eventfilters ausfuehren: ungecacht
+  `1963.8 ms`, einmaliger Root-Cache-Aufbau `1917.2 ms`, danach gecacht
+  `0.988 ms`; jeweils genau ein Pfad selektiert, `network_calls=0`.
 - [ ] Nach dem naechsten erlaubten Restart RSS, CPU, Scanrate und WAL-
   Schreibvolumen erneut live messen. Der laufende Prozess hat den Fix noch
   nicht geladen.
@@ -517,3 +524,11 @@ Der Plan ist erst abgeschlossen, wenn:
   History-/Metadaten-Suite mit `162 passed in 8.11s`; Compileall und
   `git diff --check` waren sauber. Der Funktionsstand ist als `96523652`
   committed. Die Live-Ressourcenmessung nach Restart bleibt offen.
+- 2026-07-13: Follow-Collector-Logikfehler in `1.9.486` behoben: Der
+  Eventfilter ermittelte zuvor bei jedem Batch die bis zu 301 verschachtelten
+  Sessionroots erneut. Der Watcher verwendet jetzt einen Cache und erneuert
+  ihn nur bei einem unbekannten, noch vorhandenen Eventpfad. Die Auswahl bleibt
+  identisch, aber der echte Eventfilter fiel von `1963.8 ms` auf `0.988 ms`.
+  Watcher-Fokus: `43 passed in 3.52s`; History-/Metadaten-Suite:
+  `163 passed in 7.46s`; Compileall und `git diff --check` sauber. Live-
+  Restart und Ressourcen-Nachmessung bleiben offen.

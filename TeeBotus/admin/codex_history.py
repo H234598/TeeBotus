@@ -1990,13 +1990,32 @@ def _watch_codex_session_roots_for_instances_impl(
     skipped_unchanged = 0
     last_snapshot: tuple[tuple[str, int, int], ...] | None = None
     pending_session_files: tuple[Path, ...] | None = None
+    session_directory_roots = _codex_session_directory_roots_for_roots(roots)
     while True:
         iterations += 1
         event_session_paths = (
-            _codex_session_event_files_for_roots(roots, pending_session_files, existing_only=False)
+            _codex_session_event_files_for_roots(
+                roots,
+                pending_session_files,
+                existing_only=False,
+                directory_roots=session_directory_roots,
+            )
             if pending_session_files
             else ()
         )
+        if pending_session_files and not event_session_paths and any(
+            Path(path).is_file() for path in pending_session_files
+        ):
+            # A new agent may have created a sessions directory after the
+            # watcher started. Refresh only when the cached roots reject a
+            # still-existing event path.
+            session_directory_roots = _codex_session_directory_roots_for_roots(roots)
+            event_session_paths = _codex_session_event_files_for_roots(
+                roots,
+                pending_session_files,
+                existing_only=False,
+                directory_roots=session_directory_roots,
+            )
         event_session_files = tuple(path for path in event_session_paths if path.is_file())
         if event_session_paths:
             current_snapshot = last_snapshot
@@ -5206,10 +5225,27 @@ def _codex_session_snapshot_after_events(
     return tuple(sorted(newest_first, key=lambda entry: (entry[2], entry[0])))
 
 
-def _codex_session_event_files_for_roots(
-    roots: Sequence[str | Path], event_paths: Sequence[str | Path], *, existing_only: bool = True
-) -> tuple[Path, ...]:
+def _codex_session_directory_roots_for_roots(roots: Sequence[str | Path]) -> tuple[Path, ...]:
     directory_roots: list[Path] = []
+    for root_value in roots:
+        try:
+            root = _safe_repo_root(Path(root_value), operation="sessions root", allow_hidden_segments=True)
+        except ValueError:
+            continue
+        if root.is_dir():
+            directory_roots.extend(_codex_session_directory_roots(root))
+    return tuple(dict.fromkeys(directory_roots))
+
+
+def _codex_session_event_files_for_roots(
+    roots: Sequence[str | Path],
+    event_paths: Sequence[str | Path],
+    *,
+    existing_only: bool = True,
+    directory_roots: Sequence[str | Path] | None = None,
+) -> tuple[Path, ...]:
+    cached_directory_roots = directory_roots is not None
+    normalized_directory_roots = [Path(path) for path in directory_roots or ()]
     explicit_files: set[Path] = set()
     for root_value in roots:
         try:
@@ -5218,8 +5254,8 @@ def _codex_session_event_files_for_roots(
             continue
         if root.suffix == ".jsonl" and not root.is_dir():
             explicit_files.add(root)
-        elif root.is_dir():
-            directory_roots.extend(_codex_session_directory_roots(root))
+        elif root.is_dir() and not cached_directory_roots:
+            normalized_directory_roots.extend(_codex_session_directory_roots(root))
 
     selected: set[Path] = set()
     for raw_path in event_paths:
@@ -5229,7 +5265,7 @@ def _codex_session_event_files_for_roots(
             continue
         if path.suffix != ".jsonl" or (existing_only and not path.is_file()):
             continue
-        if path in explicit_files or any(root in path.parents for root in directory_roots):
+        if path in explicit_files or any(root in path.parents for root in normalized_directory_roots):
             selected.add(path)
     return tuple(sorted(selected, key=str))
 

@@ -4528,6 +4528,27 @@ def test_codex_session_watchdog_wait_coalesces_events_arriving_during_debounce()
         thread.join(timeout=1.0)
 
 
+def test_codex_session_event_filter_reuses_cached_directory_roots(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sessions_root = tmp_path / "agents" / "a1" / "sessions"
+    sessions_root.mkdir(parents=True)
+    session_file = sessions_root / "session.jsonl"
+    session_file.write_text("{}\n", encoding="utf-8")
+
+    def fail_root_discovery(_root: Path) -> tuple[Path, ...]:
+        raise AssertionError("cached event filtering must not rediscover roots")
+
+    monkeypatch.setattr(codex_history_module, "_codex_session_directory_roots", fail_root_discovery)
+    selected = codex_history_module._codex_session_event_files_for_roots(
+        (tmp_path / "agents",),
+        (session_file,),
+        directory_roots=(sessions_root,),
+    )
+
+    assert selected == (session_file.resolve(),)
+
+
 def test_watch_codex_session_roots_snapshot_imports_only_changed_session_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
