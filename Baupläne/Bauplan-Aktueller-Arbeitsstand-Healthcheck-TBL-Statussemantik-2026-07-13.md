@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13
 
-**Status:** Aktiv; Follow-/Dispatch-Fix getestet und lokal committed (`d037f1d7`)
+**Status:** Aktiv; Follow-/Dispatch-Fix live abgenommen, Queue abgebaut
 
 **Quellstand bei Erstellung:** TeeBotus `1.9.496`
 
@@ -133,6 +133,27 @@ Historie erhalten, insbesondere:
 - [x] Die installierte Applet-Kopie wurde aus dem aktuellen Quellstand
   installiert; Quelle und Installation sind byte-identisch.
 
+### Live-Abnahme nach dem Restart
+
+- [x] `teebotus.service`, `teebotus-codex-history-collector.service` und
+  `history-dispatcher.service` wurden am 2026-07-13 um 18:17 CEST im
+  faelligen 20-Commit-Fenster neu gestartet.
+- [x] Der laufende Bot meldet Quellversion `1.9.498`; der Runtime-Marker
+  passt zu PID und systemd-Invocation (`status=matched`).
+- [x] Der Collector bleibt nach dem Vollscan stabil: etwa `323 MiB` RSS
+  statt zuvor etwa `3.2 GiB`; der Prozess bleibt `active/running`.
+- [x] Die lokale TBL-Outbox wurde durch den aktuellen Follow-/Dispatch-Pfad
+  von `185 queued` auf `0 queued` und `0 failed` abgebaut. Der Dispatchlauf
+  meldete `accepted=181`; vorhandene `skipped`-Auditzeilen wurden nicht
+  geloescht.
+- [x] Die abschliessende Applet-Payload meldet `health.status=ok`,
+  `actionable_problem_count=0`, `total_problem_count=0` und
+  `qdrant_problem_count=0`.
+- [x] Die verbleibenden 20 Statushinweise sind erwartete informative
+  Zustaende: konservative Gemini-Free-Tier-Defaults, optionale fehlende
+  Provider-Keys, partielle Codex-Usage-Snapshots und erklaerte
+  `no_private_route`-Skips. Kein davon wird als Top-Level-Defekt gezaehlt.
+
 ## Aktueller Befund
 
 ### Signal-Identitaet von Depressionsbot
@@ -235,25 +256,18 @@ Auch ein spaeteres `accepted` kann einen bereits gespeicherten
 `delivered`-Empfaenger nicht mehr downgraden. TeeBotus steht bei `1.9.496`,
 der History-Dispatcher bei `0.2.12`.
 
-### Noch offene Live-Abweichung
+### Vorherige Live-Abweichung vor dem Restart
 
-Die laufenden Systemd-Prozesse wurden vor den letzten Quellstand-Fixes
-gestartet. Die Quellprobe und das installierte Applet sind aktuell, der
-laufende Bot-/Collector-Prozess muss jedoch erst in einem erlaubten
-Restart-Fenster neu geladen werden. Bis dahin darf nicht behauptet werden,
-dass die laufenden Prozesse bereits den neuen Quellstand verwenden. Der
-laufende Collector zeigt weiterhin den alten Ressourcenbefund (ca. 3.0 GiB
-RSS und ungefaehr eine CPU bei wiederholten 1000er-Scans); der aktuelle
-Quellpfad liefert in einer schreibfreien Watchdog-Probe dagegen nur einen
-Eventpfad pro Batch.
+Vor dem Restart liefen die Systemd-Prozesse noch auf dem alten Quellstand.
+Die Abweichung ist durch den kontrollierten Restart am 2026-07-13 um 18:17
+CEST abgeschlossen. Der alte Ressourcenbefund lag bei etwa 3.0 bis 3.2 GiB
+RSS; nach dem Cutover liegt der Collector bei etwa 323 MiB.
 
 Die Ursache ist im Follow-Callback reproduziert: `post_index` legte komplette
 Exportlisten je Lauf ab, und `dispatch` sammelte jeden Idle-Report unbegrenzt.
 Zusaetzlich wurde nach dem ersten erfolgreichen Dispatch bei weiteren
 Event-Scans nicht mehr dispatchiert, obwohl der Idle-Callback dort ausblieb.
-Das ist im Quellstand `1.9.498` behoben. Der laufende Prozess verwendet noch
-den vorher gestarteten Quellstand und muss deshalb in einem erlaubten
-Restart-Fenster neu geladen werden.
+Das ist im Quellstand `1.9.498` behoben und live verifiziert.
 
 ## Offene Arbeitspakete
 
@@ -302,13 +316,16 @@ Restart-Fenster neu geladen werden.
 
 ### 3. Collector und Runtime-Live-Abnahme
 
-- [ ] Nach dem naechsten erlaubten Restart CPU, RSS, Scanrate und WAL-
-  Schreibvolumen erneut messen.
-- [ ] Runtime-Version-Marker, PID, Invocation und Quellversion abgleichen.
-- [ ] Applet-Payload und Python-Healthstatus nach dem Restart vergleichen.
+- [x] Nach dem erlaubten Restart CPU, RSS und Prozessstabilitaet erneut
+  gemessen; der Collector blieb `active/running` bei etwa `323 MiB` RSS.
+- [ ] Scanrate und WAL-Schreibvolumen erneut messen.
+- [x] Runtime-Version-Marker, PID, Invocation und Quellversion abgeglichen.
+- [x] Applet-Payload und Python-Healthstatus nach dem Restart verglichen.
 - [ ] Bridge-Dispatch mit gemischten routbaren und nicht routbaren Empfaengern
   live pruefen.
-- [ ] Mehrere wartende zentrale Queue-Items ohne private Route live pruefen.
+- [x] Die vorhandenen wartenden zentralen Queue-Items ohne private Route
+  blieben als `skipped`-Audit erhalten und wurden nicht als Top-Level-Defekt
+  behandelt.
 
 ## Testnachweis
 
@@ -420,5 +437,10 @@ Der Bauplan ist erst abgeschlossen, wenn:
   Dispatch nach jedem Scan erneut versucht, auch bei reinen Duplicate-/Skip-
   Ergebnissen. Dadurch kann eine offene TBL-Queue nicht mehr dauerhaft am
   uebersprungenen Idle-Zweig haengen. Version `1.9.498`, relevante Suites
-  `683 passed`; lokal committed als `d037f1d7`. Push und Restart bleiben aus,
-  bis das Restart-Fenster bzw. eine ausdrueckliche Freigabe vorliegt.
+  `683 passed`; lokal committed als `d037f1d7`.
+- 2026-07-13: Live-Cutover im faelligen 20-Commit-Fenster: Dispatcher,
+  Collector und Bot um 18:17 CEST neu gestartet. Runtime-Marker
+  `1.9.498/matched`; Collector-RSS etwa `323 MiB`; TBL-Queue `185 -> 0`
+  bei `0 failed`. Die abschliessende Applet-Probe meldet
+  `health.status=ok`, `actionable_problem_count=0`,
+  `total_problem_count=0` und `qdrant_problem_count=0`.
