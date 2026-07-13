@@ -279,6 +279,9 @@ erhalten.
 - [ ] Event-Burst-Debounce und Scan-Deduplizierung separat messen; ein
   Dateisystemereignis darf weiterhin zeitnah erkannt werden, aber nicht zu
   unnoetigen Vollscans fuer jede einzelne JSONL-Aenderung fuehren.
+- [x] Read-only Realroot-Vergleich ausgefuehrt: 1000-Datei-Snapshot
+  `2303.15 ms`, Eventpfad-Filter `0.5543 ms`, Baseline-Update `0.7585 ms`;
+  keine Provider- oder Netzwerkanfragen.
 - [x] Scan-Auswahl-Wiederverwendung anhand einer kleinen reproduzierbaren
   Sessionroot-Teststruktur pruefen.
 - [ ] Event-Burst-Debounce anhand einer kleinen reproduzierbaren Sessionroot-
