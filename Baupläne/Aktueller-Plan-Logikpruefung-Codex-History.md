@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.381`, Commit `e500d915`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.382`, Commit `57849ffb`.
 
 ## Arbeitsprinzipien
 
@@ -118,6 +118,12 @@ werfen; im Shadow-Modus konnte derselbe Konfigurationsfehler sogar das
 eigentliche Legacy-Summary-Schreiben abbrechen. Beide Pfade melden den Fehler
 jetzt kontrolliert bzw. lassen den Legacy-Pfad unveraendert fortsetzen.
 
+**Zehnter Befund 2026-07-13:** Der Shadow-Append pruefte nur das aeussere
+Response-`ok`. Ein technischer Transporterfolg mit `data.ok=false` konnte
+deshalb als erfolgreiches Spiegeln erscheinen. Die Shadow-Antwort wird jetzt
+mit derselben verschachtelten Schema-Pruefung wie der Bridge-Completionpfad
+ausgewertet; der Legacy-Eintrag bleibt bei einem Shadow-Fehler erhalten.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -195,6 +201,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Gezielt verifizierte TeeBotus-Suite nach der Bridge-Haertung: `114 passed`.
 - Bridge-Haertung und SemVer-Bump auf `1.9.380` committed als `8376977e` (`Harden history dispatcher bridge validation`).
 - Socket-Fehlerbehandlung und SemVer-Bump auf `1.9.381` committed als `e500d915` (`Keep history dispatch socket errors contained`); gezielte Suite danach `116 passed`.
+- Shadow-Response-Pruefung und SemVer-Bump auf `1.9.382` committed als `57849ffb` (`Validate shadow dispatcher append responses`); gezielte Suite danach `117 passed`.
 
 ### Noch offen
 
