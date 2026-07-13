@@ -29,7 +29,8 @@ Einzelstatus verstecken.
 
 ## Ausgangslage
 
-- Letzter lokaler Commit vor dem aktuellen Fix: `1.9.425`, `2332583e`.
+- Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
+- Aktueller gepruefter Quellstand: `1.9.426`, `d76614b8`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -75,6 +76,30 @@ Vor der laufenden Korrektur konnte daraus `status=ok` beziehungsweise
 `severe_status_count=0` entstehen. Der Status war damit im Payload vorhanden,
 wurde aber bei der Python-Aggregation nicht als Fehlerzaehler verwendet.
 
+## Befund 81: Deklarative v2-Severity wurde ignoriert
+
+Die Python-Aggregation beruecksichtigte deklarative Textfelder bisher nicht
+bei der Ermittlung von Gesamt-, actionable- und schweren Problemzaehlern. Ein
+staler Detailindex konnte deshalb einen deklarativ gemeldeten `broken`-Status
+auf `ok` oder `warning` herabsetzen.
+
+### Umsetzung
+
+- Neuer Parser fuer `status:count`-Listen mit Allowlist der bekannten
+  Problemstatus.
+- Gesamt-, actionable- und informative Zaehler nehmen jetzt jeweils das
+  Maximum aus Integerfeld, strukturierten Zaehlern und deklarativer Statusliste.
+- `severe_status_count` beruecksichtigt deklarative actionable Status pro
+  Status und bleibt dadurch bei `broken:1` mindestens `1`.
+- SemVer-Bump auf `1.9.426`.
+
+### Nachweis
+
+- Fokussierte Regression: `2 passed, 204 deselected in 1.29s`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `206 passed in 42.84s`.
+- `git diff --check`: erfolgreich.
+- Lokaler Commit: `d76614b8` (`Honor declared health severity statuses`).
+
 ## Umsetzung
 
 ### 1. Deklarative Statusfelder auswerten
@@ -110,15 +135,13 @@ Ergaenzend bleiben die bisherigen Tests fuer stale Gesamtzaehler, quoted
 Statuswerte, Fallback-Sentinels, API-Budgetduplikate, Codex-History und
 Qdrant-Doppelzaehlung gruen.
 
-### 3. Version und Nachweis
+### 3. Erledigte Verifikation
 
-- SemVer nach erfolgreicher Code- und Testaenderung auf `1.9.426` erhoehen.
-- `git diff --check` ausfuehren.
-- Zuerst den fokussierten Regressionstest, danach die vollstaendige
-  `tests/test_cinnamon_applet.py` ausfuehren.
-- Code, Test und Version lokal committen.
-- Diesen Bauplan nach dem Commit um Commit-ID, Testergebnisse und den naechsten
-  validierten Arbeitsstand ergaenzen und separat committen.
+- SemVer auf `1.9.426` erhoeht.
+- `git diff --check` erfolgreich ausgefuehrt.
+- Fokussierter und vollstaendiger Testlauf erfolgreich ausgefuehrt.
+- Code, Test und Version lokal als `d76614b8` committed.
+- Dieser Plan wird nach der Aktualisierung separat committed.
 - Kein `git push`, solange dies nicht ausdruecklich angefordert wird.
 - Kein Bot-/Service-Restart ausserhalb der vereinbarten 20-Commit-Grenze.
 
@@ -151,8 +174,8 @@ Qdrant-Doppelzaehlung gruen.
 
 Der Bauplan bleibt aktiv, bis:
 
-- der deklarative `broken:1`-Regressionsfall gruen getestet ist,
-- die vollstaendige Applet-Suite ohne Provideraufrufe gruen ist,
-- Version und Commit im Plan dokumentiert sind,
+- der deklarative `broken:1`-Regressionsfall gruen getestet ist (erledigt),
+- die vollstaendige Applet-Suite ohne Provideraufrufe gruen ist (erledigt),
+- Version und Commit im Plan dokumentiert sind (erledigt),
 - der aktuelle Live-/Installationsstand nachvollziehbar abgeglichen wurde,
 - die offenen Healthbefunde entschieden und mit Nachweis dokumentiert sind.
