@@ -3319,6 +3319,21 @@ def test_cinnamon_applet_runtime_parser_does_not_treat_fallback_sentinels_as_con
     assert parsed["summary"]["informational_problem_statuses"] == "unavailable:1"
 
 
+def test_cinnamon_applet_runtime_parser_prioritizes_explicit_fallback_sentinel() -> None:
+    parsed = parse_runtime_status(
+        """
+        [LLM-Routen und Backends]
+        structured_decision=disabled status=enabled route_status=unavailable fallback=disabled fallback_model=local_ollama
+        structured_decision=none status=enabled route_status=unavailable fallback=none fallback_profile=local_ollama
+        structured_decision=profile_none status=enabled route_status=unavailable fallback_profile=none fallback_model=local_ollama
+        structured_decision=model_only status=enabled route_status=unavailable fallback_model=local_ollama
+        """
+    )
+
+    assert parsed["summary"]["actionable_problem_statuses"] == "unavailable:3"
+    assert parsed["summary"]["informational_problem_statuses"] == "unavailable:1"
+
+
 def test_cinnamon_applet_runtime_parser_marks_error_without_status_as_problem() -> None:
     parsed = parse_runtime_status(
         """

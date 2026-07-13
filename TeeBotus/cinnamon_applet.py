@@ -884,8 +884,9 @@ def _account_identity_status_is_informational(fields: Mapping[str, Any]) -> bool
 def _fallback_reference_is_set(fields: Mapping[str, Any]) -> bool:
     for key in ("fallback", "fallback_profile", "fallback_model", "offload_profile"):
         value = _normalized_status_value(fields.get(key))
-        if value and value not in FALLBACK_SENTINEL_VALUES:
-            return True
+        if not value:
+            continue
+        return value not in FALLBACK_SENTINEL_VALUES
     return False
 
 
