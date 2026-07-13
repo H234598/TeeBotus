@@ -156,7 +156,8 @@ dass die laufenden Prozesse bereits den neuen Quellstand verwenden.
   `account_identity_warning`-Faelle ergaenzen.
 - [x] SemVer von `1.9.489` auf `1.9.490` bumpen.
 - [x] Fokussierte Testausfuehrung nach dem Version-Bump wiederholen.
-- [ ] Aenderungen lokal committen.
+- [x] Aenderungen lokal committen; der Fix und dieser neue Bauplan sind lokal
+  als Commit `1e7542f0` festgehalten.
 
 ### 2. TBL-Reconciliation schreibfrei abschliessen
 
@@ -225,5 +226,7 @@ Der Bauplan ist erst abgeschlossen, wenn:
   `actionable_problem_count=0`, `informational_problem_count=22` und
   `qdrant_problem_count=0`. Der Prozessmarker fehlt nur beim noch nicht
   neu gestarteten alten Dienstprozess.
+- 2026-07-13: Fix und neuer Bauplan lokal als `1e7542f0` committed; kein Push
+  und kein Restart ausgeloest.
 - 2026-07-13: Laufende Prozesse bewusst noch nicht neu gestartet; die
   20-Commit-Restart-Regel und die fehlende explizite Freigabe bleiben bestehen.
