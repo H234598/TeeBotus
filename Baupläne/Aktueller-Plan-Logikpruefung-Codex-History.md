@@ -138,8 +138,8 @@ Der Plan ist erst abgeschlossen, wenn:
 - Reproduktion des Dispatcherfehlers vor dem Fix: ein `skipped/no_private_route`-Resultat endete als `queued`
 - History-Dispatcher nach dem Fix: `31 passed`, davon zwei Regressionstests fuer terminale Skips und `delivered+skipped`
 - Lokale Dispatcher-Paketversion: `0.2.4`, nach dem Duplicate-Flag-Fix in `.venv-py313` installiert
-- History-Dispatcher-Fixes committed als `943d349` (`Treat skipped recipients as terminal`), `bf78436` (`Report persisted history append status`) und `162f978` (`Keep claim response timestamps current`)
-- TeeBotus-Plan-/Nachweisstaende committed als `18b36730`, `0cf5db99` und `0d1d2004`
+- History-Dispatcher-Fixes committed als `943d349` (`Treat skipped recipients as terminal`), `bf78436` (`Report persisted history append status`), `162f978` (`Keep claim response timestamps current`), `90e4206` (`Preserve duplicate uncertainty across retries`) und `84fa05f` (`Bump history dispatcher to 0.2.4`)
+- TeeBotus-Plan-/Nachweisstaende committed als `18b36730`, `0cf5db99`, `0d1d2004`, `f3089e08`, `418ba283` und `e9bae24d`
 
 ### In dieser Runde erledigt
 
