@@ -3909,6 +3909,18 @@ codex_history=Logger status=warning queued=0 failed=0 total=4
     assert parsed["summary"]["informational_problem_statuses"] == ""
 
 
+def test_cinnamon_applet_runtime_parser_treats_route_error_as_error() -> None:
+    parsed = parse_runtime_status(
+        """
+[LLM-Routen und Backends]
+structured_decision=Demo status=enabled route_status=unavailable fallback=local route_error=provider_unavailable
+"""
+    )
+
+    assert parsed["summary"]["actionable_problem_statuses"] == "unavailable:1"
+    assert parsed["summary"]["informational_problem_statuses"] == ""
+
+
 def test_cinnamon_applet_runtime_parser_keeps_fresh_codex_usage_neutral() -> None:
     parsed = parse_runtime_status(
         """

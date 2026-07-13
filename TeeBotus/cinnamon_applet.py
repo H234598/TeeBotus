@@ -1056,7 +1056,10 @@ def _status_is_ready_without_error(fields: Mapping[str, Any], key: str) -> bool:
 
 
 def _line_has_error(fields: Mapping[str, Any]) -> bool:
-    return _status_flag_is_set(str(fields.get("error", "") or ""))
+    return any(
+        _status_flag_is_set(str(fields.get(field, "") or ""))
+        for field in ("error", "route_error")
+    )
 
 
 def _append_status_value(values: list[str], status: str) -> None:
