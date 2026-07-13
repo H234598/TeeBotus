@@ -1,0 +1,118 @@
+# Aktueller Bauplan: Logikpruefung Codex-History und Health-Status
+
+**Stand:** 2026-07-13  
+**Status:** Aktiv, noch nicht abgeschlossen  
+**Bezug:** `Baupläne/Healthcheck-Applet-Plan.md`  
+**Geltungsbereich:** Codex-History-Collector, SQL-Outbox, Dispatcher, `/status`, Healthcheck und TeeBotus-Cinnamon-Applet
+
+## Ziel
+
+Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idempotent und nachvollziehbar sein. Ein erfolgreicher Versand darf nicht erneut als Problem erscheinen; ein echter Fehler darf aber weder durch einen Fallback noch durch eine unklare Statusaggregation verschwinden. Bot, `/status`, Healthcheck und Applet sollen dieselbe Bedeutung der Statuswerte verwenden.
+
+## Ausgangslage
+
+- Die Health-Klassifikation ist versioniert (`classification_version=2`) und trennt handlungsrelevante Probleme von Hinweisen.
+- Der `/status`-Pfad und das Applet beruecksichtigen die Bridge-Delegation fuer Codex-History.
+- `latest` wird nach `created_at` bestimmt; Aenderungen an alten Eintraegen ueber `updated_at` verschieben nicht mehr die neueste Summary.
+- Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
+- TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
+- Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.377`, Commit `86796389`.
+
+## Arbeitsprinzipien
+
+1. **Sicherheit vor Komfort:** Keine automatische Datenloeschung, kein stilles Requeue und keine Secret-Ausgabe.
+2. **Statussemantik explizit halten:** `accepted`, `delivered`, `acknowledged`, `failed`, `skipped` und `compacted` muessen einzeln nachvollziehbar bleiben.
+3. **Idempotenz vor Wiederholung:** Ein bereits erfolgreich zugestelltes Ziel darf durch einen spaeteren, nicht zugeordneten Status nicht versehentlich erneut versendet werden.
+4. **Delegation nicht mit Defekt verwechseln:** Eine Queue ohne private Route bleibt als begruendeter Skip sichtbar; delegierte Quellinstanzen werden nicht als fehlgeschlagen dargestellt.
+5. **Rohdaten erhalten:** Jede Diagnose muss auf die konkrete History-Zeile, das Zielkonto, den Status und den Skip-Grund zurueckfuehrbar sein.
+
+## Arbeitspakete
+
+### 1. Dispatch-Status und Retry-Logik pruefen
+
+- `TeeBotus/admin/codex_history.py` auf alle Statusuebergaenge und Aggregationen pruefen.
+- Klaeren, ob `_successful_codex_history_dispatch_accounts()` absichtlich den letzten Status in der gespeicherten Reihenfolge verwendet oder ob Zeitstempel und Statusrang erforderlich sind.
+- Verhalten fuer diese Sequenzen als Tests festlegen:
+  - `accepted -> delivered -> acknowledged`: kein erneuter Versand.
+  - `accepted -> failed`: kontrollierter Retry, sofern der Eintrag erneut dispatchbar ist.
+  - `delivered -> failed`: kein Downgrade ohne expliziten neuen Versandversuch.
+  - `skipped(no_private_route)`: kein Endlos-Retry ohne neue Route.
+  - mehrere Konten: Erfolg eines Kontos darf den Zustand eines anderen Kontos nicht verdecken.
+- Nur wenn die Sollsemantik belegt ist, die Aggregation korrigieren; keine pauschale Statusranglogik einbauen, die absichtliche neue Retry-Versuche blockiert.
+
+### 2. Skip- und Fehlerursachen sauber trennen
+
+- `no_private_route`, `compacted`, malformed und echte Zustellfehler getrennt ausweisen.
+- Pruefen, ob `skipped` terminal, wiederaufnehmbar oder nur informativ ist.
+- Fuer wiederaufnehmbare Eintraege eine explizite Admin-Aktion oder einen dokumentierten Requeue-Pfad vorsehen.
+- Fuer nicht wiederaufnehmbare Eintraege Quarantaene/Auditspur statt stiller Entfernung verwenden.
+- Keine Produktionsdaten veraendern, bevor die Ursache und das Zielverhalten getestet sind.
+
+### 3. Ein einheitliches Statusmodell erzwingen
+
+- Gemeinsame Statussemantik fuer:
+  - SQL-Dispatch-Resultate
+  - Dispatcher-Zusammenfassung
+  - `TeeBotus/core/status.py`
+  - Telegram-`/status`
+  - Cinnamon-Applet
+- Pruefen, dass `actionable_problem_statuses` nur echte Handlungsprobleme enthaelt.
+- Sicherstellen, dass `queued=0` nur zusammen mit dem letzten Lauf, Fehlern, Skips und dem Alter der letzten erfolgreichen Verarbeitung bewertet wird.
+- Fallbacks, optionale Provider und fehlende private Routen nicht als globalen Defekt melden.
+
+### 4. Testabdeckung erweitern
+
+- Unit-Tests fuer jede Statussequenz und jedes Zielkonto ergaenzen.
+- Property-/Invariant-Tests fuer:
+  - keine doppelte Zustellung nach terminalem Erfolg
+  - kein Verlust eines Statusgrundes
+  - stabile Latest-Auswahl nach `created_at`
+  - malformed rows bleiben sichtbar
+  - Bridge-Delegation bleibt konsistent
+- Integrationsprobe mit einer isolierten SQL-Datenbank und synthetischer Outbox ausfuehren.
+- Bestehende gezielte Suiten ausfuehren; keine kostenpflichtigen LLM- oder Provider-Calls fuer diese Logiktests.
+
+### 5. Live-Nachweis und Applet-Abgleich
+
+- `/status`, Healthcheck-JSON und Applet-Ausgabe fuer TBL, Bote der Wahrheit und Depressionsbot vergleichen.
+- Nachweisen, dass die 101 `no_private_route`-Skips sichtbar, begruendet und nicht als gescheiterte Zustellungen gezaehlt werden.
+- Applet aus dem Repository installieren und mit dem installierten Verzeichnis vergleichen.
+- Erst nach erfolgreicher Probe entscheiden, ob die TBL-Skips repariert, neu geroutet oder bewusst als dauerhaft dokumentiert werden.
+
+## Abschlusskriterien
+
+Der Plan ist erst abgeschlossen, wenn:
+
+- die Status- und Retry-Semantik durch Tests fuer alle relevanten Sequenzen belegt ist
+- kein terminaler Erfolg versehentlich erneut versendet wird
+- echte Fehler nicht durch Fallbacks oder leere Queues verdeckt werden
+- Skip-Gruende und malformed rows in SQL, `/status`, Healthcheck und Applet konsistent erscheinen
+- die gezielten Tests und die isolierte Integrationsprobe erfolgreich sind
+- eine Live-Probe ohne Datenmutation erfolgreich durchgefuehrt wurde
+- die Ergebnisse, Version und Commit-ID hier eingetragen sind
+- der Plan erst danach nach `Pläne und Regeln/` archiviert wird
+
+## Nachweisprotokoll
+
+### Bereits vorhanden
+
+- `tests/test_version_notifications.py`: letzter kompletter Lauf im aktuellen Arbeitsstand `214 passed`
+- Live-Chat-Status: `status=warning queued=0 failed=0 total=1467 skipped=101 problem_statuses=skipped:101 skip_reasons=no_private_route:101`
+- TBL-Produktionsbestand: `1.366 accepted`, `101 skipped`
+- Applet- und Statuslogik fuer Bridge-Delegation, malformed rows und `created_at`-Latest-Auswahl umgesetzt
+
+### Noch einzutragen
+
+- Ergebnis der Dispatch-Statussequenztests
+- Entscheidung zur Semantik von spaeten Fehlern nach `delivered`/`acknowledged`
+- Ergebnis der isolierten SQL-Integrationsprobe
+- Ergebnis des abschliessenden Live- und Applet-Abgleichs
+- Abschlussversion und Commit-ID
+
+## Betriebsgrenzen
+
+- Kein Push ohne ausdrueckliche Aufforderung.
+- Bot-/Service-Restart nur nach der vereinbarten Commit-Grenze oder ausdruecklich angefordert.
+- Secrets, Tokens und private Nachrichten gehoeren nicht in diesen Plan.
+- Der Plan bleibt unter `Baupläne/`, bis Umsetzung, Tests und Nachweise vollstaendig sind.
