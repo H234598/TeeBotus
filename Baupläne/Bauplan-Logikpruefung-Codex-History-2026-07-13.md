@@ -481,6 +481,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Befund 60: Dispatcher-Fehler wurden nur im Untermenue bewertet. Bei ansonsten gesundem Bot zeigte der obere Applet-Header deshalb weiterhin `Health ok` und verschwieg den Fehler.
 - Umsetzung Befund 60: Dispatcher-Warnungen und veraltete Snapshots fliessen jetzt in die obere Problemzahl, den effektiven Health-Status und die Detailzeile ein. SemVer-Bump auf `1.9.405`.
 - Regressionstest Befund 60: Die vollstaendige `tests/test_cinnamon_applet.py` laeuft mit `186 passed`; der neue Test reproduziert einen gesunden Bot mit `last_error` im Dispatcher und erwartet `Warnungen 1`, `Health Warnung` sowie `Dispatcher Warnung`.
+- Live-Nachweis Befund 60: Die Applet-Quelle wurde nach Commit `7807d650` installiert und per `ReloadExtension(teebotus@H234598, APPLET)` geladen; `cmp` bestaetigt Byte-Identitaet. Der Bot-Service bleibt bewusst bei `1.9.404`, bis die naechste 20-Commit-Restart-Grenze erreicht ist.
 
 ### Noch offen
 
@@ -488,7 +489,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.9` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
 - Live- und Applet-Abgleich ist abgeschlossen; die verbleibenden Warnungen sind jetzt getrennt von Timeout-/Parserfehlern sichtbar und muessen fachlich beziehungsweise durch Benutzeraktion bearbeitet werden.
 - Dispatcher-Dry-Run fuer `TeeBotus_Logger` liefert im Bridge-Modus `statuses: none`, waehrend die lokale Outbox noch `19 queued` Legacy-Zeilen enthaelt. Dieser Bestand bleibt als Warnung sichtbar; keine automatische Zustellung, Loeschung oder Quarantaene wurde ohne explizite Migrationsentscheidung ausgefuehrt.
-- Der lokale TeeBotus-Code ist aktuell `1.9.405`; der laufende Bot-Dienst ist noch `1.9.404`, der aktive History-Dispatcher `0.2.9`. Die Applet-Installation wird nach diesem Commit synchronisiert und reloaded. Die untracked Nutzerdaten (`.obsidian/`, `.stfolder/`, `Fusion_Packliste.txt`, `Unbenannt.base`, `Unbenannt.canvas`) bleiben bewusst unberuehrt.
+- Der lokale TeeBotus-Code und das laufende Applet sind aktuell `1.9.405`; der laufende Bot-Dienst ist noch `1.9.404`, der aktive History-Dispatcher `0.2.9`. Die untracked Nutzerdaten (`.obsidian/`, `.stfolder/`, `Fusion_Packliste.txt`, `Unbenannt.base`, `Unbenannt.canvas`) bleiben bewusst unberuehrt.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
