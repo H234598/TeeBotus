@@ -821,6 +821,7 @@ def _history_dispatcher_matching_local_row(
 ) -> Mapping[str, Any] | None:
     item_id = str(item.get("id") or "").strip()
     dedupe_key = _history_dispatcher_item_dedupe_key(item)
+    id_matches: list[Mapping[str, Any]] = []
     dedupe_matches: list[tuple[int, datetime | None, Mapping[str, Any]]] = []
     for position, local_row in enumerate(local_rows):
         if not isinstance(local_row, Mapping):
@@ -830,9 +831,21 @@ def _history_dispatcher_matching_local_row(
         same_id = bool(item_id and local_id and item_id == local_id)
         same_dedupe = bool(dedupe_key and str(local_codex.get("dedupe_key") or "").strip() == dedupe_key)
         if same_id:
-            return local_row
+            id_matches.append(local_row)
         if same_dedupe:
             dedupe_matches.append((position, _parse_codex_history_timestamp(local_row.get("updated_at") or local_row.get("created_at")), local_row))
+    if item_id and id_matches:
+        # An item ID is the strongest identity. If it collides with a local
+        # row whose non-empty dedupe key disagrees, fail closed instead of
+        # silently enriching or synchronizing the wrong summary.
+        if len(id_matches) != 1:
+            return None
+        id_match = id_matches[0]
+        local_codex = id_match.get("codex") if isinstance(id_match.get("codex"), Mapping) else {}
+        local_dedupe_key = str(local_codex.get("dedupe_key") or "").strip()
+        if dedupe_key and local_dedupe_key and local_dedupe_key != dedupe_key:
+            return None
+        return id_match
     if not dedupe_matches:
         return None
     dated_matches = [match for match in dedupe_matches if match[1] is not None]

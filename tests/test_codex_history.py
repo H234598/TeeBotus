@@ -2233,6 +2233,28 @@ def test_codex_history_dispatch_bridge_dry_run_reports_local_reconciliation_with
     assert all(row["status"] == "queued" for row in store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID))
 
 
+def test_codex_history_matching_local_row_rejects_id_dedupe_collision() -> None:
+    local_rows = (
+        {"id": "same-id", "codex": {"dedupe_key": "sha256:local-a"}},
+        {"id": "local-b", "codex": {"dedupe_key": "sha256:local-b"}},
+    )
+    dispatcher_item = {"id": "same-id", "dedupe_key": "sha256:local-b"}
+
+    assert codex_history_module._history_dispatcher_matching_local_row(dispatcher_item, local_rows) is None
+
+
+def test_codex_history_matching_local_row_accepts_matching_id_with_dedupe() -> None:
+    local_rows = (
+        {"id": "same-id", "codex": {"dedupe_key": "sha256:local-a"}},
+        {"id": "local-b", "codex": {"dedupe_key": "sha256:local-b"}},
+    )
+    dispatcher_item = {"id": "same-id", "dedupe_key": "sha256:local-a"}
+
+    match = codex_history_module._history_dispatcher_matching_local_row(dispatcher_item, local_rows)
+
+    assert match is local_rows[0]
+
+
 def test_codex_history_dispatch_bridge_mirror_failure_keeps_local_item_queued(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

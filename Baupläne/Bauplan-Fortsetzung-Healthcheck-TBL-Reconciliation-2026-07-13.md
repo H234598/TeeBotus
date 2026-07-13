@@ -6,6 +6,8 @@
 
 **Quellstand bei Erstellung:** TeeBotus `1.9.491`
 
+**Aktueller Quellstand:** TeeBotus `1.9.492`
+
 **Arbeitsbereich:** `/home/teladi/TeeBotus`
 
 ## Auftrag
@@ -76,6 +78,8 @@ Historie erhalten, insbesondere:
   als `deferred` gemeldet; ein Limit wird nur angewendet, wenn es positiv ist.
 - [x] Nach einem leeren Claim kann der lokale TBL-Spiegel eindeutige zentrale
   terminale Resultate idempotent nachziehen.
+- [x] Der lokale Matcher akzeptiert keine widerspruechliche Kombination aus
+  gleicher Item-ID und anderem Dedupe-Key; Kollisionen bleiben fail-closed.
 - [x] Eine pauschale Requeue- oder Loeschaktion fuer alte lokale Zeilen ist
   weiterhin ausgeschlossen.
 
@@ -186,6 +190,8 @@ Eventpfad pro Batch.
 - [x] Fokussierte Testausfuehrung nach dem Version-Bump wiederholen.
 - [x] Aenderungen lokal committen; der neue Fix und der aktualisierte Bauplan
   sind lokal als Commit `75efd545` festgehalten.
+- [x] SemVer von `1.9.491` auf `1.9.492` bumpen und den ID-/Dedupe-Kollisionsfix
+  mit Regressionen lokal festhalten.
 
 ### 2. TBL-Reconciliation schreibfrei abschliessen
 
@@ -216,6 +222,8 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
 - `pytest -q tests/test_admin_accounts.py tests/test_version_notifications.py`:
   `278 passed`.
 - `pytest -q tests/test_cinnamon_applet.py`: `235 passed`.
+- `pytest -q tests/test_codex_history.py`: `162 passed`.
+- Fokussierte Bridge-/Matcher-Regressionen: `25 passed`.
 - Relevante Metadaten-/Kompatibilitaetstests: `97 passed, 51 deselected`.
 - Fokussierte Account-Identity-/Health-Tests: `38 passed`.
 - `python3 -m compileall -q TeeBotus tests` erfolgreich.
@@ -265,6 +273,10 @@ Der Bauplan ist erst abgeschlossen, wenn:
   Dispatcher- oder Empfaengerdaten wurden veraendert.
 - 2026-07-13: Fix lokal als `75efd545` committed; kein Push und kein Restart
   ausgeloest.
+- 2026-07-13: ID-/Dedupe-Kollision im Bridge-Matcher reproduziert und
+  fail-closed behoben. Eine gleiche Item-ID mit widerspruechlichem Dedupe-Key
+  liefert nun keinen Treffer; passende IDs bleiben gueltig. Version `1.9.492`,
+  Codex-History-Suite `162 passed`, fokussierte Regressionen `25 passed`.
 - 2026-07-13: Der aktualisierte Bauplan-Nachweis wurde danach separat lokal
   festgehalten; Push und Restart bleiben weiterhin aus.
 - 2026-07-13: Laufende Prozesse bewusst noch nicht neu gestartet; die
