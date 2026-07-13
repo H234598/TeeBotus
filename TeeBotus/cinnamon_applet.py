@@ -894,7 +894,10 @@ def _fallback_reference_is_set(fields: Mapping[str, Any]) -> bool:
 
 
 def _normalized_status_value(value: Any) -> str:
-    return str(value or "").strip().casefold()
+    normalized = str(value or "").strip()
+    if len(normalized) >= 2 and normalized[0] == normalized[-1] and normalized[0] in {'"', "'", "`"}:
+        normalized = normalized[1:-1].strip()
+    return normalized.casefold()
 
 
 def _status_is_ready_without_error(fields: Mapping[str, Any], key: str) -> bool:

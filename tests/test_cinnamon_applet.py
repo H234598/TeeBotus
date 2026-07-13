@@ -3349,6 +3349,20 @@ def test_cinnamon_applet_runtime_parser_normalizes_quoted_fallback_sentinels() -
     assert parsed["summary"]["informational_problem_statuses"] == "unavailable:1"
 
 
+def test_cinnamon_applet_runtime_parser_normalizes_quoted_status_values() -> None:
+    parsed = parse_runtime_status(
+        """
+        [LLM-Routen und Backends]
+        structured_decision=quoted_unknown status=enabled route_status="unknown" fallback=local_ollama
+        structured_decision=quoted_effective status=enabled route_status=unavailable fallback=local_ollama effective_status="configured"
+        """
+    )
+
+    assert parsed["status_counts"]["unknown"] == 1
+    assert parsed["summary"]["actionable_problem_statuses"] == "unknown:1"
+    assert parsed["summary"]["informational_problem_statuses"] == "unavailable:1"
+
+
 def test_cinnamon_applet_runtime_parser_marks_error_without_status_as_problem() -> None:
     parsed = parse_runtime_status(
         """
