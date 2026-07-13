@@ -4391,6 +4391,55 @@ def test_codex_session_watchdog_watches_parent_for_missing_explicit_file_root(
     assert watchdog._observer.schedules == [(str(sessions_root), True)]
 
 
+def test_codex_session_watchdog_coalesces_event_burst_without_losing_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sessions_root = tmp_path / "sessions"
+    sessions_root.mkdir()
+    first = sessions_root / "first.jsonl"
+    second = sessions_root / "second.jsonl"
+
+    class FakeEventHandler:
+        pass
+
+    class FakeObserver:
+        def __init__(self) -> None:
+            self.handlers: list[object] = []
+
+        def schedule(self, handler: object, _path: str, *, recursive: bool) -> None:
+            assert recursive is True
+            self.handlers.append(handler)
+
+        def start(self) -> None:
+            return None
+
+        def stop(self) -> None:
+            return None
+
+        def join(self, timeout: float) -> None:
+            del timeout
+
+    watchdog_package = types.ModuleType("watchdog")
+    watchdog_events = types.ModuleType("watchdog.events")
+    watchdog_observers = types.ModuleType("watchdog.observers")
+    watchdog_events.FileSystemEventHandler = FakeEventHandler
+    watchdog_observers.Observer = FakeObserver
+    monkeypatch.setitem(sys.modules, "watchdog", watchdog_package)
+    monkeypatch.setitem(sys.modules, "watchdog.events", watchdog_events)
+    monkeypatch.setitem(sys.modules, "watchdog.observers", watchdog_observers)
+
+    watchdog = codex_history_module._build_codex_session_watchdog((sessions_root,))
+    assert watchdog is not None
+    handler = watchdog._observer.handlers[0]
+    event = SimpleNamespace(is_directory=False, src_path=str(first.resolve()), dest_path="")
+    handler.on_any_event(event)
+    handler.on_any_event(event)
+    handler.on_any_event(SimpleNamespace(is_directory=False, src_path=str(second.resolve()), dest_path=""))
+
+    assert watchdog.wait(0.0) == (first.resolve(), second.resolve())
+    assert watchdog.wait(0.0) is False
+
+
 def test_watch_codex_session_roots_snapshot_imports_only_changed_session_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
