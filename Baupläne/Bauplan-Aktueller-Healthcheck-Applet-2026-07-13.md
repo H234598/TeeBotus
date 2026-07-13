@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.423`, Commit `049a0427`.
+- Quellstand: TeeBotus `1.9.424`, Commit `61b63e20`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -336,6 +336,24 @@ Nachweis:
 - Vollstaendige Applet-Suite: `203 passed in 41.79s`.
 - SemVer-Bump auf `1.9.423`, Commit `049a0427`
   (`Prioritize explicit fallback disablement`).
+
+### Befund 79: Gequotete Fallback-Sentinels wurden nicht normalisiert
+
+Die Sentinelpruefung erkannte `none`, `disabled` und `unknown` nur ohne
+Umschliessungszeichen. Statuszeilen mit `fallback="none"`,
+`fallback='disabled'` oder ``fallback=`unknown` `` konnten deshalb weiterhin
+als wirksame Fallbacks gelten. Die Fallbackreferenz entfernt jetzt passende
+einfach-, doppelt- oder backtick-gequotete Umfassungen, bevor sie gegen die
+Sentinelliste prueft.
+
+Nachweis:
+
+- Regressionstest mit allen drei Quoteformen und einem quotierten echten
+  `local_ollama`-Fallback: drei Befunde actionable, einer informativ.
+- Fokussierte Fallback-Suite: `3 passed, 201 deselected`.
+- Vollstaendige Applet-Suite: `204 passed in 40.03s`.
+- SemVer-Bump auf `1.9.424`, Commit `61b63e20`
+  (`Normalize quoted fallback sentinels`).
 
 ## Naechste Arbeitspakete
 
