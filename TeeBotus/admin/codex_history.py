@@ -1816,9 +1816,9 @@ def watch_codex_session_roots_for_instances(
         if effective_poll_interval > 0 and normalized_event_mode in {"auto", "watchdog"}
         else None
     )
-    if session_watchdog is not None:
-        session_watchdog.start()
     try:
+        if session_watchdog is not None:
+            session_watchdog.start()
         return _watch_codex_session_roots_for_instances_impl(
             stores,
             roots,
@@ -5155,7 +5155,20 @@ class _CodexSessionWatchdog:
     def start(self) -> None:
         if self._started:
             return
-        self._observer.start()
+        try:
+            self._observer.start()
+        except Exception:
+            # Observer.start() can fail after creating worker threads. Try to
+            # close the observer before propagating the original exception.
+            try:
+                self._observer.stop()
+            except Exception:
+                pass
+            try:
+                self._observer.join(timeout=5.0)
+            except Exception:
+                pass
+            raise
         self._started = True
 
     def wait(self, timeout_seconds: float) -> bool | tuple[Path, ...]:

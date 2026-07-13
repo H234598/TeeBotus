@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import threading
 import types
 from collections import Counter
 from datetime import datetime, timezone
@@ -4516,6 +4517,66 @@ def test_watch_codex_session_roots_stops_watchdog_on_scan_exception(
 
     assert watchdog.started is True
     assert watchdog.stopped is True
+
+
+def test_watch_codex_session_roots_stops_watchdog_if_start_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FakeWatchdog:
+        def __init__(self) -> None:
+            self.stopped = False
+
+        def start(self) -> None:
+            raise RuntimeError("synthetic watchdog start failure")
+
+        def stop(self) -> None:
+            self.stopped = True
+
+    watchdog = FakeWatchdog()
+    monkeypatch.setattr(codex_history_module, "_build_codex_session_watchdog", lambda _roots: watchdog)
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+
+    with pytest.raises(RuntimeError, match="synthetic watchdog start failure"):
+        watch_codex_session_roots(
+            store,
+            (tmp_path / "sessions",),
+            poll_interval_seconds=0.25,
+            max_iterations=1,
+            event_mode="auto",
+        )
+
+    assert watchdog.stopped is True
+
+
+def test_codex_session_watchdog_closes_observer_after_start_failure() -> None:
+    class FailingObserver:
+        def __init__(self) -> None:
+            self.stopped = False
+            self.joined = False
+
+        def start(self) -> None:
+            raise RuntimeError("synthetic observer failure")
+
+        def stop(self) -> None:
+            self.stopped = True
+
+        def join(self, timeout: float) -> None:
+            del timeout
+            self.joined = True
+
+    observer = FailingObserver()
+    watchdog = codex_history_module._CodexSessionWatchdog(
+        observer,
+        threading.Event(),
+        set(),
+        threading.Lock(),
+    )
+
+    with pytest.raises(RuntimeError, match="synthetic observer failure"):
+        watchdog.start()
+
+    assert observer.stopped is True
+    assert observer.joined is True
 
 
 def test_watch_codex_session_roots_removes_deleted_event_from_snapshot_baseline(
