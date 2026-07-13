@@ -2075,6 +2075,20 @@ TeeBotusApplet.prototype = {
 
   _actionableRuntimeDetailsText: function(payload) {
     let runtime = payload && payload.runtime && typeof payload.runtime === "object" ? payload.runtime : {};
+    let health = payload && payload.health && typeof payload.health === "object" ? payload.health : {};
+    let summary = runtime.summary && typeof runtime.summary === "object" ? runtime.summary : {};
+    if (this._nonNegativeInt(health.classification_version, 0) >= 2) {
+      let actionableCount = this._nonNegativeInt(health.actionable_problem_count, null);
+      if (actionableCount === null) {
+        actionableCount = Math.max(
+          this._problemBreakdownCount(health.actionable_problem_statuses),
+          this._problemBreakdownCount(summary.actionable_problem_statuses)
+        );
+      }
+      if (actionableCount <= 0) {
+        return "";
+      }
+    }
     let sections = runtime.sections && typeof runtime.sections === "object" ? runtime.sections : {};
     let details = [];
     let seen = {};

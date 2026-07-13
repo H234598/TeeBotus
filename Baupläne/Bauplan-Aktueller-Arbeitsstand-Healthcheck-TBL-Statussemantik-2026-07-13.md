@@ -141,6 +141,10 @@ Historie erhalten, insbesondere:
   mehr, die `warning` oder `broken` meldet, aber keinen positiven
   `total_problem_count` besitzt. Das verhindert, dass ein leerer Nicht-OK-
   Zustand als gueltige Statusantwort weitergereicht wird.
+- [x] Die obere Applet-Detailzeile zeigt bei Health-V2 nur noch
+  handlungsrelevante Runtime-Details. Explizit informative Zeilen bleiben im
+  separaten Hinweistext und werden nicht als scheinbare Warnungsaktion
+  wiederholt.
 
 ### Live-Abnahme nach dem Restart
 
@@ -361,6 +365,8 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
   JavaScript-Syntax und `git diff --check` erfolgreich.
 - Health-V2-Status-Payload-Regressionen: `8 passed`; komplette Applet-Suite
   danach `237 passed`.
+- Header-Klassifikationsregression: `5 passed`; komplette Applet-Suite danach
+  `238 passed`.
 - Aktuelle Watcher-/Health-Abnahme: `pytest -q tests/test_codex_history.py
   tests/test_cinnamon_applet.py tests/test_admin_accounts.py
   tests/test_version_notifications.py`: `683 passed`; fokussierter Follow- und
@@ -469,3 +475,8 @@ Der Bauplan ist erst abgeschlossen, wenn:
   widerspruechlicher Semantik akzeptiert. Der Applet-Validator lehnt solche
   Payloads nun fail-closed ab; Status-Payload-Regression `8 passed`, komplette
   Applet-Suite `237 passed`, installierte Kopie byte-identisch.
+- 2026-07-13: Dritten Anzeige-Logikfehler reproduziert: Bei `Health: ok`,
+  `actionable=0` und einem bekannten `no_private_route`-Skip zeigte der
+  Header trotzdem `Details codex_history: Warnung`. Die Detailfunktion stoppt
+  nun bei Health-V2 ohne actionable Befunde; Hinweise bleiben sichtbar.
+  Header-Regression `5 passed`, komplette Applet-Suite `238 passed`.

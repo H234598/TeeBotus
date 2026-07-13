@@ -2209,6 +2209,47 @@ def test_cinnamon_applet_top_health_includes_actionable_runtime_detail() -> None
     }
 
 
+def test_cinnamon_applet_top_health_does_not_render_informational_lines_as_actionable() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let payload = {
+            ok: true,
+            health: {
+              status: "ok",
+              classification_version: 2,
+              total_problem_count: 0,
+              actionable_problem_count: 0,
+              actionable_problem_statuses: "",
+              informational_problem_count: 1,
+              informational_problem_statuses: "warning:1"
+            },
+            unit: {active_state: "active", sub_state: "running", returncode: 0},
+            qdrant: {collections: {}},
+            runtime: {
+              summary: {},
+              status_counts: {warning: 1},
+              sections: {
+                "Projekt-History": [
+                  "codex_history=TBL status=warning queued=0 failed=0 skipped=1 total=1 problem_statuses=skipped:1 skip_reasons=no_private_route:1"
+                ]
+              }
+            }
+          };
+          return {
+            actionableDetails: applet._actionableRuntimeDetailsText(payload),
+            detail: applet._statusDetailLines(payload)[0]
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "actionableDetails": "",
+        "detail": "Health: ok | Hinweise Warnung:1"
+    }
+
+
 def test_cinnamon_applet_formats_unlinked_signal_identity_as_notice() -> None:
     result = _run_js_applet_expression(
         """
