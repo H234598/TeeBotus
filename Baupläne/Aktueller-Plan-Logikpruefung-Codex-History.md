@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.387`, Commit `0ecbc32f`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.388`, Commit `ed4b2d0f`.
 
 ## Arbeitsprinzipien
 
@@ -160,6 +160,12 @@ Importen kann diese Reihenfolge von der fachlichen Ereigniszeit abweichen.
 Resultate werden jetzt zuerst nach `updated_at`/`created_at` und nur bei
 fehlenden Zeitstempeln nach Positionsreihenfolge bewertet.
 
+**Sechzehnter Befund 2026-07-13:** Der Shadow-Append akzeptierte ein
+aeusseres `ok=true` mit `data.ok=true`, aber ohne persistierte Item-ID als
+erfolgreiches Spiegeln. Damit waere unklar geblieben, ob ein Eintrag neu
+angelegt oder dedupliziert wurde. Erfolgreiche Append-Antworten muessen jetzt
+eine ID enthalten; der Legacy-Pfad bleibt bei Verstoessen erhalten.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -245,6 +251,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Dedupe-Key-Reconciliation mit absichtlich verschiedener externer/lokaler ID verifiziert; lokale Queue wird ueber den Dedupe-Key synchronisiert.
 - Dedupe-Reconciliation und SemVer-Bump auf `1.9.386` committed als `fd7400d7` (`Reconcile mirrored history by dedupe key`); gezielte Suite danach `119 passed`.
 - Retry-Statusauswahl nach Zeitstempel und SemVer-Bump auf `1.9.387` committed als `0ecbc32f` (`Order dispatch results by update time`); gezielte Suite danach `120 passed`.
+- Shadow-Append-ID-Pruefung und SemVer-Bump auf `1.9.388` committed als `ed4b2d0f` (`Require shadow append item identity`); gezielte Suite danach `121 passed`.
 - Der laufende History-Dispatcher-Snapshot meldet noch `0.1.9`, die installierte Venv `0.2.5`; der Live-Cutover-/Restart-Nachweis bleibt offen.
 
 ### Noch offen
