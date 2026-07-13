@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.421`, Commit `cd8a5761`.
+- Quellstand: TeeBotus `1.9.422`, Commit `ea2df35f`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -298,6 +298,25 @@ Nachweis:
 - Vollstaendige Applet-Suite: `201 passed in 42.64s`.
 - SemVer-Bump auf `1.9.421`, Commit `cd8a5761`
   (`Do not hide unknown decision routes`).
+
+### Befund 77: Fallback-Sentinelwerte wurden als echte Fallbacks gewertet
+
+Die Unterdrueckung pruefte nur, ob eines der Fallbackfelder nicht leer war.
+Damit galten `fallback=none`, `disabled` oder `unknown` als konfigurierter
+Fallback und konnten einen `route_status=unavailable`-Fehler verschlucken.
+Die gemeinsame Fallbackpruefung verwirft jetzt diese Sentinelwerte sowie
+`missing`, `unconfigured`, `not_configured` und `not_applicable`. Nur eine
+konkrete Referenz wie `local_ollama` kann noch zur Fallbackklassifikation
+beitragen.
+
+Nachweis:
+
+- Regressionstest mit drei Sentinelwerten und einem echten lokalen Fallback:
+  drei `unavailable`-Befunde actionable, genau einer informativ.
+- Fokussierte Fallback-Suite: `3 passed, 199 deselected`.
+- Vollstaendige Applet-Suite: `202 passed in 40.21s`.
+- SemVer-Bump auf `1.9.422`, Commit `ea2df35f`
+  (`Reject disabled fallback references`).
 
 ## Naechste Arbeitspakete
 
