@@ -1,0 +1,173 @@
+# Bauplan: Aktuelle Logikpruefung der LLM-Key-Prioritaet
+
+**Stand:** 2026-07-13  
+**Status:** Aktiv, noch nicht abgeschlossen  
+**Quellstand:** TeeBotus `1.9.445`, Commit `fb7b5776`  
+**Geltungsbereich:** `TeeBotus/runtime/config.py`,
+`TeeBotus/runtime/llm_factory.py`, `TeeBotus/llm/profiles.py`, die
+Runtime-Runner und die zugehoerigen Regressionstests
+
+## Auftrag
+
+> Entwickle und finde Logikfehler. Bleibe moeglichst bei einer Datei bzw. einem
+> Thema, um Token zu sparen.
+
+Der aktuelle Schwerpunkt ist die durchgaengige, instanzbezogene Auswahl von
+OpenAI-/LiteLLM-Schluesseln. Healthcheck, Profil-Builder und echter
+Request-Pfad muessen fuer denselben Benutzer und dieselbe Botinstanz denselben
+Schluesselvertrag verwenden. Ein gruener Healthcheck darf keinen Request mit
+einem anderen oder leeren Schluessel vortaeuschen.
+
+## Leitplanken
+
+- Sicherheit vor Bequemlichkeit: Instanz- und Kanalgrenzen bleiben erhalten.
+- Keine echten OpenAI-, Gemini-, HF- oder sonstigen kostenpflichtigen
+  Provideraufrufe fuer Diagnose und Tests.
+- Secrets duerfen weder in Logs, Testausgaben, Planschriften noch
+  Healthpayloads erscheinen; Tests verwenden nur Platzhalterwerte.
+- Nicht-OpenAI-Routen duerfen nicht durch die OpenAI-Sonderlogik veraendert
+  werden.
+- Rueckwaertskompatibilitaet der oeffentlich exportierten Builder bleibt
+  erhalten.
+- Uncommittete Benutzerdateien bleiben unangetastet:
+  `.obsidian/`, `.stfolder/`, `Fusion_Packliste.txt`, `Unbenannt.base` und
+  `Unbenannt.canvas`.
+- Aenderungen werden lokal committed. Push erfolgt nur auf ausdrueckliche
+  Anforderung; ein Bot-/Service-Restart erfolgt nur an der vereinbarten
+  20-Commit-Grenze oder nach ausdruecklicher Freigabe.
+
+## Bereits erledigte Befunde
+
+### Befund 99: Healthcheck meldete LiteLLM-OpenAI-Instanzschluessel als fehlend
+
+`provider=litellm` mit einem `openai/*`-Modell wird als OpenAI-Route erkannt.
+Accountstatus, Routenstatus und API-Budgetstatus beruecksichtigen den
+Instanz-Fallback. Das Applet stellt `key_scope=instance_fallback` ohne Secret
+als instanzbezogenen Fallback dar.
+
+### Befund 100: Diagnose und Runtime-Factory verwendeten unterschiedliche Keys
+
+Die Runtime-Factory las nicht nur den globalen `OPENAI_API_KEY`, sondern loest
+bei OpenAI-kompatiblen LiteLLM-Routen auch `OPENAI_API_KEY_<INSTANCE>` auf.
+Damit entspricht der Client-Bau dem Healthcheck.
+
+### Befund 101: Exportierter Profil-Builder blieb hinter der Runtime-Factory
+
+`build_profiled_text_llm_client` akzeptiert optional `instance_name` und nutzt
+die gemeinsame `resolve_profile_api_key`-Logik. Direkte Aufrufe bleiben ohne
+Instanznamen rueckwaertskompatibel.
+
+Nachweis fuer Befund 101:
+
+- Router-/Package-Suite: `68 passed in 1.97s`
+- direkter Profil-Builder-Test mit Instanz-Key: erfolgreich
+- SemVer: `1.9.445`
+- Commit: `27338c58`
+- Plan-/Dokumentationsnachweis: `fb7b5776`
+
+## Aktueller offener Befund 102
+
+`resolve_openai_key()` kennt eine spezifischere Reihenfolge als der Profil-
+und Route-Builder. Fuer eine Instanz kann zum Beispiel ein Kanal-/Slot-Key
+vorhanden sein:
+
+```text
+OPENAI_API_KEY_DEMO_TELEGRAM_1 = slot-key
+OPENAI_API_KEY_DEMO            = instance-key
+```
+
+Die Runtime-Konfiguration liefert dann korrekt `slot-key`. Die Factory kann
+diesen bereits aufgeloesten `default_api_key` derzeit jedoch mit dem weniger
+spezifischen Profil-Fallback `OPENAI_API_KEY_DEMO` ueberschreiben. Das waere
+eine Verletzung der Kanal-/Slot-Isolation und kann zu falschem Monitoring,
+unerwarteter Keyrotation oder einem unpassenden Benutzerkontext fuehren.
+
+Der Befund muss zuerst mit Platzhalterwerten reproduziert werden. Erst danach
+wird die kleinste gemeinsame Korrektur vorgenommen.
+
+## Zielvertrag fuer die Key-Aufloesung
+
+Fuer den echten Runtime-Pfad gilt diese Prioritaet:
+
+1. expliziter `override_api_key` des Aufrufers,
+2. bereits durch `resolve_openai_key()` aufgeloester `default_api_key`,
+3. instanzbezogener Profil-Key `OPENAI_API_KEY_<INSTANCE>`,
+4. globaler Profil-Key, zum Beispiel `OPENAI_API_KEY`.
+
+Der direkte Profil-Builder ohne bereits aufgeloesten Runtime-Key verwendet
+weiterhin:
+
+1. `OPENAI_API_KEY_<INSTANCE>`,
+2. den konfigurierten/globalen Profil-Key.
+
+Damit wird ein spezifischerer Kanal-/Slot-Key nicht durch einen allgemeineren
+Profil-Key ersetzt, ohne dass die bestehende API des Builders verbreitert
+werden muss.
+
+## Arbeitsplan
+
+### 1. Vertragsabgleich
+
+- `resolve_openai_key()` und alle Runner-Aufrufer auf Kanal-/Slot-Kontext
+  pruefen.
+- `_build_route_client()` und `_build_profile_client()` auf die Reihenfolge
+  `override > resolved default > profile fallback` abgleichen.
+- Nur die beteiligten Factory-/Profil-Dateien aendern.
+
+### 2. Fehler reproduzieren
+
+- Eine isolierte Konfiguration mit `slot-key` und `instance-key` verwenden.
+- Nachweisen, dass die Konfiguration den Slot-Key liefert.
+- Den resultierenden Client-Key ohne Provideraufruf pruefen.
+- Keine Secretwerte ausgeben; nur stabile Testmarker verwenden.
+
+### 3. Minimalen Fix umsetzen
+
+- Bereits aufgeloesten `default_api_key` vor dem Profil-Fallback bewahren.
+- Explizite Overrides weiterhin an erster Stelle behandeln.
+- Nicht-OpenAI-Provider unveraendert lassen.
+- SemVer patch-bump nach erfolgreicher Korrektur.
+
+### 4. Regressionen absichern
+
+- Test fuer Slot-vor-Instanz-Prioritaet im Runtime-Builder.
+- Test fuer expliziten Override.
+- Test fuer direkten Profil-Builder mit Instanz-vor-global.
+- Test, dass Nicht-OpenAI-Routen keinen OpenAI-Key erben.
+- Relevante Router-/Package-/Factory-Suiten ohne echte Provideraufrufe.
+
+### 5. Laufzeit- und Plan-Nachweis
+
+- `py_compile` und `git diff --check` ausfuehren.
+- Read-only-`--runtime-status` nach dem Quellfix auswerten.
+- Keine automatische Reparatur einer Signal-Identitaet aus dem Healthcheck
+  ausloesen.
+- Aktive Warnungen und verbleibende externe Handlungen getrennt dokumentieren.
+- Diesen Plan und die verknuepften Healthcheck-Plaene mit Version, Commit,
+  Testergebnis und Live-Befund aktualisieren.
+
+## Invarianten
+
+- Ein Client darf nicht instanzuebergreifend auf einen fremden Key fallen.
+- Ein Kanal-/Slot-Key ist spezifischer als ein reiner Instanz-Key.
+- Ein expliziter Override darf durch keinen Profil-Fallback ersetzt werden.
+- Healthcheck und Request-Pfad muessen denselben effektiven Key-Scope
+  anzeigen, ohne den Key selbst preiszugeben.
+- Ein fehlender oder widerspruechlicher Key bleibt diagnostizierbar und wird
+  nicht als erfolgreich konfiguriert ausgegeben.
+- Tests bleiben providerfrei und veraendern keine produktiven Secrets,
+  Accounts, Memories oder Outboxen.
+
+## Abschlusskriterien
+
+Der Plan ist erst abgeschlossen, wenn:
+
+- der Slot-vor-Instanz-Fall reproduziert und behoben ist,
+- Override-, Runtime-, Profil- und Nicht-OpenAI-Regressionen gruen sind,
+- die relevanten Tests sowie Syntax- und Diff-Pruefungen erfolgreich sind,
+- eine lesende Runtime-Statusprobe ohne kostenpflichtigen Provideraufruf
+  erfolgt ist,
+- SemVer, Commit und Testergebnisse in diesem Plan stehen,
+- keine unbeabsichtigten Benutzerdateien staged oder veraendert wurden.
+
+Bis dahin bleibt dieser Bauplan unter `Baupläne/` aktiv.
