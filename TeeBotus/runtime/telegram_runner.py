@@ -271,7 +271,8 @@ def _run_telegram_polling_bridges(
 ) -> None:
     stop_event = threading.Event()
     threads: list[threading.Thread] = []
-    thread_failures: dict[str, BaseException] = {}
+    thread_failures: dict[tuple[str, str], BaseException] = {}
+    thread_keys: dict[threading.Thread, tuple[str, str]] = {}
     youtube_job_runner = telegram_runtime.YouTubeTranscriptionJobRunner()
     _notify_recent_users_for_current_version(config, instance_configs)
     try:
@@ -294,11 +295,13 @@ def _run_telegram_polling_bridges(
                 )
             )
         for account, transport in transports:
-            def run_transport(transport=transport, account=account):  # noqa: ANN001 - transport is the typed local runtime object.
+            worker_key = (account.instance_name, account.label)
+
+            def run_transport(transport=transport, account=account, worker_key=worker_key):  # noqa: ANN001 - transport is the typed local runtime object.
                 try:
                     transport.run(stop_event=stop_event)
                 except BaseException as exc:  # noqa: BLE001 - worker failures must reach the supervisor.
-                    thread_failures[account.label] = exc
+                    thread_failures[worker_key] = exc
                     LOGGER.exception(
                         "Telegram polling thread failed instance=%s slot=%s.",
                         account.instance_name,
@@ -311,13 +314,13 @@ def _run_telegram_polling_bridges(
                 daemon=True,
             )
             threads.append(thread)
+            thread_keys[thread] = worker_key
             thread.start()
         while any(thread.is_alive() for thread in threads):
             for thread in threads:
                 thread.join(timeout=0.5)
                 if not thread.is_alive() and not stop_event.is_set():
-                    label = thread.name.rsplit("-", 1)[-1]
-                    failure = thread_failures.get(label)
+                    failure = thread_failures.get(thread_keys[thread])
                     message = f"Telegram polling thread exited unexpectedly: {thread.name}"
                     stop_event.set()
                     for other_thread in threads:

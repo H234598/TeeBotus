@@ -522,3 +522,10 @@ Der Bauplan ist erst abgeschlossen, wenn:
   `tests/test_telegram_runner.py`: `12 passed`; gemeinsame Telegram-Abdeckung
   mit `tests/test_bot.py`: `198 passed`, `17 subtests passed`. Der Fix ist noch
   uncommitted.
+- 2026-07-13: Diagnosefehler im neuen Supervisor behoben: Die Failure-Tabelle
+  war nur nach `account.label` indiziert. Da `telegram:1` in mehreren Instanzen
+  normal ist, konnte eine Ausnahme der falschen Instanz als Ursache angehaengt
+  werden. Fehler und Thread werden nun eindeutig ueber
+  `(instance_name, account.label)` beziehungsweise das konkrete Thread-Objekt
+  verknuepft. Gemeinsame Telegram-Suite: `198 passed`, `17 subtests passed`;
+  Compileall und `git diff --check` sauber.
