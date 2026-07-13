@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.459`, Codecommit `26688145`
+**Quellstand:** TeeBotus `1.9.461`, Codecommit `78e2806a`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -610,6 +610,42 @@ als Store-/Routewarnung erscheinen.
 - Entrypoint-Suite: `142 passed`.
 - Status-/Version-/Secret-Hygiene-Suite: `221 passed`.
 - SemVer `1.9.459`, Codecommit `26688145`.
+
+## Befund 116: Codex-History-Fallbacks umgingen die Runtime-Secret-Policy
+
+Report-, Watch-, Index- und Dispatch-Fallbacks in
+`admin/codex_history.py` erzeugten eigene read-only Provider. Diese hatten
+weder die Runtime-Retries noch den zentralen Account-Keyring-Guard. Ein
+transienter Secret-Service-Lookup konnte deshalb in einem Standalone-
+Codex-History-Lauf anders ausfallen als im Botstatus.
+
+### Umsetzung und Nachweis
+
+- Alle Default-Provider in den Codex-History-Pfaden verwenden jetzt
+  `runtime_secret_provider()`.
+- Explizit uebergebene Provider bleiben unveraendert moeglich.
+- Codex-History-Suite und Runtime-Admin: `157 passed`.
+- SemVer `1.9.460`, Codecommit `65126428`.
+
+## Befund 117: Read-only Admin-Provider hatten keine Retry-/Timeout-Policy
+
+Der spezielle Recovery-Provider darf absichtlich keinen Manifest-Guard
+erzwingen: Er muss gerade unlesbare oder mit einem alten Schluessel
+verschluesselte Artefakte diagnostizieren koennen. Er hatte aber bisher auch
+keine Retries und kein subprocess-Timeout. Dadurch konnten transiente
+Secret-Service-Probleme Recovery- und Adminberichte verfaelschen oder haengen.
+
+### Umsetzung und Nachweis
+
+- Normale Accounts- und Status-Auth-Reports verwenden jetzt den zentralen
+  Runtime-Provider.
+- Der Recovery-Provider behielt seine tolerante read-only Semantik, nutzt aber
+  dieselben env-gesteuerten Retries, Delays und Timeouts.
+- Ein Lookup-Transientenfall ist providerfrei getestet; der zuvor gebrochene
+  Recovery-CLI-Fall bleibt gruen.
+- Admin-/Recovery-Suite: `63 passed`.
+- Entrypoint-/Status-Suite: `357 passed`.
+- SemVer `1.9.461`, Codecommit `78e2806a`.
 
 ## Arbeitsplan
 

@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.459`, Codecommit `26688145`
+**Quellstand:** TeeBotus `1.9.461`, Codecommit `78e2806a`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet, Runtime-Healthpayload und `tests/test_cinnamon_applet.py`
 
 ## Auftrag
@@ -808,6 +808,34 @@ transienter Secret-Service-Fehler als moeglicher falscher Healthbefund.
 - Der Manifest-Guard und die Fail-Closed-Eigenschaften bleiben unveraendert.
 - Admin-Account-Suite: `27 passed`; Entrypoint-Suite: `142 passed`.
 - SemVer `1.9.459`, Codecommit `26688145`.
+
+## Befund 116: Codex-History-Statuspfade nutzten eigene Secret-Defaults
+
+Mehrere Standalone-Historypfade verwendeten den einfachen read-only Provider
+statt der Runtime-Factory. Damit fehlten Retry-Policy und Manifest-Guard,
+obwohl der normale Appletstatus bereits zentral versorgt wurde.
+
+### Umsetzung und Nachweis
+
+- Report, Watch, Index und Dispatch verwenden bei fehlendem explizitem
+  Provider jetzt `runtime_secret_provider()`.
+- Codex-History-Suite: `130 passed`; zusammen mit Runtime-Admin `157 passed`.
+- SemVer `1.9.460`, Codecommit `65126428`.
+
+## Befund 117: Recovery-Provider konnte bei Secret-Service-Transienten scheitern
+
+Der Recoverypfad braucht bewusst einen toleranten Provider ohne Manifest-Guard,
+damit kaputte oder alte Verschluesselungen diagnostizierbar bleiben. Dieser
+Provider lief jedoch ohne Timeout und Wiederholungen.
+
+### Umsetzung und Nachweis
+
+- Normale Admin-Reports nutzen die zentrale Runtime-Policy.
+- Der Recovery-Provider nutzt nun dieselben Retry-/Delay-/Timeoutwerte, ohne
+  seine diagnostische read-only Semantik zu verlieren.
+- Admin-/Recovery-Suite: `63 passed`.
+- Entrypoint-/Status-Suite: `357 passed`.
+- SemVer `1.9.461`, Codecommit `78e2806a`.
 
 ## Invarianten
 
