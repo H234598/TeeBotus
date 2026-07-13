@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.418`, Commit `ee4ce348`.
+- Quellstand: TeeBotus `1.9.419`, Commit `b8ee21cf`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -236,6 +236,29 @@ Nachweis:
 - Vollstaendige Applet-Suite: `199 passed in 37.85s`.
 - SemVer-Bump auf `1.9.418`, Commit `ee4ce348`
   (`Harden Python health aggregation`).
+
+### Befund 74: API-Budgetfehler wurden auch ohne korrespondierende Route unterdrueckt
+
+Die Duplikatlogik behandelte jeden nicht-`ready`-Status einer
+`api_budget`-Zeile als Hinweis. Ein alleinstehendes
+`api_budget=orphan status=missing_key` wurde dadurch nicht actionable,
+obwohl keine `llm_route=orphan` existierte, die denselben Fehler bereits
+meldete. Der Parser sammelt jetzt zuerst die vorhandenen LLM-Routennamen und
+unterdrueckt API-Budgetprobleme nur noch, wenn eine passende Route oder ein
+funktionierender Fallback nachweisbar ist. Die Reihenfolge der Zeilen ist
+dabei unerheblich.
+
+Nachweis:
+
+- Regressionstest mit einer orphan API-Budgetzeile und einer passenden
+  Duplikatzeile: orphan `missing_key` actionable, passende Zeile informativ;
+  die korrespondierende Route bleibt ebenfalls actionable.
+- Fokussierter Test: `1 passed, 199 deselected` nach der abschliessenden
+  Parserbereinigung.
+- Vollstaendige Applet-Suite vor der rein mechanischen Parserbereinigung:
+  `200 passed in 35.26s`; danach fokussierter Test erneut gruen.
+- SemVer-Bump auf `1.9.419`, Commit `b8ee21cf`
+  (`Require matching route for API budget suppression`).
 
 ## Naechste Arbeitspakete
 
