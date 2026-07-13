@@ -18,6 +18,7 @@ from TeeBotus.runtime.admin_accounts import (
     resolve_admin_account_group,
     runtime_status_problem_lines,
 )
+from TeeBotus.runtime import admin_accounts as admin_accounts_module
 
 
 def store_for(root: Path, instance_name: str = "Depressionsbot") -> AccountStore:
@@ -26,6 +27,20 @@ def store_for(root: Path, instance_name: str = "Depressionsbot") -> AccountStore
 
 def status_summary_store_for(instances_dir: Path) -> AccountStore:
     return store_for(instances_dir / STATUS_SUMMARY_INSTANCE_NAME / "data", STATUS_SUMMARY_INSTANCE_NAME)
+
+
+def test_default_admin_store_uses_runtime_secret_retry_policy(monkeypatch, tmp_path) -> None:
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES", "2")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS", "0.25")
+    monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_TIMEOUT_SECONDS", "4")
+
+    store = admin_accounts_module._default_account_store(tmp_path, "Demo")
+    provider = store.secret_provider.delegate
+
+    assert provider.create_if_missing is False
+    assert provider.lookup_retries == 2
+    assert provider.lookup_retry_delay_seconds == 0.25
+    assert provider.timeout_seconds == 4.0
 
 
 def test_default_admin_group_contains_configured_account_ids() -> None:

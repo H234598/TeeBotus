@@ -12,7 +12,7 @@ from typing import Any, Callable
 
 from TeeBotus import __version__
 
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, SecretToolInstanceSecretProvider, TOKEN_HEX_RE
+from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, TOKEN_HEX_RE, runtime_secret_provider
 from TeeBotus.runtime.actions import SendAttachment
 from TeeBotus.runtime.proactive_agent import ProactiveSender, select_proactive_route
 from TeeBotus.runtime.status_auth import status_auth_recipient_account_ids, status_auth_state_admin_opted_out
@@ -956,7 +956,7 @@ def _default_account_store(root: Path, instance_name: str) -> AccountStore:
     return AccountStore(
         root,
         instance_name,
-        secret_provider=SecretToolInstanceSecretProvider(create_if_missing=False),
+        secret_provider=runtime_secret_provider(),
         create_dirs=False,
         memory_backend_enabled=False,
     )
