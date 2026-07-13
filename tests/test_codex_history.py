@@ -1775,7 +1775,10 @@ def test_codex_history_dispatch_bridge_reconciles_authoritative_local_status(
                 return {"ok": True, "data": {"ok": True, "status": "queued"}}
             raise AssertionError(operation)
 
-    async def fake_send(*_args, **kwargs):
+    sent_item: dict[str, object] = {}
+
+    async def fake_send(_store, item, *_args, **kwargs):
+        sent_item.update(item)
         return {"account_id": kwargs.get("account_id", "new-admin"), "status": "accepted", "channel": "telegram"}
 
     monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
@@ -1792,6 +1795,8 @@ def test_codex_history_dispatch_bridge_reconciles_authoritative_local_status(
     )
 
     assert result["ok"] is True
+    assert sent_item["version"]["semver"] == "1.9.384"
+    assert sent_item["summary"]["text"] == "Lokaler Status wird abgeglichen."
     persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
     assert persisted["status"] == "queued"
     assert persisted["delivery"]["attempts"] == 1

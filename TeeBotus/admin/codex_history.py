@@ -685,6 +685,34 @@ def _history_dispatcher_recipient_results(item: Mapping[str, Any]) -> list[dict[
     return normalized
 
 
+def _history_dispatcher_item_dedupe_key(item: Mapping[str, Any]) -> str:
+    top_level = str(item.get("dedupe_key") or "").strip()
+    if top_level:
+        return top_level
+    payload = item.get("payload")
+    codex = payload.get("codex") if isinstance(payload, Mapping) else None
+    return str(codex.get("dedupe_key") or "").strip() if isinstance(codex, Mapping) else ""
+
+
+def _history_dispatcher_enrich_item_from_local_rows(
+    item: Mapping[str, Any], local_rows: Sequence[Mapping[str, Any]],
+) -> Mapping[str, Any]:
+    item_id = str(item.get("id") or "").strip()
+    dedupe_key = _history_dispatcher_item_dedupe_key(item)
+    for local_row in local_rows:
+        if not isinstance(local_row, Mapping):
+            continue
+        local_id = str(local_row.get("id") or "").strip()
+        local_codex = local_row.get("codex") if isinstance(local_row.get("codex"), Mapping) else {}
+        same_id = bool(item_id and local_id and item_id == local_id)
+        same_dedupe = bool(dedupe_key and str(local_codex.get("dedupe_key") or "").strip() == dedupe_key)
+        if same_id or same_dedupe:
+            enriched = dict(item)
+            enriched["payload"] = dict(local_row)
+            return enriched
+    return item
+
+
 def _sync_codex_history_local_dispatch_status(
     store: AccountStore,
     item_id: str,
@@ -761,6 +789,11 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
         secret_provider=secret_provider,
     )
     try:
+        local_history_rows = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID) if isinstance(store, AccountStore) else []
+    except (AccountStoreError, OSError, ValueError) as exc:
+        LOGGER.warning("Local Codex-History payload enrichment unavailable: %s", str(exc)[:240])
+        local_history_rows = []
+    try:
         client = HistoryDispatcherClient(_history_dispatcher_socket_path(env), timeout_seconds=10)
         if dry_run:
             response = client.request("history.query", {
@@ -772,6 +805,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
             query_items = _history_dispatcher_response_items(query_data, operation="history.query")
             rows: list[dict[str, Any]] = []
             for item in query_items:
+                item = _history_dispatcher_enrich_item_from_local_rows(item, local_history_rows)
                 rows.extend(_dry_run_dispatch_rows(_history_dispatcher_item_to_legacy(item), candidate_account_ids, store, instance_name=instance_name, instances_dir=instances_dir, secret_provider=secret_provider))
             return {
                 "ok": True,
@@ -790,6 +824,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
         claim_items = _history_dispatcher_response_items(claim_data, operation="dispatch.claim")
         result_rows: list[dict[str, Any]] = []
         for raw_item in claim_items:
+            raw_item = _history_dispatcher_enrich_item_from_local_rows(raw_item, local_history_rows)
             item = _history_dispatcher_item_to_legacy(raw_item)
             item_id = str(item["id"])
             existing_results = _history_dispatcher_recipient_results(raw_item)
@@ -840,12 +875,7 @@ async def _dispatch_codex_history_outbox_via_dispatcher(
             local_status = external_status if external_status in {"queued", "delivered", "failed", "skipped", "discarded", "compacted"} else ""
             if not local_status:
                 local_status = _overall_dispatch_status([*existing_results, *item_results])
-            dispatcher_dedupe_key = str(raw_item.get("dedupe_key") or "").strip()
-            if not dispatcher_dedupe_key:
-                raw_payload = raw_item.get("payload")
-                raw_codex_value = raw_payload.get("codex") if isinstance(raw_payload, Mapping) else None
-                raw_codex = raw_codex_value if isinstance(raw_codex_value, Mapping) else {}
-                dispatcher_dedupe_key = str(raw_codex.get("dedupe_key") or "").strip()
+            dispatcher_dedupe_key = _history_dispatcher_item_dedupe_key(raw_item)
             _sync_codex_history_local_dispatch_status(
                 store,
                 item_id,
