@@ -617,8 +617,13 @@ TeeBotusApplet.prototype = {
     let unit = this._isJsonObject(payload.unit) ? payload.unit : {};
     let qdrant = this._isJsonObject(payload.qdrant) ? payload.qdrant : {};
     let repo = this._isJsonObject(payload.repo) ? payload.repo : {};
+    let dispatcherProblems = this._historyDispatcherProblemCount();
+    let healthStatus = String(health.status || (payload.ok ? "ok" : "unknown")).trim().toLowerCase();
+    if (dispatcherProblems > 0 && healthStatus === "ok") {
+      healthStatus = "warning";
+    }
     let lines = [];
-    lines.push("Health: " + this._statusWord(health.status || (payload.ok ? "ok" : "unknown")) + this._healthDetailText(health, summary, counts));
+    lines.push("Health: " + this._statusWord(healthStatus) + this._healthDetailText(health, summary, counts, healthStatus, dispatcherProblems));
     let unitName = String(unit.name || this._runtimeUnit() || "teebotus.service");
     let unitReturncode = unit.returncode === undefined || unit.returncode === null ? "?" : String(unit.returncode);
     lines.push("Unit: " + unitName + " " + String(unit.active_state || "unknown") + " / " + String(unit.sub_state || "unknown") + "; Returncode " + unitReturncode);
@@ -1875,9 +1880,10 @@ TeeBotusApplet.prototype = {
     return " | Qdrant " + parts.join(", ");
   },
 
-  _healthDetailText: function(health, summary, counts) {
-    let total = this._healthProblemTotal(health, summary, counts || {});
-    let text = total > 0 ? " | " + this._healthCountLabel((health || {}).status) + " " + String(total) : "";
+  _healthDetailText: function(health, summary, counts, effectiveStatus, additionalProblemCount) {
+    let total = this._healthProblemTotal(health, summary, counts || {}) + this._nonNegativeInt(additionalProblemCount, 0);
+    let status = effectiveStatus || (health || {}).status;
+    let text = total > 0 ? " | " + this._healthCountLabel(status) + " " + String(total) : "";
     text += this._healthProblemDetailsText(health, summary, counts);
     return text;
   },

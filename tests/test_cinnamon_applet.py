@@ -551,7 +551,7 @@ def test_cinnamon_applet_main_menu_exposes_teebotus_features() -> None:
     assert "_problemBreakdownText: function(value)" in source
     assert "_commandProblemBreakdownText: function(health)" in source
     assert "_qdrantProblemBreakdownText: function(health)" in source
-    assert "_healthDetailText: function(health, summary, counts)" in source
+    assert "_healthDetailText: function(health, summary, counts, effectiveStatus, additionalProblemCount)" in source
     assert "this._styleMenuItemLabel(this.summaryItem, { maxWidthEm: SUBMENU_LABEL_WIDTH_EM, wrap: true });" in source
     assert "this._styleMenuItemLabel(this.versionItem, { maxWidthEm: SUBMENU_LABEL_WIDTH_EM, wrap: true });" in source
     assert "qdrant_runtime_problem_count" in source
@@ -2286,6 +2286,37 @@ def test_cinnamon_applet_warning_health_uses_warning_label_in_detail() -> None:
     )
 
     assert result[0] == "Health: Warnung | Warnungen 2 | Probleme Warnung:2"
+
+
+def test_cinnamon_applet_status_detail_includes_dispatcher_warning() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          applet.showHistoryDispatcherSection = true;
+          applet.historyDispatcherPayload = {
+            schema_version: 1,
+            ok: true,
+            generated_at: new Date().toISOString(),
+            last_error: "dispatch failed",
+            queued: 0,
+            total: 1,
+            collector: {enabled: true, sources: 1},
+            dispatch: {enabled: true, paused: false},
+            queue_preview: []
+          };
+          applet.historyDispatcherError = "";
+          return applet._statusDetailLines({
+            ok: true,
+            health: {status: "ok", classification_version: 2, total_problem_count: 0},
+            unit: {active_state: "active", sub_state: "running", returncode: 0},
+            qdrant: {collections: {}},
+            runtime: {summary: {}, status_counts: {}}
+          })[0];
+        })()
+        """
+    )
+
+    assert result == "Health: Warnung | Warnungen 1 | Dispatcher Warnung"
 
 
 def test_cinnamon_applet_status_detail_distinguishes_source_and_runtime_version() -> None:
