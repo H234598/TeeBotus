@@ -3385,13 +3385,28 @@ def test_cinnamon_applet_runtime_parser_does_not_hide_explicit_errors_in_fallbac
         codex_history_repo=Demo repo=TeeBotus status=warning queued=0 failed=0 skipped=1 total=1 problem_statuses=skipped:1 skip_reasons=no_private_route:1 error=dispatcher_failed
         [LLM-Routen und Backends]
         structured_decision=Demo status=enabled route_status=unavailable fallback=local error=provider_failed
-        llm_route=generic status=unavailable effective_status=configured fallback=local error=provider_failed
+        llm_route=generic status=unavailable fallback=local error=provider_failed
         gemini_free_tier_limits status=fallback_defaults error=public_source_incomplete
         """
     )
 
     assert parsed["summary"]["actionable_problem_statuses"] == "unavailable:2,warning:2"
     assert parsed["summary"]["informational_problem_statuses"] == "fallback_defaults:1"
+
+
+def test_cinnamon_applet_runtime_parser_suppresses_errors_only_for_verified_fallbacks() -> None:
+    parsed = parse_runtime_status(
+        """
+        [LLM-Routen und Backends]
+        llm_route=structured_decision status=unavailable effective_status=configured fallback=local error=HFPoolUnavailable
+        llm_route=cheap_fast status=missing_key effective_status=configured fallback=local error=missing api_key_env GROQ_API_KEY
+        llm_route=unverified status=unavailable fallback=local error=provider_failed
+        llm_route=blocked status=unknown effective_status=configured fallback=local error=provider_failed
+        """
+    )
+
+    assert parsed["summary"]["actionable_problem_statuses"] == "unavailable:1,unknown:1"
+    assert parsed["summary"]["informational_problem_statuses"] == "missing_key:1,unavailable:1"
 
 
 def test_cinnamon_applet_runtime_parser_does_not_treat_fallback_sentinels_as_configured() -> None:

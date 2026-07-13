@@ -894,6 +894,10 @@ def _line_health_statuses(
         or any(status in FALLBACK_SUPPRESSION_BLOCKERS for status in problems)
     )
     fallback_covered = not fallback_suppression_blocked and effective in HEALTHY_EFFECTIVE_STATUSES and _fallback_reference_is_set(fields)
+    fallback_error_covered = fallback_covered and line_has_error and (
+        primary in PROBLEM_STATUSES or route_status in PROBLEM_STATUSES
+    )
+    fallback_informational = fallback_covered and (not line_has_error or fallback_error_covered)
     informational = (
         not fallback_suppression_blocked
         and (
@@ -910,8 +914,12 @@ def _line_health_statuses(
             )
             or (prefix == "account_identity" and _account_identity_status_is_informational(fields))
             or (prefix == "codex_history_repo" and _codex_history_repo_status_is_informational(fields))
-            or (prefix == "structured_decision" and not line_has_error and _fallback_reference_is_set(fields))
-            or (fallback_covered and not line_has_error)
+            or (
+                prefix == "structured_decision"
+                and _fallback_reference_is_set(fields)
+                and (not line_has_error or fallback_error_covered)
+            )
+            or fallback_informational
         )
     )
     return ((), problems) if informational else (problems, ())
