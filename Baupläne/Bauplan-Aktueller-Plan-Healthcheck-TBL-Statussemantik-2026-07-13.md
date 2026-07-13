@@ -6,7 +6,7 @@
 
 **Quellstand bei Erstellung:** TeeBotus `1.9.493`
 
-**Aktueller Quellstand:** TeeBotus `1.9.493`
+**Aktueller Quellstand:** TeeBotus `1.9.494`; History-Dispatcher `0.2.10`
 
 **Arbeitsbereich:** `/home/teladi/TeeBotus`
 
@@ -89,14 +89,14 @@ Historie erhalten, insbesondere:
 - [x] Eine pauschale Requeue- oder Loeschaktion fuer alte lokale Zeilen ist
   weiterhin ausgeschlossen.
 
-### Statussemantik als neuer offener Bridge-Befund
+### Statussemantik als behobener Bridge-Befund
 
-- [ ] `accepted` darf nicht automatisch zu `delivered` hochgestuft werden.
-- [ ] `delivered` darf nur aus einer echten Zustellbestaetigung oder dem
+- [x] `accepted` wird nicht automatisch zu `delivered` hochgestuft.
+- [x] `delivered` entsteht nur aus einer echten Zustellbestaetigung oder dem
   ausdruecklich vereinbarten Messenger-Vertrag entstehen.
-- [ ] `acknowledged` beziehungsweise eine Lesebestaetigung muss gegenueber
+- [x] `acknowledged` beziehungsweise eine Lesebestaetigung bleibt gegenueber
   `delivered` erhalten bleiben.
-- [ ] TeeBotus und der zentrale `History-Dispatcher` muessen dieselbe
+- [x] TeeBotus und der zentrale `History-Dispatcher` verwenden dieselbe
   Aggregations- und Promotionslogik verwenden.
 
 ### Healthcheck und Cinnamon-Applet
@@ -179,11 +179,11 @@ auflosbar. Es wurde trotzdem keine Nachricht gesendet: Das waere eine
 unreviewte Alt-Summary-Flut. Die Queue bleibt daher bis zu einer expliziten,
 idempotenten Reconciliation oder einem kontrollierten Dispatch bewusst offen.
 
-### Reproduzierter Statusfehler
+### Reproduzierter und behobener Statusfehler
 
 Die Vertragsdokumentation in `docs/Codex_Outbox_History_Plan.md` trennt
 `sent`, `accepted`, `delivered` und `acknowledged` ausdruecklich. Der aktuelle
-Quellstand verletzt diese Trennung an mehreren Stellen:
+Quellstand verletzte diese Trennung an mehreren Stellen:
 
 - `TeeBotus/admin/codex_history.py` wandelt im Reportpfad `accepted` in
   `delivered` um.
@@ -192,12 +192,16 @@ Quellstand verletzt diese Trennung an mehreren Stellen:
 - `/home/teladi/History-Dispatcher/history_dispatcher/store.py` normalisiert
   `accepted` und `acknowledged` beim Persistieren zu `delivered` und kollabiert
   diese Stati erneut in `complete()`.
-- Eine Telegram-API-Annahme ist damit faelschlich als Zustellung sichtbar; eine
+- Eine Telegram-API-Annahme war damit faelschlich als Zustellung sichtbar; eine
   Lesebestaetigung kann nicht mehr sauber von einer Zustellung unterschieden
   werden.
 
-Dieser Befund ist reproduziert, aber in dieser Planfassung noch nicht
-implementiert. Bis zur Korrektur werden keine realen Alt-Summarys versendet.
+Behoben wurde das mit einer monotonen Statusaggregation in beiden Repositories:
+`accepted` bleibt `accepted`, `accepted + skipped` bleibt `accepted`, und
+Receipts koennen nur auf `delivered` beziehungsweise `acknowledged` anheben.
+Auch ein spaeteres `accepted` kann einen bereits gespeicherten
+`delivered`-Empfaenger nicht mehr downgraden. TeeBotus steht bei `1.9.494`,
+der History-Dispatcher bei `0.2.10`.
 
 ### Noch offene Live-Abweichung
 
@@ -243,15 +247,15 @@ Eventpfad pro Batch.
 
 ### 2a. Statusvertrag korrigieren
 
-- [ ] TeeBotus-Reports muessen `accepted` unveraendert weitergeben.
-- [ ] Der zentrale Dispatcher muss `accepted` und `acknowledged` persistieren,
+- [x] TeeBotus-Reports geben `accepted` unveraendert weiter.
+- [x] Der zentrale Dispatcher persistiert `accepted` und `acknowledged`,
   ohne sie in `delivered` umzuschreiben.
-- [ ] Delivery- und Read-Receipts duerfen den Status nur in der jeweils
+- [x] Delivery- und Read-Receipts stufen den Status nur in der jeweils
   belegten Richtung hochstufen und niemals zuruecksetzen.
-- [ ] Regressionen fuer `accepted`, `accepted + skipped`, `delivered` und
-  `acknowledged` in beiden Repositories ergaenzen.
-- [ ] Beide Repository-Versionen nach der Korrektur mit SemVer bumpen und
-  lokale Commits sowie Testnachweise dokumentieren.
+- [x] Regressionen fuer `accepted`, `accepted + skipped`, `delivered` und
+  `acknowledged` in beiden Repositories ergaenzt.
+- [x] Beide Repository-Versionen mit SemVer gebumpt und lokal committed;
+  Testnachweise stehen unten.
 
 ### 3. Collector und Runtime-Live-Abnahme
 
@@ -271,6 +275,9 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
   `278 passed`.
 - `pytest -q tests/test_cinnamon_applet.py`: `235 passed`.
 - `pytest -q tests/test_codex_history.py`: `164 passed`.
+- `pytest -q tests/test_codex_history.py tests/test_admin_accounts.py tests/test_version_notifications.py`:
+  `443 passed` nach dem Statusvertrag-Fix.
+- `/home/teladi/History-Dispatcher`: `pytest -q`: `54 passed`.
 - Fokussierte Bridge-/Matcher-Regressionen: `4 passed` fuer den aktuellen Fix;
   zuvor `25 passed` fuer den ersten Matcher-Fix.
 - Relevante Metadaten-/Kompatibilitaetstests: `97 passed, 51 deselected`.
@@ -279,6 +286,8 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
 - `git diff --check` erfolgreich.
 - `node --check files/teebotus@H234598/applet.js` erfolgreich.
 - Installationsparitaet des Applets mit `diff -qr` erfolgreich.
+- Statussemantik-Regressionen decken Append, Completion, Receipt-Promotion und
+  Empfaenger-Downgrade in beiden Repositories ab.
 
 ## Abnahmekriterien
 
@@ -340,3 +349,6 @@ Der Bauplan ist erst abgeschlossen, wenn:
   erstellt. Der Statusvertrag `accepted` versus `delivered` versus
   `acknowledged` wurde als reproduzierter, noch offener Bridge-Logikfehler
   aufgenommen; TeeBotus steht bei `1.9.493`.
+- 2026-07-13: Statusvertrag behoben: TeeBotus `1.9.494`,
+  History-Dispatcher `0.2.10`; TeeBotus `443 passed`, History-Dispatcher
+  `54 passed`. Push und Restart bleiben aus.

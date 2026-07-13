@@ -77,7 +77,8 @@ CODEX_HISTORY_DISPATCHING_STALE_AFTER_SECONDS = 15 * 60
 CODEX_HISTORY_DISPATCH_INSTANCES_ENV = "TEEBOTUS_CODEX_HISTORY_DISPATCH_INSTANCES"
 DEFAULT_CODEX_HISTORY_DISPATCH_INSTANCES = ("TeeBotus_Logger", "TeeBotusLogger", "TBL")
 HISTORY_DISPATCHER_RECIPIENT_STATUSES = frozenset({"accepted", "delivered", "acknowledged", "failed", "skipped"})
-HISTORY_DISPATCHER_COMPLETION_STATUSES = frozenset({"queued", "delivered", "failed", "skipped", "discarded", "compacted"})
+HISTORY_DISPATCHER_COMPLETION_STATUSES = frozenset({"queued", "sent", "accepted", "delivered", "acknowledged", "failed", "skipped", "discarded", "compacted"})
+HISTORY_DISPATCHER_RECIPIENT_STATUS_RANKS = {"failed": 0, "skipped": 0, "accepted": 1, "delivered": 2, "acknowledged": 3}
 CODEX_HISTORY_RECEIPT_RANKS = {"delivered": 1, "viewed": 2, "read": 3}
 HISTORY_DISPATCHER_MODE_ENV = "TEEBOTUS_HISTORY_DISPATCHER_MODE"
 HISTORY_DISPATCHER_SOCKET_ENV = "HISTORY_DISPATCHER_SOCKET"
@@ -623,7 +624,7 @@ def _mirror_codex_history_item_to_dispatcher(
             raise HistoryDispatcherError("History-Dispatcher history.append returned no item id")
         if bool(append_data.get("deduplicated")):
             external_status = str(append_data.get("status") or "").strip().casefold()
-            if external_status in {"delivered", "failed", "skipped", "compacted"}:
+            if external_status in {"sent", "accepted", "delivered", "acknowledged", "failed", "skipped", "compacted"}:
                 _sync_codex_history_local_dispatch_status(
                     store,
                     str(item.get("id") or ""),
@@ -757,8 +758,13 @@ def _history_dispatcher_report_recipient_results(
         result = dict(raw_result)
         result["recipient_id"] = recipient_id
         result["account_id"] = str(result.get("account_id") or recipient_id).strip()
-        if str(result.get("status") or "").strip().casefold() == "accepted":
-            result["status"] = "delivered"
+        status = str(result.get("status") or "").strip().casefold()
+        result["status"] = status
+        previous = merged.get(key)
+        if previous is not None:
+            previous_status = str(previous.get("status") or "").strip().casefold()
+            if HISTORY_DISPATCHER_RECIPIENT_STATUS_RANKS.get(status, -1) < HISTORY_DISPATCHER_RECIPIENT_STATUS_RANKS.get(previous_status, -1):
+                continue
         if key not in merged:
             order.append(key)
         merged[key] = result
@@ -4703,7 +4709,7 @@ def _overall_dispatch_status(rows: Sequence[Mapping[str, Any]]) -> str:
     if "delivered" in statuses:
         return "delivered"
     if "accepted" in statuses:
-        return "delivered" if "skipped" in statuses else "accepted"
+        return "accepted"
     if "skipped" in statuses:
         return "skipped"
     return "failed"

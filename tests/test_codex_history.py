@@ -1348,7 +1348,7 @@ def test_codex_history_dispatch_bridge_claims_sends_and_completes_only_open_reci
         )
     )
     assert result["mode"] == "history-dispatcher"
-    assert result["status_counts"] == {"delivered": 2}
+    assert result["status_counts"] == {"accepted": 1, "delivered": 1}
     assert [operation for operation, _body in calls] == ["dispatch.claim", "dispatch.complete"]
     assert calls[0][1]["limit"] == 0
     complete_body = calls[-1][1]
@@ -1718,12 +1718,21 @@ def test_history_dispatcher_recipient_results_reject_duplicate_or_conflicting_id
         )
 
 
+def test_history_dispatcher_report_recipient_results_never_downgrades_delivery() -> None:
+    merged = codex_history_module._history_dispatcher_report_recipient_results(
+        [{"account_id": "admin", "status": "delivered", "message_ref": "42"}],
+        [{"account_id": "admin", "status": "accepted", "channel": "telegram"}],
+    )
+
+    assert merged == [{"account_id": "admin", "status": "delivered", "message_ref": "42", "recipient_id": "admin"}]
+
+
 def test_codex_history_overall_status_aligns_success_plus_skip_with_dispatcher() -> None:
     rows = [
         {"status": "accepted"},
         {"status": "skipped", "reason": "no_private_route"},
     ]
-    assert codex_history_module._overall_dispatch_status(rows) == "delivered"
+    assert codex_history_module._overall_dispatch_status(rows) == "accepted"
     assert codex_history_module._overall_dispatch_reason(rows) == ""
 
 
@@ -1754,7 +1763,7 @@ def test_codex_history_success_plus_skip_clears_stale_item_reason(tmp_path: Path
     )
 
     persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
-    assert persisted["status"] == "delivered"
+    assert persisted["status"] == "accepted"
     assert "last_reason" not in persisted
 
 
@@ -2420,7 +2429,7 @@ def test_codex_history_dispatch_bridge_reconciles_authoritative_local_status(
     )
 
     assert result["ok"] is True
-    assert result["status_counts"] == {"delivered": 1, "skipped": 1}
+    assert result["status_counts"] == {"accepted": 1, "skipped": 1}
     assert completion_body["recipient_results"] == [
         {
             "recipient_id": "old-admin",
