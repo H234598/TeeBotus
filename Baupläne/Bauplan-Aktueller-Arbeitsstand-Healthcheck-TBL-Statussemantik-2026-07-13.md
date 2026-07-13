@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13
 
-**Status:** Aktiv; Receipt-Fix getestet, lokale Commits stehen noch aus
+**Status:** Aktiv; Receipt-Fix getestet und lokal committed
 
 **Quellstand bei Erstellung:** TeeBotus `1.9.496`
 
@@ -267,8 +267,9 @@ Eventpfad pro Batch.
   werden als `acknowledged` gespiegelt.
 - [x] Regressionen fuer `accepted`, `accepted + skipped`, `delivered` und
   `acknowledged` in beiden Repositories ergaenzt.
-- [ ] Beide Repository-Versionen mit SemVer gebumpt und lokal committed;
-  Testnachweise stehen unten; der Commit ist der naechste Abschluss-Schritt.
+- [x] Beide Repository-Versionen mit SemVer gebumpt und lokal committed;
+  Testnachweise stehen unten. TeeBotus: `0ac17500`, History-Dispatcher:
+  `a905aa1`.
 
 ### 3. Collector und Runtime-Live-Abnahme
 
@@ -365,6 +366,5 @@ Der Bauplan ist erst abgeschlossen, wenn:
   aufgenommen; TeeBotus steht bei `1.9.493`.
 - 2026-07-13: Statusvertrag, Append-Validierung und Receipt-Mapping behoben:
   TeeBotus `1.9.496`, History-Dispatcher `0.2.12`; TeeBotus `443 passed`,
-  History-Dispatcher `56 passed`. Die Aenderungen sind getestet, lokale
-  Commits stehen noch aus; Push und Restart bleiben aus.
-
+  History-Dispatcher `56 passed`. Lokal committed als TeeBotus `0ac17500`
+  und History-Dispatcher `a905aa1`; Push und Restart bleiben aus.
