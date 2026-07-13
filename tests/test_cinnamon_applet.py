@@ -1827,6 +1827,37 @@ def test_cinnamon_applet_status_payload_rejects_ok_with_problem_counts() -> None
     assert status_text is False
 
 
+def test_cinnamon_applet_status_payload_rejects_empty_v2_non_ok_health() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let payload = {
+            ok: false,
+            command_ok: true,
+            repo: {},
+            unit: {},
+            health: {
+              status: "warning",
+              classification_version: 2,
+              command_ok: true,
+              total_problem_count: 0
+            },
+            qdrant: {collections: {}},
+            runtime: {sections: {}, summary: {}, status_counts: {}}
+          };
+          let empty = applet._isStatusPayload(payload);
+          payload.health.total_problem_count = 1;
+          let counted = applet._isStatusPayload(payload);
+          delete payload.health.total_problem_count;
+          let missing = applet._isStatusPayload(payload);
+          return {empty: empty, counted: counted, missing: missing};
+        })()
+        """
+    )
+
+    assert result == {"empty": False, "counted": True, "missing": False}
+
+
 def test_cinnamon_applet_status_payload_rejects_invalid_health_status() -> None:
     result = _run_js_applet_expression(
         "applet._isStatusPayload({ok: true, repo: {}, unit: {}, health: {status: 'false'}, qdrant: {collections: {}}, runtime: {sections: {}, summary: {}, status_counts: {}}})"

@@ -2320,6 +2320,12 @@ TeeBotusApplet.prototype = {
     if (payload.command_ok !== payload.health.command_ok) {
       return false;
     }
+    if (this._nonNegativeInt(payload.health.classification_version, 0) >= 2 && payload.health.status !== "ok") {
+      let declaredTotal = this._nonNegativeInt(payload.health.total_problem_count, null);
+      if (declaredTotal === null || declaredTotal <= 0) {
+        return false;
+      }
+    }
     if (payload.health.status === "ok" && !payload.command_ok) {
       return false;
     }

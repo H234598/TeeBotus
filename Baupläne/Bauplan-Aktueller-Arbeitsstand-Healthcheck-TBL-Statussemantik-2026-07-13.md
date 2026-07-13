@@ -137,6 +137,10 @@ Historie erhalten, insbesondere:
   `unavailable` und weitere Nicht-Konfigurationen bestaetigen keinen
   funktionierenden Fallback. Echte Warnungsdetails werden dadurch nicht mehr
   aus der oberen Applet-Anzeige entfernt.
+- [x] Der Applet-Validator akzeptiert keine inkonsistente Health-V2-Payload
+  mehr, die `warning` oder `broken` meldet, aber keinen positiven
+  `total_problem_count` besitzt. Das verhindert, dass ein leerer Nicht-OK-
+  Zustand als gueltige Statusantwort weitergereicht wird.
 
 ### Live-Abnahme nach dem Restart
 
@@ -355,6 +359,8 @@ Bereits erfolgreich, ohne Provider- oder Netzwerkanfragen:
 - Fallback-Sentinel-Regression des Applets: `16 passed`; komplette
   `tests/test_cinnamon_applet.py`: `236 passed`; installierte Applet-Kopie,
   JavaScript-Syntax und `git diff --check` erfolgreich.
+- Health-V2-Status-Payload-Regressionen: `8 passed`; komplette Applet-Suite
+  danach `237 passed`.
 - Aktuelle Watcher-/Health-Abnahme: `pytest -q tests/test_codex_history.py
   tests/test_cinnamon_applet.py tests/test_admin_accounts.py
   tests/test_version_notifications.py`: `683 passed`; fokussierter Follow- und
@@ -458,3 +464,8 @@ Der Bauplan ist erst abgeschlossen, wenn:
   nichtleeren Textes. Die Sentinel-Pruefung wurde angeglichen; Regression
   `16 passed`, komplette Applet-Suite `236 passed`. Der lokale Applet-Stand
   ist byte-identisch installiert; Restart und Push bleiben aus.
+- 2026-07-13: Zweiten Validatorfehler reproduziert: Health-V2 mit
+  `status=warning`/`broken` und `total_problem_count=0` wurde trotz
+  widerspruechlicher Semantik akzeptiert. Der Applet-Validator lehnt solche
+  Payloads nun fail-closed ab; Status-Payload-Regression `8 passed`, komplette
+  Applet-Suite `237 passed`, installierte Kopie byte-identisch.
