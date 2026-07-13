@@ -208,16 +208,20 @@ Eine schreibfreie Systemd-Pruefung am 2026-07-13 bestaetigte:
   `2026-07-13 06:41:32 CEST`.
 - Der Quellstand ist inzwischen `1.9.486`; die laufenden Prozesse wurden vor
   den letzten Watcher-/Sessionroot-Fixes gestartet und enthalten diese deshalb
-  noch nicht.
-- `data/runtime/teebotus-runtime-version.json` fehlt aktuell. Das Applet darf
-  daraus nur `marker_missing` ableiten, nicht stillschweigend eine falsche
-  Version behaupten.
+  noch nicht. Das Journal bestaetigt den alten Laufzeitstand mit einer
+  Versionsmeldung fuer `1.9.404`.
+- `INVOCATION_ID` ist in beiden laufenden Units vorhanden. Das schliesst die
+  bisher vermutete fehlende Systemd-Umgebungsvariable als Ursache aus.
+- `data/runtime/teebotus-runtime-version.json` fehlt aktuell. Das passt zum
+  alten Prozessstand, der den aktuellen Marker-Lifecycle noch nicht enthaelt;
+  das Applet darf daraus nur `marker_missing` ableiten, nicht stillschweigend
+  eine falsche Version behaupten.
 
-Damit ist die Live-Wirkung der letzten Fixes noch nicht abgenommen. Der fehlende
-Marker ist als eigener Lifecycle-Pruefpunkt offen: Zuerst muss geklaert werden,
-ob der laufende Altprozess den Marker nur nicht geschrieben hat oder ob der
-Marker-Lifecycle selbst einen Fehler enthaelt. Erst danach ist eine erlaubte
-Live-Nachmessung mit einem Restart belastbar.
+Der Marker-Befund ist damit als aktueller Produktionsfehler nicht reproduziert:
+Die aktuelle Quelle schreibt den Marker waehrend des normalen `main()`-
+Lebenszyklus und entfernt ihn erst beim Prozessende; die bestehenden Tests
+decken Schreiben, Unit-Matching und Cleanup ab. Die Live-Wirkung bleibt bis zum
+naechsten erlaubten Restart unbestaetigt.
 
 ### Collector-Performance
 
@@ -366,9 +370,9 @@ Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
 - [x] Abweichung zwischen aktuellem Quellstand `1.9.486` und dem vor dem Fix
   gestarteten Live-Prozess dokumentiert.
 - [x] Fehlenden Marker als `marker_missing` im Appletstatus bestaetigt.
-- [ ] Marker-Lifecycle in `TeeBotus/runtime/version_marker.py` und
-  `TeeBotus/bot.py` gegen Start, normalen Stop und fehlgeschlagenen Start
-  pruefen.
+- [x] Marker-Lifecycle in `TeeBotus/runtime/version_marker.py` und
+  `TeeBotus/bot.py` gegen den vorhandenen Start-/Stop-Teststand pruefen; kein
+  reproduzierbarer Quellfehler gefunden.
 - [ ] Nach dem naechsten erlaubten Restart Marker, PID/Invocation und
   Quellversion live abgleichen.
 
@@ -574,3 +578,8 @@ Der Plan ist erst abgeschlossen, wenn:
   `06:41:32 CEST` auf dem Prozessstand vor `1.9.486` laufen. Der Runtime-
   Versionsmarker fehlt; Lifecycle-Pruefung und Live-Nachmessung bleiben deshalb
   offen. Es wurde kein Restart und kein Push ausgeloest.
+- 2026-07-13: Marker-Ursache weiter eingegrenzt: `INVOCATION_ID` ist in beiden
+  Units gesetzt, das Journal meldet aber noch den alten Runtime-/Notification-
+  Stand `1.9.404`. `marker_missing` ist deshalb erwarteter Versionsdrift und
+  kein belegter Fehler des aktuellen Marker-Lifecycles. Live-Matching nach
+  Restart bleibt als Nachweis offen.
