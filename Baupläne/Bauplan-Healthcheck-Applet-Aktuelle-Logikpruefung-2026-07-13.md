@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.428`, `79e76b6b`.
+- Aktueller gepruefter Quellstand: `1.9.429`, `9bf13bf3`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -140,6 +140,28 @@ einen negativen Qdrant-Zaehler und faelschlich `status=warning`.
 - `git diff --check`: erfolgreich.
 - SemVer `1.9.428`, lokaler Commit `79e76b6b`
   (`Clamp qdrant health counters`).
+
+## Befund 84: Gequotete Codex-History-Statuslisten wurden ignoriert
+
+Die Metadatenpruefung fuer `codex_history` und `codex_history_repo` zerlegte
+`problem_statuses="failed:1,skipped:2"` ohne die aeusseren Quotes zu entfernen.
+Der erste Status wurde dadurch als `"failed` gelesen. Eine neutrale
+Primaerzeile konnte einen echten History-Fehler verschweigen; ein quotierter
+reiner `queued`/`skipped`-Zustand wurde ebenfalls nicht sicher als Hinweis
+klassifiziert.
+
+### Umsetzung und Nachweis
+
+- Gemeinsamer Parser fuer gequotete und ungequotete `status:count`-Listen.
+- Healthaggregation, Codex-History-Fehlererkennung und Skip-Unterdrueckung
+  verwenden dieselbe Normalisierung.
+- Quoted `failed` bleibt actionable; quoted `queued`/`skipped` bleibt
+  informativ.
+- Fokussierte Codex-/Quoted-Suite: `4 passed, 205 deselected in 1.27s`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `209 passed in 37.78s`.
+- `git diff --check`: erfolgreich.
+- SemVer `1.9.429`, lokaler Commit `9bf13bf3`
+  (`Normalize quoted history status lists`).
 
 ## Umsetzung
 
