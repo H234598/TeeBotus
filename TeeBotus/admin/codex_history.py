@@ -579,6 +579,8 @@ def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any]) -> None:
             project = str(project.get("repo_root") or project.get("repo_name") or "")
         client = HistoryDispatcherClient(_history_dispatcher_socket_path(None), timeout_seconds=3)
         delivery = item.get("delivery") if isinstance(item.get("delivery"), Mapping) else {}
+        codex = item.get("codex") if isinstance(item.get("codex"), Mapping) else {}
+        dedupe_key = str(codex.get("dedupe_key") or item.get("id") or "").strip()
         response = client.request("history.append", {
             "id": str(item.get("id") or ""),
             "source": str(item.get("source") or "teebotus"),
@@ -586,7 +588,7 @@ def _mirror_codex_history_item_to_dispatcher(item: Mapping[str, Any]) -> None:
             "target_group": str(item.get("target_group") or delivery.get("target_group") or CODEX_HISTORY_TARGET_GROUP),
             "project": str(project or ""),
             "created_at": str(item.get("created_at") or ""),
-            "dedupe_key": str(item.get("id") or ""),
+            "dedupe_key": dedupe_key,
             "payload": dict(item),
         })
         try:

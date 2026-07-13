@@ -1802,9 +1802,16 @@ def test_codex_history_shadow_append_mirrors_after_legacy_write(
     monkeypatch.setenv("TEEBOTUS_HISTORY_DISPATCHER_MODE", "shadow")
     monkeypatch.setenv("HISTORY_DISPATCHER_SOCKET", str(tmp_path / "control.sock"))
     monkeypatch.setattr(codex_history_module, "HistoryDispatcherClient", FakeClient)
-    item = append_codex_history_summary(store, repo_root=repo, title="Shadow", bullets=["Legacy bleibt lesbar."])
+    item = append_codex_history_summary(
+        store,
+        repo_root=repo,
+        title="Shadow",
+        bullets=["Legacy bleibt lesbar."],
+        codex_metadata={"dedupe_key": "sha256:session-turn-final"},
+    )
     assert item["id"] == mirrored[0]["id"]
     assert mirrored[0]["operation"] == "history.append"
+    assert mirrored[0]["dedupe_key"] == "sha256:session-turn-final"
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["id"] == item["id"]
 
 
