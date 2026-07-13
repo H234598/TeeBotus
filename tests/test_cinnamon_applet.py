@@ -3875,6 +3875,28 @@ def test_cinnamon_applet_health_summary_classifies_uncovered_problem_statuses_ac
     assert health["severe_status_count"] == 1
 
 
+def test_cinnamon_applet_health_summary_clamps_negative_qdrant_runtime_count() -> None:
+    health = cinnamon_applet._health_summary(
+        command_ok=True,
+        parsed_runtime={
+            "summary": {
+                "qdrant_actionable_problem_status_count": -5,
+                "actionable_problem_status_count": 0,
+            },
+            "status_counts": {},
+            "actionable_status_counts": {},
+            "informational_status_counts": {},
+        },
+        qdrant={"collections": {}, "error": ""},
+        qdrant_unit={"active_state": "active", "sub_state": "running", "returncode": 0},
+    )
+
+    assert health["status"] == "ok"
+    assert health["qdrant_runtime_problem_count"] == 0
+    assert health["runtime_problem_count"] == 0
+    assert health["total_problem_count"] == 0
+
+
 def test_cinnamon_applet_payload_rejects_empty_runtime_output(monkeypatch, tmp_path) -> None:
     monkeypatch.setattr(cinnamon_applet, "_runtime_status", lambda *_args, **_kwargs: {"returncode": 0, "stdout": "  \n", "stderr": ""})
     monkeypatch.setattr(cinnamon_applet, "_systemd_unit_status", lambda _unit: {"active_state": "active", "sub_state": "running", "returncode": 0})

@@ -474,8 +474,11 @@ def _health_summary(*, command_ok: bool, parsed_runtime: dict[str, Any], qdrant:
         sum(declared_informational_status_counts.values()),
     )
     qdrant_unit_problem_count = _unit_problem_count(qdrant_unit)
-    qdrant_runtime_problem_count = _safe_int(
-        runtime_summary.get("qdrant_actionable_problem_status_count", runtime_summary.get("qdrant_problem_status_count", 0))
+    qdrant_runtime_problem_count = max(
+        0,
+        _safe_int(
+            runtime_summary.get("qdrant_actionable_problem_status_count", runtime_summary.get("qdrant_problem_status_count", 0))
+        ),
     )
     qdrant_probe_problem_count = _qdrant_problem_count(qdrant)
     # A failed service query and failed collection probes are overlapping signals
