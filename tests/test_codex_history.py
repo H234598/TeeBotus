@@ -7,6 +7,7 @@ import subprocess
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -4160,6 +4161,53 @@ def test_watch_codex_session_roots_runs_post_scan_callback_per_scan(tmp_path: Pa
 
     assert result["iterations"] == 2
     assert status_counts == [{"imported": 1}, {"duplicate": 1, "imported": 1}]
+
+
+def test_watch_post_index_callback_skips_expensive_work_without_new_imports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reports: list[dict[str, Any]] = []
+    dispatch_reports: list[dict[str, Any]] = []
+    index_calls: list[str] = []
+    dispatch_calls: list[str] = []
+    args = SimpleNamespace(
+        post_index=True,
+        post_index_qdrant=False,
+        post_index_qdrant_ensure=False,
+        dispatch=True,
+        follow=False,
+        format="json",
+    )
+
+    def fake_index(*_args, **kwargs):
+        index_calls.append(str(kwargs["instance_name"]))
+        return {"ok": True, "export": {"exported": 0}}
+
+    def fake_dispatch(*_args, **kwargs):
+        dispatch_calls.append("dispatch")
+        return {"ok": True, "instances": []}
+
+    monkeypatch.setattr(codex_history_module, "run_codex_history_index", fake_index)
+    monkeypatch.setattr(codex_history_module, "_watch_dispatch_report", fake_dispatch)
+    callback = codex_history_module._watch_post_index_callback(
+        object(),
+        tmp_path,
+        "TeeBotus_Logger",
+        args,
+        provider(),
+        reports,
+        dispatch_reports,
+    )
+    assert callback is not None
+
+    callback({"status_counts": {"duplicate": 12, "skipped": 4}, "items": []})
+    callback({"status_counts": {"skipped": 12}, "items": []})
+    callback({"status_counts": {"imported": 1}, "items": []})
+
+    assert index_calls == ["TeeBotus_Logger", "TeeBotus_Logger"]
+    assert dispatch_calls == ["dispatch", "dispatch"]
+    assert len(reports) == 2
+    assert len(dispatch_reports) == 2
 
 
 def test_watch_codex_session_roots_for_instances_scans_all_instances_each_iteration(tmp_path: Path) -> None:

@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.463`, lokaler Folgecommit nach `c28edd4e`
+**Quellstand:** TeeBotus `1.9.464`, lokaler Folgecommit nach `8dc6bf1e`
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
 ## Auftrag
@@ -211,6 +211,9 @@ Qdrant-Indexierung oder einer Kombination entsteht.
 - [ ] Event-Burst und Pollingpfad getrennt messen.
 - [x] Verhindern, dass ein bereits abgelaufener Watchdog-Timeout im
   `auto`-Modus nochmals als zusaetzlicher Schlaf angerechnet wird.
+- [x] Post-Index und Dispatch nicht nach jedem unveraenderten oder nur
+  uebersprungenen Scan erneut ausfuehren. Der erste Scan wird weiterhin
+  verarbeitet; danach triggern echte neue Importe den teuren Nachlauf.
 - [ ] Event-Burst-Debounce und Scan-Deduplizierung separat messen; ein
   Dateisystemereignis darf weiterhin zeitnah erkannt werden, aber nicht zu
   unnoetigen Vollscans fuer jede einzelne JSONL-Aenderung fuehren.
@@ -296,3 +299,8 @@ Der Plan ist erst abgeschlossen, wenn:
   'watchdog_event_mode or auto_event_mode'` lief mit `3 passed`, die komplette
   Suite mit `132 passed` in `6.52s`. Die Event-Burst-Scanlast ist damit noch
   nicht vollstaendig behoben und bleibt als eigenes Arbeitspaket offen.
+- 2026-07-13: Zweiten Collector-Logikfehler behoben: Der Post-Index und der
+  Dispatcher liefen nach jedem Watchdog-Event auch bei reinen Duplikat-/Skip-
+  Scans. Jetzt laufen sie initial und erneut nur bei echten Importen; der
+  Idle-Dispatch bleibt erhalten. Fokussiert `5 passed`, komplett
+  `pytest -q tests/test_codex_history.py` mit `133 passed` in `8.41s`.

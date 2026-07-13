@@ -5989,23 +5989,53 @@ def _watch_post_index_callback(
     dispatch = bool(getattr(args, "dispatch", False))
     if not (bool(getattr(args, "post_index", False)) or qdrant or qdrant_ensure or dispatch):
         return None
+    post_index_enabled = bool(getattr(args, "post_index", False)) or qdrant or qdrant_ensure
+    post_index_pending = post_index_enabled
+    dispatch_pending = dispatch
 
-    def _callback(_scan_report: Mapping[str, Any]) -> None:
-        post_index = _watch_post_index_report(store, instances_dir, instance_name, args, provider)
-        if post_index:
-            reports.append(post_index)
-        dispatch_report = _watch_dispatch_report(
-            store,
-            instances_dir,
-            instance_name,
-            args,
-            sender_factory=sender_factory,
-        )
-        if dispatch_report:
-            dispatch_reports.append(dispatch_report)
-            _emit_follow_dispatch_report(dispatch_report, args)
+    def _callback(scan_report: Mapping[str, Any]) -> None:
+        nonlocal dispatch_pending, post_index_pending
+        has_imports = _watch_scan_has_imports(scan_report)
+        if post_index_pending or has_imports:
+            post_index = _watch_post_index_report(store, instances_dir, instance_name, args, provider)
+            if post_index:
+                reports.append(post_index)
+                if bool(post_index.get("ok", True)):
+                    post_index_pending = False
+        if dispatch_pending or has_imports:
+            dispatch_report = _watch_dispatch_report(
+                store,
+                instances_dir,
+                instance_name,
+                args,
+                sender_factory=sender_factory,
+            )
+            if dispatch_report:
+                dispatch_reports.append(dispatch_report)
+                if bool(dispatch_report.get("ok", True)):
+                    dispatch_pending = False
+                _emit_follow_dispatch_report(dispatch_report, args)
 
     return _callback
+
+
+def _watch_scan_has_imports(scan_report: Mapping[str, Any]) -> bool:
+    if not isinstance(scan_report, Mapping):
+        return False
+    status_counts = scan_report.get("status_counts")
+    if isinstance(status_counts, Mapping):
+        try:
+            if int(status_counts.get("imported") or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            pass
+    items = scan_report.get("items")
+    if not isinstance(items, list):
+        return False
+    return any(
+        isinstance(item, Mapping) and str(item.get("status") or "").strip().casefold() == "imported"
+        for item in items
+    )
 
 
 def _watch_dispatch_idle_callback(
