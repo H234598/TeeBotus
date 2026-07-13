@@ -17,7 +17,7 @@ Die Logik rund um Codex-History und Health-Status soll fachlich konsistent, idem
 - Malformierte History-Zeilen werden als `problem_statuses=malformed:N` sichtbar gemacht.
 - TBL zeigt aktuell `skipped=101` mit `skip_reasons=no_private_route:101`; die 101 Eintraege werden nicht still als gescheiterte Zustellungen behandelt.
 - Der letzte Produktionsbestand hatte 1.467 History-Eintraege: 1.366 `accepted` und 101 `skipped`.
-- Der aktuelle TeeBotus-Stand ist Version `1.9.382`, Commit `57849ffb`.
+- Der aktuelle TeeBotus-Stand ist Version `1.9.383`, Commit `a32dab73`.
 
 ## Arbeitsprinzipien
 
@@ -124,6 +124,13 @@ deshalb als erfolgreiches Spiegeln erscheinen. Die Shadow-Antwort wird jetzt
 mit derselben verschachtelten Schema-Pruefung wie der Bridge-Completionpfad
 ausgewertet; der Legacy-Eintrag bleibt bei einem Shadow-Fehler erhalten.
 
+**Elfter Befund 2026-07-13:** Der Legacy-Pfad behandelte
+`codex_history_digest` als nicht dispatchbar, obwohl die Kompaktierungslogik
+Digests ausdruecklich als Markdown-Dateien fuer TBL erzeugt. Der Bridge-Pfad
+hatte dagegen keine `kind`-Pruefung und haette auch fremde Queue-Typen claimen
+koennen. Die gemeinsame Dispatch-Menge enthaelt jetzt Digests; unbekannte
+Typen werden in beiden Pfaden nicht als Codex-Summaries verarbeitet.
+
 ### 3. Ein einheitliches Statusmodell erzwingen
 
 - Gemeinsame Statussemantik fuer:
@@ -202,6 +209,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Bridge-Haertung und SemVer-Bump auf `1.9.380` committed als `8376977e` (`Harden history dispatcher bridge validation`).
 - Socket-Fehlerbehandlung und SemVer-Bump auf `1.9.381` committed als `e500d915` (`Keep history dispatch socket errors contained`); gezielte Suite danach `116 passed`.
 - Shadow-Response-Pruefung und SemVer-Bump auf `1.9.382` committed als `57849ffb` (`Validate shadow dispatcher append responses`); gezielte Suite danach `117 passed`.
+- Kind-/Digest-Abgleich und SemVer-Bump auf `1.9.383` committed als `a32dab73` (`Align bridge dispatchable history kinds`); gezielte Suite danach `118 passed`.
 
 ### Noch offen
 
