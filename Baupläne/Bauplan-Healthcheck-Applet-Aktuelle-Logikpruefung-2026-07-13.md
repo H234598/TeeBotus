@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.439`, `bfd641a8`.
+- Aktueller gepruefter Quellstand: `1.9.440`, Commit `13eed576`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -486,6 +486,19 @@ Die aktuellen drei actionable Befunde sind weiterhin real und werden nicht
 wegklassifiziert: `hard_reasoning` ohne generischen Key, fehlende Signal-
 Identitaetsverknuepfung bei Depressionsbot und lokaler TBL-History-Rueckstand.
 Qdrant ist gesund; der zentrale Dispatcher meldet Queue `0`.
+
+## Befund 96: Erklaertes History-Aggregat nicht doppelt als actionable zaehlen
+
+Die Healthparser-Details behandelten `queued` und `no_private_route` bereits
+als informativ. Die aggregierte TBL-Zeile tat das nicht. Das wurde mit einer
+fail-closed Aggregatregel korrigiert: Erst ein explizites
+`problem_statuses=queued:...,skipped:...` zusammen mit ausschliesslich
+`skip_reasons=no_private_route:...` darf informational werden. Unvollstaendige
+oder unbekannte Metadaten bleiben actionable.
+
+Nachweis: `8 passed, 212 deselected` fokussiert und `220 passed in 36.27s`
+vollstaendig; SemVer `1.9.440`, Commit `13eed576`. Der laufende Dienst ist noch der alte Prozess,
+daher steht der Live-Nachweis nach dem naechsten erlaubten Reload noch aus.
 
 ## Invarianten
 

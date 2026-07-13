@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.439`, Commit `bfd641a8`
+**Quellstand:** TeeBotus `1.9.440`, Commit `13eed576`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -252,6 +252,32 @@ Header und Detailmenue denselben Runtime-Befund unterschiedlich darstellen.
   `no_private_route`-Skips.
 - Kein Secret, keine Account-Verknuepfung, keine Outbox-Zeile und kein
   Servicezustand wurde durch die Diagnose veraendert.
+
+## Befund 96: Codex-History-Aggregat bewertete erklaerte Skips zu streng
+
+Die einzelnen `codex_history_repo`-Zeilen stuften eine ausschliesslich aus
+`queued`/`skipped` bestehende History mit dem bekannten terminalen Grund
+`no_private_route` bereits als Hinweis ein. Die aggregierte
+`codex_history=...`-Zeile blieb dagegen handlungsbeduerftig und hob den
+Applet-Healthstatus dadurch erneut auf `warning`.
+
+### Umsetzung und Nachweis
+
+- Die Aggregatklassifikation folgt jetzt derselben Regel wie die Repozeilen,
+  aber nur bei explizitem `problem_statuses`-Feld.
+- `failed>0`, Fehler, unbekannte Gruende, fehlende Skipgruende und nicht
+  dokumentierte Queue-Aggregate bleiben actionable.
+- Fokussierte Codex-History-Suite: `8 passed, 212 deselected`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `220 passed in 36.27s`.
+- SemVer `1.9.440`, Commit `13eed576` (`Classify explained history aggregates as informational`).
+
+### Live-Ergebnis nach der Klassifikationskorrektur
+
+Die Korrektur ist im Quellstand getestet, aber der laufende Botprozess stammt
+noch aus der Zeit vor dem Fix und wurde wegen der 20-Commit-Restartregel nicht
+neu gestartet. Eine neue lesende Live-Probe nach dem naechsten erlaubten
+Reload muss bestaetigen, dass der TBL-Aggregatzustand nicht mehr als
+actionable zaehlt. Key- und Signalbefund bleiben davon unberuehrt.
 
 ## Arbeitsplan
 
