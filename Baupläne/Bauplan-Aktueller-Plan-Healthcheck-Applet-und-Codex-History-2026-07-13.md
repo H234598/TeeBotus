@@ -531,4 +531,5 @@ Der Plan ist erst abgeschlossen, wenn:
   identisch, aber der echte Eventfilter fiel von `1963.8 ms` auf `0.988 ms`.
   Watcher-Fokus: `43 passed in 3.52s`; History-/Metadaten-Suite:
   `163 passed in 7.46s`; Compileall und `git diff --check` sauber. Live-
-  Restart und Ressourcen-Nachmessung bleiben offen.
+  Restart und Ressourcen-Nachmessung bleiben offen. Der Funktionsstand ist
+  als `1fced73f` committed.
