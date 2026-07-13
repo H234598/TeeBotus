@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.424`, Commit `61b63e20`.
+- Quellstand: TeeBotus `1.9.425`, Commit `2332583e`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -354,6 +354,25 @@ Nachweis:
 - Vollstaendige Applet-Suite: `204 passed in 40.03s`.
 - SemVer-Bump auf `1.9.424`, Commit `61b63e20`
   (`Normalize quoted fallback sentinels`).
+
+### Befund 80: Gequotete Statuswerte wurden aus der Problemklassifikation verloren
+
+`_normalized_status_value()` entfernte bisher keine umschliessenden Quotes.
+Dadurch wurde `route_status="unknown"` nicht als `unknown` erkannt und konnte
+komplett aus `status_counts` und actionable Health verschwinden. Die zentrale
+Normalisierung entfernt jetzt einfache, doppelte und Backtick-Quotes fuer
+primaere, sekundare und effektive Statuswerte. Die Fallbacknormalisierung
+bleibt damit konsistent zur Statusklassifikation.
+
+Nachweis:
+
+- Regressionstest mit `route_status="unknown"` und
+  `effective_status="configured"`: `unknown:1` actionable,
+  `unavailable:1` informativ.
+- Fokussierte Status-/Fallback-Suite: `3 passed, 202 deselected`.
+- Vollstaendige Applet-Suite: `205 passed in 45.24s`.
+- SemVer-Bump auf `1.9.425`, Commit `2332583e`
+  (`Normalize quoted health statuses`).
 
 ## Naechste Arbeitspakete
 
