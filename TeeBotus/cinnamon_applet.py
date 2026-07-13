@@ -593,18 +593,29 @@ def _problem_statuses_from_counts(status_counts: Mapping[str, Any]) -> str:
     return ",".join(items)
 
 
-def _problem_status_counts_from_text(value: Any) -> dict[str, int]:
+def _status_counts_from_text(value: Any) -> dict[str, int]:
     counts: dict[str, int] = {}
-    for part in str(value or "").split(","):
+    text = str(value or "").strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in {'"', "'", "`"}:
+        text = text[1:-1].strip()
+    for part in text.split(","):
         token, separator, raw_count = part.partition(":")
         if not separator:
             continue
         status = _normalized_status_value(token)
-        count = _safe_int(raw_count, 0)
-        if status not in PROBLEM_STATUSES or count <= 0:
+        count = _safe_int(_normalized_status_value(raw_count), 0)
+        if not status or count <= 0:
             continue
         counts[status] = max(counts.get(status, 0), count)
     return counts
+
+
+def _problem_status_counts_from_text(value: Any) -> dict[str, int]:
+    return {
+        status: count
+        for status, count in _status_counts_from_text(value).items()
+        if status in PROBLEM_STATUSES
+    }
 
 
 def parse_runtime_status(output: str) -> dict[str, Any]:
@@ -871,16 +882,9 @@ def _codex_history_repo_status_is_informational(fields: Mapping[str, Any]) -> bo
     primary = _normalized_status_value(fields.get("status"))
     if _safe_int(fields.get("failed"), 0) > 0:
         return False
-    raw_statuses = str(fields.get("problem_statuses") or "").strip()
-    if raw_statuses:
-        statuses: list[str] = []
-        for part in raw_statuses.split(","):
-            token, separator, raw_count = part.partition(":")
-            if not separator or _safe_int(raw_count, 0) <= 0:
-                continue
-            normalized = token.strip().casefold()
-            if normalized:
-                statuses.append(normalized)
+    status_counts = _status_counts_from_text(fields.get("problem_statuses"))
+    if status_counts:
+        statuses = tuple(status_counts)
         return bool(statuses) and all(status in {"queued", "skipped"} for status in statuses)
     if primary == "skipped":
         return True
@@ -895,16 +899,8 @@ def _codex_history_metadata_requires_problem(line: str, fields: Mapping[str, Any
         return False
     if _safe_int(fields.get("failed"), 0) > 0:
         return True
-    raw_statuses = str(fields.get("problem_statuses") or "").strip()
-    if not raw_statuses:
-        return False
-    for part in raw_statuses.split(","):
-        token, separator, raw_count = part.partition(":")
-        if not separator or _safe_int(raw_count, 0) <= 0:
-            continue
-        if token.strip().casefold() not in {"queued", "skipped"}:
-            return True
-    return False
+    status_counts = _status_counts_from_text(fields.get("problem_statuses"))
+    return any(status not in {"queued", "skipped"} for status in status_counts)
 
 
 def _api_budget_status_is_informational(

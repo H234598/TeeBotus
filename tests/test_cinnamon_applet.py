@@ -3253,6 +3253,21 @@ def test_cinnamon_applet_runtime_parser_does_not_hide_codex_repo_failures_as_inf
     assert parsed["summary"]["informational_problem_statuses"] == "warning:1"
 
 
+def test_cinnamon_applet_runtime_parser_normalizes_quoted_codex_history_metadata() -> None:
+    parsed = parse_runtime_status(
+        """
+        [Projekt-History]
+        codex_history_repo=Demo repo=failed status=ok problem_statuses="failed:1,skipped:2"
+        codex_history_repo=Demo repo=queue status=warning queued=0 skipped=2 problem_statuses="queued:1,skipped:2"
+        """
+    )
+
+    assert parsed["status_counts"]["ok"] == 1
+    assert parsed["status_counts"]["warning"] == 2
+    assert parsed["summary"]["actionable_problem_statuses"] == "warning:1"
+    assert parsed["summary"]["informational_problem_statuses"] == "warning:1"
+
+
 def test_cinnamon_applet_runtime_parser_does_not_hide_unknown_api_or_identity_statuses() -> None:
     parsed = parse_runtime_status(
         """
