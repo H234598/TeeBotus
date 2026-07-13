@@ -653,6 +653,23 @@ allgemeine LLM-Statuszeile denselben Key korrekt fand.
   `compileall` gruen.
 - SemVer `1.9.450`, Commit `d29b8a4c`.
 
+## Befund 107: `route_error` wurde vom Applet-Healthparser ignoriert
+
+Die Parserlogik behandelte nur `error=...` als Fehlertext. Die
+per-Account-Structured-Decision meldet die Ursache aber als
+`route_error=...`. Damit konnte `route_status=unavailable` trotz fehlendem
+Nachweis eines funktionierenden Fallbacks in den informationalen Bereich
+fallen.
+
+### Umsetzung und Nachweis
+
+- `_line_has_error()` wertet jetzt beide Fehlerfelder aus.
+- Regression fuer `route_error` ohne `effective_status` ist gruen.
+- Applet-Suite: `224 passed in 36.13s`.
+- Live-Parser: `unavailable:5` actionable fuer die fuenf betroffenen Slots;
+  vorhandene `effective_status=configured`-Fallbacks bleiben informational.
+- SemVer `1.9.451`, Commit `7eb2efa3`.
+
 ## Invarianten
 
 - Ein echter Fehler wird nicht durch einen Fallback, einen leeren Queue-Zustand

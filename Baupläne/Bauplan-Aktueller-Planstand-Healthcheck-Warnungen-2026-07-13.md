@@ -432,6 +432,24 @@ Pruefung ohne Instanznamen auf und konnte deshalb
   `compileall` gruen.
 - SemVer `1.9.450`, Commit `d29b8a4c`.
 
+## Befund 107: `route_error` wurde nicht als Fehler klassifiziert
+
+Der Applet-Parser erkannte in `_line_has_error()` nur das Feld `error`. Die
+Runtime-Statuszeilen der per-Account-Structured-Decision verwenden jedoch
+`route_error`. Eine nicht verfuegbare Route ohne nachgewiesenen effektiven
+Fallback konnte dadurch als rein informativ erscheinen.
+
+### Umsetzung und Nachweis
+
+- `_line_has_error()` prueft jetzt `error` und `route_error` gemeinsam.
+- Providerfreier Parser-Repro klassifiziert die Route nun als actionable
+  `unavailable:1` statt informational.
+- Vollstaendige Applet-Suite: `224 passed in 36.13s`.
+- Read-only Live-Probe zeigt die fuenf tatsaechlichen Structured-Decision-
+  Slotprobleme jetzt explizit als `unavailable`; belegte Fallbacks bleiben
+  informational.
+- SemVer `1.9.451`, Commit `7eb2efa3`.
+
 ## Arbeitsplan
 
 1. **Healthpayload und Applet weiter synchron halten**
