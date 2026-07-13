@@ -1918,6 +1918,51 @@ def test_codex_history_dispatch_uses_cross_instance_admin_route(tmp_path: Path) 
     assert dispatch["message_ref"] == "telegram-cross-1"
 
 
+def test_successful_dispatch_selection_uses_result_timestamps(tmp_path: Path) -> None:
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    item_id = "history-timestamp-order"
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item_id,
+            "account_id": "account-a",
+            "status": "delivered",
+            "updated_at": "2026-07-13T12:00:00+00:00",
+        },
+    )
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item_id,
+            "account_id": "account-a",
+            "status": "failed",
+            "updated_at": "2026-07-12T12:00:00+00:00",
+        },
+    )
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item_id,
+            "account_id": "account-b",
+            "status": "delivered",
+            "updated_at": "2026-07-12T12:00:00+00:00",
+        },
+    )
+    store.append_codex_history_dispatch_result(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "codex_history_item_id": item_id,
+            "account_id": "account-b",
+            "status": "failed",
+            "updated_at": "2026-07-13T12:00:00+00:00",
+        },
+    )
+
+    successful = codex_history_module._successful_codex_history_dispatch_accounts(store, item_id)
+
+    assert successful == {"account-a"}
+
+
 def test_codex_history_dispatch_non_logger_instance_does_not_mutate_outbox(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "non-logger-dispatch-demo", version="1.9.2")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())

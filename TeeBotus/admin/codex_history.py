@@ -4009,13 +4009,24 @@ def _successful_codex_history_dispatch_accounts(store: AccountStore, item_id: st
     normalized_item_id = str(item_id or "").strip()
     if not normalized_item_id:
         return frozenset()
-    latest_by_account: dict[str, str] = {}
-    for row in store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID):
+    rows_by_account: dict[str, list[tuple[int, datetime | None, str]]] = {}
+    for position, row in enumerate(store.read_codex_history_dispatch_results(INSTANCE_STATE_ACCOUNT_ID)):
         if not isinstance(row, Mapping) or str(row.get("codex_history_item_id") or "").strip() != normalized_item_id:
             continue
         account_id = str(row.get("account_id") or "").strip().casefold()
         if account_id:
-            latest_by_account[account_id] = str(row.get("status") or "").strip().casefold()
+            marker = _parse_codex_history_timestamp(row.get("updated_at") or row.get("created_at"))
+            rows_by_account.setdefault(account_id, []).append(
+                (position, marker, str(row.get("status") or "").strip().casefold())
+            )
+    latest_by_account: dict[str, str] = {}
+    for account_id, rows in rows_by_account.items():
+        dated_rows = [row for row in rows if row[1] is not None]
+        if dated_rows:
+            _position, _marker, status = max(dated_rows, key=lambda row: (row[1], row[0]))
+        else:
+            _position, _marker, status = max(rows, key=lambda row: row[0])
+        latest_by_account[account_id] = status
     return frozenset(
         account_id
         for account_id, status in latest_by_account.items()
