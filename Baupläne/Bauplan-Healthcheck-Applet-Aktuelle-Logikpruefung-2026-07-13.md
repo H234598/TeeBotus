@@ -30,7 +30,7 @@ Einzelstatus verstecken.
 ## Ausgangslage
 
 - Ausgangspunkt vor dem aktuellen Fix: `1.9.425`, `2332583e`.
-- Aktueller gepruefter Quellstand: `1.9.430`, `97a67599`.
+- Aktueller gepruefter Quellstand: `1.9.431`, `fab67610`.
 - Der laufende Dienst kann wegen der geltenden 20-Commit-Restart-Regel auf
   einem aelteren Runtime-Stand bleiben; ein automatischer Bot-Restart ist kein
   Bestandteil dieses Bauplans.
@@ -185,6 +185,27 @@ Gesamt-`max()` und konnte dadurch verschiedene Statusarten unterzaehlen.
 - `git diff --check`: erfolgreich.
 - SemVer `1.9.430`, lokaler Commit `97a67599`
   (`Canonicalize health status breakdowns`).
+
+## Befund 86: Schwere Sekundaerstatus wurden durch Fallbacks verdeckt
+
+Die Fallback-Sperre pruefte bisher nur den primaeren `status` und
+`route_status`. Ein gemischter Datensatz wie
+`route_status=unavailable semantic=unknown effective_status=configured
+fallback=local_ollama` wurde deshalb komplett als informativer Fallback
+behandelt. Der globale Blocker `unknown` verschwand dadurch trotz der
+korrekten Sekundaerstatus-Erkennung.
+
+### Umsetzung und Nachweis
+
+- Die Fallback-Sperre prueft jetzt jeden erkannten Problemstatus der Zeile,
+  einschliesslich `semantic` und `models_feed`.
+- Sobald ein globaler Blocker vorhanden ist, wird die Diagnosezeile
+  konservativ actionable klassifiziert.
+- Fokussierte Fallback-/Unknown-Suite: `8 passed, 202 deselected in 1.34s`.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `210 passed in 36.17s`.
+- `git diff --check`: erfolgreich.
+- SemVer `1.9.431`, lokaler Commit `fab67610`
+  (`Expose blocked secondary health statuses`).
 
 ## Umsetzung
 
