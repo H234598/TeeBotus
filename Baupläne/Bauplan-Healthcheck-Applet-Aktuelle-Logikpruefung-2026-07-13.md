@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.456`, Codecommit `893899eb`
+**Quellstand:** TeeBotus `1.9.457`, Codecommit `f8e3881e`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet, Runtime-Healthpayload und `tests/test_cinnamon_applet.py`
 
 ## Auftrag
@@ -760,6 +760,23 @@ fuehrte zu einem moeglichen falschen oder flackernden Healthcheck im Applet.
   aktualisiert; Quell- und Installationskopie sind byte-identisch.
 - `node --check files/teebotus@H234598/applet.js`: erfolgreich.
 - SemVer `1.9.456`, Codecommit `893899eb`.
+
+## Befund 113: Unbekannte Breakdown-Status wurden im Applet mitgezaehlt
+
+`_problemBreakdownCount()` und `_problemBreakdownText()` im Applet prueften
+bisher nur die Zahl, nicht die Status-Allowlist. Dadurch konnte ein unbekannter
+Status wie `bogus:999` den Healthheader als grosser Fehler erscheinen lassen,
+waehrend Python denselben Status ignorierte.
+
+### Umsetzung und Nachweis
+
+- Beide JS-Helfer filtern jetzt gegen `PROBLEM_STATUSES`.
+- Python und JS verwenden damit dieselbe Statussemantik fuer Breakdown-Text
+  und Zaehler.
+- Fokussierte Regression: `2 passed`.
+- Vollstaendige Applet-Suite: `228 passed`.
+- `node --check files/teebotus@H234598/applet.js`: erfolgreich.
+- SemVer `1.9.457`, Codecommit `f8e3881e`.
 
 ## Invarianten
 

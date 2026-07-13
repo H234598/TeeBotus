@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.456`, Codecommit `893899eb`
+**Quellstand:** TeeBotus `1.9.457`, Codecommit `f8e3881e`
 **Geltungsbereich:** `TeeBotus/cinnamon_applet.py`, Cinnamon-Applet,
 Runtime-Healthpayload, LLM-Routen, Signal-Identitaet und Codex-History-Dispatch
 
@@ -552,6 +552,25 @@ Runtimepfad bereits eine Retry-Policy besass.
 - Applet erneut lokal installiert; `applet.js` aus Quelle und Installation
   sind byte-identisch; `node --check` erfolgreich.
 - SemVer `1.9.456`, Codecommit `893899eb`.
+
+## Befund 113: JS-Healthbreakdowns akzeptierten unbekannte Statusnamen
+
+Die Python-Aggregation filterte `problem_statuses` bereits auf die bekannte
+Status-Allowlist. Der JS-Appletparser zaehlte dagegen jeden Text vor einem
+Integer, auch wenn der Status unbekannt war. Ein fehlerhaftes oder erweitertes
+Payload konnte dadurch den Header kuenstlich aufblasen und einen falschen
+Healthbefund anzeigen.
+
+### Umsetzung und Nachweis
+
+- `_problemBreakdownText()` und `_problemBreakdownCount()` akzeptieren jetzt
+  ausschliesslich `PROBLEM_STATUSES`, synchron zur Python-Seite.
+- Unbekannte Statuswerte werden weder gerendert noch in Healthzaehler
+  eingerechnet; bekannte Statuswerte bleiben erhalten.
+- Regression fuer `bogus:999,warning:1`: `2 passed` fokussiert.
+- Vollstaendige `tests/test_cinnamon_applet.py`: `228 passed`.
+- `node --check` und `git diff --check`: erfolgreich.
+- SemVer `1.9.457`, Codecommit `f8e3881e`.
 
 ## Arbeitsplan
 
