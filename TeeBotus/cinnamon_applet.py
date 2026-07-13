@@ -273,6 +273,7 @@ FALLBACK_SUPPRESSION_BLOCKERS = frozenset(
         "unknown",
     }
 )
+CODEX_HISTORY_INFORMATIONAL_SKIP_REASONS = frozenset({"no_private_route"})
 SECONDARY_PROBLEM_STATUS_FIELDS = frozenset({"models_feed", "route_status", "semantic"})
 STATUS_FIELD_BOUNDARY_KEYS = frozenset({"status"}) | SECONDARY_PROBLEM_STATUS_FIELDS
 STATUS_FIELD_BOUNDARY_VALUES = PROBLEM_STATUSES | frozenset(
@@ -622,6 +623,29 @@ def _status_counts_from_text(value: Any) -> dict[str, int]:
     return counts
 
 
+def _codex_history_skip_reasons_are_informational(fields: Mapping[str, Any]) -> bool:
+    """Only a known terminal route absence may stay informational.
+
+    The history producer emits ``unknown`` when a skipped item has no reason.
+    Treating arbitrary or malformed reason text like ``no_private_route`` would
+    hide a broken dispatcher state from the applet health header.
+    """
+    text = str(fields.get("skip_reasons") or "").strip()
+    if len(text) >= 2 and text[0] == text[-1] and text[0] in {'"', "'", "`"}:
+        text = text[1:-1].strip()
+    if not text:
+        return True
+    for part in text.split(","):
+        reason_token, separator, raw_count = part.partition(":")
+        reason = _normalized_status_value(reason_token)
+        count = _safe_int(_normalized_status_value(raw_count), 0)
+        if not separator or not reason or count <= 0:
+            return False
+        if reason not in CODEX_HISTORY_INFORMATIONAL_SKIP_REASONS:
+            return False
+    return True
+
+
 def _problem_status_counts_from_text(value: Any) -> dict[str, int]:
     return {
         status: count
@@ -896,6 +920,8 @@ def _codex_history_repo_status_is_informational(fields: Mapping[str, Any]) -> bo
     """Keep expected queue/skip states visible without hiding repo failures."""
     primary = _normalized_status_value(fields.get("status"))
     if _safe_int(fields.get("failed"), 0) > 0:
+        return False
+    if not _codex_history_skip_reasons_are_informational(fields):
         return False
     status_counts = _status_counts_from_text(fields.get("problem_statuses"))
     if status_counts:
