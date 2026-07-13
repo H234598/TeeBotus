@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen
 
-**Quellstand:** TeeBotus `1.9.477`, lokaler Stand nach `6d306f50`
+**Quellstand:** TeeBotus `1.9.478`, lokaler Stand nach `f7ad74a2`
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -123,6 +123,8 @@ Vorherige Detailplaene bleiben als Historie und Nachweis erhalten:
 - Post-Index- und Dispatch-Pending-Flags werden nur bei einem strikt echten
   `ok=True` geloescht. Malformed Ergebnisse bleiben retryfaehig und werden als
   fehlerhafte Reports gespeichert.
+- Malformed Post-Index-/Dispatch-Reports werden vor Speicherung und
+  Follow-Textausgabe in ein strukturiertes Fehlerobjekt normalisiert.
 
 ## Aktueller Live-Befund
 
@@ -300,6 +302,8 @@ deren Kombination eingegrenzt.
   `"false"` oder `1`.
 - [x] Regression, dass malformed Post-Index-/Dispatch-Ergebnisse den naechsten
   Versuch nicht unterdruecken.
+- [x] Regression, dass ein nicht-mappingfaehiger Dispatch-Report den
+  Follow-Renderer nicht mehr zum Absturz bringt.
 - [x] Regression fuer begrenzte Follow-Detailausgabe.
 - [x] Regression fuer den inkrementellen Ereignispfad.
 - [ ] Collector-Debounce-/Ressourcenbenchmark mit grossem Sessionroot.
@@ -369,5 +373,10 @@ Der Plan ist erst abgeschlossen, wenn:
   und bewahrt malformed Reports fuer den naechsten Versuch. Die fokussierten
   Tests liefen mit `10 passed`; die Codex-History- und Metadaten-Suite mit
   `157 passed in 7.10s`.
+- 2026-07-13: Folgefehler bei malformed Follow-Reports behoben:
+  `f7ad74a2` (`1.9.478`) normalisiert nicht-mappingfaehige Post-Index- und
+  Dispatch-Ergebnisse vor Speicherung und Ausgabe. Die fokussierten Tests
+  liefen mit `11 passed`; die Codex-History- und Metadaten-Suite mit
+  `158 passed in 6.64s`.
 - 2026-07-13: Der Plan bleibt bis zur TBL-Reconciliation, der Event-Burst-/
   Ressourcenmessung und der naechsten erlaubten Live-Abnahme aktiv.
