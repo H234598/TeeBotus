@@ -142,6 +142,42 @@ def test_runtime_profile_client_uses_gemini_key_ring_for_stateless_gemini_profil
     assert client.api_key_ring.keys == ("a1", "b1", "c1", "a2", "b2", "c2")
 
 
+def test_runtime_openai_clients_use_instance_scoped_key_before_global_key(monkeypatch) -> None:
+    profile_client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        profile="openai_premium",
+        instance_name="Demo",
+        env={
+            "OPENAI_API_KEY": "global-key",
+            "OPENAI_API_KEY_DEMO": "instance-key",
+        },
+    )
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.llm_factory.select_llm_route",
+        lambda *_args, **_kwargs: LLMRoute(
+            purpose="hard_reasoning",
+            profile_name="openai_premium",
+            provider="litellm",
+            model="openai/gpt-test",
+            api_key_env="OPENAI_API_KEY",
+        ),
+    )
+    route_client = build_runtime_text_llm_client(
+        instructions=BotInstructions(),
+        openai_client=None,
+        purpose="hard_reasoning",
+        instance_name="Demo",
+        env={"OPENAI_API_KEY_DEMO": "instance-key"},
+    )
+
+    assert isinstance(profile_client, LiteLLMTextClient)
+    assert isinstance(route_client, LiteLLMTextClient)
+    assert profile_client.api_key == "instance-key"
+    assert route_client.api_key == "instance-key"
+
+
 def test_runtime_gemini_profile_does_not_reuse_openai_default_key() -> None:
     client = build_runtime_text_llm_client(
         instructions=BotInstructions(),
