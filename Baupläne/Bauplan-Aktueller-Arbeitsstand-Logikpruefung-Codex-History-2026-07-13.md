@@ -453,6 +453,9 @@ Der Plan ist erst abgeschlossen, wenn:
 - Befund 51: Der Dispatcher kennt die Statuswerte `discarded` und `delivering`, der TeeBotus-Statuspfad fuehrte beide aber nicht in seiner Token-Allowlist. `/status` und das Applet zeigten solche Eintraege dadurch als `unknown` und verloren die fachliche Ursache.
 - Umsetzung Befund 51: `CODEX_HISTORY_STATUS_TOKENS` kennt `discarded` und `delivering` jetzt explizit. Beide bleiben handlungsrelevant (`warning`), werden aber mit ihrem echten Namen und nicht als `unknown` ausgegeben. SemVer-Bump auf `1.9.397`, committed als `4f5100ec` (`Preserve dispatcher status tokens in runtime status`).
 - Regressionstest Befund 51: `tests/test_version_notifications.py` laeuft vollstaendig mit `215 passed`; der neue Test prueft beide Statuswerte in Instanz- und Repository-Zeile.
+- Befund 52: Der History-Dispatcher hatte `status_heartbeat_seconds` zwar in seiner Konfiguration, verwendete den Wert aber nirgends. Der Applet-Snapshot konnte dadurch trotz laufendem Dienst stundenlang veraltet bleiben und einen falschen Dispatcher-Zustand anzeigen.
+- Umsetzung Befund 52: `DispatcherService` schreibt den Snapshot jetzt in einem stoppbaren Daemon-Heartbeat, der nur im echten `serve()`-Lifecycle gestartet wird und bei Shutdown sauber beendet wird. Dispatcher-SemVer `0.2.9`, committed im separaten Repo als `a90cb48` (`Refresh dispatcher status snapshot heartbeat`).
+- Regressionstest Befund 52: Die vollstaendige History-Dispatcher-Suite laeuft mit `49 passed`; der neue Test bestaetigt eine Snapshot-Aktualisierung ohne API-Aufruf. Der laufende Dienst ist weiterhin `0.2.8`, weil kein ausserplanmaessiger Restart ausgefuehrt wird.
 
 ### Noch offen
 
@@ -460,7 +463,7 @@ Der Plan ist erst abgeschlossen, wenn:
 - Receipt-/Reply-Reconciliation nach dem Live-Restart durch Dispatcher-Version `0.2.8` und Bridge-Dry-Run belegt; eine echte neue Channel-Zustellung bleibt als optionaler End-to-End-Test offen.
 - Live- und Applet-Abgleich ist abgeschlossen; die verbleibenden Warnungen sind jetzt getrennt von Timeout-/Parserfehlern sichtbar und muessen fachlich beziehungsweise durch Benutzeraktion bearbeitet werden.
 - Dispatcher-Dry-Run fuer `TeeBotus_Logger` liefert im Bridge-Modus `statuses: none`, waehrend die lokale Outbox noch `19 queued` Legacy-Zeilen enthaelt. Dieser Bestand bleibt als Warnung sichtbar; keine automatische Zustellung, Loeschung oder Quarantaene wurde ohne explizite Migrationsentscheidung ausgefuehrt.
-- Der lokale TeeBotus-Code ist aktuell `1.9.397`; der laufende Dienst ist noch `1.9.394`, weil kein ausserplanmaessiger Restart ausgefuehrt wird. Der aktive History-Dispatcher ist `0.2.8`.
+- Der lokale TeeBotus-Code ist aktuell `1.9.397`; der laufende Dienst ist noch `1.9.394`, weil kein ausserplanmaessiger Restart ausgefuehrt wird. Der History-Dispatcher-Fix liegt lokal bei `0.2.9`, der aktive Dienst ist noch `0.2.8`.
 - Abschlussversion und finalen Commit erst bei Abschluss des gesamten Bauplans eintragen.
 
 ## Betriebsgrenzen
