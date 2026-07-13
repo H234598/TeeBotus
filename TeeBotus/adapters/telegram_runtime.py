@@ -253,7 +253,7 @@ class TelegramAPI:
 
         try:
             with urllib.request.urlopen(request, timeout=75) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+                payload = _decode_telegram_json(response.read(), method)
         except TimeoutError as exc:
             raise TelegramNetworkError(f"Telegram network timeout: {exc}") from exc
         except urllib.error.HTTPError as exc:
@@ -293,7 +293,7 @@ class TelegramAPI:
 
         try:
             with urllib.request.urlopen(request, timeout=75) as response:
-                payload = json.loads(response.read().decode("utf-8"))
+                payload = _decode_telegram_json(response.read(), method)
         except TimeoutError as exc:
             raise TelegramNetworkError(f"Telegram network timeout: {exc}") from exc
         except urllib.error.HTTPError as exc:
@@ -324,7 +324,11 @@ class TelegramAPI:
         if offset is not None:
             params["offset"] = offset
 
-        return list(self.request("getUpdates", params)["result"])
+        payload = self.request("getUpdates", params)
+        result = payload.get("result")
+        if not isinstance(result, list) or any(not isinstance(update, dict) for update in result):
+            raise TelegramAPIError(f"Telegram getUpdates result is invalid: {payload}")
+        return result
 
     def get_me(self) -> BotIdentity:
         payload = self.request("getMe", {})
@@ -3789,6 +3793,16 @@ def _telegram_error_metadata(value: Any, *, fallback_status_code: int | None = N
     if not isinstance(retry_after, int) or isinstance(retry_after, bool) or retry_after <= 0:
         retry_after = None
     return status_code, retry_after
+
+
+def _decode_telegram_json(raw: bytes, method: str) -> dict[str, Any]:
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise TelegramAPIError(f"Telegram {method} response was not valid JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise TelegramAPIError(f"Telegram {method} response must be a JSON object: {payload!r}")
+    return payload
 
 
 def _telegram_retry_delay(exc: TelegramAPIError, fallback: int) -> int:

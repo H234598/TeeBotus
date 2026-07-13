@@ -496,3 +496,11 @@ Der Bauplan ist erst abgeschlossen, wenn:
   Regressionen fuer beide 429-Pfade und den Poller bestehen; komplette
   `tests/test_bot.py`: `183 passed`, `17 subtests passed`. Der Fix ist noch
   uncommitted; Restart und Push bleiben gemaess Arbeitsregeln aus.
+- 2026-07-13: Zweiten Telegram-Adapterfehler reproduziert: Eine formal
+  erfolgreiche, aber kaputte Antwort konnte `JSONDecodeError`, `KeyError` oder
+  `TypeError` bis aus `get_updates` herausreichen und den Poller beenden. Die
+  JSON-Antworten werden nun als Objekt validiert; `getUpdates.result` muss eine
+  Liste aus Update-Objekten sein. Ungueltige Antworten werden als
+  retrybarer `TelegramAPIError` behandelt. Fokussiert `6 passed`, komplette
+  `tests/test_bot.py`: `185 passed`, `17 subtests passed`; Compileall und
+  `git diff --check` sind sauber. Der Fix ist noch uncommitted.

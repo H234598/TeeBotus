@@ -485,6 +485,40 @@ class BotTests(unittest.TestCase):
         self.assertEqual(raised.exception.status_code, 429)
         self.assertEqual(raised.exception.retry_after, 23)
 
+    def test_telegram_invalid_json_is_api_error(self) -> None:
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def read(self):
+                return b"{not-json"
+
+        api = TelegramAPI("123:test-token")
+        with patch("TeeBotus.bot.urllib.request.urlopen", return_value=Response()):
+            with self.assertRaises(TelegramAPIError) as raised:
+                api.request("getUpdates", {})
+
+        self.assertIn("not valid JSON", str(raised.exception))
+
+    def test_telegram_get_updates_requires_update_list(self) -> None:
+        class Response:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def read(self):
+                return b'{"ok":true,"result":{"update_id":1}}'
+
+        api = TelegramAPI("123:test-token")
+        with patch("TeeBotus.bot.urllib.request.urlopen", return_value=Response()):
+            with self.assertRaises(TelegramAPIError):
+                api.get_updates(None)
+
     def test_telegram_multipart_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")
 
