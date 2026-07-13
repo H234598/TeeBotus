@@ -1854,12 +1854,12 @@ TeeBotusApplet.prototype = {
 
   _problemCountsFromBreakdown: function(value) {
     let result = {};
-    for (let part of String(value || "").split(",")) {
+    for (let part of this._stripOuterStatusQuotes(value).split(",")) {
       let index = part.indexOf(":");
       if (index < 1) {
         continue;
       }
-      let status = part.slice(0, index).trim();
+      let status = this._stripOuterStatusQuotes(part.slice(0, index)).toLowerCase();
       if (PROBLEM_STATUSES.indexOf(status) < 0) {
         continue;
       }
@@ -1871,17 +1871,17 @@ TeeBotusApplet.prototype = {
 
   _problemBreakdownCountForStatus: function(value, status) {
     let counts = this._problemCountsFromBreakdown(value);
-    return this._nonNegativeInt(counts[status], 0);
+    return this._nonNegativeInt(counts[this._stripOuterStatusQuotes(status).toLowerCase()], 0);
   },
 
   _problemBreakdownText: function(value) {
     let pairs = [];
-    for (let part of String(value || "").split(",")) {
+    for (let part of this._stripOuterStatusQuotes(value).split(",")) {
       let index = part.indexOf(":");
       if (index < 1) {
         continue;
       }
-      let status = part.slice(0, index).trim();
+      let status = this._stripOuterStatusQuotes(part.slice(0, index)).toLowerCase();
       let count = this._nonNegativeInt(part.slice(index + 1), 0);
       if (!status || !(count > 0)) {
         continue;
@@ -1904,7 +1904,7 @@ TeeBotusApplet.prototype = {
 
   _problemBreakdownCount: function(value) {
     let total = 0;
-    for (let part of String(value || "").split(",")) {
+    for (let part of this._stripOuterStatusQuotes(value).split(",")) {
       let index = part.indexOf(":");
       if (index < 1) {
         continue;

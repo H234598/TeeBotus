@@ -2794,6 +2794,26 @@ def test_cinnamon_applet_health_v2_fails_closed_when_classification_fields_are_m
     assert "Warnung:1" in result["summary"]
 
 
+def test_cinnamon_applet_normalizes_quoted_health_breakdowns() -> None:
+    result = _run_js_applet_expression(
+        """
+        ({
+          text: applet._problemBreakdownText('"warning:1,broken:2"'),
+          count: applet._problemBreakdownCount('"warning:1,broken:2"'),
+          fallback: applet._healthV2FallbackActionableStatuses(
+            {problem_statuses: '"WARNING:1,BROKEN:2"'},
+            {},
+            {}
+          )
+        })
+        """
+    )
+
+    assert result["text"] == " | Probleme defekt:2, Warnung:1"
+    assert result["count"] == 3
+    assert result["fallback"] == "broken:2,warning:1"
+
+
 def test_cinnamon_applet_health_v2_does_not_hide_command_or_qdrant_counts_behind_stale_total() -> None:
     result = _run_js_applet_expression(
         """
