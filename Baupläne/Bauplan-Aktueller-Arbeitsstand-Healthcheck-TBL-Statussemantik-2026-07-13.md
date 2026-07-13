@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13
 
-**Status:** Aktiv; Follow-/Dispatch-Fix getestet, lokaler Commit folgt
+**Status:** Aktiv; Follow-/Dispatch-Fix getestet und lokal committed (`d037f1d7`)
 
 **Quellstand bei Erstellung:** TeeBotus `1.9.496`
 
@@ -420,5 +420,5 @@ Der Bauplan ist erst abgeschlossen, wenn:
   Dispatch nach jedem Scan erneut versucht, auch bei reinen Duplicate-/Skip-
   Ergebnissen. Dadurch kann eine offene TBL-Queue nicht mehr dauerhaft am
   uebersprungenen Idle-Zweig haengen. Version `1.9.498`, relevante Suites
-  `683 passed`; Push und Restart bleiben aus, bis das Restart-Fenster bzw. eine
-  ausdrueckliche Freigabe vorliegt.
+  `683 passed`; lokal committed als `d037f1d7`. Push und Restart bleiben aus,
+  bis das Restart-Fenster bzw. eine ausdrueckliche Freigabe vorliegt.
