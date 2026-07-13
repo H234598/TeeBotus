@@ -83,8 +83,12 @@ HISTORY_DISPATCHER_MODE_ENV = "TEEBOTUS_HISTORY_DISPATCHER_MODE"
 HISTORY_DISPATCHER_SOCKET_ENV = "HISTORY_DISPATCHER_SOCKET"
 _CODEX_HISTORY_EVENT_LOCK = threading.RLock()
 _CODEX_HISTORY_EVENT_LOCK_FILENAME = ".Codex_History_Events.lock"
-CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT = 250
+# Follow mode is long-lived. Keep only a small diagnostic tail in RAM; the
+# complete history remains in the AccountStore and is never truncated here.
+CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT = 24
 CODEX_HISTORY_WATCH_DETAIL_ITEMS_LIMIT = 12
+CODEX_HISTORY_WATCHDOG_DEBOUNCE_SECONDS = 0.25
+CODEX_HISTORY_WATCHDOG_MAX_DEBOUNCE_SECONDS = 2.0
 CODEX_HISTORY_GRAPH_SVG_ENGINES = frozenset({"builtin", "auto", "mmdc"})
 CODEX_HISTORY_LLM_CATEGORY_PURPOSE = "codex_history_categorization"
 CODEX_HISTORY_STRATEGY_PURPOSE = "codex_history_strategic_analysis"
@@ -5281,10 +5285,30 @@ class _CodexSessionWatchdog:
         self._started = True
 
     def wait(self, timeout_seconds: float) -> bool | tuple[Path, ...]:
-        if not self._changed.wait(max(0.0, float(timeout_seconds))):
+        timeout = max(0.0, float(timeout_seconds))
+        if not self._changed.wait(timeout):
             return False
+        paths = self._take_changed_paths()
+        if timeout <= 0.0:
+            return tuple(sorted(paths, key=str))
+
+        # A single JSONL write produces several watchdog events. Collect a
+        # bounded burst before parsing the session files, while guaranteeing
+        # progress when a session remains continuously active.
+        deadline = time.monotonic() + CODEX_HISTORY_WATCHDOG_MAX_DEBOUNCE_SECONDS
+        while True:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0.0 or not self._changed.wait(
+                min(CODEX_HISTORY_WATCHDOG_DEBOUNCE_SECONDS, remaining)
+            ):
+                break
+            paths.update(self._take_changed_paths())
+        paths.update(self._take_changed_paths())
+        return tuple(sorted(paths, key=str))
+
+    def _take_changed_paths(self) -> set[Path]:
         with self._changed_lock:
-            paths = tuple(sorted(self._changed_paths, key=str))
+            paths = set(self._changed_paths)
             self._changed_paths.clear()
             self._changed.clear()
         return paths

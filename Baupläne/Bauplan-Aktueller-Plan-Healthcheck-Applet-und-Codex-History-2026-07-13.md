@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen; aktueller Snapshot
 
-**Quellstand:** TeeBotus `1.9.483`, lokaler Stand nach dem Bridge-Route-Preflight-Fix und dem Applet-Queue-Anzeigepatch
+**Quellstand:** TeeBotus `1.9.484`, lokaler Stand nach dem Bridge-Route-Preflight-Fix, dem Applet-Queue-Anzeigepatch und dem Watcher-Ressourcenfix
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -219,9 +219,9 @@ codex_history_watcher_poll_loop
 262.27 ms, 38.13 Operationen/s, network_calls=0
 ```
 
-Die Ursache des hohen Live-Verbrauchs ist noch nicht abschliessend auf
-Event-Burst-Debouncing, Accountstore-Lesen, Export, Qdrant-Indexierung oder
-deren Kombination eingegrenzt.
+Die Ursache des hohen Live-Verbrauchs wurde fuer den beobachteten Eventpfad
+auf Event-Bursts plus grosse wiederholte Importmengen eingegrenzt. Accountstore-
+Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
 
 ## Offene Arbeitspakete
 
@@ -242,6 +242,26 @@ deren Kombination eingegrenzt.
   `7b6da19a` committen.
 - [ ] Keinen Bot-/Service-Restart ausserhalb des vereinbarten Restart-Fensters
   ausloesen.
+
+### Snapshot-Update: Follow-Collector-Ressourcen
+
+- [x] Den Live-Befund reproduzieren: Der Follow-Collector lag bei rund
+  `2.5 GiB RSS` und `95.8 % CPU`; in zehn Minuten wurden `31` Scans mit je
+  `duplicate=909, skipped=91` protokolliert.
+- [x] Ursache im Watchdog-Pfad eingrenzen: einzelne JSONL-Schreibvorgaenge
+  erzeugten mehrere Events, die ohne Burst-Koaleszenz jeweils erneut grosse
+  Sessionmengen und drei AccountStores anstiessen.
+- [x] Watchdog-Events bis zu `0.25 s` sammeln, mit einer harten Obergrenze von
+  `2.0 s`, damit aktive Sessions weiter erkannt werden, der Import aber nicht
+  in einem Event-Sturm busy-looped.
+- [x] Follow-Report-Retention von `250` auf `24` Eintraege reduzieren. Das ist
+  nur eine RAM-Diagnosegrenze; persistierte Summarys, Zwischenantworten und
+  Dispatchdaten werden nicht geloescht oder gekuerzt.
+- [x] Regression fuer ein spaet eintreffendes Event waehrend der Debounce-
+  Phase ergaenzen; beide Pfade bleiben erhalten.
+- [ ] Nach dem naechsten erlaubten Restart RSS, CPU, Scanrate und WAL-
+  Schreibvolumen erneut live messen. Der laufende Prozess hat den Fix noch
+  nicht geladen.
 
 ### A. TBL-Reconciliation schreibfrei beweisen
 
@@ -287,12 +307,14 @@ deren Kombination eingegrenzt.
   Pfad abfangen und einen teilweise gestarteten Observer aufraeumen.
 - [x] Stop-/Join-Exceptions best effort behandeln, loggen und den Started-
   Zustand auch bei Cleanup-Fehlern zuruecksetzen.
-- [x] Event-Burst-Debounce und Scan-Deduplizierung separat messen.
+- [x] Event-Burst-Debounce und Scan-Deduplizierung separat im Watchdog-Test
+  pruefen; eine spaet eintreffende zweite Datei wird im gleichen Batch erhalten.
 - [x] Read-only Realroot-Vergleich ausfuehren und im Plan dokumentieren.
 - [x] Scan-Auswahl-Wiederverwendung mit kleiner Teststruktur pruefen.
 - [x] Event-Burst-Debounce mit kleiner reproduzierbarer Teststruktur pruefen.
-- [ ] Speicherprofil fuer Session-Import, Accountstore, Post-Index und
-  Dispatch aufnehmen.
+- [x] Aktuelles Live-Ressourcenprofil aufnehmen: `2.5 GiB RSS`, `95.8 % CPU`,
+  rund `31` Scans/10 Minuten und `52 GiB` Prozess-Schreibvolumen seit Start;
+  die Nachmessung nach Aktivierung des Fixes bleibt offen.
 - [x] Detail-Logs fuer erwartete Altbestand-Skips begrenzen.
 - [ ] Eine sichere Default-Grenze fuer Follow-Scans definieren, ohne neue
   Sessions zu verlieren; Grenzwert in Plan und Tests dokumentieren.
@@ -467,3 +489,14 @@ Der Plan ist erst abgeschlossen, wenn:
   Vollauf erfolgreich; kein Produktionscode wurde dafuer geaendert. Der
   Funktionsstand ist als `7b6da19a` committed, die Metadaten-Suite lief mit
   `6 passed in 0.07s`.
+- 2026-07-13: Follow-Collector-Logikfehler in `1.9.484` behoben: Der
+  Watchdog koalesziert JSONL-Event-Bursts bis `0.25 s` und maximal `2.0 s`;
+  damit erzeugt ein laufender Stream nicht mehr fuer jedes Einzelereignis
+  einen erneuten Vollpfad. Die persistierte History bleibt vollstaendig,
+  waehrend der langlebige Follow-Report nur noch 24 Diagnoseobjekte im RAM
+  behaelt. Fokussiert liefen `42 passed in 3.79s`, die History-/Metadaten-
+  Suite mit `162 passed in 9.50s`; die fokussierte Wiederholung lief mit
+  `42 passed in 2.26s`. Ein synthetischer Burst mit `101` Ereignissen ergab
+  `101` eindeutige Pfade in einem Batch, `784.2 ms` und
+  `network_calls=0`. Die Metadaten-Suite lief mit `6 passed in 0.07s`.
+  Live-Restart und Nachmessung bleiben wegen der Restart-Grenze offen.

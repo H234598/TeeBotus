@@ -6,6 +6,7 @@ import os
 import subprocess
 import sys
 import threading
+import time
 import types
 from collections import Counter
 from datetime import datetime, timezone
@@ -4498,6 +4499,31 @@ def test_codex_session_watchdog_coalesces_event_burst_without_losing_paths(
 
     assert watchdog.wait(0.0) == (first.resolve(), second.resolve())
     assert watchdog.wait(0.0) is False
+
+
+def test_codex_session_watchdog_wait_coalesces_events_arriving_during_debounce() -> None:
+    first = Path("/tmp/first-session.jsonl")
+    second = Path("/tmp/second-session.jsonl")
+    changed = threading.Event()
+    changed_paths = {first}
+    changed.set()
+    changed_lock = threading.Lock()
+    watchdog = codex_history_module._CodexSessionWatchdog(
+        object(), changed, changed_paths, changed_lock
+    )
+
+    def add_late_event() -> None:
+        time.sleep(0.05)
+        with changed_lock:
+            changed_paths.add(second)
+            changed.set()
+
+    thread = threading.Thread(target=add_late_event)
+    thread.start()
+    try:
+        assert watchdog.wait(1.0) == (first, second)
+    finally:
+        thread.join(timeout=1.0)
 
 
 def test_watch_codex_session_roots_snapshot_imports_only_changed_session_files(
