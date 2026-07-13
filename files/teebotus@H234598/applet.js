@@ -629,7 +629,7 @@ TeeBotusApplet.prototype = {
       healthStatus = "warning";
     }
     let lines = [];
-    lines.push("Health: " + this._statusWord(healthStatus) + this._healthDetailText(health, summary, counts, healthStatus, dispatcherProblems));
+    lines.push("Health: " + this._statusWord(healthStatus) + this._healthDetailText(health, summary, counts, healthStatus, dispatcherProblems) + this._actionableRuntimeDetailsText(payload));
     let unitName = String(unit.name || this._runtimeUnit() || "teebotus.service");
     let unitReturncode = unit.returncode === undefined || unit.returncode === null ? "?" : String(unit.returncode);
     lines.push("Unit: " + unitName + " " + String(unit.active_state || "unknown") + " / " + String(unit.sub_state || "unknown") + "; Returncode " + unitReturncode);
@@ -1754,15 +1754,16 @@ TeeBotusApplet.prototype = {
     let dispatcherText = this._historyDispatcherHealthText();
     let breakdown = this._actionableProblemBreakdownText(health, summary, counts);
     let informational = this._informationalHealthText(health, summary);
+    let actionableDetails = this._actionableRuntimeDetailsText(payload);
     let commandBreakdown = this._commandProblemBreakdownText(health);
     let qdrantBreakdown = this._qdrantProblemBreakdownText(health);
     let runtimeDiagnostics = this._runtimeDiagnosticsText(payload);
     let result;
     if (bad > 0) {
       let problemLabel = health.status === "broken" ? "Probleme " : "Warnungen ";
-      result = problemLabel + String(bad) + breakdown + informational + commandBreakdown + qdrantBreakdown + dispatcherText + " | Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + runtimeDiagnostics;
+      result = problemLabel + String(bad) + breakdown + actionableDetails + informational + commandBreakdown + qdrantBreakdown + dispatcherText + " | Health " + healthText + " | Unit " + state + " | " + instances + " | " + channels + vectorText + runtimeDiagnostics;
     } else {
-      result = "Health " + healthText + informational + " | Unit " + state + " | " + instances + " | " + channels + vectorText + breakdown + commandBreakdown + qdrantBreakdown + dispatcherText + runtimeDiagnostics;
+      result = "Health " + healthText + informational + actionableDetails + " | Unit " + state + " | " + instances + " | " + channels + vectorText + breakdown + commandBreakdown + qdrantBreakdown + dispatcherText + runtimeDiagnostics;
     }
     return this._shortText(result, MAX_PANEL_STATUS_CHARS);
   },
@@ -2013,6 +2014,68 @@ TeeBotusApplet.prototype = {
     return text;
   },
 
+  _actionableRuntimeDetailsText: function(payload) {
+    let runtime = payload && payload.runtime && typeof payload.runtime === "object" ? payload.runtime : {};
+    let sections = runtime.sections && typeof runtime.sections === "object" ? runtime.sections : {};
+    let details = [];
+    let seen = {};
+    for (let section of Object.keys(sections)) {
+      let lines = Array.isArray(sections[section]) ? sections[section] : [];
+      for (let line of lines) {
+        let fields = this._parseFields(String(line || ""));
+        let forced = false;
+        for (let key in FORCED_PROBLEM_STATUS_FIELDS) {
+          if (this._statusFlagIsSet(fields[key])) {
+            forced = true;
+            break;
+          }
+        }
+        let fallbackCovered = Boolean(
+          fields.effective_status
+          && !this._statusValueIsProblem(fields.effective_status)
+          && (fields.fallback || fields.fallback_profile || fields.fallback_model || fields.local_ollama_offload)
+        );
+        if (!forced && (fallbackCovered || !this._lineHasProblemStatus(fields))) {
+          continue;
+        }
+        let detail = "";
+        if (fields.account_identity_warning) {
+          detail = "Signal-Verknuepfung " + fields.account_identity_warning + " erforderlich";
+        } else if (fields.api_budget) {
+          detail = "API " + fields.api_budget + ": " + this._statusWord(fields.status || fields.effective_status);
+        } else if (fields.structured_decision) {
+          detail = "Entscheider " + fields.structured_decision + ": " + this._statusWord(fields.status || fields.route_status);
+        } else if (fields.llm_route) {
+          detail = "LLM-Route " + fields.llm_route + ": " + this._statusWord(fields.status || fields.route_status);
+        } else if (fields.account_memory || fields.account_identity) {
+          detail = "Account-Memory " + String(fields.account_memory || fields.account_identity) + ": " + this._statusWord(fields.status);
+        } else if (fields.qdrant || fields.qdrant_collection || fields.memory_index) {
+          detail = "Memory-Index: " + this._statusWord(fields.status || fields.semantic);
+        } else {
+          let key = Object.keys(fields).find(function(candidate) {
+            return candidate !== "status" && candidate !== "warning" && candidate !== "error";
+          });
+          detail = key ? String(key) + ": " + this._statusWord(fields.status) : "Runtime-Problem";
+        }
+        detail = this._shortText(detail, 96);
+        if (detail && !seen[detail]) {
+          seen[detail] = true;
+          details.push(detail);
+        }
+        if (details.length >= 3) {
+          break;
+        }
+      }
+      if (details.length >= 3) {
+        break;
+      }
+    }
+    if (details.length === 0) {
+      return "";
+    }
+    return " | Details " + details.join("; ");
+  },
+
   _actionableProblemBreakdownText: function(health, summary, counts) {
     let classificationVersion = this._nonNegativeInt((health || {}).classification_version, 0);
     if (classificationVersion >= 2) {
@@ -2089,6 +2152,7 @@ TeeBotusApplet.prototype = {
         "Health: " +
         healthWord +
         this._healthProblemDetailsText(health, summary, counts) +
+        this._actionableRuntimeDetailsText(payload) +
         " | Unit: " +
         String(unit.active_state || "unknown") +
         " / " +

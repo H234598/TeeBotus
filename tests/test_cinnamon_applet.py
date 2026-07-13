@@ -2136,6 +2136,63 @@ def test_cinnamon_applet_top_health_includes_dispatcher_warning() -> None:
     assert "Dispatcher Warnung" in result["version"]
 
 
+def test_cinnamon_applet_top_health_includes_actionable_runtime_detail() -> None:
+    result = _run_js_applet_expression(
+        """
+        (function() {
+          let payload = {
+            ok: false,
+            health: {
+              status: "warning",
+              classification_version: 2,
+              total_problem_count: 1,
+              actionable_problem_count: 1,
+              actionable_problem_statuses: "warning:1"
+            },
+            unit: {active_state: "active", sub_state: "running", returncode: 0},
+            qdrant: {collections: {}},
+            runtime: {
+              summary: {},
+              status_counts: {warning: 1},
+              sections: {
+                "Tools und Account-Memory": [
+                  "account_identity_warning=Depressionsbot code=runtime_channel_without_identity channel=signal message=link_needed action=run_login"
+                ]
+              }
+            }
+          };
+          return {
+            detail: applet._statusDetailLines(payload)[0],
+            hint: applet._actionableRuntimeDetailsText(payload)
+          };
+        })()
+        """
+    )
+
+    assert result == {
+        "detail": "Health: Warnung | Warnungen 1 | Probleme Warnung:1 | Details Signal-Verknuepfung Depressionsbot erforderlich",
+        "hint": " | Details Signal-Verknuepfung Depressionsbot erforderlich",
+    }
+
+
+def test_cinnamon_applet_top_health_does_not_detail_verified_fallback_as_actionable() -> None:
+    result = _run_js_applet_expression(
+        """
+        applet._actionableRuntimeDetailsText({
+          runtime: {
+            sections: {
+              "API Keys, Limits und Kosten": [
+                "api_budget=cheap_fast status=missing_key fallback=local_ollama effective_status=configured"
+              ]
+            }
+          }
+        })
+        """
+    )
+
+    assert result == ""
+
+
 def test_cinnamon_applet_spawn_json_does_not_reinvoke_throwing_consumer() -> None:
     result = _run_js_applet_expression(
         """

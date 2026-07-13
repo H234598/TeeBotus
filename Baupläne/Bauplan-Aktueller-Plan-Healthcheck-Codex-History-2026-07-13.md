@@ -4,7 +4,7 @@
 
 **Status:** Aktiv, noch nicht abgeschlossen
 
-**Quellstand:** TeeBotus `1.9.480`, lokaler Stand nach dem Bridge-Fix
+**Quellstand:** TeeBotus `1.9.481`, lokaler Stand nach dem Applet-Health-Detail-Fix
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -68,6 +68,9 @@ Vorherige Detailplaene bleiben als Historie und Nachweis erhalten:
 - Die Watch-Payload-Healthpruefung akzeptiert nur echte Boolean-`ok`-Werte;
   malformed Instanz- oder Post-Index-Berichte werden fail-closed abgelehnt.
 - Quell- und installierte Applet-Kopie waren zuletzt byte-identisch.
+- Die obere Applet-Healthanzeige nennt bei actionable Runtime-Befunden jetzt bis
+  zu drei kurze Ursachen. Eine verifizierte lokale Fallback-Route wird dabei
+  nicht als actionable Detail ausgegeben.
 
 ### Secret-Service- und Adminstatus
 
@@ -314,6 +317,8 @@ deren Kombination eingegrenzt.
 - [x] Regression fuer Burst-Koaleszenz: doppelte Pfade werden entfernt,
   unterschiedliche Pfade bleiben erhalten und die Queue wird geleert.
 - [x] Lokalen Burst-Benchmark ohne Provideraufrufe ausfuehren.
+- [x] Applet-Topanzeige mit actionable Account-Identitaetswarnung und
+  verifiziertem Fallback pruefen.
 - [x] Regression fuer begrenzte Follow-Detailausgabe.
 - [x] Regression fuer den inkrementellen Ereignispfad.
 - [ ] Collector-Debounce-/Ressourcenbenchmark mit grossem Sessionroot.
@@ -411,3 +416,8 @@ Der Plan ist erst abgeschlossen, wenn:
   erfolgreich: `160 passed in 7.22s`; Compileall und `git diff --check` sauber.
 - 2026-07-13: Der Plan bleibt bis zur TBL-Reconciliation, der Event-Burst-/
   Ressourcenmessung und der naechsten erlaubten Live-Abnahme aktiv.
+- 2026-07-13: Applet-Health-Detail-Fix in `1.9.481`: Die obere Anzeige nennt
+  die konkrete Ursache `Signal-Verknuepfung Depressionsbot erforderlich`;
+  Fallbacks mit `effective_status=configured` werden dort nicht als actionable
+  Ursache wiederholt. `pytest -q tests/test_cinnamon_applet.py` erfolgreich:
+  `231 passed in 37.28s`.
