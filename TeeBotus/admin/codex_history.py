@@ -4999,7 +4999,9 @@ def _wait_for_codex_session_change(
         watchdog_result = _wait_for_watchdog_codex_session_change(roots, timeout_seconds=poll_interval_seconds)
         if watchdog_result is True:
             return
-        if watchdog_result is False and normalized_event_mode == "watchdog":
+        if watchdog_result is False:
+            # The watchdog already consumed the full timeout. Sleeping again
+            # would double the configured interval in auto/watchdog mode.
             return
     sleep(float(poll_interval_seconds))
 

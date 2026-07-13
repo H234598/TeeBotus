@@ -4485,6 +4485,26 @@ def test_watchdog_event_mode_does_not_sleep_again_after_watchdog_timeout(
     assert sleep_calls == []
 
 
+def test_auto_event_mode_does_not_sleep_again_after_watchdog_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sleep_calls: list[float] = []
+    monkeypatch.setattr(
+        codex_history_module,
+        "_wait_for_watchdog_codex_session_change",
+        lambda _roots, *, timeout_seconds: False,
+    )
+
+    codex_history_module._wait_for_codex_session_change(
+        (tmp_path / "sessions",),
+        poll_interval_seconds=0.5,
+        event_mode="auto",
+        sleep=sleep_calls.append,
+    )
+
+    assert sleep_calls == []
+
+
 def test_codex_history_watch_once_rejects_missing_instance(tmp_path: Path, capsys) -> None:
     make_instance(tmp_path, "Depressionsbot")
 

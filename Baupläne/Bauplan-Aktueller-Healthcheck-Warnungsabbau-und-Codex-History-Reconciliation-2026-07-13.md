@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Quellstand:** TeeBotus `1.9.462`, lokaler Folgecommit nach `c60f75cb`
+**Quellstand:** TeeBotus `1.9.463`, lokaler Folgecommit nach `c28edd4e`
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
 ## Auftrag
@@ -209,6 +209,11 @@ Qdrant-Indexierung oder einer Kombination entsteht.
 ### C. Collector-Ressourcenverbrauch begrenzen
 
 - [ ] Event-Burst und Pollingpfad getrennt messen.
+- [x] Verhindern, dass ein bereits abgelaufener Watchdog-Timeout im
+  `auto`-Modus nochmals als zusaetzlicher Schlaf angerechnet wird.
+- [ ] Event-Burst-Debounce und Scan-Deduplizierung separat messen; ein
+  Dateisystemereignis darf weiterhin zeitnah erkannt werden, aber nicht zu
+  unnoetigen Vollscans fuer jede einzelne JSONL-Aenderung fuehren.
 - [ ] Scan-Deduplizierung und Debounce anhand einer kleinen reproduzierbaren
   Sessionroot-Teststruktur pruefen.
 - [ ] Speicherprofil fuer Session-Import, Accountstore-Lesen, Post-Index und
@@ -285,3 +290,9 @@ Der Plan ist erst abgeschlossen, wenn:
   Qdrant-/Unit-Fehler `0`, genau ein actionable Health-Befund wegen der
   fehlenden Signal-Identitaetsverknuepfung von `Depressionsbot`; die
   installierte Applet-Kopie ist byte-identisch zur Repo-Kopie.
+- 2026-07-13: Wartepfad-Logikfehler behoben: Ein `watchdog`-Timeout hatte im
+  `auto`-Modus bereits das konfigurierte Intervall verbraucht und danach noch
+  einmal geschlafen. `pytest -q tests/test_codex_history.py -k
+  'watchdog_event_mode or auto_event_mode'` lief mit `3 passed`, die komplette
+  Suite mit `132 passed` in `6.52s`. Die Event-Burst-Scanlast ist damit noch
+  nicht vollstaendig behoben und bleibt als eigenes Arbeitspaket offen.
