@@ -1679,7 +1679,7 @@ def test_runtime_status_resolves_purpose_router_and_remote_fallback_flag(monkeyp
         "structured_decision=Demo/telegram:1 status=enabled source=runtime_llm_configured "
         "profile=hf_pool_structured provider=hf_pool model=pool:default#structured_decision "
         "route_status=unavailable fallback=local_ollama fallback_model=ollama_chat/llama3.2:3b "
-        "fallback_base_url=http://127.0.0.1:11434 remote_fallback=enabled"
+        "fallback_base_url=http://127.0.0.1:11434 effective_status=configured remote_fallback=enabled"
     ) in captured.out
 
 
@@ -1852,6 +1852,54 @@ def test_structured_decision_status_uses_instance_scoped_openai_key(monkeypatch)
 
     assert "structured_decision=Demo/telegram:1 status=enabled" in line
     assert "route_status=configured" in line
+
+
+def test_structured_decision_status_reports_effective_fallback(monkeypatch) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    from TeeBotus.llm.profiles import LLMProfile, LLMRoute
+
+    monkeypatch.setattr(
+        "TeeBotus.llm.profiles.select_llm_route",
+        lambda *_args, **_kwargs: LLMRoute(
+            purpose="structured_decision",
+            profile_name="hf_pool_structured",
+            provider="hf_pool",
+            model="pool:default#structured_decision",
+            fallback_profile_name="local_ollama",
+            fallback_model="ollama_chat/llama3.2:3b",
+            fallback_base_url="http://127.0.0.1:11434",
+        ),
+    )
+    monkeypatch.setattr(
+        "TeeBotus.llm.profiles.load_llm_profiles",
+        lambda: {
+            "local_ollama": LLMProfile(
+                name="local_ollama",
+                provider="litellm",
+                model="ollama_chat/llama3.2:3b",
+                base_url="http://127.0.0.1:11434",
+            )
+        },
+    )
+    original_route_status = bot._runtime_route_status
+
+    def fake_route_status(route, *, instance_names=()):
+        if getattr(route, "provider", "") == "hf_pool":
+            return "unavailable", "pool disabled"
+        return original_route_status(route, instance_names=instance_names)
+
+    monkeypatch.setattr(bot, "_runtime_route_status", fake_route_status)
+    account = SimpleNamespace(
+        instance_name="Demo",
+        label="telegram:1",
+        structured_decision_enabled="yes",
+        llm_allow_remote_fallback="",
+    )
+
+    line = bot._runtime_status_structured_decision_line(account)
+
+    assert "route_status=unavailable" in line
+    assert "effective_status=configured" in line
 
 
 def test_runtime_status_reports_missing_key_for_remote_litellm_purpose_route(monkeypatch, capsys, tmp_path) -> None:

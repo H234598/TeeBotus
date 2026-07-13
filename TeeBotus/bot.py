@@ -750,8 +750,19 @@ def _runtime_status_structured_decision_line(account: Any, *, instructions: Any 
         detail += f" fallback={route.fallback_profile_name} fallback_model={route.fallback_model}"
         if route.fallback_base_url:
             detail += f" fallback_base_url={_sanitize_status_url(route.fallback_base_url)}"
-    if offload_detail := _runtime_status_local_ollama_offload_detail(route, instance_names=(str(account.instance_name),)):
+    instance_names = (str(getattr(account, "instance_name", "") or ""),)
+    offload_detail = _runtime_status_local_ollama_offload_detail(route, instance_names=instance_names)
+    if offload_detail:
         detail += f" {offload_detail}"
+    else:
+        fallback_status, fallback_error = _runtime_status_fallback_route_status(
+            route,
+            instance_names=instance_names,
+        )
+        if fallback_status:
+            detail += f" effective_status={fallback_status}"
+            if fallback_error:
+                detail += f" fallback_error={_sanitize_status_text(fallback_error)}"
     if allow_remote_fallback:
         detail += " remote_fallback=enabled"
     if route_error:
@@ -1664,6 +1675,38 @@ def _runtime_status_local_ollama_offload_detail(route: Any, *, instance_names: S
     if errors:
         detail += f" offload_error={';'.join(errors)}"
     return _sanitize_status_text(detail)
+
+
+def _runtime_status_fallback_route_status(
+    route: Any,
+    *,
+    instance_names: Sequence[str],
+) -> tuple[str, str]:
+    fallback_model = str(getattr(route, "fallback_model", "") or "").strip()
+    if not fallback_model:
+        return "", ""
+    fallback_profile_name = str(getattr(route, "fallback_profile_name", "") or "").strip()
+    fallback_provider = "litellm"
+    fallback_base_url = str(getattr(route, "fallback_base_url", "") or "").strip()
+    fallback_api_key_env = str(getattr(route, "fallback_api_key_env", "") or "").strip()
+    if fallback_profile_name:
+        try:
+            from TeeBotus.llm.profiles import load_llm_profiles
+
+            profile = load_llm_profiles()[fallback_profile_name]
+        except Exception as exc:  # noqa: BLE001 - status must expose a bad fallback, not fail startup.
+            return "broken", f"{type(exc).__name__}: {exc}"
+        fallback_provider = str(profile.provider or fallback_provider)
+        fallback_model = str(profile.model or fallback_model)
+        fallback_base_url = fallback_base_url or str(profile.base_url or "")
+        fallback_api_key_env = fallback_api_key_env or str(profile.api_key_env or "")
+    fallback_route = types.SimpleNamespace(
+        provider=fallback_provider,
+        model=fallback_model,
+        base_url=fallback_base_url,
+        api_key_env=fallback_api_key_env,
+    )
+    return _runtime_route_status(fallback_route, instance_names=instance_names)
 
 
 def _status_route_has_local_ollama_target(route: Any) -> bool:
