@@ -480,3 +480,9 @@ Der Bauplan ist erst abgeschlossen, wenn:
   Header trotzdem `Details codex_history: Warnung`. Die Detailfunktion stoppt
   nun bei Health-V2 ohne actionable Befunde; Hinweise bleiben sichtbar.
   Header-Regression `5 passed`, komplette Applet-Suite `238 passed`.
+- 2026-07-13: Frische schreibfreie Live-Probe nach dem Applet-Fix: Quellversion
+  `1.9.498`, Runtime-Marker `matched`, `health.status=ok`,
+  `actionable_problem_count=0`, `total_problem_count=0` und
+  `qdrant_problem_count=0`. TBL bleibt bei `skipped=101` mit
+  `no_private_route`; diese Zeilen sind weiterhin informational. Kein
+  Restart und kein Push ausgeloest.
