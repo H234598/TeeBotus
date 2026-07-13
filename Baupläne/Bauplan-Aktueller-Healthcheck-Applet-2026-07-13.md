@@ -31,7 +31,7 @@ Die Rohzeilen bleiben fuer die Detailansicht und die Admin-Diagnose erhalten.
 
 ## Aktueller Quell- und Laufzeitstand
 
-- Quellstand: TeeBotus `1.9.417`, Commit `d5f73b50`.
+- Quellstand: TeeBotus `1.9.418`, Commit `ee4ce348`.
 - Worktree: nur bekannte unversionierte Benutzerdateien; keine davon wird
   durch diesen Plan angefasst.
 - Laufender Dienst: `teebotus.service` aktiv, aber noch auf dem vorher
@@ -216,6 +216,26 @@ Nachweis:
 - Vollstaendige Applet-Suite: `198 passed in 46.65s`.
 - SemVer-Bump auf `1.9.417`, Commit `d5f73b50`
   (`Classify codex history failure metadata`).
+
+### Befund 73: Stale v2-Healthzaehler konnten echte Runtime-Probleme verbergen
+
+`_health_summary()` verwendete bei vorhandener v2-Klassifikation den
+deklarierten `actionable_problem_status_count` ungeprueft. Wenn dieser Wert
+stale oder inkonsistent `0` war, waehrend `actionable_status_counts` bereits
+`warning:1` enthielt, wurde der Top-Level-Healthstatus faelschlich als `ok`
+berechnet. Die Python-Aggregation nimmt jetzt fuer Problem-, actionable- und
+informative Zaehler jeweils das Maximum aus deklarierter Zusammenfassung und
+den strukturierten Detailzaehlern. Damit bleibt die robuste JS-Aggregation
+auch im Payload-Erzeuger erhalten.
+
+Nachweis:
+
+- Regressionstest mit v2-Zusammenfassung `actionable=0` und Detailzaehler
+  `warning=1`: Ergebnis `status=warning`, `actionable=1`, `total=1`.
+- Fokussierte Payload-Suite: `3 passed, 196 deselected`.
+- Vollstaendige Applet-Suite: `199 passed in 37.85s`.
+- SemVer-Bump auf `1.9.418`, Commit `ee4ce348`
+  (`Harden Python health aggregation`).
 
 ## Naechste Arbeitspakete
 
