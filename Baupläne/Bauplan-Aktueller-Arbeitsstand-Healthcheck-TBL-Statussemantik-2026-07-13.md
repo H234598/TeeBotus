@@ -512,3 +512,13 @@ Der Bauplan ist erst abgeschlossen, wenn:
   der bestehenden Channel-Post-Konvertierung abgesichert. Fokussiert `6 passed`,
   Channel-Post-Adaptertest `1 passed`, komplette `tests/test_bot.py`:
   `186 passed`, `17 subtests passed`. Der Fix ist noch uncommitted.
+- 2026-07-13: Fehler im modernen Telegram-Thread-Supervisor reproduziert:
+  Unerwartet beendete Polling-Threads wurden bisher weder geloggt noch an den
+  Hauptthread gemeldet. Dadurch konnte ein einzelner Bot-Slot dauerhaft fehlen,
+  waehrend der Dienst weiterlief. Jeder Worker meldet Fehler jetzt mit Instanz
+  und Slot; der Supervisor stoppt die uebrigen Slots und wirft einen
+  `TelegramRuntimeError`, damit systemd den Dienst als fehlerhaft behandeln und
+  neu starten kann. Auch ein unerwartet normaler Thread-Ausgang wird erkannt.
+  `tests/test_telegram_runner.py`: `12 passed`; gemeinsame Telegram-Abdeckung
+  mit `tests/test_bot.py`: `198 passed`, `17 subtests passed`. Der Fix ist noch
+  uncommitted.

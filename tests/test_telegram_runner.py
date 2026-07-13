@@ -197,6 +197,7 @@ def test_run_telegram_accounts_uses_runtime_bridges_instead_of_polling_all(monke
 
         def run_polling(self, *, stop_event, poll_timeout, youtube_job_runner):  # noqa: ANN001 - fake mirrors runtime bridge signature.
             events.append(("poll", (stop_event.is_set(), poll_timeout, bool(youtube_job_runner))))
+            stop_event.set()
 
     config = RuntimeConfig(
         instances_dir=tmp_path,
@@ -238,6 +239,47 @@ def test_run_telegram_accounts_uses_runtime_bridges_instead_of_polling_all(monke
     assert ("bridge", ("Demo", "telegram:1", tmp_path, True)) in events
     assert ("poll", (False, telegram_runner.telegram_runtime.MULTI_BOT_POLL_TIMEOUT_SECONDS, True)) in events
     assert ("shutdown", False) in events
+
+
+def test_run_telegram_accounts_surfaces_polling_thread_failure(monkeypatch, tmp_path: Path) -> None:
+    class FakeJobRunner:
+        def shutdown(self, *, wait: bool = False) -> None:
+            return None
+
+    class FailingBridge:
+        def __init__(self, **_kwargs):  # noqa: ANN001 - fake mirrors runtime bridge construction.
+            return None
+
+        def run_polling(self, **_kwargs):  # noqa: ANN001 - fake mirrors polling transport.
+            raise RuntimeError("polling failed")
+
+    config = RuntimeConfig(
+        instances_dir=tmp_path,
+        selected_instances=("Demo",),
+        channels=("telegram",),
+        instances=(
+            InstanceRunConfig(
+                instance_name="Demo",
+                instruction_path=tmp_path / "Demo" / "Bot_Verhalten.md",
+                accounts=(
+                    AccountRunConfig(
+                        instance_name="Demo",
+                        channel="telegram",
+                        slot=1,
+                        label="telegram:1",
+                        telegram_token="telegram-token",
+                        openai_api_key="",
+                    ),
+                ),
+            ),
+        ),
+    )
+    monkeypatch.setattr(telegram_runner, "TelegramRuntimeBridge", FailingBridge)
+    monkeypatch.setattr(telegram_runner.telegram_runtime, "YouTubeTranscriptionJobRunner", FakeJobRunner)
+    monkeypatch.setattr(telegram_runner, "_notify_recent_users_for_current_version", lambda *_args: None)
+
+    with pytest.raises(TelegramRuntimeError, match="telegram:1"):
+        run_telegram_accounts(config)
 
 
 def test_run_telegram_accounts_does_not_start_partial_threads_when_bridge_setup_fails(monkeypatch, tmp_path: Path) -> None:

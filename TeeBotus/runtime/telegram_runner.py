@@ -271,6 +271,7 @@ def _run_telegram_polling_bridges(
 ) -> None:
     stop_event = threading.Event()
     threads: list[threading.Thread] = []
+    thread_failures: dict[str, BaseException] = {}
     youtube_job_runner = telegram_runtime.YouTubeTranscriptionJobRunner()
     _notify_recent_users_for_current_version(config, instance_configs)
     try:
@@ -293,9 +294,19 @@ def _run_telegram_polling_bridges(
                 )
             )
         for account, transport in transports:
+            def run_transport(transport=transport, account=account):  # noqa: ANN001 - transport is the typed local runtime object.
+                try:
+                    transport.run(stop_event=stop_event)
+                except BaseException as exc:  # noqa: BLE001 - worker failures must reach the supervisor.
+                    thread_failures[account.label] = exc
+                    LOGGER.exception(
+                        "Telegram polling thread failed instance=%s slot=%s.",
+                        account.instance_name,
+                        account.label,
+                    )
+
             thread = threading.Thread(
-                target=transport.run,
-                kwargs={"stop_event": stop_event},
+                target=run_transport,
                 name=f"telegram-bot-{account.instance_name}-{account.label}",
                 daemon=True,
             )
@@ -304,6 +315,19 @@ def _run_telegram_polling_bridges(
         while any(thread.is_alive() for thread in threads):
             for thread in threads:
                 thread.join(timeout=0.5)
+                if not thread.is_alive() and not stop_event.is_set():
+                    label = thread.name.rsplit("-", 1)[-1]
+                    failure = thread_failures.get(label)
+                    message = f"Telegram polling thread exited unexpectedly: {thread.name}"
+                    stop_event.set()
+                    for other_thread in threads:
+                        if other_thread is not thread:
+                            other_thread.join(timeout=telegram_runtime.MULTI_BOT_POLL_TIMEOUT_SECONDS + 1)
+                    if failure is not None:
+                        raise TelegramRuntimeError(message) from failure
+                    raise TelegramRuntimeError(message)
+        if threads and not stop_event.is_set():
+            raise TelegramRuntimeError("All Telegram polling threads exited unexpectedly.")
     except KeyboardInterrupt:
         LOGGER.info("Stopping %s Telegram bot token slots.", len(threads))
         stop_event.set()
