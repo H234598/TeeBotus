@@ -143,6 +143,16 @@ Read-only Live-Probe ueber `TeeBotus.cinnamon_applet status`:
   Groq-Key, partielle Codex-Usage-Felder und dokumentierte
   `no_private_route`-Skips. Applet-Installation entspricht dem Repository;
   Cinnamon-Suite: `238 passed in 35.94s`.
+- 2026-07-16: Datenverlustpfad im Working-Memory gefunden: Ein `OSError` beim
+  Lesen einer vorhandenen Indexdatei wurde bisher wie leerer Speicher
+  behandelt und konnte die Datei beim anschliessenden `ensure()` ueberschreiben.
+  Moderner `runtime.working_memory`-Pfad und kompatibler Telegram-Export
+  bewahren die Datei jetzt unveraendert; `ensure()` protokolliert den Zustand
+  und laeuft ohne Memory weiter, waehrend Lese-/Schreibfehler fuer echte
+  Memory-Operationen sichtbar bleiben.
+- Regression mit simuliertem Lesefehler prueft Byte-Erhalt in beiden Pfaden.
+  Angrenzende Suite: `399 passed, 17 subtests passed in 13.18s`; keine
+  Provider-/LLM-Aufrufe.
 
 ## Historische Plaene
 

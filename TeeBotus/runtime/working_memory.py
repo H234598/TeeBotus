@@ -110,10 +110,17 @@ class WorkingMemoryStore:
 
     def ensure(self) -> Path:
         path = self._path()
-        with self._lock:
-            data = self._load_or_initialize(path)
-            _write_json_file(path, data)
-            _working_memory_entries_path(path).touch(exist_ok=True)
+        try:
+            with self._lock:
+                data = self._load_or_initialize(path)
+                _write_json_file(path, data)
+                _working_memory_entries_path(path).touch(exist_ok=True)
+        except OSError as exc:
+            LOGGER.warning(
+                "Instance working memory unavailable at %s; existing data preserved: %s",
+                path,
+                exc,
+            )
         return path
 
     def prepare(self, query_text: str, max_chars: int = WORKING_MEMORY_MAX_PROMPT_CHARS) -> WorkingMemoryRecord:
@@ -167,8 +174,7 @@ class WorkingMemoryStore:
             )
             payload = _new_working_memory_data(self.instance_name)
         except OSError as exc:
-            LOGGER.warning("Resetting unreadable instance working memory at %s: %s.", path, exc)
-            payload = _new_working_memory_data(self.instance_name)
+            raise OSError(f"Unable to read instance working memory at {path}") from exc
         if not isinstance(payload, dict):
             payload = _new_working_memory_data(self.instance_name)
         _normalize_working_memory_data(payload, self.instance_name)

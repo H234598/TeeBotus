@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from unittest.mock import patch
 
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
@@ -50,6 +51,20 @@ def test_working_memory_corrupt_index_is_preserved_without_traceback_log(tmp_pat
     assert backups[0].read_text(encoding="utf-8") == ""
     payload = json.loads(index_path.read_text(encoding="utf-8"))
     assert payload["scope"] == "instance"
+
+
+def test_working_memory_unreadable_index_is_not_replaced(tmp_path, caplog):
+    instances_dir = tmp_path / "instances"
+    store = WorkingMemoryStore("Depressionsbot", instances_dir)
+    index_path = store.ensure()
+    original = index_path.read_bytes()
+
+    with patch("TeeBotus.runtime.working_memory.Path.read_text", side_effect=OSError("permission denied")):
+        with caplog.at_level("WARNING", logger="TeeBotus"):
+            assert store.ensure() == index_path
+
+    assert index_path.read_bytes() == original
+    assert any("existing data preserved" in record.message for record in caplog.records)
 
 
 def test_working_memory_prepare_selects_relevant_entry(tmp_path):

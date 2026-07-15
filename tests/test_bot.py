@@ -1898,6 +1898,20 @@ class BotTests(unittest.TestCase):
             payload = json.loads(index_path.read_text(encoding="utf-8"))
             self.assertEqual(payload["scope"], "instance")
 
+    def test_working_memory_unreadable_index_is_not_replaced(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            instances_dir = Path(directory) / "instances"
+            store = WorkingMemoryStore("Depressionsbot", instances_dir)
+            index_path = store.ensure()
+            original = index_path.read_bytes()
+
+            with patch("TeeBotus.adapters.telegram_runtime.Path.read_text", side_effect=OSError("permission denied")):
+                with self.assertLogs("TeeBotus", level="WARNING") as logs:
+                    self.assertEqual(store.ensure(), index_path)
+
+            self.assertEqual(index_path.read_bytes(), original)
+            self.assertTrue(any("existing data preserved" in message for message in logs.output))
+
     def test_working_memory_is_included_in_openai_input_without_auto_writes(self) -> None:
         from TeeBotus.instructions import BotInstructions
 
