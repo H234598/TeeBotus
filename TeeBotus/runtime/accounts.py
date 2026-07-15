@@ -1883,6 +1883,11 @@ class AccountStore:
     def rotate_secret(self, account_id: str) -> tuple[str, str]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
+        verifier_path = self.account_dir(account_id) / SECRET_VERIFIER_FILENAME
+        previous_verifier_exists = verifier_path.exists()
+        previous_verifier = verifier_path.read_bytes() if previous_verifier_exists else b""
+        previous_profile = self._read_account_profile(account_id)
+        previous_index = self._load_index()
         secret = new_sha512_token()
         verifier = self._secret_verifier(secret)
         now = utc_now()
@@ -1897,18 +1902,42 @@ class AccountStore:
             "version": 1,
         }
         secrets_doc = self._load_secrets()
+        previous_secrets = {
+            key: dict(value) if isinstance(value, dict) else value
+            for key, value in secrets_doc.items()
+        }
         old = secrets_doc.get(account_id)
         if isinstance(old, dict) and isinstance(old.get("version"), int):
             secret_payload["version"] = int(old["version"]) + 1
         secrets_doc[account_id] = secret_payload
-        self._save_secrets(secrets_doc)
-        self.vault.write_json(self.account_dir(account_id) / SECRET_VERIFIER_FILENAME, secret_payload)
-        profile = self._read_account_profile(account_id)
+        profile = dict(previous_profile)
         profile["registered"] = True
         profile["secret_exists"] = True
         profile["updated_at"] = now
-        self._write_account_profile(account_id, profile)
-        self._upsert_account_index(profile)
+        try:
+            self.vault.write_json(verifier_path, secret_payload)
+            self._write_account_profile(account_id, profile)
+            self._upsert_account_index(profile)
+            self._save_secrets(secrets_doc)
+        except Exception:  # noqa: BLE001 - restore all account-secret state before surfacing the failure.
+            rollback_errors: list[Exception] = []
+            restores = [
+                lambda: self._save_secrets(previous_secrets),
+                lambda: self._write_account_profile(account_id, previous_profile),
+                lambda: self._save_index(previous_index),
+            ]
+            if previous_verifier_exists:
+                restores.append(lambda: _atomic_write_bytes(verifier_path, previous_verifier))
+            else:
+                restores.append(lambda: verifier_path.unlink(missing_ok=True))
+            for restore in restores:
+                try:
+                    restore()
+                except Exception as rollback_exc:  # noqa: BLE001 - report inconsistent rollback explicitly.
+                    rollback_errors.append(rollback_exc)
+            if rollback_errors:
+                raise AccountStoreError("account secret rotation rollback failed; secret and profile state may be inconsistent") from rollback_errors[0]
+            raise
         return account_id, secret
 
     def verify_secret(self, account_id: str, account_secret: str) -> bool:

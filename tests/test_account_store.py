@@ -970,6 +970,29 @@ def test_rotate_secret_invalidates_old_secret(tmp_path):
     assert store.verify_secret(account_id, second_secret)
 
 
+def test_rotate_secret_rolls_back_when_profile_write_fails(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Bote_der_Wahrheit", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    _, old_secret = store.register_account(account_id)
+    previous_verifier = (store.account_dir(account_id) / "Secret_Verifier.json").read_bytes()
+    previous_profile = store._read_account_profile(account_id)
+    previous_index = store._load_index()
+    original_write_profile = store._write_account_profile
+
+    with patch.object(
+        store,
+        "_write_account_profile",
+        side_effect=[AccountStoreError("profile write failed"), original_write_profile],
+    ):
+        with pytest.raises(AccountStoreError, match="profile write failed"):
+            store.rotate_secret(account_id)
+
+    assert store.verify_secret(account_id, old_secret)
+    assert (store.account_dir(account_id) / "Secret_Verifier.json").read_bytes() == previous_verifier
+    assert store._read_account_profile(account_id) == previous_profile
+    assert store._load_index() == previous_index
+
+
 def test_secret_tool_rotate_secret_preserves_instance_keys_and_memory(tmp_path, monkeypatch):
     stored: dict[tuple[str, str], bytes] = {}
     secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)

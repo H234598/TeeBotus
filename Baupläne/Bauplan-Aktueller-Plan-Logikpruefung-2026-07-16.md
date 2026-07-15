@@ -161,6 +161,15 @@ Diagnose und Tests.
 - Fault-Injection-Regression fuer Profil-, Index- und Mapping-Writefehler
   ergaenzt. Fokussiert `4 passed`; AccountStore-Suite danach `211 passed in
   10.18s`.
+- 2026-07-16: Eine Biene reproduzierte eine inkonsistente Secret-Rotation:
+  `Account_Secrets.json` wurde vor Verifier, Profil und Index geschrieben.
+  Ein spaeter Fehler deaktivierte damit altes Secret trotz abgebrochener
+  Rotation.
+- Rotation schreibt Secrets erst nach den abhaengigen Metadaten und stellt bei
+  jedem Fehler Secrets, Verifier, Profil und Index auf den vorherigen Stand
+  zurueck. Ein fehlgeschlagener Rollback bleibt als eigener Fehler sichtbar.
+  Regression fokussiert `3 passed`; AccountStore-Suite danach `212 passed in
+  7.82s`.
 
 ## Akzeptanzkriterien
 
