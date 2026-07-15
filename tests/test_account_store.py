@@ -901,6 +901,29 @@ def test_privacy_confirmation_is_persisted_in_profile_and_reset_by_memory_reset(
     assert store.has_privacy_confirmation(account_id) is False
 
 
+def test_clear_privacy_confirmation_retry_repairs_index_after_write_failure(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(395935293))
+    store.confirm_privacy(account_id, source="telegram")
+    original_account_index = store._upsert_account_index
+    failed = False
+
+    def fail_once(profile):
+        nonlocal failed
+        if not failed:
+            failed = True
+            raise AccountStoreError("index write failed")
+        return original_account_index(profile)
+
+    with patch.object(store, "_upsert_account_index", side_effect=fail_once):
+        with pytest.raises(AccountStoreError, match="index write failed"):
+            store.clear_privacy_confirmation(account_id)
+
+    assert store.has_privacy_confirmation(account_id) is False
+    store.clear_privacy_confirmation(account_id)
+    assert account_id in store._load_index().get("accounts", {})
+
+
 def test_reset_structured_account_memory_writes_empty_schema_index(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")

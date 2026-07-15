@@ -179,6 +179,13 @@ Diagnose und Tests.
   bestehende Accounts und External-Accounts reparieren den Account-Index beim
   naechsten Retry. Regression fokussiert `3 passed`; AccountStore-Suite danach
   `215 passed in 9.60s`.
+- 2026-07-16: Eine Biene reproduzierte einen weiteren Retry-Fehler in
+  `clear_privacy_confirmation()`: Nach erfolgreichem Profil-Write und
+  fehlgeschlagenem Index-Write war Privacy bereits geloescht, sodass der
+  naechste Lauf den Index nicht mehr anfasste.
+- Der Pfad upsertet den Account-Index jetzt auch ohne erneute Privacy-Aenderung.
+  Regression fuer den einmaligen Indexfehler ergaenzt; fokussiert `2 passed`,
+  AccountStore-Suite danach `216 passed in 14.67s`.
 - Offener naechster Auditpunkt bleibt die systematische Pruefung weiterer
   mehrteiliger Account-Metadatenwrites; bisher kein neuer belegter Befund.
 

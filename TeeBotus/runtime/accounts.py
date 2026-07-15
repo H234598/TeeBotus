@@ -2377,7 +2377,7 @@ class AccountStore:
             profile.pop("privacy", None)
             profile["updated_at"] = utc_now()
             self._write_account_profile(account_id, profile)
-            self._upsert_account_index(profile)
+        self._upsert_account_index(profile)
 
     @_serialize_account_memory
     def rebuild_structured_memory_index(self, account_id: str) -> None:
