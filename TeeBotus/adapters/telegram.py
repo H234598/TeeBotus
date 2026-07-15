@@ -339,12 +339,11 @@ def _send_telegram_text_chunk(
                 kwargs["reply_parameters"] = reply_parameters
             return api.send_message(chat_id, text, **kwargs)
         except TypeError as exc:
-            if (
-                "text_mode" not in str(exc)
-                and "formatted_text" not in str(exc)
-                and "reply_markup" not in str(exc)
-                and "reply_parameters" not in str(exc)
-            ):
+            if _telegram_unexpected_keyword(
+                str(exc),
+                kwargs,
+                ("text_mode", "formatted_text", "reply_markup", "reply_parameters"),
+            ) is None:
                 raise
             return api.send_message(chat_id, text_with_button_fallback(text, buttons))
     if reply_markup or reply_parameters:
@@ -356,7 +355,7 @@ def _send_telegram_text_chunk(
                 kwargs["reply_parameters"] = reply_parameters
             return api.send_message(chat_id, text, **kwargs)
         except TypeError as exc:
-            if "reply_markup" not in str(exc) and "reply_parameters" not in str(exc):
+            if _telegram_unexpected_keyword(str(exc), kwargs, ("reply_markup", "reply_parameters")) is None:
                 raise
             return api.send_message(chat_id, text_with_button_fallback(text, buttons))
     return api.send_message(chat_id, text)
@@ -380,22 +379,20 @@ def _telegram_call_with_optional_reply(method: Any, *args: Any, reply_parameters
         try:
             return method(*args, **kwargs)
         except TypeError as exc:
-            message = str(exc)
-            unsupported = next(
-                (
-                    key
-                    for key in optional_keywords
-                    if key in kwargs
-                    and (
-                        f"unexpected keyword argument '{key}'" in message
-                        or f'unexpected keyword argument "{key}"' in message
-                    )
-                ),
-                None,
-            )
+            unsupported = _telegram_unexpected_keyword(str(exc), kwargs, optional_keywords)
             if unsupported is None:
                 raise
             kwargs.pop(unsupported, None)
+
+
+def _telegram_unexpected_keyword(message: str, kwargs: dict[str, Any], keys: tuple[str, ...]) -> str | None:
+    for key in keys:
+        if key in kwargs and (
+            f"unexpected keyword argument '{key}'" in message
+            or f'unexpected keyword argument "{key}"' in message
+        ):
+            return key
+    return None
 
 
 def _telegram_reply_markup(buttons: tuple[MessageButton, ...]) -> str:

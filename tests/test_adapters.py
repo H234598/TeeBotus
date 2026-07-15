@@ -1699,6 +1699,22 @@ def test_telegram_send_text_appends_button_fallback_when_reply_markup_is_not_sup
     assert api.calls == [("@my_channel", "Bitte waehlen\n\nOptionen:\n- Ja: ja")]
 
 
+def test_telegram_send_text_does_not_swallow_real_type_error():
+    class API:
+        def send_message(self, chat_id, text, **kwargs):
+            raise TypeError("text_mode must be html")
+
+    try:
+        send_telegram_actions(
+            API(),
+            [SendText("@my_channel", "Antwort", text_mode="html", formatted_text="<b>Antwort</b>")],
+        )
+    except TypeError as exc:
+        assert str(exc) == "text_mode must be html"
+    else:
+        raise AssertionError("real text TypeError was swallowed")
+
+
 def test_telegram_callback_query_maps_button_data_to_event_text():
     update = {
         "callback_query": {

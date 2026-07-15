@@ -113,6 +113,14 @@ Read-only Live-Probe ueber `TeeBotus.cinnamon_applet status`:
   `unexpected keyword argument '<name>'`.
 - Adapter-Vollsuite danach: `150 passed in 1.90s`; `py_compile` und
   `git diff --check` sauber.
+- 2026-07-16: Derselbe Fehler wurde im formatierten `SendText`-Fallback
+  gefunden. Breite Textsuche konnte einen echten Fehler wie `text_mode must
+  be html` verschlucken und stattdessen unformatiert senden. Gemeinsame
+  Erkennung nutzt jetzt ausschliesslich echte `unexpected keyword argument`
+  Meldungen.
+- Regression fuer echten formatierten Text-`TypeError` ergaenzt.
+  Adapter-Vollsuite danach: `151 passed in 0.97s`; `py_compile` und
+  `git diff --check` sauber.
 
 ## Historische Plaene
 
