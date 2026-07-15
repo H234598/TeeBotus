@@ -155,8 +155,12 @@ Diagnose und Tests.
   Cleanup ergaenzt. Fokussiert `4 passed`; AccountStore-Suite `208 passed in
   7.37s`; Logik-Audit-Suite `10 passed`.
 - Offener Bienenbefund: `unlink_identity()` hat weiterhin getrennte Profil-,
-  Index- und Mapping-Writes. Vor einem Fix muss dessen gewollte Reihenfolge
-  und Rollback-Vertrag separat reproduziert werden.
+- Index- und Mapping-Writes. Eine Biene reproduzierte die drei Teilfehler;
+  die bestehende Reihenfolge konvergiert beim Retry bereits sicher, daher kein
+  Runtime-Fix noetig.
+- Fault-Injection-Regression fuer Profil-, Index- und Mapping-Writefehler
+  ergaenzt. Fokussiert `4 passed`; AccountStore-Suite danach `211 passed in
+  10.18s`.
 
 ## Akzeptanzkriterien
 

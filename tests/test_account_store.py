@@ -1134,6 +1134,30 @@ def test_unlink_identity_marks_orphaned_when_last_identity_removed(tmp_path):
     assert summary["linked_identities"] == []
 
 
+@pytest.mark.parametrize(
+    ("failing_method", "error_text"),
+    [
+        ("_write_account_profile", "profile write failed"),
+        ("_upsert_account_index", "index write failed"),
+        ("_save_identities", "identity write failed"),
+    ],
+)
+def test_unlink_identity_retry_converges_after_partial_write_failure(tmp_path, failing_method, error_text):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    identity_key = telegram_identity_key(1)
+    account_id = store.resolve_or_create_account(identity_key)
+
+    with patch.object(store, failing_method, side_effect=AccountStoreError(error_text)):
+        with pytest.raises(AccountStoreError, match=error_text):
+            store.unlink_identity(identity_key)
+
+    assert store.get_account_for_identity(identity_key) == account_id
+    assert store.unlink_identity(identity_key) == account_id
+    profile = store._read_account_profile(account_id)
+    assert identity_key not in profile["linked_identities"]
+    assert profile["status"] == "orphaned"
+
+
 def test_link_identity_refuses_to_silently_merge_registered_source_account(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))
