@@ -216,3 +216,10 @@ git diff --check
 - Regression `SendText -> DeleteTrackedMessages -> SendText` ergaenzt:
   `11 passed` im fokussierten Telegram-Retry-/Polling-Lauf, keine
   Provider-/LLM-Aufrufe. Compile- und Diff-Pruefung sauber.
+- 2026-07-15: Kompatibilitaetsregression aus dem Datei-Reply-Fix entfernt:
+  Alternative Telegram-Adapter ohne optionales `reply_parameters` fallen bei
+  Text-, Voice- und Dokument-Fallbacks jetzt auf den bisherigen Aufruf zurueck,
+  statt mit `TypeError` abzubrechen. Der Produktions-Wrapper unterstuetzt den
+  Parameter weiterhin nativ.
+- Fokussierte Adapter-/Runtime-Regressionen: `8 passed`; keine
+  Provider-/LLM-Aufrufe. Compile- und Diff-Pruefung sauber.

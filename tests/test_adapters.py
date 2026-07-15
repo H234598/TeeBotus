@@ -1739,7 +1739,10 @@ def test_telegram_export_file_falls_back_to_message_without_document_api():
 
     api = API()
 
-    sent = send_telegram_actions(api, [ExportFile("@my_channel", "report.pdf", "application/pdf", b"%PDF")])
+    sent = send_telegram_actions(
+        api,
+        [ExportFile("@my_channel", "report.pdf", "application/pdf", b"%PDF", reply_to_ref="99")],
+    )
 
     assert sent == [5]
     assert api.calls == [("@my_channel", "Export erzeugt: report.pdf")]

@@ -153,27 +153,64 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
         elif isinstance(action, SendAttachment):
             reply_parameters = _telegram_reply_parameters(action.reply_to_ref)
             if action.content_type.startswith("audio/") and hasattr(api, "send_voice"):
-                kwargs = {"reply_parameters": reply_parameters} if reply_parameters else {}
-                sent.append(api.send_voice(action.chat_id, action.data, action.filename, action.content_type, **kwargs))
+                sent.append(
+                    _telegram_call_with_optional_reply(
+                        api.send_voice,
+                        action.chat_id,
+                        action.data,
+                        action.filename,
+                        action.content_type,
+                        reply_parameters=reply_parameters,
+                    )
+                )
             elif hasattr(api, "send_document"):
                 kwargs = {"caption": action.caption}
-                if reply_parameters:
-                    kwargs["reply_parameters"] = reply_parameters
-                sent.append(api.send_document(action.chat_id, action.data, action.filename, action.content_type, **kwargs))
+                sent.append(
+                    _telegram_call_with_optional_reply(
+                        api.send_document,
+                        action.chat_id,
+                        action.data,
+                        action.filename,
+                        action.content_type,
+                        reply_parameters=reply_parameters,
+                        **kwargs,
+                    )
+                )
             else:
-                sent.append(api.send_message(action.chat_id, action.caption or f"Datei: {action.filename}"))
+                sent.append(
+                    _telegram_call_with_optional_reply(
+                        api.send_message,
+                        action.chat_id,
+                        action.caption or f"Datei: {action.filename}",
+                        reply_parameters=reply_parameters,
+                    )
+                )
         elif isinstance(action, ExportFile):
             send_document = getattr(api, "send_document", None)
             if callable(send_document):
                 kwargs = {"caption": action.caption}
                 reply_parameters = _telegram_reply_parameters(action.reply_to_ref)
-                if reply_parameters:
-                    kwargs["reply_parameters"] = reply_parameters
-                sent.append(send_document(action.chat_id, action.data, action.filename, action.content_type, **kwargs))
+                sent.append(
+                    _telegram_call_with_optional_reply(
+                        send_document,
+                        action.chat_id,
+                        action.data,
+                        action.filename,
+                        action.content_type,
+                        reply_parameters=reply_parameters,
+                        **kwargs,
+                    )
+                )
             else:
                 reply_parameters = _telegram_reply_parameters(action.reply_to_ref)
-                kwargs = {"reply_parameters": reply_parameters} if reply_parameters else {}
-                sent.append(api.send_message(action.chat_id, f"Export erzeugt: {action.filename}", **kwargs))
+                sent.append(
+                    _telegram_call_with_optional_reply(
+                        api.send_message,
+                        action.chat_id,
+                        f"Export erzeugt: {action.filename}",
+                        reply_parameters=reply_parameters,
+                    )
+                )
         elif isinstance(action, NotifyLinkedIdentity):
             # Routing a notification by identity requires the production identity router;
             # the adapter keeps it explicit instead of leaking the notice to the wrong chat.
@@ -241,6 +278,18 @@ def _telegram_reply_parameters(reply_to_ref: str) -> str:
     if message_id <= 0:
         return ""
     return json_dumps({"message_id": message_id})
+
+
+def _telegram_call_with_optional_reply(method: Any, *args: Any, reply_parameters: str = "", **kwargs: Any) -> Any:
+    if reply_parameters:
+        kwargs["reply_parameters"] = reply_parameters
+    try:
+        return method(*args, **kwargs)
+    except TypeError as exc:
+        if not reply_parameters or "reply_parameters" not in str(exc):
+            raise
+        kwargs.pop("reply_parameters", None)
+        return method(*args, **kwargs)
 
 
 def _telegram_reply_markup(buttons: tuple[MessageButton, ...]) -> str:
