@@ -1,0 +1,101 @@
+# Bauplan: Aktuelle Logikpruefung und Healthcheck
+
+**Stand:** 2026-07-16 00:06 CEST
+
+**Status:** Aktiv
+
+**Geltungsbereich:** TeeBotus-Runtime, Cinnamon-Applet, Health-Payload,
+Telegram-Adapter und die dazugehoerigen Regressionstests.
+
+## Auftrag
+
+Logikfehler reproduzieren, Ursache im gemeinsamen Pfad beheben und mit einer
+kleinen Regression absichern. Pro Arbeitsschritt bleibt der Fokus auf einer
+Datei oder einem eng zusammenhaengenden Thema. Keine Provider- oder LLM-
+Aufrufe fuer Diagnose und Tests.
+
+## Leitplanken
+
+- Healthcheck und Status-Applet bleiben read-only.
+- `actionable` Probleme bleiben sichtbar und werden nicht durch Fallbacks
+  verdeckt.
+- Rein informative Fallbacks, fehlende optionale Keys und terminale History-
+  Skips werden nicht als Top-Level-Defekt klassifiziert.
+- Keine Secrets, Account-IDs oder privaten Nachrichteninhalte in Plan,
+  Testausgabe oder Applet-Payload speichern.
+- Uncommittete Benutzerdateien `.obsidian/`, `.stfolder/`,
+  `Fusion_Packliste.txt`, `Unbenannt.base` und `Unbenannt.canvas` bleiben
+  unangetastet.
+- Kein Push ohne ausdrueckliche Freigabe. Restart erst an der vereinbarten
+  20-Commit-Grenze oder nach ausdruecklicher Freigabe.
+
+## Aktueller Befund
+
+Read-only Live-Probe ueber `TeeBotus.cinnamon_applet status`:
+
+- Programmversion `1.9.498`, Runtime-Marker `matched`.
+- `teebotus.service`: `active/running`, Returncode `0`.
+- Qdrant: `active/running`, beide benoetigten Collections `ready`.
+- Health-Payload: `status=ok`, `command_ok=true`,
+  `actionable_problem_count=0`, `total_problem_count=0`.
+- Es gibt `20` informative Hinweise. Sie bestehen aus konservativen Gemini-
+  Limitdefaults, optional fehlenden Provider-Keys, partiellen Codex-Usage-
+  Daten, erklaerten lokalen Fallbacks und terminalen Codex-History-Skips.
+  Diese Befunde sind aktuell kein Top-Level-Defekt.
+- Aktuelle Applet-Validierung akzeptiert die Live-Payload. Der erzeugte
+  Kurztext lautet sinngemaess `Health ok` mit separaten `Hinweise`.
+- Falls die sichtbare Cinnamon-Anzeige weiterhin `Health defekt` zeigt, liegt
+  die Abweichung ausserhalb des aktuellen Payloads: stale Applet-Prozess,
+  nicht ausgefuehrter Refresh oder alte Anzeige. Das wird vor einem weiteren
+  Quellpatch reproduziert.
+
+## Bereits umgesetzt
+
+### Healthcheck und Applet
+
+- Health-Klassifikation V2 trennt actionable Probleme von informativen
+  Hinweisen.
+- Applet-Validator prueft Boolean-Konsistenz, Servicezustand, Qdrant-
+  Collections, Runtime-Returncode und Health-Zaehler fail-closed.
+- Applet zeigt konkrete actionable Details; verifizierte lokale Fallbacks
+  werden nicht nochmals als Defekt angezeigt.
+- Zentrale Dispatcher-Warnung wird getrennt von Runtime-Health behandelt.
+
+### Telegram-Paritaet
+
+- Lange Textantworten werden im gemeinsamen Adapterpfad Telegram-konform in
+  UTF-16-beschraenkte Chunks geteilt.
+- Reply-Parameter werden fuer Text, Attachment und Export erhalten.
+- Action-Reihenfolge und Partial-Failure-Fortschritt bleiben retrybar.
+- `SendEdit` reicht `text_mode` weiter.
+- Voice- und Document-Captions reichen Caption sowie normalisierten
+  Telegram-`parse_mode` weiter.
+
+## Naechste Schritte
+
+1. **Sichtbare Applet-Abweichung reproduzieren.** Live-Payload, installierte
+   Applet-Datei, Refresh-Ergebnis und angezeigten Text gemeinsam erfassen.
+   Erfolg: keine unbelegte Annahme ueber `Health defekt`.
+2. **Nur echte actionable Befunde beheben.** Ursache in Runtime oder
+   Applet-Validierung korrigieren; informative Statuszeilen nicht blind
+   entfernen. Erfolg: `actionable_problem_count` und Anzeige stimmen ueberein.
+3. **Contract-Tests erweitern.** Einen schreibfreien Test fuer den aktuellen
+   Live-Payload-Vertrag sowie fuer den betroffenen Anzeigezustand ergaenzen.
+   Erfolg: fokussierte Applet-Suite und relevante Runtime-Suite gruen.
+4. **Plan fortschreiben.** Befund, Commit, Tests und offene Live-Abnahme hier
+   dokumentieren. Plan erst nach reproduzierbarer Abnahme als abgeschlossen
+   markieren.
+
+## Letzter Nachweis
+
+- Telegram-Media-Fix: Commit `0f2497fb`.
+- Relevante Suite: `780 passed, 17 subtests passed in 12.91s`.
+- Cinnamon-Applet-Suite: `238 passed in 29.18s`.
+- `py_compile` und `git diff --check`: sauber.
+- Tests liefen ohne Provider-/LLM-Aufruf.
+
+## Historische Plaene
+
+- `Baupläne/Bauplan-Aktueller-Plan-Logikfehler-Healthcheck-Applet-Codex-History-2026-07-13.md`
+- `Baupläne/Bauplan-Aktueller-Plan-Dispatcher-Teilfehler-Idempotenz-2026-07-13.md`
+- `Baupläne/Bauplan-Fortsetzung-Healthcheck-TBL-Reconciliation-2026-07-13.md`
