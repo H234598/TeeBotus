@@ -442,9 +442,16 @@ class TelegramAPI:
         filename: str,
         content_type: str,
         *,
+        caption: str = "",
+        text_mode: str = "",
         reply_parameters: str = "",
     ) -> int | None:
         fields: dict[str, Any] = {"chat_id": chat_id}
+        if caption:
+            fields["caption"] = caption
+        parse_mode = _telegram_parse_mode(text_mode)
+        if parse_mode:
+            fields["parse_mode"] = parse_mode
         if reply_parameters:
             fields["reply_parameters"] = reply_parameters
         payload = self.request_multipart(
@@ -466,11 +473,15 @@ class TelegramAPI:
         content_type: str,
         caption: str = "",
         *,
+        text_mode: str = "",
         reply_parameters: str = "",
     ) -> int | None:
         fields: dict[str, Any] = {"chat_id": chat_id}
         if caption:
             fields["caption"] = caption
+        parse_mode = _telegram_parse_mode(text_mode)
+        if parse_mode:
+            fields["parse_mode"] = parse_mode
         if reply_parameters:
             fields["reply_parameters"] = reply_parameters
         payload = self.request_multipart(

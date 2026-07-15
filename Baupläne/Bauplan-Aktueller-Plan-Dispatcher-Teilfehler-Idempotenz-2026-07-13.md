@@ -271,3 +271,10 @@ git diff --check
   den alten Aufruf.
 - Betroffene Gesamt-Suite danach: `779 passed, 17 subtests passed in 12.42s`;
   keine Provider-/LLM-Aufrufe.
+- 2026-07-15: Telegram-Media-Paritaetsfehler behoben: `SendAttachment` fuer
+  Audio/Voice verlor bisher `caption` vollstaendig. Voice- und Document-
+  Multipart-Aufrufe uebergeben jetzt Caption sowie den normalisierten
+  `text_mode` als Telegram-`parse_mode`; Reply-Parameter bleiben erhalten.
+- Regression fuer Audio-Caption, Parse-Mode und Reply-Verknuepfung ergaenzt.
+  Betroffene Gesamt-Suite danach: `780 passed, 17 subtests passed in 12.91s`;
+  keine Provider-/LLM-Aufrufe. `py_compile` und `git diff --check` sauber.

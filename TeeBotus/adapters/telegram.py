@@ -223,11 +223,15 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
                         action.data,
                         action.filename,
                         action.content_type,
+                        caption=action.caption,
+                        text_mode=action.text_mode,
                         reply_parameters=reply_parameters,
                     )
                 )
             elif hasattr(api, "send_document"):
                 kwargs = {"caption": action.caption}
+                if action.text_mode:
+                    kwargs["text_mode"] = action.text_mode
                 sent.append(
                     _telegram_call_with_optional_reply(
                         api.send_document,
