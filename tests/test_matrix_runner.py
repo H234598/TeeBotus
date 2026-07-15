@@ -203,7 +203,7 @@ def test_matrix_bridge_preserves_mixed_action_order(tmp_path, monkeypatch) -> No
     async def delete(_event, _actions):
         calls.append("delete")
 
-    async def send(_client, actions):
+    async def send(_client, actions, **_kwargs):
         calls.append(f"send:{actions[0].text}")
         return [f"${actions[0].text}"]
 

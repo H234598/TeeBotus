@@ -274,7 +274,7 @@ def test_signal_command_retries_transient_action_dispatch_failure(tmp_path, monk
     command.engine.process_result = lambda event: EngineResult(event.account_id, [SendText(event.chat_id, "ok")], handled=True)  # type: ignore[method-assign]
     calls = 0
 
-    async def send_once_fails(_context, _actions):
+    async def send_once_fails(_context, _actions, **_kwargs):
         nonlocal calls
         calls += 1
         if calls == 1:
@@ -362,7 +362,7 @@ def test_signal_command_preserves_mixed_action_order(tmp_path, monkeypatch) -> N
     async def delete(_context, _event, _actions):
         calls.append("delete")
 
-    async def send(_context, actions):
+    async def send(_context, actions, **_kwargs):
         calls.append(f"send:{actions[0].text}")
         return [987654]
 
