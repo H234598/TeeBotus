@@ -207,3 +207,12 @@ git diff --check
   Regressionen fuer Attachment und Export ergaenzt.
 - Betroffene Suite danach: `610 passed, 17 subtests passed in 11.28s`;
   keine Provider-/LLM-Aufrufe.
+- 2026-07-15: Action-Reihenfolgefehler behoben: Der moderne Dispatcher zog
+  `NotifyLinkedIdentity` und `DeleteTrackedMessages` in zwei Vorab-Schleifen
+  vor alle normalen Aktionen. Dadurch konnte eine Verknuepfungsbestaetigung
+  nach dem Folgehinweis kommen oder Cleanup vor der gerade erzeugten
+  Nachricht laufen. Ein sequenzieller Loop verarbeitet jetzt alle Actions in
+  ihrer Engine-Reihenfolge; abgeschlossene Journal-Indizes bleiben identisch.
+- Regression `SendText -> DeleteTrackedMessages -> SendText` ergaenzt:
+  `11 passed` im fokussierten Telegram-Retry-/Polling-Lauf, keine
+  Provider-/LLM-Aufrufe. Compile- und Diff-Pruefung sauber.

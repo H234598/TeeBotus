@@ -4723,6 +4723,43 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [(123, BotInstructions().cleanup_success.format(count=5))])
         self.assertEqual(chat_state.pop_recent_messages(123, 10), [101])
 
+    def test_modern_telegram_dispatch_preserves_action_order(self) -> None:
+        from TeeBotus.adapters.telegram_runtime import _dispatch_modern_telegram_actions
+        from TeeBotus.runtime.actions import DeleteTrackedMessages, SendText
+        from TeeBotus.runtime.events import IncomingEvent
+
+        api = FakeAPI()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            secret_provider = StaticSecretProvider(b"e" * 32)
+            account_store = AccountStore(root / "accounts", "Demo", secret_provider)
+            tracker = MessageTracker(root / "Sent_Message_Refs.json")
+            event = IncomingEvent(
+                event_id="telegram:1",
+                instance="Demo",
+                channel="telegram",
+                adapter_slot=1,
+                account_id="account-1",
+                identity_key="telegram:user:456",
+                chat_id="123",
+                chat_type="private",
+                sender_id="456",
+                text="/cleanup 1",
+                message_ref="1",
+            )
+
+            _dispatch_modern_telegram_actions(
+                api,
+                tracker,
+                event,
+                [SendText("123", "before"), DeleteTrackedMessages("123", 1), SendText("123", "after")],
+                account_store=account_store,
+                instance_name="Demo",
+            )
+
+        self.assertEqual(api.sent_messages, [("123", "before"), ("123", "after")])
+        self.assertEqual(api.deleted_messages, [(123, 101)])
+
     def test_modern_telegram_cleanup_logs_and_restores_failed_deletes(self) -> None:
         from TeeBotus.adapters.telegram_runtime import _delete_tracked_telegram_messages
         from TeeBotus.runtime.actions import DeleteTrackedMessages

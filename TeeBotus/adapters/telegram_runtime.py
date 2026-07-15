@@ -1696,19 +1696,17 @@ def _dispatch_modern_telegram_actions(
             dispatch_journal.mark_action_completed(journal_key, index)
 
     for index, action in enumerate(actions):
-        if index in completed or not isinstance(action, NotifyLinkedIdentity):
-            continue
-        _notify_telegram_linked_identities(api, message_tracker, account_store, [action], instance_name=instance_name)
-        # The helper deliberately keeps linked-identity notifications non-fatal.
-        # Mark the attempt complete so a later retry cannot duplicate it.
-        mark_completed(index)
-    for index, action in enumerate(actions):
-        if index in completed or not isinstance(action, DeleteTrackedMessages):
-            continue
-        _delete_tracked_telegram_messages(api, message_tracker, event, [action])
-        mark_completed(index)
-    for index, action in enumerate(actions):
         if index in completed:
+            continue
+        if isinstance(action, NotifyLinkedIdentity):
+            _notify_telegram_linked_identities(api, message_tracker, account_store, [action], instance_name=instance_name)
+            # The helper deliberately keeps linked-identity notifications non-fatal.
+            # Mark the attempt complete so a later retry cannot duplicate it.
+            mark_completed(index)
+            continue
+        if isinstance(action, DeleteTrackedMessages):
+            _delete_tracked_telegram_messages(api, message_tracker, event, [action])
+            mark_completed(index)
             continue
         sent_refs = send_telegram_actions(api, [action])
         if len(sent_refs) != 1:
