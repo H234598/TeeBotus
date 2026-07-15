@@ -223,3 +223,12 @@ git diff --check
   Parameter weiterhin nativ.
 - Fokussierte Adapter-/Runtime-Regressionen: `8 passed`; keine
   Provider-/LLM-Aufrufe. Compile- und Diff-Pruefung sauber.
+- 2026-07-15: Derselbe Reihenfolgefehler wurde in Signal- und Matrix-Runnern
+  gefunden und behoben. Beide fuehrten `NotifyLinkedIdentity` und
+  `DeleteTrackedMessages` vor allen normalen Actions aus. Die Runner
+  behandeln Sonderaktionen jetzt an ihrer Position und senden normale
+  Aktionen einzeln; dadurch bleibt die Engine-Reihenfolge auch kanalueber-
+  greifend erhalten.
+- Je ein Mixed-Action-Regressionstest fuer Matrix und Signal: `2 passed`;
+  die vollstaendigen Runner-Suiten liefen zuvor mit Matrix `54 passed` und
+  Signal `90 passed`. Keine Provider-/LLM-Aufrufe.

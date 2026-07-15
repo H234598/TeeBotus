@@ -237,21 +237,26 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 await self._send_memory_error(context, event)
                 return
             event = event.with_account(engine_result.account_id)
-            actions = engine_result.actions
-            await self._notify_linked_identities(actions)
-            await self._delete_tracked_messages(context, event, actions)
-            actions = _with_signal_reply_context(actions, event)
-            try:
-                sent_refs = await _send_signal_actions_with_retry(context, actions)
-            except Exception:
-                LOGGER.exception(
-                    "Signal action dispatch failed instance=%s recipient=%s message_ref=%s.",
-                    event.instance,
-                    event.chat_id,
-                    event.message_ref,
-                )
-                return
-            for action, sent_ref in zip(actions, sent_refs):
+            actions = _with_signal_reply_context(engine_result.actions, event)
+            for action in actions:
+                if isinstance(action, NotifyLinkedIdentity):
+                    await self._notify_linked_identities([action])
+                    continue
+                if isinstance(action, DeleteTrackedMessages):
+                    await self._delete_tracked_messages(context, event, [action])
+                    continue
+                try:
+                    sent_refs = await _send_signal_actions_with_retry(context, [action])
+                except Exception:
+                    LOGGER.exception(
+                        "Signal action dispatch failed instance=%s recipient=%s message_ref=%s action=%s.",
+                        event.instance,
+                        event.chat_id,
+                        event.message_ref,
+                        type(action).__name__,
+                    )
+                    return
+                sent_ref = sent_refs[0] if sent_refs else None
                 if sent_ref is None:
                     continue
                 if isinstance(action, ExportFile):

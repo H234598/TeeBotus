@@ -340,6 +340,46 @@ def test_signal_command_does_not_resend_completed_actions_when_later_action_fail
     assert [ref.message_ref for ref in refs] == ["103", "101"]
 
 
+def test_signal_command_preserves_mixed_action_order(tmp_path, monkeypatch) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    calls: list[str] = []
+
+    async def notify(_actions):
+        calls.append("notify")
+
+    async def delete(_context, _event, _actions):
+        calls.append("delete")
+
+    async def send(_context, actions):
+        calls.append(f"send:{actions[0].text}")
+        return [987654]
+
+    command.engine.process_result = lambda event: EngineResult(  # type: ignore[method-assign]
+        event.account_id,
+        [SendText(event.chat_id, "before"), DeleteTrackedMessages(event.chat_id, 1), SendText(event.chat_id, "after")],
+        handled=True,
+    )
+    monkeypatch.setattr(command, "_notify_linked_identities", notify)
+    monkeypatch.setattr(command, "_delete_tracked_messages", delete)
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._send_signal_actions_with_retry", send)
+
+    asyncio.run(command.handle(FakeSignalContext()))
+
+    assert calls == ["send:before", "delete", "send:after"]
+
+
 def test_signal_command_can_login_from_linked_device_sync_message(tmp_path) -> None:
     secret_provider = StaticSecretProvider(b"x" * 32)
     command = TeeBotusSignalCommand(

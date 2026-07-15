@@ -190,21 +190,26 @@ class MatrixRuntimeBridge:
             await self._send_memory_error(event)
             return
         event = event.with_account(engine_result.account_id)
-        actions = engine_result.actions
-        await self._notify_linked_identities(actions)
-        await self._delete_tracked_messages(event, actions)
-        actions = _with_matrix_reply_context(actions, event)
-        try:
-            sent_refs = await send_matrix_actions(self.client, actions)
-        except Exception:
-            LOGGER.exception(
-                "Matrix action dispatch failed instance=%s room_id=%s event_id=%s.",
-                event.instance,
-                event.chat_id,
-                event.message_ref,
-            )
-            return
-        for action, sent_ref in zip(actions, sent_refs):
+        actions = _with_matrix_reply_context(engine_result.actions, event)
+        for action in actions:
+            if isinstance(action, NotifyLinkedIdentity):
+                await self._notify_linked_identities([action])
+                continue
+            if isinstance(action, DeleteTrackedMessages):
+                await self._delete_tracked_messages(event, [action])
+                continue
+            try:
+                sent_refs = await send_matrix_actions(self.client, [action])
+            except Exception:
+                LOGGER.exception(
+                    "Matrix action dispatch failed instance=%s room_id=%s event_id=%s action=%s.",
+                    event.instance,
+                    event.chat_id,
+                    event.message_ref,
+                    type(action).__name__,
+                )
+                return
+            sent_ref = sent_refs[0] if sent_refs else None
             if sent_ref is None:
                 continue
             if isinstance(action, ExportFile):

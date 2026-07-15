@@ -178,6 +178,49 @@ def test_matrix_bridge_logs_action_dispatch_errors(tmp_path, caplog) -> None:
     assert "Matrix action dispatch failed" in caplog.text
 
 
+def test_matrix_bridge_preserves_mixed_action_order(tmp_path, monkeypatch) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    calls: list[str] = []
+
+    async def notify(_actions):
+        calls.append("notify")
+
+    async def delete(_event, _actions):
+        calls.append("delete")
+
+    async def send(_client, actions):
+        calls.append(f"send:{actions[0].text}")
+        return [f"${actions[0].text}"]
+
+    bridge.engine.process_result = lambda event: EngineResult(  # type: ignore[method-assign]
+        event.account_id,
+        [SendText(event.chat_id, "before"), DeleteTrackedMessages(event.chat_id, 1), SendText(event.chat_id, "after")],
+        handled=True,
+    )
+    monkeypatch.setattr(bridge, "_notify_linked_identities", notify)
+    monkeypatch.setattr(bridge, "_delete_tracked_messages", delete)
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner.send_matrix_actions", send)
+
+    asyncio.run(bridge.handle_message(FakeMatrixRoom(), FakeMatrixMessage()))
+
+    assert calls == ["send:before", "delete", "send:after"]
+
+
 def test_matrix_bridge_exposes_proactive_sender(tmp_path) -> None:
     client = FakeMatrixClient()
     bridge = MatrixRuntimeBridge(
