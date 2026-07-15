@@ -93,6 +93,12 @@ Read-only Live-Probe ueber `TeeBotus.cinnamon_applet status`:
 - Cinnamon-Applet-Suite: `238 passed in 29.18s`.
 - `py_compile` und `git diff --check`: sauber.
 - Tests liefen ohne Provider-/LLM-Aufruf.
+- 2026-07-16: Ein Applet-Warning mit `TeeBotus_Logger queued=1` wurde
+  reproduziert. Die Adminroute war `routable=1`; eine unmittelbare read-only
+  Wiederholung zeigte lokale Queue `0` und zentrale Dispatcher-Queue `0`.
+  Die Warnung war damit ein echter kurzlebiger Zustellzustand, kein stale
+  Applet-Payload und kein Fehlklassifikationsbeleg. Die aktuelle Payload wurde
+  durch den installierten JavaScript-Validator akzeptiert.
 
 ## Historische Plaene
 
