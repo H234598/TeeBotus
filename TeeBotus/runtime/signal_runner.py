@@ -238,33 +238,17 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 return
             event = event.with_account(engine_result.account_id)
             actions = _with_signal_reply_context(engine_result.actions, event)
-            for action in actions:
-                if isinstance(action, NotifyLinkedIdentity):
-                    await self._notify_linked_identities([action])
-                    continue
-                if isinstance(action, DeleteTrackedMessages):
-                    await self._delete_tracked_messages(context, event, [action])
-                    continue
-                try:
-                    sent_refs = await _send_signal_actions_with_retry(context, [action])
-                except Exception:
-                    LOGGER.exception(
-                        "Signal action dispatch failed instance=%s recipient=%s message_ref=%s action=%s.",
-                        event.instance,
-                        event.chat_id,
-                        event.message_ref,
-                        type(action).__name__,
-                    )
-                    return
-                sent_ref = sent_refs[0] if sent_refs else None
+            pending_actions: list[Any] = []
+
+            def record_sent_action(action: Any, sent_ref: Any) -> None:
                 if sent_ref is None:
-                    continue
+                    return
                 if isinstance(action, ExportFile):
                     should_track = True
                 else:
                     should_track = isinstance(action, (SendText, SendAttachment, SendEdit, SendPoll)) and action.track
                 if not should_track:
-                    continue
+                    return
                 self._record_sent_ref(
                     SentMessageRef(
                         channel="signal",
@@ -276,6 +260,40 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                     ),
                     context="action",
                 )
+
+            async def flush_pending() -> bool:
+                if not pending_actions:
+                    return True
+                batch = list(pending_actions)
+                pending_actions.clear()
+                try:
+                    sent_refs = await _send_signal_actions_with_retry(context, batch)
+                except Exception:
+                    LOGGER.exception(
+                        "Signal action dispatch failed instance=%s recipient=%s message_ref=%s actions=%s.",
+                        event.instance,
+                        event.chat_id,
+                        event.message_ref,
+                        tuple(type(action).__name__ for action in batch),
+                    )
+                    return False
+                for action, sent_ref in zip(batch, sent_refs):
+                    record_sent_action(action, sent_ref)
+                return True
+
+            for action in actions:
+                if isinstance(action, NotifyLinkedIdentity):
+                    if not await flush_pending():
+                        return
+                    await self._notify_linked_identities([action])
+                    continue
+                if isinstance(action, DeleteTrackedMessages):
+                    if not await flush_pending():
+                        return
+                    await self._delete_tracked_messages(context, event, [action])
+                    continue
+                pending_actions.append(action)
+            await flush_pending()
         finally:
             await self._delete_local_attachments(context)
 

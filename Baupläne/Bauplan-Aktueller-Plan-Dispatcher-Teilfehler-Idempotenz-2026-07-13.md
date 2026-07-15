@@ -232,3 +232,8 @@ git diff --check
 - Je ein Mixed-Action-Regressionstest fuer Matrix und Signal: `2 passed`;
   die vollstaendigen Runner-Suiten liefen zuvor mit Matrix `54 passed` und
   Signal `90 passed`. Keine Provider-/LLM-Aufrufe.
+- Nachkontrolle: Normale zusammenhaengende Actions bleiben in Matrix und
+  Signal als Batch erhalten. Damit bleibt Signal-Typing ueber eine folgende
+  Textaktion aktiv, waehrend Notify/Delete weiterhin an ihrer Listenposition
+  unterbrechen. Runner-Suiten danach: Matrix `55 passed`, Signal `91 passed`;
+  Compile- und Diff-Pruefung sauber.
