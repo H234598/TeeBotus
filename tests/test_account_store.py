@@ -1127,6 +1127,24 @@ def test_external_account_can_be_created_and_linked_without_local_secret(tmp_pat
     assert profile["external_links"][0]["source_instance"] == "Bote_der_Wahrheit"
 
 
+def test_link_identity_retry_repairs_profile_after_mapping_write_succeeds(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    identity_key = signal_identity_key(source_uuid="repair-me")
+
+    with patch.object(store, "_add_identity_to_profile", side_effect=AccountStoreError("profile write failed")):
+        with pytest.raises(AccountStoreError, match="profile write failed"):
+            store.link_identity_to_account(identity_key, account_id, display_label="Signal")
+
+    assert store.get_account_for_identity(identity_key) == account_id
+    assert identity_key not in store._read_account_profile(account_id)["linked_identities"]
+
+    result = store.link_identity_to_account(identity_key, account_id, display_label="Signal")
+
+    assert result["already_linked"] is True
+    assert identity_key in store._read_account_profile(account_id)["linked_identities"]
+
+
 def test_encrypted_memory_with_wrong_instance_secret_does_not_fallback_to_envelope(tmp_path):
     first = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
     account_id = first.resolve_or_create_account(telegram_identity_key(77))

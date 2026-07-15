@@ -135,6 +135,16 @@ Diagnose und Tests.
   wird der Fehler sichtbar statt stale Daten zu liefern.
 - Regression fuer Klartext-Index und Klartext-Entries ergaenzt. AccountStore-
   Suite: `205 passed in 6.40s`; Legacy-/SQL-Migrationssuiten: `49 passed`.
+- 2026-07-16: Bienenbefund bei Identity-Link bestaetigt: Nach erfolgreichem
+  Mapping-Write und fehlgeschlagenem Profil-Write blieb ein Retry auf
+  `already_linked` stehen und reparierte das Profil nicht. Der bereits
+  gemappte Pfad synchronisiert das Profil jetzt vor dem Return.
+- `link_identity()` und `rotate_secret()` verwenden dieselbe Identity-Sperre;
+  dadurch liegt Secret-Pruefung nicht mehr ausserhalb der Link-Serialisierung.
+  Regression fokussiert `7 passed`; AccountStore-Suite danach `206 passed in
+  9.55s`.
+- Naechster offener High-Priority-Befund: `merge_accounts()` ist bei Fehlern
+  nicht transaktional und nach Teilfehlern nicht sicher replaybar.
 
 ## Akzeptanzkriterien
 

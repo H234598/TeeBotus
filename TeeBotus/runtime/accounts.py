@@ -1879,6 +1879,7 @@ class AccountStore:
             raise AccountStoreError("account already has an active secret; rotate instead")
         return self.rotate_secret(account_id)
 
+    @_serialize_identity_map
     def rotate_secret(self, account_id: str) -> tuple[str, str]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
@@ -1926,6 +1927,7 @@ class AccountStore:
         actual = self._secret_verifier(secret)
         return hmac.compare_digest(expected, actual)
 
+    @_serialize_identity_map
     def link_identity(self, identity_key: str, account_id: str, account_secret: str, *, display_label: str = "") -> dict[str, Any]:
         target_account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(target_account_id)
@@ -1976,6 +1978,7 @@ class AccountStore:
         now = utc_now()
         merged_from: str | None = None
         if current_account_id == target_account_id:
+            self._add_identity_to_profile(target_account_id, key)
             identities = self._load_identities()
             self._touch_identity(identities, key)
             return {
