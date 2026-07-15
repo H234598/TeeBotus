@@ -99,6 +99,14 @@ Read-only Live-Probe ueber `TeeBotus.cinnamon_applet status`:
   Die Warnung war damit ein echter kurzlebiger Zustellzustand, kein stale
   Applet-Payload und kein Fehlklassifikationsbeleg. Die aktuelle Payload wurde
   durch den installierten JavaScript-Validator akzeptiert.
+- 2026-07-16: Telegram-Kompatibilitaetsregression behoben: Der neue Caption-
+  und `text_mode`-Pfad entfernte bei alten Adaptern nur `reply_parameters`.
+  Adapter mit historischer Signatur ohne optionale Keywords konnten dadurch
+  bei Voice-/Document-Actions mit `TypeError` abbrechen. Der gemeinsame
+  Fallback entfernt jetzt nur die vom konkreten Adapter nicht unterstuetzten
+  optionalen Keywords und laesst echte TypeErrors weiter hochlaufen.
+- Regression fuer alte Voice-/Document-Signaturen ergaenzt. Relevante Suite:
+  `781 passed, 17 subtests passed in 12.62s`; keine Provider-/LLM-Aufrufe.
 
 ## Historische Plaene
 

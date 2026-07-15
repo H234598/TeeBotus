@@ -1853,6 +1853,52 @@ def test_telegram_audio_attachment_preserves_caption_and_text_mode():
     ]
 
 
+def test_telegram_media_attachment_keeps_legacy_adapter_compatibility():
+    class API:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def send_voice(self, chat_id, data, filename, content_type):
+            self.calls.append(("voice", chat_id, data, filename, content_type))
+            return 1
+
+        def send_document(self, chat_id, data, filename, content_type):
+            self.calls.append(("document", chat_id, data, filename, content_type))
+            return 2
+
+    api = API()
+
+    sent = send_telegram_actions(
+        api,
+        [
+            SendAttachment(
+                "@my_channel",
+                b"audio",
+                "voice.ogg",
+                "audio/ogg",
+                caption="Hinweis",
+                text_mode="html",
+                reply_to_ref="99",
+            ),
+            SendAttachment(
+                "@my_channel",
+                b"document",
+                "note.txt",
+                "text/plain",
+                caption="Hinweis",
+                text_mode="html",
+                reply_to_ref="99",
+            ),
+        ],
+    )
+
+    assert sent == [1, 2]
+    assert api.calls == [
+        ("voice", "@my_channel", b"audio", "voice.ogg", "audio/ogg"),
+        ("document", "@my_channel", b"document", "note.txt", "text/plain"),
+    ]
+
+
 def test_telegram_export_file_falls_back_to_message_without_document_api():
     class API:
         def __init__(self) -> None:

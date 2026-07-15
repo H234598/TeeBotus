@@ -375,13 +375,22 @@ def _telegram_reply_parameters(reply_to_ref: str) -> str:
 def _telegram_call_with_optional_reply(method: Any, *args: Any, reply_parameters: str = "", **kwargs: Any) -> Any:
     if reply_parameters:
         kwargs["reply_parameters"] = reply_parameters
-    try:
-        return method(*args, **kwargs)
-    except TypeError as exc:
-        if not reply_parameters or "reply_parameters" not in str(exc):
-            raise
-        kwargs.pop("reply_parameters", None)
-        return method(*args, **kwargs)
+    optional_keywords = ("reply_parameters", "text_mode", "caption")
+    while True:
+        try:
+            return method(*args, **kwargs)
+        except TypeError as exc:
+            unsupported = next(
+                (
+                    key
+                    for key in optional_keywords
+                    if key in kwargs and key in str(exc)
+                ),
+                None,
+            )
+            if unsupported is None:
+                raise
+            kwargs.pop(unsupported, None)
 
 
 def _telegram_reply_markup(buttons: tuple[MessageButton, ...]) -> str:
