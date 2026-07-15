@@ -237,3 +237,12 @@ git diff --check
   Textaktion aktiv, waehrend Notify/Delete weiterhin an ihrer Listenposition
   unterbrechen. Runner-Suiten danach: Matrix `55 passed`, Signal `91 passed`;
   Compile- und Diff-Pruefung sauber.
+- 2026-07-15: Letzter verbleibender Telegram-Limitfehler gefunden: Der
+  Proactive-Sender rief `send_telegram_actions` direkt auf und umging damit
+  die Runtime-Expansion fuer lange Texte. Die gemeinsame Chunk-Logik liegt
+  jetzt im Telegram-Adapter; direkte, Runtime- und Proactive-Aufrufe teilen
+  denselben Pfad. Bei mehreren Chunks bleiben Reply am ersten und Buttons am
+  letzten Chunk.
+- Betroffene Gesamt-Suite: `758 passed, 17 subtests passed in 15.60s`;
+  keine Provider-/LLM-Aufrufe. Direkter Proactive-/Adapter-Regressionstest
+  ergaenzt.

@@ -59,8 +59,11 @@ from TeeBotus.runtime.dotenv import load_dotenv_defaults
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.adapters.telegram import (
+    TELEGRAM_MESSAGE_CHUNK_SIZE,
+    _telegram_text_chunks,
     _telegram_reply_markup,
     send_telegram_actions,
+    split_telegram_message,
     telegram_message_to_event,
     telegram_update_callback_query_id,
     telegram_update_message,
@@ -90,7 +93,6 @@ MAX_TRACKED_BOT_MESSAGES = 100
 MAX_TRACKED_CHAT_MESSAGES = 1000
 INITIAL_RETRY_DELAY_SECONDS = 5
 MAX_RETRY_DELAY_SECONDS = 60
-TELEGRAM_MESSAGE_CHUNK_SIZE = 3900
 TELADI_EMERGENCY_CHAT_ID = 395935293
 TELADI_EMERGENCY_COOLDOWN_SECONDS = 24 * 60 * 60
 DEFAULT_INSTANCE_NAME = "Bote_der_Wahrheit"
@@ -4814,43 +4816,6 @@ def count_words(text: str) -> int:
 
 def contains_sources(text: str) -> bool:
     return bool(SOURCE_MARKER_RE.search(text))
-
-
-def split_telegram_message(text: str, chunk_size: int = TELEGRAM_MESSAGE_CHUNK_SIZE) -> list[str]:
-    if len(text) <= chunk_size:
-        return [text]
-
-    chunks: list[str] = []
-    remaining = text
-    while len(remaining) > chunk_size:
-        split_at = _find_split_index(remaining, chunk_size)
-        chunk = remaining[:split_at].rstrip()
-        if not chunk:
-            chunk = remaining[:chunk_size]
-            split_at = chunk_size
-        chunks.append(chunk)
-        remaining = remaining[split_at:].lstrip()
-
-    if remaining:
-        chunks.append(remaining)
-    return chunks
-
-
-def _telegram_text_chunks(text: str, *, formatted_text: str = "") -> list[tuple[str, str]]:
-    plain = str(text or "")
-    formatted = str(formatted_text or "")
-    if formatted and len(plain) <= TELEGRAM_MESSAGE_CHUNK_SIZE and len(formatted) <= TELEGRAM_MESSAGE_CHUNK_SIZE:
-        return [(plain, formatted)]
-    return [(chunk, "") for chunk in split_telegram_message(plain)]
-
-
-def _find_split_index(text: str, chunk_size: int) -> int:
-    search_window = text[:chunk_size]
-    for separator in ("\n\n", "\n", ". ", "? ", "! ", "; ", ", ", " "):
-        index = search_window.rfind(separator)
-        if index >= chunk_size // 2:
-            return index + len(separator)
-    return chunk_size
 
 
 def _handle_voice_command(

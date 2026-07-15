@@ -9,7 +9,12 @@ from signalbot.message import MessageType
 
 from TeeBotus.adapters.matrix import matrix_message_to_event, send_matrix_actions
 from TeeBotus.adapters.signal import send_signal_actions, signal_message_to_event
-from TeeBotus.adapters.telegram import send_telegram_actions, telegram_message_to_event, telegram_update_message
+from TeeBotus.adapters.telegram import (
+    TELEGRAM_MESSAGE_CHUNK_SIZE,
+    send_telegram_actions,
+    telegram_message_to_event,
+    telegram_update_message,
+)
 from TeeBotus.runtime.actions import (
     DelaySeconds,
     ExportFile,
@@ -1525,6 +1530,37 @@ def test_telegram_send_delay_preserves_result_alignment(monkeypatch):
     assert sent == [1, None, 2]
     assert sleeps == [1.0]
     assert api.calls == [("1", "vorher"), ("1", "danach")]
+
+
+def test_telegram_direct_adapter_splits_long_text_with_reply_and_buttons():
+    class API:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def send_message(self, chat_id, text, **kwargs):
+            self.calls.append((chat_id, text, kwargs))
+            return len(self.calls)
+
+    api = API()
+
+    sent = send_telegram_actions(
+        api,
+        [
+            SendText(
+                "1",
+                "wort " * 1200,
+                reply_to_ref="77",
+                buttons=(MessageButton("Weiter", "weiter"),),
+            )
+        ],
+    )
+
+    assert len(api.calls) > 1
+    assert sent == [len(api.calls)]
+    assert all(len(text) <= TELEGRAM_MESSAGE_CHUNK_SIZE for _, text, _ in api.calls)
+    assert json.loads(api.calls[0][2]["reply_parameters"]) == {"message_id": 77}
+    assert "reply_parameters" not in api.calls[-1][2]
+    assert "reply_markup" in api.calls[-1][2]
 
 
 def test_telegram_send_text_passes_formatted_text_when_supported():

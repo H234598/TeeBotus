@@ -24,6 +24,8 @@ from TeeBotus.runtime.actions import (
 )
 from TeeBotus.runtime.events import IncomingEvent
 
+TELEGRAM_MESSAGE_CHUNK_SIZE = 3900
+
 
 def telegram_message_to_event(
     message: dict[str, Any] | None = None,
@@ -105,6 +107,43 @@ def _telegram_sender_name(sender: dict[str, Any], sender_chat: dict[str, Any]) -
     if sender:
         return " ".join(part for part in [str(sender.get("first_name") or "").strip(), str(sender.get("last_name") or "").strip()] if part)
     return str(sender_chat.get("title") or sender_chat.get("first_name") or "").strip()
+
+
+def split_telegram_message(text: str, chunk_size: int = TELEGRAM_MESSAGE_CHUNK_SIZE) -> list[str]:
+    if len(text) <= chunk_size:
+        return [text]
+
+    chunks: list[str] = []
+    remaining = text
+    while len(remaining) > chunk_size:
+        split_at = _find_split_index(remaining, chunk_size)
+        chunk = remaining[:split_at].rstrip()
+        if not chunk:
+            chunk = remaining[:chunk_size]
+            split_at = chunk_size
+        chunks.append(chunk)
+        remaining = remaining[split_at:].lstrip()
+
+    if remaining:
+        chunks.append(remaining)
+    return chunks
+
+
+def _telegram_text_chunks(text: str, *, formatted_text: str = "") -> list[tuple[str, str]]:
+    plain = str(text or "")
+    formatted = str(formatted_text or "")
+    if formatted and len(plain) <= TELEGRAM_MESSAGE_CHUNK_SIZE and len(formatted) <= TELEGRAM_MESSAGE_CHUNK_SIZE:
+        return [(plain, formatted)]
+    return [(chunk, "") for chunk in split_telegram_message(plain)]
+
+
+def _find_split_index(text: str, chunk_size: int) -> int:
+    search_window = text[:chunk_size]
+    for separator in ("\n\n", "\n", ". ", "? ", "! ", "; ", ", ", " "):
+        index = search_window.rfind(separator)
+        if index >= chunk_size // 2:
+            return index + len(separator)
+    return chunk_size
 
 
 def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
@@ -227,6 +266,31 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
 
 
 def _send_telegram_text(
+    api: Any,
+    chat_id: Any,
+    text: str,
+    *,
+    text_mode: str = "",
+    formatted_text: str = "",
+    buttons: tuple[MessageButton, ...] = (),
+    reply_to_ref: str = "",
+) -> int | None:
+    chunk_pairs = _telegram_text_chunks(text, formatted_text=formatted_text)
+    message_id: int | None = None
+    for index, (chunk, formatted_chunk) in enumerate(chunk_pairs):
+        message_id = _send_telegram_text_chunk(
+            api,
+            chat_id,
+            chunk,
+            text_mode=text_mode if formatted_chunk else "",
+            formatted_text=formatted_chunk,
+            buttons=buttons if index == len(chunk_pairs) - 1 else (),
+            reply_to_ref=reply_to_ref if index == 0 else "",
+        )
+    return message_id
+
+
+def _send_telegram_text_chunk(
     api: Any,
     chat_id: Any,
     text: str,
