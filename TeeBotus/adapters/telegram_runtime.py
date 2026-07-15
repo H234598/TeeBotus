@@ -896,6 +896,7 @@ class TelegramRuntimeContext:
     dispatch_retries: dict[str, "_TelegramDispatchRetry"] = field(default_factory=dict)
     dispatch_lock: Any = field(default_factory=threading.Lock)
     dispatch_journal: TelegramDispatchJournal | None = None
+    dispatch_journal_completion_deferred: bool = False
 
 
 @dataclass
@@ -980,6 +981,36 @@ def _telegram_dispatch_retry_key(context: TelegramRuntimeContext, update: dict[s
     if update_id is not None:
         return f"{context.instance_name}:{context.adapter_slot}:update:{update_id}"
     return f"{context.instance_name}:{context.adapter_slot}:event:{event.event_id}:{event.chat_id}"
+
+
+def _telegram_dispatch_retry_key_for_update(context: TelegramRuntimeContext, update: dict[str, Any]) -> str:
+    message = telegram_update_message(update)
+    if not isinstance(message, dict):
+        return ""
+    event = telegram_message_to_event(
+        message,
+        update=update,
+        instance=context.instance_name,
+        adapter_slot=context.adapter_slot,
+    )
+    if event is None:
+        return ""
+    return _telegram_dispatch_retry_key(context, update, event)
+
+
+def _complete_telegram_dispatch_journal(context: Any, update: dict[str, Any]) -> bool:
+    journal = getattr(context, "dispatch_journal", None)
+    if journal is None:
+        return True
+    key = _telegram_dispatch_retry_key_for_update(context, update)
+    if not key:
+        return True
+    try:
+        journal.complete(key)
+    except Exception:
+        LOGGER.exception("Could not finalize Telegram dispatch journal key=%s.", key)
+        return False
+    return True
 
 
 def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update: dict[str, Any], chat_state: ChatState) -> bool:
@@ -1262,7 +1293,7 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
                 f"slot={context.adapter_slot} event_id={event.event_id}"
             )
         context.dispatch_retries.pop(retry_key, None)
-        if dispatch_journal is not None:
+        if dispatch_journal is not None and not getattr(context, "dispatch_journal_completion_deferred", False):
             dispatch_journal.complete(retry_key)
     except Exception:
         LOGGER.exception(
@@ -3794,6 +3825,8 @@ def run_polling(
     offset_path = _telegram_update_offset_path(instance, token_label, instances_dir=instances_dir)
     offset: int | None = _read_telegram_update_offset(offset_path)
     retry_delay = INITIAL_RETRY_DELAY_SECONDS
+    if runtime_context is not None:
+        runtime_context.dispatch_journal_completion_deferred = True
 
     try:
         while stop_event is None or not stop_event.is_set():
@@ -3837,7 +3870,28 @@ def run_polling(
                         retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
                         break
                     else:
-                        _write_telegram_update_offset(offset_path, persisted_offset)
+                        if not _write_telegram_update_offset(offset_path, persisted_offset):
+                            LOGGER.error(
+                                "Telegram update offset was not persisted; keeping update unacknowledged "
+                                "instance=%s token_slot=%s update_id=%s.",
+                                instance,
+                                token_label,
+                                update_id,
+                            )
+                            time.sleep(retry_delay)
+                            retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
+                            break
+                        if not _complete_telegram_dispatch_journal(runtime_context, update):
+                            LOGGER.error(
+                                "Telegram dispatch journal was not finalized; keeping update retryable "
+                                "instance=%s token_slot=%s update_id=%s.",
+                                instance,
+                                token_label,
+                                update_id,
+                            )
+                            time.sleep(retry_delay)
+                            retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
+                            break
                         offset = persisted_offset
             except KeyboardInterrupt:
                 LOGGER.info("Bot stopped.")
@@ -4334,7 +4388,7 @@ def _read_telegram_update_offset(path: Path) -> int | None:
         return None
 
 
-def _write_telegram_update_offset(path: Path, offset: int) -> None:
+def _write_telegram_update_offset(path: Path, offset: int) -> bool:
     temporary_path = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -4343,8 +4397,10 @@ def _write_telegram_update_offset(path: Path, offset: int) -> None:
             file.flush()
             os.fsync(file.fileno())
         os.replace(temporary_path, path)
+        return True
     except OSError:
         LOGGER.exception("Failed to persist telegram update offset path=%s offset=%s.", path, offset)
+        return False
     finally:
         try:
             temporary_path.unlink()

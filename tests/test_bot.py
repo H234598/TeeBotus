@@ -5084,6 +5084,85 @@ class BotTests(unittest.TestCase):
         self.assertEqual(handle.call_count, 2)
         self.assertEqual(api.offsets, [None, None, 8])
 
+    def test_run_polling_keeps_completed_dispatch_journal_until_offset_is_persisted(self) -> None:
+        from TeeBotus.runtime.actions import SendText
+        from TeeBotus.runtime.engine import EngineResult
+
+        class InstructionBox:
+            def get(self):
+                return BotInstructions()
+
+        class OffsetFailurePollingAPI(FakeAPI):
+            def __init__(self) -> None:
+                super().__init__()
+                self.calls = 0
+                self.offsets: list[int | None] = []
+
+            def get_updates(self, offset, timeout=50):
+                self.offsets.append(offset)
+                self.calls += 1
+                if self.calls <= 2:
+                    return [
+                        {
+                            "update_id": 7,
+                            "message": {
+                                "message_id": 11,
+                                "text": "/ping",
+                                "chat": {"id": 123, "type": "private"},
+                                "from": {"id": 456},
+                            },
+                        }
+                    ]
+                raise KeyboardInterrupt
+
+        api = OffsetFailurePollingAPI()
+        process_calls = 0
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            secret_provider = StaticSecretProvider(b"e" * 32)
+            context = build_telegram_runtime_context(
+                api=api,
+                instance_name="Demo",
+                adapter_slot=1,
+                instruction_store=InstructionBox(),
+                account_store=AccountStore(root / "accounts", "Demo", secret_provider),
+                state_store=RuntimeStateStore(root / "data", instance_name="Demo", secret_provider=secret_provider),
+                message_tracker=MessageTracker(root / "runtime" / "Sent_Message_Refs.json"),
+                openai_client=None,
+                working_memory_store=None,
+                bibliothekar_store=None,
+                youtube_job_runner=None,
+                bot_identity=BotIdentity(first_name="Mondbot", username="MondBot"),
+            )
+
+            def process_result(event):
+                nonlocal process_calls
+                process_calls += 1
+                return EngineResult(event.account_id, [SendText(event.chat_id, "once")], handled=True)
+
+            context.engine.process_result = process_result  # type: ignore[method-assign]
+            with (
+                patch("TeeBotus.adapters.telegram_runtime._write_telegram_update_offset", side_effect=[False, True]) as write_offset,
+                patch("TeeBotus.adapters.telegram_runtime.time.sleep"),
+            ):
+                run_polling(
+                    api,
+                    instruction_store=InstructionBox(),
+                    instance_name="Demo",
+                    instances_dir=root / "instances",
+                    runtime_context=context,
+                    chat_state=ChatState(),
+                    bot_identity=context.bot_identity,
+                    youtube_job_runner=FakeJobRunner(),
+                )
+
+            self.assertIsNone(context.dispatch_journal.load("Demo:1:update:7"))
+
+        self.assertEqual(api.sent_messages, [("123", "once")])
+        self.assertEqual(process_calls, 1)
+        self.assertEqual(api.offsets, [None, None, 8])
+        self.assertEqual(write_offset.call_count, 2)
+
     def test_run_polling_all_cleans_up_when_bridge_setup_fails(self) -> None:
         from TeeBotus.adapters.telegram_runtime import run_polling_all
 

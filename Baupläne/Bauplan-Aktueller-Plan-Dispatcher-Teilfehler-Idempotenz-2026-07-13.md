@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13
 
-**Status:** Abgeschlossen fuer diesen Dispatcher-Abschnitt
+**Status:** Abgeschlossen fuer Dispatcher-Teilfehler, Journal und Offset-Commit
 
 **Parent-Plan:**
 `Baupläne/Bauplan-Aktueller-Plan-Logikpruefung-Telegram-Runtime-2026-07-13.md`
@@ -81,6 +81,11 @@ Der uebergeordnete Arbeitsauftrag lautet:
 - [x] Journalfehler fail-closed behandeln: Wenn der Plan nicht sicher
   geschrieben werden kann, bleibt das Update unbestaetigt und es wird kein
   in-memory-only Retry weitergefuehrt.
+- [x] Offset-Commit-Reihenfolge absichern: Das Dispatch-Journal bleibt nach
+  erfolgreichem Versand erhalten, bis der Telegram-Offset atomar geschrieben
+  wurde. Ein fehlgeschlagener Offset-Write oder eine fehlgeschlagene
+  Journal-Finalisierung laesst das Update retrybar und verhindert dadurch eine
+  erneute Seiteneffekt-Ausfuehrung.
 - [x] Den Timeout-Pfad absichern: Ein laufender Versand wird durch einen
   In-Flight-Lock nicht parallel erneut gestartet. Der Timeout bleibt ein
   Retry-Fehler und sendet keine konkurrierende Fallback-Antwort; das Update
@@ -139,6 +144,9 @@ Der Prozessneustart-Nachweis ist gruen:
 ```text
 .venv-py313/bin/pytest -q tests/test_bot.py -k 'modern_dispatch_retry or modern_dispatch_timeout'
 3 passed, 188 deselected in 1.83s
+
+.venv-py313/bin/pytest -q tests/test_bot.py -k 'run_polling or modern_dispatch_retry or modern_dispatch_timeout'
+10 passed, 182 deselected in 3.22s
 ```
 
 Die relevante Suite ist gruen:
@@ -147,7 +155,7 @@ Die relevante Suite ist gruen:
 .venv-py313/bin/pytest -q tests/test_bot.py tests/test_telegram_runner.py \
   tests/test_engine_identity_flows.py tests/test_adapters.py \
   tests/test_runtime_state.py
-605 passed, 17 subtests passed in 10.63s
+606 passed, 17 subtests passed in 11.52s
 
 git diff --check
 ```
@@ -165,4 +173,9 @@ git diff --check
   Commit mit unserem Journal. Das Journal reduziert das Fenster auf diese
   unvermeidbare Remote-Grenze.
 - Die relevante Suite und Syntaxpruefung liefen ohne Provider-/LLM-Aufruf.
-- Lokaler Commit fuer diesen Abschnitt ist gesetzt; Push bleibt aus.
+- Lokaler Commit fuer diesen Folgefix ist gesetzt; Push bleibt aus.
+- Der Offset-Commit-Test reproduziert einen fehlgeschlagenen ersten Write:
+  Telegram liefert Update `7` erneut, aber die Aktion `once` wird nur einmal
+  gesendet. Erst nach erfolgreichem Offset-Write wird das verschluesselte
+  Journal final geloescht. Damit ist die lokale Reihenfolge
+  `dispatch -> offset durable -> journal complete` belastbar.
