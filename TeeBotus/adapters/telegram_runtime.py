@@ -61,6 +61,7 @@ from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.adapters.telegram import (
     TELEGRAM_MESSAGE_CHUNK_SIZE,
     _telegram_text_chunks,
+    _telegram_unexpected_keyword,
     _telegram_reply_markup,
     send_telegram_actions,
     split_telegram_message,
@@ -4688,14 +4689,18 @@ def _send_telegram_message(
                 kwargs["reply_markup"] = reply_markup
             message_id = api.send_message(chat_id, text, **kwargs)
         except TypeError as exc:
-            if "text_mode" not in str(exc) and "formatted_text" not in str(exc) and "reply_markup" not in str(exc):
+            if _telegram_unexpected_keyword(
+                str(exc),
+                kwargs,
+                ("text_mode", "formatted_text", "reply_markup"),
+            ) is None:
                 raise
             message_id = api.send_message(chat_id, text)
     elif reply_markup:
         try:
             message_id = api.send_message(chat_id, text, reply_markup=reply_markup)
         except TypeError as exc:
-            if "reply_markup" not in str(exc):
+            if _telegram_unexpected_keyword(str(exc), {"reply_markup": reply_markup}, ("reply_markup",)) is None:
                 raise
             message_id = api.send_message(chat_id, text)
     else:

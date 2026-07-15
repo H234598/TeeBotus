@@ -560,6 +560,23 @@ class BotTests(unittest.TestCase):
             },
         )
 
+    def test_legacy_telegram_text_fallback_does_not_swallow_real_type_error(self) -> None:
+        from TeeBotus.adapters.telegram_runtime import _send_telegram_message
+
+        class API:
+            def send_message(self, chat_id, text, **kwargs):
+                raise TypeError("text_mode must be html")
+
+        with self.assertRaisesRegex(TypeError, "text_mode must be html"):
+            _send_telegram_message(API(), 123, "Antwort", text_mode="html", formatted_text="<b>Antwort</b>")
+
+    def test_legacy_telegram_text_fallback_keeps_old_signature_usable(self) -> None:
+        from TeeBotus.adapters.telegram_runtime import _send_telegram_message
+
+        api = FakeAPI()
+        self.assertEqual(_send_telegram_message(api, 123, "Antwort", text_mode="html"), 101)
+        self.assertEqual(api.sent_messages, [(123, "Antwort")])
+
     def test_telegram_multipart_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")
 

@@ -121,6 +121,14 @@ Read-only Live-Probe ueber `TeeBotus.cinnamon_applet status`:
 - Regression fuer echten formatierten Text-`TypeError` ergaenzt.
   Adapter-Vollsuite danach: `151 passed in 0.97s`; `py_compile` und
   `git diff --check` sauber.
+- 2026-07-16: Der verbleibende direkte/Legacy-Telegram-Textpfad hatte dieselbe
+  breite `TypeError`-Suche. Ein echter Fehler wie `text_mode must be html`
+  konnte dadurch verloren gehen. Der Pfad nutzt jetzt dieselbe exakte
+  Erkennung fuer `unexpected keyword argument '<name>'` wie der gemeinsame
+  Adapter; alte `send_message(chat_id, text)`-Signaturen bleiben kompatibel.
+- Regression fuer beide Faelle ergaenzt: echte Textfehler werden propagiert,
+  historische Signaturen erhalten Plaintext-Fallback. Relevante Suite danach:
+  `785 passed, 17 subtests passed in 13.30s`; keine Provider-/LLM-Aufrufe.
 
 ## Historische Plaene
 
