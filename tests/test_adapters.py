@@ -443,6 +443,31 @@ def test_signal_send_delay_preserves_result_alignment(monkeypatch):
     assert context.calls == [("send", "vorher"), ("send", "danach")]
 
 
+def test_signal_send_reports_completed_action_before_later_failure():
+    class Context:
+        async def send(self, text, **_kwargs):
+            if text == "danach":
+                raise RuntimeError("temporary failure")
+            return 101
+
+    completed: list[str] = []
+
+    try:
+        asyncio.run(
+            send_signal_actions(
+                Context(),
+                [SendText("+491", "vorher"), SendText("+491", "danach")],
+                on_action_sent=lambda action, _ref: completed.append(action.text),
+            )
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "temporary failure"
+    else:
+        raise AssertionError("later Signal action should fail")
+
+    assert completed == ["vorher"]
+
+
 def test_signal_unknown_action_preserves_result_alignment():
     class Context:
         async def send(self, text, **_kwargs):
@@ -2230,6 +2255,40 @@ def test_matrix_send_delay_preserves_result_alignment(monkeypatch):
     assert sent == ["$sent-1", None, "$sent-2"]
     assert sleeps == [1.0]
     assert client.calls == ["vorher", "danach"]
+
+
+def test_matrix_send_reports_completed_action_before_later_failure():
+    class Response:
+        def __init__(self, event_id: str) -> None:
+            self.event_id = event_id
+
+    class Client:
+        def __init__(self) -> None:
+            self.calls = []
+
+        async def room_send(self, **kwargs):
+            text = kwargs["content"]["body"]
+            self.calls.append(text)
+            if text == "danach":
+                raise RuntimeError("temporary failure")
+            return Response("$before")
+
+    completed: list[str] = []
+
+    try:
+        asyncio.run(
+            send_matrix_actions(
+                Client(),
+                [SendText("!room:example", "vorher"), SendText("!room:example", "danach")],
+                on_action_sent=lambda action, _ref: completed.append(action.text),
+            )
+        )
+    except RuntimeError as exc:
+        assert str(exc) == "temporary failure"
+    else:
+        raise AssertionError("later Matrix action should fail")
+
+    assert completed == ["vorher"]
 
 
 def test_matrix_send_text_rejects_response_without_event_id():

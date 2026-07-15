@@ -267,7 +267,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 batch = list(pending_actions)
                 pending_actions.clear()
                 try:
-                    sent_refs = await _send_signal_actions_with_retry(context, batch)
+                    await _send_signal_actions_with_retry(context, batch, on_action_sent=record_sent_action)
                 except Exception:
                     LOGGER.exception(
                         "Signal action dispatch failed instance=%s recipient=%s message_ref=%s actions=%s.",
@@ -277,8 +277,6 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                         tuple(type(action).__name__ for action in batch),
                     )
                     return False
-                for action, sent_ref in zip(batch, sent_refs):
-                    record_sent_action(action, sent_ref)
                 return True
 
             for action in actions:
@@ -561,7 +559,12 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 continue
 
 
-async def _send_signal_actions_with_retry(context: Any, actions: list[Any]) -> list[Any]:
+async def _send_signal_actions_with_retry(
+    context: Any,
+    actions: list[Any],
+    *,
+    on_action_sent: Callable[[Any, int | None], None] | None = None,
+) -> list[Any]:
     if len(actions) > 1:
         return await send_signal_actions(
             context,
@@ -573,9 +576,10 @@ async def _send_signal_actions_with_retry(context: Any, actions: list[Any]) -> l
                 attempts,
                 delay,
             ),
+            on_action_sent=on_action_sent,
         )
     return await _run_signal_operation_with_retry(
-        lambda: send_signal_actions(context, actions),
+        lambda: send_signal_actions(context, actions, on_action_sent=on_action_sent),
         label="action dispatch",
     )
 

@@ -104,6 +104,7 @@ async def send_signal_actions(
     *,
     retry_delays_seconds: Sequence[float] = (),
     on_retry: Callable[[int, int, float], None] | None = None,
+    on_action_sent: Callable[[Any, int | None], None] | None = None,
 ) -> list[int | None]:
     sent: list[int | None] = []
     typing_target: str | None = None
@@ -122,6 +123,8 @@ async def send_signal_actions(
                     await asyncio.sleep(delay)
                 else:
                     sent.append(sent_ref)
+                    if on_action_sent is not None:
+                        on_action_sent(action, sent_ref)
                     break
     finally:
         if typing_target is not None:

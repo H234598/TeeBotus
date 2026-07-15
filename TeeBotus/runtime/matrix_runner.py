@@ -220,7 +220,7 @@ class MatrixRuntimeBridge:
             batch = list(pending_actions)
             pending_actions.clear()
             try:
-                sent_refs = await send_matrix_actions(self.client, batch)
+                await send_matrix_actions(self.client, batch, on_action_sent=record_sent_action)
             except Exception:
                 LOGGER.exception(
                     "Matrix action dispatch failed instance=%s room_id=%s event_id=%s actions=%s.",
@@ -230,8 +230,6 @@ class MatrixRuntimeBridge:
                     tuple(type(action).__name__ for action in batch),
                 )
                 return False
-            for action, sent_ref in zip(batch, sent_refs):
-                record_sent_action(action, sent_ref)
             return True
 
         for action in actions:

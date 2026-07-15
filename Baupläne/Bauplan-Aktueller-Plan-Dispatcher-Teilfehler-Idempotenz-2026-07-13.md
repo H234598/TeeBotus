@@ -253,3 +253,12 @@ git diff --check
   ergaenzt.
 - Abschlusslauf des fokussierten Themenbatches: `759 passed, 17 subtests
   passed in 23.68s`; keine Provider-/LLM-Aufrufe.
+- 2026-07-15: Partial-Failure-Fehler in Signal/Matrix behoben: Erfolgreiche
+  Actions wurden erst nach komplettem Batch getrackt. Bei spaeterem Fehler
+  fehlten ihre Refs; ein Retry konnte sie doppelt senden. Beide Adapter bieten
+  jetzt einen optionalen `on_action_sent`-Callback und Runner committen jeden
+  erfolgreichen Ref sofort, ohne normales batching oder Signal-Typing zu
+  verlieren.
+- Adapter-Regressionen reproduzieren erste erfolgreiche Action plus spaeteren
+  Fehler. Betroffene Gesamt-Suite: `778 passed, 17 subtests passed in 12.93s`;
+  keine Provider-/LLM-Aufrufe.

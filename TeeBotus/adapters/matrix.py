@@ -4,7 +4,7 @@ import asyncio
 from html import unescape
 from html.parser import HTMLParser
 from io import BytesIO
-from typing import Any, Mapping
+from typing import Any, Callable, Mapping
 
 from TeeBotus.runtime.accounts import matrix_identity_key
 from TeeBotus.runtime.action_buttons import text_with_button_fallback
@@ -73,7 +73,12 @@ def matrix_message_to_event(
     )
 
 
-async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | None]:
+async def send_matrix_actions(
+    client: Any,
+    actions: list[Any],
+    *,
+    on_action_sent: Callable[[Any, str | None], None] | None = None,
+) -> list[str | None]:
     sent: list[str | None] = []
     for action in actions:
         if isinstance(action, SendText):
@@ -90,19 +95,31 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 view_once=action.view_once,
                 link_preview=action.link_preview,
             )
-            sent.append(_matrix_required_event_id(response, "Matrix text send"))
+            sent_ref = _matrix_required_event_id(response, "Matrix text send")
+            sent.append(sent_ref)
+            if on_action_sent is not None:
+                on_action_sent(action, sent_ref)
         elif isinstance(action, DelaySeconds):
             await asyncio.sleep(max(0.0, float(action.seconds)))
             sent.append(None)
+            if on_action_sent is not None:
+                on_action_sent(action, None)
         elif isinstance(action, SendTyping):
             await _send_matrix_typing(client, action.chat_id)
             sent.append(None)
+            if on_action_sent is not None:
+                on_action_sent(action, None)
         elif isinstance(action, SendReaction):
             response = await _send_matrix_reaction(client, action.chat_id, action.message_ref, action.emoji)
-            sent.append(_matrix_required_event_id(response, "Matrix reaction send"))
+            sent_ref = _matrix_required_event_id(response, "Matrix reaction send")
+            sent.append(sent_ref)
+            if on_action_sent is not None:
+                on_action_sent(action, sent_ref)
         elif isinstance(action, SendReceipt):
             await _send_matrix_receipt(client, action.chat_id, action.message_ref, action.receipt_type)
             sent.append(None)
+            if on_action_sent is not None:
+                on_action_sent(action, None)
         elif isinstance(action, SendEdit):
             response = await _send_matrix_edit(
                 client,
@@ -114,7 +131,10 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 view_once=action.view_once,
                 link_preview=action.link_preview,
             )
-            sent.append(_matrix_required_event_id(response, "Matrix edit send"))
+            sent_ref = _matrix_required_event_id(response, "Matrix edit send")
+            sent.append(sent_ref)
+            if on_action_sent is not None:
+                on_action_sent(action, sent_ref)
         elif isinstance(action, SendPoll):
             response = await _send_matrix_poll(
                 client,
@@ -123,10 +143,15 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 list(action.answers),
                 action.allow_multiple_selections,
             )
-            sent.append(_matrix_required_event_id(response, "Matrix poll send"))
+            sent_ref = _matrix_required_event_id(response, "Matrix poll send")
+            sent.append(sent_ref)
+            if on_action_sent is not None:
+                on_action_sent(action, sent_ref)
         elif isinstance(action, SetMatrixState):
             await _set_matrix_state(client, action.chat_id, action.event_type, action.content, state_key=action.state_key)
             sent.append(None)
+            if on_action_sent is not None:
+                on_action_sent(action, None)
         elif isinstance(action, SendAttachment):
             response = await _send_matrix_file_or_error_notice(
                 client,
@@ -141,7 +166,10 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 view_once=action.view_once,
                 link_preview=action.link_preview,
             )
-            sent.append(_matrix_required_event_id(response, "Matrix attachment send"))
+            sent_ref = _matrix_required_event_id(response, "Matrix attachment send")
+            sent.append(sent_ref)
+            if on_action_sent is not None:
+                on_action_sent(action, sent_ref)
         elif isinstance(action, ExportFile):
             response = await _send_matrix_file_or_error_notice(
                 client,
@@ -152,11 +180,18 @@ async def send_matrix_actions(client: Any, actions: list[Any]) -> list[str | Non
                 caption=action.caption or f"Export: {action.filename}",
                 reply_to_ref=action.reply_to_ref,
             )
-            sent.append(_matrix_required_event_id(response, "Matrix export send"))
+            sent_ref = _matrix_required_event_id(response, "Matrix export send")
+            sent.append(sent_ref)
+            if on_action_sent is not None:
+                on_action_sent(action, sent_ref)
         elif isinstance(action, (NotifyLinkedIdentity, DeleteTrackedMessages, UpdateSignalContact, UpdateSignalGroup)):
             sent.append(None)
+            if on_action_sent is not None:
+                on_action_sent(action, None)
         else:
             sent.append(None)
+            if on_action_sent is not None:
+                on_action_sent(action, None)
     return sent
 
 
