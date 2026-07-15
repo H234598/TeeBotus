@@ -119,6 +119,7 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
                     text_mode=action.text_mode,
                     formatted_text=action.formatted_text,
                     buttons=action.buttons,
+                    reply_to_ref=action.reply_to_ref,
                 )
             )
         elif isinstance(action, DelaySeconds):
@@ -185,26 +186,50 @@ def _send_telegram_text(
     text_mode: str = "",
     formatted_text: str = "",
     buttons: tuple[MessageButton, ...] = (),
+    reply_to_ref: str = "",
 ) -> int | None:
     reply_markup = _telegram_reply_markup(buttons)
+    reply_parameters = _telegram_reply_parameters(reply_to_ref)
     if text_mode or formatted_text:
         try:
             kwargs = {"text_mode": text_mode, "formatted_text": formatted_text}
             if reply_markup:
                 kwargs["reply_markup"] = reply_markup
+            if reply_parameters:
+                kwargs["reply_parameters"] = reply_parameters
             return api.send_message(chat_id, text, **kwargs)
         except TypeError as exc:
-            if "text_mode" not in str(exc) and "formatted_text" not in str(exc) and "reply_markup" not in str(exc):
+            if (
+                "text_mode" not in str(exc)
+                and "formatted_text" not in str(exc)
+                and "reply_markup" not in str(exc)
+                and "reply_parameters" not in str(exc)
+            ):
                 raise
             return api.send_message(chat_id, text_with_button_fallback(text, buttons))
-    if reply_markup:
+    if reply_markup or reply_parameters:
         try:
-            return api.send_message(chat_id, text, reply_markup=reply_markup)
+            kwargs = {}
+            if reply_markup:
+                kwargs["reply_markup"] = reply_markup
+            if reply_parameters:
+                kwargs["reply_parameters"] = reply_parameters
+            return api.send_message(chat_id, text, **kwargs)
         except TypeError as exc:
-            if "reply_markup" not in str(exc):
+            if "reply_markup" not in str(exc) and "reply_parameters" not in str(exc):
                 raise
             return api.send_message(chat_id, text_with_button_fallback(text, buttons))
     return api.send_message(chat_id, text)
+
+
+def _telegram_reply_parameters(reply_to_ref: str) -> str:
+    try:
+        message_id = int(str(reply_to_ref or "").strip())
+    except (TypeError, ValueError):
+        return ""
+    if message_id <= 0:
+        return ""
+    return json_dumps({"message_id": message_id})
 
 
 def _telegram_reply_markup(buttons: tuple[MessageButton, ...]) -> str:

@@ -1562,6 +1562,23 @@ def test_telegram_send_text_passes_formatted_text_when_supported():
     ]
 
 
+def test_telegram_send_text_passes_reply_parameters_when_supported():
+    class API:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, dict[str, str]]] = []
+
+        def send_message(self, chat_id, text, **kwargs):
+            self.calls.append((chat_id, text, kwargs))
+            return 2
+
+    api = API()
+
+    sent = send_telegram_actions(api, [SendText("@my_channel", "Antwort", reply_to_ref="99")])
+
+    assert sent == [2]
+    assert json.loads(api.calls[0][2]["reply_parameters"]) == {"message_id": 99}
+
+
 def test_telegram_send_text_passes_inline_buttons_when_supported():
     class API:
         def __init__(self) -> None:

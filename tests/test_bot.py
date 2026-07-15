@@ -62,7 +62,11 @@ from TeeBotus.bot import (
     transcribe_youtube_video,
 )
 from TeeBotus import __version__
-from TeeBotus.adapters.telegram_runtime import _expand_telegram_text_actions, _handle_update_with_runtime_context
+from TeeBotus.adapters.telegram_runtime import (
+    _expand_telegram_text_actions,
+    _handle_update_with_runtime_context,
+    _with_telegram_reply_context,
+)
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, INSTANCE_STATE_ACCOUNT_ID, StaticSecretProvider, telegram_identity_key
@@ -540,6 +544,21 @@ class BotTests(unittest.TestCase):
         request = urlopen.call_args.args[0]
         params = urllib.parse.parse_qs(request.data.decode("utf-8"))
         self.assertEqual(json.loads(params["allowed_updates"][0]), ["message", "channel_post", "callback_query"])
+
+    def test_telegram_send_message_includes_reply_parameters(self) -> None:
+        api = TelegramAPI("telegram-token")
+        with patch.object(api, "request", return_value={"ok": True, "result": {"message_id": 88}}) as request:
+            self.assertEqual(api.send_message(123, "Antwort", reply_parameters='{"message_id":77}'), 88)
+
+        request.assert_called_once_with(
+            "sendMessage",
+            {
+                "chat_id": 123,
+                "text": "Antwort",
+                "disable_web_page_preview": "true",
+                "reply_parameters": '{"message_id":77}',
+            },
+        )
 
     def test_telegram_multipart_timeout_is_network_error(self) -> None:
         api = TelegramAPI("123:test-token")
@@ -4543,19 +4562,24 @@ class BotTests(unittest.TestCase):
         from TeeBotus.runtime.actions import MessageButton, SendText
 
         actions = _expand_telegram_text_actions(
-            [
-                SendText(
-                    "123",
-                    "wort " * 1200,
-                    buttons=(MessageButton("Weiter", "weiter"),),
-                )
-            ]
+            _with_telegram_reply_context(
+                [
+                    SendText(
+                        "123",
+                        "wort " * 1200,
+                        buttons=(MessageButton("Weiter", "weiter"),),
+                    )
+                ],
+                SimpleNamespace(chat_id="123", message_ref="77"),
+            )
         )
 
         self.assertGreater(len(actions), 1)
         self.assertTrue(all(isinstance(action, SendText) for action in actions))
         self.assertTrue(all(len(action.text) <= TELEGRAM_MESSAGE_CHUNK_SIZE for action in actions))
         self.assertTrue(all(not action.buttons for action in actions[:-1]))
+        self.assertEqual(actions[0].reply_to_ref, "77")
+        self.assertTrue(all(not action.reply_to_ref for action in actions[1:]))
         self.assertEqual(actions[-1].buttons, (MessageButton("Weiter", "weiter"),))
 
     def test_every_third_short_openai_reply_without_sources_is_voice(self) -> None:

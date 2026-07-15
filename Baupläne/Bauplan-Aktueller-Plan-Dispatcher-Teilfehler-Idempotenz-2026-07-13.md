@@ -189,3 +189,13 @@ git diff --check
 - Regressionstest fuer Chunk-Grenze, Button-Platzierung und Action-Expansion
   ergaenzt. Relevante Suite: `607 passed, 17 subtests passed in 13.03s`;
   keine Provider-/LLM-Aufrufe. `py_compile` und `git diff --check` sauber.
+- 2026-07-15: Zweiten Modern-/Legacy-Paritaetsfehler behoben: Telegram
+  ignorierte `SendText.reply_to_ref`; Antworten erschienen deshalb ohne
+  echte Telegram-Reply-Verknuepfung, obwohl Matrix und Signal sie setzten.
+  Der moderne Runtime-Pfad uebernimmt jetzt die eingehende Message-ID fuer
+  Text-, Attachment- und Export-Aktionen im selben Chat. `sendMessage` sendet
+  sie als `reply_parameters`; bei gesplitteten Antworten antwortet nur der
+  erste Chunk auf die Originalnachricht. Unveraenderte explizite Replys werden
+  respektiert.
+- API-, Adapter- und Runtime-Regressionen ergaenzt. Betroffene Suite:
+  `609 passed, 17 subtests passed in 13.02s`; keine Provider-/LLM-Aufrufe.

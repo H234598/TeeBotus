@@ -359,6 +359,7 @@ class TelegramAPI:
         text_mode: str = "",
         formatted_text: str = "",
         reply_markup: str = "",
+        reply_parameters: str = "",
     ) -> int | None:
         bot_instance = getattr(self, "instance_name", "unknown")
         adapter_slot = getattr(self, "adapter_slot", "unknown")
@@ -382,6 +383,8 @@ class TelegramAPI:
             params["parse_mode"] = parse_mode
         if reply_markup:
             params["reply_markup"] = reply_markup
+        if reply_parameters:
+            params["reply_parameters"] = reply_parameters
         payload = self.request(
             "sendMessage",
             params,
@@ -1218,7 +1221,10 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
                 return True
             # Expand before journal creation so every Telegram chunk has its own
             # durable action index and can retry without duplicating prior chunks.
-            engine_result = replace(engine_result, actions=_expand_telegram_text_actions(engine_result.actions))
+            engine_result = replace(
+                engine_result,
+                actions=_expand_telegram_text_actions(_with_telegram_reply_context(engine_result.actions, event)),
+            )
             LOGGER.info(
                 "Telegram engine result instance=%s slot=%s event_id=%s handled=%s actions=%s action_types=%s",
                 context.instance_name,
@@ -1472,6 +1478,23 @@ def _with_telegram_reply_text(event: IncomingEvent, message: dict[str, Any]) -> 
     return event.with_reply_to_text(reply_text)
 
 
+def _with_telegram_reply_context(actions: list[Any], event: IncomingEvent) -> list[Any]:
+    reply_to_ref = str(event.message_ref or "").strip()
+    if not reply_to_ref:
+        return actions
+    enriched: list[Any] = []
+    for action in actions:
+        if (
+            isinstance(action, (SendText, SendAttachment, ExportFile))
+            and action.chat_id == event.chat_id
+            and not action.reply_to_ref
+        ):
+            enriched.append(replace(action, reply_to_ref=reply_to_ref))
+        else:
+            enriched.append(action)
+    return enriched
+
+
 def _telegram_reply_text(reply: dict[str, Any]) -> str:
     direct_text = str(reply.get("text") or reply.get("caption") or "").strip()
     if direct_text:
@@ -1578,6 +1601,7 @@ def _expand_telegram_text_actions(actions: list[Any]) -> list[Any]:
                 replace(
                     action,
                     text=chunk,
+                    reply_to_ref=action.reply_to_ref if index == 0 else "",
                     text_mode=action.text_mode if formatted_chunk else "",
                     formatted_text=formatted_chunk,
                     buttons=action.buttons if index == len(chunks) - 1 else (),
