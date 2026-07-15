@@ -169,6 +169,12 @@ Read-only Live-Probe ueber `TeeBotus.cinnamon_applet status`:
 - Regression fuer simulierten Index-Schreibfehler: alter Entries- und
   Indexstand bleibt erhalten. Account-Store-Suite: `201 passed in 12.35s`;
   keine Provider-/LLM-Aufrufe.
+- 2026-07-16: Auch `reset_structured_memory()` schrieb Entries vor dem
+  Index. Ein Indexfehler konnte dadurch einen nur halb ausgefuehrten Reset
+  hinterlassen. Der Reset stellt bei Fehlern Entries und Index auf den
+  vorherigen Stand zurueck und meldet einen fehlgeschlagenen Rollback separat.
+- Regression fuer fehlgeschlagenen Reset-Index-Write ergaenzt. Account-Store-
+  Suite danach: `202 passed in 7.02s`; keine Provider-/LLM-Aufrufe.
 
 ## Historische Plaene
 

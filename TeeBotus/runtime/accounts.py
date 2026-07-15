@@ -2232,7 +2232,9 @@ class AccountStore:
 
     @_serialize_account_memory
     def reset_structured_memory(self, account_id: str) -> None:
-        self.write_memory_entries(account_id, [])
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        previous_rows = self.read_memory_entries(account_id)
+        previous_index = self.read_memory_index(account_id)
         reset_index = self._normalized_memory_index(
             account_id,
             {
@@ -2240,7 +2242,22 @@ class AccountStore:
             },
         )
         reset_index["updated_at"] = utc_now()
-        self.write_memory_index(account_id, reset_index)
+        try:
+            self.write_memory_entries(account_id, [])
+            self.write_memory_index(account_id, reset_index)
+        except Exception:  # noqa: BLE001 - restore both stores before surfacing the reset failure.
+            rollback_errors: list[Exception] = []
+            for restore in (
+                lambda: self.write_memory_entries(account_id, previous_rows),
+                lambda: self.write_memory_index(account_id, previous_index),
+            ):
+                try:
+                    restore()
+                except Exception as rollback_exc:  # noqa: BLE001 - report inconsistent rollback explicitly.
+                    rollback_errors.append(rollback_exc)
+            if rollback_errors:
+                raise AccountStoreError("account memory reset rollback failed; index and entries may be inconsistent") from rollback_errors[0]
+            raise
         self.clear_privacy_confirmation(account_id)
 
     def has_privacy_confirmation(self, account_id: str) -> bool:
