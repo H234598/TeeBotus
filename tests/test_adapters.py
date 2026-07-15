@@ -1736,6 +1736,23 @@ def test_telegram_send_edit_uses_optional_edit_message_text():
     assert api.calls == [("@my_channel", "99", "korrigiert")]
 
 
+def test_telegram_send_edit_preserves_text_mode():
+    class API:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def edit_message_text(self, chat_id, message_id, text, **kwargs):
+            self.calls.append((chat_id, message_id, text, kwargs))
+            return 2
+
+    api = API()
+
+    sent = send_telegram_actions(api, [SendEdit("@my_channel", "99", "<b>neu</b>", text_mode="html")])
+
+    assert sent == [2]
+    assert api.calls == [("@my_channel", "99", "<b>neu</b>", {"text_mode": "html"})]
+
+
 def test_telegram_send_poll_uses_optional_send_poll():
     class API:
         def __init__(self) -> None:

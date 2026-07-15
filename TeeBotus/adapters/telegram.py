@@ -190,7 +190,13 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
         elif isinstance(action, SendEdit):
             edit_message_text = getattr(api, "edit_message_text", None)
             if callable(edit_message_text):
-                sent.append(edit_message_text(action.chat_id, action.message_ref, action.text))
+                kwargs = {"text_mode": action.text_mode} if action.text_mode else {}
+                try:
+                    sent.append(edit_message_text(action.chat_id, action.message_ref, action.text, **kwargs))
+                except TypeError as exc:
+                    if "text_mode" not in str(exc):
+                        raise
+                    sent.append(edit_message_text(action.chat_id, action.message_ref, action.text))
             else:
                 sent.append(None)
         elif isinstance(action, SendPoll):

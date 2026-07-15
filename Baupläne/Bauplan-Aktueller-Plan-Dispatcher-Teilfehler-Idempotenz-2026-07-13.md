@@ -265,3 +265,9 @@ git diff --check
 - Runner-Integrationstests pruefen jetzt zusaetzlich, dass Matrix und Signal
   die vom Callback gelieferten Refs nach einem gemischten Action-Batch im
   `MessageTracker` behalten. Fokussierte Matrix-/Signal-Tests: `2 passed`.
+- 2026-07-15: Telegram-Adapter-Paritaetsfehler behoben: `SendEdit` reichte
+  `text_mode` nicht an `editMessageText` weiter. HTML-/Markdown-Edits nutzen
+  den Modus jetzt; Adapter ohne dieses optionale Keyword erhalten weiterhin
+  den alten Aufruf.
+- Betroffene Gesamt-Suite danach: `779 passed, 17 subtests passed in 12.42s`;
+  keine Provider-/LLM-Aufrufe.
