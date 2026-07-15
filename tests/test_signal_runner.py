@@ -364,7 +364,11 @@ def test_signal_command_preserves_mixed_action_order(tmp_path, monkeypatch) -> N
 
     async def send(_context, actions, **_kwargs):
         calls.append(f"send:{actions[0].text}")
-        return [987654]
+        sent_ref = 987654 if actions[0].text == "before" else 987655
+        callback = _kwargs.get("on_action_sent")
+        if callback is not None:
+            callback(actions[0], sent_ref)
+        return [sent_ref]
 
     command.engine.process_result = lambda event: EngineResult(  # type: ignore[method-assign]
         event.account_id,
@@ -378,6 +382,8 @@ def test_signal_command_preserves_mixed_action_order(tmp_path, monkeypatch) -> N
     asyncio.run(command.handle(FakeSignalContext()))
 
     assert calls == ["send:before", "delete", "send:after"]
+    refs = command.message_tracker.pop_for_cleanup(instance_name="Demo", channel="signal", chat_id="+491234", count=2)
+    assert [ref.message_ref for ref in refs] == ["987655", "987654"]
 
 
 def test_signal_command_can_login_from_linked_device_sync_message(tmp_path) -> None:

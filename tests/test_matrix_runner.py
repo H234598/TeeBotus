@@ -205,7 +205,11 @@ def test_matrix_bridge_preserves_mixed_action_order(tmp_path, monkeypatch) -> No
 
     async def send(_client, actions, **_kwargs):
         calls.append(f"send:{actions[0].text}")
-        return [f"${actions[0].text}"]
+        sent_ref = f"${actions[0].text}"
+        callback = _kwargs.get("on_action_sent")
+        if callback is not None:
+            callback(actions[0], sent_ref)
+        return [sent_ref]
 
     bridge.engine.process_result = lambda event: EngineResult(  # type: ignore[method-assign]
         event.account_id,
@@ -219,6 +223,8 @@ def test_matrix_bridge_preserves_mixed_action_order(tmp_path, monkeypatch) -> No
     asyncio.run(bridge.handle_message(FakeMatrixRoom(), FakeMatrixMessage()))
 
     assert calls == ["send:before", "delete", "send:after"]
+    refs = bridge.message_tracker.pop_for_cleanup(instance_name="Demo", channel="matrix", chat_id="!room:example", count=2)
+    assert [ref.message_ref for ref in refs] == ["$after", "$before"]
 
 
 def test_matrix_bridge_exposes_proactive_sender(tmp_path) -> None:
