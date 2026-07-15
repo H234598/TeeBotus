@@ -194,7 +194,7 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
                 try:
                     sent.append(edit_message_text(action.chat_id, action.message_ref, action.text, **kwargs))
                 except TypeError as exc:
-                    if "text_mode" not in str(exc):
+                    if _telegram_unexpected_keyword(str(exc), kwargs, ("text_mode",)) is None:
                         raise
                     sent.append(edit_message_text(action.chat_id, action.message_ref, action.text))
             else:

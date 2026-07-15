@@ -129,6 +129,13 @@ Read-only Live-Probe ueber `TeeBotus.cinnamon_applet status`:
 - Regression fuer beide Faelle ergaenzt: echte Textfehler werden propagiert,
   historische Signaturen erhalten Plaintext-Fallback. Relevante Suite danach:
   `785 passed, 17 subtests passed in 13.30s`; keine Provider-/LLM-Aufrufe.
+- 2026-07-16: Auch der `SendEdit`-Pfad hatte noch einen breiten
+  `text_mode`-Treffer. Ein echter Edit-Fehler konnte dadurch als zweiter,
+  unformatierter Versuch ausgefuehrt werden. Fallback nutzt nun ebenfalls nur
+  die exakte Meldung `unexpected keyword argument '<name>'`.
+- Regression fuer echten Edit-`TypeError` und historische Edit-Signaturen
+  ergaenzt. Adapter-Vollsuite danach: `153 passed in 1.52s`; keine
+  Provider-/LLM-Aufrufe.
 
 ## Historische Plaene
 

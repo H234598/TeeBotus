@@ -1769,6 +1769,29 @@ def test_telegram_send_edit_preserves_text_mode():
     assert api.calls == [("@my_channel", "99", "<b>neu</b>", {"text_mode": "html"})]
 
 
+def test_telegram_send_edit_does_not_swallow_real_type_error():
+    class API:
+        def edit_message_text(self, chat_id, message_id, text, **kwargs):
+            raise TypeError("text_mode must be html")
+
+    try:
+        send_telegram_actions(API(), [SendEdit("@my_channel", "99", "<b>neu</b>", text_mode="html")])
+    except TypeError as exc:
+        assert str(exc) == "text_mode must be html"
+    else:
+        raise AssertionError("real edit TypeError was swallowed")
+
+
+def test_telegram_send_edit_keeps_old_signature_usable():
+    class API:
+        def edit_message_text(self, chat_id, message_id, text):
+            return 2
+
+    sent = send_telegram_actions(API(), [SendEdit("@my_channel", "99", "neu", text_mode="html")])
+
+    assert sent == [2]
+
+
 def test_telegram_send_poll_uses_optional_send_poll():
     class API:
         def __init__(self) -> None:
