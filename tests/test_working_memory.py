@@ -67,6 +67,20 @@ def test_working_memory_unreadable_index_is_not_replaced(tmp_path, caplog):
     assert any("existing data preserved" in record.message for record in caplog.records)
 
 
+def test_working_memory_atomic_write_preserves_index_on_replace_error(tmp_path, caplog):
+    instances_dir = tmp_path / "instances"
+    store = WorkingMemoryStore("Depressionsbot", instances_dir)
+    index_path = store.ensure()
+    original = index_path.read_bytes()
+
+    with patch("TeeBotus.runtime.working_memory.os.replace", side_effect=OSError("replace failed")):
+        with caplog.at_level("WARNING", logger="TeeBotus"):
+            assert store.ensure() == index_path
+
+    assert index_path.read_bytes() == original
+    assert not list(index_path.parent.glob(".Working_Memorys.json.*.tmp"))
+
+
 def test_working_memory_prepare_selects_relevant_entry(tmp_path):
     instances_dir = tmp_path / "instances"
     store = WorkingMemoryStore("Depressionsbot", instances_dir)

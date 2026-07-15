@@ -153,6 +153,14 @@ Read-only Live-Probe ueber `TeeBotus.cinnamon_applet status`:
 - Regression mit simuliertem Lesefehler prueft Byte-Erhalt in beiden Pfaden.
   Angrenzende Suite: `399 passed, 17 subtests passed in 13.18s`; keine
   Provider-/LLM-Aufrufe.
+- 2026-07-16: Zweiten Working-Memory-Datenverlustpfad geschlossen: Der
+  moderne Runtime-Writer schrieb den JSON-Index direkt und konnte ihn bei
+  einem Schreibfehler truncaten. Er schreibt jetzt mit Flush/`fsync` in eine
+  temporaere Datei und ersetzt erst danach atomar; der bestehende Legacy-
+  Writer hatte dieses Muster bereits.
+- Replace-Fehler-Regression prueft unveraenderten Index und aufgeraeumte
+  Tempdatei. Angrenzende Suite danach: `400 passed, 17 subtests passed in
+  12.49s`; keine Provider-/LLM-Aufrufe.
 
 ## Historische Plaene
 
