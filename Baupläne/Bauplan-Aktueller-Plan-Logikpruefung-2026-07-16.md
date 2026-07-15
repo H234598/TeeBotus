@@ -186,6 +186,9 @@ Diagnose und Tests.
 - Der Pfad upsertet den Account-Index jetzt auch ohne erneute Privacy-Aenderung.
   Regression fuer den einmaligen Indexfehler ergaenzt; fokussiert `2 passed`,
   AccountStore-Suite danach `216 passed in 14.67s`.
+- Commit `ca101c09`; nach Commit 40 wurde die korrekte User-Unit
+  `teebotus.service` erfolgreich neu gestartet. Status `active/running`, neue
+  PID `4023650`, Start `2026-07-16 01:40:29 CEST`.
 - Offener naechster Auditpunkt bleibt die systematische Pruefung weiterer
   mehrteiliger Account-Metadatenwrites; bisher kein neuer belegter Befund.
 
