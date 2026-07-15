@@ -18,6 +18,8 @@ from TeeBotus.runtime.accounts import (
     PROACTIVE_OUTBOX_FILENAME,
     STATUS_AUTH_STATE_FILENAME,
     STATUS_OUTBOX_FILENAME,
+    USER_MEMORY_ENTRIES_FILENAME,
+    USER_MEMORY_INDEX_FILENAME,
     INSTANCE_MAPPING_KEY_PURPOSE,
     INSTANCE_PEPPER_PURPOSE,
     EncryptedJsonVault,
@@ -1134,6 +1136,21 @@ def test_encrypted_memory_with_wrong_instance_secret_does_not_fallback_to_envelo
 
     with pytest.raises(AccountStoreError):
         second.read_memory_index(account_id)
+
+
+def test_plaintext_structured_memory_does_not_bypass_instance_secret(tmp_path):
+    first = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
+    account_id = first.resolve_or_create_account(telegram_identity_key(78))
+    account_dir = first.account_dir(account_id)
+    (account_dir / USER_MEMORY_INDEX_FILENAME).write_text('{"scope":"account"}\n', encoding="utf-8")
+    (account_dir / USER_MEMORY_ENTRIES_FILENAME).write_text('{"id":"mem_plain"}\n', encoding="utf-8")
+
+    second = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"b" * 32), create_dirs=False)
+
+    with pytest.raises(AccountStoreError):
+        second.read_memory_index(account_id)
+    with pytest.raises(AccountStoreError):
+        second.read_memory_entries(account_id)
 
 
 def test_encrypted_vault_refuses_to_overwrite_existing_payload_with_wrong_secret(tmp_path):

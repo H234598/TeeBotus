@@ -96,6 +96,10 @@ Diagnose und Tests.
   vorherigen Entries-/Indexstand wieder her.
 - `rebuild_structured_memory_index()` stellt bei Fehlern nach einer
   Normalisierung ebenfalls den vorherigen Entries-/Indexstand wieder her.
+- Der laufende strukturierte Memorypfad akzeptiert keine Plaintext-
+  `User_Memory_Index.json` oder `User_Memory_Entries.jsonl` mehr als stillen
+  Fallback. Dedizierte Legacy-/SQL-Importer behalten ihren expliziten
+  Plaintext-Migrationspfad.
 - Fehlgeschlagene Rollbacks werden als eigene Inkonsistenzfehler gemeldet.
 - Account-Store-Suite zuletzt: `203 passed in 9.57s`.
 - Letzter Commit: `dfb99cb2 fix: rollback account memory resets`.
@@ -122,8 +126,15 @@ Diagnose und Tests.
   Entries-Write ergaenzt; fokussiert `5 passed`, vollstaendig `204 passed in
   7.85s`.
 - Naechster offener Kandidat aus dem Bienen-Suchlauf: die getrennte
-  Konsolidierung in `run_memory_maintenance()` sowie der bewusst zu pruefende
-  Plaintext-Legacy-Fallback.
+  Konsolidierung in `run_memory_maintenance()` ist bewusst tolerierter
+  Teilfortschritt und braucht keinen Fix. Der Plaintext-Legacy-Fallback war
+  dagegen ein echter Stale-/Secret-Fehlerpfad und ist behoben.
+- 2026-07-16: Eine Biene reproduzierte, dass `_read_json*_with_fallback()` bei
+  Klartextdateien einen Vault-/Secretfehler verdecken konnte. Structured
+  Memory liest nun strikt verschluesselt; bei Klartext oder falschem Secret
+  wird der Fehler sichtbar statt stale Daten zu liefern.
+- Regression fuer Klartext-Index und Klartext-Entries ergaenzt. AccountStore-
+  Suite: `205 passed in 6.40s`; Legacy-/SQL-Migrationssuiten: `49 passed`.
 
 ## Akzeptanzkriterien
 

@@ -2114,7 +2114,12 @@ class AccountStore:
         backend = self.account_memory_backend
         if backend is not None:
             return backend.read_index(account_id)
-        return self._read_json_with_fallback(self.account_dir(account_id) / USER_MEMORY_INDEX_FILENAME, {}, vault=self.account_memory_vault)
+        return self._read_json_with_fallback(
+            self.account_dir(account_id) / USER_MEMORY_INDEX_FILENAME,
+            {},
+            vault=self.account_memory_vault,
+            allow_plaintext_legacy=False,
+        )
 
     @_serialize_account_memory
     def write_memory_index(self, account_id: str, data: dict[str, Any]) -> None:
@@ -2130,7 +2135,11 @@ class AccountStore:
         backend = self.account_memory_backend
         if backend is not None:
             return backend.read_entries(account_id)
-        return self._read_jsonl_with_fallback(self.account_dir(account_id) / USER_MEMORY_ENTRIES_FILENAME, vault=self.account_memory_vault)
+        return self._read_jsonl_with_fallback(
+            self.account_dir(account_id) / USER_MEMORY_ENTRIES_FILENAME,
+            vault=self.account_memory_vault,
+            allow_plaintext_legacy=False,
+        )
 
     def read_memory_entries_by_ids(self, account_id: str, memory_ids: Iterable[str]) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
@@ -2145,7 +2154,11 @@ class AccountStore:
             else:
                 rows = backend.read_entries(account_id)
         else:
-            rows = self._read_jsonl_with_fallback(self.account_dir(account_id) / USER_MEMORY_ENTRIES_FILENAME, vault=self.account_memory_vault)
+            rows = self._read_jsonl_with_fallback(
+                self.account_dir(account_id) / USER_MEMORY_ENTRIES_FILENAME,
+                vault=self.account_memory_vault,
+                allow_plaintext_legacy=False,
+            )
         entries_by_id = {
             str(row.get("id") or "").strip(): row
             for row in rows
@@ -3901,28 +3914,41 @@ class AccountStore:
             ]
         return [entries_by_id[memory_id] for memory_id in ordered_ids if memory_id in entries_by_id]
 
-    def _read_json_with_fallback(self, path: Path, default: dict[str, Any], *, vault: EncryptedJsonVault) -> dict[str, Any]:
+    def _read_json_with_fallback(
+        self,
+        path: Path,
+        default: dict[str, Any],
+        *,
+        vault: EncryptedJsonVault,
+        allow_plaintext_legacy: bool = True,
+    ) -> dict[str, Any]:
         path = _safe_rooted_path(path, allowed_roots=(self.root, self.root.parent), operation="legacy account json read")
         if not path.exists():
             return dict(default)
         try:
             return vault.read_json(path, default)
         except AccountStoreError:
-            if _looks_like_teebotus_encrypted_payload(path, allowed_roots=(self.root, self.root.parent)):
+            if not allow_plaintext_legacy or _looks_like_teebotus_encrypted_payload(path, allowed_roots=(self.root, self.root.parent)):
                 raise
             return _read_json_object(path, allowed_roots=(self.root, self.root.parent))
 
     def _write_json_with_vault(self, path: Path, data: dict[str, Any], *, vault: EncryptedJsonVault) -> None:
         vault.write_json(path, data)
 
-    def _read_jsonl_with_fallback(self, path: Path, *, vault: EncryptedJsonVault) -> list[dict[str, Any]]:
+    def _read_jsonl_with_fallback(
+        self,
+        path: Path,
+        *,
+        vault: EncryptedJsonVault,
+        allow_plaintext_legacy: bool = True,
+    ) -> list[dict[str, Any]]:
         path = _safe_rooted_path(path, allowed_roots=(self.root, self.root.parent), operation="legacy account jsonl read")
         if not path.exists():
             return []
         try:
             return vault.read_jsonl(path)
         except AccountStoreError:
-            if _looks_like_teebotus_encrypted_payload(path, allowed_roots=(self.root, self.root.parent)):
+            if not allow_plaintext_legacy or _looks_like_teebotus_encrypted_payload(path, allowed_roots=(self.root, self.root.parent)):
                 raise
             return _read_jsonl_plain(path)
 
