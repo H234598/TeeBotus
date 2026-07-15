@@ -4062,15 +4062,43 @@ class AccountStore:
                 selected_key = candidate_key
                 selected_payload = candidate_payload
                 break
-        if selected_key != key:
-            identities.pop(selected_key, None)
-            selected_payload["identity_key"] = key
-            identities[key] = selected_payload
-            account_id = selected_payload.get("account_id")
-            if isinstance(account_id, str) and TOKEN_HEX_RE.fullmatch(account_id):
-                self._replace_identity_in_profile(account_id, selected_key, key)
-            self._save_identities(identities)
-        self._remove_identity_aliases_for_key(identities, key, keep_account_id=str(selected_payload.get("account_id") or ""))
+        needs_repair = selected_key != key or any(candidate_key != key for candidate_key, _ in candidates)
+        if needs_repair:
+            tracked_paths: set[Path] = {self.identities_path, self.account_index_path}
+            for _, candidate_payload in candidates:
+                account_id = candidate_payload.get("account_id")
+                if isinstance(account_id, str) and TOKEN_HEX_RE.fullmatch(account_id):
+                    tracked_paths.add(self.account_dir(account_id) / ACCOUNT_PROFILE_FILENAME)
+            previous_files: dict[Path, bytes | None] = {}
+            for path in tracked_paths:
+                try:
+                    previous_files[path] = path.read_bytes()
+                except FileNotFoundError:
+                    previous_files[path] = None
+            try:
+                if selected_key != key:
+                    identities.pop(selected_key, None)
+                    selected_payload = dict(selected_payload)
+                    selected_payload["identity_key"] = key
+                    identities[key] = selected_payload
+                    account_id = selected_payload.get("account_id")
+                    if isinstance(account_id, str) and TOKEN_HEX_RE.fullmatch(account_id):
+                        self._replace_identity_in_profile(account_id, selected_key, key)
+                    self._save_identities(identities)
+                self._remove_identity_aliases_for_key(identities, key, keep_account_id=str(selected_payload.get("account_id") or ""))
+            except Exception:  # noqa: BLE001 - restore every file touched by alias repair.
+                rollback_errors: list[Exception] = []
+                for path, previous_bytes in previous_files.items():
+                    try:
+                        if previous_bytes is None:
+                            path.unlink(missing_ok=True)
+                        else:
+                            _atomic_write_bytes(path, previous_bytes)
+                    except Exception as rollback_exc:  # noqa: BLE001 - report inconsistent identity repair explicitly.
+                        rollback_errors.append(rollback_exc)
+                if rollback_errors:
+                    raise AccountStoreError("identity alias repair rollback failed; mappings and profiles may be inconsistent") from rollback_errors[0]
+                raise
         return selected_payload
 
     def _identity_payload_candidates_for_key(self, identities: dict[str, Any], key: str) -> list[tuple[str, dict[str, Any]]]:

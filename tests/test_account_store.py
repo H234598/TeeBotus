@@ -788,6 +788,32 @@ def test_identity_lookup_migrates_legacy_case_variant_key(tmp_path) -> None:
     assert migrated_profile["linked_identities"] == [canonical_key]
 
 
+def test_identity_alias_repair_rolls_back_on_identity_write_failure(tmp_path) -> None:
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    canonical_key = "signal:uuid:abc-def"
+    legacy_key = "signal:uuid:ABC-DEF"
+    account_id = store.resolve_or_create_account(canonical_key)
+    identities = store._load_identities()
+    payload = identities.pop(canonical_key)
+    payload["identity_key"] = legacy_key
+    identities[legacy_key] = payload
+    store._save_identities(identities)
+    profile = store._read_account_profile(account_id)
+    profile["linked_identities"] = [legacy_key]
+    store._write_account_profile(account_id, profile)
+    previous_identity_bytes = store.identities_path.read_bytes()
+    previous_profile_bytes = (store.account_dir(account_id) / "Account_Profile.json").read_bytes()
+    previous_index_bytes = store.account_index_path.read_bytes()
+
+    with patch.object(store, "_save_identities", side_effect=AccountStoreError("identity write failed")):
+        with pytest.raises(AccountStoreError, match="identity write failed"):
+            store.get_account_for_identity(canonical_key)
+
+    assert store.identities_path.read_bytes() == previous_identity_bytes
+    assert (store.account_dir(account_id) / "Account_Profile.json").read_bytes() == previous_profile_bytes
+    assert store.account_index_path.read_bytes() == previous_index_bytes
+
+
 def test_identity_lookup_removes_legacy_alias_when_canonical_key_exists(tmp_path) -> None:
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     canonical_key = "signal:uuid:abc-def"

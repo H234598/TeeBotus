@@ -189,6 +189,14 @@ Diagnose und Tests.
 - Commit `ca101c09`; nach Commit 40 wurde die korrekte User-Unit
   `teebotus.service` erfolgreich neu gestartet. Status `active/running`, neue
   PID `4023650`, Start `2026-07-16 01:40:29 CEST`.
+- 2026-07-16: Eine Biene reproduzierte einen Teilfehler bei
+  Identity-Alias-Normalisierung: Profil wurde vor dem Identity-Write
+  kanonisiert. Ein fehlgeschlagener Lookup konnte dadurch Mapping und Profil
+  auseinanderziehen.
+- Alias-Reparatur sichert jetzt Identity-Datei, Account-Index und betroffene
+  Profile als Rohbytes und stellt sie bei Fehlern gemeinsam wieder her.
+  Regression prueft unveraenderte Bytes; fokussiert `4 passed`,
+  AccountStore-Suite danach `217 passed in 6.61s`.
 - Offener naechster Auditpunkt bleibt die systematische Pruefung weiterer
   mehrteiliger Account-Metadatenwrites; bisher kein neuer belegter Befund.
 
