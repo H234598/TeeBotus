@@ -1318,6 +1318,25 @@ def test_rebuild_structured_account_memory_index_removes_stale_ids(tmp_path):
     assert entries[0]["importance"] == 3
 
 
+def test_rebuild_structured_account_memory_rolls_back_entries_when_index_write_fails(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_memory_entries(account_id, [{"id": "mem_raw", "user_text": "Mond", "bot_text": "Tee"}])
+    previous_rows = store.read_memory_entries(account_id)
+    previous_index = store.read_memory_index(account_id)
+
+    with patch.object(
+        store,
+        "write_memory_index",
+        side_effect=[AccountStoreError("index write failed"), None],
+    ):
+        with pytest.raises(AccountStoreError, match="index write failed"):
+            store.rebuild_structured_memory_index(account_id)
+
+    assert store.read_memory_entries(account_id) == previous_rows
+    assert store.read_memory_index(account_id) == previous_index
+
+
 def test_structured_account_memory_importance_breaks_keyword_ties(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

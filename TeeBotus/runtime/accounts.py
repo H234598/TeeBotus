@@ -2316,6 +2316,8 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
         rows = self.read_memory_entries(account_id)
+        previous_rows = [dict(row) for row in rows if isinstance(row, dict)]
+        previous_index = self.read_memory_index(account_id)
         changed = False
         normalized_rows: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
@@ -2384,9 +2386,11 @@ class AccountStore:
                 changed = True
             normalized_rows.append(entry)
         if changed:
-            self.write_memory_entries(account_id, normalized_rows)
+            entries_to_write = normalized_rows
+        else:
+            entries_to_write = None
 
-        existing_index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
+        existing_index = self._normalized_memory_index(account_id, previous_index)
         existing_nested_index = existing_index.get("index") if isinstance(existing_index.get("index"), dict) else {}
         existing_semantic_cache = (
             existing_nested_index.get("semantic_cache") if isinstance(existing_nested_index.get("semantic_cache"), dict) else {}
@@ -2408,7 +2412,23 @@ class AccountStore:
             self._update_structured_memory_index(rebuilt_index, normalized_rows, entry, {})
         rebuilt_index["index"]["accessed_ids"] = _rebuild_account_memory_accessed_ids(normalized_rows, existing_accessed_ids)
         rebuilt_index["updated_at"] = utc_now()
-        self.write_memory_index(account_id, rebuilt_index)
+        try:
+            if entries_to_write is not None:
+                self.write_memory_entries(account_id, entries_to_write)
+            self.write_memory_index(account_id, rebuilt_index)
+        except Exception:  # noqa: BLE001 - restore both stores before surfacing the original failure.
+            rollback_errors: list[Exception] = []
+            for restore in (
+                lambda: self.write_memory_entries(account_id, previous_rows),
+                lambda: self.write_memory_index(account_id, previous_index),
+            ):
+                try:
+                    restore()
+                except Exception as rollback_exc:  # noqa: BLE001 - report inconsistent rollback explicitly.
+                    rollback_errors.append(rollback_exc)
+            if rollback_errors:
+                raise AccountStoreError("account memory rebuild rollback failed; index and entries may be inconsistent") from rollback_errors[0]
+            raise
 
     @_serialize_account_memory
     def check_structured_memory_index(self, account_id: str, *, require_resolvable: bool = True) -> AccountMemoryIndexHealth:

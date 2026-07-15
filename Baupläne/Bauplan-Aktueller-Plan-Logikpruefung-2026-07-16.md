@@ -94,6 +94,8 @@ Diagnose und Tests.
 - `reset_structured_memory()` hat denselben Rollbackschutz.
 - `mark_structured_memory_accessed()` stellt bei Indexfehlern ebenfalls den
   vorherigen Entries-/Indexstand wieder her.
+- `rebuild_structured_memory_index()` stellt bei Fehlern nach einer
+  Normalisierung ebenfalls den vorherigen Entries-/Indexstand wieder her.
 - Fehlgeschlagene Rollbacks werden als eigene Inkonsistenzfehler gemeldet.
 - Account-Store-Suite zuletzt: `203 passed in 9.57s`.
 - Letzter Commit: `dfb99cb2 fix: rollback account memory resets`.
@@ -110,7 +112,18 @@ Diagnose und Tests.
 - Regression fuer simulierten Index-Schreibfehler ergaenzt. Fokussiert:
   `2 passed, 201 deselected`; vollstaendig: `203 passed in 9.57s`.
 - Naechster belegter Kandidat: `rebuild_structured_memory_index()` mit
-  derselben getrennten Entries-/Index-Schreibreihenfolge.
+-  derselben getrennten Entries-/Index-Schreibreihenfolge. Dieser Befund ist
+  inzwischen behoben.
+- 2026-07-16: Eine Biene bestaetigte den Rebuild-Teilfehler: normalisierte
+  Entries wurden vor dem Index geschrieben. Ein Indexfehler konnte deshalb
+  neue Rows mit altem Index hinterlassen.
+- Der Rebuild sichert jetzt beide Staende vor der Normalisierung und rollt
+  bei Fehlern Entries und Index zurueck. Regression fuer Indexfehler nach dem
+  Entries-Write ergaenzt; fokussiert `5 passed`, vollstaendig `204 passed in
+  7.85s`.
+- Naechster offener Kandidat aus dem Bienen-Suchlauf: die getrennte
+  Konsolidierung in `run_memory_maintenance()` sowie der bewusst zu pruefende
+  Plaintext-Legacy-Fallback.
 
 ## Akzeptanzkriterien
 
