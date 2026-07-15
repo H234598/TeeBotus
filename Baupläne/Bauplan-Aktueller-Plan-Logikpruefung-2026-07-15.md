@@ -136,6 +136,13 @@ Read-only Live-Probe ueber `TeeBotus.cinnamon_applet status`:
 - Regression fuer echten Edit-`TypeError` und historische Edit-Signaturen
   ergaenzt. Adapter-Vollsuite danach: `153 passed in 1.52s`; keine
   Provider-/LLM-Aufrufe.
+- 2026-07-16: Read-only Live-Abnahme des Applet-Status: `Health ok`,
+  `actionable=0`, Qdrant `2/2 ready`, Runtime-Version `1.9.498` passend zur
+  laufenden Unit. Die 20 sichtbaren Hinweise sind erklaert: deaktivierter
+  HF-Pool mit konfiguriertem lokalen/Gemini-Fallback, optionaler fehlender
+  Groq-Key, partielle Codex-Usage-Felder und dokumentierte
+  `no_private_route`-Skips. Applet-Installation entspricht dem Repository;
+  Cinnamon-Suite: `238 passed in 35.94s`.
 
 ## Historische Plaene
 
