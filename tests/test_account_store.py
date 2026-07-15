@@ -1020,6 +1020,44 @@ def test_link_identity_merges_temporary_memory_and_tombstones_temp(tmp_path):
     assert not (temp_dir / "User_Memory_Entries.jsonl").exists()
 
 
+def test_merge_accounts_retry_after_identity_write_failure_is_idempotent(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    target = store.resolve_or_create_account(telegram_identity_key(1))
+    source_identity = signal_identity_key(source_uuid="retry-merge")
+    source = store.resolve_or_create_account(source_identity)
+    store.write_memory_entries(source, [{"id": "mem_source", "text": "einmal"}])
+    store.write_account_text(source, "User_Habbits_and_behave.md", "Quelle")
+
+    with patch.object(store, "_save_identities", side_effect=AccountStoreError("identity write failed")):
+        with pytest.raises(AccountStoreError, match="identity write failed"):
+            store.merge_accounts(source, target)
+
+    store.merge_accounts(source, target)
+
+    assert [row["id"] for row in store.read_memory_entries(target)] == ["mem_source"]
+    habits = store.read_account_text(target, "User_Habbits_and_behave.md")
+    assert habits.count("## Merged from") == 1
+    assert store.get_account_for_identity(source_identity) == target
+    assert not (store.account_dir(source) / USER_MEMORY_ENTRIES_FILENAME).exists()
+
+
+def test_merge_accounts_resumes_tombstone_cleanup_after_failure(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    target = store.resolve_or_create_account(telegram_identity_key(1))
+    source = store.resolve_or_create_account(signal_identity_key(source_uuid="cleanup-merge"))
+
+    with patch.object(store, "_delete_dir_contents_except", side_effect=AccountStoreError("cleanup failed")):
+        with pytest.raises(AccountStoreError, match="cleanup failed"):
+            store.merge_accounts(source, target)
+
+    assert (store.account_dir(source) / "Account_Tombstone.json").exists()
+    store.merge_accounts(source, target)
+
+    assert (store.account_dir(source) / "Account_Tombstone.json").exists()
+    assert not (store.account_dir(source) / "Account_Profile.json").exists()
+    assert source not in store._load_index().get("accounts", {})
+
+
 def test_link_identity_merges_legacy_openai_state_into_llm_state(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))

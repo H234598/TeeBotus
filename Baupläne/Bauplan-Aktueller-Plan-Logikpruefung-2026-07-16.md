@@ -143,8 +143,20 @@ Diagnose und Tests.
   dadurch liegt Secret-Pruefung nicht mehr ausserhalb der Link-Serialisierung.
   Regression fokussiert `7 passed`; AccountStore-Suite danach `206 passed in
   9.55s`.
-- Naechster offener High-Priority-Befund: `merge_accounts()` ist bei Fehlern
-  nicht transaktional und nach Teilfehlern nicht sicher replaybar.
+- 2026-07-16: Zwei Bienen bestaetigten den High-Priority-Befund bei
+  `merge_accounts()`: ein Fehler nach Zielschreibungen konnte beim Retry
+  doppelte Memories/Habit-Abschnitte erzeugen; ein Fehler nach Tombstone-Write
+  konnte Cleanup blockieren.
+- JSONL-Merge dedupliziert jetzt nach Memory-ID/identischem Payload, Habit-
+  Merge prueft vorhandene Abschnitte, und ein Tombstone fuer dasselbe Ziel
+  setzt Index-Entfernung und Quellverzeichnis-Cleanup fort. Retries bleiben
+  dadurch sicher wiederholbar.
+- Regressionen fuer Identity-Write-Fehler und fehlgeschlagenes Tombstone-
+  Cleanup ergaenzt. Fokussiert `4 passed`; AccountStore-Suite `208 passed in
+  7.37s`; Logik-Audit-Suite `10 passed`.
+- Offener Bienenbefund: `unlink_identity()` hat weiterhin getrennte Profil-,
+  Index- und Mapping-Writes. Vor einem Fix muss dessen gewollte Reihenfolge
+  und Rollback-Vertrag separat reproduziert werden.
 
 ## Akzeptanzkriterien
 

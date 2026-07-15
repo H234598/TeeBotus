@@ -2067,12 +2067,21 @@ class AccountStore:
     def merge_accounts(self, source_account_id: str, target_account_id: str) -> None:
         source_account_id = validate_sha512_token(source_account_id, field_name="source_account_id")
         target_account_id = validate_sha512_token(target_account_id, field_name="target_account_id")
-        self._ensure_account_resolvable(source_account_id)
         self._ensure_account_resolvable(target_account_id)
         if source_account_id == target_account_id:
             return
         source_dir = self.account_dir(source_account_id)
         target_dir = self.account_dir(target_account_id)
+        tombstone_path = source_dir / "Account_Tombstone.json"
+        if tombstone_path.exists():
+            tombstone = self.vault.read_json(tombstone_path, {})
+            if str(tombstone.get("status") or "") == "tombstoned":
+                if str(tombstone.get("merged_into") or "") != target_account_id:
+                    raise AccountStoreError("source account is already tombstoned")
+                self._remove_account_from_index(source_account_id)
+                self._delete_dir_contents_except(source_dir, {"Account_Tombstone.json"})
+                return
+        self._ensure_account_resolvable(source_account_id)
         target_dir.mkdir(parents=True, exist_ok=True)
         self._merge_jsonl(source_dir / USER_MEMORY_ENTRIES_FILENAME, target_dir / USER_MEMORY_ENTRIES_FILENAME, vault=self.account_memory_vault)
         self._merge_json_objects(source_dir / USER_MEMORY_INDEX_FILENAME, target_dir / USER_MEMORY_INDEX_FILENAME, preserve_target=True, vault=self.account_memory_vault)
@@ -4173,7 +4182,7 @@ class AccountStore:
         target.parent.mkdir(parents=True, exist_ok=True)
         existing = self._read_jsonl_with_fallback(target, vault=vault) if target.exists() else []
         addition = self._read_jsonl_with_fallback(source, vault=vault)
-        self._write_jsonl_with_vault(target, [*existing, *addition], vault=vault)
+        self._write_jsonl_with_vault(target, _merge_account_jsonl_rows(existing, addition), vault=vault)
 
     def _merge_json_objects(self, source: Path, target: Path, *, preserve_target: bool = False, vault: EncryptedJsonVault) -> None:
         if not source.exists():
@@ -4216,6 +4225,8 @@ class AccountStore:
             return
         target_text = target.read_text(encoding="utf-8") if target.exists() else ""
         addition = f"\n\n## {heading}\n\n{source_text}\n"
+        if addition.strip() in target_text:
+            return
         _atomic_write_text(target, target_text.rstrip() + addition)
 
     def _delete_dir_contents_except(self, path: Path, keep: set[str]) -> None:
