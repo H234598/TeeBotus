@@ -151,18 +151,29 @@ def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:
             else:
                 sent.append(api.send_message(action.chat_id, _poll_text_fallback(action.question, answers)))
         elif isinstance(action, SendAttachment):
+            reply_parameters = _telegram_reply_parameters(action.reply_to_ref)
             if action.content_type.startswith("audio/") and hasattr(api, "send_voice"):
-                sent.append(api.send_voice(action.chat_id, action.data, action.filename, action.content_type))
+                kwargs = {"reply_parameters": reply_parameters} if reply_parameters else {}
+                sent.append(api.send_voice(action.chat_id, action.data, action.filename, action.content_type, **kwargs))
             elif hasattr(api, "send_document"):
-                sent.append(api.send_document(action.chat_id, action.data, action.filename, action.content_type, caption=action.caption))
+                kwargs = {"caption": action.caption}
+                if reply_parameters:
+                    kwargs["reply_parameters"] = reply_parameters
+                sent.append(api.send_document(action.chat_id, action.data, action.filename, action.content_type, **kwargs))
             else:
                 sent.append(api.send_message(action.chat_id, action.caption or f"Datei: {action.filename}"))
         elif isinstance(action, ExportFile):
             send_document = getattr(api, "send_document", None)
             if callable(send_document):
-                sent.append(send_document(action.chat_id, action.data, action.filename, action.content_type, caption=action.caption))
+                kwargs = {"caption": action.caption}
+                reply_parameters = _telegram_reply_parameters(action.reply_to_ref)
+                if reply_parameters:
+                    kwargs["reply_parameters"] = reply_parameters
+                sent.append(send_document(action.chat_id, action.data, action.filename, action.content_type, **kwargs))
             else:
-                sent.append(api.send_message(action.chat_id, f"Export erzeugt: {action.filename}"))
+                reply_parameters = _telegram_reply_parameters(action.reply_to_ref)
+                kwargs = {"reply_parameters": reply_parameters} if reply_parameters else {}
+                sent.append(api.send_message(action.chat_id, f"Export erzeugt: {action.filename}", **kwargs))
         elif isinstance(action, NotifyLinkedIdentity):
             # Routing a notification by identity requires the production identity router;
             # the adapter keeps it explicit instead of leaking the notice to the wrong chat.

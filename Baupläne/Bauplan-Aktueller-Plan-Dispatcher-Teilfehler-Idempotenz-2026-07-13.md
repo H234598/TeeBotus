@@ -199,3 +199,11 @@ git diff --check
   respektiert.
 - API-, Adapter- und Runtime-Regressionen ergaenzt. Betroffene Suite:
   `609 passed, 17 subtests passed in 13.02s`; keine Provider-/LLM-Aufrufe.
+- 2026-07-15: Anschlussfehler geschlossen: Der automatisch gesetzte
+  Telegram-Reply-Kontext wurde bei `SendAttachment` und `ExportFile` zuvor
+  nicht an `sendVoice`/`sendDocument` weitergereicht. Multipart-Felder tragen
+  `reply_parameters` jetzt ebenfalls; der Text-Fallback fuer fehlende
+  Dokument-APIs behaelt Reply-Parameter, wenn der Adapter sie akzeptiert.
+  Regressionen fuer Attachment und Export ergaenzt.
+- Betroffene Suite danach: `610 passed, 17 subtests passed in 11.28s`;
+  keine Provider-/LLM-Aufrufe.

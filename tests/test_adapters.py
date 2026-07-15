@@ -1705,6 +1705,29 @@ def test_telegram_export_file_uses_optional_send_document():
     assert api.calls == [("@my_channel", b"%PDF", "report.pdf", "application/pdf", {"caption": "Export"})]
 
 
+def test_telegram_attachment_and_export_preserve_reply_parameters():
+    class API:
+        def __init__(self) -> None:
+            self.calls = []
+
+        def send_document(self, chat_id, data, filename, content_type, **kwargs):
+            self.calls.append((chat_id, data, filename, content_type, kwargs))
+            return len(self.calls)
+
+    api = API()
+
+    sent = send_telegram_actions(
+        api,
+        [
+            SendAttachment("@my_channel", b"data", "note.txt", reply_to_ref="99"),
+            ExportFile("@my_channel", "report.pdf", "application/pdf", b"%PDF", reply_to_ref="99"),
+        ],
+    )
+
+    assert sent == [1, 2]
+    assert [call[-1]["reply_parameters"] for call in api.calls] == ['{"message_id":99}', '{"message_id":99}']
+
+
 def test_telegram_export_file_falls_back_to_message_without_document_api():
     class API:
         def __init__(self) -> None:

@@ -433,10 +433,21 @@ class TelegramAPI:
         copied_message_id = result.get("message_id")
         return int(copied_message_id) if isinstance(copied_message_id, int) else None
 
-    def send_voice(self, chat_id: int, audio: bytes, filename: str, content_type: str) -> int | None:
+    def send_voice(
+        self,
+        chat_id: int,
+        audio: bytes,
+        filename: str,
+        content_type: str,
+        *,
+        reply_parameters: str = "",
+    ) -> int | None:
+        fields: dict[str, Any] = {"chat_id": chat_id}
+        if reply_parameters:
+            fields["reply_parameters"] = reply_parameters
         payload = self.request_multipart(
             "sendVoice",
-            {"chat_id": chat_id},
+            fields,
             [("voice", filename, content_type, audio)],
         )
         result = payload.get("result")
@@ -445,10 +456,21 @@ class TelegramAPI:
         message_id = result.get("message_id")
         return int(message_id) if isinstance(message_id, int) else None
 
-    def send_document(self, chat_id: int, data: bytes, filename: str, content_type: str, caption: str = "") -> int | None:
+    def send_document(
+        self,
+        chat_id: int,
+        data: bytes,
+        filename: str,
+        content_type: str,
+        caption: str = "",
+        *,
+        reply_parameters: str = "",
+    ) -> int | None:
         fields: dict[str, Any] = {"chat_id": chat_id}
         if caption:
             fields["caption"] = caption
+        if reply_parameters:
+            fields["reply_parameters"] = reply_parameters
         payload = self.request_multipart(
             "sendDocument",
             fields,
