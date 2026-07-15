@@ -7,6 +7,7 @@ import re
 import subprocess
 from contextlib import contextmanager
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -1221,6 +1222,25 @@ def test_structured_account_memory_migrates_legacy_top_level_index(tmp_path):
     assert index["index"]["entries"]["mem_legacy"]["schema_version"] == 2
     assert index["index"]["keywords"]["mond"] == ["mem_legacy"]
     assert index["index"]["keywords"]["kaffee"] == ["mem_new"]
+
+
+def test_structured_account_memory_rolls_back_entries_when_index_write_fails(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_old", "user_text": "Mond", "bot_text": "Tee"})
+    previous_rows = store.read_memory_entries(account_id)
+    previous_index = store.read_memory_index(account_id)
+
+    with patch.object(
+        store,
+        "write_memory_index",
+        side_effect=[AccountStoreError("index write failed"), None],
+    ):
+        with pytest.raises(AccountStoreError, match="index write failed"):
+            store.append_structured_memory_entry(account_id, {"id": "mem_new", "user_text": "Kaffee"})
+
+    assert store.read_memory_entries(account_id) == previous_rows
+    assert store.read_memory_index(account_id) == previous_index
 
 
 def test_append_structured_account_memory_renames_duplicate_entry_id(tmp_path):

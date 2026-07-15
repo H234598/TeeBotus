@@ -161,6 +161,14 @@ Read-only Live-Probe ueber `TeeBotus.cinnamon_applet status`:
 - Replace-Fehler-Regression prueft unveraenderten Index und aufgeraeumte
   Tempdatei. Angrenzende Suite danach: `400 passed, 17 subtests passed in
   12.49s`; keine Provider-/LLM-Aufrufe.
+- 2026-07-16: `append_structured_memory_entry()` schrieb Entries und Index
+  getrennt. Bei einem Indexfehler konnten neue Entries ohne Indexeintrag
+  zurueckbleiben. Der Hotpath sichert jetzt vorherigen Entries-/Indexstand und
+  stellt beide bei Fehlern wieder her; ein fehlgeschlagener Rollback wird als
+  eigener Inkonsistenzfehler sichtbar.
+- Regression fuer simulierten Index-Schreibfehler: alter Entries- und
+  Indexstand bleibt erhalten. Account-Store-Suite: `201 passed in 12.35s`;
+  keine Provider-/LLM-Aufrufe.
 
 ## Historische Plaene
 

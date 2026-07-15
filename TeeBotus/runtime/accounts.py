@@ -2180,6 +2180,8 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
         rows = self.read_memory_entries(account_id)
+        previous_rows = [dict(row) for row in rows if isinstance(row, dict)]
+        previous_index = self.read_memory_index(account_id)
         normalized_entry = dict(entry)
         memory_id = str(normalized_entry.get("id") or f"mem_{uuid.uuid4().hex}").strip()
         existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
@@ -2208,10 +2210,24 @@ class AccountStore:
         rows.append(normalized_entry)
         if max_entries > 0:
             del rows[:-max_entries]
-        self.write_memory_entries(account_id, rows)
-        index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
+        index = self._normalized_memory_index(account_id, previous_index)
         self._update_structured_memory_index(index, rows, normalized_entry, profile_updates or {})
-        self.write_memory_index(account_id, index)
+        try:
+            self.write_memory_entries(account_id, rows)
+            self.write_memory_index(account_id, index)
+        except Exception:  # noqa: BLE001 - restore both stores before surfacing the original failure.
+            rollback_errors: list[Exception] = []
+            for restore in (
+                lambda: self.write_memory_entries(account_id, previous_rows),
+                lambda: self.write_memory_index(account_id, previous_index),
+            ):
+                try:
+                    restore()
+                except Exception as rollback_exc:  # noqa: BLE001 - report inconsistent rollback explicitly.
+                    rollback_errors.append(rollback_exc)
+            if rollback_errors:
+                raise AccountStoreError("account memory append rollback failed; index and entries may be inconsistent") from rollback_errors[0]
+            raise
         return memory_id
 
     @_serialize_account_memory
