@@ -1013,6 +1013,36 @@ def test_secret_tool_rotate_secret_preserves_instance_keys_and_memory(tmp_path, 
     assert [entry.get("id") for entry in entries] == ["mem_1"]
 
 
+def test_resolve_or_create_account_repairs_index_after_partial_write(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    identity_key = telegram_identity_key(1)
+    original_account_index = store._upsert_account_index
+
+    with patch.object(store, "_upsert_account_index", side_effect=AccountStoreError("index write failed")):
+        with pytest.raises(AccountStoreError, match="index write failed"):
+            store.resolve_or_create_account(identity_key)
+
+    account_id = store.get_account_for_identity(identity_key)
+    assert account_id is not None
+    assert account_id not in store._load_index().get("accounts", {})
+
+    with patch.object(store, "_upsert_account_index", side_effect=original_account_index):
+        assert store.resolve_or_create_account(identity_key) == account_id
+    assert account_id in store._load_index().get("accounts", {})
+
+
+def test_resolve_or_create_account_removes_profile_when_identity_write_fails(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    identity_key = telegram_identity_key(1)
+
+    with patch.object(store, "_save_identities", side_effect=AccountStoreError("identity write failed")):
+        with pytest.raises(AccountStoreError, match="identity write failed"):
+            store.resolve_or_create_account(identity_key)
+
+    assert store.get_account_for_identity(identity_key) is None
+    assert store.list_account_ids(include_unresolvable=True) == ()
+
+
 def test_link_identity_merges_temporary_memory_and_tombstones_temp(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))

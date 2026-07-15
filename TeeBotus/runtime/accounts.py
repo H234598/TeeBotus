@@ -1786,6 +1786,9 @@ class AccountStore:
             payload = self._identity_payload_for_key(identities, key)
             existing = payload.get("account_id") if isinstance(payload, dict) else None
             if isinstance(existing, str) and TOKEN_HEX_RE.fullmatch(existing) and self._account_is_resolvable(existing):
+                existing_profile = dict(self._read_account_profile(existing))
+                existing_profile["account_id"] = existing
+                self._upsert_account_index(existing_profile)
                 self._touch_identity(identities, key)
                 return existing
             account_id = new_sha512_token()
@@ -1801,6 +1804,7 @@ class AccountStore:
                 "linked_identities": [key],
                 "status": "active",
             }
+            account_dir = self.account_dir(account_id)
             self._write_account_profile(account_id, account)
             identities[key] = {
                 "schema_version": ACCOUNT_SCHEMA_VERSION,
@@ -1811,7 +1815,15 @@ class AccountStore:
                 "first_seen_at": now,
                 "last_seen_at": now,
             }
-            self._save_identities(identities)
+            try:
+                self._save_identities(identities)
+            except Exception:  # noqa: BLE001 - remove profile created without an identity mapping.
+                try:
+                    (account_dir / ACCOUNT_PROFILE_FILENAME).unlink(missing_ok=True)
+                    account_dir.rmdir()
+                except Exception as rollback_exc:  # noqa: BLE001 - report orphan risk explicitly.
+                    raise AccountStoreError("account creation rollback failed; orphan profile may remain") from rollback_exc
+                raise
             self._upsert_account_index(account)
             return account_id
 
