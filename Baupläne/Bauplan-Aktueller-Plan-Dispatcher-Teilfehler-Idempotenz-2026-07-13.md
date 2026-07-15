@@ -179,3 +179,13 @@ git diff --check
   gesendet. Erst nach erfolgreichem Offset-Write wird das verschluesselte
   Journal final geloescht. Damit ist die lokale Reihenfolge
   `dispatch -> offset durable -> journal complete` belastbar.
+- 2026-07-15: Logikfehler im modernen Telegram-Pfad behoben: Lange
+  `SendText`-Antworten wurden dort als eine ungeteilte API-Aktion gesendet,
+  obwohl der Legacy-Pfad bereits Telegram-Chunks verwendete. Antworten ueber
+  Telegrams Nachrichtenlimit konnten dadurch abgelehnt werden. Chunks werden
+  jetzt vor Retry-Journal und Action-Indizes erzeugt; jeder Chunk ist damit
+  einzeln retrybar und trackbar. Buttons bleiben am letzten Chunk, lange
+  formatierte Varianten fallen auf Plaintext-Chunks zurueck.
+- Regressionstest fuer Chunk-Grenze, Button-Platzierung und Action-Expansion
+  ergaenzt. Relevante Suite: `607 passed, 17 subtests passed in 13.03s`;
+  keine Provider-/LLM-Aufrufe. `py_compile` und `git diff --check` sauber.

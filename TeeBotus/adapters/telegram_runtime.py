@@ -14,7 +14,7 @@ import urllib.parse
 import urllib.request
 import uuid
 from contextvars import copy_context
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -955,7 +955,7 @@ def build_telegram_runtime_context(
             api,
             message_tracker,
             event,
-            actions,
+            _expand_telegram_text_actions(actions),
             account_store=account_store,
             instance_name=instance_name,
             dispatch_lock=dispatch_lock,
@@ -1216,6 +1216,9 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
                         chat_id,
                     )
                 return True
+            # Expand before journal creation so every Telegram chunk has its own
+            # durable action index and can retry without duplicating prior chunks.
+            engine_result = replace(engine_result, actions=_expand_telegram_text_actions(engine_result.actions))
             LOGGER.info(
                 "Telegram engine result instance=%s slot=%s event_id=%s handled=%s actions=%s action_types=%s",
                 context.instance_name,
@@ -1558,6 +1561,29 @@ def _download_telegram_message_attachments(api: TelegramAPI, message: dict[str, 
             continue
         attachments.append(IncomingAttachment(data=data, filename=filename, content_type=content_type))
     return tuple(attachments)
+
+
+def _expand_telegram_text_actions(actions: list[Any]) -> list[Any]:
+    expanded: list[Any] = []
+    for action in actions:
+        if not isinstance(action, SendText):
+            expanded.append(action)
+            continue
+        chunks = _telegram_text_chunks(action.text, formatted_text=action.formatted_text)
+        if len(chunks) == 1:
+            expanded.append(action)
+            continue
+        for index, (chunk, formatted_chunk) in enumerate(chunks):
+            expanded.append(
+                replace(
+                    action,
+                    text=chunk,
+                    text_mode=action.text_mode if formatted_chunk else "",
+                    formatted_text=formatted_chunk,
+                    buttons=action.buttons if index == len(chunks) - 1 else (),
+                )
+            )
+    return expanded
 
 
 def _dispatch_modern_telegram_actions(

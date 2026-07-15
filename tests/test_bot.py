@@ -62,7 +62,7 @@ from TeeBotus.bot import (
     transcribe_youtube_video,
 )
 from TeeBotus import __version__
-from TeeBotus.adapters.telegram_runtime import _handle_update_with_runtime_context
+from TeeBotus.adapters.telegram_runtime import _expand_telegram_text_actions, _handle_update_with_runtime_context
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.openai_client import OpenAIAPIError, OpenAIResponse, OpenAIVoice
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, INSTANCE_STATE_ACCOUNT_ID, StaticSecretProvider, telegram_identity_key
@@ -4538,6 +4538,25 @@ class BotTests(unittest.TestCase):
 
         self.assertGreater(len(api.sent_messages), 1)
         self.assertTrue(all(len(text) <= TELEGRAM_MESSAGE_CHUNK_SIZE for _, text in api.sent_messages))
+
+    def test_modern_telegram_text_actions_split_before_retry_indexing(self) -> None:
+        from TeeBotus.runtime.actions import MessageButton, SendText
+
+        actions = _expand_telegram_text_actions(
+            [
+                SendText(
+                    "123",
+                    "wort " * 1200,
+                    buttons=(MessageButton("Weiter", "weiter"),),
+                )
+            ]
+        )
+
+        self.assertGreater(len(actions), 1)
+        self.assertTrue(all(isinstance(action, SendText) for action in actions))
+        self.assertTrue(all(len(action.text) <= TELEGRAM_MESSAGE_CHUNK_SIZE for action in actions))
+        self.assertTrue(all(not action.buttons for action in actions[:-1]))
+        self.assertEqual(actions[-1].buttons, (MessageButton("Weiter", "weiter"),))
 
     def test_every_third_short_openai_reply_without_sources_is_voice(self) -> None:
         from TeeBotus.instructions import BotInstructions
