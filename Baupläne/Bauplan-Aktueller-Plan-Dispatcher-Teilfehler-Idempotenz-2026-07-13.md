@@ -262,3 +262,6 @@ git diff --check
 - Adapter-Regressionen reproduzieren erste erfolgreiche Action plus spaeteren
   Fehler. Betroffene Gesamt-Suite: `778 passed, 17 subtests passed in 12.93s`;
   keine Provider-/LLM-Aufrufe.
+- Runner-Integrationstests pruefen jetzt zusaetzlich, dass Matrix und Signal
+  die vom Callback gelieferten Refs nach einem gemischten Action-Batch im
+  `MessageTracker` behalten. Fokussierte Matrix-/Signal-Tests: `2 passed`.
