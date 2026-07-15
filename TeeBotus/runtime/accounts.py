@@ -1986,6 +1986,8 @@ class AccountStore:
             if profile.get("status") == "tombstoned":
                 raise AccountStoreError("target account is tombstoned")
             if self._account_is_resolvable(account_id):
+                profile["account_id"] = account_id
+                self._upsert_account_index(profile)
                 return
         now = utc_now()
         profile = {

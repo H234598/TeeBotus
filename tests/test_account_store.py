@@ -1043,6 +1043,27 @@ def test_resolve_or_create_account_removes_profile_when_identity_write_fails(tmp
     assert store.list_account_ids(include_unresolvable=True) == ()
 
 
+def test_ensure_external_account_repairs_index_after_partial_write(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = "a" * 128
+    original_account_index = store._upsert_account_index
+    failed = False
+
+    def fail_once(profile):
+        nonlocal failed
+        if not failed:
+            failed = True
+            raise AccountStoreError("index write failed")
+        return original_account_index(profile)
+
+    with patch.object(store, "_upsert_account_index", side_effect=fail_once):
+        with pytest.raises(AccountStoreError, match="index write failed"):
+            store.ensure_external_account(account_id, source_instance="Bote_der_Wahrheit")
+        store.ensure_external_account(account_id, source_instance="Bote_der_Wahrheit")
+
+    assert account_id in store._load_index().get("accounts", {})
+
+
 def test_link_identity_merges_temporary_memory_and_tombstones_temp(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))

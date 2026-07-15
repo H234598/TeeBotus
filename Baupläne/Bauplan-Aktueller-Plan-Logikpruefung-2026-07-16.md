@@ -170,6 +170,17 @@ Diagnose und Tests.
   zurueck. Ein fehlgeschlagener Rollback bleibt als eigener Fehler sichtbar.
   Regression fokussiert `3 passed`; AccountStore-Suite danach `212 passed in
   7.82s`.
+- 2026-07-16: Eine Biene fand zwei Account-Erzeugungs-Teilfehler:
+  `resolve_or_create_account()` konnte nach einem Mappingfehler ein
+  verwaistes Profil hinterlassen und nach einem Indexfehler den fehlenden
+  Index beim Retry nicht reparieren. `ensure_external_account()` gab bei
+  vorhandenem Profil ohne Index zu frueh zurueck.
+- Neue Accounts entfernen ihr Profil bei fehlgeschlagenem Identity-Write;
+  bestehende Accounts und External-Accounts reparieren den Account-Index beim
+  naechsten Retry. Regression fokussiert `3 passed`; AccountStore-Suite danach
+  `215 passed in 9.60s`.
+- Offener naechster Auditpunkt bleibt die systematische Pruefung weiterer
+  mehrteiliger Account-Metadatenwrites; bisher kein neuer belegter Befund.
 
 ## Akzeptanzkriterien
 
