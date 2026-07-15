@@ -2131,6 +2131,84 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [("123", "first"), ("123", "second")])
         self.assertEqual(process_calls, 1)
 
+    def test_modern_dispatch_retry_recovers_from_encrypted_journal_after_context_rebuild(self) -> None:
+        from TeeBotus.runtime.actions import SendText
+        from TeeBotus.runtime.engine import EngineResult
+
+        class InstructionBox:
+            def get(self):
+                return BotInstructions()
+
+        class PartialFailureAPI(FakeAPI):
+            def __init__(self) -> None:
+                super().__init__()
+                self.failed_once = False
+
+            def send_message(self, chat_id: int, text: str) -> int:
+                if text == "second" and not self.failed_once:
+                    self.failed_once = True
+                    raise TelegramAPIError("temporary second action failure")
+                return super().send_message(chat_id, text)
+
+        def build_context(root: Path, api: FakeAPI):
+            secret_provider = StaticSecretProvider(b"e" * 32)
+            account_store = AccountStore(root / "accounts", "Demo", secret_provider)
+            state_store = RuntimeStateStore(root / "data", instance_name="Demo", secret_provider=secret_provider)
+            return build_telegram_runtime_context(
+                api=api,
+                instance_name="Demo",
+                adapter_slot=1,
+                instruction_store=InstructionBox(),
+                account_store=account_store,
+                state_store=state_store,
+                message_tracker=MessageTracker(root / "runtime" / "Sent_Message_Refs.json"),
+                openai_client=None,
+                working_memory_store=None,
+                bibliothekar_store=None,
+                youtube_job_runner=None,
+                bot_identity=BotIdentity(first_name="Mondbot", username="MondBot"),
+            )
+
+        api = PartialFailureAPI()
+        process_calls = 0
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            context = build_context(root, api)
+
+            def process_result(event):
+                nonlocal process_calls
+                process_calls += 1
+                return EngineResult(
+                    event.account_id,
+                    [SendText(event.chat_id, "first"), SendText(event.chat_id, "second")],
+                    handled=True,
+                )
+
+            context.engine.process_result = process_result  # type: ignore[method-assign]
+            update = {
+                "update_id": 43,
+                "message": {
+                    "message_id": 9,
+                    "text": "/ping",
+                    "chat": {"id": 123, "type": "private"},
+                    "from": {"id": 456},
+                },
+            }
+            with self.assertRaisesRegex(TelegramAPIError, "temporary second action failure"):
+                handle_update(api, update, chat_state=ChatState(), runtime_context=context)
+
+            journal_path = root / "data" / "runtime" / "Telegram_Dispatch_Journal.json"
+            self.assertTrue(journal_path.exists())
+            self.assertNotIn(b"second", journal_path.read_bytes())
+
+            recovered_context = build_context(root, api)
+            recovered_context.engine.process_result = lambda _event: (_ for _ in ()).throw(AssertionError("engine rerun"))  # type: ignore[method-assign]
+            handle_update(api, update, chat_state=ChatState(), runtime_context=recovered_context)
+            self.assertNotIn(b"second", journal_path.read_bytes())
+
+        self.assertEqual(api.sent_messages, [("123", "first"), ("123", "second")])
+        self.assertEqual(process_calls, 1)
+
     def test_modern_dispatch_timeout_does_not_send_fallback_while_worker_is_in_flight(self) -> None:
         from TeeBotus.runtime.actions import SendText
         from TeeBotus.runtime.engine import EngineResult
@@ -2149,10 +2227,9 @@ class BotTests(unittest.TestCase):
             def send_message(self, chat_id: int, text: str) -> int:
                 self.started.set()
                 self.release.wait(timeout=5)
-                try:
-                    return super().send_message(chat_id, text)
-                finally:
-                    self.finished.set()
+                result = super().send_message(chat_id, text)
+                self.finished.set()
+                return result
 
         api = BlockingAPI()
         with tempfile.TemporaryDirectory() as directory:
@@ -2197,6 +2274,8 @@ class BotTests(unittest.TestCase):
 
             api.release.set()
             self.assertTrue(api.finished.wait(timeout=2))
+            self.assertTrue(context.dispatch_lock.acquire(timeout=2))
+            context.dispatch_lock.release()
             handle_update(api, update, chat_state=ChatState(), runtime_context=context)
 
         self.assertEqual(api.sent_messages, [("123", "slow")])

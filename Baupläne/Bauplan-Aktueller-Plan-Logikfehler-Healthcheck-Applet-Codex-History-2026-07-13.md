@@ -658,3 +658,17 @@ Der Plan ist erst abgeschlossen, wenn:
   `actionable_problem_count=0` und eine sichtbare Notice. Automatisches
   Linking bleibt aus Sicherheitsgruenden verboten; der bestaetigte
   `/login`-Flow bleibt die einzige Aktion.
+- 2026-07-15: Live-Healthcheck reproduzierte einen echten, aber operativen
+  Befund: `teebotus.service` war seit 21:06 CEST sauber mit `SIGTERM` beendet
+  (`Result=success`), nicht abgestuerzt. Deshalb waren die Signal-Service- und
+  Signal-Account-Probes `unreachable`/`unavailable`; `Restart=on-failure` darf
+  einen absichtlichen Stop nicht selbststaendig aufheben. Dienst wurde wieder
+  gestartet. Neue Applet-Probe: `health.status=ok`, `command_ok=true`,
+  `actionable_problem_count=0`, `total_problem_count=0`, Qdrant-Fehler `0`,
+  Unit `active/running`.
+- Die verbleibenden `20` Hinweise sind nicht-actionable und nachvollziehbar:
+  Gemini-Limitquelle nutzt konservative Defaults (`1`), zwei optionale
+  fehlende Provider-Keys, drei partielle Offload-Zustaende, sieben erklaerte
+  Fallback-/Pool-Hinweise und sieben bekannte Codex-Usage-/History-Hinweise.
+  Der Applet-Header darf sie als Hinweise zeigen, aber nicht als `Health
+  defekt` bewerten. Keine Applet-Codeaenderung war dafuer erforderlich.

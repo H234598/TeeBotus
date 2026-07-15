@@ -72,6 +72,7 @@ from TeeBotus.runtime.codex_command import execute_codex_admin_command
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent
 from TeeBotus.runtime.proactive_agent import proactive_agent_instance_enabled
 from TeeBotus.runtime.status_auth import StatusAuthGateResult, evaluate_status_auth_gate, status_auth_enabled
+from TeeBotus.runtime.telegram_dispatch import TelegramDispatchJournal
 from TeeBotus.runtime.tts_dialect import (
     handle_tts_mimic_voice_command,
     handle_tts_voice_model_command,
@@ -894,6 +895,7 @@ class TelegramRuntimeContext:
     bot_identity: BotIdentity
     dispatch_retries: dict[str, "_TelegramDispatchRetry"] = field(default_factory=dict)
     dispatch_lock: Any = field(default_factory=threading.Lock)
+    dispatch_journal: TelegramDispatchJournal | None = None
 
 
 @dataclass
@@ -924,6 +926,7 @@ def build_telegram_runtime_context(
 ) -> TelegramRuntimeContext:
     instructions = instruction_store.get()
     dispatch_lock = threading.Lock()
+    dispatch_journal = TelegramDispatchJournal(instance_name, state_store.runtime_dir, state_store.secret_provider)
     engine = TeeBotusEngine(
         account_store,
         state=state_store,
@@ -968,6 +971,7 @@ def build_telegram_runtime_context(
         engine=engine,
         bot_identity=bot_identity,
         dispatch_lock=dispatch_lock,
+        dispatch_journal=dispatch_journal,
     )
 
 
@@ -1031,6 +1035,16 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
     if not isinstance(getattr(context, "dispatch_retries", None), dict):
         context.dispatch_retries = {}
     retry_state = context.dispatch_retries.get(retry_key)
+    dispatch_journal = getattr(context, "dispatch_journal", None)
+    if retry_state is None and dispatch_journal is not None:
+        journal_entry = dispatch_journal.load(retry_key)
+        if journal_entry is not None:
+            retry_state = _TelegramDispatchRetry(
+                event=journal_entry.event,
+                engine_result=journal_entry.engine_result,
+                completed_action_indices=set(journal_entry.completed_action_indices),
+            )
+            context.dispatch_retries[retry_key] = retry_state
     status_auth = _telegram_status_auth_pre_gate(context.account_store, event)
     if status_auth is not None:
         return _dispatch_telegram_status_auth_pre_gate(context.api, event, status_auth)
@@ -1059,7 +1073,10 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
             message.get("message_id", "unknown"),
         )
         return True
-    event = _with_telegram_attachments(context.api, event, message)
+    if retry_state is None:
+        event = _with_telegram_attachments(context.api, event, message)
+    else:
+        event = retry_state.event
     LOGGER.debug(
         "Telegram runtime event prepared instance=%s slot=%s event_id=%s message_id=%s attachments=%s",
         context.instance_name,
@@ -1068,32 +1085,33 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
         message.get("message_id", "unknown"),
         len(event.attachments),
     )
-    try:
-        account_id = context.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
-        context.account_store.update_identity_route(
-            event.identity_key,
-            channel=event.channel,
-            chat_id=event.chat_id,
-            chat_type=event.chat_type,
-            adapter_slot=event.adapter_slot,
-        )
-    except (AccountStoreError, OSError, ValueError, AttributeError):
-        LOGGER.exception(
-            "Telegram account resolution failed instance=%s chat_id=%s message_id=%s.",
-            context.instance_name,
-            chat_id,
-            message.get("message_id", "unknown"),
-        )
+    if retry_state is None:
         try:
-            context.api.send_message(str(chat_id), context.instruction_store.get().user_memory_error)
-        except (TelegramAPIError, TelegramNetworkError, OSError):
+            account_id = context.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
+            context.account_store.update_identity_route(
+                event.identity_key,
+                channel=event.channel,
+                chat_id=event.chat_id,
+                chat_type=event.chat_type,
+                adapter_slot=event.adapter_slot,
+            )
+        except (AccountStoreError, OSError, ValueError, AttributeError):
             LOGGER.exception(
-                "Telegram memory error notification failed instance=%s chat_id=%s.",
+                "Telegram account resolution failed instance=%s chat_id=%s message_id=%s.",
                 context.instance_name,
                 chat_id,
+                message.get("message_id", "unknown"),
             )
-        return True
-    event = event.with_account(account_id)
+            try:
+                context.api.send_message(str(chat_id), context.instruction_store.get().user_memory_error)
+            except (TelegramAPIError, TelegramNetworkError, OSError):
+                LOGGER.exception(
+                    "Telegram memory error notification failed instance=%s chat_id=%s.",
+                    context.instance_name,
+                    chat_id,
+                )
+            return True
+        event = event.with_account(account_id)
     process_timeout = _telegram_runtime_timeout_seconds(
         TELEGRAM_RUNTIME_PROCESS_TIMEOUT_ENV,
         TELEGRAM_RUNTIME_PROCESS_TIMEOUT_SECONDS,
@@ -1201,6 +1219,14 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
             return True
         retry_state = _TelegramDispatchRetry(event=event, engine_result=engine_result)
         context.dispatch_retries[retry_key] = retry_state
+        if dispatch_journal is not None:
+            try:
+                dispatch_journal.create(retry_key, event, engine_result)
+            except Exception:
+                # Do not continue with an in-memory-only retry after persistence
+                # failed; that would reopen the process-restart duplicate window.
+                context.dispatch_retries.pop(retry_key, None)
+                raise
     event = event.with_account(engine_result.account_id)
     try:
         dispatch_started_at = time.perf_counter()
@@ -1215,6 +1241,8 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
                 instance_name=context.instance_name,
                 completed_action_indices=retry_state.completed_action_indices,
                 dispatch_lock=getattr(context, "dispatch_lock", None),
+                dispatch_journal=dispatch_journal,
+                journal_key=retry_key,
             ),
             timeout_seconds=dispatch_timeout,
         )
@@ -1234,6 +1262,8 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
                 f"slot={context.adapter_slot} event_id={event.event_id}"
             )
         context.dispatch_retries.pop(retry_key, None)
+        if dispatch_journal is not None:
+            dispatch_journal.complete(retry_key)
     except Exception:
         LOGGER.exception(
             "Telegram action dispatch failed hard instance=%s slot=%s event_id=%s chat_id=%s actions=%s",
@@ -1509,6 +1539,8 @@ def _dispatch_modern_telegram_actions(
     instance_name: str,
     completed_action_indices: set[int] | None = None,
     dispatch_lock: Any | None = None,
+    dispatch_journal: TelegramDispatchJournal | None = None,
+    journal_key: str = "",
 ) -> None:
     if dispatch_lock is not None:
         acquired = dispatch_lock.acquire(blocking=False)
@@ -1523,6 +1555,8 @@ def _dispatch_modern_telegram_actions(
                 account_store=account_store,
                 instance_name=instance_name,
                 completed_action_indices=completed_action_indices,
+                dispatch_journal=dispatch_journal,
+                journal_key=journal_key,
             )
         finally:
             dispatch_lock.release()
@@ -1552,18 +1586,24 @@ def _dispatch_modern_telegram_actions(
         tuple(type(action).__name__ for action in actions),
     )
     completed = completed_action_indices if completed_action_indices is not None else set()
+
+    def mark_completed(index: int) -> None:
+        completed.add(index)
+        if dispatch_journal is not None and journal_key:
+            dispatch_journal.mark_action_completed(journal_key, index)
+
     for index, action in enumerate(actions):
         if index in completed or not isinstance(action, NotifyLinkedIdentity):
             continue
         _notify_telegram_linked_identities(api, message_tracker, account_store, [action], instance_name=instance_name)
         # The helper deliberately keeps linked-identity notifications non-fatal.
         # Mark the attempt complete so a later retry cannot duplicate it.
-        completed.add(index)
+        mark_completed(index)
     for index, action in enumerate(actions):
         if index in completed or not isinstance(action, DeleteTrackedMessages):
             continue
         _delete_tracked_telegram_messages(api, message_tracker, event, [action])
-        completed.add(index)
+        mark_completed(index)
     for index, action in enumerate(actions):
         if index in completed:
             continue
@@ -1602,7 +1642,7 @@ def _dispatch_modern_telegram_actions(
                 )
         # A returned None is still a completed no-op (typing, delay, reaction,
         # or a channel-neutral action that Telegram intentionally ignores).
-        completed.add(index)
+        mark_completed(index)
 
 
 def _notify_telegram_linked_identities(

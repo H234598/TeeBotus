@@ -2,13 +2,12 @@
 
 **Stand:** 2026-07-13
 
-**Status:** Aktiv
+**Status:** Abgeschlossen fuer diesen Dispatcher-Abschnitt
 
 **Parent-Plan:**
 `Baupläne/Bauplan-Aktueller-Plan-Logikpruefung-Telegram-Runtime-2026-07-13.md`
 
-**Quellstand:** TeeBotus `1.9.498`, letzter lokaler Commit
-`535c1e18 fix: defer Telegram attachment downloads`
+**Quellstand:** TeeBotus `1.9.498`, Dispatcher-Journal-Fix dieses Abschnitts
 
 ## Auftrag
 
@@ -37,7 +36,8 @@ Der uebergeordnete Arbeitsauftrag lautet:
 - Die relevante Testsuite meldet jetzt `604 passed, 17 subtests passed`.
 - Vor dem aktuellen Timeout-Fix lagen seit dem letzten Live-Restart am
   2026-07-13 um 18:17 CEST 19 lokale Commits vor.
-  Commits vor. Der naechste Restart ist erst am 20-Commit-Fenster faellig.
+  Der Restart erfolgte danach am 20-Commit-Fenster. Der naechste Restart ist
+  erst am naechsten 20-Commit-Fenster faellig.
 - Push ist nicht angefordert und bleibt aus.
 - Die uncommitteten Benutzerdateien `.obsidian/`, `.stfolder/`,
   `Fusion_Packliste.txt`, `Unbenannt.base` und `Unbenannt.canvas` bleiben
@@ -72,12 +72,15 @@ Der uebergeordnete Arbeitsauftrag lautet:
   Fehlermeldung erhalten.
 - [x] Keine kostenpflichtigen Provider- oder LLM-Aufrufe verwenden.
 
-Offen fuer einen Folgeabschnitt:
-
-- [ ] Den Dispatch-Fortschritt ueber einen Prozessneustart hinweg persistent
-  machen. Der aktuelle Fix verhindert doppelte Aktionen bei Poller-Retries im
-  laufenden Prozess; nach einem Neustart bleibt wegen des noch nicht
-  persistierten Aktionsplans ein at-least-once-Fenster bestehen.
+- [x] Den Dispatch-Fortschritt ueber einen Prozessneustart hinweg persistent
+  machen: Der moderne Telegram-Pfad schreibt vor dem Versand einen
+  verschluesselten, explizit allowlisteten Action-Plan und markiert jede
+  bestaetigte Aktion einzeln. Ein neuer Runtime-Kontext laedt diesen Plan und
+  setzt nur offene Aktionen fort. Klartext-Message- und Dateiinhalte liegen
+  nicht im Journal.
+- [x] Journalfehler fail-closed behandeln: Wenn der Plan nicht sicher
+  geschrieben werden kann, bleibt das Update unbestaetigt und es wird kein
+  in-memory-only Retry weitergefuehrt.
 - [x] Den Timeout-Pfad absichern: Ein laufender Versand wird durch einen
   In-Flight-Lock nicht parallel erneut gestartet. Der Timeout bleibt ein
   Retry-Fehler und sendet keine konkurrierende Fallback-Antwort; das Update
@@ -131,13 +134,35 @@ Der Timeout-Regressionstest ist ebenfalls gruen:
 2 passed, 188 deselected in 1.61s
 ```
 
+Der Prozessneustart-Nachweis ist gruen:
+
+```text
+.venv-py313/bin/pytest -q tests/test_bot.py -k 'modern_dispatch_retry or modern_dispatch_timeout'
+3 passed, 188 deselected in 1.83s
+```
+
 Die relevante Suite ist gruen:
 
 ```text
 .venv-py313/bin/pytest -q tests/test_bot.py tests/test_telegram_runner.py \
   tests/test_engine_identity_flows.py tests/test_adapters.py \
   tests/test_runtime_state.py
-604 passed, 17 subtests passed in 12.48s
+605 passed, 17 subtests passed in 10.63s
 
 git diff --check
 ```
+
+## Nachtrag 2026-07-15
+
+- Der verschluesselte Dispatch-Plan wurde mit `StaticSecretProvider` in einem
+  neuen Runtime-Kontext wieder eingelesen. Aktion 1 blieb abgeschlossen,
+  Aktion 2 wurde genau einmal nachgesendet; das Engine-Ergebnis wurde nicht
+  erneut erzeugt. Der Test prueft ausserdem, dass `second` nicht im Journal-
+  Dateibyte vorkommt.
+- Die Zustellgarantie bleibt bewusst **at-least-once**: Ein Prozessabsturz
+  exakt zwischen Telegram-Erfolg und dem lokalen Fortschritts-Write kann eine
+  einzelne Aktion erneut senden. Telegram bietet dafuer keinen atomaren
+  Commit mit unserem Journal. Das Journal reduziert das Fenster auf diese
+  unvermeidbare Remote-Grenze.
+- Die relevante Suite und Syntaxpruefung liefen ohne Provider-/LLM-Aufruf.
+- Lokaler Commit fuer diesen Abschnitt ist gesetzt; Push bleibt aus.
