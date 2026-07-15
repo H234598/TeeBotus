@@ -107,6 +107,12 @@ Read-only Live-Probe ueber `TeeBotus.cinnamon_applet status`:
   optionalen Keywords und laesst echte TypeErrors weiter hochlaufen.
 - Regression fuer alte Voice-/Document-Signaturen ergaenzt. Relevante Suite:
   `781 passed, 17 subtests passed in 12.62s`; keine Provider-/LLM-Aufrufe.
+- 2026-07-16: Der Kompatibilitaetsfallback wurde enger gefasst: Beliebige
+  Texttreffer wie `caption must be a string` duerfen keinen Fehler mehr
+  verschlucken. Fallback startet nur noch bei einer echten Python-Meldung
+  `unexpected keyword argument '<name>'`.
+- Adapter-Vollsuite danach: `150 passed in 1.90s`; `py_compile` und
+  `git diff --check` sauber.
 
 ## Historische Plaene
 

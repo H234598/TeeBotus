@@ -1899,6 +1899,22 @@ def test_telegram_media_attachment_keeps_legacy_adapter_compatibility():
     ]
 
 
+def test_telegram_media_adapter_does_not_swallow_real_type_error():
+    class API:
+        def send_voice(self, chat_id, data, filename, content_type, **kwargs):
+            raise TypeError("caption must be a string")
+
+    try:
+        send_telegram_actions(
+            API(),
+            [SendAttachment("@my_channel", b"audio", "voice.ogg", "audio/ogg", caption="Hinweis")],
+        )
+    except TypeError as exc:
+        assert str(exc) == "caption must be a string"
+    else:
+        raise AssertionError("real media TypeError was swallowed")
+
+
 def test_telegram_export_file_falls_back_to_message_without_document_api():
     class API:
         def __init__(self) -> None:

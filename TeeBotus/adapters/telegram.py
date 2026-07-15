@@ -380,11 +380,16 @@ def _telegram_call_with_optional_reply(method: Any, *args: Any, reply_parameters
         try:
             return method(*args, **kwargs)
         except TypeError as exc:
+            message = str(exc)
             unsupported = next(
                 (
                     key
                     for key in optional_keywords
-                    if key in kwargs and key in str(exc)
+                    if key in kwargs
+                    and (
+                        f"unexpected keyword argument '{key}'" in message
+                        or f'unexpected keyword argument "{key}"' in message
+                    )
                 ),
                 None,
             )
