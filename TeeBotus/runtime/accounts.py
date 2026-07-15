@@ -2877,6 +2877,8 @@ class AccountStore:
             return
         requested = set(requested_ids)
         rows = self.read_memory_entries(account_id)
+        previous_rows = [dict(row) for row in rows if isinstance(row, dict)]
+        previous_index = self.read_memory_index(account_id)
         timestamp = utc_now()
         changed = False
         for row in rows:
@@ -2890,8 +2892,7 @@ class AccountStore:
             changed = True
         if not changed:
             return
-        self.write_memory_entries(account_id, rows)
-        index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
+        index = self._normalized_memory_index(account_id, previous_index)
         nested_index = index.setdefault("index", {})
         access_ids = nested_index.setdefault("accessed_ids", [])
         if not isinstance(access_ids, list):
@@ -2916,7 +2917,22 @@ class AccountStore:
             if row_id in requested:
                 nested_index.setdefault("entries", {})[row_id] = _account_memory_index_entry(row)
         index["updated_at"] = timestamp
-        self.write_memory_index(account_id, index)
+        try:
+            self.write_memory_entries(account_id, rows)
+            self.write_memory_index(account_id, index)
+        except Exception:  # noqa: BLE001 - restore both stores before surfacing the original failure.
+            rollback_errors: list[Exception] = []
+            for restore in (
+                lambda: self.write_memory_entries(account_id, previous_rows),
+                lambda: self.write_memory_index(account_id, previous_index),
+            ):
+                try:
+                    restore()
+                except Exception as rollback_exc:  # noqa: BLE001 - report inconsistent rollback explicitly.
+                    rollback_errors.append(rollback_exc)
+            if rollback_errors:
+                raise AccountStoreError("account memory access rollback failed; index and entries may be inconsistent") from rollback_errors[0]
+            raise
 
     @_serialize_account_memory
     def consolidate_structured_memory(self, account_id: str, *, max_new_entries: int = 8) -> tuple[str, ...]:

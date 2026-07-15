@@ -92,9 +92,25 @@ Diagnose und Tests.
 - `append_structured_memory_entry()` stellt bei Indexfehlern vorherigen
   Entries-/Indexstand wieder her.
 - `reset_structured_memory()` hat denselben Rollbackschutz.
+- `mark_structured_memory_accessed()` stellt bei Indexfehlern ebenfalls den
+  vorherigen Entries-/Indexstand wieder her.
 - Fehlgeschlagene Rollbacks werden als eigene Inkonsistenzfehler gemeldet.
-- Account-Store-Suite zuletzt: `202 passed in 7.02s`.
+- Account-Store-Suite zuletzt: `203 passed in 9.57s`.
 - Letzter Commit: `dfb99cb2 fix: rollback account memory resets`.
+
+## Letzter Nachweis
+
+- 2026-07-16: Eine Biene fand in `mark_structured_memory_accessed()` einen
+  Teilfehler: Entries wurden vor dem Index geschrieben. Bei einem
+  Indexfehler blieben `access_count` und `last_accessed_at` neu, waehrend
+  `accessed_ids` und Index-Entries alt blieben.
+- Der Zugriffspfad liest nun beide vorherigen Staende vor der Mutation und
+  rollt Entries sowie Index bei jedem Schreibfehler zurueck. Ein fehlgeschla-
+  gener Rollback wird als eigener Inkonsistenzfehler sichtbar.
+- Regression fuer simulierten Index-Schreibfehler ergaenzt. Fokussiert:
+  `2 passed, 201 deselected`; vollstaendig: `203 passed in 9.57s`.
+- Naechster belegter Kandidat: `rebuild_structured_memory_index()` mit
+  derselben getrennten Entries-/Index-Schreibreihenfolge.
 
 ## Akzeptanzkriterien
 
@@ -113,4 +129,3 @@ Diagnose und Tests.
 - Vorheriger Plan:
   `Baupläne/Bauplan-Aktueller-Plan-Logikpruefung-2026-07-15.md`
 - Aktueller Arbeitsbaum: `/home/teladi/TeeBotus`
-

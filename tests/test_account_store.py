@@ -4653,6 +4653,25 @@ def test_mark_structured_account_memory_accessed_deduplicates_requested_ids(tmp_
     assert store.check_structured_memory_index(account_id).ok
 
 
+def test_mark_structured_account_memory_rolls_back_entries_when_index_write_fails(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    memory_id = store.append_structured_memory_entry(account_id, {"id": "mem_first", "user_text": "Mond", "bot_text": "Tee"})
+    previous_rows = store.read_memory_entries(account_id)
+    previous_index = store.read_memory_index(account_id)
+
+    with patch.object(
+        store,
+        "write_memory_index",
+        side_effect=[AccountStoreError("index write failed"), None],
+    ):
+        with pytest.raises(AccountStoreError, match="index write failed"):
+            store.mark_structured_memory_accessed(account_id, [memory_id])
+
+    assert store.read_memory_entries(account_id) == previous_rows
+    assert store.read_memory_index(account_id) == previous_index
+
+
 def test_structured_account_memory_indexes_types_and_temporal_relations(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
