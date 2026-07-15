@@ -12,6 +12,7 @@ from TeeBotus.adapters.signal import send_signal_actions, signal_message_to_even
 from TeeBotus.adapters.telegram import (
     TELEGRAM_MESSAGE_CHUNK_SIZE,
     send_telegram_actions,
+    split_telegram_message,
     telegram_message_to_event,
     telegram_update_message,
 )
@@ -1561,6 +1562,14 @@ def test_telegram_direct_adapter_splits_long_text_with_reply_and_buttons():
     assert json.loads(api.calls[0][2]["reply_parameters"]) == {"message_id": 77}
     assert "reply_parameters" not in api.calls[-1][2]
     assert "reply_markup" in api.calls[-1][2]
+
+
+def test_telegram_chunks_respect_utf16_message_limit():
+    chunks = split_telegram_message("😀" * 2500)
+
+    assert len(chunks) > 1
+    assert all(len(chunk.encode("utf-16-le")) // 2 <= TELEGRAM_MESSAGE_CHUNK_SIZE for chunk in chunks)
+    assert "".join(chunks) == "😀" * 2500
 
 
 def test_telegram_send_text_passes_formatted_text_when_supported():

@@ -110,17 +110,17 @@ def _telegram_sender_name(sender: dict[str, Any], sender_chat: dict[str, Any]) -
 
 
 def split_telegram_message(text: str, chunk_size: int = TELEGRAM_MESSAGE_CHUNK_SIZE) -> list[str]:
-    if len(text) <= chunk_size:
+    if _telegram_text_length(text) <= chunk_size:
         return [text]
 
     chunks: list[str] = []
     remaining = text
-    while len(remaining) > chunk_size:
+    while _telegram_text_length(remaining) > chunk_size:
         split_at = _find_split_index(remaining, chunk_size)
         chunk = remaining[:split_at].rstrip()
         if not chunk:
-            chunk = remaining[:chunk_size]
-            split_at = chunk_size
+            split_at = _telegram_prefix_length(remaining, chunk_size)
+            chunk = remaining[:split_at]
         chunks.append(chunk)
         remaining = remaining[split_at:].lstrip()
 
@@ -129,21 +129,39 @@ def split_telegram_message(text: str, chunk_size: int = TELEGRAM_MESSAGE_CHUNK_S
     return chunks
 
 
+def _telegram_text_length(text: str) -> int:
+    return len(str(text or "").encode("utf-16-le")) // 2
+
+
+def _telegram_prefix_length(text: str, max_units: int) -> int:
+    units = 0
+    for index, character in enumerate(text):
+        character_units = 2 if ord(character) > 0xFFFF else 1
+        if units + character_units > max_units:
+            return index
+        units += character_units
+    return len(text)
+
+
 def _telegram_text_chunks(text: str, *, formatted_text: str = "") -> list[tuple[str, str]]:
     plain = str(text or "")
     formatted = str(formatted_text or "")
-    if formatted and len(plain) <= TELEGRAM_MESSAGE_CHUNK_SIZE and len(formatted) <= TELEGRAM_MESSAGE_CHUNK_SIZE:
+    if (
+        formatted
+        and _telegram_text_length(plain) <= TELEGRAM_MESSAGE_CHUNK_SIZE
+        and _telegram_text_length(formatted) <= TELEGRAM_MESSAGE_CHUNK_SIZE
+    ):
         return [(plain, formatted)]
     return [(chunk, "") for chunk in split_telegram_message(plain)]
 
 
 def _find_split_index(text: str, chunk_size: int) -> int:
-    search_window = text[:chunk_size]
+    search_window = text[:_telegram_prefix_length(text, chunk_size)]
     for separator in ("\n\n", "\n", ". ", "? ", "! ", "; ", ", ", " "):
         index = search_window.rfind(separator)
-        if index >= chunk_size // 2:
+        if index >= len(search_window) // 2:
             return index + len(separator)
-    return chunk_size
+    return len(search_window)
 
 
 def send_telegram_actions(api: Any, actions: list[Any]) -> list[int | None]:

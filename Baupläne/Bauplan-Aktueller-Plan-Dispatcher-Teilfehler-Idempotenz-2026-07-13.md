@@ -246,3 +246,10 @@ git diff --check
 - Betroffene Gesamt-Suite: `758 passed, 17 subtests passed in 15.60s`;
   keine Provider-/LLM-Aufrufe. Direkter Proactive-/Adapter-Regressionstest
   ergaenzt.
+- 2026-07-15: Telegram-Limitmessung korrigiert: Telegram zaehlt UTF-16-
+  Codeunits, Python `len()` zaehlt Unicode-Codepoints. Der gemeinsame
+  Splitter misst und begrenzt jetzt UTF-16; damit bleiben emoji-lastige
+  Antworten ebenfalls unter dem API-Limit. Regression fuer 2.500 Emojis
+  ergaenzt.
+- Abschlusslauf des fokussierten Themenbatches: `759 passed, 17 subtests
+  passed in 23.68s`; keine Provider-/LLM-Aufrufe.
