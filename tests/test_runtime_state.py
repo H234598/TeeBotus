@@ -1218,6 +1218,81 @@ def test_runtime_state_store_retries_failed_reset_after_persistence_recovers(tmp
     assert "previous_response_id" not in account_store.read_llm_state(ACCOUNT_ID)
 
 
+def test_runtime_state_store_reset_preserves_failed_set_marker(tmp_path):
+    secret = b"s" * 32
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=StaticSecretProvider(secret))
+    account_store.write_llm_state(ACCOUNT_ID, {"previous_response_id": "resp-old"})
+    recovering_provider = RecoveringProvider(secret)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=recovering_provider)
+    state.previous_response_ids[("Bot", ACCOUNT_ID)] = "resp-old"
+
+    state.set_previous_response_id("Bot", ACCOUNT_ID, "resp-new")
+    state.reset_previous_response_id("Bot", ACCOUNT_ID)
+    recovering_provider.available = True
+
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID) is None
+    assert "previous_response_id" not in account_store.read_llm_state(ACCOUNT_ID)
+
+
+def test_runtime_state_store_reset_does_not_clear_same_response_with_new_scope(tmp_path):
+    secret = b"s" * 32
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=StaticSecretProvider(secret))
+    account_store.write_llm_state(
+        ACCOUNT_ID,
+        {
+            "previous_response_id": "resp-same",
+            "previous_response_provider": "openai",
+            "previous_response_model": "gpt-5.5",
+        },
+    )
+    recovering_provider = RecoveringProvider(secret)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=recovering_provider)
+    key = ("Bot", ACCOUNT_ID)
+    state.previous_response_ids[key] = "resp-same"
+    state.previous_response_scopes[key] = ("openai", "gpt-5.5", "")
+
+    state.reset_previous_response_id("Bot", ACCOUNT_ID)
+    account_store.write_llm_state(
+        ACCOUNT_ID,
+        {
+            "previous_response_id": "resp-same",
+            "previous_response_provider": "gemini",
+            "previous_response_model": "gemini-3.5-flash",
+        },
+    )
+    recovering_provider.available = True
+
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID, provider="gemini", model="gemini-3.5-flash") == "resp-same"
+    persisted = account_store.read_llm_state(ACCOUNT_ID)
+    assert persisted["previous_response_provider"] == "gemini"
+    assert persisted["previous_response_model"] == "gemini-3.5-flash"
+
+
+def test_runtime_state_store_retries_reset_of_orphaned_scope_after_persistence_recovers(tmp_path):
+    secret = b"s" * 32
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=StaticSecretProvider(secret))
+    account_store.write_llm_state(
+        ACCOUNT_ID,
+        {
+            "previous_response_provider": "openai",
+            "previous_response_model": "gpt-5.5",
+        },
+    )
+    recovering_provider = RecoveringProvider(secret)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=recovering_provider)
+
+    state.reset_previous_response_id("Bot", ACCOUNT_ID)
+    recovering_provider.available = True
+
+    assert state.get_previous_response_id("Bot", ACCOUNT_ID) is None
+    persisted = account_store.read_llm_state(ACCOUNT_ID)
+    assert "previous_response_provider" not in persisted
+    assert "previous_response_model" not in persisted
+
+
 def test_runtime_state_store_does_not_clear_new_response_after_failed_reset(tmp_path):
     secret = b"s" * 32
     data_dir = tmp_path / "Bot" / "data"

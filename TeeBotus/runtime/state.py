@@ -72,6 +72,12 @@ class PendingFlow:
         }
 
 
+@dataclass(frozen=True)
+class _PendingPreviousResponseReset:
+    response_id: str | None
+    scope: tuple[str, str, str] | None
+
+
 @dataclass
 class RuntimeState:
     """Small in-memory state container for pending account-scoped flows."""
@@ -81,7 +87,7 @@ class RuntimeState:
     link_notifications: dict[tuple[str, str, str], dict[str, str]] = field(default_factory=dict)
     previous_response_ids: dict[tuple[str, str], str] = field(default_factory=dict)
     previous_response_scopes: dict[tuple[str, str], tuple[str, str, str]] = field(default_factory=dict)
-    pending_previous_response_resets: dict[tuple[str, str], str | None] = field(default_factory=dict)
+    pending_previous_response_resets: dict[tuple[str, str], _PendingPreviousResponseReset] = field(default_factory=dict)
     security_events: list[dict[str, Any]] = field(default_factory=list)
     security_events_persistence_error: str = ""
 
@@ -397,6 +403,7 @@ class RuntimeStateStore(RuntimeState):
         with self._llm_state_lock(account_id):
             key = (instance_name, account_id)
             previous_response_id = self.previous_response_ids.get(key)
+            previous_response_scope = self.previous_response_scopes.get(key)
             super().set_previous_response_id(
                 instance_name,
                 account_id,
@@ -416,9 +423,15 @@ class RuntimeStateStore(RuntimeState):
                 if persisted:
                     self.pending_previous_response_resets.pop(key, None)
                 else:
-                    self.pending_previous_response_resets.setdefault(key, previous_response_id)
+                    self.pending_previous_response_resets.setdefault(
+                        key,
+                        _PendingPreviousResponseReset(previous_response_id, previous_response_scope),
+                    )
             else:
-                self.pending_previous_response_resets[key] = previous_response_id
+                self.pending_previous_response_resets.setdefault(
+                    key,
+                    _PendingPreviousResponseReset(previous_response_id, previous_response_scope),
+                )
                 if self._clear_llm_previous_response_id(account_id):
                     self.pending_previous_response_resets.pop(key, None)
 
@@ -436,6 +449,10 @@ class RuntimeStateStore(RuntimeState):
         with self._llm_state_lock(account_id):
             persisted, persisted_scope, persistence_error = self._read_llm_previous_response(account_id)
             if persistence_error:
+                if key in self.pending_previous_response_resets and self._clear_llm_previous_response_id(account_id):
+                    self.pending_previous_response_resets.pop(key, None)
+                    super().reset_previous_response_id(instance_name, account_id)
+                    return None
                 return super().get_previous_response_id(
                     instance_name,
                     account_id,
@@ -444,15 +461,20 @@ class RuntimeStateStore(RuntimeState):
                     key_fingerprint=key_fingerprint,
                 )
             if key in self.pending_previous_response_resets:
-                stale_response_id = self.pending_previous_response_resets[key]
+                pending_reset = self.pending_previous_response_resets[key]
+                stale_response_id = pending_reset.response_id
+                stale_scope = pending_reset.scope
                 current_response_id = self.previous_response_ids.get(key)
                 current_scope = self.previous_response_scopes.get(key)
-                scope_changed = current_scope != persisted_scope
+                persisted_matches_stale = (
+                    (persisted is None and stale_response_id is None)
+                    or (persisted == stale_response_id and persisted_scope == stale_scope)
+                )
                 if current_response_id and (
-                    current_response_id != stale_response_id or not persisted or scope_changed
-                ) and (
-                    not persisted or stale_response_id is None or persisted == stale_response_id
-                ):
+                    current_response_id != stale_response_id
+                    or current_scope != stale_scope
+                    or not persisted
+                ) and (not persisted or persisted_matches_stale):
                     persisted_current = self._write_llm_previous_response_id(
                         account_id,
                         current_response_id,
@@ -469,15 +491,16 @@ class RuntimeStateStore(RuntimeState):
                         model=model,
                         key_fingerprint=key_fingerprint,
                     )
-                if current_response_id and current_response_id == stale_response_id and persisted == stale_response_id:
+                if current_response_id and current_response_id == stale_response_id and persisted_matches_stale:
                     self.pending_previous_response_resets.pop(key, None)
-                elif not persisted or stale_response_id is None or persisted == stale_response_id:
-                    if not persisted or self._clear_llm_previous_response_id(account_id):
+                elif persisted_matches_stale:
+                    if self._clear_llm_previous_response_id(account_id):
                         self.pending_previous_response_resets.pop(key, None)
-                    self.previous_response_ids.pop(key, None)
-                    self.previous_response_scopes.pop(key, None)
-                    return None
-                self.pending_previous_response_resets.pop(key, None)
+                        self.previous_response_ids.pop(key, None)
+                        self.previous_response_scopes.pop(key, None)
+                        return None
+                else:
+                    self.pending_previous_response_resets.pop(key, None)
             if persisted:
                 self.previous_response_ids[key] = persisted
                 if persisted_scope is not None:
@@ -499,7 +522,15 @@ class RuntimeStateStore(RuntimeState):
         self._ensure_instance_scope(instance_name)
         with self._llm_state_lock(account_id):
             key = (instance_name, account_id)
-            self.pending_previous_response_resets[key] = self.previous_response_ids.get(key)
+            if key not in self.pending_previous_response_resets:
+                persisted, persisted_scope, persistence_error = self._read_llm_previous_response(account_id)
+                if persistence_error:
+                    persisted = self.previous_response_ids.get(key)
+                    persisted_scope = self.previous_response_scopes.get(key)
+                self.pending_previous_response_resets[key] = _PendingPreviousResponseReset(
+                    persisted,
+                    persisted_scope,
+                )
             super().reset_previous_response_id(instance_name, account_id)
             if self._clear_llm_previous_response_id(account_id):
                 self.pending_previous_response_resets.pop(key, None)
