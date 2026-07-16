@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `18/20` Commits vorhanden; naechster Restart
-  nach 2 weiteren Commits.
+  letzten Restart ist aktuell `19/20` Commits vorhanden; naechster Restart
+  nach 1 weiterem Commit.
 
 ## Aktueller Plan
 
@@ -468,6 +468,18 @@ Diagnose und Tests.
   Umgebung nicht; `export`, Quotes und Inline-Kommentare sind abgesichert.
   `tests/test_runtime_dotenv.py`: `7 passed`; Ruff gruen. Kein Runtime-Patch.
 
+### Telegram-Offset und Dispatch-Journal-Nachaudit
+
+- 2026-07-16: Offset wird erst nach erfolgreicher Updateverarbeitung und
+  erfolgreichem Offset-Write im Speicher weitergeschoben. Bei Handler- oder
+  Offsetfehler bleibt Update retrybar; nach Offset-Erfolg blockiert ein
+  Journal-Cleanupfehler die Bestaetigung nicht erneut.
+- Die bestehende Journal-Recovery verhindert bei erneuter Zustellung doppelte
+  Aktionen; Cleanup bleibt bei Fehler sichtbar pending. Kein neuer
+  reproduzierbarer Replay- oder Ack-Reihenfolgefehler.
+- Vorhandene Regressionen in `tests/test_bot.py` decken diese Pfade ab;
+  kein Runtime-Patch.
+
 ## Akzeptanzkriterien
 
 - Kein geaenderter Pfad kann nach einem simulierten zweiten Schreibfehler
@@ -480,8 +492,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `18/20` Commits; kein Restart oder
-Push ausgeloest. Naechster Restart nach 2 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `19/20` Commits; kein Restart oder
+Push ausgeloest. Naechster Restart nach 1 weiterem Commit.
 
 ## Bezug
 
