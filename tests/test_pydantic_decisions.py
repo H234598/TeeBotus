@@ -133,6 +133,21 @@ def test_bibliothekar_query_decision_ignores_low_confidence_model_search() -> No
     )
 
 
+def test_bibliothekar_query_decision_fails_closed_when_model_runner_is_unavailable() -> None:
+    decision = decide_bibliothekar_query(
+        "Vielleicht steht irgendwo etwas dazu?",
+        model_runner=lambda _prompt, _schema: None,
+    )
+
+    assert decision == BibliothekarQueryDecision(
+        should_search=False,
+        query="",
+        confidence=0.0,
+        reason_short="Structured Bibliothekar decision unavailable; skipped search",
+        source="fallback",
+    )
+
+
 def test_bibliothekar_query_decision_schema_accepts_json_payloads() -> None:
     decision = parse_bibliothekar_query_decision(
         '{"should_search": true, "query": "Schlafhygiene Depression", "confidence": 0.88, "reason_short": "library query", "source": "model"}'

@@ -103,7 +103,13 @@ def decide_bibliothekar_query(text: str, *, model_runner: ModelRunner | None = N
                 )
             return model_decision
         except (TypeError, ValueError, ValidationError, json.JSONDecodeError):
-            pass
+            return BibliothekarQueryDecision(
+                should_search=False,
+                query="",
+                confidence=0.0,
+                reason_short="Structured Bibliothekar decision unavailable; skipped search",
+                source="fallback",
+            )
     return BibliothekarQueryDecision(should_search=True, query=value, confidence=0.35, reason_short="Fallback keeps existing Bibliothekar behavior", source="fallback")
 
 

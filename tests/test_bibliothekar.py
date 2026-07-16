@@ -2854,6 +2854,58 @@ def test_engine_bibliothekar_context_ignores_low_confidence_model_search(tmp_pat
     assert "Bibliothekar-Quellenkontext" not in fake_client.prompt
 
 
+def test_engine_bibliothekar_context_skips_search_when_decision_runner_fails(tmp_path):
+    class FakeBibliothekarService:
+        calls = []
+
+        def search(self, query_text, **kwargs):
+            self.calls.append((query_text, kwargs))
+            return SimpleSelection("should not be used")
+
+    class SimpleSelection:
+        def __init__(self, prompt_text):
+            self.prompt_text = prompt_text
+            self.selected_ids = ()
+
+    class FakeOpenAIClient:
+        prompt = ""
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.prompt = user_text
+            return OpenAIResponse("Antwort.", "resp-service", None)
+
+    account_store = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"b" * 32))
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1), display_label="Alice")
+    service = FakeBibliothekarService()
+    fake_client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, bibliothekar_enabled=True),
+        openai_client=fake_client,
+        bibliothekar_store=service,
+        structured_decision_runner=lambda _prompt, _schema: None,
+    )
+    event = IncomingEvent(
+        event_id="telegram:1",
+        instance="Depressionsbot",
+        channel="telegram",
+        adapter_slot=1,
+        account_id=account_id,
+        identity_key=telegram_identity_key(1),
+        chat_id="1",
+        chat_type="private",
+        sender_id="1",
+        sender_name="Alice",
+        text="Vielleicht steht irgendwo etwas dazu?",
+        message_ref="1",
+    )
+
+    engine._openai_actions(event, account_id, BotInstructions(openai_enabled=True, bibliothekar_enabled=True))
+
+    assert service.calls == []
+    assert "Bibliothekar-Quellenkontext" not in fake_client.prompt
+
+
 def test_bibliothekar_openai_settings_are_parsed():
     instructions = parse_instructions(
         """
