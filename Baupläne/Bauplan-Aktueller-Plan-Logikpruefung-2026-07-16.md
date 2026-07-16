@@ -350,7 +350,23 @@ Diagnose und Tests.
   durch vorhandene Regressionen abgedeckt. `tests/test_cinnamon_applet.py`:
   `238 passed in 30.23s`.
 - Kein Patch fuer eine unbelegte Anzeige erstellt. Seit dem Restart stehen
-  `3/20` Commits an; kein weiterer Restart erforderlich.
+  `5/20` Commits an; kein weiterer Restart erforderlich.
+
+### Reminder-Intent und Werktags-Rekurrenz
+
+- 2026-07-16: Der Audit reproduzierte einen stillen Semantikfehler:
+  `jeden Werktag`, `jeden Wochentag` und englische `weekdays` wurden als
+  einmalige Erinnerung fuer den naechsten Uhrzeitpunkt behandelt. Die
+  Wiederholung ging verloren; Freitag konnte dadurch auf Samstag fallen.
+- Der klassische Parser liefert jetzt `recurrence=weekdays`, verschiebt die
+  erste Faelligkeit auf Montag bis Freitag und entfernt Wiederholungswoerter
+  aus dem Betreff. Der Proactive-Dispatcher plant Folgefaelligkeiten ebenfalls
+  ueber das Wochenende hinweg.
+- Regressionen pruefen Freitag und Samstag als Startpunkt sowie Dispatcher-
+  Fortschreibung. `tests/test_reminder_intent.py`: `24 passed`; komplette
+  `tests/test_proactive_agent.py`: `117 passed in 2.51s`; Ruff, `py_compile`
+  und `git diff --check` gruen. Commit:
+  `bf603317 fix: preserve weekday reminder recurrence`.
 
 ## Akzeptanzkriterien
 
