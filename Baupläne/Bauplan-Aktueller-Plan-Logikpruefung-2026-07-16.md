@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart sind aktuell `16/20` Commits vorhanden; naechster Restart
-  nach 4 weiteren Commits.
+  letzten Restart sind aktuell `18/20` Commits vorhanden; naechster Restart
+  nach 2 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -463,6 +463,19 @@ Diagnose und Tests.
   Provider/API-Aufruf.
 - Code-Commit: `c51babf0 fix: serialize identity secret rotation`.
 
+### Account-Summary-Snapshot-Lock
+
+- 2026-07-16: `account_summary()` las Profil, Secret-Map und aktive
+  Identitaeten ohne gemeinsamen Identity-Lock. Waehrend einer Secret-Rotation
+  konnte der Status deshalb voruebergehend `registered=true` mit
+  `secret_exists=false` oder einem alten Identity-Bestand kombinieren.
+- Der Status-Snapshot verwendet jetzt den reentranten Identity-Lock. Der
+  bereits geschuetzte Read der aktiven Identitaeten bleibt kompatibel.
+- Regression prueft Profile-Read unter gehaltenem Lock; fokussiert `2
+  passed`, AccountStore komplett `243 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `669baaf9 fix: serialize account summaries`.
+
 ### LLM-State-SQL/JSON-Audit
 
 - 2026-07-16: Biene Herschel meldete einen vorzeitigen SQL-Return in
@@ -881,8 +894,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `16/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 4 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `18/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 2 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
