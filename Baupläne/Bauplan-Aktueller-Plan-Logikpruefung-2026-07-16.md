@@ -29,7 +29,7 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit letztem
-  Restart sind aktuell `12/20` Commits vorhanden; naechster Restart nach 8
+  Restart sind aktuell `13/20` Commits vorhanden; naechster Restart nach 7
   weiteren Commits.
 
 ## Aktueller Plan
