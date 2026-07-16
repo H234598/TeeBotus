@@ -1875,3 +1875,24 @@ ausgeloest. Naechster Restart nach 14 weiteren Commits.
 
 **Laufstand nach Fix:** Seit dem Restart `8/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 12 weiteren Commits.
+
+### Debug-Level-Nutzerhinweis
+
+- 2026-07-16: Der Planpunkt war bisher nicht umgesetzt: Log-Level-Parsing
+  existierte, aber Nutzer bekamen keinen Hinweis auf moegliche Einsicht in
+  Nachrichteninhalte durch Debug-/Diagnosepfade.
+- Level `1`, `2`, `debug_all`, `debug-all`, `all` und `finest` aktivieren jetzt
+  eine Warnung. Sie wird pro Account und Kanal einmal je Engine-Prozess vor
+  der ersten echten Antwort gesendet. TBL bleibt vor erfolgreicher
+  Status-Authentifizierung durch das fruehe Gate stumm.
+- Kein globaler Push an inaktive Accounts: Die channel-neutrale Engine kennt
+  keine vollstaendige Senderliste. Aktive Nutzer werden beim naechsten
+  beantworteten Turn informiert; Gruppen erhalten denselben sichtbaren
+  Hinweis.
+- Regression: `tests/test_runtime_maintenance.py` und
+  `tests/test_engine_identity_flows.py` -> `341 passed`; `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c52d7250 fix: warn users about debug message visibility`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `19/20` Commits. Kein Push.
+Naechster Restart nach einem weiteren Commit.
