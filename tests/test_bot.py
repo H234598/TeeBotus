@@ -4443,6 +4443,55 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.chat_actions, [(123, "typing")])
         self.assertEqual(api.sent_messages, [(123, f"Codex -> repo\nSession: {session_id}\n\nCodex erledigt.")])
 
+    def test_bare_codex_command_uses_status_executor_for_runtime_admin(self) -> None:
+        from TeeBotus.adapters.telegram_runtime import _handle_codex_command
+        from TeeBotus.runtime.codex_command import CodexCommandResult
+        from TeeBotus.runtime.events import IncomingEvent
+        from TeeBotus.runtime.status_auth import authorize_status_recipient
+
+        api = FakeAPI()
+        with tempfile.TemporaryDirectory() as directory:
+            store = AccountStore(Path(directory) / "accounts", "Depressionsbot", StaticSecretProvider(b"c" * 32))
+            account_id = store.resolve_or_create_account(telegram_identity_key(456), display_label="Ada")
+            authorize_status_recipient(
+                store,
+                account_id,
+                IncomingEvent(
+                    event_id="telegram:bare-codex",
+                    instance="Depressionsbot",
+                    channel="telegram",
+                    adapter_slot=1,
+                    account_id=account_id,
+                    identity_key=telegram_identity_key(456),
+                    chat_id="123",
+                    chat_type="private",
+                    sender_id="456",
+                    sender_name="Ada",
+                    text="/codex",
+                    message_ref="bare-codex",
+                ),
+            )
+            with patch(
+                "TeeBotus.adapters.telegram_runtime.execute_codex_admin_command",
+                return_value=CodexCommandResult("ok", text="Codex-Schalter"),
+            ) as execute:
+                handled = _handle_codex_command(
+                    api,
+                    ChatState(),
+                    123,
+                    {"from": {"id": 456}},
+                    BotInstructions(),
+                    "/codex",
+                    False,
+                    BotIdentity(first_name="Mondbot"),
+                    user_memory_store=store,
+                    instance_name="Depressionsbot",
+                )
+
+        self.assertTrue(handled)
+        execute.assert_called_once()
+        self.assertEqual(api.sent_messages, [(123, "Codex-Schalter")])
+
     def test_codex_command_rejects_non_admin_account(self) -> None:
         from TeeBotus.instructions import BotInstructions
 

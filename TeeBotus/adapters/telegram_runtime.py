@@ -5573,11 +5573,6 @@ def _handle_codex_command(
         _send_tracked_message(api, chat_state, chat_id, reply)
         return True
 
-    if len(text.split(maxsplit=1)) < 2:
-        reply = _with_first_contact_intro(instructions.codex_usage, first_contact, bot_identity)
-        _send_tracked_message(api, chat_state, chat_id, reply)
-        return True
-
     result = execute_codex_admin_command(
         user_memory_store,
         instance_name=instance_name,
