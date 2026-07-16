@@ -2046,3 +2046,19 @@ Commits.
 **Aktueller Laufstand:** Seit dem Restart `15/20` Code-Commits. Dieser
 Plan-Commit macht `16/20`; kein Push. Naechster Restart nach 4 weiteren
 Commits.
+
+### Proactive-Lock-Reihenfolge
+
+- 2026-07-16: Der neue Planner-Account-Lock wurde gegen bestehende
+  Outbox-Pfade geprueft. Diese verwenden `Outbox -> Memory`; ein Planner in
+  `Memory -> Outbox`-Reihenfolge haette bei parallelem Queue-Schreiben
+  deadlocken koennen.
+- Reflection-Planner verwendet jetzt ebenfalls `Outbox -> Memory`. Nested
+  Store-Locks bleiben reentrant; alle Read-/Write-Rennen bleiben serialisiert.
+- Regressionen Planner/Setter -> `7 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `aae8371a fix: preserve proactive lock ordering`.
+
+**Aktueller Laufstand:** Seit dem Restart `17/20` Code-Commits. Dieser
+Plan-Commit macht `18/20`; kein Push. Naechster Restart nach 2 weiteren
+Commits.
