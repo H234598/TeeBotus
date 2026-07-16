@@ -112,7 +112,21 @@ def parse_csv(value: str | None) -> tuple[str, ...]:
 
 def discover_instances(instances_dir: Path, explicit: Sequence[str] = ()) -> tuple[str, ...]:
     if explicit:
-        return tuple(dict.fromkeys(str(name).strip() for name in explicit if str(name).strip()))
+        names = tuple(dict.fromkeys(str(name).strip() for name in explicit if str(name).strip()))
+        if instances_dir.is_symlink():
+            return ()
+        safe_names = []
+        for name in names:
+            if name in {".", ".."} or "/" in name or "\\" in name:
+                continue
+            instance_dir = instances_dir / name
+            if instance_dir.is_symlink():
+                continue
+            instruction_path = instance_dir / BOT_INSTRUCTION_FILENAME
+            if instruction_path.is_symlink():
+                continue
+            safe_names.append(name)
+        return tuple(safe_names)
     if instances_dir.is_symlink() or not instances_dir.exists():
         return ()
     try:

@@ -83,6 +83,7 @@ def test_admin_instance_discovery_ignores_symlinked_instances_and_instructions(t
     (local_instance / "Bot_Verhalten.md").symlink_to(instruction_target)
 
     assert accounts_report_module.discover_instances(instances_root) == ()
+    assert accounts_report_module.discover_instances(instances_root, ("LinkedInstance", "../external-instance", "safe")) == ("safe",)
 
 
 def test_memory_recovery_default_provider_uses_readonly_runtime_policy(monkeypatch) -> None:
