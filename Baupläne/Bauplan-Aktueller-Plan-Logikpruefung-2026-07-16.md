@@ -1513,6 +1513,23 @@ ausgeloest. Naechster Restart nach 10 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `12/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 8 weiteren Commits.
 
+### Admin-Directory-Guard-mit-minimalen-Store-Doubles
+
+- 2026-07-16: Vollsuite lief bis auf acht Codex-History-Tests durch:
+  `3856 passed, 8 failed`. Der neue Phantom-Account-Guard rief bei einem
+  bewusst minimalen Dispatcher-Store ohne `account_dir` direkt eine nicht
+  vorhandene Methode auf.
+- `_account_dir_exists()` behandelt Stores ohne `account_dir` jetzt als
+  nicht-lokal. Echte `AccountStore`-Routen bleiben unveraendert; der
+  Codex-Dispatcher bleibt mit seinem schlanken Store-Double kompatibel.
+- Regression: acht zuvor fehlschlagende Codex-History-Tests plus Admin-Suite:
+  `40 passed`; Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `9c94aa74 fix: tolerate minimal admin store doubles`.
+
+**Laufstand nach Fix:** Seit dem Restart `13/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 7 weiteren Commits.
+
 ### Erstschreibpfad-bei-fehlender-SQLite-Datenbank
 
 - 2026-07-16: `read_entries()` meldet bei einer noch nicht angelegten
