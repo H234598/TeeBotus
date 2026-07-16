@@ -508,6 +508,22 @@ Diagnose und Tests.
 - Vorhandene Regressionen in `tests/test_bot.py` decken diese Pfade ab;
   kein Runtime-Patch.
 
+### Working-Memory-Instanzscope
+
+- 2026-07-16: Die Bienenpruefung fand zwei nahezu gleiche
+  Working-Memory-Implementierungen: `runtime/working_memory.py` und den
+  Telegram-Kompatibilitaetspfad. Beide akzeptierten bisher einen bereits
+  gesetzten, fremden `instance_name` aus einer kopierten oder alten
+  Indexdatei.
+- Das ist ein Scope-Fehler: Datei liegt zwar unter aktueller Instanz, der
+  Prompt konnte aber fremde Instanzmetadaten ausgeben. Normalisierung setzt
+  `instance_name` jetzt immer auf aktuelle Store-Instanz; beide Pfade bleiben
+  verhaltensgleich.
+- Regression fuer beide `WorkingMemoryStore`-Klassen: `tests/test_working_memory.py`:
+  `8 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `15d3e0e0 fix: enforce working memory instance scope`; kein
+  Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -536,8 +552,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `9/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 11 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `11/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 9 weiteren Commits.
 
 ## Bezug
 
