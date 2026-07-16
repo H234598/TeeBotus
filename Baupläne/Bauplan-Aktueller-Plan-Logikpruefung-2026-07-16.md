@@ -2824,3 +2824,21 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `18/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 2 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### SQLite-Recovery-lehnt-Symlinks-ab
+
+- 2026-07-17: `_connect_sqlite_readonly()` folgte SQLite-Hauptdatei und
+  `-wal`/`-shm`-Sidecars ueber Symlinks. Recovery-Scan und moeglicher Apply
+  konnten dadurch Daten ausserhalb des Account-Store-Kontexts lesen oder
+  kopieren.
+- Hauptdatei und Sidecars werden jetzt vor `copy2()` auf Symlinks geprueft;
+  Treffer werden als `sqlite:`-Fehler gemeldet und nicht gelesen, repariert
+  oder verschoben.
+- Regression: symlinked Hauptdatei und WAL-Sidecar -> `3 passed`; komplette
+  `tests/test_admin_accounts.py` -> `67 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ce69d017 fix: reject symlinked sqlite recovery files`.
+
+**Aktueller Laufstand:** Seit dem Restart `20/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart jetzt erforderlich. Naechster Push bleibt erst
+bei 100 Commits.
