@@ -279,6 +279,53 @@ def test_proactive_category_and_policy_setters_are_normalized(tmp_path) -> None:
     assert decision_at_night.allowed is True
 
 
+def test_proactive_state_setters_serialize_read_modify_write(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
+    enable_proactive_agent(account_store, account_id)
+    original_read = account_store.read_agent_state
+    state = {"active": 0, "maximum": 0}
+    state_lock = threading.Lock()
+
+    def observe_read(current_account_id):
+        with state_lock:
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+        try:
+            time.sleep(0.03)
+            return original_read(current_account_id)
+        finally:
+            with state_lock:
+                state["active"] -= 1
+
+    monkeypatch.setattr(account_store, "read_agent_state", observe_read)
+    errors = []
+
+    def set_categories() -> None:
+        try:
+            set_proactive_categories(account_store, account_id, ("analysis",))
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    def set_hours() -> None:
+        try:
+            set_proactive_allowed_hours(account_store, account_id, 22, 8)
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    threads = [threading.Thread(target=set_categories), threading.Thread(target=set_hours)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    final_state = account_store.read_agent_state(account_id)
+    assert errors == []
+    assert state["maximum"] == 1
+    assert final_state["consent"]["categories"] == ["analysis"]
+    assert final_state["policy"]["allowed_hours"] == [22, 8]
+
+
 def test_proactive_policy_enforces_min_interval_after_sent_message(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

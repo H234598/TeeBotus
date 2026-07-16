@@ -223,21 +223,22 @@ def handle_proactive_command(event: IncomingEvent, account_store: AccountStore, 
 
 
 def enable_proactive_agent(account_store: AccountStore, account_id: str, *, categories: Iterable[str] = PROACTIVE_DEFAULT_CATEGORIES) -> dict[str, Any]:
-    state = _normalized_agent_state(account_store.read_agent_state(account_id))
-    enabled_categories = [
-        category
-        for category in dict.fromkeys(str(value or "").strip().casefold() for value in categories)
-        if category in PROACTIVE_ALLOWED_CATEGORIES
-    ]
-    if not enabled_categories:
-        enabled_categories = list(PROACTIVE_DEFAULT_CATEGORIES)
-    state["proactive"]["enabled"] = True
-    state["proactive"]["paused"] = False
-    state["proactive"]["updated_at"] = utc_now()
-    state["consent"]["categories"] = enabled_categories
-    state["consent"]["updated_at"] = state["proactive"]["updated_at"]
-    account_store.write_agent_state(account_id, state)
-    return state
+    with account_store.account_memory_lock(account_id):
+        state = _normalized_agent_state(account_store.read_agent_state(account_id))
+        enabled_categories = [
+            category
+            for category in dict.fromkeys(str(value or "").strip().casefold() for value in categories)
+            if category in PROACTIVE_ALLOWED_CATEGORIES
+        ]
+        if not enabled_categories:
+            enabled_categories = list(PROACTIVE_DEFAULT_CATEGORIES)
+        state["proactive"]["enabled"] = True
+        state["proactive"]["paused"] = False
+        state["proactive"]["updated_at"] = utc_now()
+        state["consent"]["categories"] = enabled_categories
+        state["consent"]["updated_at"] = state["proactive"]["updated_at"]
+        account_store.write_agent_state(account_id, state)
+        return state
 
 
 def proactive_agent_instance_enabled(instance_name: str, env: Mapping[str, str] | None = None) -> bool:
@@ -253,61 +254,67 @@ def proactive_agent_instance_enabled(instance_name: str, env: Mapping[str, str] 
 
 
 def disable_proactive_agent(account_store: AccountStore, account_id: str) -> dict[str, Any]:
-    state = _normalized_agent_state(account_store.read_agent_state(account_id))
-    state["proactive"]["enabled"] = False
-    state["proactive"]["paused"] = False
-    state["proactive"]["updated_at"] = utc_now()
-    account_store.write_agent_state(account_id, state)
-    return state
+    with account_store.account_memory_lock(account_id):
+        state = _normalized_agent_state(account_store.read_agent_state(account_id))
+        state["proactive"]["enabled"] = False
+        state["proactive"]["paused"] = False
+        state["proactive"]["updated_at"] = utc_now()
+        account_store.write_agent_state(account_id, state)
+        return state
 
 
 def pause_proactive_agent(account_store: AccountStore, account_id: str) -> dict[str, Any]:
-    state = _normalized_agent_state(account_store.read_agent_state(account_id))
-    state["proactive"]["paused"] = True
-    state["proactive"]["updated_at"] = utc_now()
-    account_store.write_agent_state(account_id, state)
-    return state
+    with account_store.account_memory_lock(account_id):
+        state = _normalized_agent_state(account_store.read_agent_state(account_id))
+        state["proactive"]["paused"] = True
+        state["proactive"]["updated_at"] = utc_now()
+        account_store.write_agent_state(account_id, state)
+        return state
 
 
 def resume_proactive_agent(account_store: AccountStore, account_id: str) -> dict[str, Any]:
-    state = _normalized_agent_state(account_store.read_agent_state(account_id))
-    if not state["consent"]["categories"]:
-        state["consent"]["categories"] = list(PROACTIVE_DEFAULT_CATEGORIES)
-        state["consent"]["updated_at"] = utc_now()
-    state["proactive"]["enabled"] = True
-    state["proactive"]["paused"] = False
-    state["proactive"]["updated_at"] = utc_now()
-    account_store.write_agent_state(account_id, state)
-    return state
+    with account_store.account_memory_lock(account_id):
+        state = _normalized_agent_state(account_store.read_agent_state(account_id))
+        if not state["consent"]["categories"]:
+            state["consent"]["categories"] = list(PROACTIVE_DEFAULT_CATEGORIES)
+            state["consent"]["updated_at"] = utc_now()
+        state["proactive"]["enabled"] = True
+        state["proactive"]["paused"] = False
+        state["proactive"]["updated_at"] = utc_now()
+        account_store.write_agent_state(account_id, state)
+        return state
 
 
 def set_proactive_categories(account_store: AccountStore, account_id: str, categories: Iterable[str]) -> dict[str, Any]:
-    state = _normalized_agent_state(account_store.read_agent_state(account_id))
-    normalized = [
-        category
-        for category in dict.fromkeys(str(value or "").strip().casefold() for value in categories)
-        if category in PROACTIVE_ALLOWED_CATEGORIES
-    ]
-    state["consent"]["categories"] = normalized
-    state["consent"]["updated_at"] = utc_now()
-    account_store.write_agent_state(account_id, state)
-    return state
+    with account_store.account_memory_lock(account_id):
+        state = _normalized_agent_state(account_store.read_agent_state(account_id))
+        normalized = [
+            category
+            for category in dict.fromkeys(str(value or "").strip().casefold() for value in categories)
+            if category in PROACTIVE_ALLOWED_CATEGORIES
+        ]
+        state["consent"]["categories"] = normalized
+        state["consent"]["updated_at"] = utc_now()
+        account_store.write_agent_state(account_id, state)
+        return state
 
 
 def set_proactive_allowed_hours(account_store: AccountStore, account_id: str, start_hour: Any, end_hour: Any) -> dict[str, Any]:
-    state = _normalized_agent_state(account_store.read_agent_state(account_id))
-    state["policy"]["allowed_hours"] = [_normalize_hour(start_hour, default=9), _normalize_hour(end_hour, default=20)]
-    state["proactive"]["updated_at"] = utc_now()
-    account_store.write_agent_state(account_id, state)
-    return state
+    with account_store.account_memory_lock(account_id):
+        state = _normalized_agent_state(account_store.read_agent_state(account_id))
+        state["policy"]["allowed_hours"] = [_normalize_hour(start_hour, default=9), _normalize_hour(end_hour, default=20)]
+        state["proactive"]["updated_at"] = utc_now()
+        account_store.write_agent_state(account_id, state)
+        return state
 
 
 def set_proactive_min_interval_minutes(account_store: AccountStore, account_id: str, minutes: Any) -> dict[str, Any]:
-    state = _normalized_agent_state(account_store.read_agent_state(account_id))
-    state["policy"]["min_minutes_between_messages"] = min(24 * 60, max(0, _normalize_int(minutes, default=0)))
-    state["proactive"]["updated_at"] = utc_now()
-    account_store.write_agent_state(account_id, state)
-    return state
+    with account_store.account_memory_lock(account_id):
+        state = _normalized_agent_state(account_store.read_agent_state(account_id))
+        state["policy"]["min_minutes_between_messages"] = min(24 * 60, max(0, _normalize_int(minutes, default=0)))
+        state["proactive"]["updated_at"] = utc_now()
+        account_store.write_agent_state(account_id, state)
+        return state
 
 
 def proactive_status_text(account_store: AccountStore, account_id: str) -> str:
