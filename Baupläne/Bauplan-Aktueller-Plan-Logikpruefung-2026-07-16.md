@@ -524,6 +524,19 @@ Diagnose und Tests.
 - Code-Commit: `15d3e0e0 fix: enforce working memory instance scope`; kein
   Provider/API-Aufruf.
 
+### Working-Memory-Korruptionsschutz
+
+- 2026-07-16: Beim Lesen eines indexierten JSONL-Eintrags wurde
+  `UnicodeDecodeError` nicht abgefangen. Ein einzelnes ungueltiges Byte konnte
+  dadurch den kompletten Working-Memory-Promptpfad abbrechen.
+- Beide Implementierungen behandeln den Eintrag jetzt wie andere korrupte
+  Entries: loggen, Entry ueberspringen, keinen Prompt erzwingen. Die
+  Indexdatei und Rohdaten bleiben zur Diagnose erhalten.
+- Regression fuer beide `WorkingMemoryStore`-Klassen: `tests/test_working_memory.py`:
+  `10 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `d474c0b7 fix: tolerate corrupt working memory entries`; kein
+  Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -552,8 +565,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `11/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 9 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `13/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 7 weiteren Commits.
 
 ## Bezug
 
