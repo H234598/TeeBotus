@@ -113,7 +113,13 @@ def resolve_route_to_target(
     else:
         resolved_routing = dict(routing)
 
-    normalized = normalize_route_to_token(target)
+    raw_target = str(target or "").strip()
+    prefix, separator, purpose_target = raw_target.partition(":")
+    normalized = (
+        normalize_route_to_token(purpose_target)
+        if separator and normalize_route_to_token(prefix) == "purpose"
+        else normalize_route_to_token(raw_target)
+    )
     profile_name = _profile_name_for_target(normalized, resolved_profiles)
     if profile_name:
         profile = resolved_profiles[profile_name]

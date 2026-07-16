@@ -66,6 +66,12 @@ def test_resolve_route_to_target_uses_aliases_profiles_and_purposes() -> None:
     hf = resolve_route_to_target("HF", profiles=profiles, routing=routing)
     gemini25 = resolve_route_to_target("Gemini25", profiles=profiles, routing=routing)
     purpose = resolve_route_to_target("StructuredDecision", profiles=profiles, default_profile="local_ollama", routing=routing)
+    explicit_purpose = resolve_route_to_target(
+        "purpose:structured_decision",
+        profiles=profiles,
+        default_profile="local_ollama",
+        routing=routing,
+    )
 
     assert openai.kind == "profile"
     assert openai.name == "openai_premium"
@@ -76,6 +82,8 @@ def test_resolve_route_to_target_uses_aliases_profiles_and_purposes() -> None:
     assert purpose.kind == "purpose"
     assert purpose.name == "structured_decision"
     assert purpose.provider == "hf_pool"
+    assert explicit_purpose.kind == "purpose"
+    assert explicit_purpose.name == "structured_decision"
 
 
 def test_resolve_route_to_target_displays_litellm_openai_profile_as_openai() -> None:
