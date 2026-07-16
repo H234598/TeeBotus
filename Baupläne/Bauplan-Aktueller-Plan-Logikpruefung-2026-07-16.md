@@ -29,7 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit letztem
-  Restart sind aktuell 29 Commits vorhanden; naechster Restart ab Commit 40.
+  Restart sind aktuell `3/20` Commits vorhanden; naechster Restart nach 17
+  weiteren Commits.
 
 ## Aktueller Plan
 
@@ -199,6 +200,23 @@ Diagnose und Tests.
   AccountStore-Suite danach `217 passed in 6.61s`.
 - Offener naechster Auditpunkt bleibt die systematische Pruefung weiterer
   mehrteiliger Account-Metadatenwrites; bisher kein neuer belegter Befund.
+
+### SQL-Fallback und Legacy-Migration
+
+- 2026-07-16: Zwei Bienen bestaetigten, dass gueltige SQL-Rows mit
+  `last_collection_read_error` oder `last_collection_skipped` vorher als
+  Totalausfall behandelt wurden. Stale JSON konnte dadurch gueltige SQL-Daten
+  ersetzen.
+- JSON-Dokumente nutzen bei Partial-Reads direkt gueltige SQL-Rows. JSONL
+  ergaenzt Legacy nur im Speicher. In beiden Faellen gibt es keinen
+  destruktiven Write und keine Legacy-Loeschung bei laufender Diagnose.
+- Saubere Migrationen pruefen den Readback exakt. Bei stillem Verlust oder
+  erneutem Fehler bleibt Legacy erhalten. `read_llm_state()` entfernt bei
+  unbestaetigter `LLM_State.json`-Migration auch `OpenAI_State.json` nicht.
+- Commit `aa6663d9`; Fokus `29 passed`, AccountStore-Suite `224 passed in
+  6.50s`, Ruff, `py_compile` und `git diff --check` gruen.
+- Neuer fokussierter Bauplan:
+  `Baupläne/Bauplan-SQL-Fallback-und-Migrationsschutz-2026-07-16.md`.
 
 ## Akzeptanzkriterien
 
