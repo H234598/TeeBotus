@@ -2107,35 +2107,51 @@ def _account_memory_fallback_warning(store: AccountStore, account_id: str) -> st
         return f" warning=memory_backend_unavailable{suffix}"
     if backend is None:
         return ""
+    snapshot_available = False
     try:
-        stale_entries = set(getattr(backend, "stale_fallback_entry_account_ids", ()) or ())
-        stale_indexes = set(getattr(backend, "stale_fallback_index_account_ids", ()) or ())
-        stale_collections = set(getattr(backend, "stale_fallback_collection_account_ids", ()) or ())
+        diagnostics_snapshot = getattr(backend, "fallback_diagnostics_for_account", None)
+        if callable(diagnostics_snapshot):
+            snapshot_available = True
+            snapshot = diagnostics_snapshot(account_id)
+            if not isinstance(snapshot, Mapping):
+                raise TypeError("fallback diagnostics snapshot is not a mapping")
+            stale_parts = [
+                name
+                for name in ("entries", "index", "collections")
+                if bool(snapshot.get(name))
+            ]
+            error = redact_status_text(str(snapshot.get("error") or ""))
+        else:
+            stale_entries = set(getattr(backend, "stale_fallback_entry_account_ids", ()) or ())
+            stale_indexes = set(getattr(backend, "stale_fallback_index_account_ids", ()) or ())
+            stale_collections = set(getattr(backend, "stale_fallback_collection_account_ids", ()) or ())
+            stale_parts = []
+            if account_id in stale_entries:
+                stale_parts.append("entries")
+            if account_id in stale_indexes:
+                stale_parts.append("index")
+            if account_id in stale_collections:
+                stale_parts.append("collections")
+            error = ""
     except Exception as exc:  # noqa: BLE001 - broken fallback diagnostics must not break /status.
         LOGGER.exception("Failed to read account memory fallback diagnostics.")
         detail = redact_status_text(f"{type(exc).__name__}: {exc}")
         suffix = f":{detail}" if detail else ""
         return f" warning=memory_backend_status_unavailable{suffix}"
-    stale_parts: list[str] = []
-    if account_id in stale_entries:
-        stale_parts.append("entries")
-    if account_id in stale_indexes:
-        stale_parts.append("index")
-    if account_id in stale_collections:
-        stale_parts.append("collections")
     if not stale_parts:
         return ""
-    try:
-        error_for_account = getattr(backend, "fallback_sync_error_for_account", None)
-        if callable(error_for_account):
-            error = redact_status_text(str(error_for_account(account_id) or ""))
-        else:
-            error = redact_status_text(getattr(backend, "last_fallback_sync_error", "") or "")
-    except Exception as exc:  # noqa: BLE001 - fallback error reporting is best effort.
-        LOGGER.exception("Failed to read account memory fallback sync error.")
-        detail = redact_status_text(f"{type(exc).__name__}: {exc}")
-        suffix = f":{detail}" if detail else ""
-        return f" warning=memory_backend_status_unavailable{suffix}"
+    if not snapshot_available and not error:
+        try:
+            error_for_account = getattr(backend, "fallback_sync_error_for_account", None)
+            if callable(error_for_account):
+                error = redact_status_text(str(error_for_account(account_id) or ""))
+            else:
+                error = redact_status_text(getattr(backend, "last_fallback_sync_error", "") or "")
+        except Exception as exc:  # noqa: BLE001 - fallback error reporting is best effort.
+            LOGGER.exception("Failed to read account memory fallback sync error.")
+            detail = redact_status_text(f"{type(exc).__name__}: {exc}")
+            suffix = f":{detail}" if detail else ""
+            return f" warning=memory_backend_status_unavailable{suffix}"
     suffix = f":{error}" if error else ""
     return f" warning=fallback_sync_stale:{'+'.join(stale_parts)}{suffix}"
 

@@ -1499,6 +1499,32 @@ def test_memory_fallback_status_diagnoses_backend_resolution_failure():
     assert warning == " warning=memory_backend_unavailable:postgres DSN missing"
 
 
+def test_memory_fallback_status_uses_atomic_account_snapshot():
+    class Backend:
+        @property
+        def stale_fallback_entry_account_ids(self):
+            raise AssertionError("status must use atomic fallback snapshot")
+
+        @property
+        def stale_fallback_index_account_ids(self):
+            raise AssertionError("status must use atomic fallback snapshot")
+
+        @property
+        def stale_fallback_collection_account_ids(self):
+            raise AssertionError("status must use atomic fallback snapshot")
+
+        def fallback_diagnostics_for_account(self, account_id: str):
+            assert account_id == "account"
+            return {"entries": True, "index": False, "collections": False, "error": "fallback broken"}
+
+    class Store:
+        account_memory_backend = Backend()
+
+    assert status_core._account_memory_fallback_warning(Store(), "account") == (
+        " warning=fallback_sync_stale:entries:fallback broken"
+    )
+
+
 def test_engine_proactive_command_requires_instance_enablement(tmp_path, monkeypatch):
     monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", raising=False)
     monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_DEPRESSIONSBOT", raising=False)

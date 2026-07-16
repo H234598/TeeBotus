@@ -1111,6 +1111,19 @@ class WarningFallbackAccountMemoryBackend:
                 self._fallback_sync_errors.pop((_operation, state_key), None)
         self._refresh_last_fallback_sync_error()
 
+    def fallback_diagnostics_for_account(self, account_id: str) -> dict[str, Any]:
+        with self._operation_lock:
+            return {
+                "entries": account_id in self._stale_fallback_entries,
+                "index": account_id in self._stale_fallback_indexes,
+                "collections": bool(
+                    account_id in self._failed_collection_name_reads
+                    or any(key[0] == account_id for key in self._stale_fallback_collections)
+                ),
+                "error": self.fallback_sync_error_for_account(account_id),
+            }
+
+    @_serialize_fallback_operation
     def fallback_sync_error_for_account(self, account_id: str) -> str:
         messages: list[str] = []
         for (_operation, state_key), message in self._fallback_sync_errors.items():
@@ -1167,14 +1180,17 @@ class WarningFallbackAccountMemoryBackend:
             self.last_collection_skipped = 0
 
     @property
+    @_serialize_fallback_operation
     def stale_fallback_entry_account_ids(self) -> tuple[str, ...]:
         return tuple(sorted(self._stale_fallback_entries))
 
     @property
+    @_serialize_fallback_operation
     def stale_fallback_index_account_ids(self) -> tuple[str, ...]:
         return tuple(sorted(self._stale_fallback_indexes))
 
     @property
+    @_serialize_fallback_operation
     def stale_fallback_collection_account_ids(self) -> tuple[str, ...]:
         return tuple(
             sorted(
