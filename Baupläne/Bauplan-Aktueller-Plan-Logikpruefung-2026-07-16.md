@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `1/20` Commit vorhanden; naechster Restart nach
-  19 weiteren Commits.
+  letzten Restart ist aktuell `8/20` Commits vorhanden; naechster Restart nach
+  12 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -350,7 +350,7 @@ Diagnose und Tests.
   durch vorhandene Regressionen abgedeckt. `tests/test_cinnamon_applet.py`:
   `238 passed in 30.23s`.
 - Kein Patch fuer eine unbelegte Anzeige erstellt. Seit dem Restart stehen
-  `5/20` Commits an; kein weiterer Restart erforderlich.
+  `8/20` Commits an; kein weiterer Restart erforderlich.
 
 ### Reminder-Intent und Werktags-Rekurrenz
 
@@ -367,6 +367,46 @@ Diagnose und Tests.
   `tests/test_proactive_agent.py`: `117 passed in 2.51s`; Ruff, `py_compile`
   und `git diff --check` gruen. Commit:
   `bf603317 fix: preserve weekday reminder recurrence`.
+
+### Wetterkontext und City-Memory
+
+- 2026-07-16: Eine Biene bestaetigte den Ablauf `City-Memory schreiben ->
+  Wetter-State schreiben` als Replay-Luecke. Fiel der State-Write nach dem
+  Memory-Write aus, sah der Retry dieselbe Stadt erneut als neu. Der
+  AccountStore vergab bei der bereits belegten Wunsch-ID eine neue ID; so
+  entstanden doppelte Wohnort-Memories.
+- `_append_city_memory()` prueft die deterministische `mem_residence_city_*`
+  ID jetzt vor dem Append. Der Check laeuft unter dem Account-Memory-Lock und
+  bleibt bei bestehenden Eintraegen idempotent.
+- Regression fuer State-Write-Fehler nach erfolgreichem Memory-Append:
+  `tests/test_weather_context.py`: `9 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Commit:
+  `0a526527 fix: deduplicate residence city memories`.
+
+### Runtime-Status-Dispatch und Audit-Write
+
+- 2026-07-16: Der Audit fand einen Fehler nach externer Zustellung: Outbox
+  stand bereits auf `sent`, aber ein fehlgeschlagener Write in
+  `status_dispatch_results` liess `_record_runtime_status_dispatch()` eine
+  Exception werfen. Dadurch konnte die Admin-Schleife nach bereits erfolgter
+  Zustellung abbrechen und `sent` falsch als Fehler erscheinen.
+- Outbox-Zustand bleibt jetzt massgeblich fuer die Zustellung. Ein fehlge-
+  schlagener Audit-Write wird mit Account-/Item-Kontext geloggt und blockiert
+  keine weiteren Empfaenger. Die fehlende Audit-Zeile bleibt dadurch sichtbar
+  als Persistenzwarnung statt als falscher Versandfehler.
+- Regression ohne Provider-Aufruf: `tests/test_runtime_admin_accounts.py`:
+  `28 passed`; Ruff, `py_compile` und `git diff --check` gruen. Commit:
+  `baa62d09 fix: keep status delivery visible when audit write fails`.
+
+### Bienenkoordination
+
+- Vorhandene Bienenberichte zu AccountStore, RuntimeState, Fallback,
+  Telegram-Ack, Activity-Profil, Applet-Health und Reminder wurden jeweils
+  gegen den aktuellen Quellstand geprueft und in diesem Plan verarbeitet.
+- Zwei neue, disjunkte Explorationsauftraege fuer Wetter und Reminder konnten
+  wegen voller Agentinnen-Threadgrenze nicht gestartet werden. Es wurde kein
+  Delegationsresultat erfunden; der Wetterbefund wurde lokal reproduziert und
+  abgesichert.
 
 ## Akzeptanzkriterien
 
