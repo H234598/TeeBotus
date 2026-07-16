@@ -17,7 +17,13 @@ def store(tmp_path) -> AccountStore:
     return AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
 
 
-def event(identity: str, *, text: str = "Hallo", event_id: str = "signal:1") -> IncomingEvent:
+def event(
+    identity: str,
+    *,
+    text: str = "Hallo",
+    event_id: str = "signal:1",
+    chat_id: str = "+491",
+) -> IncomingEvent:
     return IncomingEvent(
         event_id=event_id,
         instance="Depressionsbot",
@@ -25,7 +31,7 @@ def event(identity: str, *, text: str = "Hallo", event_id: str = "signal:1") -> 
         adapter_slot=1,
         account_id="",
         identity_key=identity,
-        chat_id="+491",
+        chat_id=chat_id,
         chat_type="private",
         sender_id=identity,
         sender_name="Signal User",
@@ -121,6 +127,31 @@ def test_record_account_activity_ignores_replayed_event(tmp_path) -> None:
     assert len(observations) == 1
     assert observations[0]["event_id"] == "signal:replayed"
     assert observations[0]["at"] == "2026-06-15T09:00:00+02:00"
+
+
+def test_record_account_activity_keeps_same_event_id_on_distinct_routes(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity, account_id = prepare_account(account_store)
+
+    record_account_activity(
+        account_store,
+        account_id,
+        event(identity, event_id="telegram:1", chat_id="100"),
+        now=datetime(2026, 6, 15, 9, 0, tzinfo=LOCAL),
+    )
+    record_account_activity(
+        account_store,
+        account_id,
+        event(identity, event_id="telegram:1", chat_id="200"),
+        now=datetime(2026, 6, 15, 10, 0, tzinfo=LOCAL),
+    )
+
+    observations = account_store.read_agent_state(account_id)["activity_profile"]["observations"]
+    assert len(observations) == 2
+    assert {observation["route_key"] for observation in observations} == {
+        "signal:1:100",
+        "signal:1:200",
+    }
 
 
 def test_record_account_activity_serializes_concurrent_state_updates(tmp_path, monkeypatch) -> None:

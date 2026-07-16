@@ -44,8 +44,11 @@ def record_account_activity(
             observations = []
             profile["observations"] = observations
         event_id = str(event.event_id or "").strip()
+        route_key = f"{event.channel}:{event.adapter_slot}:{event.chat_id}"
         if event_id and any(
-            isinstance(value, Mapping) and str(value.get("event_id") or "").strip() == event_id
+            isinstance(value, Mapping)
+            and str(value.get("event_id") or "").strip() == event_id
+            and str(value.get("route_key") or "").strip() == route_key
             for value in observations
         ):
             return
@@ -54,7 +57,7 @@ def record_account_activity(
                 "at": observed_at,
                 "event_id": event_id,
                 "channel": event.channel,
-                "route_key": f"{event.channel}:{event.adapter_slot}:{event.chat_id}",
+                "route_key": route_key,
                 "text_length": min(4000, len(str(event.text or ""))),
                 "attachment_count": len(event.attachments),
             }
