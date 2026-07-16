@@ -1208,11 +1208,11 @@ def test_memory_recovery_quarantine_dry_run_reports_apply_blocked_by_runtime(tmp
     assert result["apply_safety"]["apply_requires_stopped_bot"] is True
 
 
-def test_memory_recovery_quarantines_unreadable_account_metadata(tmp_path: Path) -> None:
+def test_memory_recovery_metadata_quarantine_blocks_key_mismatch(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
     bad_store = AccountStore(accounts_root, "Depressionsbot", StaticSecretProvider(b"b" * 32))
-    bad_store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+    account_id = bad_store.resolve_or_create_account("telegram:user:2", display_label="Ada")
     assert build_accounts_admin_report(instances_dir=tmp_path, provider=provider())["totals"]["store_errors"] == 1
 
     result = quarantine_unreadable_account_metadata(
@@ -1223,19 +1223,14 @@ def test_memory_recovery_quarantines_unreadable_account_metadata(tmp_path: Path)
         running_processes=[],
     )
 
-    assert result["status"] == "applied"
-    assert result["totals"]["instances_with_unreadable_metadata"] == 1
-    assert result["totals"]["items_quarantined"] == 3
-    assert result["totals"]["account_dirs_quarantined"] == 1
-    follow_up = build_accounts_admin_report(instances_dir=tmp_path, provider=provider())
-    assert follow_up["totals"]["store_errors"] == 0
-    assert follow_up["totals"]["account_dirs"] == 0
-    instance_quarantine = tmp_path / "quarantine" / "Depressionsbot" / "metadata"
-    timestamp_dir = next(instance_quarantine.iterdir())
-    assert (timestamp_dir / "Account_Index.json").exists()
-    assert (timestamp_dir / "Account_Identities.json").exists()
-    assert (timestamp_dir / "accounts").exists()
-    assert (timestamp_dir / "manifest.json").exists()
+    assert result["status"] == "blocked"
+    assert result["totals"]["instances_with_unreadable_metadata"] == 0
+    assert result["totals"]["items_quarantined"] == 0
+    assert result["totals"]["account_dirs_quarantined"] == 0
+    assert (accounts_root / "Account_Index.json").exists()
+    assert (accounts_root / "Account_Identities.json").exists()
+    assert (accounts_root / "accounts" / account_id / "Account_Profile.json").exists()
+    assert not (tmp_path / "quarantine").exists()
 
 
 def test_memory_recovery_metadata_quarantine_preserves_readable_account_dirs(tmp_path: Path) -> None:
@@ -1244,16 +1239,8 @@ def test_memory_recovery_metadata_quarantine_preserves_readable_account_dirs(tmp
     good_store = AccountStore(accounts_root, "Depressionsbot", provider())
     readable_account = good_store.resolve_or_create_account("telegram:user:1")
     unreadable_account = good_store.resolve_or_create_account("telegram:user:2")
-    wrong_store = AccountStore(
-        accounts_root,
-        "Depressionsbot",
-        StaticSecretProvider(b"b" * 32),
-        create_dirs=False,
-        memory_backend_enabled=False,
-    )
-    bad_profile = json.dumps({"account_id": unreadable_account, "status": "active"}).encode("utf-8")
     bad_profile_path = good_store.account_dir(unreadable_account) / "Account_Profile.json"
-    bad_profile_path.write_bytes(wrong_store.vault.encrypt(bad_profile, kind=bad_profile_path.name))
+    bad_profile_path.write_bytes(b"malformed envelope\n")
 
     result = quarantine_unreadable_account_metadata(
         instances_dir=tmp_path,

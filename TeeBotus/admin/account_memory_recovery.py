@@ -567,13 +567,13 @@ def _metadata_error_is_safe_to_quarantine(error: str) -> bool:
         "secret service",
         "instance secret is missing",
         "instance secret verifier mismatch",
+        "encrypted envelope authentication failed",
         "keyring",
         "provider",
     )
     if any(marker in lowered for marker in unsafe_markers):
         return False
     corruption_markers = (
-        "encrypted envelope authentication failed",
         "encrypted envelope is malformed",
         "encrypted envelope must be an object",
         "encrypted envelope version is unsupported",
