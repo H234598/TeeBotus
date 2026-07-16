@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `19/20` Commits vorhanden; naechster Restart
-  nach 1 weiterem Commit.
+  letzten Restart ist aktuell `20/20` Commits vorhanden; Restart steht jetzt
+  an.
 
 ## Aktueller Plan
 
@@ -480,6 +480,16 @@ Diagnose und Tests.
 - Vorhandene Regressionen in `tests/test_bot.py` decken diese Pfade ab;
   kein Runtime-Patch.
 
+### Restart-Checkpoint
+
+- Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
+  Proactive-Agent `119 passed`, Proactive-CLI `48 passed`, Cinnamon-Applet
+  `238 passed`, Dotenv `7 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Codeaenderungen sind committed. Untracked Obsidian-/Arbeitsdateien bleiben
+  unangetastet. Nach lokalem Restart Status erneut auf `active/running` und
+  Health-Daten pruefen.
+
 ## Akzeptanzkriterien
 
 - Kein geaenderter Pfad kann nach einem simulierten zweiten Schreibfehler
@@ -492,8 +502,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `19/20` Commits; kein Restart oder
-Push ausgeloest. Naechster Restart nach 1 weiterem Commit.
+**Laufstand:** Seit dem letzten Restart `20/20` Commits; Restart jetzt
+ausloesen, danach Zaehler auf `0/20` setzen. Kein Push ausgeloest.
 
 ## Bezug
 
