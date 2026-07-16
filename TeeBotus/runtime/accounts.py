@@ -1805,26 +1805,23 @@ class AccountStore:
                 "status": "active",
             }
             account_dir = self.account_dir(account_id)
-            self._write_account_profile(account_id, account)
-            identities[key] = {
-                "schema_version": ACCOUNT_SCHEMA_VERSION,
-                "instance": self.instance_name,
-                "identity_key": key,
-                "account_id": account_id,
-                "display_label": display_label,
-                "first_seen_at": now,
-                "last_seen_at": now,
-            }
+            snapshot = self._snapshot_identity_metadata((account_id,))
             try:
+                self._write_account_profile(account_id, account)
+                identities[key] = {
+                    "schema_version": ACCOUNT_SCHEMA_VERSION,
+                    "instance": self.instance_name,
+                    "identity_key": key,
+                    "account_id": account_id,
+                    "display_label": display_label,
+                    "first_seen_at": now,
+                    "last_seen_at": now,
+                }
                 self._save_identities(identities)
-            except Exception:  # noqa: BLE001 - remove profile created without an identity mapping.
-                try:
-                    (account_dir / ACCOUNT_PROFILE_FILENAME).unlink(missing_ok=True)
-                    account_dir.rmdir()
-                except Exception as rollback_exc:  # noqa: BLE001 - report orphan risk explicitly.
-                    raise AccountStoreError("account creation rollback failed; orphan profile may remain") from rollback_exc
+                self._upsert_account_index(account)
+            except Exception:
+                self._restore_new_account_metadata(snapshot, account_dir, operation="account creation")
                 raise
-            self._upsert_account_index(account)
             return account_id
 
     def get_account_for_identity(self, identity_key: str) -> str | None:
@@ -2043,20 +2040,7 @@ class AccountStore:
             self._write_account_profile(account_id, profile)
             self._upsert_account_index(profile)
         except Exception:
-            rollback_error: Exception | None = None
-            try:
-                self._restore_identity_metadata(snapshot, operation="external account creation")
-            except Exception as exc:  # noqa: BLE001 - surface rollback failures explicitly.
-                rollback_error = exc
-            try:
-                if account_dir.exists() and not any(account_dir.iterdir()):
-                    account_dir.rmdir()
-            except OSError as exc:
-                rollback_error = rollback_error or exc
-            if rollback_error:
-                raise AccountStoreError(
-                    "external account creation rollback failed; identity metadata may be inconsistent"
-                ) from rollback_error
+            self._restore_new_account_metadata(snapshot, account_dir, operation="external account creation")
             raise
 
     @_serialize_identity_map
@@ -4351,6 +4335,28 @@ class AccountStore:
                 rollback_errors.append(rollback_exc)
         if rollback_errors:
             raise AccountStoreError(f"{operation} rollback failed; identity metadata may be inconsistent") from rollback_errors[0]
+
+    def _restore_new_account_metadata(
+        self,
+        snapshot: dict[Path, bytes | None],
+        account_dir: Path,
+        *,
+        operation: str,
+    ) -> None:
+        rollback_error: Exception | None = None
+        try:
+            self._restore_identity_metadata(snapshot, operation=operation)
+        except Exception as exc:  # noqa: BLE001 - surface rollback failures explicitly.
+            rollback_error = exc
+        try:
+            if account_dir.exists() and not any(account_dir.iterdir()):
+                account_dir.rmdir()
+        except OSError as exc:
+            rollback_error = rollback_error or exc
+        if rollback_error:
+            raise AccountStoreError(
+                f"{operation} rollback failed; identity metadata may be inconsistent"
+            ) from rollback_error
 
     def _load_identities(self) -> dict[str, Any]:
         return self.vault.read_json(self.identities_path, {})

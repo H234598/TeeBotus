@@ -1071,12 +1071,11 @@ def test_resolve_or_create_account_repairs_index_after_partial_write(tmp_path):
         with pytest.raises(AccountStoreError, match="index write failed"):
             store.resolve_or_create_account(identity_key)
 
-    account_id = store.get_account_for_identity(identity_key)
-    assert account_id is not None
-    assert account_id not in store._load_index().get("accounts", {})
+    assert store.get_account_for_identity(identity_key) is None
+    assert store.list_account_ids(include_unresolvable=True) == ()
 
     with patch.object(store, "_upsert_account_index", side_effect=original_account_index):
-        assert store.resolve_or_create_account(identity_key) == account_id
+        account_id = store.resolve_or_create_account(identity_key)
     assert account_id in store._load_index().get("accounts", {})
 
 
