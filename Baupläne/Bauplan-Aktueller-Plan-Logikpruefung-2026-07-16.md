@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart sind aktuell `18/20` Commits vorhanden; naechster Restart
-  nach 2 weiteren Commits.
+  letzten Restart sind aktuell `20/20` Commits vorhanden; Restart folgt nach
+  diesem Plan-Commit.
 
 ## Aktueller Plan
 
@@ -476,6 +476,20 @@ Diagnose und Tests.
   `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `669baaf9 fix: serialize account summaries`.
 
+### Memory-Retrieval-Snapshot-Lock
+
+- 2026-07-16: `rank_structured_memory_ids()`,
+  `select_structured_memory()` und `select_structured_memory_by_ids()` lasen
+  Entries und Index ohne gemeinsamen Account-Memory-Lock. Parallel laufende
+  Append-/Rebuild-Pfade konnten dadurch gemischte Staende ranken; Selection
+  konnte anschliessend einen nicht mehr passenden Stand als gelesen markieren.
+- Alle drei Retrieval-Einstiege verwenden jetzt denselben reentranten Lock.
+  Verschachtelte Reads, Habit-Reads und Access-Updates bleiben kompatibel.
+- Regression prueft Lock-Haltung waehrend aller drei Retrieval-Pfade;
+  fokussiert `1 passed`, AccountStore komplett `244 passed`. Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a26c5d44 fix: serialize memory retrieval`.
+
 ### LLM-State-SQL/JSON-Audit
 
 - 2026-07-16: Biene Herschel meldete einen vorzeitigen SQL-Return in
@@ -894,8 +908,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `18/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 2 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `20/20` Commits; Restart folgt nach
+diesem Plan-Commit, kein Push ausgeloest.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
