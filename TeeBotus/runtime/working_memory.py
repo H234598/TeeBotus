@@ -172,7 +172,7 @@ class WorkingMemoryStore:
             return data
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError as exc:
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
             backup_path = _move_corrupt_json_file(path)
             LOGGER.warning(
                 "Resetting invalid instance working memory at %s: %s. Corrupt file preserved at %s.",
