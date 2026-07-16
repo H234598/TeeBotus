@@ -2673,6 +2673,7 @@ def _normalize_route_slot(value: Any) -> int | None:
 def _proactive_daily_count(account_store: AccountStore, account_id: str, now: datetime, *, exclude_item_id: str = "") -> int:
     count = 0
     normalized_exclude_item_id = str(exclude_item_id or "").strip()
+    local_date = to_local(now).date()
     for item in account_store.read_proactive_outbox(account_id):
         if not isinstance(item, dict):
             continue
@@ -2681,10 +2682,15 @@ def _proactive_daily_count(account_store: AccountStore, account_id: str, now: da
         status = str(item.get("status") or "queued").strip().casefold()
         if status not in {"queued", "dispatching", "sent"}:
             continue
-        timestamp = _parse_proactive_datetime(str(item.get("sent_at") or item.get("due_at") or item.get("created_at") or ""))
-        if timestamp is None:
-            continue
-        if to_local(timestamp).date() == to_local(now).date():
+        timestamp_values: list[str] = []
+        if status == "sent":
+            timestamp_values.append(str(item.get("sent_at") or ""))
+        else:
+            timestamp_values.append(str(item.get("due_at") or item.get("created_at") or ""))
+            if _normalize_recurrence_rule(item.get("recurrence")):
+                timestamp_values.append(str(item.get("sent_at") or ""))
+        timestamps = (_parse_proactive_datetime(value) for value in timestamp_values)
+        if any(timestamp is not None and to_local(timestamp).date() == local_date for timestamp in timestamps):
             count += 1
     return count
 

@@ -703,6 +703,49 @@ def test_proactive_policy_counts_dispatching_job_as_daily_reservation(tmp_path) 
     assert second.reason == "daily_limit_reached"
 
 
+def test_proactive_policy_counts_due_recurring_item_as_daily_reservation(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    state = enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    state["policy"]["max_messages_per_day"] = 1
+    account_store.write_agent_state(account_id, state)
+    first = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="user_requested_reminder",
+        message_text="Wiederholung",
+        due_at="2026-06-14T12:00:00+00:00",
+        now=datetime(2026, 6, 14, 12, tzinfo=timezone.utc),
+        recurrence="daily",
+        user_requested=True,
+    )
+    assert first.allowed is True
+    assert update_proactive_outbox_item_status(
+        account_store,
+        account_id,
+        first.reason.removeprefix("queued:"),
+        status="sent",
+        reason="test",
+        now=datetime(2026, 6, 14, 12, tzinfo=timezone.utc),
+    )
+
+    second = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="second",
+        message_text="Weitere Nachricht",
+        due_at="2026-06-15T13:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+
+    assert second.allowed is False
+    assert second.reason == "daily_limit_reached"
+
+
 def test_llm_cannot_spoof_user_requested_reminder_limit_bypass(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
