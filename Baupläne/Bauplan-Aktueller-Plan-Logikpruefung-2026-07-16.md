@@ -3144,3 +3144,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `14/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 6 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Quarantaene-SQL-Quellen-an-Accounts-Root-binden
+
+- 2026-07-17: `quarantine_unrecoverable_account_memory()` vertraute auf
+  Pfade aus uebergebenem Report. Ein manipulierter Report konnte damit
+  beliebige SQLite-Dateien fuer Delete/Snapshot angeben.
+- Aktive SQLite-Quellen werden jetzt nur akzeptiert, wenn sie unter dem
+  nicht-symlinketen `accounts_root` liegen. Fehlender Root, Symlink-Root,
+  `..`-Escape und externe Pfade liefern keine Delete-Quelle.
+- Regression: externe Report-Quelle -> `2 passed` im Path-Fokus; komplette
+  `tests/test_admin_accounts.py` -> `83 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `82e548b6 fix: constrain quarantine sqlite sources to account root`.
+
+**Aktueller Laufstand:** Seit dem Restart `16/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 4 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
