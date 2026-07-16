@@ -2497,6 +2497,7 @@ class AccountStore:
         self._raise_if_account_memory_entries_unreadable("cannot append structured memory")
         previous_rows = [dict(row) for row in rows if isinstance(row, dict)]
         previous_index = self.read_memory_index(account_id)
+        self._raise_if_account_memory_index_unreadable("cannot append structured memory")
         normalized_entry = dict(entry)
         memory_id = str(normalized_entry.get("id") or f"mem_{uuid.uuid4().hex}").strip()
         existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
@@ -2551,6 +2552,7 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         previous_rows = self.read_memory_entries(account_id)
         previous_index = self.read_memory_index(account_id)
+        self._raise_if_account_memory_index_unreadable("cannot reset structured memory")
         previous_metadata = self._snapshot_identity_metadata((account_id,))
         reset_index = self._normalized_memory_index(
             account_id,
@@ -3252,6 +3254,7 @@ class AccountStore:
         self._raise_if_account_memory_entries_unreadable("cannot mark account memory accessed")
         previous_rows = [dict(row) for row in rows if isinstance(row, dict)]
         previous_index = self.read_memory_index(account_id)
+        self._raise_if_account_memory_index_unreadable("cannot mark account memory accessed")
         timestamp = utc_now()
         changed = False
         for row in rows:
