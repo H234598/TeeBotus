@@ -1340,6 +1340,24 @@ kein Push ausgeloest.
 **Laufstand nach Restart:** Seit dem Restart `1/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 19 weiteren Commits.
 
+### Index-Read-Guard-vor-Structured-Mutationen
+
+- 2026-07-16: Rebuild war gegen unlesbare Indexe geschuetzt, aber
+  strukturierter Append, Access-Markierung und Memory-Reset lasen den Index
+  danach ohne denselben Guard. Diese Pfade konnten einen defekten Index
+  ebenfalls ersetzen oder bei Reset Metadaten veraendern.
+- Alle drei Read-Modify-Write-Pfade pruefen Index-Diagnose direkt nach dem
+  Read und stoppen vor jedem Entry-/Index-Write. Fehlende Erst-DB bleibt
+  zulaessig; Entschluesselungs-/Skip-Diagnosen bleiben blockierend.
+- Regression fuer Append, Access, Reset und Rebuild mit Write-Zaehlern;
+  gesamte `tests/test_account_store.py` `267 passed`; Ruff, `py_compile`
+  und `git diff --check` gruen.
+- Code-Commit: `e3671b6c fix: guard structured mutations on index read errors`;
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `3/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 17 weiteren Commits.
+
 ### Leerer-By-ID-Read-und-stale-Missing-Diagnose
 
 - 2026-07-16: `WarningFallbackAccountMemoryBackend.read_entries_by_ids()`
