@@ -1182,6 +1182,29 @@ def test_merge_accounts_normalizes_source_before_retry_deduplication(tmp_path):
     assert entries[0]["id"]
 
 
+def test_merge_accounts_merges_and_clears_sql_memory(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    target = store.resolve_or_create_account(telegram_identity_key(1))
+    source = store.resolve_or_create_account(signal_identity_key(source_uuid="sql-merge"))
+    store.append_structured_memory_entry(
+        source,
+        {
+            "id": "mem_sql_source",
+            "memory_type": "semantic",
+            "user_text": "SQL-Quelle",
+            "bot_text": "Uebernommen.",
+        },
+    )
+
+    store.merge_accounts(source, target)
+
+    assert any(row["id"] == "mem_sql_source" for row in store.read_memory_entries(target))
+    assert store.read_memory_entries(source) == []
+
+
 def test_merge_accounts_resumes_tombstone_cleanup_after_failure(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))

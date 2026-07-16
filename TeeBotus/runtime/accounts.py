@@ -2131,19 +2131,46 @@ class AccountStore:
         source_dir = self.account_dir(source_account_id)
         target_dir = self.account_dir(target_account_id)
         tombstone_path = source_dir / "Account_Tombstone.json"
+        memory_backend = self.account_memory_backend
         if tombstone_path.exists():
             tombstone = self.vault.read_json(tombstone_path, {})
             if str(tombstone.get("status") or "") == "tombstoned":
                 if str(tombstone.get("merged_into") or "") != target_account_id:
                     raise AccountStoreError("source account is already tombstoned")
+                if memory_backend is not None:
+                    clear_source = getattr(memory_backend, "clear_account_unchecked", None)
+                    if not callable(clear_source):
+                        raise AccountStoreError("account memory backend cannot clear merged source account")
+                    clear_source(source_account_id)
                 self._delete_dir_contents_except(source_dir, {"Account_Tombstone.json"})
                 self._remove_account_from_index(source_account_id)
                 return
         self._ensure_account_resolvable(source_account_id)
         target_dir.mkdir(parents=True, exist_ok=True)
         self.rebuild_structured_memory_index(source_account_id)
-        self._merge_jsonl(source_dir / USER_MEMORY_ENTRIES_FILENAME, target_dir / USER_MEMORY_ENTRIES_FILENAME, vault=self.account_memory_vault)
-        self._merge_json_objects(source_dir / USER_MEMORY_INDEX_FILENAME, target_dir / USER_MEMORY_INDEX_FILENAME, preserve_target=True, vault=self.account_memory_vault)
+        if memory_backend is None:
+            self._merge_jsonl(source_dir / USER_MEMORY_ENTRIES_FILENAME, target_dir / USER_MEMORY_ENTRIES_FILENAME, vault=self.account_memory_vault)
+            self._merge_json_objects(source_dir / USER_MEMORY_INDEX_FILENAME, target_dir / USER_MEMORY_INDEX_FILENAME, preserve_target=True, vault=self.account_memory_vault)
+        else:
+            source_entries = self.read_memory_entries(source_account_id)
+            target_entries = self.read_memory_entries(target_account_id)
+            self.write_memory_entries(target_account_id, _merge_account_jsonl_rows(target_entries, source_entries))
+            source_index = self.read_memory_index(source_account_id)
+            target_index = self._normalized_memory_index(target_account_id, self.read_memory_index(target_account_id))
+            source_nested_index = source_index.get("index") if isinstance(source_index.get("index"), dict) else {}
+            target_nested_index = target_index.setdefault("index", {})
+            target_accessed_ids = target_nested_index.setdefault("accessed_ids", [])
+            if not isinstance(target_accessed_ids, list):
+                target_accessed_ids = []
+                target_nested_index["accessed_ids"] = target_accessed_ids
+            source_accessed_ids = source_nested_index.get("accessed_ids") if isinstance(source_nested_index.get("accessed_ids"), list) else []
+            target_accessed_ids.extend(
+                memory_id
+                for value in source_accessed_ids
+                if (memory_id := str(value or "").strip())
+                and memory_id not in target_accessed_ids
+            )
+            self.write_memory_index(target_account_id, target_index)
         self.rebuild_structured_memory_index(target_account_id)
         self._merge_json_objects(source_dir / ACCOUNT_PROFILE_FILENAME, target_dir / ACCOUNT_PROFILE_FILENAME, preserve_target=True, vault=self.vault)
         self._merge_text(source_dir / USER_HABITS_FILENAME, target_dir / USER_HABITS_FILENAME, heading=f"Merged from {source_account_id}")
@@ -2154,6 +2181,11 @@ class AccountStore:
                 payload["account_id"] = target_account_id
                 self._add_identity_to_profile(target_account_id, str(payload.get("identity_key") or ""))
         self._save_identities(identities)
+        if memory_backend is not None:
+            clear_source = getattr(memory_backend, "clear_account_unchecked", None)
+            if not callable(clear_source):
+                raise AccountStoreError("account memory backend cannot clear merged source account")
+            clear_source(source_account_id)
         tombstone = self._read_account_profile(source_account_id) if (source_dir / ACCOUNT_PROFILE_FILENAME).exists() else {}
         tombstone.update({"account_id": source_account_id, "status": "tombstoned", "merged_into": target_account_id, "updated_at": utc_now()})
         self.vault.write_json(source_dir / "Account_Tombstone.json", tombstone)
