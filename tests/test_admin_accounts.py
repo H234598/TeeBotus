@@ -1382,6 +1382,37 @@ def test_memory_recovery_metadata_quarantine_keeps_truncated_auth_failure_blocke
     assert not (tmp_path / "quarantine").exists()
 
 
+def test_memory_recovery_metadata_quarantine_blocks_unsupported_envelope(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    store = AccountStore(accounts_root, "Depressionsbot", provider())
+    store.resolve_or_create_account("telegram:user:1")
+    index_path = accounts_root / "Account_Index.json"
+    index_path.write_text(
+        json.dumps(
+            {
+                "magic": "TMBMAP1",
+                "version": 999,
+                "algorithm": "AES-256-GCM",
+                "kind": "Account_Index.json",
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    result = quarantine_unreadable_account_metadata(
+        instances_dir=tmp_path,
+        provider=provider(),
+        apply=True,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[],
+    )
+
+    assert result["status"] == "blocked"
+    assert index_path.exists()
+    assert not (tmp_path / "quarantine").exists()
+
+
 def test_memory_recovery_report_includes_unreadable_metadata_account_ids(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"

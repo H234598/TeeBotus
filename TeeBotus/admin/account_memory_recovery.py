@@ -581,9 +581,6 @@ def _metadata_error_is_safe_to_quarantine(error: str) -> bool:
     corruption_markers = (
         "encrypted envelope is malformed",
         "encrypted envelope must be an object",
-        "encrypted envelope version is unsupported",
-        "encrypted envelope algorithm is unsupported",
-        "encrypted envelope kind does not match",
         "encrypted envelope fields are invalid",
         "encrypted envelope nonce has invalid length",
         "encrypted envelope ciphertext is empty",
