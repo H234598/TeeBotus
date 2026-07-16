@@ -257,6 +257,21 @@ Diagnose und Tests.
   Ruff, `py_compile` und `git diff --check` gruen. Commit:
   `5770bf8f fix: rollback identity metadata updates`.
 
+### Cross-Instance-External-Links
+
+- 2026-07-16: `ensure_external_account()` kehrte bei bestehendem Profil zu
+  frueh zurueck. Wenn derselbe Account aus mehreren Quellinstanzen bekannt
+  wurde, blieb nur der erste `external_link` erhalten.
+- Der Pfad serialisiert jetzt ueber die Identity-Sperre, fuegt neue
+  `(source_instance, source_account_id)`-Paare dedupliziert an und schreibt
+  Profil/Account-Index mit gemeinsamem Rollback. Wiederholungen bleiben
+  idempotent.
+- Regressionen fuer zwei Quellen, Duplikat und Indexfehler ergaenzt;
+  fokussiert `18 passed`, vollstaendig `234 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `004293e8 fix: preserve external account source links`; kein
+  Provider/API-Aufruf.
+
 ### LLM-State-SQL/JSON-Audit
 
 - 2026-07-16: Biene Herschel meldete einen vorzeitigen SQL-Return in
@@ -675,8 +690,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `7/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 13 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `9/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 11 weiteren Commits.
 
 ## Bezug
 
