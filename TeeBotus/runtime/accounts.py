@@ -4779,11 +4779,16 @@ class AccountStore:
         self._ensure_account_resolvable(account_id)
 
     def _upsert_account_index(self, profile: dict[str, Any]) -> None:
+        if not isinstance(profile, dict):
+            raise AccountStoreError("account profile must be an object")
+        account_id = validate_sha512_token(profile.get("account_id", ""), field_name="account_id")
+        if str(profile.get("instance") or "").strip() != self.instance_name:
+            raise AccountStoreError("account profile instance does not match account store")
         index = self._load_index()
         accounts = index.setdefault("accounts", {})
         linked_identities = self._profile_linked_identities(profile)
-        accounts[profile["account_id"]] = {
-            "account_id": profile["account_id"],
+        accounts[account_id] = {
+            "account_id": account_id,
             "status": profile.get("status", "active"),
             "registered": bool(profile.get("registered")),
             "linked_identity_count": len(linked_identities),

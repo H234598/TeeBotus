@@ -862,6 +862,24 @@ def test_account_store_rejects_profile_without_matching_identity_metadata(tmp_pa
     assert profile_path.exists()
 
 
+def test_account_index_rejects_profile_with_wrong_ownership(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    previous_index = store.account_index_path.read_bytes()
+
+    with pytest.raises(AccountStoreError, match="account profile"):
+        store._upsert_account_index(
+            {
+                "account_id": "f" * 128,
+                "instance": "Otherbot",
+                "linked_identities": [],
+            }
+        )
+
+    assert store.account_index_path.read_bytes() == previous_index
+    assert account_id in store.list_account_ids()
+
+
 def test_telegram_identity_key_uses_username_and_display_fallbacks() -> None:
     assert telegram_identity_key(395935293, username="Teladi") == "telegram:user:395935293"
     assert telegram_identity_key("", username="@Teladi") == "telegram:username:teladi"
