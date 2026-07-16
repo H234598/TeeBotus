@@ -1482,6 +1482,23 @@ ausgeloest. Naechster Restart nach 11 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `8/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 12 weiteren Commits.
 
+### Modern-Engine-Tracker-Test-im-Persistenz-Scope-halten
+
+- 2026-07-16: Der Modern-Engine-Test pruefte gespeicherte Message-Refs erst
+  nach Ende seines `TemporaryDirectory`. Der Tracker verwirft bei fehlender
+  Persistenz absichtlich stale Refs; dadurch war der Test falsch gescoped und
+  meldete einen Produktionsfehler.
+- Assertion in den temporaeren Verzeichnis-Scope verschoben. Produktionscode
+  unveraendert; bestehender Schutz gegen geloeschte/ungueltige Tracker-Dateien
+  bleibt aktiv.
+- Regression: Modern-Engine-Test plus `tests/test_message_tracking.py`:
+  `9 passed`; Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Test-Commit: `795dc983 test: keep tracker assertion within fixture`.
+
+**Laufstand nach Fix:** Seit dem Restart `10/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 10 weiteren Commits.
+
 ### Erstschreibpfad-bei-fehlender-SQLite-Datenbank
 
 - 2026-07-16: `read_entries()` meldet bei einer noch nicht angelegten
