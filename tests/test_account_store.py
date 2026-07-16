@@ -5017,6 +5017,72 @@ def test_account_memory_fallback_blocks_collection_names_after_secondary_clear_f
         backend.read_collection_names(account_id)
 
 
+def test_account_memory_fallback_serializes_diagnostic_capture_across_accounts() -> None:
+    account_a = "a" * 128
+    account_b = "b" * 128
+    first_read_started = threading.Event()
+    release_first_read = threading.Event()
+    second_read_started = threading.Event()
+
+    class Backend:
+        def __init__(self, rows: dict[str, list[dict[str, str]]], *, block_account: str = "") -> None:
+            self.rows = rows
+            self.block_account = block_account
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+            self.last_index_read_error = ""
+            self.last_collection_read_error = ""
+            self.last_collection_skipped = 0
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+            if account_id == self.block_account:
+                self.last_entry_read_error = "corrupt row"
+                self.last_entry_skipped = 1
+                first_read_started.set()
+                release_first_read.wait(timeout=2)
+            elif account_id == account_b:
+                second_read_started.set()
+            return [dict(row) for row in self.rows.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            self.rows[account_id] = [dict(row) for row in rows]
+
+    primary = Backend(
+        {
+            account_a: [{"id": "a-visible"}],
+            account_b: [{"id": "b-visible"}],
+        },
+        block_account=account_a,
+    )
+    fallback = Backend(
+        {
+            account_a: [{"id": "a-visible"}, {"id": "a-omitted"}],
+            account_b: [{"id": "b-visible"}],
+        }
+    )
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+    results: dict[str, list[dict[str, str]]] = {}
+
+    first_thread = threading.Thread(target=lambda: results.setdefault("a", backend.read_entries(account_a)))
+    second_thread = threading.Thread(target=lambda: results.setdefault("b", backend.read_entries(account_b)))
+    first_thread.start()
+    assert first_read_started.wait(timeout=1)
+    second_thread.start()
+
+    # Without the wrapper lock, account B clears account A's diagnostics here.
+    assert not second_read_started.wait(timeout=0.25)
+    release_first_read.set()
+    first_thread.join(timeout=2)
+    second_thread.join(timeout=2)
+
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+    assert {row["id"] for row in results["a"]} == {"a-visible", "a-omitted"}
+    assert results["b"] == [{"id": "b-visible"}]
+
+
 def test_account_memory_fallback_retries_secondary_clear_before_collection_names() -> None:
     class Backend:
         def __init__(self, *, fail_clear: bool = False) -> None:

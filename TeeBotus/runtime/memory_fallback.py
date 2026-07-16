@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import logging
+import threading
 import time
+from functools import wraps
 from typing import Any, Callable
 
 from TeeBotus.runtime.accounts import AccountStoreError
@@ -14,11 +16,23 @@ class _FallbackReadFailure(AccountStoreError):
     """Preserve a secondary-read failure across the outer primary error handler."""
 
 
+def _serialize_fallback_operation(method):  # noqa: ANN001
+    @wraps(method)
+    def wrapped(self, *args, **kwargs):  # noqa: ANN001, ANN002, ANN003
+        with self._operation_lock:
+            return method(self, *args, **kwargs)
+
+    return wrapped
+
+
 class WarningFallbackAccountMemoryBackend:
     def __init__(self, primary: Any, fallback: Any, *, label: str) -> None:
         self.primary = primary
         self.fallback = fallback
         self.label = label
+        # SQLite/PostgreSQL backends expose read diagnostics as mutable fields.
+        # Keep callback, diagnostic capture, and failover decision together.
+        self._operation_lock = threading.RLock()
         self._fallback_active = False
         # Keep warning timestamps per account and operation so one failing
         # account cannot suppress the first warning for another account.
@@ -52,6 +66,7 @@ class WarningFallbackAccountMemoryBackend:
             self._sync_entries_from_fallback,
         )
 
+    @_serialize_fallback_operation
     def read_entries_by_ids(self, account_id: str, memory_ids: list[str]) -> list[dict[str, Any]]:
         requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
         if not requested_ids:
@@ -164,6 +179,7 @@ class WarningFallbackAccountMemoryBackend:
         )
         return bool(replace_result["replaced"])
 
+    @_serialize_fallback_operation
     def read_collection_names(self, account_id: str) -> tuple[str, ...]:
         try:
             self._repair_cleared_fallback_account(account_id)
@@ -244,6 +260,7 @@ class WarningFallbackAccountMemoryBackend:
                 )
                 raise _FallbackReadFailure(self.fallback_sync_error_for_account(account_id) or self.last_fallback_sync_error) from fallback_exc
 
+    @_serialize_fallback_operation
     def clear_account_unchecked(self, account_id: str) -> None:
         primary_clear = getattr(self.primary, "clear_account_unchecked", None)
         fallback_clear = getattr(self.fallback, "clear_account_unchecked", None)
@@ -292,6 +309,7 @@ class WarningFallbackAccountMemoryBackend:
         self.last_collection_skipped = 0
         self._clear_recovered_if_clean("clear_account_unchecked", account_id)
 
+    @_serialize_fallback_operation
     def _read(
         self,
         operation: str,
@@ -408,6 +426,7 @@ class WarningFallbackAccountMemoryBackend:
                 partial_result=partial_result,
             )
 
+    @_serialize_fallback_operation
     def _write(
         self,
         operation: str,
