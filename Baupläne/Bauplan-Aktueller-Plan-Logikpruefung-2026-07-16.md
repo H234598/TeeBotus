@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart sind aktuell `2/20` Commits vorhanden; naechster Restart
-  nach 18 weiteren Commits.
+  letzten Restart sind aktuell `4/20` Commits vorhanden; naechster Restart
+  nach 16 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -505,6 +505,21 @@ Diagnose und Tests.
   `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `12d05cce fix: serialize auth and privacy reads`.
 
+### Version-Notification-Backend-Lock
+
+- 2026-07-16: Zwei Hilfsfunktionen in `core/version_notifications.py` lasen
+  bzw. loeschten `version_notifications` direkt ueber
+  `account_memory_backend`. Sie umgingen damit den neuen Instance-State-Lock
+  von `AccountStore.read_instance_json_state()` und
+  `write_instance_json_state()`.
+- Read- und Clear-Helfer nehmen jetzt denselben reservierten
+  Instance-State-Lock. Fehlende Lock-Unterstuetzung bei kleinen Test-/Fake-
+  Stores bleibt ueber `nullcontext()` kompatibel.
+- Regression prueft beide direkten Helfer unter gehaltenem Lock; fokussiert
+  `1 passed`, Version-Notifications komplett `216 passed`. Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `62d73474 fix: lock version notification state`.
+
 ### LLM-State-SQL/JSON-Audit
 
 - 2026-07-16: Biene Herschel meldete einen vorzeitigen SQL-Return in
@@ -923,8 +938,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `2/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 18 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `4/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 16 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
