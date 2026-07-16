@@ -113,13 +113,20 @@ def parse_csv(value: str | None) -> tuple[str, ...]:
 def discover_instances(instances_dir: Path, explicit: Sequence[str] = ()) -> tuple[str, ...]:
     if explicit:
         return tuple(dict.fromkeys(str(name).strip() for name in explicit if str(name).strip()))
-    if not instances_dir.exists():
+    if instances_dir.is_symlink() or not instances_dir.exists():
+        return ()
+    try:
+        candidates = list(instances_dir.iterdir())
+    except OSError:
         return ()
     return tuple(
         sorted(
             path.name
-            for path in instances_dir.iterdir()
-            if path.is_dir() and (path / BOT_INSTRUCTION_FILENAME).exists()
+            for path in candidates
+            if not path.is_symlink()
+            and path.is_dir()
+            and (path / BOT_INSTRUCTION_FILENAME).is_file()
+            and not (path / BOT_INSTRUCTION_FILENAME).is_symlink()
         )
     )
 

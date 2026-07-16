@@ -67,6 +67,24 @@ def test_admin_reports_use_runtime_secret_provider_defaults(monkeypatch, tmp_pat
     assert len(sentinels) == 2
 
 
+def test_admin_instance_discovery_ignores_symlinked_instances_and_instructions(tmp_path: Path) -> None:
+    instances_root = tmp_path / "instances"
+    instances_root.mkdir()
+    external = tmp_path / "external-instance"
+    external.mkdir()
+    (external / "Bot_Verhalten.md").write_text("external\n", encoding="utf-8")
+    linked_instance = instances_root / "LinkedInstance"
+    linked_instance.symlink_to(external, target_is_directory=True)
+
+    local_instance = instances_root / "LocalInstance"
+    local_instance.mkdir()
+    instruction_target = tmp_path / "external-instruction.md"
+    instruction_target.write_text("external\n", encoding="utf-8")
+    (local_instance / "Bot_Verhalten.md").symlink_to(instruction_target)
+
+    assert accounts_report_module.discover_instances(instances_root) == ()
+
+
 def test_memory_recovery_default_provider_uses_readonly_runtime_policy(monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES", "2")
     monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRY_DELAY_SECONDS", "0.25")
