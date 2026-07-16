@@ -1657,6 +1657,23 @@ ausgeloest. Naechster Restart nach 7 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `15/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 5 weiteren Commits.
 
+### Keine-partiellen-Primary-Rows-in-stale-Fallback-Append-spiegeln
+
+- 2026-07-16: Der stale-Repair fuer `append_collection_items()` hatte
+  denselben unsicheren Voll-Read wie der Replace-Pfad. Ein partieller
+  Primary-Read konnte beim Append-Repair komplette gueltige Fallback-Daten
+  ueberschreiben.
+- Append-Repairs validieren den Quell-Read jetzt ebenfalls vor dem Write.
+  Auch der generische Backend-Fallback ohne native Append-Methode nutzt den
+  sauberen Collection-Read; Diagnose bedeutet Sync-Fehler statt Datenverlust.
+- Regression mit stale Fallback und partieller Primary-Read-Diagnose; gesamte
+  `tests/test_account_store.py`: `274 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `77120ba3 fix: guard partial fallback append repairs`.
+
+**Laufstand nach Fix:** Seit dem Restart `17/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 3 weiteren Commits.
+
 ## Bezug
 
 - Vorheriger Plan:
