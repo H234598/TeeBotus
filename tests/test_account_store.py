@@ -2219,9 +2219,12 @@ def test_account_memory_append_initializes_missing_sqlite_database(tmp_path):
     )
     store._account_memory_backend = backend
 
-    store.append_memory_entry(account_id, {"id": "mem_first", "user_text": "Erster Eintrag"})
+    store.append_structured_memory_entry(account_id, {"id": "mem_first", "user_text": "Erster Eintrag"})
 
-    assert backend.read_entries(account_id) == [{"id": "mem_first", "user_text": "Erster Eintrag"}]
+    rows = backend.read_entries(account_id)
+    assert len(rows) == 1
+    assert rows[0]["id"] == "mem_first"
+    assert rows[0]["user_text"] == "Erster Eintrag"
     assert sqlite_path.exists()
 
 
