@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart sind aktuell `12/20` Commits vorhanden; naechster Restart
-  nach 8 weiteren Commits.
+  letzten Restart sind aktuell `14/20` Commits vorhanden; naechster Restart
+  nach 6 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -432,6 +432,20 @@ Diagnose und Tests.
   aufgerufen wird; fokussiert `2 passed`, AccountStore komplett `240 passed`.
   Ruff, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `e8e7bde7 fix: serialize account registration`.
+
+### Account-Memory-Read-Locks
+
+- 2026-07-16: Drei direkte User-Memory-Reads (`read_memory_index()`,
+  `read_memory_entries()` und `read_memory_entries_by_ids()`) umgingen den
+  Account-Memory-Lock. SQL-/Fallback-Diagnosen und JSON-Datei-Reads konnten
+  dadurch parallel zu Writes oder Repairs laufen.
+- Alle drei Reads verwenden jetzt denselben reentranten Lock wie die
+  Schreib- und Read-Modify-Write-Pfade. Der lockfreie Backend-Read ist damit
+  auch fuer den JSON-Fallback ausgeschlossen.
+- Regression prueft Lock-Haltung waehrend aller drei Backend-Reads;
+  fokussiert `2 passed`, AccountStore komplett `241 passed`. Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `dd8a336a fix: serialize account memory reads`.
 
 ### LLM-State-SQL/JSON-Audit
 
@@ -851,8 +865,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `12/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 8 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `14/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 6 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
