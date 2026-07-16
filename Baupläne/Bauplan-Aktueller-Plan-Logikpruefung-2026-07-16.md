@@ -2730,6 +2730,24 @@ Restart nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Identity-Mapping-Ownership
+
+- 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
+  ignorierte aber ein explizites fremdes `instance`-Feld im Identity-Mapping.
+  Ein kopiertes/falsch zugeordnetes Mapping konnte dadurch lokalen Account
+  referenzieren.
+- Kandidaten mit explizit anderer Instanz werden jetzt vor Auswahl und
+  Alias-Reparatur verworfen. Historische Mappings ohne `instance` bleiben als
+  Legacy-Fallback lesbar; es wird kein fremdes Mapping automatisch repariert.
+- Regression: Identity-Lookup inklusive Fremdinstanz -> `5 passed`; komplette
+  `tests/test_account_store.py` -> `291 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b549cfec fix: reject foreign identity instance mappings`.
+
+**Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Metadata-Quarantaene-bei-Secret-Fehlern
 
 - 2026-07-17: `_unreadable_metadata_items()` meldete fehlendes, nicht
