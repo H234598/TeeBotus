@@ -3526,6 +3526,21 @@ class AccountStore:
             return collection_error or f"skipped={collection_skipped}"
         return ""
 
+    def _raise_if_account_memory_collection_unreadable(self, collection: str, operation: str) -> None:
+        backend = self.account_memory_backend
+        if backend is None:
+            return
+        try:
+            detail = self._collection_read_diagnostic_error(backend)
+        except Exception as exc:  # noqa: BLE001 - broken diagnostics must fail closed.
+            raise AccountStoreError(
+                f"{operation}: account memory SQL collection {collection} is unreadable: diagnostics unavailable"
+            ) from exc
+        if detail:
+            raise AccountStoreError(
+                f"{operation}: account memory SQL collection {collection} is unreadable: {detail}"
+            )
+
     def _read_account_json_document(
         self,
         account_id: str,
@@ -3657,6 +3672,10 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         with self.proactive_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_proactive_outbox(account_id)
+            self._raise_if_account_memory_collection_unreadable(
+                PROACTIVE_OUTBOX_COLLECTION,
+                "cannot append proactive outbox item",
+            )
             normalized = dict(item)
             item_id = str(normalized.get("id") or f"pro_{uuid.uuid4().hex}").strip()
             existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
@@ -3686,6 +3705,10 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         with self.proactive_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_proactive_audit(account_id)
+            self._raise_if_account_memory_collection_unreadable(
+                PROACTIVE_AUDIT_COLLECTION,
+                "cannot append proactive audit event",
+            )
             normalized = dict(event)
             event_id = str(normalized.get("id") or f"paud_{uuid.uuid4().hex}").strip()
             existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
@@ -3728,6 +3751,10 @@ class AccountStore:
             return ()
         with self.proactive_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_proactive_dispatch_results(account_id)
+            self._raise_if_account_memory_collection_unreadable(
+                PROACTIVE_DISPATCH_RESULTS_COLLECTION,
+                "cannot append proactive dispatch result",
+            )
             existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
             timestamp = utc_now()
             created_ids: list[str] = []
@@ -3776,6 +3803,10 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         with self.status_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_status_outbox(account_id)
+            self._raise_if_account_memory_collection_unreadable(
+                STATUS_OUTBOX_COLLECTION,
+                "cannot append status outbox item",
+            )
             normalized = dict(item)
             item_id = str(normalized.get("id") or f"stat_{uuid.uuid4().hex}").strip()
             existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
@@ -3820,6 +3851,10 @@ class AccountStore:
             return ()
         with self.status_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_status_dispatch_results(account_id)
+            self._raise_if_account_memory_collection_unreadable(
+                STATUS_DISPATCH_RESULTS_COLLECTION,
+                "cannot append status dispatch result",
+            )
             existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
             timestamp = utc_now()
             created_ids: list[str] = []
@@ -3866,6 +3901,10 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         with self.codex_history_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_codex_history_outbox(account_id)
+            self._raise_if_account_memory_collection_unreadable(
+                CODEX_HISTORY_OUTBOX_COLLECTION,
+                "cannot append Codex history item",
+            )
             normalized = dict(item)
             item_id = str(normalized.get("id") or f"hist_{uuid.uuid4().hex}").strip()
             existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
@@ -3914,6 +3953,10 @@ class AccountStore:
         append_collection_items = getattr(backend, "append_collection_items", None) if backend is not None else None
         with self.codex_history_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_codex_history_dispatch_results(account_id)
+            self._raise_if_account_memory_collection_unreadable(
+                CODEX_HISTORY_DISPATCH_RESULTS_COLLECTION,
+                "cannot append Codex history dispatch result",
+            )
             existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
             created_ids: list[str] = []
             for result in normalized_results:

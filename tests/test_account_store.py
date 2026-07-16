@@ -2944,6 +2944,38 @@ def test_account_jsonl_collection_uses_valid_rows_when_sql_diagnostics_are_parti
     assert legacy_path.exists()
 
 
+def test_account_collection_append_paths_refuse_partial_sql_rows(tmp_path):
+    class PartialReadCollectionBackend:
+        last_collection_read_error = "one payload could not be decrypted"
+        last_collection_skipped = 1
+        write_calls = 0
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            return [{"id": "existing", "status": "queued"}]
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            self.write_calls += 1
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    backend = PartialReadCollectionBackend()
+    store._account_memory_backend = backend
+    operations = (
+        lambda: store.append_proactive_outbox_item(account_id, {"message_text": "neu"}),
+        lambda: store.append_proactive_audit_event(account_id, {"event_type": "neu"}),
+        lambda: store.append_proactive_dispatch_result(account_id, {"status": "sent"}),
+        lambda: store.append_status_outbox_item(account_id, {"message_text": "neu"}),
+        lambda: store.append_status_dispatch_result(account_id, {"status": "sent"}),
+        lambda: store.append_codex_history_item(account_id, {"summary": "neu"}),
+        lambda: store.append_codex_history_dispatch_result(account_id, {"status": "sent"}),
+    )
+
+    for operation in operations:
+        with pytest.raises(AccountStoreError, match="collection.*unreadable"):
+            operation()
+    assert backend.write_calls == 0
+
+
 def test_account_jsonl_collection_keeps_legacy_after_silent_readback_loss(tmp_path):
     class SilentReadbackLossBackend:
         last_collection_read_error = ""
