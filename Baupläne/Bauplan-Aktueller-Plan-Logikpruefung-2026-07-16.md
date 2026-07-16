@@ -613,6 +613,20 @@ Diagnose und Tests.
   Provider/API-Aufruf. Lock gilt fuer diesen gemeinsamen Prozess; keine
   unnoetige externe Prozesskoordination eingefuehrt.
 
+### Working-Memory-Symlink-Locks
+
+- 2026-07-16: Der prozessweite Lockkey nutzte zunaechst nur `abspath`.
+  Dasselbe Working-Memory konnte ueber einen Symlink dadurch zwei Locks
+  erhalten. Repro: 100 erfolgreiche parallele Appends, nur 53 indexierte
+  Entries.
+- Lockkeys nutzen jetzt `realpath`; direkte und symlinkte Pfade teilen
+  denselben Lock. Das betrifft beide Working-Memory-Implementierungen.
+- Symlink-Parallelregression mit 40 Appends je Store-Klasse gruen;
+  `tests/test_working_memory.py`: `27 passed`; Telegram-Working-Memory
+  `4 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `c071636c fix: canonicalize working memory lock paths`; kein
+  Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -646,8 +660,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `3/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 17 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `5/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 15 weiteren Commits.
 
 ## Bezug
 
