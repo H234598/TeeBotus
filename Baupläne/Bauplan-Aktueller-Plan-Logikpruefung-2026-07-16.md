@@ -2676,3 +2676,20 @@ erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Kein Push. Naechster
 Restart nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Ranking-bei-kaputtem-Index
+
+- 2026-07-17: `rank_structured_memory_ids()` und
+  `select_structured_memory()` normalisierten einen leeren Rueckgabewert trotz
+  `last_index_read_error`. Kaputter/verschluesselungsbedingt unlesbarer Index
+  wurde dadurch wie leerer Index behandelt.
+- Beide Pfade pruefen Index-Diagnose jetzt direkt nach dem Read und brechen
+  fail-closed mit `AccountStoreError` ab. Ein leerer, fehlerfreier Erstindex
+  bleibt gueltig.
+- Regression: Mutation/Ranking/Auswahl gegen unlesbaren Index plus komplette
+  `tests/test_account_store.py` -> `287 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `95483ed3 fix: fail closed on unreadable memory indexes`.
+
+**Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Kein Push. Naechster
+Restart nach 16 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
