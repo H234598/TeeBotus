@@ -27,10 +27,13 @@ def _retry_after_missing_schema(method):  # noqa: ANN001
         try:
             return method(self, *args, **kwargs)
         except Exception as exc:  # noqa: BLE001
-            if not self._initialized or not _is_missing_postgres_relation(exc):
+            if not _is_missing_postgres_relation(exc):
                 raise
-            self._initialized = False
-            return method(self, *args, **kwargs)
+            with _SCHEMA_INIT_LOCK:
+                if not self._initialized:
+                    raise
+                self._initialized = False
+                return method(self, *args, **kwargs)
 
     return wrapped
 

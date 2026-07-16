@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import threading
+
 import pytest
 
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider
-from TeeBotus.runtime.postgres_memory import PostgresAccountMemoryBackend, PostgresMemoryConfig
+from TeeBotus.runtime.postgres_memory import (
+    PostgresAccountMemoryBackend,
+    PostgresMemoryConfig,
+    _retry_after_missing_schema,
+)
 from scripts import benchmark_memory_store as memory_bench
 from scripts.benchmark_memory_store import (
     benchmark_postgres_backend,
@@ -386,6 +392,66 @@ def test_postgres_backend_rebuilds_schema_after_missing_relation(monkeypatch) ->
 
     assert backend.read_entries("a" * 128) == [{"id": "mem_retry"}]
     assert any("CREATE TABLE IF NOT EXISTS teebotus_memory_entries" in sql for sql in connection.executed)
+
+
+def test_postgres_missing_schema_retry_is_serialized() -> None:
+    class MissingRelationError(Exception):
+        sqlstate = "42P01"
+
+    class Worker:
+        _initialized = True
+
+        def __init__(self) -> None:
+            self.allow_first_raise = threading.Event()
+            self.retry_started = threading.Event()
+            self.allow_retry = threading.Event()
+            self.first_initial_started = threading.Event()
+            self.calls = 0
+            self.calls_lock = threading.Lock()
+
+        @_retry_after_missing_schema
+        def run(self):
+            with self.calls_lock:
+                call = self.calls
+                self.calls += 1
+            if call == 0:
+                self.first_initial_started.set()
+                assert self.allow_first_raise.wait(2)
+                raise MissingRelationError("relation does not exist")
+            if call == 1:
+                assert self.retry_started.wait(2)
+                raise MissingRelationError("relation does not exist")
+            self._initialized = True
+            if call == 2:
+                self.retry_started.set()
+                assert self.allow_retry.wait(2)
+            return "ok"
+
+    worker = Worker()
+    results = []
+    errors = []
+
+    def run_worker():
+        try:
+            results.append(worker.run())
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    first = threading.Thread(target=run_worker)
+    second = threading.Thread(target=run_worker)
+    first.start()
+    assert worker.first_initial_started.wait(2)
+    second.start()
+    worker.allow_first_raise.set()
+    assert worker.retry_started.wait(2)
+    worker.allow_retry.set()
+    first.join(2)
+    second.join(2)
+
+    assert not first.is_alive()
+    assert not second.is_alive()
+    assert errors == []
+    assert results == ["ok", "ok"]
 
 
 def test_postgres_backend_ignores_corrupt_index_like_sqlite(monkeypatch, caplog) -> None:
