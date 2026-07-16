@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `10/20` Commits vorhanden; naechster Restart
-  nach 10 weiteren Commits.
+  letzten Restart ist aktuell `12/20` Commits vorhanden; naechster Restart
+  nach 8 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -350,7 +350,7 @@ Diagnose und Tests.
   durch vorhandene Regressionen abgedeckt. `tests/test_cinnamon_applet.py`:
   `238 passed in 30.23s`.
 - Kein Patch fuer eine unbelegte Anzeige erstellt. Seit dem Restart stehen
-  `10/20` Commits an; kein weiterer Restart erforderlich.
+  `12/20` Commits an; kein weiterer Restart erforderlich.
 
 ### Reminder-Intent und Werktags-Rekurrenz
 
@@ -407,6 +407,20 @@ Diagnose und Tests.
   wegen voller Agentinnen-Threadgrenze nicht gestartet werden. Es wurde kein
   Delegationsresultat erfunden; der Wetterbefund wurde lokal reproduziert und
   abgesichert.
+
+### MessageTracker-Persistenz
+
+- 2026-07-16: Der Audit fand einen stale-read Fehler: Wenn die persistierte
+  `Sent_Message_Refs.json` waehrend laufender Runtime geloescht oder unlesbar
+  wurde, behielt `MessageTracker` seine alten In-Memory-Refs. Cleanup konnte
+  dadurch veraltete Nachrichten-IDs weiterverwenden.
+- Fehlende oder ungueltige Persistenz leert den Tracker jetzt fail-closed.
+  Neue Refs koennen danach normal wieder aufgezeichnet werden; alte Refs
+  werden nicht gegen aktuelle Chats eingesetzt.
+- Providerfreie Regressionen fuer kaputtes File und verschwundenes Parent:
+  `tests/test_message_tracking.py`: `8 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Commit:
+  `4857c518 fix: clear stale message refs after storage loss`.
 
 ## Akzeptanzkriterien
 
