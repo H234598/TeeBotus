@@ -2283,3 +2283,35 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `19/20` Code-Commits. Dieser
 Plan-Commit macht `20/20`; danach User-Service-Restart. Kein Push. Naechster
 Push bleibt erst bei 100 Commits.
+
+### Gemini-Instanz-Limits-im-Profilpfad
+
+- 2026-07-16: Nach dem Keyring-Fix wurden im selben Profilpfad weiterhin
+  `instance_name` bei Free-Tier-Limits und `service_tier` unterschlagen.
+  Profilbasierte Gemini-Routen konnten daher globale RPM/TPM/RPD- und Flex-
+  Einstellungen statt Instanzwerten verwenden.
+- Beide Resolver erhalten jetzt den Instanznamen. Runtime-Routen hatten diese
+  Weitergabe bereits.
+- Regression: Instanz-Keyring, instanzspezifisches RPM und instanzspezifisches
+  Flex vor globalen Werten; `tests/test_llm_router.py -k 'profiled_text_client and gemini'`
+  -> `3 passed`; Ruff und `compileall` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `65ea6747 fix: preserve instance Gemini limits in profile routes`.
+
+### Reminder-Structured-Entscheidungskosten
+
+- 2026-07-16: Der Engine-Pfad rief den Structured-Decision-Runner fuer jede
+  adressierte Nicht-Command-Nachricht auf, sobald er aktiviert war. Das war
+  ein unnötiger Provideraufruf pro normaler Nachricht.
+- Ein lokaler, konservativer Reminder-Hinweisfilter laesst den Runner nur bei
+  Erinnerungssignalen wie `erinnern`, `remind`, `dran`, `daran`, `stupsen`,
+  `bescheid`, `nicht vergessen` oder `auf dem Schirm` laufen. Klassische
+  Treffer bleiben unveraendert; direkte freie Reminderformulierungen mit
+  diesen Signalen erreichen weiterhin den LLM-Fallback.
+- Regression: normale Terminfrage ruft Runner nicht auf; Reminder-Suite ->
+  `37 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `5ac383e6 fix: gate structured reminder classification locally`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Code-Commits. Dieser
+Plan-Commit macht `3/20`; kein Push. Naechster Restart nach 17 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
