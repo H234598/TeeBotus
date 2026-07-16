@@ -263,6 +263,21 @@ def test_admin_report_ignores_account_directory_with_only_transient_locks(tmp_pa
     assert report["instances"][0]["identity_health"] == {"status": "ok", "warning_count": 0, "warnings": [], "notice_count": 0, "notices": []}
 
 
+def test_admin_report_ignores_symlinked_account_directories(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts" / "accounts"
+    accounts_root.mkdir(parents=True)
+    external_account = tmp_path / "external-account"
+    external_account.mkdir()
+    (accounts_root / ("a" * 128)).symlink_to(external_account, target_is_directory=True)
+
+    report = build_accounts_admin_report(instances_dir=tmp_path, provider=provider())
+
+    store_report = report["instances"][0]["account_store"]
+    assert store_report["account_directories"] == 0
+    assert store_report["account_directory_ids"] == []
+
+
 def test_text_report_contains_account_store_and_identity_summary(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())

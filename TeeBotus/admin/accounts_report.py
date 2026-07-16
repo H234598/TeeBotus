@@ -486,6 +486,7 @@ def _account_dirs(accounts_dir: Path) -> list[Path]:
         path
         for path in accounts_dir.iterdir()
         if path.is_dir()
+        and not path.is_symlink()
         and TOKEN_HEX_RE.fullmatch(path.name)
         and not _account_dir_contains_only_transient_locks(path)
     )
