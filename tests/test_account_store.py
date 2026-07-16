@@ -1198,11 +1198,29 @@ def test_merge_accounts_merges_and_clears_sql_memory(tmp_path, monkeypatch):
             "bot_text": "Uebernommen.",
         },
     )
+    store.write_llm_state(
+        source,
+        {"previous_response_id": "resp-source", "updated_at": "2026-07-16T03:00:00+00:00"},
+    )
+    store.write_agent_state(source, {"proactive": {"enabled": True}})
+    store.write_status_auth_state(source, {"authorized": True, "source": "test"})
+    store.append_proactive_outbox_item(source, {"id": "pro_source", "message_text": "Proaktiv"})
+    store.append_status_outbox_item(source, {"id": "status_source", "message_text": "Status"})
+    store.append_codex_history_item(source, {"id": "history_source", "summary": "Codex"})
 
     store.merge_accounts(source, target)
 
     assert any(row["id"] == "mem_sql_source" for row in store.read_memory_entries(target))
+    assert store.read_llm_state(target)["previous_response_id"] == "resp-source"
+    assert store.read_agent_state(target)["proactive"]["enabled"] is True
+    assert store.read_status_auth_state(target)["authorized"] is True
+    assert store.read_proactive_outbox(target)[0]["id"] == "pro_source"
+    assert store.read_status_outbox(target)[0]["id"] == "status_source"
+    assert store.read_codex_history_outbox(target)[0]["id"] == "history_source"
     assert store.read_memory_entries(source) == []
+    assert store.read_llm_state(source) == {}
+    assert store.read_agent_state(source) == {}
+    assert store.read_proactive_outbox(source) == []
 
 
 def test_merge_accounts_resumes_tombstone_cleanup_after_failure(tmp_path):

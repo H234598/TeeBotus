@@ -2174,7 +2174,10 @@ class AccountStore:
         self.rebuild_structured_memory_index(target_account_id)
         self._merge_json_objects(source_dir / ACCOUNT_PROFILE_FILENAME, target_dir / ACCOUNT_PROFILE_FILENAME, preserve_target=True, vault=self.vault)
         self._merge_text(source_dir / USER_HABITS_FILENAME, target_dir / USER_HABITS_FILENAME, heading=f"Merged from {source_account_id}")
-        self._merge_llm_state(source_dir, target_dir)
+        if memory_backend is None:
+            self._merge_llm_state(source_dir, target_dir)
+        else:
+            self._merge_sql_account_memory_collections(memory_backend, source_account_id, target_account_id)
         identities = self._load_identities()
         for payload in identities.values():
             if isinstance(payload, dict) and payload.get("account_id") == source_account_id:
@@ -2191,6 +2194,47 @@ class AccountStore:
         self.vault.write_json(source_dir / "Account_Tombstone.json", tombstone)
         self._delete_dir_contents_except(source_dir, {"Account_Tombstone.json"})
         self._remove_account_from_index(source_account_id)
+
+    def _merge_sql_account_memory_collections(self, backend: Any, source_account_id: str, target_account_id: str) -> None:
+        jsonl_collections: tuple[
+            tuple[str, Callable[[str], list[dict[str, Any]]], Callable[[str, list[dict[str, Any]]], None]], ...
+        ] = (
+            (PROACTIVE_OUTBOX_COLLECTION, self.read_proactive_outbox, self.write_proactive_outbox),
+            (PROACTIVE_AUDIT_COLLECTION, self.read_proactive_audit, self.write_proactive_audit),
+            (PROACTIVE_DISPATCH_RESULTS_COLLECTION, self.read_proactive_dispatch_results, self.write_proactive_dispatch_results),
+            (STATUS_OUTBOX_COLLECTION, self.read_status_outbox, self.write_status_outbox),
+            (STATUS_DISPATCH_RESULTS_COLLECTION, self.read_status_dispatch_results, self.write_status_dispatch_results),
+            (CODEX_HISTORY_OUTBOX_COLLECTION, self.read_codex_history_outbox, self.write_codex_history_outbox),
+            (CODEX_HISTORY_DISPATCH_RESULTS_COLLECTION, self.read_codex_history_dispatch_results, self.write_codex_history_dispatch_results),
+            (CODEX_HISTORY_PROJECTS_COLLECTION, self.read_codex_history_projects, self.write_codex_history_projects),
+        )
+        for collection, reader, writer in jsonl_collections:
+            source_rows = reader(source_account_id)
+            target_rows = reader(target_account_id)
+            merged_rows = _merge_account_jsonl_rows(target_rows, source_rows)
+            if merged_rows != target_rows:
+                writer(target_account_id, merged_rows)
+
+        document_collections: tuple[
+            tuple[str, Callable[[str], dict[str, Any]], Callable[[str, dict[str, Any]], None]], ...
+        ] = (
+            (LLM_STATE_COLLECTION, self.read_llm_state, self.write_llm_state),
+            (AGENT_STATE_COLLECTION, self.read_agent_state, self.write_agent_state),
+            (STATUS_AUTH_STATE_COLLECTION, self.read_status_auth_state, self.write_status_auth_state),
+        )
+        for collection, reader, writer in document_collections:
+            source_data = reader(source_account_id)
+            target_data = reader(target_account_id)
+            if collection == LLM_STATE_COLLECTION:
+                merged_data = _choose_newer_state(source_data, target_data)
+            else:
+                merged_data = _merge_nested_json_documents(source_data, target_data)
+                if collection == STATUS_AUTH_STATE_COLLECTION:
+                    merged_data["authorized"] = bool(
+                        source_data.get("authorized") or target_data.get("authorized")
+                    )
+            if merged_data != target_data:
+                writer(target_account_id, merged_data)
 
     def account_summary(self, account_id: str) -> dict[str, Any]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
