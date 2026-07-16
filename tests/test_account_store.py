@@ -1094,6 +1094,41 @@ def test_register_holds_identity_lock_across_active_secret_check_and_rotation(tm
     assert lock_states == []
 
 
+def test_memory_reads_hold_account_lock(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    lock_states: list[str] = []
+
+    class Backend:
+        def read_index(self, _account_id):
+            assert lock_states == [account_id]
+            return {"index": {}}
+
+        def read_entries(self, _account_id):
+            assert lock_states == [account_id]
+            return [{"id": "memory-1"}]
+
+        def read_entries_by_ids(self, _account_id, _memory_ids):
+            assert lock_states == [account_id]
+            return [{"id": "memory-1"}]
+
+    @contextmanager
+    def recording_lock(locked_account_id):
+        lock_states.append(locked_account_id)
+        try:
+            yield
+        finally:
+            lock_states.pop()
+
+    store._account_memory_backend = Backend()
+    with patch.object(store, "account_memory_lock", recording_lock):
+        assert store.read_memory_index(account_id) == {"index": {}}
+        assert store.read_memory_entries(account_id) == [{"id": "memory-1"}]
+        assert store.read_memory_entries_by_ids(account_id, ["memory-1"]) == [{"id": "memory-1"}]
+
+    assert lock_states == []
+
+
 def test_rotate_secret_invalidates_old_secret(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Bote_der_Wahrheit", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

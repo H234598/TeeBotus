@@ -2347,6 +2347,7 @@ class AccountStore:
         self._ensure_account_resolvable(account_id)
         return self._active_identities_for_account(account_id)
 
+    @_serialize_account_memory
     def read_memory_index(self, account_id: str) -> dict[str, Any]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         backend = self.account_memory_backend
@@ -2368,6 +2369,7 @@ class AccountStore:
             return
         self.account_memory_vault.write_json(self.account_dir(account_id) / USER_MEMORY_INDEX_FILENAME, data)
 
+    @_serialize_account_memory
     def read_memory_entries(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         backend = self.account_memory_backend
@@ -2379,6 +2381,7 @@ class AccountStore:
             allow_plaintext_legacy=False,
         )
 
+    @_serialize_account_memory
     def read_memory_entries_by_ids(self, account_id: str, memory_ids: Iterable[str]) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
