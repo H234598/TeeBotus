@@ -2009,3 +2009,21 @@ Commits.
 **Aktueller Laufstand:** Seit dem Restart `11/20` Code-Commits. Dieser
 Plan-Commit macht `12/20`; kein Push. Naechster Restart nach 8 weiteren
 Commits.
+
+### Proactive-Risiko-Validitaetsfenster
+
+- 2026-07-16: `_risk_memory_is_active()` pruefte `valid_to` zuerst. Ein
+  Risikosignal mit zukuenftigem `valid_from` und zukuenftigem `valid_to` galt
+  dadurch vor seinem Start bereits als aktiv und blockierte Analyse, Tests,
+  Reflection und Bilder.
+- `valid_from` wird jetzt zuerst ausgewertet; zukuenftige Signale sind nicht
+  aktiv. Danach entscheidet `valid_to`; ohne Zeitfenster bleibt der bisherige
+  30-Tage-Lookback erhalten.
+- Regression: zukuenftiges Fenster vor Start und genau zum Start; kompletter
+  `tests/test_proactive_agent.py`-Lauf -> `123 passed`. Ruff, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9f45edcc fix: respect proactive risk validity start`.
+
+**Aktueller Laufstand:** Seit dem Restart `13/20` Code-Commits. Dieser
+Plan-Commit macht `14/20`; kein Push. Naechster Restart nach 6 weiteren
+Commits.
