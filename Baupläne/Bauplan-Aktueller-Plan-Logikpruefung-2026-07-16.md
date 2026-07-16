@@ -3179,3 +3179,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `18/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 2 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Quarantaene-Blocked-Status-nicht-zu-No-op
+
+- 2026-07-17: Ein inkonsistenter Report mit leerem/unsicherem
+  `accounts_root` wurde korrekt als Instance `blocked` markiert. Der aeussere
+  Aggregator setzte danach bei null quarantainierten Accounts trotzdem den
+  Gesamtstatus auf `no-op`.
+- Der Gesamtstatus bleibt jetzt `blocked`, sobald eine Instance blockiert ist.
+  Kein irrefuehrender Erfolgstatus bei verweigerter Quarantaene.
+- Regression: fehlender Report-Root -> `1 passed`; komplette
+  `tests/test_admin_accounts.py` -> `85 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c9eaa5a9 fix: preserve blocked quarantine status`.
+
+**Aktueller Laufstand:** Seit dem Restart `20/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart jetzt erforderlich. Naechster Push bleibt erst
+bei 100 Commits.
