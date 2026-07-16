@@ -2102,6 +2102,232 @@ def test_account_jsonl_collection_keeps_merged_rows_when_verify_read_reports_dia
     assert legacy_path.exists()
 
 
+@pytest.mark.parametrize(
+    ("reader_name", "filename", "expected"),
+    (
+        (
+            "read_llm_state",
+            LLM_STATE_FILENAME,
+            {"previous_response_id": "resp-sql", "updated_at": "2026-06-15T12:00:00+00:00"},
+        ),
+        (
+            "read_agent_state",
+            "Agent_State.json",
+            {"proactive": {"enabled": True}, "updated_at": "2026-06-15T12:00:00+00:00"},
+        ),
+    ),
+)
+def test_account_json_document_uses_valid_rows_when_sql_diagnostics_are_partial(
+    tmp_path, reader_name, filename, expected
+):
+    class PartialReadCollectionBackend:
+        last_collection_read_error = "one payload could not be decrypted"
+        last_collection_skipped = 1
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            return [dict(expected)]
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            pytest.fail("partial SQL read must not compact destructively")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    backend = PartialReadCollectionBackend()
+    store._account_memory_backend = backend
+    stale_path = store.account_dir(account_id) / filename
+    store.account_memory_vault.write_json(stale_path, {"stale": True})
+    legacy_path = store.account_dir(account_id) / OPENAI_STATE_FILENAME
+    if reader_name == "read_llm_state":
+        store.account_memory_vault.write_json(legacy_path, {"stale_legacy": True})
+
+    state = getattr(store, reader_name)(account_id)
+
+    assert state == expected
+    assert stale_path.exists()
+    if reader_name == "read_llm_state":
+        assert legacy_path.exists()
+
+
+def test_account_jsonl_collection_uses_valid_rows_when_sql_diagnostics_are_partial(tmp_path):
+    class PartialReadCollectionBackend:
+        last_collection_read_error = "one payload could not be decrypted"
+        last_collection_skipped = 1
+
+        def __init__(self) -> None:
+            self.rows = [
+                {
+                    "id": "pro_sql",
+                    "message_text": "SQL",
+                    "status": "queued",
+                    "updated_at": "2026-06-15T10:00:00+00:00",
+                }
+            ]
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            return [dict(row) for row in self.rows]
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            pytest.fail("partial SQL read must not compact destructively")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    backend = PartialReadCollectionBackend()
+    store._account_memory_backend = backend
+    legacy_path = store.account_dir(account_id) / PROACTIVE_OUTBOX_FILENAME
+    store.account_memory_vault.write_jsonl(
+        legacy_path,
+        [
+            {
+                "id": "pro_sql",
+                "message_text": "Legacy stale",
+                "status": "sent",
+                "updated_at": "2026-06-15T09:00:00+00:00",
+            },
+            {"id": "pro_legacy", "message_text": "Legacy", "status": "queued"},
+        ],
+    )
+
+    rows = store.read_proactive_outbox(account_id)
+
+    assert rows == [
+        {
+            "id": "pro_sql",
+            "message_text": "SQL",
+            "status": "queued",
+            "updated_at": "2026-06-15T10:00:00+00:00",
+        },
+        {"id": "pro_legacy", "message_text": "Legacy", "status": "queued"},
+    ]
+    assert legacy_path.exists()
+
+
+def test_account_jsonl_collection_keeps_legacy_after_silent_readback_loss(tmp_path):
+    class SilentReadbackLossBackend:
+        last_collection_read_error = ""
+        last_collection_skipped = 0
+
+        def __init__(self) -> None:
+            self.read_count = 0
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            self.read_count += 1
+            if self.read_count == 1:
+                return [{"id": "pro_sql", "message_text": "SQL", "status": "queued"}]
+            return []
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            return None
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store._account_memory_backend = SilentReadbackLossBackend()
+    legacy_path = store.account_dir(account_id) / PROACTIVE_OUTBOX_FILENAME
+    store.account_memory_vault.write_jsonl(
+        legacy_path,
+        [{"id": "pro_legacy", "message_text": "Legacy", "status": "queued"}],
+    )
+
+    rows = store.read_proactive_outbox(account_id)
+
+    assert rows == [
+        {"id": "pro_sql", "message_text": "SQL", "status": "queued"},
+        {"id": "pro_legacy", "message_text": "Legacy", "status": "queued"},
+    ]
+    assert legacy_path.exists()
+
+
+def test_read_llm_state_keeps_legacy_after_silent_readback_loss(tmp_path):
+    class SilentReadbackLossBackend:
+        last_collection_read_error = ""
+        last_collection_skipped = 0
+
+        def __init__(self) -> None:
+            self.read_count = 0
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            self.read_count += 1
+            if self.read_count == 1:
+                return [{"previous_response_id": "resp-sql", "updated_at": "2026-06-15T08:00:00+00:00"}]
+            return []
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            return None
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store._account_memory_backend = SilentReadbackLossBackend()
+    legacy_path = store.account_dir(account_id) / LLM_STATE_FILENAME
+    store.account_memory_vault.write_json(
+        legacy_path,
+        {"previous_response_id": "resp-legacy", "updated_at": "2026-06-15T09:00:00+00:00"},
+    )
+
+    state = store.read_llm_state(account_id)
+
+    assert state["previous_response_id"] == "resp-legacy"
+    assert legacy_path.exists()
+
+
+def test_instance_json_state_uses_valid_rows_when_sql_diagnostics_are_partial(tmp_path):
+    class PartialReadCollectionBackend:
+        last_collection_read_error = "one payload could not be decrypted"
+        last_collection_skipped = 1
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            return [{"versions": {"2.0.0": {"sent_identities": ["telegram:user:222"]}}}]
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            pytest.fail("partial SQL read must not compact destructively")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    backend = PartialReadCollectionBackend()
+    store._account_memory_backend = backend
+    legacy_path = tmp_path / "Version_Notifications.json"
+    store.account_memory_vault.write_json(
+        legacy_path,
+        {"versions": {"1.0.0": {"sent_identities": ["telegram:user:111"]}}},
+    )
+
+    state = store.read_instance_json_state("Version_Notifications.json", "version_notifications", {"versions": {}})
+
+    assert state == {"versions": {"2.0.0": {"sent_identities": ["telegram:user:222"]}}}
+    assert legacy_path.exists()
+
+
+def test_instance_json_state_keeps_legacy_after_silent_readback_loss(tmp_path):
+    class SilentReadbackLossBackend:
+        last_collection_read_error = ""
+        last_collection_skipped = 0
+
+        def __init__(self) -> None:
+            self.read_count = 0
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            self.read_count += 1
+            if self.read_count == 1:
+                return [{"versions": {"2.0.0": {"sent_identities": ["telegram:user:222"]}}}]
+            return []
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            return None
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    store._account_memory_backend = SilentReadbackLossBackend()
+    legacy_path = tmp_path / "Version_Notifications.json"
+    store.account_memory_vault.write_json(
+        legacy_path,
+        {"versions": {"1.0.0": {"sent_identities": ["telegram:user:111"]}}},
+    )
+
+    state = store.read_instance_json_state("Version_Notifications.json", "version_notifications", {"versions": {}})
+
+    assert state["versions"] == {
+        "1.0.0": {"sent_identities": ["telegram:user:111"]},
+        "2.0.0": {"sent_identities": ["telegram:user:222"]},
+    }
+    assert legacy_path.exists()
+
+
 def test_account_store_sqlite_backend_merges_multiple_json_document_rows(tmp_path, monkeypatch):
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")

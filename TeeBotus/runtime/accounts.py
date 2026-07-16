@@ -3110,6 +3110,10 @@ class AccountStore:
                     raise
                 sql_state = {}
                 sql_state_available = False
+            if sql_state_available and self._collection_read_diagnostic_error(self.account_memory_backend):
+                return sql_state
+            if sql_state_available and llm_path.exists():
+                return sql_state
             llm_state = self._read_json_with_fallback(llm_path, {}, vault=self.account_memory_vault) if llm_path.exists() else {}
             legacy_state = self._read_json_with_fallback(legacy_path, {}, vault=self.account_memory_vault) if legacy_path.exists() else {}
             selected = _choose_newer_state(legacy_state, _choose_newer_state(llm_state, sql_state))
@@ -3117,7 +3121,8 @@ class AccountStore:
                 self._write_account_json_document(account_id, LLM_STATE_FILENAME, LLM_STATE_COLLECTION, selected)
             if sql_state_available:
                 self._unlink_migrated_account_file(llm_path)
-                self._unlink_migrated_account_file(legacy_path)
+                if not llm_path.exists():
+                    self._unlink_migrated_account_file(legacy_path)
             return selected
         llm_state = self._read_json_with_fallback(llm_path, {}, vault=self.account_memory_vault) if llm_path.exists() else {}
         legacy_state = self._read_json_with_fallback(legacy_path, {}, vault=self.account_memory_vault) if legacy_path.exists() else {}
@@ -3195,11 +3200,13 @@ class AccountStore:
                 return self._read_legacy_instance_json_state(path, dict(default))
             raise
         detail = self._collection_read_diagnostic_error(backend)
-        if detail:
+        if detail and not rows:
             if fallback_to_legacy_on_read_error and path.exists():
                 return self._read_legacy_instance_json_state(path, dict(default))
             raise AccountStoreError(f"account memory SQL collection {collection_name} could not be read: {detail}")
         data = _merge_json_document_rows(rows, dict(default))
+        if detail:
+            return data
         should_compact = len(rows) > 1
         should_unlink_legacy = False
         if path.exists():
@@ -3211,6 +3218,14 @@ class AccountStore:
             should_unlink_legacy = True
         if should_compact:
             write_collection(INSTANCE_STATE_ACCOUNT_ID, collection_name, [data])
+            try:
+                verified_rows = [
+                    row for row in read_collection(INSTANCE_STATE_ACCOUNT_ID, collection_name) if isinstance(row, dict)
+                ]
+            except Exception:
+                return data
+            if self._collection_read_diagnostic_error(backend) or _merge_json_document_rows(verified_rows, dict(default)) != data:
+                return data
         if should_unlink_legacy:
             self._unlink_migrated_account_file(path)
         return data
@@ -3268,11 +3283,13 @@ class AccountStore:
                     return self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
                 raise _AccountCollectionReadError(str(exc)) from exc
             detail = self._collection_read_diagnostic_error(backend)
-            if detail:
+            if detail and not rows:
                 if fallback_to_legacy_on_read_error and path.exists():
                     return self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
                 raise _AccountCollectionReadError(f"account memory SQL collection {collection} could not be read: {detail}")
             data = _merge_json_document_rows(rows, dict(default))
+            if detail:
+                return data
             should_compact = len(rows) > 1
             should_unlink_legacy = False
             if path.exists():
@@ -3284,6 +3301,12 @@ class AccountStore:
                 should_unlink_legacy = True
             if should_compact:
                 write_collection(account_id, collection, [data])
+                try:
+                    verified_rows = [row for row in read_collection(account_id, collection) if isinstance(row, dict)]
+                except Exception:
+                    return data
+                if self._collection_read_diagnostic_error(backend) or _merge_json_document_rows(verified_rows, dict(default)) != data:
+                    return data
             if should_unlink_legacy:
                 self._unlink_migrated_account_file(path)
             return data
@@ -3313,18 +3336,26 @@ class AccountStore:
                     return self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
                 raise
             detail = self._collection_read_diagnostic_error(backend)
-            if detail:
+            if detail and not rows:
                 if path.exists():
                     return self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
                 raise AccountStoreError(f"account memory SQL collection {collection} could not be read: {detail}")
+            if detail:
+                if path.exists():
+                    legacy_rows = self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
+                    return _merge_account_jsonl_rows(rows, legacy_rows)
+                return rows
             if path.exists():
                 legacy_rows = self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
                 merged_rows = _merge_account_jsonl_rows(rows, legacy_rows)
                 if merged_rows != rows:
                     write_collection(account_id, collection, merged_rows)
-                    rows = list(read_collection(account_id, collection))
+                    try:
+                        rows = [row for row in read_collection(account_id, collection) if isinstance(row, dict)]
+                    except Exception:
+                        return merged_rows
                     detail = self._collection_read_diagnostic_error(backend)
-                    if detail:
+                    if detail or rows != merged_rows:
                         return merged_rows
                 self._unlink_migrated_account_file(path)
             return rows
