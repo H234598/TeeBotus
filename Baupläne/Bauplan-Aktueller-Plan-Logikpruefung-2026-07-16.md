@@ -1482,6 +1482,25 @@ ausgeloest. Naechster Restart nach 11 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `8/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 12 weiteren Commits.
 
+### Codex-Summary-vollstaendig-und-Kommentare-einklappbar
+
+- 2026-07-16: `Bauplaene!/Summarys.md` forderte ungekürzte Summarys, bis zu
+  zehn Kommentare und einklappbare Kommentarueberschriften. Der Formatter
+  zeigte vorher nur fünf Zwischenantworten, kuerzte jede auf 900 Zeichen und
+  speicherte beim Session-Import nur acht Bullet-Zeilen mit je 240 Zeichen.
+- Session-Imports speichern den vollstaendigen redigierten Finaltext jetzt in
+  `summary.text` und rendern ihn vollstaendig im Abschnitt `Zusammenfassung`.
+  Zwischenantworten werden nicht mehr auf 1000/900 Zeichen gekuerzt; maximal
+  zehn werden als sichere HTML-`<details>`-Bloecke angezeigt.
+- Regression: Volltext laenger als 1400 Zeichen, 12 Kommentare und alter
+  Importpfad getestet; `3 passed`, `py_compile`, Diff-Check und relevante
+  Ruff-Regeln gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `22be8ae5 fix: preserve full codex summaries`.
+
+**Laufstand nach Fix:** Seit dem Restart `16/20` Commits; dieser
+Dokumentationscommit erhoeht auf `17/20`. Kein Push. Naechster Restart nach
+3 weiteren Commits.
+
 ### Vollsuite-nach-Store-Guard
 
 - 2026-07-16: Zweiter Vollsuite-Lauf nach dem minimalen Store-Guard ist
