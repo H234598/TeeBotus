@@ -4622,6 +4622,42 @@ def test_account_memory_fallback_does_not_mirror_partial_primary_replace() -> No
     assert "source collection read has diagnostics" in backend.last_fallback_sync_error
 
 
+def test_account_memory_fallback_does_not_mirror_partial_primary_append() -> None:
+    class Backend:
+        def __init__(self, rows: list[dict[str, str]], *, read_error: str = "") -> None:
+            self.rows = [dict(row) for row in rows]
+            self.last_collection_read_error = read_error
+            self.last_collection_skipped = 0
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.rows]
+
+        def write_collection(self, _account_id: str, _collection: str, rows: list[dict[str, str]]) -> None:
+            self.rows = [dict(row) for row in rows]
+
+        def append_collection_items(
+            self,
+            _account_id: str,
+            _collection: str,
+            rows: list[dict[str, str]],
+        ) -> None:
+            self.rows.extend(dict(row) for row in rows)
+
+    account_id = "a" * 128
+    collection = "codex_history_dispatch_results"
+    primary = Backend([{"id": "row_1"}], read_error="row_2 could not be decrypted")
+    fallback = Backend([{"id": "row_1"}])
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+    backend._stale_fallback_collections.add((account_id, collection))
+
+    backend.append_collection_items(account_id, collection, [{"id": "row_2"}])
+
+    assert primary.rows == [{"id": "row_1"}, {"id": "row_2"}]
+    assert fallback.rows == [{"id": "row_1"}]
+    assert (account_id, collection) in backend._fallback_sync_failed_collections
+    assert "source collection read has diagnostics" in backend.last_fallback_sync_error
+
+
 @pytest.mark.parametrize("kind", ["entries", "index", "collection"])
 def test_account_memory_fallback_does_not_promote_corrupt_dirty_data(kind: str) -> None:
     class Backend:

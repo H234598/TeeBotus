@@ -1015,13 +1015,14 @@ class WarningFallbackAccountMemoryBackend:
         if backend is self.fallback and (
             stale_key in self._stale_fallback_collections or stale_key in self._fallback_sync_failed_collections
         ):
-            self.fallback.write_collection(account_id, collection, list(self.primary.read_collection(account_id, collection)))
+            primary_rows = self._read_clean_collection_for_mirror(self.primary, account_id, collection)
+            self.fallback.write_collection(account_id, collection, primary_rows)
             return
         append_collection_items = getattr(backend, "append_collection_items", None)
         if callable(append_collection_items):
             append_collection_items(account_id, collection, rows)
             return
-        existing_rows = list(backend.read_collection(account_id, collection))
+        existing_rows = self._read_clean_collection_for_mirror(backend, account_id, collection)
         backend.write_collection(account_id, collection, existing_rows + [dict(row) for row in rows])
 
     def _read_clean_collection_for_mirror(self, backend: Any, account_id: str, collection: str) -> list[dict[str, Any]]:
