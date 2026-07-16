@@ -145,6 +145,22 @@ def test_status_auth_gate_silences_logger_user_until_code_seen(tmp_path, monkeyp
     assert "Befehle" in help_actions[0].text
 
 
+def test_debug_level_warns_each_active_account_and_channel_once(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_LOG_LEVEL", "2")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    first_actions = engine.process(event(identity, "/ping"))
+    second_actions = engine.process(event(identity, "/ping"))
+
+    assert first_actions[0].text.startswith("Hinweis: Debug-Level 1/2 ist aktiv.")
+    assert first_actions[1].text == "Pong"
+    second_texts = [getattr(action, "text", "") for action in second_actions]
+    assert "Pong" in second_texts
+    assert not any(text.startswith("Hinweis: Debug-Level") for text in second_texts)
+
+
 def test_status_auth_global_code_does_not_silence_non_logger_instances(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
     account_store = store(tmp_path)

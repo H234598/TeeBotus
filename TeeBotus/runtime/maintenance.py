@@ -24,6 +24,7 @@ MAX_RUNTIME_TEXT_FILE_BYTES = 2 * 1024 * 1024
 COMPRESS_AFTER_SECONDS = 7 * 24 * 60 * 60
 MONTHLY_ARCHIVE_AFTER_SECONDS = 60 * 24 * 60 * 60
 DEBUG_ALL = 1
+DEBUG_OBSERVATION_WARNING_LEVELS = frozenset({1, 2})
 LOG_LEVEL_ALIASES = {
     "critical": logging.CRITICAL,
     "crit": logging.CRITICAL,
@@ -129,6 +130,21 @@ def normalize_log_level(level: str | int) -> int:
         return _normalize_numeric_log_level(int(text))
     normalized = text.casefold().replace("_", " ").replace("-", " ")
     return LOG_LEVEL_ALIASES.get(normalized, LOG_LEVEL_ALIASES.get(text.casefold(), logging.INFO))
+
+
+def debug_observation_warning_enabled(level: str | int | None = None) -> bool:
+    """Return whether runtime logging can expose message content to operators."""
+    if level is None:
+        level = os.getenv("TEEBOTUS_LOG_LEVEL") or os.getenv("LOG_LEVEL", "INFO")
+    if isinstance(level, bool):
+        return False
+    if isinstance(level, int):
+        return level in DEBUG_OBSERVATION_WARNING_LEVELS
+    text = str(level or "").strip()
+    numeric_text = text[1:] if text[:1] in {"+", "-"} else text
+    if numeric_text.isdigit():
+        return int(text) in DEBUG_OBSERVATION_WARNING_LEVELS
+    return normalize_log_level(text) == DEBUG_ALL
 
 
 def _normalize_numeric_log_level(level: int) -> int:

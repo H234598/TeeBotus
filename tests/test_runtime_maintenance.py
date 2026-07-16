@@ -22,6 +22,7 @@ from TeeBotus.runtime.maintenance import (
     _publish_temporary_file,
     _stdout_targets_path,
     configure_runtime_logging,
+    debug_observation_warning_enabled,
     gzip_file,
     install_stdio_tee,
     maintain_runtime_directory,
@@ -2401,6 +2402,16 @@ def test_normalize_log_level_accepts_documented_debug_all_spellings():
     assert normalize_log_level("finest") == DEBUG_ALL
     assert normalize_log_level(1) == DEBUG_ALL
     assert normalize_log_level("1") == DEBUG_ALL
+
+
+def test_debug_observation_warning_matches_documented_numeric_levels(monkeypatch):
+    assert debug_observation_warning_enabled(1) is True
+    assert debug_observation_warning_enabled("2") is True
+    assert debug_observation_warning_enabled("debug_all") is True
+    assert debug_observation_warning_enabled("debug") is False
+
+    monkeypatch.setenv("TEEBOTUS_LOG_LEVEL", "2")
+    assert debug_observation_warning_enabled() is True
 
 
 def test_normalize_log_level_rejects_undocumented_numeric_trace_levels():

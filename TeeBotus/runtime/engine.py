@@ -56,6 +56,7 @@ from TeeBotus.runtime.jobs import YouTubeTranscriptionJobRunner
 from TeeBotus.runtime.llm_factory import build_runtime_text_llm_client
 from TeeBotus.runtime.llm_route_command import ROUTE_TO_FLOW, parse_route_to_command, resolve_route_to_target, route_to_known_targets
 from TeeBotus.runtime.memory_search import MemorySearchConfig, MemorySearchService
+from TeeBotus.runtime.maintenance import debug_observation_warning_enabled
 from TeeBotus.runtime.qdrant import QdrantError
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex
 from TeeBotus.runtime.state import RuntimeState
@@ -81,6 +82,10 @@ from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
 LOGGER = logging.getLogger("TeeBotus.runtime.engine")
 DEBUG_ALL = 1
+DEBUG_OBSERVATION_WARNING = (
+    "Hinweis: Debug-Level 1/2 ist aktiv. Administratoren koennen in Logs und Diagnosepfaden "
+    "potenziell Nachrichteninhalte sehen. Bitte Debugging danach wieder abschalten."
+)
 PRIVATE_ONLY = "Bitte privat."
 LINKED_NOTICE = "Ein neuer Kommunikationsweg wurde mit deinem TeeBotus-Account verbunden. Wenn du das nicht warst, schreibe innerhalb der Sicherheitsfrist: WTF?"
 CURRENT_CHAT_CLEANUP_NOTE = "Ich lösche nur die in diesem aktuellen Chat gemerkten Botnachrichten, nicht Nachrichten in anderen Chats oder Messengern."
@@ -193,6 +198,7 @@ class TeeBotusEngine:
         self.codex_runner = codex_runner
         self.codex_session_roots = codex_session_roots
         self.codex_executable = str(codex_executable or "codex")
+        self._debug_observation_warning_sent: set[tuple[str, str, str]] = set()
 
     def should_ignore_without_account(self, event: IncomingEvent) -> bool:
         return should_ignore_event_without_account(event, self._bot_address_names_for_event(event))
@@ -218,7 +224,8 @@ class TeeBotusEngine:
             return EngineResult(status_auth.account_id or event.account_id, actions, handled=True)
         if status_auth.account_id and status_auth.account_id != event.account_id:
             event = event.with_account(status_auth.account_id)
-        return self._with_notification_loudness_prompt(event, self._process_result_inner(event))
+        result = self._with_notification_loudness_prompt(event, self._process_result_inner(event))
+        return self._with_debug_observation_warning(event, result)
 
     def _process_result_inner(self, event: IncomingEvent) -> EngineResult:
         from TeeBotus.runtime.actions import DeleteTrackedMessages, SendText
@@ -579,6 +586,20 @@ class TeeBotusEngine:
         if prompt is None:
             return result
         return EngineResult(result.account_id, [*result.actions, prompt], handled=True if result.handled or result.actions else True)
+
+    def _with_debug_observation_warning(self, event: IncomingEvent, result: EngineResult) -> EngineResult:
+        if not result.account_id or not result.actions or not debug_observation_warning_enabled():
+            return result
+        marker = (event.instance, result.account_id, event.channel)
+        if marker in self._debug_observation_warning_sent:
+            return result
+        self._debug_observation_warning_sent.add(marker)
+        return EngineResult(
+            result.account_id,
+            [SendText(event.chat_id, DEBUG_OBSERVATION_WARNING, track=False), *result.actions],
+            handled=True,
+            suppress_notification_loudness_prompt=result.suppress_notification_loudness_prompt,
+        )
 
     def _pending_teladi_emergency_actions(
         self,
