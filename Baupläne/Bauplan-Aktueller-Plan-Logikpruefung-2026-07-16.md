@@ -1719,6 +1719,25 @@ ausgeloest. Naechster Code-Commit loest Restart aus.
 **Laufstand nach Restart:** Seit dem Restart `1/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 19 weiteren Commits.
 
+### Direkte-Structured-Memory-Writes-vor-partial-Reads-schuetzen
+
+- 2026-07-16: `write_memory_entries()` und `write_memory_index()` konnten
+  SQL-Inhalte direkt vollstaendig ersetzen, ohne die aktuellen Entry-/Index-
+  Read-Diagnosen zu pruefen. Ein direkter Aufrufer konnte damit korrupte oder
+  partiell gelesene Memorys ueberschreiben.
+- Beide Pfade pruefen jetzt vor Backend-Write auf Decrypt-Fehler und Skips;
+  eine wirklich fehlende, noch nicht initialisierte SQLite-DB bleibt als
+  sauberer Erstwrite zulaessig. SQLite/PostgreSQL loeschen beim ersten
+  erfolgreichen Write nach DB-Initialisierung auch bereinigte Missing-DB-
+  Diagnosen aus anderen Teilbereichen.
+- Regression fuer direkte Write-Blockade und frische SQLite-Initialisierung;
+  gesamte `tests/test_account_store.py`: `277 passed`; Ruff, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `294ea77b fix: guard direct memory writes`.
+
+**Laufstand nach Fix:** Seit dem Restart `3/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 17 weiteren Commits.
+
 ## Bezug
 
 - Vorheriger Plan:
