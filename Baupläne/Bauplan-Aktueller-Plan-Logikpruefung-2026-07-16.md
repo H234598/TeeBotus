@@ -1143,6 +1143,21 @@ Diagnose und Tests.
 - Code-Commit: `3134bd27 fix: serialize SQL schema initialization`;
   kein Provider/API-Aufruf.
 
+### PostgreSQL-Schema-Retry
+
+- 2026-07-16: Bei gleichzeitigem `42P01`-Fehler konnte ein zweiter Request
+  die bereits laufende Schema-Reparatur als `_initialized=False` sehen und
+  ohne Retry abbrechen.
+- Schema-Invalidierung, Reparatur-Aufruf und betroffener Retry laufen jetzt
+  unter demselben Prozess-Lock. Ein paralleler Request wartet und versucht
+  danach erneut; Fremdfehler ohne PostgreSQL-Schema-SQLSTATE bleiben
+  unveraendert Fehler.
+- Regression fuer die kontrollierte Reihenfolge zweier paralleler Reads:
+  `tests/test_memory_store_benchmark.py`: `15 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `a511a866 fix: serialize PostgreSQL schema retries`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -1182,8 +1197,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `19/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 1 weiterem Commit.
+**Laufstand:** Seit dem letzten Restart `1/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 19 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
@@ -1191,6 +1206,13 @@ kein Push ausgeloest. Naechster Restart nach 1 weiterem Commit.
   `--runtime-status` meldet Signal erreichbar, Qdrant `ready` und alle
   Account-Crypto-/Memory-Pruefungen `ok`. HF-Pool bleibt deaktiviert und
   wird laut Status lokal ueber Ollama ersetzt; kein Provider-Testaufruf.
+
+- Nach Commit 20 dieses Auditblocks: `teebotus.service` `active/running`,
+  PID `1705677`, Start `2026-07-16 11:26:21 CEST`. Providerfreier
+  `--runtime-status` meldet Signal `reachable`, Qdrant `ready` und alle
+  Account-Crypto-/Memory-Pruefungen `ok`. HF-Pool bleibt deaktiviert,
+  GROQ-Key fehlt; beides sind bestehende Konfigurationszustaende. Kein
+  Provider/API-Aufruf.
 
 ## Bezug
 
