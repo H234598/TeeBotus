@@ -3127,3 +3127,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `12/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 8 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Metadata-Probe-Fehler-fail-closed
+
+- 2026-07-17: `_metadata_health_report()` fing nur `AccountStoreError`, der
+  Quarantaene-Wrapper gar keine Probe-Fehler. Ein verschwundener oder nicht
+  lesbarer Metadata-Pfad konnte den Admin-Lauf dadurch abbrechen.
+- Healthcheck und Metadata-Quarantaene wandeln `AccountStoreError`/`OSError`
+  jetzt in unsicheren `account_store`-Befund um. Apply blockiert; kein Move,
+  keine automatische Reparatur.
+- Regression: simulierter Metadata-Probe-Fehler -> `11 passed` im Fokus;
+  komplette `tests/test_admin_accounts.py` -> `82 passed`. Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `65700a44 fix: fail closed on metadata probe errors`.
+
+**Aktueller Laufstand:** Seit dem Restart `14/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 6 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
