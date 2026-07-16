@@ -2203,3 +2203,28 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `11/20` Code-Commits. Dieser
 Plan-Commit macht `12/20`; kein Push. Naechster Restart nach 8 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Reminder-Subject-und-Expliziter-Monatsanker
+
+- 2026-07-16: Der Reverse-Reminder-Pfad entfernte bei `Kannst du mich ... an`
+  den Subject-Marker vor der Subject-Bereinigung. Ein ISO-Datum im Subject,
+  etwa `Version 2026-06-01`, wurde danach faelschlich als Datumstermin aus
+  dem Subject geloescht. Marker bleiben bis nach dem Datums-Schutz erhalten;
+  `an`/`daran`-Subjects werden ohne fuehrende Leerzeichen ausgegeben.
+- Folgeaudit durch Biene Curie: Ein expliziter `28.`-Monatstermin, der im
+  Folgemonat zufaellig auf den 28. faellt, wurde als Monatsende gespeichert.
+  `28. Februar -> 31. Maerz` war falsch. Der Parser reicht gewuenschten
+  Kalendertag und Monatsende-Absicht bis in die Outbox; nur expliziter `31.`
+  nutzt Monatsende-Semantik.
+- Structured- und klassischer Reminder-Pfad tragen die Metadaten. Alte Items
+  ohne expliziten Anker bleiben rueckwaertskompatibel und werden wie bisher
+  aus `due_at` abgeleitet.
+- Regression: Reverse-Subject mit ISO-Datum, `an`/`daran`, klassischer
+  Monats-28-Reminder und direkte Folgeplanung; Reminder + Proactive ->
+  `161 passed`; Decision-/Engine-Fokus -> `14 passed`; Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e0e097ee fix: preserve explicit monthly reminder day`.
+
+**Aktueller Laufstand:** Seit dem Restart `13/20` Code-Commits. Dieser
+Plan-Commit macht `14/20`; kein Push. Naechster Restart nach 6 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
