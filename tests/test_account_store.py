@@ -6346,6 +6346,20 @@ def test_structured_account_memory_index_health_accepts_empty_account(tmp_path, 
     assert health.errors == ()
 
 
+def test_structured_account_memory_index_health_rejects_empty_existing_json_artifact(tmp_path, monkeypatch):
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN", raising=False)
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.account_memory_vault.write_json(store.account_dir(account_id) / USER_MEMORY_INDEX_FILENAME, {})
+
+    health = store.check_structured_memory_index(account_id)
+
+    assert not health.ok
+    assert "index scope is not account" in health.errors
+    assert "index schema is not nested" in health.errors
+
+
 def test_structured_memory_index_normalizes_legacy_id_whitespace(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
