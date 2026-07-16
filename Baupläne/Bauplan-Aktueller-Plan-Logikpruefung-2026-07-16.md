@@ -1372,8 +1372,22 @@ ausgeloest. Naechster Restart nach 19 weiteren Commits.
 - Code-Commit: `955dfc0f fix: block partial collection appends`;
   kein Provider/API-Aufruf.
 
-**Laufstand nach Fix:** Seit dem Restart `4/20` Commits; kein Push
-ausgeloest. Naechster Restart nach 16 weiteren Commits.
+### Partielle-SQL-Collections-vor-Account-Merge
+
+- 2026-07-16: `_merge_sql_account_memory_collections()` las Quelle und Ziel
+  und konnte danach aus partiellen Row-Mengen einen neuen Zielbestand
+  schreiben. Korrupte Collection-Rows waeren dabei aus dem Ziel verschwunden.
+- Guard prueft jetzt jede Quelle und jedes Ziel unmittelbar nach dem Read.
+  Merge stoppt fail-closed vor dem ersten Collection-Write; gesundes
+  Fallback-Recovery bleibt davor moeglich.
+- Regression mit partieller Quelle und partiellem Ziel; gesamte
+  `tests/test_account_store.py` `262 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `8de2da94 fix: block partial collection merges`;
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `6/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 14 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
