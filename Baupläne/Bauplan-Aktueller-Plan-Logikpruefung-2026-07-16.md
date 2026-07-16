@@ -2139,6 +2139,24 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 Plan-Commit macht `6/20`; kein Push. Naechster Restart nach 14 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### Wetter-Rate-Limit-und-Uhrsprung
+
+- 2026-07-16: Das Wetter-Rate-Limit behandelte einen zukuenftigen
+  `last_checked_at` als gueltigen Cache. Nach Uhrkorrektur oder korruptem
+  Zeitstempel konnte der naechste externe Wettercheck bis zum alten
+  Zukunftszeitpunkt blockiert bleiben.
+- Rate-Limit gilt jetzt nur noch bei `0 <= elapsed < 2 Stunden`. Zukuenftige
+  Zeitstempel loesen wieder einen Check aus; vorhandene Stadt- und
+  Fehlerbehandlung bleibt unveraendert.
+- Regression: zukuenftiger Wetterzeitstempel blockiert Recheck nicht;
+  `tests/test_weather_context.py` -> `10 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `064f86af fix: recover weather checks after clock rollback`.
+
+**Aktueller Laufstand:** Seit dem Restart `18/20` Code-Commits. Dieser
+Plan-Commit macht `19/20`; kein Push. Naechster Restart nach 1 weiterem
+Commit. Naechster Push bleibt erst bei 100 Commits.
+
 ### Proactive-Tageslimit-bei-Wiederholungen
 
 - 2026-07-16: Nach erfolgreichem Versand wird eine wiederkehrende Erinnerung
