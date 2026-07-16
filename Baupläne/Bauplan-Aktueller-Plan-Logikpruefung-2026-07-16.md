@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart ist aktuell `1/20` Commit vorhanden; naechster Restart
-  nach 19 weiteren Commits.
+  letzten Restart ist aktuell `4/20` Commits vorhanden; naechster Restart
+  nach 16 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -354,6 +354,20 @@ Diagnose und Tests.
   `py_compile` und `git diff --check` gruen.
 - Code-Commit: `91accd50 fix: validate account identity lists`; kein
   Provider/API-Aufruf.
+
+### Account-Text-und-Agent-State-Locks
+
+- 2026-07-16: Gewohnheitstext sowie `Agent_State` wurden ohne
+  Account-Memory-Lock gelesen/geschrieben. Merge oder parallele Agent-
+  Updates konnten dadurch Read-Modify-Write-Staende ueberholen.
+- `read_account_text()`/`write_account_text()` sowie
+  `read_agent_state()`/`write_agent_state()` verwenden jetzt denselben
+  reentranten Account-Memory-Lock wie strukturierte Memorys und `LLM_State`.
+- Fokustests fuer Gewohnheiten, Agent-State und Merge: `5 passed`; komplette
+  AccountStore-Suite: `238 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commits: `c9e0b860 fix: lock account text memory`,
+  `73ca3a41 fix: lock agent state memory`.
 
 ### LLM-State-SQL/JSON-Audit
 
@@ -773,8 +787,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `1/20` Commit; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 19 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `4/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 16 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
