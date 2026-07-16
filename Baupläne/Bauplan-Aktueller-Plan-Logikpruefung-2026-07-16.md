@@ -1114,6 +1114,19 @@ Diagnose und Tests.
 - Code-Commit: `117aaedf fix: validate working memory entry offsets`;
   kein Provider/API-Aufruf.
 
+### Account-JSONL-Row-Typen
+
+- 2026-07-16: SQL-JSONL-Reads reichten Nicht-Dict-Rows ungefiltert an
+  Outbox-/Audit-Consumer weiter. Ein korruptes SQL-Objekt konnte dadurch
+  spaeter bei `row.get()` den Consumer abbrechen.
+- Der AccountStore filtert JSONL-Collection-Reads jetzt auf Dict-Rows; eine
+  ungueltige Row wird nicht als Outbox-Datensatz ausgegeben und loest keinen
+  stillen Rewrite aus.
+- `tests/test_account_store.py`: `251 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `2883551a fix: filter invalid account collection rows`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
