@@ -1776,3 +1776,21 @@ ausgeloest. Naechster Restart nach 14 weiteren Commits.
 - Vorheriger Plan:
   `Baupläne/Bauplan-Aktueller-Plan-Logikpruefung-2026-07-15.md`
 - Aktueller Arbeitsbaum: `/home/teladi/TeeBotus`
+
+### Admin-Status-Remote-IDs-nicht-als-lokal-anlegen
+
+- 2026-07-16: Der Kandidatenpfad fuer Runtime-Status-Admins las den
+  Opt-out-State fuer jede konfigurierte ID. Der Account-Memory-Lock legt beim
+  Lesen das Account-Verzeichnis an. Eine nur remote vorhandene Admin-ID wurde
+  dadurch als lokaler Phantom-Account erkannt; Status wurde als
+  `route:...:AccountStoreError` statt `not_local` gemeldet.
+- Opt-out wird jetzt nur fuer bereits lokale Account-Verzeichnisse gelesen.
+  Remote konfigurierte IDs bleiben fuer den Cross-Instance-Route-Scan
+  sichtbar, erzeugen aber keine lokale Memory-Struktur.
+- Regression: vier Admin-Status-/Notify-Tests gruen; zusaetzlicher Assert
+  bestaetigt, dass keine Phantom-Directory entsteht. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4cca4082 fix: avoid phantom remote admin accounts`.
+
+**Laufstand nach Fix:** Seit dem Restart `8/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 12 weiteren Commits.
