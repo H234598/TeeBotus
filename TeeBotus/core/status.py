@@ -198,10 +198,11 @@ def build_status_reply(
                 llm_model=llm_model,
                 llm_fallback_models=llm_fallback_models,
                 llm_client=llm_client,
-                structured_decision_runner=structured_decision_runner,
-                bibliothekar_enabled=bibliothekar_enabled,
-                env=env,
-            ),
+            structured_decision_runner=structured_decision_runner,
+            bibliothekar_enabled=bibliothekar_enabled,
+            env=env,
+            instance_name=instance_name,
+        ),
             "",
             "[API, Limits und Kosten]",
             *api_budget_lines,
@@ -236,6 +237,7 @@ def build_status_reply_html(text: str, *, project_root: Path) -> str:
 
 def _llm_category_status_lines(
     *,
+    instance_name: str,
     llm_enabled: bool | None,
     llm_provider: str,
     llm_model: str,
@@ -254,7 +256,7 @@ def _llm_category_status_lines(
     lines = [
         f"- Chat/Text: {chat_status} - {chat_label}",
         f"- Entscheidungen/Planner: {_structured_decision_status_label(structured_decision_runner)}",
-        f"- Bibliothekar/Antworten: {_route_status_label('bibliothekar_answer', enabled=bibliothekar_enabled, env=env)}",
+        f"- Bibliothekar/Antworten: {_route_status_label('bibliothekar_answer', enabled=bibliothekar_enabled, env=env, instance_name=instance_name)}",
         f"- Ersatzmodelle: {_fallback_category_status(llm_client, llm_fallback_models)}",
     ]
     return [redact_status_text(line) for line in lines]
@@ -469,6 +471,7 @@ def _api_budget_label_for_route(purpose: str, *, enabled: bool | None, env: Mapp
         route = select_llm_route(purpose)
         service_tier = resolve_gemini_service_tier(
             env,
+            instance_name=instance_name,
             provider=route.provider,
             model=route.model,
             explicit_service_tier=route.service_tier,
@@ -630,7 +633,13 @@ def _structured_decision_status_label(runner: object | None) -> str:
     return label
 
 
-def _route_status_label(purpose: str, *, enabled: bool | None, env: Mapping[str, str] | None) -> str:
+def _route_status_label(
+    purpose: str,
+    *,
+    enabled: bool | None,
+    env: Mapping[str, str] | None,
+    instance_name: str = "",
+) -> str:
     if enabled is False:
         return "aus"
     try:
@@ -641,6 +650,7 @@ def _route_status_label(purpose: str, *, enabled: bool | None, env: Mapping[str,
         label = f"aktiv - {_normalize_status_provider(route.provider)} / {route.model}"
         service_tier = resolve_gemini_service_tier(
             env,
+            instance_name=instance_name,
             provider=route.provider,
             model=route.model,
             explicit_service_tier=route.service_tier,

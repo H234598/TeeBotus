@@ -1030,6 +1030,22 @@ def test_status_api_budget_accepts_gemini_key_ring_without_single_key(tmp_path):
     assert "Key: GEMINI_API_KEY fehlt" not in text
 
 
+def test_status_bibliothekar_service_tier_uses_instance_override(tmp_path):
+    text = build_status_reply(
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        bibliothekar_enabled=True,
+        env={
+            "TEEBOTUS_GEMINI_SERVICE_TIER_DEPRESSIONSBOT": "flex",
+            "TEEBOTUS_GEMINI_SERVICE_TIER": "none",
+        },
+    )
+
+    assert "- Bibliothekar/Antworten: aktiv - litellm_gemini_stateful / gemini/gemini-3.5-flash service_tier=flex" in text
+    assert "- Bibliothekar/Antworten: litellm_gemini_stateful / gemini/gemini-3.5-flash;" in text
+    assert "; service_tier=flex" in text
+
+
 def test_status_api_budget_prefers_gemini_key_ring_when_single_key_is_also_set(tmp_path):
     class GeminiClient:
         provider_name = "litellm_gemini_stateless"
