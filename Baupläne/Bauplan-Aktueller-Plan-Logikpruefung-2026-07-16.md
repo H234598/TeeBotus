@@ -1102,6 +1102,18 @@ Diagnose und Tests.
 - Code-Commit: `d7b6d601 fix: sanitize working memory entries on read`;
   kein Provider/API-Aufruf.
 
+### Working-Memory-Entry-Metadaten
+
+- 2026-07-16: Entry-Metadaten wurden bisher nur als Dict validiert. Kaputte
+  `offset`-/`length`-Werte machten einzelne JSONL-Eintraege still unlesbar.
+- Offset und Laenge werden jetzt auf nichtnegative, numerisch lesbare Werte
+  geprueft; Laenge null ist ungueltig. Bei Fehler baut der Store Index aus
+  JSONL neu auf. Numerische Legacy-Strings bleiben kompatibel.
+- Regression parametrisiert ueber beide Stores: `tests/test_working_memory.py`:
+  `41 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `117aaedf fix: validate working memory entry offsets`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
