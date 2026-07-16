@@ -2331,7 +2331,15 @@ class AccountStore:
         )
         for collection, reader, writer in document_collections:
             source_data = reader(source_account_id)
+            self._raise_if_account_memory_collection_unreadable(
+                collection,
+                "cannot merge source account memory",
+            )
             target_data = reader(target_account_id)
+            self._raise_if_account_memory_collection_unreadable(
+                collection,
+                "cannot merge target account memory",
+            )
             if collection == LLM_STATE_COLLECTION:
                 merged_data = _choose_newer_state(source_data, target_data)
             else:
