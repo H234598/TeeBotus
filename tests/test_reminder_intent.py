@@ -310,6 +310,31 @@ def test_parse_non_reminder_is_not_request() -> None:
     assert intent.is_request is False
 
 
+def test_structured_reminder_fallback_does_not_call_llm_without_reminder_cue(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    calls = []
+
+    def runner(*_args):
+        calls.append(True)
+        raise AssertionError("ordinary messages must not reach reminder LLM classifier")
+
+    reply = maybe_queue_natural_reminder(
+        account_store=account_store,
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        text="Was denkst du ueber den Termin?",
+        now=fixed_now(),
+        structured_decision_runner=runner,
+    )
+
+    assert reply is None
+    assert calls == []
+
+
 def test_structured_reminder_fallback_can_queue_natural_request(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
     account_store = store(tmp_path)

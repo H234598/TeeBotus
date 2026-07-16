@@ -47,6 +47,16 @@ REMINDER_REQUEST_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+STRUCTURED_REMINDER_CUE_RE = re.compile(
+    r"(?:"
+    r"\b(?:erinner\w*|remind\w*|remember\w*|reminder|dran|daran|bescheid|stups\w*|anstups\w*)\b|"
+    r"\bdenk(?:e|en)?\s+(?:bitte\s+)?(?:an|dran|daran)\b|"
+    r"\bnicht\s+vergessen\b|\bdon['’]?t\s+forget\b|\bdo\s+not\s+forget\b|"
+    r"\b(?:ping|notify|alert)\s+(?:mich|me|uns|us)\b|"
+    r"\bauf\s+dem\s+schirm\b"
+    r")",
+    re.IGNORECASE,
+)
 
 _CLOCK_HOUR = r"(?:2[0-3]|[01]?\d)(?!\d)"
 EXPLICIT_TIME_CANDIDATE_RE = re.compile(
@@ -168,7 +178,11 @@ def maybe_queue_natural_reminder(
 ) -> str | None:
     resolved_now = now or local_now()
     intent = parse_reminder_intent(text, now=resolved_now)
-    if not intent.is_request and structured_decision_runner is not None:
+    if (
+        not intent.is_request
+        and structured_decision_runner is not None
+        and _has_structured_reminder_cue(text)
+    ):
         intent = _structured_reminder_intent(
             text,
             structured_decision_runner=structured_decision_runner,
@@ -345,6 +359,10 @@ def _normalized_categories(values: object) -> list[str]:
         return []
     allowed = {"reminder", "task", "tip", "test", "image", "analysis", "reflection"}
     return [value for value in dict.fromkeys(str(item or "").strip().casefold() for item in values) if value in allowed]
+
+
+def _has_structured_reminder_cue(text: str) -> bool:
+    return STRUCTURED_REMINDER_CUE_RE.search(str(text or "")) is not None
 
 
 def _parse_due_at(text: str, now: datetime) -> str:
