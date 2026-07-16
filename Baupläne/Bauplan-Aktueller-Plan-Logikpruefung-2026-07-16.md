@@ -1075,6 +1075,19 @@ Diagnose und Tests.
 - Code-Commit: `7ff3a0a3 fix: persist working memory metadata normalization`;
   kein Provider/API-Aufruf.
 
+### Working-Memory-Nested-Index-Schema
+
+- 2026-07-16: Die bisherige Validierung pruefte nur Container. Ein String
+  statt ID-Liste in einem Keyword-Bucket blieb gueltig und machte Treffer
+  still unsichtbar.
+- Keyword-Buckets, `recent_ids` und Entry-Metadaten werden jetzt bis zur
+  naechsten Strukturgrenze typgeprueft. Bei Fehler greift Quarantaene plus
+  JSONL-Rebuild; gueltige Entry-Rohdaten bleiben erhalten.
+- Regression parametrisiert ueber beide Stores: `tests/test_working_memory.py`:
+  `37 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `a565f51a fix: validate nested working memory indexes`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
