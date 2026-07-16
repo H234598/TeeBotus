@@ -85,6 +85,11 @@ def test_admin_instance_discovery_ignores_symlinked_instances_and_instructions(t
     assert accounts_report_module.discover_instances(instances_root) == ()
     assert accounts_report_module.discover_instances(instances_root, ("LinkedInstance", "../external-instance", "safe")) == ("safe",)
 
+    linked_root = tmp_path / "linked-root"
+    linked_root.symlink_to(instances_root, target_is_directory=True)
+    assert accounts_report_module.discover_instances(linked_root) == ()
+    assert accounts_report_module.discover_instances(linked_root, ("safe",)) == ()
+
 
 def test_memory_recovery_default_provider_uses_readonly_runtime_policy(monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_SECRET_TOOL_LOOKUP_RETRIES", "2")

@@ -113,7 +113,7 @@ def parse_csv(value: str | None) -> tuple[str, ...]:
 def discover_instances(instances_dir: Path, explicit: Sequence[str] = ()) -> tuple[str, ...]:
     if explicit:
         names = tuple(dict.fromkeys(str(name).strip() for name in explicit if str(name).strip()))
-        if instances_dir.is_symlink():
+        if _first_symlinked_path_component(instances_dir) is not None:
             return ()
         safe_names = []
         for name in names:
@@ -127,7 +127,7 @@ def discover_instances(instances_dir: Path, explicit: Sequence[str] = ()) -> tup
                 continue
             safe_names.append(name)
         return tuple(safe_names)
-    if instances_dir.is_symlink() or not instances_dir.exists():
+    if _first_symlinked_path_component(instances_dir) is not None or not instances_dir.exists():
         return ()
     try:
         candidates = list(instances_dir.iterdir())
@@ -143,6 +143,17 @@ def discover_instances(instances_dir: Path, explicit: Sequence[str] = ()) -> tup
             and not (path / BOT_INSTRUCTION_FILENAME).is_symlink()
         )
     )
+
+
+def _first_symlinked_path_component(path: Path) -> Path | None:
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    for candidate in (absolute, *absolute.parents):
+        try:
+            if candidate.is_symlink():
+                return candidate
+        except OSError:
+            return candidate
+    return None
 
 
 def build_accounts_admin_report(
