@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart sind aktuell `18/20` Commits vorhanden; naechster Restart
-  nach 2 weiteren Commits.
+  letzten Restart sind aktuell `20/20` Commits vorhanden; Restart jetzt
+  faellig.
 
 ## Aktueller Plan
 
@@ -632,6 +632,21 @@ Diagnose und Tests.
   `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `5db8d63a fix: snapshot fallback health diagnostics`.
 
+### Collection-Name-Fail-Closed
+
+- 2026-07-16: `read_collection_names()` gab bei einem fehlerhaften Primary
+  und fehlender Secondary `()` zurueck, obwohl die Primary-Datenbank existiert.
+  Aufrufer konnten dadurch „keine Collections“ annehmen und Memory-/State-
+  Daten ueberspringen.
+- Wenn beide Datenbanken wirklich uninitialisiert sind, bleibt leerer Start
+  erlaubt. Wenn Primary existiert, Secondary aber fehlt, wirft der Pfad jetzt
+  einen sichtbaren `AccountStoreError`; kein stiller leerer Snapshot.
+- Regression fuer fehlende Secondary bei vorhandener Primary sowie bestehende
+  Collection-Name-Reparatur: fokussiert `4 passed`, AccountStore komplett
+  `250 passed`. Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `e218298f fix: block unsafe collection name failover`.
+
 ### LLM-State-SQL/JSON-Audit
 
 - 2026-07-16: Biene Herschel meldete einen vorzeitigen SQL-Return in
@@ -1050,8 +1065,9 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `18/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 2 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `20/20` Commits; Restart jetzt
+faellig, kein Push ausgeloest. Nach dem Restart beginnt neuer Block bei
+`0/20`.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
