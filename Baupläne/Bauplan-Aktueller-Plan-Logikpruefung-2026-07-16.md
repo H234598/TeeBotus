@@ -2180,3 +2180,26 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `9/20` Code-Commits. Dieser
 Plan-Commit macht `10/20`; kein Push. Naechster Restart nach 10 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Proactive-DST-Zeitzone
+
+- 2026-07-16: Wiederkehrende Kalenderregeln speicherten nur den aktuellen
+  Offset. `_parse_proactive_datetime()` macht aus `Europe/Berlin`-Zeitstempeln
+  jedoch einen festen `+01:00`-Offset. Ein Reminder am 28. Maerz um 10:00
+  lief deshalb am Folgetag als 10:00 `+01:00` statt lokal 10:00 `+02:00`.
+- Neue wiederkehrende Items speichern den passenden IANA-Zeitzonennamen, wenn
+  der gespeicherte Offset zur konfigurierten Zone passt. Kalenderregeln
+  (`daily`, `weekdays`, `weekly`, Tage/Wochen/Monate) rechnen vor dem naechsten
+  Termin in dieser Zone; explizite UTC-Termine bleiben unveraendert UTC.
+- Bestehende Items ohne Zone erhalten den Anker beim ersten erfolgreichen
+  Versand, sofern `due_at` zur konfigurierten Zone passt. Unbekannte oder
+  unpassende Zonen fallen kontrolliert auf bisherigen Offset-Betrieb zurueck.
+- Regression: DST `+01 -> +02`, Queue-Persistenz und Monatsanker;
+  `tests/test_proactive_agent.py` -> `127 passed`; Reminder-/Engine-Fokus ->
+  `39 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `4d191384 fix: preserve recurrence timezone rules`.
+
+**Aktueller Laufstand:** Seit dem Restart `11/20` Code-Commits. Dieser
+Plan-Commit macht `12/20`; kein Push. Naechster Restart nach 8 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
