@@ -3240,6 +3240,41 @@ def test_month_recurrence_preserves_original_calendar_day_after_short_month() ->
     assert _advance_recurrence_due_at(jan_30, "monthly") == feb_28
 
 
+def test_calendar_recurrence_recomputes_dst_offset_from_stored_timezone() -> None:
+    item = {
+        "due_at": "2026-03-28T10:00:00+01:00",
+        "recurrence": "daily",
+        "recurrence_timezone": "Europe/Berlin",
+    }
+
+    assert _next_recurrence_due_at(item, "2026-03-28T10:00:00+01:00") == "2026-03-29T10:00:00+02:00"
+
+
+def test_queue_persists_matching_configured_recurrence_timezone(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_TIMEZONE", "Europe/Berlin")
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="user_requested_reminder",
+        message_text="Sommerzeit",
+        due_at="2026-03-28T10:00:00+01:00",
+        now=datetime(2026, 3, 27, 10, tzinfo=timezone.utc),
+        recurrence="daily",
+        user_requested=True,
+    )
+
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert decision.allowed is True
+    assert item["recurrence_timezone"] == "Europe/Berlin"
+
+
 def test_future_risk_memory_window_is_not_active_before_valid_from() -> None:
     now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
 

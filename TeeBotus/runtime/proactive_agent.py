@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 from inspect import isawaitable
 from typing import Any, Callable, Iterable, Mapping
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import ValidationError
 
@@ -24,7 +25,7 @@ from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import generated_file_to_outbox_payload, normalize_generated_file
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.notification_loudness import is_notification_loudness_outbox_item, notification_loudness_outbox_item_is_active
-from TeeBotus.runtime.timezone import local_now, to_local
+from TeeBotus.runtime.timezone import configured_timezone, local_now, to_local
 
 LOGGER = logging.getLogger("TeeBotus.runtime.proactive_agent")
 
@@ -415,8 +416,11 @@ def queue_proactive_message(
     normalized_recurrence = _normalize_recurrence_rule(recurrence)
     if normalized_recurrence:
         payload["recurrence"] = normalized_recurrence
+        anchor = _parse_proactive_datetime(str(due_at or "")) or resolved_now
+        recurrence_timezone = _recurrence_timezone_name(anchor)
+        if recurrence_timezone:
+            payload["recurrence_timezone"] = recurrence_timezone
         if _recurrence_uses_months(normalized_recurrence):
-            anchor = _parse_proactive_datetime(str(due_at or "")) or resolved_now
             payload["recurrence_anchor_day"] = anchor.day
             payload["recurrence_anchor_end_of_month"] = anchor.day == calendar.monthrange(anchor.year, anchor.month)[1]
     if file is not None:
@@ -1267,6 +1271,10 @@ def update_proactive_outbox_item_status(
                             item["recurrence_anchor_day"] = anchor.day
                         if "recurrence_anchor_end_of_month" not in item:
                             item["recurrence_anchor_end_of_month"] = anchor.day == calendar.monthrange(anchor.year, anchor.month)[1]
+                        if "recurrence_timezone" not in item:
+                            recurrence_timezone = _recurrence_timezone_name(anchor)
+                            if recurrence_timezone:
+                                item["recurrence_timezone"] = recurrence_timezone
                 next_due_at = _next_recurrence_due_at(item, timestamp)
                 if next_due_at:
                     item["status"] = "queued"
@@ -2751,6 +2759,27 @@ def _recurrence_uses_months(recurrence: str) -> bool:
     return bool(re.fullmatch(r"every\s+\d{1,3}\s+months", str(recurrence or "")))
 
 
+def _recurrence_timezone_name(value: datetime) -> str:
+    configured = configured_timezone()
+    name = str(getattr(configured, "key", "") or "").strip()
+    if not name or value.tzinfo is None:
+        return ""
+    try:
+        return name if value.utcoffset() == value.astimezone(configured).utcoffset() else ""
+    except (OverflowError, ValueError):
+        return ""
+
+
+def _stored_recurrence_timezone(item: Mapping[str, Any]) -> ZoneInfo | None:
+    name = str(item.get("recurrence_timezone") or "").strip()
+    if not name:
+        return None
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return None
+
+
 def _next_recurrence_due_at(item: Mapping[str, Any], sent_at: str) -> str:
     recurrence = _normalize_recurrence_rule(item.get("recurrence"))
     if not recurrence:
@@ -2773,6 +2802,14 @@ def _next_recurrence_due_at(item: Mapping[str, Any], sent_at: str) -> str:
             "days": timedelta(days=count),
             "weeks": timedelta(weeks=count),
         }[match.group("unit")]
+    month_match = re.fullmatch(r"every\s+\d{1,3}\s+months", recurrence)
+    calendar_recurrence = recurrence in {"daily", "weekdays", "weekly", "monthly"} or bool(
+        match and match.group("unit") in {"days", "weeks"}
+    ) or month_match is not None
+    recurrence_timezone = _stored_recurrence_timezone(item)
+    if calendar_recurrence and recurrence_timezone is not None:
+        base = base.astimezone(recurrence_timezone)
+        sent = sent.astimezone(recurrence_timezone)
     if fixed_interval is not None:
         periods = max(1, int((sent - base) // fixed_interval) + 1)
         return (base + fixed_interval * periods).isoformat(timespec="seconds")
