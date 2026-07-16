@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import subprocess
+import threading
 from contextlib import contextmanager
 from pathlib import Path
 from unittest.mock import patch
@@ -1239,6 +1240,58 @@ def test_merge_accounts_retry_after_identity_write_failure_is_idempotent(tmp_pat
     assert habits.count("## Merged from") == 1
     assert store.get_account_for_identity(source_identity) == target
     assert not (store.account_dir(source) / USER_MEMORY_ENTRIES_FILENAME).exists()
+
+
+def test_merge_accounts_locks_source_and_target_memory_during_read_merge_write(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider(), memory_backend_enabled=False)
+    target = store.resolve_or_create_account(telegram_identity_key(1))
+    source = store.resolve_or_create_account(signal_identity_key(source_uuid="locked-merge"))
+    store.write_memory_entries(source, [{"id": "mem_source", "text": "Quelle"}])
+    entered_merge = threading.Event()
+    release_merge = threading.Event()
+    append_started = threading.Event()
+    append_finished = threading.Event()
+    merge_errors: list[BaseException] = []
+    append_errors: list[BaseException] = []
+    original_merge_jsonl = store._merge_jsonl
+
+    def block_merge(source_path, target_path, *, vault):
+        entered_merge.set()
+        assert release_merge.wait(2)
+        return original_merge_jsonl(source_path, target_path, vault=vault)
+
+    def run_merge():
+        try:
+            store.merge_accounts(source, target)
+        except BaseException as exc:  # noqa: BLE001 - surface thread failures in assertions below.
+            merge_errors.append(exc)
+
+    def append_target_memory():
+        append_started.set()
+        try:
+            store.append_structured_memory_entry(target, {"id": "mem_concurrent", "text": "Parallel"})
+        except BaseException as exc:  # noqa: BLE001 - surface thread failures in assertions below.
+            append_errors.append(exc)
+        finally:
+            append_finished.set()
+
+    with patch.object(store, "_merge_jsonl", side_effect=block_merge):
+        merge_thread = threading.Thread(target=run_merge)
+        merge_thread.start()
+        assert entered_merge.wait(2)
+        append_thread = threading.Thread(target=append_target_memory)
+        append_thread.start()
+        assert append_started.wait(2)
+        assert not append_finished.wait(0.2)
+        release_merge.set()
+        merge_thread.join(2)
+        append_thread.join(2)
+
+    assert not merge_thread.is_alive()
+    assert not append_thread.is_alive()
+    assert not merge_errors
+    assert not append_errors
+    assert {row["id"] for row in store.read_memory_entries(target)} == {"mem_source", "mem_concurrent"}
 
 
 def test_merge_accounts_normalizes_source_before_retry_deduplication(tmp_path):

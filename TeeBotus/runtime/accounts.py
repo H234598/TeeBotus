@@ -1156,6 +1156,25 @@ def _serialize_account_memory(method: Callable[..., Any]) -> Callable[..., Any]:
     return wrapped
 
 
+def _serialize_account_memory_pair(method: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(method)
+    def wrapped(
+        self: "AccountStore",
+        source_account_id: str,
+        target_account_id: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Any:
+        account_ids = sorted({str(source_account_id), str(target_account_id)})
+        with self.account_memory_lock(account_ids[0]):
+            if len(account_ids) == 1:
+                return method(self, source_account_id, target_account_id, *args, **kwargs)
+            with self.account_memory_lock(account_ids[1]):
+                return method(self, source_account_id, target_account_id, *args, **kwargs)
+
+    return wrapped
+
+
 @contextmanager
 def account_memory_lock_for_root(root: Path, account_id: str) -> Iterator[None]:
     """Serialize account-memory/state operations for an AccountStore root."""
@@ -2154,6 +2173,7 @@ class AccountStore:
         return self.unlink_identity(key)
 
     @_serialize_identity_map
+    @_serialize_account_memory_pair
     def merge_accounts(self, source_account_id: str, target_account_id: str) -> None:
         source_account_id = validate_sha512_token(source_account_id, field_name="source_account_id")
         target_account_id = validate_sha512_token(target_account_id, field_name="target_account_id")
