@@ -935,8 +935,6 @@ class WarningFallbackAccountMemoryBackend:
         if stale_key in sync_failed or stale_key in unrecoverable:
             return True
         if operation.startswith("read_collection:"):
-            if account_id in self._failed_collection_name_reads:
-                return True
             wildcard_key = (account_id, "*")
             return wildcard_key in sync_failed or wildcard_key in unrecoverable
         return False
