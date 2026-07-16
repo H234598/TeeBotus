@@ -3004,3 +3004,21 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `18/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 2 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### SQLite-Snapshot-Ziel-exklusiv-reservieren
+
+- 2026-07-17: `_snapshot_sqlite_database()` legte das Ziel direkt per
+  `sqlite3.connect()` an. Ein bereits vorhandener Symlink im Quarantaene-
+  Verzeichnis konnte dadurch auf eine externe Datei zeigen; ein vorhandenes
+  Snapshot-Ziel wurde ausserdem still ueberschrieben.
+- Snapshot-Ziele werden jetzt vor dem SQLite-Backup mit `O_CREAT|O_EXCL`
+  exklusiv reserviert. Vorhandene Dateien und Symlinks blockieren; der externe
+  Zielinhalt bleibt unveraendert.
+- Regression: vorhandener Symlink als Snapshot-Ziel -> `2 passed` im
+  Snapshot-Fokus; komplette `tests/test_admin_accounts.py` -> `75 passed`.
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5f4826e0 fix: reserve sqlite snapshot destinations exclusively`.
+
+**Aktueller Laufstand:** Seit dem Restart `20/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart jetzt erforderlich. Naechster Push bleibt erst
+bei 100 Commits.
