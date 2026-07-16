@@ -38,13 +38,18 @@ def store(tmp_path) -> AccountStore:
     return AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"n" * 32))
 
 
-def event(identity_key: str, text: str = "Hallo") -> IncomingEvent:
-    return event_with_chat_type(identity_key, text=text, chat_type="private")
+def event(identity_key: str, text: str = "Hallo", event_id: str = "telegram:1") -> IncomingEvent:
+    return event_with_chat_type(identity_key, text=text, chat_type="private", event_id=event_id)
 
 
-def event_with_chat_type(identity_key: str, text: str = "Hallo", chat_type: str = "private") -> IncomingEvent:
+def event_with_chat_type(
+    identity_key: str,
+    text: str = "Hallo",
+    chat_type: str = "private",
+    event_id: str = "telegram:1",
+) -> IncomingEvent:
     return IncomingEvent(
-        event_id="telegram:1",
+        event_id=event_id,
         instance="Depressionsbot",
         channel="telegram",
         adapter_slot=1,
@@ -543,7 +548,12 @@ def test_scheduler_respects_adaptive_activity_profile_for_notification_loudness(
     identity = telegram_identity_key(1)
     account_id = prepare_account_with_route(account_store, identity)
     for day in (8, 9, 10, 11, 12, 15):
-        record_account_activity(account_store, account_id, event(identity, text="Morgens bin ich erreichbar."), now=datetime(2026, 6, day, 9, 0, tzinfo=LOCAL))
+        record_account_activity(
+            account_store,
+            account_id,
+            event(identity, text="Morgens bin ich erreichbar.", event_id=f"telegram:{day}"),
+            now=datetime(2026, 6, day, 9, 0, tzinfo=LOCAL),
+        )
     now = datetime(2026, 6, 15, 8, 0, tzinfo=LOCAL)
     assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=now) is not None
     late_same_day = datetime(2026, 6, 15, 17, 0, tzinfo=LOCAL)

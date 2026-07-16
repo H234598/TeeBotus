@@ -3582,10 +3582,12 @@ class AccountStore:
         except FileNotFoundError:
             return
 
+    @_serialize_account_memory
     def read_proactive_outbox(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         return self._read_account_jsonl_collection(account_id, PROACTIVE_OUTBOX_FILENAME, PROACTIVE_OUTBOX_COLLECTION)
 
+    @_serialize_account_memory
     def write_proactive_outbox(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._write_account_jsonl_collection(account_id, PROACTIVE_OUTBOX_FILENAME, PROACTIVE_OUTBOX_COLLECTION, list(rows))
@@ -3609,10 +3611,12 @@ class AccountStore:
             self.write_proactive_outbox(account_id, rows)
             return item_id
 
+    @_serialize_account_memory
     def read_proactive_audit(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         return self._read_account_jsonl_collection(account_id, PROACTIVE_AUDIT_FILENAME, PROACTIVE_AUDIT_COLLECTION)
 
+    @_serialize_account_memory
     def write_proactive_audit(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._write_account_jsonl_collection(account_id, PROACTIVE_AUDIT_FILENAME, PROACTIVE_AUDIT_COLLECTION, list(rows))
@@ -3634,6 +3638,7 @@ class AccountStore:
             self.write_proactive_audit(account_id, rows)
             return event_id
 
+    @_serialize_account_memory
     def read_proactive_dispatch_results(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         return self._read_account_jsonl_collection(
@@ -3642,6 +3647,7 @@ class AccountStore:
             PROACTIVE_DISPATCH_RESULTS_COLLECTION,
         )
 
+    @_serialize_account_memory
     def write_proactive_dispatch_results(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._write_account_jsonl_collection(
@@ -3678,6 +3684,7 @@ class AccountStore:
             self.write_proactive_dispatch_results(account_id, rows)
             return tuple(created_ids)
 
+    @_serialize_account_memory
     def read_status_auth_state(self, account_id: str) -> dict[str, Any]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         return self._read_account_json_document(
@@ -3687,16 +3694,19 @@ class AccountStore:
             {"schema_version": 1, "authorized": False},
         )
 
+    @_serialize_account_memory
     def write_status_auth_state(self, account_id: str, data: dict[str, Any]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         normalized = dict(data)
         normalized.setdefault("schema_version", 1)
         self._write_account_json_document(account_id, STATUS_AUTH_STATE_FILENAME, STATUS_AUTH_STATE_COLLECTION, normalized)
 
+    @_serialize_account_memory
     def read_status_outbox(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         return self._read_account_jsonl_collection(account_id, STATUS_OUTBOX_FILENAME, STATUS_OUTBOX_COLLECTION)
 
+    @_serialize_account_memory
     def write_status_outbox(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._write_account_jsonl_collection(account_id, STATUS_OUTBOX_FILENAME, STATUS_OUTBOX_COLLECTION, list(rows))
@@ -3720,6 +3730,7 @@ class AccountStore:
             self.write_status_outbox(account_id, rows)
             return item_id
 
+    @_serialize_account_memory
     def read_status_dispatch_results(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         return self._read_account_jsonl_collection(
@@ -3728,6 +3739,7 @@ class AccountStore:
             STATUS_DISPATCH_RESULTS_COLLECTION,
         )
 
+    @_serialize_account_memory
     def write_status_dispatch_results(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._write_account_jsonl_collection(
@@ -3764,14 +3776,17 @@ class AccountStore:
             self.write_status_dispatch_results(account_id, rows)
             return tuple(created_ids)
 
+    @_serialize_account_memory
     def read_codex_history_outbox(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         return self._read_account_jsonl_collection(account_id, CODEX_HISTORY_OUTBOX_FILENAME, CODEX_HISTORY_OUTBOX_COLLECTION)
 
+    @_serialize_account_memory
     def write_codex_history_outbox(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._write_account_jsonl_collection(account_id, CODEX_HISTORY_OUTBOX_FILENAME, CODEX_HISTORY_OUTBOX_COLLECTION, list(rows))
 
+    @_serialize_account_memory
     def replace_codex_history_outbox_item(self, account_id: str, item: dict[str, Any]) -> bool:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         item_id = str(item.get("id") or "").strip() if isinstance(item, dict) else ""
@@ -3806,6 +3821,7 @@ class AccountStore:
             self.write_codex_history_outbox(account_id, rows)
             return item_id
 
+    @_serialize_account_memory
     def read_codex_history_dispatch_results(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         return self._read_account_jsonl_collection(
@@ -3814,6 +3830,7 @@ class AccountStore:
             CODEX_HISTORY_DISPATCH_RESULTS_COLLECTION,
         )
 
+    @_serialize_account_memory
     def write_codex_history_dispatch_results(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._write_account_jsonl_collection(
@@ -3863,10 +3880,12 @@ class AccountStore:
             self.write_codex_history_dispatch_results(account_id, rows)
             return tuple(final_created_ids)
 
+    @_serialize_account_memory
     def read_codex_history_projects(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         return self._read_account_jsonl_collection(account_id, CODEX_HISTORY_PROJECTS_FILENAME, CODEX_HISTORY_PROJECTS_COLLECTION)
 
+    @_serialize_account_memory
     def write_codex_history_projects(self, account_id: str, rows: list[dict[str, Any]]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._write_account_jsonl_collection(account_id, CODEX_HISTORY_PROJECTS_FILENAME, CODEX_HISTORY_PROJECTS_COLLECTION, list(rows))
