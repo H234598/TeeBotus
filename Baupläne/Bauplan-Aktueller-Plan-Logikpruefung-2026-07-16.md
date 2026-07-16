@@ -1238,6 +1238,22 @@ Diagnose und Tests.
 - Code-Commit: `b00fcea1 fix: refuse partial account memory reads`;
   kein Provider/API-Aufruf.
 
+### Leere-Collection-Namen-im-Fallback
+
+- 2026-07-16: `WarningFallbackAccountMemoryBackend.read_collection_names()`
+  gab nach einem Primary-Ausfall eine leere Liste aus dem Secondary als
+  erfolgreichen Read zurueck. Damit konnten vorhandene SQL-Collections des
+  Primary unsichtbar werden; ein leerer Secondary ist kein Nachweis fuer einen
+  leeren Account.
+- Leere Secondary-Namen setzen den Account jetzt auf unsicheren Fallback-
+  Zustand, erzeugen `read_collection_names: fallback has no recoverable data`
+  und blockieren Folgezugriffe bis eine verifizierbare Liste vorliegt. Der
+  Sonderfall zweier wirklich nicht initialisierter Datenbanken bleibt erlaubt.
+- Regression: gesamte `tests/test_account_store.py` `258 passed`; Ruff,
+  `py_compile` und `git diff --check` gruen.
+- Code-Commit: `8dfa5a38 fix: block empty collection fallback`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -1277,8 +1293,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `14/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 8 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `16/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 4 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
