@@ -201,6 +201,26 @@ def test_parse_reminder_named_month_rejects_out_of_range_hour() -> None:
     assert intent.missing_time is True
 
 
+def test_parse_reminder_does_not_treat_decimal_subject_as_date() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich morgen um 9 an 1.5 Liter Wasser",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-06-16T09:00:00+00:00"
+    assert intent.subject == "1.5 Liter Wasser"
+
+
+def test_parse_reminder_does_not_treat_iso_subject_as_date() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich morgen um 9 an Version 2026-06-01",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-06-16T09:00:00+00:00"
+    assert intent.subject == "Version 2026-06-01"
+
+
 def test_parse_reminder_supports_trailing_dot_before_numeric_time() -> None:
     now = datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc)
 
