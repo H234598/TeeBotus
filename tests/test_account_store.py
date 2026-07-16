@@ -2976,6 +2976,33 @@ def test_account_collection_append_paths_refuse_partial_sql_rows(tmp_path):
     assert backend.write_calls == 0
 
 
+def test_sql_account_collection_merge_refuses_partial_rows(tmp_path):
+    class PartialReadCollectionBackend:
+        def __init__(self, partial_account: str) -> None:
+            self.partial_account = partial_account
+            self.last_collection_read_error = ""
+            self.last_collection_skipped = 0
+            self.write_calls = 0
+
+        def read_collection(self, account_id: str, _collection: str) -> list[dict[str, object]]:
+            self.last_collection_read_error = "one payload could not be decrypted" if account_id == self.partial_account else ""
+            self.last_collection_skipped = 1 if account_id == self.partial_account else 0
+            return [{"id": f"row-{account_id[0]}", "status": "queued"}]
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            self.write_calls += 1
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    source_account_id = "a" * 128
+    target_account_id = "b" * 128
+    for partial_account in (source_account_id, target_account_id):
+        backend = PartialReadCollectionBackend(partial_account)
+        store._account_memory_backend = backend
+        with pytest.raises(AccountStoreError, match="collection.*unreadable"):
+            store._merge_sql_account_memory_collections(backend, source_account_id, target_account_id)
+        assert backend.write_calls == 0
+
+
 def test_account_jsonl_collection_keeps_legacy_after_silent_readback_loss(tmp_path):
     class SilentReadbackLossBackend:
         last_collection_read_error = ""

@@ -2309,7 +2309,15 @@ class AccountStore:
         )
         for collection, reader, writer in jsonl_collections:
             source_rows = reader(source_account_id)
+            self._raise_if_account_memory_collection_unreadable(
+                collection,
+                "cannot merge source account memory",
+            )
             target_rows = reader(target_account_id)
+            self._raise_if_account_memory_collection_unreadable(
+                collection,
+                "cannot merge target account memory",
+            )
             merged_rows = _merge_account_jsonl_rows(target_rows, source_rows)
             if merged_rows != target_rows:
                 writer(target_account_id, merged_rows)
