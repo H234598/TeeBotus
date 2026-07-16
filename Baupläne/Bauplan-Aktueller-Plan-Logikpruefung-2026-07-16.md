@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit letztem
-  Restart sind aktuell `18/20` Commits vorhanden; naechster Restart nach 2
-  weiteren Commits.
+  Restart sind aktuell `19/20` Commits vorhanden; naechster Restart nach dem
+  Plan-Commit.
 
 ## Aktueller Plan
 
@@ -315,6 +315,22 @@ Diagnose und Tests.
   `tests/test_notification_loudness.py` `164 passed in 11.72s`; Ruff,
   `py_compile` und `git diff --check` gruen. Commit:
   `6a30a0f1 fix: recover loudness wake window from outbox`.
+
+### Activity-Profile und Poller-Replay
+
+- 2026-07-16: Der Audit fand einen At-least-once-Fehler im Aktivitaetsprofil.
+  Telegram-, Signal- und Matrix-Events tragen stabile `event_id`s. Nach einem
+  Poller-/Dispatch-Replay wurde dieselbe Nachricht erneut als Aktivitaet
+  gespeichert und konnte Wach-/Ruhezeitprofile messbar verfaelschen.
+- `record_account_activity()` speichert die `event_id` mit jeder neuen
+  Beobachtung und ignoriert bereits vorhandene IDs im selben Profil. Alte
+  Beobachtungen ohne ID bleiben lesbar; das Verhalten ist damit
+  rueckwaertskompatibel.
+- Replay-Regression ergaenzt. `tests/test_activity_profile.py`: `13 passed in
+  0.80s`; `py_compile` und `git diff --check` gruen. Code-Commit:
+  `be4ce9d9 fix: deduplicate replayed activity events`.
+- Nach dem folgenden Plan-Commit steht der Zaehler bei `20/20`; danach ist der
+  vereinbarte lokale Bot-/Service-Restart auszufuehren.
 
 ## Akzeptanzkriterien
 
