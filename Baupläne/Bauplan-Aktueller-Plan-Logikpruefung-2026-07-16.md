@@ -3110,3 +3110,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Recovery-Iterator-Race-im-try
+
+- 2026-07-17: Der erste Directory-Race-Guard fing nur Fehler beim Aufruf von
+  `Path.iterdir()` ab. `iterdir()` liefert aber lazy Generator; der eigentliche
+  `OSError` kann erst beim `update()`/Iterieren auftreten.
+- Discovery materialisiert Accountdirs jetzt innerhalb des `try`-Blocks.
+  Race bleibt leere Quelle; Metadata-Recovery bleibt unsicher und blockiert
+  Apply.
+- Regression: Fehler erst beim Generator-Iterieren -> `1 passed` Fokus;
+  komplette `tests/test_admin_accounts.py` -> `81 passed`. Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `51b45353 fix: catch iterator races during account discovery`.
+
+**Aktueller Laufstand:** Seit dem Restart `12/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 8 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
