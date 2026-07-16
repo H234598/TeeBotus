@@ -1579,6 +1579,36 @@ def test_unlink_identity_marks_orphaned_when_last_identity_removed(tmp_path):
     assert summary["linked_identities"] == []
 
 
+def test_account_summary_holds_identity_lock_for_profile_snapshot(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    identity_key = telegram_identity_key(1)
+    account_id = store.resolve_or_create_account(identity_key)
+    lock_states: list[bool] = []
+    original_read_profile = store._read_account_profile
+
+    @contextmanager
+    def recording_lock():
+        lock_states.append(True)
+        try:
+            yield
+        finally:
+            lock_states.pop()
+
+    def read_profile(profile_account_id):
+        assert lock_states == [True]
+        return original_read_profile(profile_account_id)
+
+    with patch.object(store, "account_identity_lock", recording_lock), patch.object(
+        store,
+        "_read_account_profile",
+        side_effect=read_profile,
+    ):
+        summary = store.account_summary(account_id)
+
+    assert summary["account_id"] == account_id
+    assert lock_states == []
+
+
 @pytest.mark.parametrize(
     ("failing_method", "error_text"),
     [

@@ -2327,6 +2327,7 @@ class AccountStore:
             if merged_data != target_data:
                 writer(target_account_id, merged_data)
 
+    @_serialize_identity_map
     def account_summary(self, account_id: str) -> dict[str, Any]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
