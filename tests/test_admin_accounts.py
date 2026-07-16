@@ -893,6 +893,28 @@ def test_memory_recovery_accounts_directory_race_stays_fail_closed(monkeypatch, 
     ]
 
 
+def test_memory_recovery_metadata_probe_errors_block_apply(monkeypatch, tmp_path: Path) -> None:
+    make_instance(tmp_path)
+
+    def probe_error(*_args, **_kwargs):
+        raise OSError("metadata source disappeared")
+
+    monkeypatch.setattr(account_memory_recovery_module, "_unreadable_metadata_items", probe_error)
+
+    result = quarantine_unreadable_account_metadata(
+        instances_dir=tmp_path,
+        provider=provider(),
+        apply=True,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[],
+    )
+
+    assert result["status"] == "blocked"
+    assert result["instances"][0]["status"] == "blocked"
+    assert result["instances"][0]["items"][0]["error"] == "metadata source disappeared"
+    assert not (tmp_path / "quarantine").exists()
+
+
 def test_memory_recovery_report_counts_sqlite_collections_and_skips_instance_state_account(tmp_path: Path, monkeypatch) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"

@@ -462,7 +462,10 @@ def _quarantine_instance_unreadable_metadata(
         if quarantine_dir is not None
         else accounts_root / "Account_Metadata_Quarantine" / timestamp
     )
-    items = _unreadable_metadata_items(accounts_root, instance_name, provider)
+    try:
+        items = _unreadable_metadata_items(accounts_root, instance_name, provider)
+    except (AccountStoreError, OSError) as exc:
+        items = [{"kind": "account_store", "path": accounts_root, "error": str(exc)}]
     result: dict[str, Any] = {
         "instance": instance_name,
         "accounts_root": str(accounts_root),
@@ -694,7 +697,7 @@ def _unreadable_metadata_items(accounts_root: Path, instance_name: str, provider
 def _metadata_health_report(accounts_root: Path, instance_name: str, provider: InstanceSecretProvider) -> dict[str, Any]:
     try:
         items = _unreadable_metadata_items(accounts_root, instance_name, provider)
-    except AccountStoreError as exc:
+    except (AccountStoreError, OSError) as exc:
         items = [{"kind": "account_store", "path": accounts_root, "error": str(exc)}]
     normalized_items = []
     for item in items:
