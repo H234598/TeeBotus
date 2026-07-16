@@ -563,6 +563,19 @@ Diagnose und Tests.
   `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `64b00d15 fix: serialize account listing reads`.
 
+### Status-Memory-Size-Snapshot
+
+- 2026-07-16: `account_memory_payload_size()` las Entries und Index in zwei
+  getrennten Reads. Parallel laufende Memory-Writes oder Rebuilds konnten
+  dadurch fuer `/status` einen gemischten Payload-Snapshot liefern.
+- Entries- und Index-Read laufen jetzt unter demselben reentranten
+  Account-Memory-Lock. Backend-Diagnose und Serialisierung bleiben innerhalb
+  desselben Snapshots; der Legacy-Dateifallback bleibt unveraendert.
+- Regression prueft beide Reads unter gehaltenem Lock; fokussiert `2 passed`.
+  Komplette `tests/test_engine_identity_flows.py`: `184 passed`. Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a3a211e4 fix: serialize status memory size snapshot`.
+
 ### LLM-State-SQL/JSON-Audit
 
 - 2026-07-16: Biene Herschel meldete einen vorzeitigen SQL-Return in
@@ -981,8 +994,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `10/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 10 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `12/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 8 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
