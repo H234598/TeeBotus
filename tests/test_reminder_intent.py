@@ -385,6 +385,27 @@ def test_classic_monthly_day_28_is_not_inferred_as_month_end(tmp_path, monkeypat
     assert item["recurrence_anchor_end_of_month"] is False
 
 
+def test_month_interval_without_explicit_day_keeps_start_day(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+
+    maybe_queue_natural_reminder(
+        account_store=account_store,
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        text="Erinnere mich alle 1 Monate an die Abrechnung",
+        now=datetime(2026, 1, 28, 12, 0, tzinfo=timezone.utc),
+    )
+
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["due_at"] == "2026-02-28T12:00:00+00:00"
+    assert item["recurrence_anchor_day"] == 28
+    assert item["recurrence_anchor_end_of_month"] is False
+
+
 def test_structured_reminder_fallback_interprets_naive_datetime_as_configured_local_time(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
     monkeypatch.setattr(

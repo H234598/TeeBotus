@@ -223,7 +223,7 @@ def parse_reminder_intent(text: str, *, now: datetime | None = None) -> Reminder
     if not due_at and recurrence.startswith("every ") and not _has_invalid_explicit_time(raw):
         due_at = _initial_interval_due(normalized_now, recurrence)
     subject = _reminder_subject(raw)
-    anchor_day, anchor_end_of_month = _recurrence_anchor_from_text(raw, recurrence)
+    anchor_day, anchor_end_of_month = _recurrence_anchor_from_text(raw, recurrence, fallback=normalized_now)
     return ReminderIntent(
         True,
         due_at=due_at,
@@ -255,7 +255,7 @@ def _structured_reminder_intent(
         return ReminderIntent(False)
     subject = decision.text.strip() or "deinen Termin"
     recurrence = str(decision.recurrence or "").strip()
-    anchor_day, anchor_end_of_month = _recurrence_anchor_from_text(raw, recurrence)
+    anchor_day, anchor_end_of_month = _recurrence_anchor_from_text(raw, recurrence, fallback=resolved_now)
     if not decision.datetime_iso:
         return ReminderIntent(
             True,
@@ -629,7 +629,12 @@ def _parse_recurrence(text: str) -> str:
     return f"every {count} {normalized_unit}"
 
 
-def _recurrence_anchor_from_text(text: str, recurrence: str) -> tuple[int | None, bool | None]:
+def _recurrence_anchor_from_text(
+    text: str,
+    recurrence: str,
+    *,
+    fallback: datetime | None = None,
+) -> tuple[int | None, bool | None]:
     normalized_recurrence = str(recurrence or "").strip().casefold()
     if normalized_recurrence != "monthly" and not re.fullmatch(r"every\s+\d{1,3}\s+months", normalized_recurrence):
         return None, None
@@ -644,6 +649,8 @@ def _recurrence_anchor_from_text(text: str, recurrence: str) -> tuple[int | None
             continue
         if 1 <= day <= 31:
             return day, day == 31
+    if fallback is not None:
+        return fallback.day, fallback.day == calendar.monthrange(fallback.year, fallback.month)[1]
     return None, None
 
 
