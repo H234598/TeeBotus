@@ -580,7 +580,10 @@ class SQLiteAccountMemoryBackend:
                         ordinal,
                     ),
                 )
-                return int(updated.rowcount or 0) > 0
+                replaced = int(updated.rowcount or 0) > 0
+        if replaced:
+            self._clear_write_diagnostics("collection")
+        return replaced
 
     def read_collection_names(self, account_id: str) -> tuple[str, ...]:
         self.last_collection_read_error = ""

@@ -3861,6 +3861,30 @@ def test_sqlite_empty_entry_id_read_clears_previous_diagnostics(tmp_path):
     assert backend.last_database_missing is False
 
 
+def test_sqlite_replace_collection_item_clears_previous_diagnostics(tmp_path):
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=tmp_path / "memory.sqlite3", fallback_path=None),
+    )
+    account_id = "a" * 128
+    backend.write_collection(account_id, "status_outbox", [{"id": "row_1", "status": "pending"}])
+    backend.last_collection_read_error = "stale error"
+    backend.last_collection_skipped = 2
+    backend.last_database_missing = True
+
+    assert backend.replace_collection_item(
+        account_id,
+        "status_outbox",
+        "row_1",
+        {"id": "row_1", "status": "sent"},
+    ) is True
+    assert backend.last_collection_read_error == ""
+    assert backend.last_collection_skipped == 0
+    assert backend.last_database_missing is False
+
+
 def test_account_memory_fallback_empty_entry_id_read_clears_previous_diagnostics() -> None:
     backend = WarningFallbackAccountMemoryBackend(object(), object(), label="Demo:sqlite")
     backend.last_entry_read_error = "stale error"

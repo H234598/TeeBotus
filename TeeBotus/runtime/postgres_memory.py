@@ -428,7 +428,10 @@ class PostgresAccountMemoryBackend:
                         ordinal,
                     ),
                 )
-                return int(updated.rowcount or 0) > 0
+                replaced = int(updated.rowcount or 0) > 0
+        if replaced:
+            self._clear_write_diagnostics("collection")
+        return replaced
 
     @_retry_after_missing_schema
     def read_collection_names(self, account_id: str) -> tuple[str, ...]:
