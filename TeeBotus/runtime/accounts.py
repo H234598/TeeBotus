@@ -3322,6 +3322,7 @@ class AccountStore:
     def write_openai_state(self, account_id: str, data: dict[str, Any]) -> None:
         self.write_llm_state(account_id, data)
 
+    @_serialize_account_memory
     def read_agent_state(self, account_id: str) -> dict[str, Any]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         if self._account_memory_collection_backend_available():
@@ -3340,6 +3341,7 @@ class AccountStore:
                 raise
         return self._read_json_with_fallback(self.account_dir(account_id) / AGENT_STATE_FILENAME, {}, vault=self.account_memory_vault)
 
+    @_serialize_account_memory
     def write_agent_state(self, account_id: str, data: dict[str, Any]) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         if self._account_memory_collection_backend_available():
