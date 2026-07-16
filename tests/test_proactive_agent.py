@@ -2779,6 +2779,89 @@ def test_dispatch_due_proactive_items_sends_with_mocked_channel_and_tracks_ref(t
     assert refs[0].ref_kind == "signal_timestamp"
 
 
+def test_dispatch_survives_post_send_outbox_persistence_error(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Persistenztest",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    original_write = account_store.write_proactive_outbox
+    failed = False
+
+    def fail_sent_write(target_account_id, rows):
+        nonlocal failed
+        if not failed and any(item.get("status") == "sent" for item in rows if isinstance(item, dict)):
+            failed = True
+            raise OSError("simulated outbox write failure")
+        return original_write(target_account_id, rows)
+
+    monkeypatch.setattr(account_store, "write_proactive_outbox", fail_sent_write)
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda _route, _action, _item: "sent-ref"},
+            now=now,
+        )
+    )
+
+    assert len(results) == 1
+    assert results[0].item_id == queued.reason.removeprefix("queued:")
+    assert results[0].status == "failed"
+    assert results[0].reason == "status_update_failed"
+    assert results[0].message_ref == "sent-ref"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "dispatching"
+
+
+def test_dispatch_keeps_sent_result_when_message_tracking_fails(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Tracker-Test",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    tracker = MessageTracker(tmp_path / "refs.json")
+
+    def fail_record(_ref):
+        raise OSError("simulated tracker write failure")
+
+    monkeypatch.setattr(tracker, "record", fail_record)
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda _route, _action, _item: "sent-ref"},
+            now=now,
+            message_tracker=tracker,
+        )
+    )
+
+    assert results[0].status == "sent"
+    assert results[0].message_ref == "sent-ref"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "sent"
+
+
 def test_dispatch_claim_prevents_nested_worker_from_sending_same_item(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

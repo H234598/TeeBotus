@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import calendar
@@ -24,6 +25,8 @@ from TeeBotus.runtime.file_artifacts import generated_file_to_outbox_payload, no
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.notification_loudness import is_notification_loudness_outbox_item, notification_loudness_outbox_item_is_active
 from TeeBotus.runtime.timezone import local_now, to_local
+
+LOGGER = logging.getLogger("TeeBotus.runtime.proactive_agent")
 
 PROACTIVE_COMMANDS = {"/proactive", "/agent", "/proaktiv"}
 PROACTIVE_ALLOWED_CATEGORIES = frozenset({"reminder", "task", "tip", "test", "image", "analysis", "reflection"})
@@ -1484,26 +1487,49 @@ async def dispatch_due_proactive_outbox_items(
             continue
         message_ref = _normalize_sent_ref(sent_ref)
         dispatch_meta = {"channel": channel, "chat_id": chat_id, "message_ref": message_ref}
-        if not update_proactive_outbox_item_status(
-            account_store,
-            account_id,
-            item_id,
-            status="sent",
-            reason="sent",
-            now=resolved_now,
-            dispatch=dispatch_meta,
-            expected_status="dispatching",
-        ):
+        try:
+            status_updated = update_proactive_outbox_item_status(
+                account_store,
+                account_id,
+                item_id,
+                status="sent",
+                reason="sent",
+                now=resolved_now,
+                dispatch=dispatch_meta,
+                expected_status="dispatching",
+            )
+        except Exception:  # pragma: no cover - concrete storage failures vary by backend
+            LOGGER.exception(
+                "Proactive outbox status persistence failed after external delivery "
+                "account=%s item=%s channel=%s message_ref=%s; lease recovery remains active.",
+                account_id,
+                item_id,
+                channel,
+                message_ref,
+            )
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", "status_update_failed", channel, message_ref))
             continue
-        _record_proactive_sent_ref(
-            message_tracker,
-            instance_name=instance_name or account_store.instance_name,
-            account_id=account_id,
-            channel=channel,
-            chat_id=chat_id,
-            message_ref=message_ref,
-        )
+        if not status_updated:
+            results.append(ProactiveDispatchResult(account_id, item_id, "failed", "status_update_failed", channel, message_ref))
+            continue
+        try:
+            _record_proactive_sent_ref(
+                message_tracker,
+                instance_name=instance_name or account_store.instance_name,
+                account_id=account_id,
+                channel=channel,
+                chat_id=chat_id,
+                message_ref=message_ref,
+            )
+        except Exception:  # pragma: no cover - tracker storage failures vary by backend
+            LOGGER.exception(
+                "Proactive sent-message tracking failed after delivery "
+                "account=%s item=%s channel=%s message_ref=%s; outbox remains sent.",
+                account_id,
+                item_id,
+                channel,
+                message_ref,
+            )
         results.append(ProactiveDispatchResult(account_id, item_id, "sent", "sent", channel, message_ref))
     return tuple(results)
 
