@@ -2139,6 +2139,25 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 Plan-Commit macht `6/20`; kein Push. Naechster Restart nach 14 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### Proactive-Tageslimit-bei-Wiederholungen
+
+- 2026-07-16: Nach erfolgreichem Versand wird eine wiederkehrende Erinnerung
+  als dieselbe `queued`-Outbox-Zeile mit neuem `due_at` weitergefuehrt. Die
+  Tageszaehlung bevorzugte jedoch altes `sent_at` und uebersah dadurch die
+  naechste faellige Wiederholung als Tagesreservierung.
+- Die Zaehllogik nutzt fuer `sent` den Versandtag, fuer `queued` und
+  `dispatching` den Faelligkeitstag; bei wiederkehrenden Zeilen wird der
+  aktuelle Versandtag zusaetzlich beruecksichtigt. Damit blockiert eine
+  faellige Wiederholung keine weitere Nachricht zu spaet.
+- Regression: Wiederholungszeile mit Folgetermin am aktuellen Tag blockiert
+  zweite Nachricht bei `max_messages_per_day=1`; Fokus -> `4 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `887c85cb fix: count recurring reminders in daily limits`.
+
+**Aktueller Laufstand:** Seit dem Restart `10/20` Code-Commits. Dieser
+Plan-Commit macht `11/20`; kein Push. Naechster Restart nach 9 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
+
 ### RouteTo-Purpose-Ziel
 
 - 2026-07-16: Explorer-Biene fand widerspruechliche Discovery. Die
