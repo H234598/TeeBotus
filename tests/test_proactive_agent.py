@@ -3212,6 +3212,34 @@ def test_recurrence_catches_up_fixed_intervals_after_long_dispatch_delay() -> No
     assert _next_recurrence_due_at({**base_item, "recurrence": "daily"}, sent_at) == "2026-07-03T00:00:00+00:00"
 
 
+def test_month_recurrence_preserves_original_calendar_day_after_short_month() -> None:
+    feb_28 = datetime(2026, 2, 28, 9, tzinfo=timezone.utc)
+    jan_30 = datetime(2026, 1, 30, 9, tzinfo=timezone.utc)
+
+    assert _next_recurrence_due_at(
+        {
+            "due_at": "2026-01-31T09:00:00+00:00",
+            "recurrence": "monthly",
+            "recurrence_anchor_day": 31,
+            "recurrence_anchor_end_of_month": True,
+        },
+        "2026-01-31T09:00:00+00:00",
+    ) == "2026-02-28T09:00:00+00:00"
+    assert _advance_recurrence_due_at(
+        feb_28,
+        "monthly",
+        anchor_day=31,
+        anchor_end_of_month=True,
+    ) == datetime(2026, 3, 31, 9, tzinfo=timezone.utc)
+    assert _advance_recurrence_due_at(
+        datetime(2026, 2, 28, 9, tzinfo=timezone.utc),
+        "monthly",
+        anchor_day=30,
+        anchor_end_of_month=False,
+    ) == datetime(2026, 3, 30, 9, tzinfo=timezone.utc)
+    assert _advance_recurrence_due_at(jan_30, "monthly") == feb_28
+
+
 def test_future_risk_memory_window_is_not_active_before_valid_from() -> None:
     now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
 

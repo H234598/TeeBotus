@@ -415,6 +415,10 @@ def queue_proactive_message(
     normalized_recurrence = _normalize_recurrence_rule(recurrence)
     if normalized_recurrence:
         payload["recurrence"] = normalized_recurrence
+        if _recurrence_uses_months(normalized_recurrence):
+            anchor = _parse_proactive_datetime(str(due_at or "")) or resolved_now
+            payload["recurrence_anchor_day"] = anchor.day
+            payload["recurrence_anchor_end_of_month"] = anchor.day == calendar.monthrange(anchor.year, anchor.month)[1]
     if file is not None:
         generated_file = normalize_generated_file(file)
         if generated_file is None:
@@ -1254,6 +1258,15 @@ def update_proactive_outbox_item_status(
                 item["status_history"] = history
             history.append({"at": timestamp, "status": normalized_status, "reason": str(reason or "").strip()})
             if normalized_status == "sent":
+                recurrence = _normalize_recurrence_rule(item.get("recurrence"))
+                if _recurrence_uses_months(recurrence):
+                    anchor = _parse_proactive_datetime(str(item.get("due_at") or "")) or _parse_proactive_datetime(timestamp)
+                    if anchor is not None:
+                        anchor_day = _normalize_int(item.get("recurrence_anchor_day"), default=0)
+                        if not 1 <= anchor_day <= 31:
+                            item["recurrence_anchor_day"] = anchor.day
+                        if "recurrence_anchor_end_of_month" not in item:
+                            item["recurrence_anchor_end_of_month"] = anchor.day == calendar.monthrange(anchor.year, anchor.month)[1]
                 next_due_at = _next_recurrence_due_at(item, timestamp)
                 if next_due_at:
                     item["status"] = "queued"
@@ -2732,6 +2745,12 @@ def _normalize_recurrence_rule(value: object) -> str:
     return f"every {count} {normalized_unit}"
 
 
+def _recurrence_uses_months(recurrence: str) -> bool:
+    if recurrence == "monthly":
+        return True
+    return bool(re.fullmatch(r"every\s+\d{1,3}\s+months", str(recurrence or "")))
+
+
 def _next_recurrence_due_at(item: Mapping[str, Any], sent_at: str) -> str:
     recurrence = _normalize_recurrence_rule(item.get("recurrence"))
     if not recurrence:
@@ -2758,16 +2777,41 @@ def _next_recurrence_due_at(item: Mapping[str, Any], sent_at: str) -> str:
         periods = max(1, int((sent - base) // fixed_interval) + 1)
         return (base + fixed_interval * periods).isoformat(timespec="seconds")
 
-    next_due = _advance_recurrence_due_at(base, recurrence)
+    anchor_day: int | None = None
+    anchor_end_of_month: bool | None = None
+    if _recurrence_uses_months(recurrence):
+        candidate_day = _normalize_int(item.get("recurrence_anchor_day"), default=0)
+        anchor_day = candidate_day if 1 <= candidate_day <= 31 else base.day
+        anchor_end_of_month = _normalize_bool(
+            item.get("recurrence_anchor_end_of_month"),
+            default=base.day == calendar.monthrange(base.year, base.month)[1],
+        )
+    next_due = _advance_recurrence_due_at(
+        base,
+        recurrence,
+        anchor_day=anchor_day,
+        anchor_end_of_month=anchor_end_of_month,
+    )
     while next_due is not None and next_due <= sent:
-        following_due = _advance_recurrence_due_at(next_due, recurrence)
+        following_due = _advance_recurrence_due_at(
+            next_due,
+            recurrence,
+            anchor_day=anchor_day,
+            anchor_end_of_month=anchor_end_of_month,
+        )
         if following_due is None or following_due <= next_due:
             return ""
         next_due = following_due
     return next_due.isoformat(timespec="seconds") if next_due is not None else ""
 
 
-def _advance_recurrence_due_at(base: datetime, recurrence: str) -> datetime | None:
+def _advance_recurrence_due_at(
+    base: datetime,
+    recurrence: str,
+    *,
+    anchor_day: int | None = None,
+    anchor_end_of_month: bool | None = None,
+) -> datetime | None:
     if recurrence == "daily":
         return base + timedelta(days=1)
     if recurrence == "weekdays":
@@ -2778,7 +2822,7 @@ def _advance_recurrence_due_at(base: datetime, recurrence: str) -> datetime | No
     if recurrence == "weekly":
         return base + timedelta(weeks=1)
     if recurrence == "monthly":
-        return _add_month(base)
+        return _add_month(base, anchor_day=anchor_day, anchor_end_of_month=anchor_end_of_month)
     match = re.fullmatch(r"every\s+(?P<count>\d{1,3})\s+(?P<unit>minutes|hours|days|weeks|months)", recurrence)
     if not match:
         return None
@@ -2792,14 +2836,27 @@ def _advance_recurrence_due_at(base: datetime, recurrence: str) -> datetime | No
         return base + timedelta(days=count)
     if unit == "weeks":
         return base + timedelta(weeks=count)
-    return _add_month(base, count)
+    return _add_month(base, count, anchor_day=anchor_day, anchor_end_of_month=anchor_end_of_month)
 
 
-def _add_month(value: datetime, count: int = 1) -> datetime:
+def _add_month(
+    value: datetime,
+    count: int = 1,
+    *,
+    anchor_day: int | None = None,
+    anchor_end_of_month: bool | None = None,
+) -> datetime:
     month = value.month + count
     year = value.year + (month - 1) // 12
     month = ((month - 1) % 12) + 1
-    day = min(value.day, calendar.monthrange(year, month)[1])
+    last_day = calendar.monthrange(year, month)[1]
+    target_day = anchor_day if anchor_day is not None and 1 <= anchor_day <= 31 else value.day
+    preserve_end_of_month = (
+        anchor_end_of_month
+        if anchor_end_of_month is not None
+        else value.day == calendar.monthrange(value.year, value.month)[1]
+    )
+    day = last_day if preserve_end_of_month else min(target_day, last_day)
     return value.replace(year=year, month=month, day=day)
 
 
