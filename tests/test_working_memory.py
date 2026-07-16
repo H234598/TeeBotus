@@ -150,6 +150,33 @@ def test_working_memory_prepare_persists_metadata_normalization(tmp_path, store_
 
 
 @pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
+def test_working_memory_prepare_rebuilds_nested_malformed_index(tmp_path, store_class):
+    instances_dir = tmp_path / "instances"
+    store = store_class("Depressionsbot", instances_dir)
+    memory_id = store.append_manual("Architekturfragen zuerst strukturieren.")
+    index_path = store.ensure()
+    index_path.write_text(
+        json.dumps(
+            {
+                "scope": "instance",
+                "index": {
+                    "keywords": {"architekturfragen": memory_id},
+                    "recent_ids": [memory_id],
+                    "entries": {},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    record = store.prepare("Architekturfragen")
+
+    assert record.selected_ids == (memory_id,)
+    assert "Architekturfragen" in record.prompt_text
+    assert len(list(index_path.parent.glob("Working_Memorys.json.corrupt.*"))) == 1
+
+
+@pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
 def test_working_memory_invalid_utf8_index_is_preserved(tmp_path, caplog, store_class):
     instances_dir = tmp_path / "instances"
     index_path = instances_dir / "Depressionsbot" / "data" / "Working_Memorys.json"

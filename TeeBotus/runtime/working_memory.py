@@ -195,16 +195,7 @@ class WorkingMemoryStore:
             payload = _new_working_memory_data(self.instance_name)
             repaired = True
         index = payload.get("index")
-        invalid_index = "index" in payload and not isinstance(index, dict)
-        if isinstance(index, dict):
-            invalid_index = any(
-                key in index and not isinstance(index[key], expected_type)
-                for key, expected_type in (
-                    ("keywords", dict),
-                    ("recent_ids", list),
-                    ("entries", dict),
-                )
-            )
+        invalid_index = "index" in payload and _working_memory_index_is_invalid(index)
         if invalid_index:
             backup_path = _move_corrupt_json_file(path)
             LOGGER.warning(
@@ -397,6 +388,29 @@ def _rebuild_working_memory_data(entries_path: Path, instance_name: str) -> dict
     if skipped:
         LOGGER.warning("Skipped %d invalid instance working memory JSONL entries in %s.", skipped, entries_path)
     return data
+
+
+def _working_memory_index_is_invalid(index: Any) -> bool:
+    if not isinstance(index, dict):
+        return True
+    if "keywords" in index:
+        keyword_index = index["keywords"]
+        if not isinstance(keyword_index, dict):
+            return True
+        if any(
+            not isinstance(memory_ids, list) or any(not isinstance(memory_id, str) for memory_id in memory_ids)
+            for memory_ids in keyword_index.values()
+        ):
+            return True
+    if "recent_ids" in index:
+        recent_ids = index["recent_ids"]
+        if not isinstance(recent_ids, list) or any(not isinstance(memory_id, str) for memory_id in recent_ids):
+            return True
+    if "entries" in index:
+        entries = index["entries"]
+        if not isinstance(entries, dict) or any(not isinstance(metadata, dict) for metadata in entries.values()):
+            return True
+    return False
 
 
 def _store_working_memory_entry(index_path: Path, data: dict[str, Any], entry: dict[str, Any]) -> int:
