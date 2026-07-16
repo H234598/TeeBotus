@@ -408,7 +408,24 @@ def _working_memory_index_is_invalid(index: Any) -> bool:
             return True
     if "entries" in index:
         entries = index["entries"]
-        if not isinstance(entries, dict) or any(not isinstance(metadata, dict) for metadata in entries.values()):
+        if not isinstance(entries, dict) or any(
+            not isinstance(metadata, dict) or _working_memory_entry_metadata_is_invalid(metadata)
+            for metadata in entries.values()
+        ):
+            return True
+    return False
+
+
+def _working_memory_entry_metadata_is_invalid(metadata: dict[str, Any]) -> bool:
+    for field in ("offset", "length"):
+        value = metadata.get(field)
+        if isinstance(value, bool) or value is None:
+            return True
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            return True
+        if number < 0 or (field == "length" and number == 0):
             return True
     return False
 
