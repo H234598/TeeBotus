@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import pytest
 
@@ -17,6 +19,8 @@ from TeeBotus.core.version_notifications import (
     github_repo_url,
     notify_recent_telegram_users_for_version,
     recent_telegram_recipients,
+    _clear_sql_state_collection,
+    _sql_state_collection_has_rows,
 )
 from TeeBotus.core.status import (
     account_identity_health_lines,
@@ -59,6 +63,34 @@ def _make_instance(tmp_path: Path) -> None:
     instance_dir = tmp_path / "instances" / "Demo"
     instance_dir.mkdir(parents=True, exist_ok=True)
     (instance_dir / "Bot_Verhalten.md").write_text("", encoding="utf-8")
+
+
+def test_version_notification_sql_helpers_hold_instance_state_lock(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    lock_states: list[str] = []
+
+    class Backend:
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, object]]:
+            assert lock_states == [INSTANCE_STATE_ACCOUNT_ID]
+            return [{"versions": {"1.0.0": {}}}]
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            assert lock_states == [INSTANCE_STATE_ACCOUNT_ID]
+
+    @contextmanager
+    def recording_lock(account_id: str):
+        lock_states.append(account_id)
+        try:
+            yield
+        finally:
+            lock_states.pop()
+
+    store._account_memory_backend = Backend()
+    with patch.object(store, "account_memory_lock", recording_lock):
+        assert _sql_state_collection_has_rows(store) is True
+        _clear_sql_state_collection(store)
+
+    assert lock_states == []
 
 
 class FakeSecretStatusProvider:

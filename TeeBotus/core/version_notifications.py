@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -1176,21 +1177,27 @@ def _sql_state_backend_available(account_store: AccountStore) -> bool:
 def _sql_state_collection_has_rows(account_store: AccountStore) -> bool:
     if not _sql_state_backend_available(account_store):
         return False
-    backend = getattr(account_store, "account_memory_backend", None)
-    read_collection = getattr(backend, "read_collection", None)
-    if not callable(read_collection):
-        return False
-    try:
-        return bool(read_collection(INSTANCE_STATE_ACCOUNT_ID, NOTIFICATION_STATE_COLLECTION))
-    except Exception:
-        return True
+    lock_factory = getattr(account_store, "account_memory_lock", None)
+    lock = lock_factory(INSTANCE_STATE_ACCOUNT_ID) if callable(lock_factory) else nullcontext()
+    with lock:
+        backend = getattr(account_store, "account_memory_backend", None)
+        read_collection = getattr(backend, "read_collection", None)
+        if not callable(read_collection):
+            return False
+        try:
+            return bool(read_collection(INSTANCE_STATE_ACCOUNT_ID, NOTIFICATION_STATE_COLLECTION))
+        except Exception:
+            return True
 
 
 def _clear_sql_state_collection(account_store: AccountStore) -> None:
-    backend = getattr(account_store, "account_memory_backend", None)
-    write_collection = getattr(backend, "write_collection", None)
-    if callable(write_collection):
-        write_collection(INSTANCE_STATE_ACCOUNT_ID, NOTIFICATION_STATE_COLLECTION, [])
+    lock_factory = getattr(account_store, "account_memory_lock", None)
+    lock = lock_factory(INSTANCE_STATE_ACCOUNT_ID) if callable(lock_factory) else nullcontext()
+    with lock:
+        backend = getattr(account_store, "account_memory_backend", None)
+        write_collection = getattr(backend, "write_collection", None)
+        if callable(write_collection):
+            write_collection(INSTANCE_STATE_ACCOUNT_ID, NOTIFICATION_STATE_COLLECTION, [])
 
 
 def _notification_state_has_versions(state: dict[str, Any]) -> bool:
