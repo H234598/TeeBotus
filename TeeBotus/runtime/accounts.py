@@ -1175,6 +1175,15 @@ def _serialize_account_memory_pair(method: Callable[..., Any]) -> Callable[..., 
     return wrapped
 
 
+def _serialize_instance_memory(method: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(method)
+    def wrapped(self: "AccountStore", *args: Any, **kwargs: Any) -> Any:
+        with self.account_memory_lock(INSTANCE_STATE_ACCOUNT_ID):
+            return method(self, *args, **kwargs)
+
+    return wrapped
+
+
 @contextmanager
 def account_memory_lock_for_root(root: Path, account_id: str) -> Iterator[None]:
     """Serialize account-memory/state operations for an AccountStore root."""
@@ -3381,6 +3390,7 @@ class AccountStore:
     def instance_json_state_backend_available(self) -> bool:
         return self._account_memory_collection_backend_available()
 
+    @_serialize_instance_memory
     def read_instance_json_state(
         self,
         filename: str,
@@ -3434,6 +3444,7 @@ class AccountStore:
             self._unlink_migrated_account_file(path)
         return data
 
+    @_serialize_instance_memory
     def write_instance_json_state(self, filename: str, collection: str, data: dict[str, Any]) -> None:
         safe_filename = _safe_account_filename(filename)
         collection_name = _safe_collection_name(collection)
