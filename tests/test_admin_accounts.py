@@ -8,6 +8,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from TeeBotus.admin import __main__ as admin_entrypoint
 import TeeBotus.admin.account_memory_recovery as account_memory_recovery_module
 import TeeBotus.admin.accounts_report as accounts_report_module
@@ -1411,6 +1413,31 @@ def test_memory_recovery_metadata_quarantine_blocks_unsupported_envelope(tmp_pat
     assert result["status"] == "blocked"
     assert index_path.exists()
     assert not (tmp_path / "quarantine").exists()
+
+
+def test_memory_recovery_quarantine_rejects_symlinked_destination(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    store = AccountStore(accounts_root, "Depressionsbot", provider())
+    store.resolve_or_create_account("telegram:user:1")
+    index_path = accounts_root / "Account_Index.json"
+    index_path.write_bytes(b"malformed envelope\n")
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    quarantine = tmp_path / "quarantine"
+    quarantine.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(AccountStoreError, match="symlinked quarantine directory"):
+        quarantine_unreadable_account_metadata(
+            instances_dir=tmp_path,
+            provider=provider(),
+            apply=True,
+            quarantine_dir=quarantine,
+            running_processes=[],
+        )
+
+    assert index_path.exists()
+    assert not any(outside.iterdir())
 
 
 def test_memory_recovery_report_includes_unreadable_metadata_account_ids(tmp_path: Path) -> None:

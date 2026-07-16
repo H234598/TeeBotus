@@ -888,7 +888,16 @@ def _delete_row_count(cursor: sqlite3.Cursor) -> int:
 
 
 def _prepare_private_dir(path: Path) -> None:
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    for candidate in (absolute, *absolute.parents):
+        try:
+            if candidate.is_symlink():
+                raise AccountStoreError(f"refusing symlinked quarantine directory: {candidate}")
+        except OSError as exc:
+            raise AccountStoreError(f"could not inspect quarantine directory: {candidate}") from exc
     path.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink() or not path.is_dir():
+        raise AccountStoreError(f"refusing unsafe quarantine directory: {path}")
     try:
         os.chmod(path, 0o700)
     except OSError:
