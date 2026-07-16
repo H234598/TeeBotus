@@ -1449,6 +1449,25 @@ ausgeloest. Naechster Restart nach 8 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `14/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 6 weiteren Commits.
 
+### Partielle-Dokument-Collections-vor-Merge
+
+- 2026-07-16: SQL-JSONL-Merge pruefte Quelle und Ziel direkt nach dem
+  Collection-Read. Der separate Dokument-Merge fuer LLM-State, Agent-State
+  und Status-Auth pruefte bisher nur indirekt beim Write. Ein partieller
+  Quell-Read konnte durch anschliessenden sauberen Ziel-Read seine Diagnose
+  verlieren und als vollstaendiger Zustand in Ziel-Account gelangen.
+- Dokument-Merge prueft jetzt Quelle und Ziel unmittelbar nach jedem Read;
+  Merge stoppt vor dem ersten Ziel-Write bei unlesbaren Rows. Ziel-Fehler
+  bleiben ebenfalls fail-closed.
+- Regression fuer partielle Quell-Dokument-Collection plus bestehende
+  Quell-/Ziel-Collection-Regression; gesamte `tests/test_account_store.py`
+  `264 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `51fe5b54 fix: guard partial document merges`;
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `16/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 4 weiteren Commits.
+
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
   `/v1/about` meldet Signal REST `0.100` im JSON-RPC-Modus;
