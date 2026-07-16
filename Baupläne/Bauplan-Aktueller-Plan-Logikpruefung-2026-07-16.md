@@ -2749,3 +2749,22 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Account-Profil-Ownership
+
+- 2026-07-17: `_account_is_resolvable()` akzeptierte jedes lesbare Profil,
+  solange `status` nicht `tombstoned` war. Ein Profil mit fehlender oder
+  fremder `account_id` bzw. falscher Instanz konnte dadurch als aktiver Account
+  verwendet und in den Index geschrieben werden.
+- Resolvability verlangt jetzt ein Dict-Profil mit exakt passender
+  normalisierter `account_id`, passendem `instance`-Wert und nicht-tombstoned
+  Status. Verdächtige Profile bleiben unresolvable und werden nicht automatisch
+  überschrieben.
+- Regression: Profile mit fehlender/fremder Ownership -> `2 passed`; komplette
+  `tests/test_account_store.py` -> `289 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `78e51423 fix: validate account profile ownership`.
+
+**Aktueller Laufstand:** Seit dem Restart `12/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 8 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
