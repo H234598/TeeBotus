@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart sind aktuell `8/20` Commits vorhanden; naechster Restart
-  nach 12 weiteren Commits.
+  letzten Restart sind aktuell `10/20` Commits vorhanden; naechster Restart
+  nach 10 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -548,6 +548,21 @@ Diagnose und Tests.
   `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `95d1a5d7 fix: lock version notification identities`.
 
+### Account-Listing-Identity-Lock
+
+- 2026-07-16: `list_account_ids()` und
+  `list_identities_for_account()` lasen Account-/Identity-Metadata ohne
+  aeusseren Identity-Lock. Status- und Routing-Aufrufer konnten dadurch
+  waehrend Account-Erstellung, Merge oder Tombstoning einen halben Snapshot
+  sehen.
+- Beide Listing-Pfade halten jetzt den reentranten Identity-Lock ueber
+  Validierung und Ausgabe. Unterliegende aktive-Identity-Reads bleiben
+  kompatibel.
+- Regression prueft Index- und Profil-Read unter gehaltenem Lock; fokussiert
+  `2 passed`, AccountStore komplett `247 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `64b00d15 fix: serialize account listing reads`.
+
 ### LLM-State-SQL/JSON-Audit
 
 - 2026-07-16: Biene Herschel meldete einen vorzeitigen SQL-Return in
@@ -966,8 +981,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `8/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 12 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `10/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 10 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
