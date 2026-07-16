@@ -663,10 +663,10 @@ class WarningFallbackAccountMemoryBackend:
         if self._fallback_result_is_empty_for_failed_read(
             operation,
             result,
+            primary_entry_read_error,
             primary_entry_skipped,
             primary_index_read_error,
             primary_collection_skipped,
-            partial_result=partial_result,
         ):
             self.last_entry_read_error = primary_entry_read_error
             self.last_entry_skipped = primary_entry_skipped
@@ -722,13 +722,13 @@ class WarningFallbackAccountMemoryBackend:
         self,
         operation: str,
         result: Any,
+        primary_entry_read_error: str,
         primary_entry_skipped: int,
         primary_index_read_error: str,
         primary_collection_skipped: int,
-        partial_result: bool = False,
     ) -> bool:
         if operation == "read_entries":
-            return bool(primary_entry_skipped) and result == [] and not partial_result
+            return bool(primary_entry_read_error or primary_entry_skipped) and result == []
         if operation == "read_index":
             return bool(primary_index_read_error) and result == {}
         if operation.startswith("read_collection:"):

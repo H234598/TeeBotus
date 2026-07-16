@@ -4678,6 +4678,42 @@ def test_account_memory_fallback_empty_entries_by_ids_result_from_empty_fallback
     assert backend.last_fallback_sync_error == ""
 
 
+def test_account_memory_fallback_blocks_empty_secondary_after_partial_entries_by_ids_read() -> None:
+    class Backend:
+        def __init__(self, rows: list[dict[str, str]], *, partial_ids: bool = False) -> None:
+            self.entries = {"a" * 128: [dict(row) for row in rows]}
+            self.partial_ids = partial_ids
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+            self.last_index_read_error = ""
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def read_entries_by_ids(self, account_id: str, memory_ids: list[str]) -> list[dict[str, str]]:
+            if self.partial_ids:
+                self.last_entry_read_error = "payload could not be decrypted"
+                self.last_entry_skipped = 1
+                return []
+            requested = set(memory_ids)
+            return [row for row in self.read_entries(account_id) if row.get("id") in requested]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            self.entries[account_id] = [dict(row) for row in rows]
+
+    account_id = "a" * 128
+    original_rows = [{"id": "mem_good"}, {"id": "mem_bad"}]
+    primary = Backend(original_rows, partial_ids=True)
+    fallback = Backend([])
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    assert backend.read_entries_by_ids(account_id, ["mem_bad"]) == []
+
+    assert primary.entries[account_id] == original_rows
+    assert account_id in backend._unrecoverable_fallback_entries
+    assert backend.last_fallback_sync_error == "read_entries: fallback has no recoverable data"
+
+
 def test_account_memory_fallback_repair_keeps_other_pending_errors_until_cleared(caplog):
     class Backend:
         def __init__(self, *, fail_read: bool = False) -> None:
