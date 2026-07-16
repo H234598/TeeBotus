@@ -551,6 +551,20 @@ Diagnose und Tests.
 - Code-Commit: `f40fc1c1 fix: preserve recent working memory ranking`; kein
   Provider/API-Aufruf.
 
+### Working-Memory-Index-Typfehler
+
+- 2026-07-16: Ein syntaktisch gueltiges JSON-Array oder anderer Nicht-Objekt-
+  Top-Level wurde bisher still als leerer Working-Memory-Index ersetzt. Der
+  alte Inhalt war danach ohne Backup verloren.
+- Beide Pfade verschieben solche Dateien jetzt zuerst nach
+  `Working_Memorys.json.corrupt.*`, loggen den Reset und schreiben erst dann
+  einen neuen Objektindex.
+- Regression fuer beide Store-Klassen: `tests/test_working_memory.py`:
+  `13 passed`; Telegram-Working-Memory `4 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `a4d26531 fix: preserve malformed working memory indexes`; kein
+  Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -579,8 +593,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `15/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 5 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `17/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 3 weiteren Commits.
 
 ## Bezug
 
