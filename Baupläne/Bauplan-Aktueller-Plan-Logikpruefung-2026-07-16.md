@@ -3161,3 +3161,21 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `16/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 4 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Automatische-Instanz-Discovery-ohne-Symlink
+
+- 2026-07-17: `discover_instances()` nahm Symlink-Instanzen und symlinked
+  `Bot_Verhalten.md` in automatische Admin-/Recovery-Reports auf. Ein
+  externer Instruktionsbaum konnte damit als lokale Instanz gelten.
+- Discovery materialisiert den Root-Scan innerhalb `try`, ueberspringt
+  Symlink-Instanzen und verlangt echte Instruction-Datei. Race/OS-Fehler
+  liefern leere automatische Discovery; explizite Instance-Auswahl bleibt
+  unveraendert.
+- Regression: Symlink-Instanz plus symlinked Instruction -> `1 passed`; komplette
+  `tests/test_admin_accounts.py` -> `84 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0ada76b3 fix: ignore symlinked automatic instance discovery`.
+
+**Aktueller Laufstand:** Seit dem Restart `18/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 2 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
