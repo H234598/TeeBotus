@@ -2966,3 +2966,22 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### JSON-Recovery-ignoriert-Symlink-Accountdirs
+
+- 2026-07-17: `_json_memory_files_for_accounts()` folgte Symlink-Accountdirs.
+  Ein Account-Verzeichnis konnte dadurch auf Dateien ausserhalb des aktiven
+  `accounts/`-Baums zeigen; Quarantaene haette diese Dateien als Memory-Artefakte
+  behandeln koennen.
+- Symlink- oder nicht existente Accountdirs werden beim JSON-Recovery jetzt
+  fail-closed uebersprungen. Externe Dateien werden weder gelesen noch
+  verschoben; normale Verzeichnisse bleiben unveraendert.
+- Regression: externes Ziel hinter Symlink bleibt erhalten und liefert keine
+  Recovery-Datei; gezielter Quarantaene-/Snapshot-Fokus -> `15 passed`;
+  komplette `tests/test_admin_accounts.py` -> `72 passed`. Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5542c432 fix: ignore symlinked account directories in recovery`.
+
+**Aktueller Laufstand:** Seit dem Restart `16/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 4 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
