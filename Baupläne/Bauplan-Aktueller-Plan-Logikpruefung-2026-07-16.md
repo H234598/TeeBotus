@@ -596,6 +596,23 @@ Diagnose und Tests.
 - Code-Commit: `2f4b1813 fix: roll back working memory append failures`; kein
   Provider/API-Aufruf.
 
+### Working-Memory-Parallelzugriff
+
+- 2026-07-16: Zwei Runner-Store-Objekte fuer dieselbe Instanz hatten bisher
+  je einen eigenen `threading.Lock`. Paralleltests meldeten 100 erfolgreiche
+  Appends, im Index blieben aber nur 51 Entries.
+- Locks werden jetzt pro kanonischem Working-Memory-Pfad prozessweit geteilt.
+  Telegram-, Signal- und Matrix-Store-Objekte serialisieren dadurch ihre
+  gemeinsamen Index-/JSONL-Schreibvorgaenge; der Append-Rollback bleibt
+  aktiv.
+- Regression mit zwei Store-Objekten und 40 parallelen Appends in beiden
+  Implementierungen: `tests/test_working_memory.py`: `25 passed`;
+  Telegram-Working-Memory `4 passed`; separater 100er-Repro ergibt
+  `indexed_entries=100`. Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `e05caa13 fix: serialize shared working memory paths`; kein
+  Provider/API-Aufruf. Lock gilt fuer diesen gemeinsamen Prozess; keine
+  unnoetige externe Prozesskoordination eingefuehrt.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -629,8 +646,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `1/20` Commit; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 19 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `3/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 17 weiteren Commits.
 
 ## Bezug
 
