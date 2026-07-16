@@ -870,7 +870,11 @@ def test_memory_recovery_accounts_directory_race_stays_fail_closed(monkeypatch, 
 
     def race_iterdir(path: Path):
         if path == accounts_dir:
-            raise OSError("accounts directory disappeared")
+            def disappeared():
+                raise OSError("accounts directory disappeared")
+                yield from ()
+
+            return disappeared()
         return original_iterdir(path)
 
     monkeypatch.setattr(Path, "iterdir", race_iterdir)

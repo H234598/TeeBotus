@@ -1050,7 +1050,7 @@ def _discover_account_ids(accounts_root: Path) -> list[str]:
     accounts_dir = _safe_json_accounts_dir(accounts_root)
     if accounts_dir is not None:
         try:
-            account_dirs = accounts_dir.iterdir()
+            account_dirs = list(accounts_dir.iterdir())
         except OSError:
             account_dirs = ()
         account_ids.update(
