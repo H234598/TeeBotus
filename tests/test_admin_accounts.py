@@ -1440,6 +1440,52 @@ def test_memory_recovery_quarantine_rejects_symlinked_destination(tmp_path: Path
     assert not any(outside.iterdir())
 
 
+def test_memory_recovery_snapshots_all_sqlite_sources_before_deleting(monkeypatch, tmp_path: Path) -> None:
+    account_id = "a" * 128
+    first = tmp_path / "Account_Memory.sqlite3"
+    second = tmp_path / "Account_Memory.backup.sqlite3"
+    first.write_bytes(b"first")
+    second.write_bytes(b"second")
+    snapshot_calls: list[Path] = []
+    delete_calls: list[Path] = []
+
+    def snapshot(source: Path, _target: Path) -> None:
+        snapshot_calls.append(source)
+        if source == second:
+            raise OSError("second snapshot failed")
+
+    monkeypatch.setattr(account_memory_recovery_module, "_snapshot_sqlite_database", snapshot)
+    monkeypatch.setattr(
+        account_memory_recovery_module,
+        "_delete_sqlite_account_rows",
+        lambda source, _instance, _accounts: delete_calls.append(source) or 1,
+    )
+    report = {
+        "instances": [
+            {
+                "instance": "Depressionsbot",
+                "accounts_root": str(tmp_path),
+                "accounts": [
+                    {
+                        "account_id": account_id,
+                        "recovery_status": "unrecoverable",
+                        "sources": [
+                            {"kind": "sqlite", "active": True, "path": str(first), "raw_entries": 1},
+                            {"kind": "sqlite", "active": True, "path": str(second), "raw_entries": 1},
+                        ],
+                    }
+                ],
+            }
+        ]
+    }
+
+    with pytest.raises(OSError, match="second snapshot failed"):
+        quarantine_unrecoverable_account_memory(report, apply=True, running_processes=[])
+
+    assert snapshot_calls == [first, second]
+    assert delete_calls == []
+
+
 def test_memory_recovery_report_includes_unreadable_metadata_account_ids(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"

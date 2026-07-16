@@ -722,20 +722,19 @@ def _quarantine_instance_unrecoverable(
 
     _prepare_private_dir(instance_quarantine_dir)
     snapshots_dir = instance_quarantine_dir / "sqlite_snapshots"
+    snapshot_records = []
     for sqlite_path in sqlite_sources:
         snapshot_path = snapshots_dir / sqlite_path.name
         _snapshot_sqlite_database(sqlite_path, snapshot_path)
         result["totals"]["snapshots_created"] += 1
-        deleted_rows = _delete_sqlite_account_rows(sqlite_path, instance_name, account_ids)
-        result["totals"]["sqlite_rows_quarantined"] += deleted_rows
-        result["sqlite_sources"].append(
-            {
-                "path": str(sqlite_path),
-                "payload_kind": "encrypted_account_memory",
-                "snapshot": str(snapshot_path),
-                "rows_deleted": deleted_rows,
-            }
-        )
+        snapshot_record = {
+            "path": str(sqlite_path),
+            "payload_kind": "encrypted_account_memory",
+            "snapshot": str(snapshot_path),
+            "rows_deleted": 0,
+        }
+        snapshot_records.append((sqlite_path, snapshot_record))
+        result["sqlite_sources"].append(snapshot_record)
     moved_files = []
     for path in json_files:
         target = instance_quarantine_dir / "json_files" / path.parent.name / path.name
@@ -744,6 +743,10 @@ def _quarantine_instance_unrecoverable(
         moved_files.append({"path": str(path), "quarantine_path": str(target)})
     result["json_files"] = moved_files
     result["totals"]["json_files_quarantined"] = len(moved_files)
+    for sqlite_path, snapshot_record in snapshot_records:
+        deleted_rows = _delete_sqlite_account_rows(sqlite_path, instance_name, account_ids)
+        result["totals"]["sqlite_rows_quarantined"] += deleted_rows
+        snapshot_record["rows_deleted"] = deleted_rows
     result["totals"]["accounts_quarantined"] = len(account_ids)
     manifest_path = instance_quarantine_dir / "manifest.json"
     manifest_path.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -839,7 +842,7 @@ def _json_memory_files_for_accounts(accounts_root: Path, account_ids: Sequence[s
 
 def _snapshot_sqlite_database(source: Path, target: Path) -> None:
     _prepare_private_dir(target.parent)
-    with sqlite3.connect(source) as source_connection, sqlite3.connect(target) as target_connection:
+    with _connect_sqlite_readonly(source) as source_connection, sqlite3.connect(target) as target_connection:
         source_connection.backup(target_connection)
     try:
         os.chmod(target, 0o600)
