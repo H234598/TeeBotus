@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `20/20` Commits vorhanden; Restart steht jetzt
-  an.
+  letzten Restart ist aktuell `1/20` Commit vorhanden; naechster Restart
+  nach 19 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -489,6 +489,12 @@ Diagnose und Tests.
 - Codeaenderungen sind committed. Untracked Obsidian-/Arbeitsdateien bleiben
   unangetastet. Nach lokalem Restart Status erneut auf `active/running` und
   Health-Daten pruefen.
+- Restart ausgefuehrt: `teebotus.service` `active/running`, PID `247193`,
+  Start `2026-07-16 03:49:25 CEST`, Runtime-Version `1.9.498`. Erste
+  unmittelbare Probe sah Signal noch waehrend Autostart als `unreachable`;
+  Folgeprobe nach Bereitschaft meldete Signal `2/2 reachable`,
+  `health=ok`, `actionable_problem_count=0`. Das ist ein bestaetigter
+  transienter Startzustand, kein dauerhafter Health-Fehler.
 
 ## Akzeptanzkriterien
 
@@ -502,8 +508,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `20/20` Commits; Restart jetzt
-ausloesen, danach Zaehler auf `0/20` setzen. Kein Push ausgeloest.
+**Laufstand:** Seit dem letzten Restart `1/20` Commit; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 19 weiteren Commits.
 
 ## Bezug
 
