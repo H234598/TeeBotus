@@ -2748,6 +2748,24 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Identity-Listen-mit-Instanzfilter
+
+- 2026-07-17: `get_account_for_identity()` ignorierte explizite fremde
+  Instanz-Mappings, aber `_active_identities_for_account()` zaehlte sie weiter
+  als lokal. Account-Summary, Adminzaehler und Routing konnten damit
+  unterschiedliche Identitaetsmengen melden.
+- Die lokale Identitaetsliste filtert jetzt denselben expliziten
+  `instance`-Besitzvertrag. Fehlendes Feld bleibt Legacy-kompatibel; fremde
+  Instanz wird weder gelistet noch fuer lokale Operationen verwendet.
+- Regression: Identity-Lookup/-Liste -> `5 passed`; komplette
+  `tests/test_account_store.py` -> `291 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f80ab4fe fix: filter foreign identities from account lists`.
+
+**Aktueller Laufstand:** Seit dem Restart `12/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 8 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Metadata-Quarantaene-bei-Secret-Fehlern
 
 - 2026-07-17: `_unreadable_metadata_items()` meldete fehlendes, nicht
