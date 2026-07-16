@@ -206,8 +206,9 @@ def bootstrap_status_auth_secrets(
     provider: InstanceSecretProvider | None = None,
 ) -> dict[str, Any]:
     resolved_instances_dir = Path(instances_dir)
-    selected_instances = tuple(instances) if tuple(instances) else DEFAULT_STATUS_AUTH_INSTANCES
-    selected_instances = tuple(dict.fromkeys(str(name).strip() for name in selected_instances if str(name).strip()))
+    requested_instances = tuple(instances)
+    requested_instances = requested_instances or DEFAULT_STATUS_AUTH_INSTANCES
+    selected_instances = discover_instances(resolved_instances_dir, requested_instances)
     bootstrap_provider = provider or runtime_secret_provider()
     report: dict[str, Any] = {
         "schema_version": REPORT_SCHEMA_VERSION,

@@ -555,6 +555,21 @@ def test_status_auth_bootstrap_does_not_create_missing_instance_dir(tmp_path: Pa
     assert not (tmp_path / "TeeBotus_Logger").exists()
 
 
+def test_status_auth_bootstrap_rejects_instance_path_escape(tmp_path: Path) -> None:
+    bootstrap_provider = RecordingBootstrapProvider()
+
+    report = bootstrap_status_auth_secrets(
+        instances_dir=tmp_path,
+        instances=("../outside",),
+        provider=bootstrap_provider,
+    )
+
+    assert report["instance_count"] == 0
+    assert report["instances"] == []
+    assert bootstrap_provider.created == []
+    assert not (tmp_path.parent / "outside").exists()
+
+
 def test_status_auth_report_keeps_account_when_route_lookup_fails(tmp_path: Path, monkeypatch) -> None:
     instance_dir = make_instance(tmp_path)
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
