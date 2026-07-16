@@ -1047,6 +1047,21 @@ Diagnose und Tests.
 - Code-Commit: `5234fe0a fix: persist working memory repairs from reads`;
   kein Provider/API-Aufruf.
 
+### Working-Memory-Index-Rebuild aus JSONL
+
+- 2026-07-16: Ein korruptes Index-JSON wurde zwar ersetzt, valide Eintraege
+  in `Working_Memorys.entries.jsonl` blieben aber ohne Indexreferenz und waren
+  fuer Retrieval unsichtbar.
+- Reparatur baut `entries`, Keyword-Buckets und `recent_ids` jetzt aus jeder
+  gueltigen JSONL-Zeile neu auf. Ungueltige Zeilen bleiben unveraendert und
+  werden nur protokolliert; Rohdaten werden nicht geloescht.
+- Gemeinsamer Helper wird von Runtime- und Telegram-Store verwendet.
+  Regression parametrisiert ueber beide Stores:
+  `tests/test_working_memory.py`: `33 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `5fa1eb3d fix: rebuild working memory index from entries`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
