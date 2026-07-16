@@ -2264,3 +2264,22 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `17/20` Code-Commits. Dieser
 Plan-Commit macht `18/20`; kein Push. Naechster Restart nach 2 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Gemini-Instanz-Keyring-im-Profilpfad
+
+- 2026-07-16: `build_profiled_text_llm_client()` uebergab den
+  `instance_name` nicht an `resolve_gemini_api_key_ring()`. Profilbasierte
+  Gemini-Routen und Gemini-Fallbacks ignorierten dadurch
+  `TEEBOTUS_GEMINI_API_KEYS_<INSTANCE>_*` und konnten den globalen Keyring
+  verwenden.
+- Der Profilpfad reicht den Instanznamen jetzt weiter. Rollen-/Scope-Keyrings
+  bleiben im Runtime-Pfad unveraendert; der Fix verhindert nur den falschen
+  globalen Rueckfall.
+- Regression: Profilbasierter Gemini-Fallback bevorzugt Instanz-Keyring vor
+  globalem Keyring; gezielter Test -> `1 passed`; Ruff und `compileall` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `c7b4929e fix: preserve instance Gemini key rings in profile routes`.
+
+**Aktueller Laufstand:** Seit dem Restart `19/20` Code-Commits. Dieser
+Plan-Commit macht `20/20`; danach User-Service-Restart. Kein Push. Naechster
+Push bleibt erst bei 100 Commits.
