@@ -1785,6 +1785,7 @@ class AccountStore:
             return self.resolve_or_create_account(identity_key, display_label=display_label)
         return self.get_account_for_identity(identity_key)
 
+    @_serialize_identity_map
     def list_account_ids(self, *, include_unresolvable: bool = False) -> tuple[str, ...]:
         ids: set[str] = set()
         index = self._load_index()
@@ -2349,6 +2350,7 @@ class AccountStore:
             "status": profile.get("status", "unknown"),
         }
 
+    @_serialize_identity_map
     def list_identities_for_account(self, account_id: str) -> list[str]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
