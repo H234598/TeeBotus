@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `7/20` Commits vorhanden; naechster Restart
-  nach 13 weiteren Commits.
+  letzten Restart ist aktuell `9/20` Commits vorhanden; naechster Restart
+  nach 11 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -172,6 +172,14 @@ Diagnose und Tests.
   geleert. Tombstone-Retry wiederholt das Leeren idempotent.
 - Regression fuer SQL-Merge und Source-Clear ergaenzt; fokussiert `5 passed`,
   AccountStore-Suite danach `232 passed in 10.51s`. Code-Commit: `a9393974`.
+- 2026-07-16: Folgeaudit zeigte, dass derselbe SQL-Mergefehler auch
+  `LLM_State`, Agent-State, Status-Auth sowie Proactive-, Status- und
+  Codex-Collections betraf. Der SQL-Merge dedupliziert JSONL-Collections,
+  waehlt den neuesten LLM-State, merged Dokumente und behandelt
+  Status-Auth als monotones OR. Source-Clear folgt erst danach.
+- SQLite-Regression deckt strukturierte Entries, drei Dokumente und mehrere
+  Outbox-Collections ab; fokussiert `5 passed`, AccountStore-Suite `232 passed`.
+  Ruff, `py_compile` und `git diff --check` gruen. Code-Commit: `50688e74`.
 - Offener Bienenbefund: `unlink_identity()` hat weiterhin getrennte Profil-,
 - Index- und Mapping-Writes. Eine Biene reproduzierte die drei Teilfehler;
   die bestehende Reihenfolge konvergiert beim Retry bereits sicher, daher kein
@@ -528,8 +536,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `7/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 13 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `9/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 11 weiteren Commits.
 
 ## Bezug
 
