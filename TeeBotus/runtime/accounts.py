@@ -2443,6 +2443,14 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
         rows = self.read_memory_entries(account_id)
+        backend = self.account_memory_backend
+        entry_read_error = str(getattr(backend, "last_entry_read_error", "") or "") if backend is not None else ""
+        entry_read_skipped = int(getattr(backend, "last_entry_skipped", 0) or 0) if backend is not None else 0
+        if entry_read_error or entry_read_skipped:
+            detail = entry_read_error or f"skipped={entry_read_skipped}"
+            raise AccountStoreError(
+                f"cannot append structured memory while account entries are unreadable: {detail}"
+            )
         previous_rows = [dict(row) for row in rows if isinstance(row, dict)]
         previous_index = self.read_memory_index(account_id)
         normalized_entry = dict(entry)
@@ -2597,6 +2605,14 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
         rows = self.read_memory_entries(account_id)
+        backend = self.account_memory_backend
+        entry_read_error = str(getattr(backend, "last_entry_read_error", "") or "") if backend is not None else ""
+        entry_read_skipped = int(getattr(backend, "last_entry_skipped", 0) or 0) if backend is not None else 0
+        if entry_read_error or entry_read_skipped:
+            detail = entry_read_error or f"skipped={entry_read_skipped}"
+            raise AccountStoreError(
+                f"cannot rebuild structured memory index while account entries are unreadable: {detail}"
+            )
         previous_rows = [dict(row) for row in rows if isinstance(row, dict)]
         previous_index = self.read_memory_index(account_id)
         changed = False

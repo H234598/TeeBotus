@@ -2125,6 +2125,49 @@ def test_rebuild_structured_account_memory_index_removes_stale_ids(tmp_path):
     assert entries[0]["importance"] == 3
 
 
+def test_rebuild_structured_account_memory_refuses_partial_sql_entries(tmp_path, monkeypatch):
+    import sqlite3
+
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_memory_entries(
+        account_id,
+        [
+            {"id": "mem_good", "user_text": "Mond", "bot_text": "Tee"},
+            {"id": "mem_bad", "user_text": "Kaffee", "bot_text": "Tasse"},
+        ],
+    )
+    with sqlite3.connect(sqlite_path) as connection:
+        connection.execute(
+            "UPDATE memory_entries SET payload_ciphertext = ? WHERE memory_id = ?",
+            (b"broken", "mem_bad"),
+        )
+    store._account_memory_backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=sqlite_path, fallback_path=None),
+    )
+
+    with pytest.raises(AccountStoreError, match="entries are unreadable"):
+        store.rebuild_structured_memory_index(account_id)
+    with pytest.raises(AccountStoreError, match="cannot append structured memory"):
+        store.append_structured_memory_entry(account_id, {"id": "mem_new", "user_text": "Neu"})
+
+    with sqlite3.connect(sqlite_path) as connection:
+        memory_ids = {
+            str(row[0])
+            for row in connection.execute(
+                "SELECT memory_id FROM memory_entries WHERE account_id = ?",
+                (account_id,),
+            )
+        }
+    assert memory_ids == {"mem_good", "mem_bad"}
+
+
 def test_rebuild_structured_account_memory_rolls_back_entries_when_index_write_fails(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
