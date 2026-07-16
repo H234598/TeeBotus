@@ -2194,6 +2194,24 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 Plan-Commit macht `15/20`; kein Push. Naechster Restart nach 5 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### Status-Gemini-Service-Tier-Instanzkontext
+
+- 2026-07-16: Statusaufbau reichte `instance_name` bis zum API-Budget-Helfer,
+  aber Bibliothekar-Aktivzeile und Budget-Service-Tier-Resolver nutzten ihn
+  nicht. Instanzspezifisches Gemini-Flex konnte dadurch als global oder leer
+  erscheinen.
+- `_llm_category_status_lines()`, `_route_status_label()` und
+  `_api_budget_label_for_route()` reichen den Instanznamen jetzt bis
+  `resolve_gemini_service_tier()` weiter.
+- Regression: globales Tier `none`, Depressionsbot-Tier `flex`; relevante
+  Status/Gemini-Fokus -> `9 passed`; Ruff, `compileall` und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1913a5d2 fix: use instance Gemini tier in status`.
+
+**Aktueller Laufstand:** Seit dem Restart `16/20` Code-Commits. Dieser
+Plan-Commit macht `17/20`; kein Push. Naechster Restart nach 3 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
+
 ### RouteTo-Purpose-Ziel
 
 - 2026-07-16: Explorer-Biene fand widerspruechliche Discovery. Die
