@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `5/20` Commits vorhanden; naechster Restart
-  nach 15 weiteren Commits.
+  letzten Restart ist aktuell `7/20` Commits vorhanden; naechster Restart
+  nach 13 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -164,6 +164,14 @@ Diagnose und Tests.
 - Regression fuer Legacy-Row-Duplikation und Cleanup-Reihenfolge ergaenzt;
   fokussiert `4 passed`, AccountStore-Suite danach `231 passed in 6.97s`.
   Code-Commit: `5900f36c`.
+- 2026-07-16: SQL-Repro zeigte einen groesseren Merge-Fehler: Bei aktivem
+  SQLite/Postgres-Backend kopierte `merge_accounts()` nur JSON-Dateien.
+  Strukturierte Source-Entries blieben dadurch unsichtbar im Ziel und wurden
+  nicht geloescht. SQL-Entries und Access-Reihenfolge werden jetzt ins Ziel
+  uebernommen; Source-Collections werden erst nach Ziel-/Identity-Write
+  geleert. Tombstone-Retry wiederholt das Leeren idempotent.
+- Regression fuer SQL-Merge und Source-Clear ergaenzt; fokussiert `5 passed`,
+  AccountStore-Suite danach `232 passed in 10.51s`. Code-Commit: `a9393974`.
 - Offener Bienenbefund: `unlink_identity()` hat weiterhin getrennte Profil-,
 - Index- und Mapping-Writes. Eine Biene reproduzierte die drei Teilfehler;
   die bestehende Reihenfolge konvergiert beim Retry bereits sicher, daher kein
@@ -520,8 +528,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `5/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 15 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `7/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 13 weiteren Commits.
 
 ## Bezug
 
