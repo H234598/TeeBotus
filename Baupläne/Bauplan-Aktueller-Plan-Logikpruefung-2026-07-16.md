@@ -2139,6 +2139,35 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 Plan-Commit macht `6/20`; kein Push. Naechster Restart nach 14 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### RouteTo-Purpose-Ziel
+
+- 2026-07-16: Explorer-Biene fand widerspruechliche Discovery. Die
+  Fehlermeldung listete `purpose:structured_decision`, der Resolver entfernte
+  den `purpose:`-Praefix aber nicht. Angezeigtes Ziel war dadurch nicht
+  nutzbar.
+- Resolver erkennt `purpose:<name>` jetzt explizit vor Token-Normalisierung.
+- Regression: Alias, Profil, Purpose und explizites Purpose-Ziel; RouteTo-Suite
+  -> `8 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `d1825707 fix: resolve explicit RouteTo purposes`.
+
+### RouteTo-Cancel-Kontext
+
+- 2026-07-16: `/cancel` loeschte eine Pending-Route accountweit. Ein
+  verbundener Chat desselben Accounts konnte damit eine Route aus einem
+  anderen Chat abbrechen.
+- `/cancel` wird jetzt nur noch akzeptiert, wenn Channel, Adapter-Slot,
+  Chat-ID und Identity zum Pending-Kontext passen. Fremde Chats erhalten
+  keinen Abbruchhinweis und lassen Pending unveraendert.
+- Regression: Fremdchat-Cancel plus lokaler Cancel; RouteTo-Suite -> `9
+  passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `17268349 fix: bind RouteTo cancellation to chat context`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Code-Commits. Dieser
+Plan-Commit macht `9/20`; kein Push. Naechster Restart nach 11 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
+
 ### Codex-Bare-Status-Im-Legacy-Pfad
 
 - 2026-07-16: Der Legacy-Telegram-Handler behandelte bare `/codex` vor dem
