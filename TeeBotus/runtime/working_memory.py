@@ -358,7 +358,7 @@ def _read_working_memory_entry(index_path: Path, data: dict[str, Any], memory_id
         with _working_memory_entries_path(index_path).open("rb") as file:
             file.seek(offset)
             payload = json.loads(file.read(length).decode("utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         LOGGER.exception("Failed to read JSONL instance working memory entry id=%s.", memory_id)
         return None
     if not isinstance(payload, dict) or str(payload.get("id", "")) != memory_id:

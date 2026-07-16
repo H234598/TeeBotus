@@ -54,6 +54,23 @@ def test_working_memory_repairs_stale_instance_name(tmp_path, store_class):
     assert payload["instance_name"] == "Depressionsbot"
 
 
+@pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
+def test_working_memory_ignores_invalid_utf8_entry(tmp_path, store_class):
+    instances_dir = tmp_path / "instances"
+    store = store_class("Depressionsbot", instances_dir)
+    memory_id = store.append_manual("Ein korrekter Eintrag")
+    index_path = store.ensure()
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    entry_length = payload["index"]["entries"][memory_id]["length"]
+    entries_path = index_path.parent / "Working_Memorys.entries.jsonl"
+    entries_path.write_bytes(b"\xff" * entry_length)
+
+    record = store.prepare("korrekter Eintrag")
+
+    assert record.prompt_text == ""
+    assert record.selected_ids == ()
+
+
 def test_working_memory_corrupt_index_is_preserved_without_traceback_log(tmp_path, caplog):
     instances_dir = tmp_path / "instances"
     index_path = instances_dir / "Depressionsbot" / "data" / "Working_Memorys.json"
