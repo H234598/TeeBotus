@@ -3532,6 +3532,28 @@ def test_account_memory_fallback_empty_entry_id_read_clears_previous_diagnostics
     assert backend.last_entry_skipped == 0
 
 
+def test_account_memory_fallback_preserves_missing_database_diagnostic(tmp_path):
+    primary_path = tmp_path / "primary.sqlite3"
+    fallback_path = tmp_path / "fallback.sqlite3"
+    primary = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary_path, fallback_path=fallback_path),
+    )
+    fallback = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=fallback_path, fallback_path=None),
+    )
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    assert backend.read_collection("a" * 128, "proactive_outbox") == []
+    assert backend.last_database_missing is True
+    assert backend.last_fallback_sync_error == "read_collection:proactive_outbox: primary and fallback databases are not initialized"
+
+
 def test_sqlite_entry_id_read_chunks_large_requests(tmp_path):
     backend = SQLiteAccountMemoryBackend(
         instance_name="Depressionsbot",

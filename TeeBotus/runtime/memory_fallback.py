@@ -55,6 +55,7 @@ class WarningFallbackAccountMemoryBackend:
         self.last_index_read_error = ""
         self.last_collection_read_error = ""
         self.last_collection_skipped = 0
+        self.last_database_missing = False
         self.last_fallback_sync_error = ""
         self._fallback_sync_errors: dict[Any, str] = {}
 
@@ -622,6 +623,7 @@ class WarningFallbackAccountMemoryBackend:
             self.last_index_read_error = primary_index_read_error
             self.last_collection_read_error = primary_collection_read_error
             self.last_collection_skipped = primary_collection_skipped
+            self.last_database_missing = primary_database_missing
             if primary_database_missing:
                 self._clear_read_diagnostics(operation)
                 self._set_fallback_sync_error(
@@ -649,6 +651,7 @@ class WarningFallbackAccountMemoryBackend:
             self.last_index_read_error = primary_index_read_error
             self.last_collection_read_error = primary_collection_read_error
             self.last_collection_skipped = primary_collection_skipped
+            self.last_database_missing = primary_database_missing
             stale_key = self._operation_stale_key(operation, account_id)
             self._fallback_stale_set(operation).add(stale_key)
             self._unrecoverable_fallback_set(operation).add(stale_key)
@@ -1168,6 +1171,7 @@ class WarningFallbackAccountMemoryBackend:
         self.last_index_read_error = str(getattr(backend, "last_index_read_error", "") or "")
         self.last_collection_read_error = str(getattr(backend, "last_collection_read_error", "") or "")
         self.last_collection_skipped = int(getattr(backend, "last_collection_skipped", 0) or 0)
+        self.last_database_missing = bool(getattr(backend, "last_database_missing", False))
 
     def _backend_database_missing(self, backend: Any) -> bool:
         return bool(getattr(backend, "last_database_missing", False))
