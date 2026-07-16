@@ -1927,3 +1927,19 @@ Naechster Restart nach 20 weiteren Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Kein Push.
 Naechster Restart nach 18 weiteren Commits.
+
+### Reminder-Monatsnamen-nicht-als-Monatsnummer-verwechseln
+
+- 2026-07-16: Parser verstand bisher nur numerische Daten. Bei
+  `10. Mai um 14:30` griff dadurch `MONTH_DAY_RE`: Ergebnis wurde 10. des
+  naechsten Monats um 09:00; `16. Maerz 2027` verlor Jahr und Uhrzeit.
+- Deutsche Monatsnamen und Kurzformen werden jetzt mit optionalem Jahr und
+  Uhrzeit geparst. Invalides Datum bleibt ohne Fallback auf einen anderen
+  Monat; Subject entfernt Datum vollstaendig.
+- Regression: `tests/test_reminder_intent.py` -> `27 passed`; Engine-Contract
+  plus Modul -> `28 passed`; `py_compile` und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `7c259cb9 fix: parse German reminder month names`.
+
+**Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Kein Push.
+Naechster Restart nach 16 weiteren Commits.
