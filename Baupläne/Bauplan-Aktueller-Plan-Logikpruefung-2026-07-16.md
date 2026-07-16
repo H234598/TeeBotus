@@ -2139,6 +2139,28 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 Plan-Commit macht `6/20`; kein Push. Naechster Restart nach 14 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### Bibliothekar-Decision-Fallback
+
+- 2026-07-16: `build_runtime_structured_decision_runner()` liefert bei
+  Provider-, Modell- oder Schemafehlern bewusst `None`. Die
+  `BibliothekarQueryDecision` behandelte diesen Wert bisher wie den alten
+  "kein Runner konfiguriert"-Fall und suchte deshalb jede normale Nachricht.
+  Dadurch konnten irrelevante Bibliotheks-Chunks in den Hauptprompt gelangen.
+- Ein vorhandener, aber fehlgeschlagener Structured-Runner faellt jetzt
+  geschlossen ohne Bibliothekskontext zurueck. Explizite klassische Begriffe
+  wie Buch, Quelle, Zitat oder Bibliothek werden weiterhin vor dem Runner
+  erkannt und direkt gesucht. Der alte "kein Runner vorhanden"-Fallback bleibt
+  fuer kompatible Installationen unveraendert.
+- Regressionen: `tests/test_pydantic_decisions.py`
+  und `tests/test_bibliothekar.py` zusammen -> `126 passed`; Ruff fuer
+  betroffene Produktions-/Decision-Dateien, `compileall` und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c595ee00 fix: fail closed on library decision errors`.
+
+**Aktueller Laufstand:** Seit dem manuellen Restart `5/20` Commits inklusive
+Dokumentationscommit. Kein Push. Naechster manueller Restart nach 15 weiteren
+Commits; naechster Push bleibt bei 100 Commits.
+
 ### Telegram-RemoteDisconnect
 
 - 2026-07-16: `RemoteDisconnected` aus `urllib` wurde beim Telegram-

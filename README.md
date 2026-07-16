@@ -855,6 +855,8 @@ Konfiguration in `Bot_Verhalten.md`:
 
 Vor dem Bibliothekar-Kontext kann ein optionaler Pydantic-Subtask `BibliothekarQueryDecision` laufen. Er entscheidet, ob der Quellenindex fuer die aktuelle natuerliche Sprache durchsucht werden soll, und kann die Suchfrage knapp normalisieren. Ohne strukturierten Runner bleibt das alte Verhalten erhalten: der Bibliothekar sucht weiter, sobald er in der Instanz aktiviert ist. Fuer echte Pydantic-AI-Laeufe gibt es `TeeBotus.decisions.pydantic_agent.build_router_pydantic_ai_model_runner("structured_decision")`, der den TeeBotus-LLM-Router nutzt und aktuell auf den `hf_pool_structured`-Bucket zeigt. `build_pydantic_ai_model_runner(model)` bleibt fuer direkte Tests/Fakes verfuegbar. Der Adapter ist optional, nutzt Pydantic-AIs strukturierte `output_type`-Ausgabe und meldet klar, wenn das Extra `[agents]` nicht installiert ist.
 
+Wenn ein konfigurierter Structured-Runner selbst fehlschlaegt oder kein validierbares Ergebnis liefert, bleibt die Suche geschlossen: Die Nachricht wird ohne Bibliothekskontext beantwortet. Klassische Treffer wie Buch-, Quellen- oder Zitatfragen umgehen diesen Fallback und suchen weiterhin direkt. Dadurch landen bei einem defekten Decision-Backend keine zufaelligen oder irrelevanten Chunks im Prompt.
+
 CLI:
 
 ```bash
