@@ -29,7 +29,7 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit letztem
-  Restart sind aktuell `13/20` Commits vorhanden; naechster Restart nach 7
+  Restart sind aktuell `16/20` Commits vorhanden; naechster Restart nach 4
   weiteren Commits.
 
 ## Aktueller Plan
@@ -283,6 +283,22 @@ Diagnose und Tests.
 - Drei Regressionen ergaenzt; `tests/test_runtime_state.py`: `81 passed in
   1.14s`; Ruff und `py_compile` gruen. Commit:
   `4e4ffc5d fix: preserve response scope during reset retries`.
+
+### Telegram-Offset und Dispatch-Journal
+
+- 2026-07-16: Der Audit fand einen Ack-Reihenfolgefehler in `run_polling()`.
+  Nach erfolgreicher Action-Ausfuehrung wurde der Update-Offset persistiert,
+  danach konnte das Dispatch-Journal-Cleanup scheitern. Der Code liess dann
+  den In-Memory-Offset alt und behandelte ein bereits bestaetigtes Update bei
+  jedem Poll erneut. Bei dauerhaft defektem Journal konnte der Poller dadurch
+  endlos am selben Update haengen.
+- Nach erfolgreicher Offset-Persistenz gilt Update als bestaetigt. Ein
+  fehlgeschlagenes Journal-Cleanup wird sichtbar geloggt, aber nicht mehr als
+  retrybarer Updatefehler behandelt. At-least-once-Action-Recovery bleibt vor
+  Offset-Persistenz unveraendert.
+- Regression fuer Cleanup-Fehler ergaenzt. `tests/test_bot.py`: `199 passed,
+  17 subtests passed in 3.65s`; Ruff, `py_compile` und `git diff --check`
+  gruen. Commit: `7e9c73e2 fix: stop retrying acknowledged telegram updates`.
 
 ## Akzeptanzkriterien
 
