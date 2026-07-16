@@ -944,6 +944,23 @@ def test_confirm_privacy_rolls_back_profile_when_index_write_fails(tmp_path):
     assert store.has_privacy_confirmation(account_id) is False
 
 
+def test_profile_identity_list_corruption_is_rejected_without_mutation(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(395935293))
+    profile_path = store.account_dir(account_id) / "Account_Profile.json"
+    profile = store._read_account_profile(account_id)
+    profile["linked_identities"] = "telegram:user:corrupt"
+    store._write_account_profile(account_id, profile)
+    corrupted_profile = profile_path.read_bytes()
+    previous_index = store.account_index_path.read_bytes()
+
+    with pytest.raises(AccountStoreError, match="linked_identities must be a string list"):
+        store.confirm_privacy(account_id, source="telegram")
+
+    assert profile_path.read_bytes() == corrupted_profile
+    assert store.account_index_path.read_bytes() == previous_index
+
+
 def test_clear_privacy_confirmation_retry_repairs_index_after_write_failure(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(395935293))

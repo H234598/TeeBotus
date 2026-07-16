@@ -2143,7 +2143,7 @@ class AccountStore:
             # Pre-read and validate the profile before mutating the identity mapping. If
             # the encrypted profile is unreadable, no mapping is removed.
             profile = self._read_account_profile(account_id)
-            linked = [value for value in profile.get("linked_identities", []) if value != key]
+            linked = [value for value in self._profile_linked_identities(profile) if value != key]
             profile["linked_identities"] = linked
             profile["updated_at"] = utc_now()
             if not linked:
@@ -4444,11 +4444,12 @@ class AccountStore:
     def _upsert_account_index(self, profile: dict[str, Any]) -> None:
         index = self._load_index()
         accounts = index.setdefault("accounts", {})
+        linked_identities = self._profile_linked_identities(profile)
         accounts[profile["account_id"]] = {
             "account_id": profile["account_id"],
             "status": profile.get("status", "active"),
             "registered": bool(profile.get("registered")),
-            "linked_identity_count": len(profile.get("linked_identities", [])),
+            "linked_identity_count": len(linked_identities),
             "updated_at": profile.get("updated_at", utc_now()),
         }
         self._save_index(index)
@@ -4464,11 +4465,17 @@ class AccountStore:
             identities[identity_key]["last_seen_at"] = utc_now()
             self._save_identities(identities)
 
+    def _profile_linked_identities(self, profile: dict[str, Any]) -> list[str]:
+        linked_identities = profile.get("linked_identities", [])
+        if not isinstance(linked_identities, list) or not all(isinstance(value, str) for value in linked_identities):
+            raise AccountStoreError("account profile linked_identities must be a string list")
+        return list(linked_identities)
+
     def _add_identity_to_profile(self, account_id: str, identity_key: str) -> None:
         if not identity_key:
             return
         profile = self._read_account_profile(account_id)
-        linked = list(profile.get("linked_identities", []))
+        linked = self._profile_linked_identities(profile)
         if identity_key not in linked:
             linked.append(identity_key)
         profile["linked_identities"] = linked
@@ -4484,7 +4491,7 @@ class AccountStore:
         profile = self._read_account_profile(account_id)
         linked = [
             new_identity_key if str(identity_key) == old_identity_key else str(identity_key)
-            for identity_key in profile.get("linked_identities", [])
+            for identity_key in self._profile_linked_identities(profile)
         ]
         if new_identity_key not in linked:
             linked.append(new_identity_key)
@@ -4497,7 +4504,7 @@ class AccountStore:
         if not (self.account_dir(account_id) / ACCOUNT_PROFILE_FILENAME).exists():
             return
         profile = self._read_account_profile(account_id)
-        linked = [str(value) for value in profile.get("linked_identities", []) if str(value) != identity_key]
+        linked = [value for value in self._profile_linked_identities(profile) if value != identity_key]
         profile["linked_identities"] = linked
         profile["updated_at"] = utc_now()
         if mark_orphaned and not linked:
