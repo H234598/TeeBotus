@@ -833,6 +833,8 @@ def _json_memory_files_for_accounts(accounts_root: Path, account_ids: Sequence[s
     files: list[Path] = []
     for account_id in account_ids:
         account_dir = accounts_root / ACCOUNTS_DIRNAME / account_id
+        if account_dir.is_symlink() or not account_dir.is_dir():
+            continue
         for filename in JSON_ACCOUNT_MEMORY_FILES:
             path = account_dir / filename
             if path.exists():

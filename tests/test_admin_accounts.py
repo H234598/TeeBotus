@@ -1486,6 +1486,20 @@ def test_memory_recovery_snapshots_all_sqlite_sources_before_deleting(monkeypatc
     assert delete_calls == []
 
 
+def test_memory_recovery_json_quarantine_ignores_symlinked_account_dir(tmp_path: Path) -> None:
+    accounts_root = tmp_path / "data" / "accounts"
+    external = tmp_path / "external-account"
+    external.mkdir(parents=True)
+    (external / "User_Memory_Entries.jsonl").write_text("outside\n", encoding="utf-8")
+    account_id = "a" * 128
+    account_dir = accounts_root / "accounts" / account_id
+    account_dir.parent.mkdir(parents=True)
+    account_dir.symlink_to(external, target_is_directory=True)
+
+    assert account_memory_recovery_module._json_memory_files_for_accounts(accounts_root, [account_id]) == []
+    assert (external / "User_Memory_Entries.jsonl").exists()
+
+
 def test_memory_recovery_report_includes_unreadable_metadata_account_ids(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
