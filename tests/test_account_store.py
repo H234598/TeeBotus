@@ -1472,6 +1472,22 @@ def test_merge_accounts_preserves_json_account_collections(tmp_path):
     assert not (store.account_dir(source) / PROACTIVE_OUTBOX_FILENAME).exists()
 
 
+def test_replace_codex_history_outbox_refuses_collection_diagnostics(tmp_path):
+    class Backend:
+        last_database_missing = False
+        last_collection_read_error = "payload could not be decrypted"
+        last_collection_skipped = 1
+
+        def replace_collection_item(self, *_args, **_kwargs):
+            raise AssertionError("unreadable collection must block replacement")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    store._account_memory_backend = Backend()
+
+    with pytest.raises(AccountStoreError, match="cannot replace Codex history outbox item"):
+        store.replace_codex_history_outbox_item("a" * 128, {"id": "history_1", "status": "sent"})
+
+
 def test_merge_accounts_normalizes_source_before_retry_deduplication(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))

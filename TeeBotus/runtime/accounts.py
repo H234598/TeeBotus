@@ -3961,6 +3961,10 @@ class AccountStore:
         replace_collection_item = getattr(backend, "replace_collection_item", None) if backend is not None else None
         if not callable(replace_collection_item):
             return False
+        self._raise_if_account_memory_collection_unreadable(
+            CODEX_HISTORY_OUTBOX_COLLECTION,
+            "cannot replace Codex history outbox item",
+        )
         replaced = bool(replace_collection_item(account_id, CODEX_HISTORY_OUTBOX_COLLECTION, item_id, dict(item)))
         if replaced:
             self._unlink_migrated_account_file(self.account_dir(account_id) / CODEX_HISTORY_OUTBOX_FILENAME)
