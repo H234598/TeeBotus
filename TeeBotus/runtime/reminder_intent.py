@@ -75,6 +75,14 @@ DATE_RE = re.compile(
     rf"(?:\s+(?:um|gegen)?\s*(?P<hour>{_CLOCK_HOUR})(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?)?",
     re.IGNORECASE,
 )
+MONTH_NAME_DATE_RE = re.compile(
+    r"\b(?:am\s+)?(?P<day>[0-3]?\d)\.?\s+"
+    r"(?P<month>januar|jan|februar|feb|maerz|märz|marz|mrz|april|apr|mai|juni|jun|juli|jul|august|aug|"
+    r"september|sep|oktober|okt|november|nov|dezember|dez)"
+    r"(?:\s+(?P<year>\d{2,4}))?"
+    rf"(?:\s+(?:um|gegen)?\s*(?P<hour>{_CLOCK_HOUR})(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?)?",
+    re.IGNORECASE,
+)
 ISO_RE = re.compile(
     r"\b(?P<year>20\d{2})-(?P<month>[01]\d)-(?P<day>[0-3]\d)"
     rf"(?:[T\s](?P<hour>{_CLOCK_HOUR}):(?P<minute>[0-5]\d))?",
@@ -88,6 +96,33 @@ DAY_WORDS = {
     "freitag": 4,
     "samstag": 5,
     "sonntag": 6,
+}
+MONTH_NAMES = {
+    "januar": 1,
+    "jan": 1,
+    "februar": 2,
+    "feb": 2,
+    "maerz": 3,
+    "märz": 3,
+    "marz": 3,
+    "mrz": 3,
+    "april": 4,
+    "apr": 4,
+    "mai": 5,
+    "juni": 6,
+    "jun": 6,
+    "juli": 7,
+    "jul": 7,
+    "august": 8,
+    "aug": 8,
+    "september": 9,
+    "sep": 9,
+    "oktober": 10,
+    "okt": 10,
+    "november": 11,
+    "nov": 11,
+    "dezember": 12,
+    "dez": 12,
 }
 DAY_WORD_RE = re.compile(
     r"\b(?P<day>montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)"
@@ -295,6 +330,15 @@ def _parse_due_at(text: str, now: datetime) -> str:
             if _relative_text_uses_calendar_unit(relative_text.group("phrase")):
                 candidate = _apply_explicit_time(candidate, text)
             return _iso(candidate)
+    month_name_date = MONTH_NAME_DATE_RE.search(_normalize(text))
+    if month_name_date:
+        month = MONTH_NAMES[month_name_date.group("month").casefold()]
+        day = int(month_name_date.group("day"))
+        hour = int(month_name_date.group("hour") or 9)
+        minute = int(month_name_date.group("minute") or 0)
+        if month_name_date.group("year"):
+            return _build_datetime(normalized_now, _normalize_year(month_name_date.group("year"), normalized_now.year), month, day, hour, minute)
+        return _next_annual_date(normalized_now, month=month, day=day, hour=hour, minute=minute)
     iso = ISO_RE.search(text)
     if iso:
         return _build_datetime(
@@ -571,8 +615,12 @@ def _apply_explicit_time(value: datetime, text: str) -> datetime:
 
 def _has_invalid_explicit_time(text: str) -> bool:
     raw = str(text or "")
-    for pattern in (EXPLICIT_TIME_CANDIDATE_RE, DATE_TIME_CANDIDATE_RE):
-        match = pattern.search(raw)
+    for pattern, candidate_text in (
+        (EXPLICIT_TIME_CANDIDATE_RE, raw),
+        (DATE_TIME_CANDIDATE_RE, raw),
+        (MONTH_NAME_DATE_RE, _normalize(raw)),
+    ):
+        match = pattern.search(candidate_text)
         if match is None:
             continue
         hour = int(match.group("hour"))
@@ -616,6 +664,7 @@ def _reminder_subject(text: str) -> str:
     cleaned = RELATIVE_RE.sub("", cleaned)
     cleaned = TIME_RE.sub("", cleaned)
     cleaned = ISO_RE.sub("", cleaned)
+    cleaned = MONTH_NAME_DATE_RE.sub("", cleaned)
     cleaned = DATE_RE.sub("", cleaned)
     cleaned = MONTH_DAY_RE.sub("", cleaned)
     cleaned = DAY_WORD_RE.sub("", cleaned)

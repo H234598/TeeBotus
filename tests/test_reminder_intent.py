@@ -170,6 +170,26 @@ def test_parse_reminder_date_without_year_rolls_to_next_occurrence() -> None:
     assert intent.due_at == "2027-01-01T09:00:00+00:00"
 
 
+def test_parse_reminder_supports_german_month_names_and_explicit_year() -> None:
+    now = datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc)
+
+    next_may = parse_reminder_intent("Erinnere mich am 10. Mai um 14:30 an den Termin", now=now)
+    march = parse_reminder_intent("Erinnere mich am 16. Maerz 2027 um 17:47 an Dr. Oliver", now=now)
+    umlaut = parse_reminder_intent("Erinnere mich am 16. März 2027 um 17:47 an Dr. Oliver", now=now)
+
+    assert (next_may.due_at, next_may.subject) == ("2027-05-10T14:30:00+00:00", "den Termin")
+    assert (march.due_at, march.subject) == ("2027-03-16T17:47:00+00:00", "Dr. Oliver")
+    assert umlaut.due_at == march.due_at
+
+
+def test_parse_reminder_rejects_invalid_named_month_date_without_fallback() -> None:
+    intent = parse_reminder_intent("Erinnere mich am 31. Februar 2027 um 10 an den Termin", now=fixed_now())
+
+    assert intent.is_request is True
+    assert intent.missing_time is True
+    assert intent.due_at == ""
+
+
 def test_parse_reminder_does_not_queue_past_today_time() -> None:
     intent = parse_reminder_intent(
         "Erinnere mich heute um 9 an den Termin",
