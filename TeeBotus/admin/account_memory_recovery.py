@@ -831,15 +831,25 @@ def _sqlite_sources_for_unrecoverable_accounts(accounts: Sequence[Mapping[str, A
 
 def _json_memory_files_for_accounts(accounts_root: Path, account_ids: Sequence[str]) -> list[Path]:
     files: list[Path] = []
+    accounts_dir = _safe_json_accounts_dir(accounts_root)
+    if accounts_dir is None:
+        return files
     for account_id in account_ids:
-        account_dir = accounts_root / ACCOUNTS_DIRNAME / account_id
+        account_dir = accounts_dir / account_id
         if account_dir.is_symlink() or not account_dir.is_dir():
             continue
         for filename in JSON_ACCOUNT_MEMORY_FILES:
             path = account_dir / filename
-            if path.exists():
+            if not path.is_symlink() and path.is_file():
                 files.append(path)
     return files
+
+
+def _safe_json_accounts_dir(accounts_root: Path) -> Path | None:
+    accounts_dir = accounts_root / ACCOUNTS_DIRNAME
+    if accounts_dir.is_symlink() or not accounts_dir.is_dir():
+        return None
+    return accounts_dir
 
 
 def _snapshot_sqlite_database(source: Path, target: Path) -> None:
@@ -957,12 +967,15 @@ def _looks_like_running_teebotus_runtime(cmdline_lower: str) -> bool:
 
 def _discover_account_ids(accounts_root: Path) -> list[str]:
     account_ids: set[str] = set()
-    accounts_dir = accounts_root / ACCOUNTS_DIRNAME
-    if accounts_dir.exists():
+    accounts_dir = _safe_json_accounts_dir(accounts_root)
+    if accounts_dir is not None:
         account_ids.update(
             path.name
             for path in accounts_dir.iterdir()
-            if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name) and path.name != INSTANCE_STATE_ACCOUNT_ID
+            if not path.is_symlink()
+            and path.is_dir()
+            and TOKEN_HEX_RE.fullmatch(path.name)
+            and path.name != INSTANCE_STATE_ACCOUNT_ID
         )
     for source in _discover_recovery_sources(accounts_root):
         if source.active and source.kind == "sqlite":
@@ -978,8 +991,8 @@ def _discover_recovery_sources(accounts_root: Path) -> list[RecoverySource]:
     ):
         if path.exists():
             sources.append(RecoverySource(name, "sqlite", path))
-    accounts_dir = accounts_root / ACCOUNTS_DIRNAME
-    if accounts_dir.exists():
+    accounts_dir = _safe_json_accounts_dir(accounts_root)
+    if accounts_dir is not None:
         sources.append(RecoverySource("json_files", "json", accounts_dir))
     sources.extend(_discover_snapshot_sqlite_sources(accounts_root, existing_paths={source.path.resolve() for source in sources}))
     return sources
@@ -994,7 +1007,7 @@ def _discover_snapshot_sqlite_sources(accounts_root: Path, *, existing_paths: se
     seen_names: set[str] = set()
     for path in sorted(candidates):
         resolved = path.resolve()
-        if resolved in existing_paths or not path.is_file():
+        if resolved in existing_paths or path.is_symlink() or not path.is_file():
             continue
         name = _snapshot_source_name(accounts_root, path, seen_names=seen_names)
         sources.append(RecoverySource(name, "sqlite", path, active=False))
@@ -1158,18 +1171,44 @@ def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_
     index: dict[str, Any] = {}
     collections = 0
     raw_collections = 0
+    if source.path.is_symlink() or (source.path / account_id).is_symlink():
+        rejected_path = source.path if source.path.is_symlink() else source.path / account_id
+        return {
+            "name": source.name,
+            "kind": source.kind,
+            "payload_kind": "encrypted_account_memory",
+            "path": str(source.path),
+            "active": source.active,
+            "readable": False,
+            "entries": 0,
+            "raw_entries": 0,
+            "index_present": False,
+            "raw_index_present": False,
+            "collections": 0,
+            "raw_collections": 0,
+            "error": f"refusing symlinked JSON recovery path: {rejected_path}",
+        }
     if entries_path.exists():
-        try:
-            entries = store.account_memory_vault.read_jsonl(entries_path)
-        except AccountStoreError as exc:
-            errors.append(f"entries: {exc}")
+        if entries_path.is_symlink():
+            errors.append(f"entries: refusing symlinked JSON recovery file: {entries_path}")
+        else:
+            try:
+                entries = store.account_memory_vault.read_jsonl(entries_path)
+            except AccountStoreError as exc:
+                errors.append(f"entries: {exc}")
     if index_path.exists():
-        try:
-            index = store.account_memory_vault.read_json(index_path, {})
-        except AccountStoreError as exc:
-            errors.append(f"index: {exc}")
+        if index_path.is_symlink():
+            errors.append(f"index: refusing symlinked JSON recovery file: {index_path}")
+        else:
+            try:
+                index = store.account_memory_vault.read_json(index_path, {})
+            except AccountStoreError as exc:
+                errors.append(f"index: {exc}")
     for filename in JSON_ACCOUNT_STATE_FILES:
         path = source.path / account_id / filename
+        if path.is_symlink():
+            errors.append(f"{filename}: refusing symlinked JSON recovery file: {path}")
+            continue
         if not path.exists():
             continue
         if filename.endswith(".jsonl"):
@@ -1195,9 +1234,9 @@ def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_
         "active": source.active,
         "readable": not errors,
         "entries": len(entries),
-        "raw_entries": _count_lines(entries_path),
+        "raw_entries": _count_lines(entries_path) if entries_path.is_file() and not entries_path.is_symlink() else 0,
         "index_present": bool(index),
-        "raw_index_present": index_path.exists(),
+        "raw_index_present": index_path.is_file() and not index_path.is_symlink(),
         "collections": collections,
         "raw_collections": raw_collections,
         "error": "; ".join(errors),
