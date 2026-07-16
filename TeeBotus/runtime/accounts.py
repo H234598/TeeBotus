@@ -1978,6 +1978,7 @@ class AccountStore:
             raise
         return account_id, secret
 
+    @_serialize_identity_map
     def verify_secret(self, account_id: str, account_secret: str) -> bool:
         try:
             account_id = validate_sha512_token(account_id, field_name="account_id")
@@ -2520,6 +2521,7 @@ class AccountStore:
                 ) from rollback_errors[0]
             raise
 
+    @_serialize_identity_map
     def has_privacy_confirmation(self, account_id: str) -> bool:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)

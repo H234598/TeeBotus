@@ -1650,6 +1650,38 @@ def test_account_summary_holds_identity_lock_for_profile_snapshot(tmp_path):
     assert lock_states == []
 
 
+def test_secret_and_privacy_reads_hold_identity_lock(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    _, secret = store.register_account(account_id)
+    store.confirm_privacy(account_id, source="telegram")
+    lock_states: list[bool] = []
+
+    @contextmanager
+    def recording_lock():
+        lock_states.append(True)
+        try:
+            yield
+        finally:
+            lock_states.pop()
+
+    original_read_profile = store._read_account_profile
+
+    def read_profile(profile_account_id):
+        assert lock_states == [True]
+        return original_read_profile(profile_account_id)
+
+    with patch.object(store, "account_identity_lock", recording_lock), patch.object(
+        store,
+        "_read_account_profile",
+        side_effect=read_profile,
+    ):
+        assert store.verify_secret(account_id, secret) is True
+        assert store.has_privacy_confirmation(account_id) is True
+
+    assert lock_states == []
+
+
 @pytest.mark.parametrize(
     ("failing_method", "error_text"),
     [
