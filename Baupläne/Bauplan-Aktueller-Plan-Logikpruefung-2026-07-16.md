@@ -2641,3 +2641,21 @@ Restart nach 6 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `17/20` Code-Commits. Dieser
 Plan-Commit macht `18/20`. Kein Push. Restart nach 2 weiteren Commits.
 Naechster Push bleibt erst bei 100 Commits.
+
+### Merge-prueft-Source-und-Target-getrennt
+
+- 2026-07-16: `merge_accounts()` las Source-Entries, dann Target-Entries und
+  pruefte erst danach den gemeinsamen Diagnosezustand. Ein sauberer Target-Read
+  konnte damit einen partiell unlesbaren Source-Read maskieren; Source-Daten
+  waeren anschliessend zusammengefuehrt und beim Tombstone-Cleanup geloescht
+  worden.
+- Source- und Target-Entries werden jetzt direkt nach ihrem jeweiligen Read
+  fail-closed geprueft. Erst zwei saubere Reads erlauben Merge/Loeschpfad.
+- Regression: Merge-Suite -> `8 passed`; komplette `tests/test_account_store.py`
+  -> `286 passed`. Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `8cb00919 fix: validate source memory before account merge`.
+
+**Aktueller Laufstand:** Seit dem Restart `19/20` Code-Commits. Dieser
+Plan-Commit macht `20/20`; danach Restart. Kein Push. Naechster Push bleibt
+erst bei 100 Commits.
