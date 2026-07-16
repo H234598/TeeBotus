@@ -2157,3 +2157,26 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `7/20` Code-Commits. Dieser
 Plan-Commit macht `8/20`; kein Push. Naechster Restart nach 12 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Proactive-Monatsanker
+
+- 2026-07-16: Monats-Wiederholungen klebten nach einem kurzen Monat am
+  gekappten Tag. Ein Reminder am 31. Januar lief dadurch ueber 28. Februar
+  dauerhaft am 28. weiter und kehrte nie zum 31. zurueck.
+- Monatliche Regeln speichern jetzt urspruenglichen Kalendertag und ob der
+  Starttag Monatsende war. Tag 30 bleibt nach Februar am 30.; ein Start am
+  Monatsende nutzt in kurzen Monaten das Monatsende und danach wieder den
+  letzten Tag des Zielmonats.
+- Bestehende Items ohne Anker werden beim ersten erfolgreichen Versand aus
+  ihrem vorhandenen `due_at` reparierbar abgeleitet. Die Regel gilt fuer
+  `monthly` und `every N months`; Tages-, Wochen- und Werktagsregeln bleiben
+  unveraendert.
+- Regression fuer 31->28->31, 30->28->30 sowie Dispatch-Persistenz;
+  `tests/test_proactive_agent.py` -> `125 passed`; Reminder-/Engine-Fokus ->
+  `39 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `1acaf25a fix: preserve monthly recurrence calendar day`.
+
+**Aktueller Laufstand:** Seit dem Restart `9/20` Code-Commits. Dieser
+Plan-Commit macht `10/20`; kein Push. Naechster Restart nach 10 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
