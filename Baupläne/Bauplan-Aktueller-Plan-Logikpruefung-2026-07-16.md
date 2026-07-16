@@ -1127,6 +1127,22 @@ Diagnose und Tests.
 - Code-Commit: `2883551a fix: filter invalid account collection rows`;
   kein Provider/API-Aufruf.
 
+### SQL-Schema-Initialisierung
+
+- 2026-07-16: SQLite- und PostgreSQL-Backends konnten bei parallelem ersten
+  Zugriff dieselbe Schema-Initialisierung gleichzeitig ausfuehren. Bei SQLite
+  konnte daraus ein `database is locked` entstehen; PostgreSQL bekam
+  unnoetige konkurrierende DDL-Transaktionen.
+- Beide Backends serialisieren Schema-Pruefung und DDL jetzt ueber einen
+  gemeinsamen Prozess-Lock. Das gilt fuer mehrere Backend-Objekte innerhalb
+  desselben Bot-Prozesses; getrennte Prozesse verlassen sich weiter auf die
+  Transaktions-/Lock-Semantik der Datenbank.
+- Regression: Ein blockierter erster SQLite-DDL-Lauf darf keinen zweiten
+  parallelen DDL-Lauf starten. AccountStore `252 passed`, Benchmark-Suite
+  `14 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `3134bd27 fix: serialize SQL schema initialization`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -1166,8 +1182,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `17/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 3 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `19/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 1 weiterem Commit.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
