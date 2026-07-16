@@ -2157,6 +2157,27 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 Plan-Commit macht `19/20`; kein Push. Naechster Restart nach 1 weiterem
 Commit. Naechster Push bleibt erst bei 100 Commits.
 
+### Gemini-Free-Tier-Uhrsprung
+
+- 2026-07-16: `GeminiFreeTierGuard` setzte RPM-/TPM- und RPD-Budget bei
+  jedem anderen Zeit-Bucket zurueck. Eine rueckwaerts korrigierte Systemuhr
+  konnte dadurch bereits verbrauchte Free-Tier-Anfragen erneut freigeben.
+- Minute- und Tagesbucket wechseln jetzt nur vorwaerts. Bei Ruecksprung
+  bleiben alte Zaehler aktiv; der Guard bleibt konservativ und gibt keine
+  Zusatzanfragen frei.
+- Regression: Vorwaertswechsel setzt Tagesbudget korrekt neu, Ruecksprung
+  bleibt blockiert; Free-Tier-Fokus -> `3 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0b418e79 fix: preserve Gemini budgets across clock rollback`.
+- Nach dem 20. Commit seit dem vorherigen Lauf wurde `teebotus.service`
+  neu gestartet. Status `active`, MainPID `504988`, Exit `0`, Start
+  `2026-07-16 20:39:19 CEST`.
+
+**Aktueller Laufstand:** Seit dem Restart `0/20` Commits. Dieser
+Plan-Commit ist der erste Commit des neuen Laufs; kein Push. Naechster
+Restart nach 19 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
+
 ### Proactive-Tageslimit-bei-Wiederholungen
 
 - 2026-07-16: Nach erfolgreichem Versand wird eine wiederkehrende Erinnerung
