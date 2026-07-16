@@ -1517,6 +1517,17 @@ faellig, kein Push ausgeloest.
   GROQ-Key fehlt; beides sind bestehende Konfigurationszustaende. Kein
   Provider/API-Aufruf.
 
+- Nach Commit 20 dieses Auditblocks erneut ueber die aktive User-Unit
+  `teebotus.service` neugestartet: `active/running`, PID `96400`,
+  `ActiveEnterTimestamp=2026-07-16 13:48:49 CEST`. Die erste unmittelbare
+  Statusprobe sah Signal noch im Start-Rennen als `connection refused`;
+  Folgeprobe nach Bereitschaft meldete beide Signal-Services `reachable` und
+  beide Accounts `registered`. Qdrant blieb `ready`; kein Provider/API-
+  Aufruf. Die systemweite Unit blieb erwartungsgemaess unbeteiligt.
+
+**Laufstand nach Restart:** Seit dem Restart `1/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 19 weiteren Commits.
+
 ## Bezug
 
 - Vorheriger Plan:
