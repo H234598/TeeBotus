@@ -2729,3 +2729,23 @@ Restart nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Metadata-Quarantaene-bei-Secret-Fehlern
+
+- 2026-07-17: `_unreadable_metadata_items()` meldete fehlendes, nicht
+  erreichbares oder geaendertes Secret ebenso wie echte Payload-Korruption als
+  `AccountStoreError`. `--apply --quarantine-unreadable-metadata` haette
+  dadurch gueltige verschluesselte Daten aus dem aktiven Store bewegen koennen.
+- Quarantaene-Apply laeuft jetzt nur bei bekannten Korruptionssignaturen wie
+  Authentication-Tag-Fehlern, malformed/unsupported Envelopes oder invalidem
+  verschluesseltem JSON. Secret-Service-, Keyring-, Provider-, Missing-Key- und
+  unbekannte Fehler blockieren den gesamten Instance-Apply. Dateien bleiben
+  unangetastet; Ergebnisstatus ist `blocked`.
+- Regression: Metadata-Quarantaene inklusive fehlendem Secret -> `4 passed`;
+  komplette `tests/test_admin_accounts.py` -> `65 passed`. Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `69497d4d fix: block metadata quarantine on secret failures`.
+
+**Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
