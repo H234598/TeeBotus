@@ -5308,7 +5308,7 @@ def test_account_memory_fallback_does_not_mark_unrecoverable_for_empty_entries_b
     assert (account_id in backend._unrecoverable_fallback_entries) is False
 
 
-def test_account_memory_fallback_empty_entries_by_ids_result_from_empty_fallback_syncs_empty_primary(caplog):
+def test_account_memory_fallback_empty_entries_by_ids_result_from_empty_fallback_does_not_sync_primary(caplog):
     class Backend:
         def __init__(self, *, fail_read: bool = False) -> None:
             self.fail_read = fail_read
@@ -5337,9 +5337,42 @@ def test_account_memory_fallback_empty_entries_by_ids_result_from_empty_fallback
         rows = backend.read_entries_by_ids(account_id, ["entry_missing"])
 
     assert rows == []
-    assert primary.entries[account_id] == []
-    assert backend.stale_fallback_entry_account_ids == ()
-    assert backend.last_fallback_sync_error == ""
+    assert account_id not in primary.entries
+    assert account_id in backend._unrecoverable_fallback_entries
+    assert backend.last_fallback_sync_error == "read_entries: fallback has no recoverable data"
+
+
+def test_account_memory_fallback_does_not_clear_primary_from_empty_entries_by_ids_fallback() -> None:
+    class Backend:
+        def __init__(self, rows: list[dict[str, str]], *, fail_read: bool = False) -> None:
+            self.entries = {"a" * 128: [dict(row) for row in rows]}
+            self.fail_read = fail_read
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            if self.fail_read:
+                raise AccountStoreError("primary entries unavailable")
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def read_entries_by_ids(self, account_id: str, memory_ids: list[str]) -> list[dict[str, str]]:
+            if self.fail_read:
+                raise AccountStoreError("primary entries-by-ids unavailable")
+            requested_ids = set(memory_ids)
+            return [dict(row) for row in self.entries.get(account_id, []) if row.get("id") in requested_ids]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            self.entries[account_id] = [dict(row) for row in rows]
+
+    account_id = "a" * 128
+    original_rows = [{"id": "entry_existing"}]
+    primary = Backend(original_rows, fail_read=True)
+    fallback = Backend([])
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    assert backend.read_entries_by_ids(account_id, ["entry_existing"]) == []
+
+    assert primary.entries[account_id] == original_rows
+    assert account_id in backend._unrecoverable_fallback_entries
+    assert backend.last_fallback_sync_error == "read_entries: fallback has no recoverable data"
 
 
 def test_account_memory_fallback_blocks_empty_secondary_after_partial_entries_by_ids_read() -> None:

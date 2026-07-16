@@ -714,6 +714,12 @@ class WarningFallbackAccountMemoryBackend:
             self._unrecoverable_fallback_set(operation).add(stale_key)
             self._set_fallback_sync_error(operation, account_id, f"{operation}: fallback has no recoverable data")
             return result
+        if partial_result and repair_data == []:
+            stale_key = self._operation_stale_key(operation, account_id)
+            self._fallback_stale_set(operation).add(stale_key)
+            self._unrecoverable_fallback_set(operation).add(stale_key)
+            self._set_fallback_sync_error(operation, account_id, f"{operation}: fallback has no recoverable data")
+            return result
         if self._read_diagnostic_failed(operation):
             raise self._fallback_diagnostics_error(operation, account_id)
         try:
