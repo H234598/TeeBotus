@@ -2968,6 +2968,15 @@ def test_account_collection_append_paths_refuse_partial_sql_rows(tmp_path):
         lambda: store.append_status_dispatch_result(account_id, {"status": "sent"}),
         lambda: store.append_codex_history_item(account_id, {"summary": "neu"}),
         lambda: store.append_codex_history_dispatch_result(account_id, {"status": "sent"}),
+        lambda: store.write_proactive_outbox(account_id, [{"id": "replacement"}]),
+        lambda: store.write_llm_state(account_id, {"previous_response_id": "replacement"}),
+        lambda: store.write_agent_state(account_id, {"proactive": {"enabled": False}}),
+        lambda: store.write_status_auth_state(account_id, {"authorized": True}),
+        lambda: store.write_instance_json_state(
+            "Version_Notifications.json",
+            "version_notifications",
+            {"versions": {}},
+        ),
     )
 
     for operation in operations:

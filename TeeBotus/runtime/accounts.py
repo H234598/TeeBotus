@@ -3510,6 +3510,10 @@ class AccountStore:
         write_collection = getattr(backend, "write_collection", None) if backend is not None else None
         if not callable(write_collection):
             raise AccountStoreError("account memory SQL collection backend is not available")
+        self._raise_if_account_memory_collection_unreadable(
+            collection_name,
+            "cannot write account memory collection",
+        )
         write_collection(INSTANCE_STATE_ACCOUNT_ID, collection_name, [dict(data)])
         self._unlink_migrated_account_file(self.root.parent / safe_filename)
 
@@ -3606,6 +3610,10 @@ class AccountStore:
         backend = self.account_memory_backend
         write_collection = getattr(backend, "write_collection", None) if backend is not None else None
         if callable(write_collection):
+            self._raise_if_account_memory_collection_unreadable(
+                collection,
+                "cannot write account memory collection",
+            )
             write_collection(account_id, collection, [dict(data)])
             self._unlink_migrated_account_file(self.account_dir(account_id) / filename)
             return
@@ -3655,6 +3663,10 @@ class AccountStore:
         backend = self.account_memory_backend
         write_collection = getattr(backend, "write_collection", None) if backend is not None else None
         if callable(write_collection):
+            self._raise_if_account_memory_collection_unreadable(
+                collection,
+                "cannot write account memory collection",
+            )
             write_collection(account_id, collection, list(rows))
             self._unlink_migrated_account_file(self.account_dir(account_id) / filename)
             return
