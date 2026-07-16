@@ -89,6 +89,24 @@ def test_parse_reminder_extracts_supported_recurrence_rules() -> None:
     assert (every_months.recurrence, every_months.due_at) == ("every 2 months", "2026-07-01T10:00:00+00:00")
 
 
+def test_parse_weekday_reminder_does_not_become_one_off_weekend_reminder() -> None:
+    friday = parse_reminder_intent(
+        "Erinnere mich jeden Werktag um 9 an die Medikamente",
+        now=datetime(2026, 6, 19, 10, 0, tzinfo=timezone.utc),
+    )
+    saturday = parse_reminder_intent(
+        "Erinnere mich jeden Wochentag um 9 an die Medikamente",
+        now=datetime(2026, 6, 20, 8, 0, tzinfo=timezone.utc),
+    )
+
+    assert (friday.due_at, friday.recurrence, friday.subject) == (
+        "2026-06-22T09:00:00+00:00",
+        "weekdays",
+        "die Medikamente",
+    )
+    assert (saturday.due_at, saturday.recurrence) == ("2026-06-22T09:00:00+00:00", "weekdays")
+
+
 def test_parse_reminder_interval_recurrence_starts_from_now() -> None:
     now = datetime(2026, 6, 15, 12, 34, tzinfo=timezone.utc)
 

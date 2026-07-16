@@ -2634,6 +2634,19 @@ def _normalize_recurrence_rule(value: object) -> str:
         "taeglich": "daily",
         "täglich": "daily",
         "jeden tag": "daily",
+        "weekdays": "weekdays",
+        "weekday": "weekdays",
+        "every weekday": "weekdays",
+        "every weekdays": "weekdays",
+        "jeden werktag": "weekdays",
+        "jeden wochentag": "weekdays",
+        "alle werktage": "weekdays",
+        "alle wochentage": "weekdays",
+        "werktags": "weekdays",
+        "werktage": "weekdays",
+        "wochentags": "weekdays",
+        "wochentage": "weekdays",
+        "business days": "weekdays",
         "weekly": "weekly",
         "woechentlich": "weekly",
         "wöchentlich": "weekly",
@@ -2688,6 +2701,11 @@ def _next_recurrence_due_at(item: Mapping[str, Any], sent_at: str) -> str:
 def _advance_recurrence_due_at(base: datetime, recurrence: str) -> datetime | None:
     if recurrence == "daily":
         return base + timedelta(days=1)
+    if recurrence == "weekdays":
+        next_due = base + timedelta(days=1)
+        while next_due.weekday() >= 5:
+            next_due += timedelta(days=1)
+        return next_due
     if recurrence == "weekly":
         return base + timedelta(weeks=1)
     if recurrence == "monthly":

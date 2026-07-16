@@ -45,6 +45,7 @@ from TeeBotus.runtime.proactive_agent import (
     _proactive_last_sent_within,
     _queued_proactive_outbox_item_exists,
     _normalize_proactive_route,
+    _advance_recurrence_due_at,
     _update_proactive_outbox_item_due_at,
 )
 
@@ -2952,6 +2953,12 @@ def test_dispatch_reschedules_recurring_user_reminder_after_successful_send(tmp_
     assert item["status_history"][-1] == {"at": "2026-06-15T12:00:00+00:00", "status": "queued", "reason": "recurrence:daily"}
     assert due_proactive_outbox_items(account_store, account_id, now=now) == ()
     assert due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 16, 11, tzinfo=timezone.utc))[0]["id"] == item_id
+
+
+def test_weekday_recurrence_skips_weekend_after_send() -> None:
+    friday = datetime(2026, 6, 19, 9, 0, tzinfo=timezone.utc)
+
+    assert _advance_recurrence_due_at(friday, "weekdays") == datetime(2026, 6, 22, 9, 0, tzinfo=timezone.utc)
 
 
 def test_dispatch_reschedules_month_interval_recurring_reminder(tmp_path) -> None:

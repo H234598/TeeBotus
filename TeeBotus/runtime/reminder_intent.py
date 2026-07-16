@@ -100,6 +100,8 @@ RECURRENCE_EVERY_RE = re.compile(
 )
 RECURRENCE_MARKER_RE = re.compile(
     r"(?i)\b(?:"
+    r"(?:jeden|alle)\s+(?:werk|wochen)tag(?:e|en|s)?|every\s+weekdays?|"
+    r"werktag(?:e|en|s)?|wochentag(?:e|en|s)?|weekdays?|business\s+days?|"
     r"taeglich|täglich|daily|"
     r"woechentlich|wöchentlich|weekly|"
     r"monatlich|monthly|"
@@ -171,6 +173,8 @@ def parse_reminder_intent(text: str, *, now: datetime | None = None) -> Reminder
     normalized_now = resolved_now if resolved_now.tzinfo else resolved_now.replace(tzinfo=timezone.utc)
     recurrence = _parse_recurrence(raw)
     due_at = _parse_due_at(raw, resolved_now)
+    if recurrence == "weekdays" and due_at:
+        due_at = _move_due_to_weekday(due_at, normalized_now)
     if not due_at and recurrence.startswith("every ") and not _has_invalid_explicit_time(raw):
         due_at = _initial_interval_due(normalized_now, recurrence)
     subject = _reminder_subject(raw)
@@ -347,6 +351,16 @@ def _parse_due_at(text: str, now: datetime) -> str:
     return ""
 
 
+def _move_due_to_weekday(due_at: str, now: datetime) -> str:
+    try:
+        candidate = datetime.fromisoformat(due_at)
+    except ValueError:
+        return ""
+    while candidate.weekday() >= 5 or candidate <= now:
+        candidate += timedelta(days=1)
+    return _iso(candidate)
+
+
 def _build_datetime(now: datetime, year: int, month: int, day: int, hour: int, minute: int) -> str:
     try:
         due = now.replace(year=year, month=month, day=day, hour=hour, minute=minute, second=0, microsecond=0)
@@ -415,6 +429,8 @@ def _time_in_text(text: str, *, default_hour: int) -> tuple[int, int]:
 
 def _parse_recurrence(text: str) -> str:
     normalized = _normalize(text)
+    if re.search(r"\b(?:werktag(?:e|en|s)?|wochentag(?:e|en|s)?|weekdays?|business\s+days?)\b", normalized):
+        return "weekdays"
     if re.search(r"\b(?:taeglich|daily|jeden\s+tag|every\s+day)\b", normalized):
         return "daily"
     if re.search(
