@@ -1088,6 +1088,20 @@ Diagnose und Tests.
 - Code-Commit: `a565f51a fix: validate nested working memory indexes`;
   kein Provider/API-Aufruf.
 
+### Working-Memory-Privacy beim Lesen
+
+- 2026-07-16: Neue Eintraege werden beim Append sanitisiert, alte/importierte
+  JSONL-Zeilen aber beim Prompt-Lesen ungeprueft ausgegeben. Damit konnten
+  Handles, URLs oder Telefonnummern aus Legacy-Rohdaten in den Kontext
+  gelangen.
+- Beide Stores sanitizen den gelesenen Entry jetzt vor Prompt-Erzeugung und
+  berechnen Keywords neu. JSONL-Rohdaten und Byte-Offsets bleiben unveraendert
+  fuer Diagnose und Rebuild.
+- Regression parametrisiert ueber beide Stores: `tests/test_working_memory.py`:
+  `39 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `d7b6d601 fix: sanitize working memory entries on read`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
