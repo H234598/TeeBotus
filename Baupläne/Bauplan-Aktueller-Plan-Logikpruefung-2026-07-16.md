@@ -3276,3 +3276,18 @@ nach 10 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `12/20` Commits. Kein Push. Restart
 nach 8 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Status-Auth-Bootstrap-nutzt-Discovery-Guard
+
+- 2026-07-17: `bootstrap_status_auth_secrets()` umging `discover_instances()`.
+  Explizite Pfadnamen wie `../outside` konnten dadurch Secret-Bootstrap
+  ausserhalb des Instances-Baums erreichen.
+- Bootstrap nutzt jetzt dieselbe sichere explizite Discovery. Sichere fehlende
+  Instanznamen bleiben fuer den bestehenden Missing-Instance-Report erlaubt.
+- Regression: Pfad-Escape plus Bootstrap-Fokus -> `5 passed`; komplette
+  `tests/test_admin_accounts.py` -> `88 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `29e91ad6 fix: constrain status auth bootstrap instances`.
+
+**Aktueller Laufstand:** Seit dem Restart `13/20` Commits. Kein Push. Restart
+nach 7 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
