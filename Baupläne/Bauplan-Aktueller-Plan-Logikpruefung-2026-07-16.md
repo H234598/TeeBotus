@@ -1621,6 +1621,24 @@ ausgeloest. Naechster Restart nach 19 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `11/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 9 weiteren Commits.
 
+### Fallback-Mirror-Fehler-bei-Item-Replacement-sichtbar-machen
+
+- 2026-07-16: Der Fallback-Router ignorierte `False` vom sekundären
+  `replace_collection_item()`. Wenn Primary die Zeile erfolgreich ersetzte,
+  sie im Fallback aber fehlte, wurde kein Fehlerzustand gesetzt; beide
+  Datenbanken konnten dadurch unbemerkt auseinanderlaufen.
+- Nach erfolgreichem Primary-Replacement wird ein fehlender Fallback-Artikel
+  jetzt als `stale` und `sync_failed` markiert und periodisch gewarnt. Ein
+  normales `False` vom Primary bleibt unveraendert ein „nicht gefunden“ ohne
+  falschen Sync-Fehler.
+- Regression mit vorhandenem Primary-Artikel und leerem Fallback; gesamte
+  `tests/test_account_store.py`: `272 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e2da0666 fix: flag missing fallback replacement mirrors`.
+
+**Laufstand nach Fix:** Seit dem Restart `13/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 7 weiteren Commits.
+
 ## Bezug
 
 - Vorheriger Plan:
