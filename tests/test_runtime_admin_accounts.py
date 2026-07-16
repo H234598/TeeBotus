@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+import logging
 from pathlib import Path
 
 from TeeBotus import __version__
@@ -252,6 +253,38 @@ def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -
     assert outbox[0]["markdown_filename"] == f"TeeBotus_release_{__version__}_0001.md"
     assert outbox[0]["markdown_document"].startswith(f"# Release TeeBotus {__version__}\n")
     assert account_store.read_status_dispatch_results(account_id)[0]["status"] == "sent"
+
+
+def test_runtime_status_dispatch_audit_failure_does_not_hide_delivery(tmp_path, monkeypatch, caplog) -> None:
+    instances_dir = tmp_path / "instances"
+    account_store = status_summary_store_for(instances_dir)
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+
+    def fail_dispatch_result(*_args, **_kwargs):
+        raise OSError("dispatch result store unavailable")
+
+    monkeypatch.setattr(account_store, "append_status_dispatch_result", fail_dispatch_result)
+    with caplog.at_level(logging.ERROR, logger="TeeBotus.runtime.admin_accounts"):
+        results = asyncio.run(
+            notify_runtime_status_admin_accounts(
+                instances_dir=instances_dir,
+                selected_instances=("Depressionsbot",),
+                status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+                env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+                store_factory=lambda _root, _instance: account_store,
+                sender_factory=lambda _instance, _store: {"telegram": lambda _route, _action, _metadata: "ok"},
+                now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+            )
+        )
+
+    assert format_admin_notification_result_lines(results) == (
+        f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={account_id} channel=telegram",
+    )
+    assert account_store.read_status_outbox(account_id)[0]["status"] == "sent"
+    assert account_store.read_status_dispatch_results(account_id) == []
+    assert "Runtime status dispatch result persistence failed" in caplog.text
 
 
 def test_benchmark_admin_notify_sends_markdown_attachment_to_routable_admin_account(tmp_path) -> None:

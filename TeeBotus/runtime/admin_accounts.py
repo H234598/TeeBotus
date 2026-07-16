@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 import uuid
@@ -64,6 +65,8 @@ class _AdminRouteResolution:
 
 StoreFactory = Callable[[Path, str], AccountStore]
 SenderFactory = Callable[[str, AccountStore], Mapping[str, ProactiveSender]]
+
+LOGGER = logging.getLogger("TeeBotus.runtime.admin_accounts")
 
 
 def resolve_admin_account_group(*, instance_name: str = "", env: Mapping[str, str] | None = None) -> AdminAccountGroup:
@@ -710,20 +713,28 @@ def _record_runtime_status_dispatch(
             history.append({"at": timestamp, "status": normalized_status, "reason": normalized_reason})
             break
         store.write_status_outbox(account_id, rows)
-    store.append_status_dispatch_result(
-        account_id,
-        {
-            "schema_version": 1,
-            "status_outbox_item_id": item_id,
-            "status": normalized_status,
-            "reason": normalized_reason,
-            "channel": str(channel or "").strip().casefold(),
-            "summary_prefix": summary_prefix,
-            "summary_number": summary_number,
-            "created_at": timestamp,
-            "updated_at": timestamp,
-        },
-    )
+    try:
+        store.append_status_dispatch_result(
+            account_id,
+            {
+                "schema_version": 1,
+                "status_outbox_item_id": item_id,
+                "status": normalized_status,
+                "reason": normalized_reason,
+                "channel": str(channel or "").strip().casefold(),
+                "summary_prefix": summary_prefix,
+                "summary_number": summary_number,
+                "created_at": timestamp,
+                "updated_at": timestamp,
+            },
+        )
+    except Exception:  # noqa: BLE001 - external delivery state must not be reported as failed after it was sent.
+        LOGGER.exception(
+            "Runtime status dispatch result persistence failed account_id=%s item_id=%s status=%s",
+            account_id,
+            item_id,
+            normalized_status,
+        )
 
 
 def _next_status_summary_number(rows: Sequence[Mapping[str, Any]]) -> int:
