@@ -756,7 +756,7 @@ def _quarantine_instance_unrecoverable(
     }
     if not account_ids:
         return result
-    sqlite_sources = _sqlite_sources_for_unrecoverable_accounts(unrecoverable_accounts)
+    sqlite_sources = _sqlite_sources_for_unrecoverable_accounts(unrecoverable_accounts, accounts_root=accounts_root)
     json_files = _json_memory_files_for_accounts(accounts_root, account_ids)
     result["totals"]["sqlite_sources"] = len(sqlite_sources)
     result["totals"]["json_files_quarantined"] = len(json_files)
@@ -860,7 +860,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     return exit_code
 
 
-def _sqlite_sources_for_unrecoverable_accounts(accounts: Sequence[Mapping[str, Any]]) -> list[Path]:
+def _sqlite_sources_for_unrecoverable_accounts(
+    accounts: Sequence[Mapping[str, Any]],
+    *,
+    accounts_root: Path | None = None,
+) -> list[Path]:
+    if accounts_root is None or _first_symlinked_path_component(accounts_root) is not None:
+        return []
+    try:
+        resolved_root = accounts_root.resolve()
+    except OSError:
+        return []
     paths: list[Path] = []
     for account in accounts:
         for source in account.get("sources", []) if isinstance(account.get("sources"), list) else []:
@@ -878,6 +888,10 @@ def _sqlite_sources_for_unrecoverable_accounts(accounts: Sequence[Mapping[str, A
             if not raw_path:
                 continue
             path = Path(raw_path)
+            try:
+                path.resolve().relative_to(resolved_root)
+            except (OSError, ValueError):
+                continue
             if path not in paths:
                 paths.append(path)
     return paths

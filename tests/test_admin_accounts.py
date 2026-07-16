@@ -1108,6 +1108,29 @@ def test_sqlite_sources_for_unrecoverable_accounts_ignores_malformed_counts_with
     assert sources == []
 
 
+def test_sqlite_sources_for_unrecoverable_accounts_rejects_paths_outside_root(tmp_path: Path) -> None:
+    accounts_root = tmp_path / "accounts"
+    external = tmp_path / "external.sqlite3"
+
+    sources = _sqlite_sources_for_unrecoverable_accounts(
+        [
+            {
+                "sources": [
+                    {
+                        "kind": "sqlite",
+                        "active": True,
+                        "path": str(external),
+                        "raw_entries": 1,
+                    }
+                ]
+            }
+        ],
+        accounts_root=accounts_root,
+    )
+
+    assert sources == []
+
+
 def test_memory_recovery_totals_ignore_malformed_legacy_counts_without_crashing() -> None:
     totals = {
         "accounts": 0,
