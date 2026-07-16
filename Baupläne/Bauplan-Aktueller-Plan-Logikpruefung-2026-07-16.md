@@ -1755,6 +1755,22 @@ ausgeloest. Naechster Restart nach 17 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `4/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 16 weiteren Commits.
 
+### Recovery-Report-Instanz-State-Account-ausfiltern
+
+- 2026-07-16: Recovery-Report filterte die zentrale
+  `INSTANCE_STATE_ACCOUNT_ID` beim SQL-Account-Scan, nahm denselben
+  Instanz-State-Account aber aus dem JSON-`accounts/`-Verzeichnis als
+  normalen User auf. Reports konnten dadurch falsche Account-Anzahlen und
+  Recovery-Eintraege zeigen.
+- JSON- und SQL-Discovery schliessen zentrale Instanz-State-ID jetzt gleich
+  aus. Bestehende User-Account-Verzeichnisse bleiben unveraendert.
+- Regression `test_memory_recovery_report_counts_sqlite_collections_and_skips_instance_state_account` gruen;
+  Ruff und `py_compile` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a3bec7ee fix: exclude instance state from recovery accounts`.
+
+**Laufstand nach Fix:** Seit dem Restart `6/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 14 weiteren Commits.
+
 ## Bezug
 
 - Vorheriger Plan:
