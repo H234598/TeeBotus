@@ -109,6 +109,35 @@ def test_working_memory_non_object_index_is_preserved(tmp_path, caplog, store_cl
     assert any("expected JSON object" in record.message for record in caplog.records)
 
 
+@pytest.mark.parametrize(
+    "invalid_index",
+    (
+        [],
+        {"keywords": []},
+        {"recent_ids": {}},
+        {"entries": []},
+    ),
+)
+@pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
+def test_working_memory_invalid_index_structure_is_preserved(tmp_path, caplog, invalid_index, store_class):
+    instances_dir = tmp_path / "instances"
+    index_path = instances_dir / "Depressionsbot" / "data" / "Working_Memorys.json"
+    index_path.parent.mkdir(parents=True)
+    original = {"scope": "instance", "index": invalid_index}
+    index_path.write_text(json.dumps(original), encoding="utf-8")
+    store = store_class("Depressionsbot", instances_dir)
+
+    with caplog.at_level("WARNING", logger="TeeBotus"):
+        store.ensure()
+
+    backups = list(index_path.parent.glob("Working_Memorys.json.corrupt.*"))
+    assert len(backups) == 1
+    assert json.loads(backups[0].read_text(encoding="utf-8")) == original
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    assert payload["index"]["entries"] == {}
+    assert any("invalid index structure" in record.message for record in caplog.records)
+
+
 def test_working_memory_unreadable_index_is_not_replaced(tmp_path, caplog):
     instances_dir = tmp_path / "instances"
     store = WorkingMemoryStore("Depressionsbot", instances_dir)

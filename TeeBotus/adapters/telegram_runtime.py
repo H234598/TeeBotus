@@ -928,6 +928,25 @@ class WorkingMemoryStore:
                 backup_path,
             )
             payload = _new_working_memory_data(self.instance_name)
+        index = payload.get("index")
+        invalid_index = "index" in payload and not isinstance(index, dict)
+        if isinstance(index, dict):
+            invalid_index = any(
+                key in index and not isinstance(index[key], expected_type)
+                for key, expected_type in (
+                    ("keywords", dict),
+                    ("recent_ids", list),
+                    ("entries", dict),
+                )
+            )
+        if invalid_index:
+            backup_path = _move_corrupt_json_file(path)
+            LOGGER.warning(
+                "Resetting invalid instance working memory at %s: invalid index structure. Corrupt file preserved at %s.",
+                path,
+                backup_path,
+            )
+            payload = _new_working_memory_data(self.instance_name)
         _normalize_working_memory_data(payload, self.instance_name)
         entries_path.touch(exist_ok=True)
         return payload
