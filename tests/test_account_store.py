@@ -4018,7 +4018,7 @@ def test_account_memory_fallback_keeps_warning_when_primary_repair_fails(caplog)
     assert "primary backend recovered" not in caplog.text
 
 
-def test_account_memory_fallback_keeps_reading_clean_fallback_after_primary_repair_failure() -> None:
+def test_account_memory_fallback_blocks_fallback_after_primary_repair_failure() -> None:
     class Backend:
         def __init__(
             self,
@@ -4066,12 +4066,12 @@ def test_account_memory_fallback_keeps_reading_clean_fallback_after_primary_repa
 
     first_read = backend.read_entries(account_id)
     primary.fail_read = True
-    second_read = backend.read_entries(account_id)
+    with pytest.raises(AccountStoreError, match="read blocked because primary is unavailable"):
+        backend.read_entries(account_id)
 
     assert first_read == [{"id": "mem_clean"}]
-    assert second_read == [{"id": "mem_clean"}]
     assert account_id in backend.stale_fallback_entry_account_ids
-    assert account_id not in backend._fallback_sync_failed_entries
+    assert account_id in backend._fallback_sync_failed_entries
 
 
 def test_account_memory_fallback_recovers_primary_index_diagnostics(caplog):

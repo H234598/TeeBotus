@@ -656,7 +656,9 @@ class WarningFallbackAccountMemoryBackend:
                 self._fallback_sync_failed_collections.discard(key)
                 self._unrecoverable_fallback_collections.discard(key)
         except Exception as exc:  # noqa: BLE001
-            self._fallback_stale_set(operation).add(self._operation_stale_key(operation, account_id))
+            stale_key = self._operation_stale_key(operation, account_id)
+            self._fallback_stale_set(operation).add(stale_key)
+            self._fallback_sync_failed_set(operation).add(stale_key)
             self._set_fallback_sync_error(operation, account_id, f"{operation}: primary repair failed: {exc}")
             LOGGER.critical(
                 "ACCOUNT MEMORY PRIMARY DATABASE REPAIR FROM FALLBACK FAILED. "
