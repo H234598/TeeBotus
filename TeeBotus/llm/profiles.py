@@ -225,7 +225,7 @@ def build_profiled_text_llm_client(
         fallback_api_keys={route.fallback_model: fallback_api_key} if route.fallback_model and fallback_api_key else None,
         fallback_api_bases={route.fallback_model: route.fallback_base_url} if route.fallback_model and route.fallback_base_url else None,
         api_key=api_key,
-        api_key_ring=resolve_gemini_api_key_ring(source) if uses_gemini_api else (),
+        api_key_ring=resolve_gemini_api_key_ring(source, instance_name=instance_name) if uses_gemini_api else (),
         gemini_free_tier_limits=resolve_gemini_free_tier_limits(source, provider=route.provider, model=gemini_key_model)
         if gemini_key_model
         else None,

@@ -315,9 +315,11 @@ def test_runtime_route_client_uses_gemini_key_ring_for_gemini_fallback(monkeypat
         openai_client=None,
         purpose="hard_reasoning",
         allow_remote_fallback=True,
+        instance_name="Demo",
         env={
             "OPENAI_API_KEY": "openai-key",
             "GEMINI_API_KEY": "single-gemini-key",
+            "TEEBOTUS_GEMINI_API_KEYS_DEMO_ACCOUNT_1": "demo-a1,demo-a2",
             "GEMINI_API_KEYS_ACCOUNT_1": "a1,a2",
             "GEMINI_API_KEYS_ACCOUNT_2": "b1",
         },
@@ -327,7 +329,7 @@ def test_runtime_route_client_uses_gemini_key_ring_for_gemini_fallback(monkeypat
     assert client.api_key == "openai-key"
     assert client.fallback_models == ("gemini/gemini-3.5-flash",)
     assert client.api_key_ring is not None
-    assert client.api_key_ring.keys == ("a1", "b1", "a2")
+    assert client.api_key_ring.keys == ("demo-a1", "demo-a2")
     assert client.gemini_free_tier_limits.active
     assert client.service_tier == "flex"
 
