@@ -1184,7 +1184,8 @@ Diagnose und Tests.
   Backend; beide fehlenden Datenbanken setzen den Primary-Missing-Status
   explizit. Das verhindert stale Health-/Migrationssignale ohne Datenrewrite.
 - Regression mit vorherigem Missing-State und anschliessendem Erfolgs-Read:
-  Fallback-Block `56 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+  Fallback-Block `56 passed`; gesamte `tests/test_account_store.py` danach
+  `254 passed`; Ruff, `py_compile` und `git diff --check` gruen.
 - Code-Commit: `22f69b2e fix: refresh fallback collection diagnostics`;
   kein Provider/API-Aufruf.
 
