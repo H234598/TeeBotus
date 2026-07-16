@@ -2048,11 +2048,11 @@ class BotTests(unittest.TestCase):
                 )
 
             account_id = account_store.get_account_for_identity(telegram_identity_key("456"))
+            self.assertEqual(message_tracker.list_for_chat("123", instance_name="Demo", channel="telegram")[0].message_ref, "101")
 
         self.assertEqual(api.sent_messages[:10], [("123", "Pong")] * 10)
         self.assertIn("Nachrichten in diesem Chat auf laut", api.sent_messages[10][1])
         self.assertIsNotNone(account_id)
-        self.assertEqual(message_tracker.list_for_chat("123", instance_name="Demo", channel="telegram")[0].message_ref, "101")
 
     def test_modern_group_reply_to_bot_reaches_engine_before_account_resolution(self) -> None:
         from TeeBotus.runtime.actions import SendText
