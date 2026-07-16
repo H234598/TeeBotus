@@ -4954,9 +4954,9 @@ def _secret_verifier_file_has_payload(path: Path, *, allowed_roots: Iterable[Pat
 def _sqlite_memory_has_instance_payload_rows(path: Path, instance_name: str) -> bool:
     try:
         if not path.is_file() or path.stat().st_size <= 0:
-            return False
+            return _sqlite_memory_has_nonempty_sidecar(path)
     except OSError:
-        return False
+        return _sqlite_memory_has_nonempty_sidecar(path)
     import sqlite3
 
     try:
@@ -4975,11 +4975,26 @@ def _sqlite_memory_has_instance_payload_rows(path: Path, instance_name: str) -> 
     return False
 
 
+def _sqlite_memory_has_nonempty_sidecar(path: Path) -> bool:
+    for suffix in ("-wal", "-shm"):
+        sidecar = path.with_name(f"{path.name}{suffix}")
+        try:
+            if sidecar.is_file() and sidecar.stat().st_size > 0:
+                return True
+        except OSError:
+            return True
+    return False
+
+
 def _sqlite_memory_account_ids(path: Path, instance_name: str) -> tuple[str, ...]:
     try:
         if not path.is_file() or path.stat().st_size <= 0:
+            if _sqlite_memory_has_nonempty_sidecar(path):
+                raise AccountStoreError(f"could not inspect SQLite account-memory payload: {path} sidecar")
             return ()
     except OSError:
+        if _sqlite_memory_has_nonempty_sidecar(path):
+            raise AccountStoreError(f"could not inspect SQLite account-memory payload: {path} sidecar")
         return ()
     import sqlite3
 
