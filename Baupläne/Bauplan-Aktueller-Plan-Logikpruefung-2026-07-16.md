@@ -3022,3 +3022,21 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `20/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart jetzt erforderlich. Naechster Push bleibt erst
 bei 100 Commits.
+
+### Metadata-Recovery-lehnt-Symlink-Pfade-ab
+
+- 2026-07-17: `_unreadable_metadata_items()` folgte Symlinks bei
+  `Account_Index.json`, anderen Metadata-Dateien, `accounts/` und
+  `Account_Profile.json`. Recovery konnte dadurch externe Dateien lesen;
+  Apply haette den Befund nicht als sicheren Korruptionsfall behandeln duerfen.
+- Metadata-Dateien, Accounts-Wurzel und Accountdirs werden jetzt vor `exists()`
+  oder Lesen auf Symlinks geprueft. Solche Pfade werden explizit als unsicher
+  gemeldet und blockieren Apply; externe Inhalte bleiben unangetastet.
+- Regression: Symlink-Metadata und Symlink-Accountdir -> `2 passed` im Fokus;
+  komplette `tests/test_admin_accounts.py` -> `77 passed`. Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `37777cde fix: block symlinked metadata recovery paths`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
