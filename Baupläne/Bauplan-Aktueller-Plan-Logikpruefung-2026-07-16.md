@@ -2027,3 +2027,22 @@ Commits.
 **Aktueller Laufstand:** Seit dem Restart `13/20` Code-Commits. Dieser
 Plan-Commit macht `14/20`; kein Push. Naechster Restart nach 6 weiteren
 Commits.
+
+### Proactive-State-Setter-Read-Modify-Write
+
+- 2026-07-16: `enable`, `disable`, `pause`, `resume`, Kategorien-, Zeitfenster-
+  und Intervall-Setter lasen Agent-State ausserhalb eines gemeinsamen Locks
+  und schrieben danach. Gleichzeitige Befehle aus mehreren Adaptern konnten
+  dadurch die jeweils andere Aenderung verlieren.
+- Alle sieben State-Setter halten jetzt `account_memory_lock(account_id)` um
+  den kompletten Read-Normalize-Write-Ablauf. Der darunterliegende Write-Lock
+  bleibt reentrant.
+- Regression mit paralleler Kategorien-/Zeitfenster-Aenderung: Read-
+  Parallelitaet bleibt `1`, beide Aenderungen sind im Endzustand vorhanden;
+  kompletter `tests/test_proactive_agent.py`-Lauf -> `124 passed`. Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9861716a fix: serialize proactive state updates`.
+
+**Aktueller Laufstand:** Seit dem Restart `15/20` Code-Commits. Dieser
+Plan-Commit macht `16/20`; kein Push. Naechster Restart nach 4 weiteren
+Commits.
