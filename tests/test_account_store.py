@@ -4552,6 +4552,34 @@ def test_account_memory_fallback_does_not_promote_corrupt_dirty_data(kind: str) 
         assert (account_id, collection) in backend._unrecoverable_fallback_collections
 
 
+def test_account_memory_fallback_blocks_empty_secondary_after_collection_error() -> None:
+    class Backend:
+        def __init__(self, rows: list[dict[str, str]], *, error: str = "") -> None:
+            self.rows = list(rows)
+            self.last_collection_read_error = error
+            self.last_collection_skipped = 0
+            self.write_calls = 0
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.rows]
+
+        def write_collection(self, _account_id: str, _collection: str, rows: list[dict[str, str]]) -> None:
+            self.write_calls += 1
+            self.rows = [dict(row) for row in rows]
+
+    account_id = "a" * 128
+    primary = Backend([{"id": "primary_visible"}], error="collection payload could not be decrypted")
+    fallback = Backend([])
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    rows = backend.read_collection(account_id, "proactive_outbox")
+
+    assert rows == []
+    assert primary.write_calls == 0
+    assert (account_id, "proactive_outbox") in backend._unrecoverable_fallback_collections
+    assert backend.last_fallback_sync_error == "read_collection:proactive_outbox: fallback has no recoverable data"
+
+
 def test_account_memory_fallback_blocks_collection_writes_after_unrecoverable_empty_fallback(caplog):
     class Backend:
         def __init__(self, *, fail_read: bool = False) -> None:

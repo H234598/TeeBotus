@@ -665,10 +665,11 @@ class WarningFallbackAccountMemoryBackend:
             return result
         if self._fallback_result_is_empty_for_failed_read(
             operation,
-            result,
+            repair_data,
             primary_entry_read_error,
             primary_entry_skipped,
             primary_index_read_error,
+            primary_collection_read_error,
             primary_collection_skipped,
         ):
             self.last_entry_read_error = primary_entry_read_error
@@ -724,18 +725,19 @@ class WarningFallbackAccountMemoryBackend:
     def _fallback_result_is_empty_for_failed_read(
         self,
         operation: str,
-        result: Any,
+        fallback_result: Any,
         primary_entry_read_error: str,
         primary_entry_skipped: int,
         primary_index_read_error: str,
+        primary_collection_read_error: str,
         primary_collection_skipped: int,
     ) -> bool:
         if operation == "read_entries":
-            return bool(primary_entry_read_error or primary_entry_skipped) and result == []
+            return bool(primary_entry_read_error or primary_entry_skipped) and fallback_result == []
         if operation == "read_index":
-            return bool(primary_index_read_error) and result == {}
+            return bool(primary_index_read_error) and fallback_result == {}
         if operation.startswith("read_collection:"):
-            return bool(primary_collection_skipped) and result == []
+            return bool(primary_collection_read_error or primary_collection_skipped) and fallback_result == []
         return False
 
     def _fallback_result_is_empty_after_primary_exception(
