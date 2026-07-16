@@ -979,7 +979,12 @@ def _default_account_store(root: Path, instance_name: str) -> AccountStore:
 
 
 def _account_dir_exists(store: AccountStore, account_id: str) -> bool:
-    return TOKEN_HEX_RE.fullmatch(str(account_id or "").strip().casefold()) is not None and store.account_dir(account_id).is_dir()
+    if TOKEN_HEX_RE.fullmatch(str(account_id or "").strip().casefold()) is None:
+        return False
+    account_dir = getattr(store, "account_dir", None)
+    if not callable(account_dir):
+        return False
+    return account_dir(account_id).is_dir()
 
 
 def _env_instance_token(instance_name: str) -> str:
