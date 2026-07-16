@@ -677,6 +677,68 @@ def test_dispatch_rechecks_loudness_after_worker_claim(tmp_path, monkeypatch) ->
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "cancelled"
 
 
+def test_loudness_dispatch_claim_wins_after_active_recheck(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    assert maybe_notification_loudness_prompt_action(
+        event(identity), account_store, account_id, now=now - timedelta(hours=7)
+    ) is not None
+    set_identity_last_seen(account_store, identity, now)
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=now)
+
+    import TeeBotus.runtime.proactive_agent as proactive_agent
+
+    active_checked = threading.Event()
+    release_active_check = threading.Event()
+    original_active_check = proactive_agent.notification_loudness_outbox_item_is_active
+    active_check_count = 0
+
+    def active_check_then_pause(current_store, current_account_id, item):
+        nonlocal active_check_count
+        active_check_count += 1
+        active = original_active_check(current_store, current_account_id, item)
+        if active_check_count == 3:
+            active_checked.set()
+            assert release_active_check.wait(2)
+        return active
+
+    monkeypatch.setattr(proactive_agent, "notification_loudness_outbox_item_is_active", active_check_then_pause)
+    sent: list[SendText] = []
+    dispatch_result: list[tuple] = []
+
+    async def sender(_route, action, _item):
+        sent.append(action)
+        return "message-ref"
+
+    def run_dispatch() -> None:
+        dispatch_result.extend(
+            asyncio.run(
+                dispatch_due_proactive_outbox_items(
+                    account_store,
+                    account_id,
+                    senders={"telegram": sender},
+                    now=now,
+                )
+            )
+        )
+
+    dispatch_thread = threading.Thread(target=run_dispatch)
+    dispatch_thread.start()
+    assert active_checked.wait(2)
+    assert maybe_handle_notification_loudness_response(
+        event(identity, "ja, laut"), account_store, account_id, now=now
+    ) is not None
+    release_active_check.set()
+    dispatch_thread.join(2)
+
+    assert not dispatch_thread.is_alive()
+    assert len(sent) == 1
+    assert dispatch_result[0].status == "sent"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "sent"
+
+
 def test_dispatch_fails_loudness_item_when_post_claim_state_is_unavailable(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

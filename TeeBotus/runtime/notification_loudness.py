@@ -1888,6 +1888,13 @@ def is_notification_loudness_outbox_item(item: Mapping[str, Any] | None) -> bool
 
 def notification_loudness_outbox_item_is_active(account_store: AccountStore, account_id: str, item: Mapping[str, Any]) -> bool:
     """Return whether a queued loudness prompt still belongs to an open check."""
+    with _account_proactive_outbox_lock(account_store, account_id):
+        return _notification_loudness_outbox_item_is_active_unlocked(account_store, account_id, item)
+
+
+def _notification_loudness_outbox_item_is_active_unlocked(
+    account_store: AccountStore, account_id: str, item: Mapping[str, Any]
+) -> bool:
     item_status = _notification_loudness_outbox_status(item)
     if item_status not in {"queued", "dispatching"}:
         return False
@@ -3201,7 +3208,9 @@ def _cancel_pending_notification_loudness_items(account_store: AccountStore, acc
                 continue
             if _outbox_route_key(item) != _normalize_route_key(route_key):
                 continue
-            if _notification_loudness_outbox_status(item) not in {"queued", "dispatching"}:
+            # A dispatching item was already claimed. Let its worker finish; the
+            # active re-check linearizes cancellation before or after sending.
+            if _notification_loudness_outbox_status(item) != "queued":
                 continue
             item["status"] = "cancelled"
             item["updated_at"] = timestamp
