@@ -3213,3 +3213,20 @@ bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Instanz-Discovery-ohne-Symlink-Rootkomponenten
+
+- 2026-07-17: Der Explicit-/Automatic-Guard pruefte Root-Symlinks, aber nicht
+  symlinked Elternkomponenten. Ein Rootpfad konnte dadurch dennoch auf einen
+  externen Instances-Baum zeigen.
+- `discover_instances()` lehnt jetzt Symlink-Komponenten in `instances_dir`
+  fuer automatische und explizite Auswahl ab. Sichere Missing-Instance-
+  Auswahl bleibt kompatibel.
+- Regression: symlinked Root plus automatische/explicit Auswahl -> `1 passed`;
+  komplette `tests/test_admin_accounts.py` -> `85 passed`. Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `36c76a41 fix: reject symlinked instance root components`.
+
+**Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
