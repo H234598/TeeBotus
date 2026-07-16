@@ -1851,6 +1851,7 @@ def _queue_due_notification_loudness_prompts_unlocked(
         if _has_notification_loudness_item_in_wake_window(account_store, account_id, route_key, resolved_now):
             continue
         _mark_route_state_prompted(route_state, resolved_now)
+        timestamp = resolved_now.isoformat(timespec="seconds")
         queued_ids.append(
             account_store.append_proactive_outbox_item(
                 account_id,
@@ -1860,7 +1861,9 @@ def _queue_due_notification_loudness_prompts_unlocked(
                     "intent": NOTIFICATION_LOUDNESS_INTENT,
                     "message_text": NOTIFICATION_LOUDNESS_PROMPT,
                     "reason_memory_ids": [],
-                    "due_at": resolved_now.isoformat(timespec="seconds"),
+                    "due_at": timestamp,
+                    "created_at": timestamp,
+                    "updated_at": timestamp,
                     "risk_gate": "none",
                     "planner": {"source": "system", "system_item": NOTIFICATION_LOUDNESS_SYSTEM_ITEM},
                     "policy_result": "allowed",
@@ -1868,7 +1871,7 @@ def _queue_due_notification_loudness_prompts_unlocked(
                     "route": dict(route),
                     "system_item": NOTIFICATION_LOUDNESS_SYSTEM_ITEM,
                     "route_key": str(route_key),
-                    "status_history": [{"at": utc_now(), "status": "queued", "reason": "created"}],
+                    "status_history": [{"at": timestamp, "status": "queued", "reason": "created"}],
                 },
             )
         )

@@ -511,6 +511,27 @@ def test_scheduler_queues_notification_loudness_follow_up_when_recently_active_i
     assert check_proactive_agent_account(account_store, account_id).ok is True
 
 
+def test_scheduler_persists_supplied_now_in_loudness_outbox_metadata(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_TIMEZONE", "Europe/Berlin")
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    first_wake = datetime(2026, 6, 15, 8, tzinfo=timezone.utc)
+    second_wake = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=first_wake) is not None
+    set_identity_last_seen(account_store, identity, second_wake)
+
+    queued = queue_due_notification_loudness_prompts(account_store, account_id, now=second_wake)
+
+    assert len(queued) == 1
+    item = account_store.read_proactive_outbox(account_id)[0]
+    timestamp = second_wake.isoformat(timespec="seconds")
+    assert item["created_at"] == timestamp
+    assert item["updated_at"] == timestamp
+    assert item["due_at"] == timestamp
+    assert item["status_history"] == [{"at": timestamp, "status": "queued", "reason": "created"}]
+
+
 def test_scheduler_uses_outbox_as_wake_window_recovery_marker_after_state_write_failure(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)
