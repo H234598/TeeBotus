@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart ist aktuell `4/20` Commits vorhanden; naechster Restart
-  nach 16 weiteren Commits.
+  letzten Restart ist aktuell `6/20` Commits vorhanden; naechster Restart
+  nach 14 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -368,6 +368,20 @@ Diagnose und Tests.
   `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commits: `c9e0b860 fix: lock account text memory`,
   `73ca3a41 fix: lock agent state memory`.
+
+### JSON-Account-Collection-Merge
+
+- 2026-07-16: Im JSON-Fallback von `merge_accounts()` wurden nur
+  User-Memory, Profil, Habits und LLM-State uebernommen. Outbox-/Dispatch-
+  Dateien, Codex-Projekte, Agent-State und Status-Auth wurden beim
+  anschliessenden Source-Cleanup geloescht.
+- JSON-Merge uebernimmt jetzt alle acht JSONL-Kollektionen sowie Agent-State
+  und Status-Auth. Verschachtelte Dokumente werden wie im SQL-Pfad rekursiv
+  zusammengefuehrt; `authorized` bleibt logisch OR.
+- Regression deckt alle Kollektionen und Source-Cleanup ab; Merge-Suite
+  `6 passed`, vollstaendig `239 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `96123b26 fix: merge json account collections`.
 
 ### LLM-State-SQL/JSON-Audit
 
@@ -787,8 +801,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `4/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 16 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `6/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 14 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
