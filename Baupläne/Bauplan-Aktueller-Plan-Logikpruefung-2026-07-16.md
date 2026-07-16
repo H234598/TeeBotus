@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `17/20` Commits vorhanden; naechster Restart
-  nach 3 weiteren Commits.
+  letzten Restart ist aktuell `18/20` Commits vorhanden; naechster Restart
+  nach 2 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -459,6 +459,15 @@ Diagnose und Tests.
   `48 passed`; Ruff, `py_compile` und `git diff --check` gruen. Code-Commit:
   `d134d41d fix: preserve proactive delivery after post-send errors`.
 
+### Dotenv-Aufloesung
+
+- 2026-07-16: Der angrenzende Secret-/Konfigurationspfad wurde auf
+  Prozesswert-Prioritaet, verschachtelte `instances`-Pfade und den optionalen
+  Fallback-Parser geprueft. Kein neuer reproduzierbarer Ladefehler.
+- Prozesswerte bleiben vor `.env`-Defaults; fehlende Dateien veraendern die
+  Umgebung nicht; `export`, Quotes und Inline-Kommentare sind abgesichert.
+  `tests/test_runtime_dotenv.py`: `7 passed`; Ruff gruen. Kein Runtime-Patch.
+
 ## Akzeptanzkriterien
 
 - Kein geaenderter Pfad kann nach einem simulierten zweiten Schreibfehler
@@ -471,8 +480,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `17/20` Commits; kein Restart oder
-Push ausgeloest. Naechster Restart nach 3 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `18/20` Commits; kein Restart oder
+Push ausgeloest. Naechster Restart nach 2 weiteren Commits.
 
 ## Bezug
 
