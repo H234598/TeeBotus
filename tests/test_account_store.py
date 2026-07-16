@@ -6567,6 +6567,31 @@ def test_structured_account_memory_index_health_reports_database_decryption_erro
     assert "database index unreadable: SQLite account memory payload could not be decrypted" in error_text
 
 
+def test_structured_account_memory_index_health_reports_skipped_rows_without_error_text(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_live", "user_text": "Mond"})
+    healthy_index = store.read_memory_index(account_id)
+
+    class SkippedRowsBackend:
+        last_entry_read_error = ""
+        last_entry_skipped = 2
+        last_index_read_error = ""
+
+        def read_entries(self, _account_id):
+            return []
+
+        def read_index(self, _account_id):
+            return dict(healthy_index)
+
+    store._account_memory_backend = SkippedRowsBackend()
+
+    health = store.check_structured_memory_index(account_id)
+
+    assert not health.ok
+    assert "database entries unreadable: skipped=2 error=unspecified" in health.errors
+
+
 def test_structured_account_memory_index_health_reports_broken_invariants(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

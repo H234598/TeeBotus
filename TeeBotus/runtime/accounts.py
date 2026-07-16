@@ -2760,8 +2760,10 @@ class AccountStore:
         entry_read_error = str(getattr(backend, "last_entry_read_error", "") or "") if backend is not None else ""
         entry_skipped = int(getattr(backend, "last_entry_skipped", 0) or 0) if backend is not None else 0
         database_read_errors: list[str] = []
-        if entry_read_error:
-            database_read_errors.append(f"database entries unreadable: skipped={entry_skipped} error={entry_read_error}")
+        if entry_read_error or entry_skipped:
+            database_read_errors.append(
+                f"database entries unreadable: skipped={entry_skipped} error={entry_read_error or 'unspecified'}"
+            )
         entry_ids: list[str] = []
         for position, entry in enumerate(entries):
             if not isinstance(entry, dict):
