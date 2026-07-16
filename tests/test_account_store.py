@@ -3831,6 +3831,23 @@ def test_account_memory_fallback_empty_entry_id_read_clears_previous_diagnostics
     assert backend.last_database_missing is False
 
 
+def test_account_store_empty_entry_id_read_clears_backend_diagnostics(tmp_path):
+    class Backend:
+        last_entry_read_error = "stale error"
+        last_entry_skipped = 2
+        last_database_missing = True
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    backend = Backend()
+    store._account_memory_backend = backend
+
+    assert store.read_memory_entries_by_ids(account_id, []) == []
+    assert backend.last_entry_read_error == ""
+    assert backend.last_entry_skipped == 0
+    assert backend.last_database_missing is False
+
+
 def test_account_memory_fallback_preserves_missing_database_diagnostic(tmp_path):
     primary_path = tmp_path / "primary.sqlite3"
     fallback_path = tmp_path / "fallback.sqlite3"

@@ -2444,6 +2444,21 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
         if not requested_ids:
+            backend = self.account_memory_backend
+            if backend is not None:
+                read_by_ids = getattr(backend, "read_entries_by_ids", None)
+                if callable(read_by_ids):
+                    read_by_ids(account_id, [])
+                else:
+                    for attribute, value in (
+                        ("last_entry_read_error", ""),
+                        ("last_entry_skipped", 0),
+                        ("last_database_missing", False),
+                    ):
+                        try:
+                            setattr(backend, attribute, value)
+                        except Exception:  # noqa: BLE001 - diagnostic reset is best effort for adapters.
+                            pass
             return []
         backend = self.account_memory_backend
         if backend is not None:
