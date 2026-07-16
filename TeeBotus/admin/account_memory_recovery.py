@@ -482,7 +482,12 @@ def _quarantine_instance_unreadable_metadata(
         },
     }
     if apply:
-        unsafe_items = [item for item in items if not _metadata_error_is_safe_to_quarantine(str(item.get("error") or ""))]
+        unsafe_items = [
+            item
+            for item in items
+            if item.get("quarantine_safe") is False
+            or not _metadata_error_is_safe_to_quarantine(str(item.get("error") or ""))
+        ]
         if unsafe_items:
             result["status"] = "blocked"
             result["error"] = (
@@ -629,6 +634,10 @@ def _unreadable_metadata_items(accounts_root: Path, instance_name: str, provider
                     "path": accounts_dir,
                     "account_ids": unreadable_profile_accounts,
                     "error": "; ".join(unreadable_profiles[:5]),
+                    "quarantine_safe": all(
+                        _metadata_error_is_safe_to_quarantine(error)
+                        for error in unreadable_profiles
+                    ),
                 }
             )
     return items

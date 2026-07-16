@@ -1343,6 +1343,45 @@ def test_memory_recovery_metadata_quarantine_refuses_missing_secret(tmp_path: Pa
     assert not (tmp_path / "quarantine").exists()
 
 
+def test_memory_recovery_metadata_quarantine_keeps_truncated_auth_failure_blocked(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    good_store = AccountStore(accounts_root, "Depressionsbot", provider())
+    account_ids = sorted(
+        good_store.resolve_or_create_account(f"telegram:user:{number}")
+        for number in range(6)
+    )
+    wrong_store = AccountStore(
+        accounts_root,
+        "Depressionsbot",
+        StaticSecretProvider(b"b" * 32),
+        create_dirs=False,
+        memory_backend_enabled=False,
+    )
+    for account_id in account_ids[:-1]:
+        (good_store.account_dir(account_id) / "Account_Profile.json").write_bytes(b"malformed envelope\n")
+    auth_failure_path = good_store.account_dir(account_ids[-1]) / "Account_Profile.json"
+    auth_failure_path.write_bytes(
+        wrong_store.vault.encrypt(
+            json.dumps({"account_id": account_ids[-1], "status": "active"}).encode("utf-8"),
+            kind=auth_failure_path.name,
+        )
+    )
+
+    result = quarantine_unreadable_account_metadata(
+        instances_dir=tmp_path,
+        provider=provider(),
+        apply=True,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[],
+    )
+
+    assert result["status"] == "blocked"
+    assert result["totals"]["items_quarantined"] == 0
+    assert all((good_store.account_dir(account_id) / "Account_Profile.json").exists() for account_id in account_ids)
+    assert not (tmp_path / "quarantine").exists()
+
+
 def test_memory_recovery_report_includes_unreadable_metadata_account_ids(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
