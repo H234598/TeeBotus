@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart sind aktuell `0/20` Commits vorhanden; naechster Restart
-  nach 20 weiteren Commits.
+  letzten Restart sind aktuell `2/20` Commits vorhanden; naechster Restart
+  nach 18 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -1071,8 +1071,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `0/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 20 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `2/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 18 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
