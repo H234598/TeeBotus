@@ -486,6 +486,25 @@ def test_status_auth_report_cli_outputs_json(tmp_path: Path, capsys) -> None:
     assert payload["totals"]["authorized_accounts"] == 1
 
 
+def test_status_auth_report_contains_store_initialization_error(monkeypatch, tmp_path: Path) -> None:
+    make_instance(tmp_path)
+
+    def fail_store(*_args: Any, **_kwargs: Any) -> AccountStore:
+        raise AccountStoreError("secret missing")
+
+    monkeypatch.setattr(status_auth_admin_module, "AccountStore", fail_store)
+
+    report = build_status_auth_report(
+        instances_dir=tmp_path,
+        provider=provider(),
+    )
+
+    status_auth = report["instances"][0]["status_auth"]
+    assert status_auth["errors"]
+    assert status_auth["errors"][0].startswith("store:AccountStoreError:")
+    assert report["totals"]["store_errors"] == 1
+
+
 def test_status_auth_bootstrap_creates_mapping_and_memory_purposes(tmp_path: Path) -> None:
     make_instance(tmp_path, "TeeBotus_Logger")
     bootstrap_provider = RecordingBootstrapProvider()

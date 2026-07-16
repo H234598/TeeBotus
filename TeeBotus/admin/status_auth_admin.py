@@ -292,13 +292,6 @@ def build_instance_status_auth_report(
     provider: InstanceSecretProvider,
 ) -> dict[str, Any]:
     accounts_root = instances_dir / instance_name / "data" / "accounts"
-    store = AccountStore(
-        accounts_root,
-        instance_name,
-        secret_provider=provider,
-        create_dirs=False,
-        secret_guard_purposes=(INSTANCE_MAPPING_KEY_PURPOSE,),
-    )
     status_auth: dict[str, Any] = {
         "accounts": [],
         "account_count": 0,
@@ -309,6 +302,22 @@ def build_instance_status_auth_report(
         "dispatch_status_counts": {},
         "errors": [],
     }
+    try:
+        store = AccountStore(
+            accounts_root,
+            instance_name,
+            secret_provider=provider,
+            create_dirs=False,
+            secret_guard_purposes=(INSTANCE_MAPPING_KEY_PURPOSE,),
+        )
+    except (AccountStoreError, OSError, ValueError) as exc:
+        status_auth["errors"].append(f"store:{type(exc).__name__}:{exc}")
+        return {
+            "instance": instance_name,
+            "accounts_root": str(accounts_root),
+            "accounts_root_exists": accounts_root.exists(),
+            "status_auth": status_auth,
+        }
     try:
         account_ids = store.list_account_ids(include_unresolvable=False)
     except (AccountStoreError, OSError, ValueError) as exc:
