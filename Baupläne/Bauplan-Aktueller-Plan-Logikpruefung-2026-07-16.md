@@ -1356,8 +1356,24 @@ ausgeloest. Naechster Restart nach 19 weiteren Commits.
 - Code-Commit: `d61d7a7c fix: clear stale fallback missing diagnostics`;
   kein Provider/API-Aufruf.
 
-**Laufstand nach Fix:** Seit dem Restart `2/20` Commits; kein Push
-ausgeloest. Naechster Restart nach 18 weiteren Commits.
+### Partielle-SQL-Collections-vor-Append
+
+- 2026-07-16: Outbox-, Audit-, Dispatch- und Codex-History-Append-Pfade lasen
+  eine SQL-Collection und schrieben anschliessend den Gesamtbestand. Bei
+  `last_collection_read_error`/`last_collection_skipped` konnten sichtbare
+  Rows plus unlesbare Rows dadurch die unlesbaren Rows beim Write entfernen.
+- Gemeinsamer Guard in `AccountStore` blockiert jetzt alle sieben Append-Pfade
+  vor ID-Vergabe und Write. Das verhindert auch doppelte IDs im atomaren
+  Codex-Dispatch-Append, wenn der vorherige Read nur teilweise war.
+- Regression fuer Proactive-Outbox, Proactive-Audit, Proactive-Dispatch,
+  Status-Outbox, Status-Dispatch, Codex-History und Codex-History-Dispatch;
+  gesamte `tests/test_account_store.py` `261 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `955dfc0f fix: block partial collection appends`;
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `4/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 16 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
