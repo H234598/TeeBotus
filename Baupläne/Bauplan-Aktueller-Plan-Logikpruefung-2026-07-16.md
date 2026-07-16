@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `8/20` Commits vorhanden; naechster Restart nach
-  12 weiteren Commits.
+  letzten Restart ist aktuell `10/20` Commits vorhanden; naechster Restart
+  nach 10 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -350,7 +350,7 @@ Diagnose und Tests.
   durch vorhandene Regressionen abgedeckt. `tests/test_cinnamon_applet.py`:
   `238 passed in 30.23s`.
 - Kein Patch fuer eine unbelegte Anzeige erstellt. Seit dem Restart stehen
-  `8/20` Commits an; kein weiterer Restart erforderlich.
+  `10/20` Commits an; kein weiterer Restart erforderlich.
 
 ### Reminder-Intent und Werktags-Rekurrenz
 
