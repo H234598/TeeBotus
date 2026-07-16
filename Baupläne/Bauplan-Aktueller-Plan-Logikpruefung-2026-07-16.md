@@ -627,6 +627,21 @@ Diagnose und Tests.
 - Code-Commit: `c071636c fix: canonicalize working memory lock paths`; kein
   Provider/API-Aufruf.
 
+### Working-Memory-Index-UTF8
+
+- 2026-07-16: `read_text(encoding="utf-8")` konnte bei ungueltigen Bytes in
+  `Working_Memorys.json` einen ungefangenen `UnicodeDecodeError` werfen.
+  Engine-/Adapter-Aufruf konnte dadurch statt leerem Arbeitskontext komplett
+  abbrechen.
+- Der Lesepfad behandelt `UnicodeDecodeError` jetzt wie JSON-Korruption,
+  verschiebt Originalbytes nach `Working_Memorys.json.corrupt.*` und erzeugt
+  erst danach neuen Index.
+- Regression in beiden Store-Klassen prueft Byte-genaues Backup:
+  `tests/test_working_memory.py`: `29 passed`; Telegram-Working-Memory
+  `4 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `5d441d80 fix: quarantine invalid utf8 working memory indexes`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -660,8 +675,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `5/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 15 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `7/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 13 weiteren Commits.
 
 ## Bezug
 
