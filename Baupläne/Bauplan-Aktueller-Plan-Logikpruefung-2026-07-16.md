@@ -1674,6 +1674,23 @@ ausgeloest. Naechster Restart nach 5 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `17/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 3 weiteren Commits.
 
+### Direkten-Codex-Outbox-Replacement-Guarden
+
+- 2026-07-16: `replace_codex_history_outbox_item()` rief das Backend direkt
+  auf und umging damit den bestehenden Collection-Diagnose-Guard. Ein
+  vorheriger Decrypt- oder Skip-Fehler konnte so zu einem destruktiven
+  Outbox-Write fuehren.
+- Der direkte Codex-Replacement-Pfad prueft jetzt vor dem Backend-Aufruf
+  `last_collection_read_error`, Skip-Count und Database-Missing-Zustand.
+  Bei unlesbarer Collection bleibt Backend unveraendert.
+- Regression beweist Abbruch vor Backend-Aufruf; gesamte
+  `tests/test_account_store.py`: `275 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `dd6e2476 fix: guard direct codex outbox replacement`.
+
+**Laufstand nach Fix:** Seit dem Restart `19/20` Commits; kein Push
+ausgeloest. Naechster Code-Commit loest Restart aus.
+
 ## Bezug
 
 - Vorheriger Plan:
