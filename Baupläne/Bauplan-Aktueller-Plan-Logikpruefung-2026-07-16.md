@@ -2546,6 +2546,25 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
   Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `c0b4f661 fix: accept direct reminder wording`.
 
+### Fallback-Warnrate-bei-Teilreparatur
+
+- 2026-07-16: `_clear_recovered_if_clean()` loeschte bei jedem erfolgreichen
+  Vorgang saemtliche Warn-Zeitstempel des Accounts. Ein gesunder Index-Write
+  konnte dadurch den weiterhin defekten Entry-Fallback entdrosseln; der
+  naechste Entry-Zugriff meldete denselben Primary-Fehler sofort erneut.
+- Warn-Zeitstempel bleiben jetzt erhalten, solange irgendein Memory-Teil des
+  Accounts stale, dirty, sync_failed oder unrecoverable ist. Erst wenn der
+  gesamte Account wieder sauber ist, wird Warnzustand inklusive Rate-Limit
+  zurueckgesetzt. Erfolgreiche Einzeloperationen duerfen weiterhin ihren
+  eigenen Sync-Fehler entfernen.
+- Regression: gezielter Cross-Operation-Warnlauf plus bestehender Rate-Limit-
+  Test -> `2 passed`; komplette `tests/test_account_store.py` -> `281 passed`.
+  Ruff, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `59be1fb9 fix: preserve fallback warning cooldowns`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Kein Push. Naechster
+Restart nach 12 weiteren Commits.
+
 **Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Dieser
 Plan-Commit macht `6/20`; kein Push. Naechster Restart nach 14 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
