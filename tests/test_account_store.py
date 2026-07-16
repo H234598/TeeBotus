@@ -3670,6 +3670,55 @@ def test_account_memory_fallback_repairs_entry_fallback_from_full_read_after_unr
     assert backend.last_fallback_sync_error == ""
 
 
+def test_account_memory_fallback_does_not_repair_secondary_from_partial_full_read() -> None:
+    class Backend:
+        def __init__(self, rows: list[dict[str, str]], *, fail_write: bool = False, partial_full_read: bool = False) -> None:
+            self.entries = {"a" * 128: [dict(row) for row in rows]}
+            self.fail_write = fail_write
+            self.partial_full_read = partial_full_read
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+            self.last_index_read_error = ""
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            if self.partial_full_read:
+                self.last_entry_read_error = "payload could not be decrypted"
+                self.last_entry_skipped = 1
+                return [dict(self.entries[account_id][0])]
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def read_entries_by_ids(self, account_id: str, memory_ids: list[str]) -> list[dict[str, str]]:
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+            requested = set(memory_ids)
+            return [dict(row) for row in self.entries.get(account_id, []) if row.get("id") in requested]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_write:
+                raise OSError("fallback unavailable")
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+    account_id = "a" * 128
+    primary = Backend([{"id": "row_1"}, {"id": "row_2"}], partial_full_read=True)
+    fallback = Backend([{"id": "row_1"}, {"id": "row_2"}], fail_write=True)
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    backend.write_entries(account_id, [{"id": "row_1"}, {"id": "row_2"}, {"id": "row_3"}])
+    fallback.fail_write = False
+
+    assert backend.read_entries_by_ids(account_id, ["row_1"]) == [{"id": "row_1"}]
+    assert fallback.entries[account_id] == [{"id": "row_1"}, {"id": "row_2"}]
+    assert account_id in backend._fallback_sync_failed_entries
+
+
 def test_account_memory_fallback_recovers_primary_from_full_entries_after_entries_by_ids_diagnostic_error() -> None:
     class Backend:
         def __init__(self, *, force_read_error: bool = False) -> None:

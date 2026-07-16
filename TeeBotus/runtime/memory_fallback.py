@@ -338,8 +338,16 @@ class WarningFallbackAccountMemoryBackend:
                 )
             if read_full_for_repair is not None:
                 if self._fallback_repair_pending(operation, account_id):
-                    repair_data = read_full_for_repair(self.primary)
-                    self._repair_unrecoverable_fallback_from_primary(operation, account_id, repair_data)
+                    try:
+                        repair_data = read_full_for_repair(self.primary)
+                    except Exception as exc:  # noqa: BLE001 - do not overwrite verified fallback with a failed full read.
+                        self._mark_primary_repair_read_failed(operation, account_id, str(exc))
+                    else:
+                        self._copy_diagnostics(self.primary)
+                        if self._read_diagnostic_failed(operation):
+                            self._mark_primary_repair_read_failed(operation, account_id, self._diagnostic_error_text(operation))
+                        else:
+                            self._repair_unrecoverable_fallback_from_primary(operation, account_id, repair_data)
             else:
                 self._repair_unrecoverable_fallback_from_primary(operation, account_id, result)
             self._warn_if_fallback_repair_pending(operation, account_id)
@@ -727,6 +735,21 @@ class WarningFallbackAccountMemoryBackend:
         self._fallback_stale_set(operation).discard(stale_key)
         self._fallback_sync_failed_set(operation).discard(stale_key)
         unrecoverable_set.discard(stale_key)
+
+    def _mark_primary_repair_read_failed(self, operation: str, account_id: str, detail: str) -> None:
+        stale_key = self._operation_stale_key(operation, account_id)
+        self._fallback_active = True
+        self._fallback_stale_set(operation).add(stale_key)
+        self._fallback_sync_failed_set(operation).add(stale_key)
+        self._set_fallback_sync_error(operation, account_id, f"{operation}: primary repair read failed: {detail}")
+        LOGGER.critical(
+            "ACCOUNT MEMORY FALLBACK REPAIR READ FAILED. FALLBACK REMAINS STALE UNTIL A CLEAN PRIMARY FULL READ "
+            "SUCCEEDS. label=%s operation=%s account_id=%s error=%s.",
+            self.label,
+            operation,
+            account_id,
+            detail,
+        )
 
     def _collection_clear_pending(self, account_id: str) -> bool:
         wildcard_key = (account_id, "*")
