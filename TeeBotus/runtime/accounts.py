@@ -2234,8 +2234,9 @@ class AccountStore:
             self._merge_json_objects(source_dir / USER_MEMORY_INDEX_FILENAME, target_dir / USER_MEMORY_INDEX_FILENAME, preserve_target=True, vault=self.account_memory_vault)
         else:
             source_entries = self.read_memory_entries(source_account_id)
+            self._raise_if_account_memory_entries_unreadable("cannot merge source account memory")
             target_entries = self.read_memory_entries(target_account_id)
-            self._raise_if_account_memory_entries_unreadable("cannot merge account memory")
+            self._raise_if_account_memory_entries_unreadable("cannot merge target account memory")
             source_index = self.read_memory_index(source_account_id)
             self._raise_if_account_memory_index_unreadable("cannot merge source account memory index")
             raw_target_index = self.read_memory_index(target_account_id)

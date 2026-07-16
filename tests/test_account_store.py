@@ -1638,6 +1638,49 @@ def test_merge_accounts_validates_indexes_before_target_entry_write(tmp_path):
     assert target not in backend.write_entries_accounts
 
 
+def test_merge_accounts_rejects_unreadable_source_entries_before_target_read(tmp_path):
+    class Backend:
+        last_entry_read_error = ""
+        last_entry_skipped = 0
+        last_index_read_error = ""
+
+        def __init__(self) -> None:
+            self.source_account_id = ""
+            self.write_entries_accounts: list[str] = []
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            if account_id == self.source_account_id:
+                self.last_entry_read_error = "source entry could not be decrypted"
+                self.last_entry_skipped = 1
+                return [{"id": "mem_source"}]
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+            return []
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            self.last_index_read_error = ""
+            return {}
+
+        def write_entries(self, account_id: str, _rows: list[dict[str, str]]) -> None:
+            self.write_entries_accounts.append(account_id)
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    target = store.resolve_or_create_account(telegram_identity_key(1))
+    source = store.resolve_or_create_account(signal_identity_key(source_uuid="source-entry-error"))
+    backend = Backend()
+    backend.source_account_id = source
+    store._account_memory_backend = backend
+
+    with patch.object(store, "rebuild_structured_memory_index"):
+        with pytest.raises(AccountStoreError, match="cannot merge source account memory"):
+            store.merge_accounts(source, target)
+
+    assert target not in backend.write_entries_accounts
+
+
 def test_merge_accounts_resumes_tombstone_cleanup_after_failure(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))
