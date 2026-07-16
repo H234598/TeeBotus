@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart ist aktuell `17/20` Commits vorhanden; naechster Restart
-  nach 3 weiteren Commits.
+  letzten Restart ist aktuell `19/20` Commits vorhanden; naechster Restart
+  nach 1 weiterem Commit.
 
 ## Aktueller Plan
 
@@ -321,6 +321,22 @@ Diagnose und Tests.
   Entries, Memory-Index, Profil und Account-Index; fokussiert `6 passed`,
   vollstaendig `236 passed`; Ruff, `py_compile` und `git diff --check` gruen.
 - Code-Commit: `89e7c265 fix: roll back full memory reset`; kein
+  Provider/API-Aufruf.
+
+### Account-Merge-Locking
+
+- 2026-07-16: `merge_accounts()` hielt nur die Identity-Sperre. Source- und
+  Target-Memory konnten waehrend des Read-Merge-Write parallel beschrieben
+  werden; besonders der JSON-Pfad schrieb Merge-Dateien ohne eigenen
+  Ziel-Lock.
+- Merge sperrt Source und Target jetzt in sortierter Reihenfolge unterhalb
+  des Identity-Locks. Gleiche Account-Locks bleiben reentrant fuer die
+  bestehenden Memory-Helfer; Lock-Order bleibt `Identity -> Memory`.
+- Thread-Regression haelt Merge waehrend der Zwischenphase an und bestaetigt,
+  dass Target-Append blockiert und danach beide Entries erhalten bleiben;
+  Merge-Suite `5 passed`, vollstaendig `237 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `dba4db7d fix: serialize account merges`; kein
   Provider/API-Aufruf.
 
 ### LLM-State-SQL/JSON-Audit
@@ -741,8 +757,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `17/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 3 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `19/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 1 weiterem Commit.
 
 ## Bezug
 
