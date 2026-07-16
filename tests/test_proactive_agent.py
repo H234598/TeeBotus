@@ -50,6 +50,7 @@ from TeeBotus.runtime.proactive_agent import (
     _normalize_proactive_route,
     _advance_recurrence_due_at,
     _next_recurrence_due_at,
+    _risk_memory_is_active,
     _update_proactive_outbox_item_due_at,
 )
 
@@ -3162,6 +3163,27 @@ def test_recurrence_catches_up_fixed_intervals_after_long_dispatch_delay() -> No
     assert _next_recurrence_due_at({**base_item, "recurrence": "every 5 minutes"}, sent_at) == "2026-07-02T00:05:00+00:00"
     assert _next_recurrence_due_at({**base_item, "recurrence": "every 2 hours"}, sent_at) == "2026-07-02T02:00:00+00:00"
     assert _next_recurrence_due_at({**base_item, "recurrence": "daily"}, sent_at) == "2026-07-03T00:00:00+00:00"
+
+
+def test_future_risk_memory_window_is_not_active_before_valid_from() -> None:
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+
+    assert _risk_memory_is_active(
+        {
+            "kind": "risk_signal",
+            "valid_from": "2026-06-16T00:00:00+00:00",
+            "valid_to": "2026-06-22T00:00:00+00:00",
+        },
+        now,
+    ) is False
+    assert _risk_memory_is_active(
+        {
+            "kind": "risk_signal",
+            "valid_from": "2026-06-16T00:00:00+00:00",
+            "valid_to": "2026-06-22T00:00:00+00:00",
+        },
+        datetime(2026, 6, 16, tzinfo=timezone.utc),
+    ) is True
 
 
 def test_dispatch_reschedules_month_interval_recurring_reminder(tmp_path) -> None:
