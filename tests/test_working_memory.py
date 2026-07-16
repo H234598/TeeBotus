@@ -177,6 +177,52 @@ def test_working_memory_prepare_rebuilds_nested_malformed_index(tmp_path, store_
 
 
 @pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
+def test_working_memory_prepare_sanitizes_legacy_jsonl_entry(tmp_path, store_class):
+    instances_dir = tmp_path / "instances"
+    store = store_class("Depressionsbot", instances_dir)
+    index_path = store.ensure()
+    entry = {
+        "id": "wm_legacy",
+        "created_at": "2026-07-16T00:00:00+00:00",
+        "updated_at": "2026-07-16T00:00:00+00:00",
+        "kind": "legacy",
+        "text": "Kontakt @ada ada@example.com https://example.com 123456789.",
+    }
+    line = (json.dumps(entry) + "\n").encode("utf-8")
+    entries_path = index_path.parent / "Working_Memorys.entries.jsonl"
+    entries_path.write_bytes(line)
+    index_path.write_text(
+        json.dumps(
+            {
+                "scope": "instance",
+                "index": {
+                    "keywords": {"kontakt": [entry["id"]]},
+                    "recent_ids": [entry["id"]],
+                    "entries": {
+                        entry["id"]: {
+                            "offset": 0,
+                            "length": len(line),
+                            "created_at": entry["created_at"],
+                            "updated_at": entry["updated_at"],
+                            "kind": entry["kind"],
+                        }
+                    },
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    record = store.prepare("Kontakt")
+
+    assert record.selected_ids == (entry["id"],)
+    assert "[handle entfernt]" in record.prompt_text
+    assert "ada@example.com" not in record.prompt_text
+    assert "https://example.com" not in record.prompt_text
+    assert "123456789" not in record.prompt_text
+
+
+@pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
 def test_working_memory_invalid_utf8_index_is_preserved(tmp_path, caplog, store_class):
     instances_dir = tmp_path / "instances"
     index_path = instances_dir / "Depressionsbot" / "data" / "Working_Memorys.json"

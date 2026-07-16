@@ -3795,6 +3795,8 @@ def _read_working_memory_entry(index_path: Path, data: dict[str, Any], memory_id
         return None
     if not isinstance(payload, dict) or str(payload.get("id", "")) != memory_id:
         return None
+    payload["text"] = _sanitize_working_memory_text(str(payload.get("text", "")))
+    payload["keywords"] = _memory_keywords(str(payload.get("text", "")))
     return payload
 
 
