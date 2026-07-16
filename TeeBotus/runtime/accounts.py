@@ -2461,6 +2461,7 @@ class AccountStore:
             return False
         return bool(privacy.get("confirmed"))
 
+    @_serialize_identity_map
     def confirm_privacy(
         self,
         account_id: str,
@@ -2489,19 +2490,30 @@ class AccountStore:
             privacy["source"] = str(source or "").strip()[:120]
         profile["privacy"] = privacy
         profile["updated_at"] = timestamp
-        self._write_account_profile(account_id, profile)
-        self._upsert_account_index(profile)
+        snapshot = self._snapshot_identity_metadata((account_id,))
+        try:
+            self._write_account_profile(account_id, profile)
+            self._upsert_account_index(profile)
+        except Exception:
+            self._restore_identity_metadata(snapshot, operation="privacy confirmation")
+            raise
 
+    @_serialize_identity_map
     def clear_privacy_confirmation(self, account_id: str) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
         profile = self._read_account_profile(account_id)
         privacy = profile.get("privacy")
-        if isinstance(privacy, dict) and "confirmed" in privacy:
-            profile.pop("privacy", None)
-            profile["updated_at"] = utc_now()
-            self._write_account_profile(account_id, profile)
-        self._upsert_account_index(profile)
+        snapshot = self._snapshot_identity_metadata((account_id,))
+        try:
+            if isinstance(privacy, dict) and "confirmed" in privacy:
+                profile.pop("privacy", None)
+                profile["updated_at"] = utc_now()
+                self._write_account_profile(account_id, profile)
+            self._upsert_account_index(profile)
+        except Exception:
+            self._restore_identity_metadata(snapshot, operation="privacy confirmation clear")
+            raise
 
     @_serialize_account_memory
     def rebuild_structured_memory_index(self, account_id: str) -> None:

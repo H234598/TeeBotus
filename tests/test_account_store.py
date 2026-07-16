@@ -927,12 +927,31 @@ def test_privacy_confirmation_is_persisted_in_profile_and_reset_by_memory_reset(
     assert store.has_privacy_confirmation(account_id) is False
 
 
+def test_confirm_privacy_rolls_back_profile_when_index_write_fails(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(395935293))
+    profile_path = store.account_dir(account_id) / "Account_Profile.json"
+    previous_profile = profile_path.read_bytes()
+    previous_index = store.account_index_path.read_bytes()
+
+    with patch.object(store, "_upsert_account_index", side_effect=AccountStoreError("index write failed")):
+        with pytest.raises(AccountStoreError, match="index write failed"):
+            store.confirm_privacy(account_id, source="telegram")
+
+    assert profile_path.read_bytes() == previous_profile
+    assert store.account_index_path.read_bytes() == previous_index
+    assert store.has_privacy_confirmation(account_id) is False
+
+
 def test_clear_privacy_confirmation_retry_repairs_index_after_write_failure(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(395935293))
     store.confirm_privacy(account_id, source="telegram")
     original_account_index = store._upsert_account_index
     failed = False
+    profile_path = store.account_dir(account_id) / "Account_Profile.json"
+    previous_profile = profile_path.read_bytes()
+    previous_index = store.account_index_path.read_bytes()
 
     def fail_once(profile):
         nonlocal failed
@@ -945,8 +964,11 @@ def test_clear_privacy_confirmation_retry_repairs_index_after_write_failure(tmp_
         with pytest.raises(AccountStoreError, match="index write failed"):
             store.clear_privacy_confirmation(account_id)
 
-    assert store.has_privacy_confirmation(account_id) is False
+    assert profile_path.read_bytes() == previous_profile
+    assert store.account_index_path.read_bytes() == previous_index
+    assert store.has_privacy_confirmation(account_id) is True
     store.clear_privacy_confirmation(account_id)
+    assert store.has_privacy_confirmation(account_id) is False
     assert account_id in store._load_index().get("accounts", {})
 
 
