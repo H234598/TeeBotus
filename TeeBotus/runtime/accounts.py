@@ -3919,6 +3919,7 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         _atomic_write_text(self.account_dir(account_id) / _safe_account_text_filename(filename), str(text or ""))
 
+    @_serialize_identity_map
     def unlink_identity_and_rotate_secret(self, identity_key: str, account_id: str) -> tuple[str | None, str]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         snapshot = self._snapshot_identity_metadata((account_id,))

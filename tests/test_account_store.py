@@ -1700,6 +1700,38 @@ def test_unlink_identity_and_rotate_secret_rolls_back_unlink_when_rotation_fails
     assert store.verify_secret(account_id, new_secret)
 
 
+def test_unlink_identity_and_rotate_secret_holds_identity_lock_across_steps(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    identity_key = telegram_identity_key(1)
+    account_id = store.resolve_or_create_account(identity_key)
+    lock_states: list[bool] = []
+
+    @contextmanager
+    def recording_lock():
+        lock_states.append(True)
+        try:
+            yield
+        finally:
+            lock_states.pop()
+
+    def unlink(_identity_key, _account_id):
+        assert lock_states == [True]
+        return account_id
+
+    def rotate(_account_id):
+        assert lock_states == [True]
+        return account_id, "c" * 128
+
+    with patch.object(store, "account_identity_lock", recording_lock), patch.object(
+        store,
+        "unlink_identity_if_linked_to",
+        side_effect=unlink,
+    ), patch.object(store, "rotate_secret", side_effect=rotate):
+        assert store.unlink_identity_and_rotate_secret(identity_key, account_id) == (account_id, "c" * 128)
+
+    assert lock_states == []
+
+
 def test_encrypted_memory_with_wrong_instance_secret_does_not_fallback_to_envelope(tmp_path):
     first = AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
     account_id = first.resolve_or_create_account(telegram_identity_key(77))
