@@ -1691,6 +1691,34 @@ ausgeloest. Naechster Restart nach 3 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `19/20` Commits; kein Push
 ausgeloest. Naechster Code-Commit loest Restart aus.
 
+### Keine-divergente-Fallback-Zeile-bei-Primary-Miss-mutieren
+
+- 2026-07-16: Bei `replace_collection_item()` durfte Primary `False`
+  zurueckgeben, waehrend Fallback eine zusaetzliche gleichnamige Zeile
+  besass. Der Router konnte diese Fallback-Zeile dann trotzdem aktualisieren
+  und den Unterschied ohne Warnung bestehen lassen.
+- Wenn Primary die Zeile nicht findet, prueft der Router Fallback vor einer
+  Mutation. Eine widerspruechliche Extra-Zeile wird nicht veraendert und
+  erzeugt `stale`/`sync_failed`; wenn beide Seiten die Zeile nicht haben,
+  bleibt `False` ein normaler Nichtgefunden-Fall.
+- Regression mit leerem Primary und vorhandener Fallback-Zeile; gesamte
+  `tests/test_account_store.py`: `276 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `69f28aa2 fix: prevent divergent fallback replacements`.
+
+**Laufstand vor Restart:** `20/20` Commits seit letztem Restart; kein Push.
+
+- Danach `systemctl --user restart teebotus.service`: `active/running`,
+  PID `191417`, Start `2026-07-16 14:17:38 CEST`.
+- Providerfreier `--runtime-status` nach Bereitschaft: Signal beide
+  Accounts `reachable` und `registered`, Qdrant `ready`, Account-Crypto und
+  Memory `ok`. HF-Pool deaktiviert, GROQ-Key fehlt und Depressionsbot-Signal
+  hat weiterhin keine verknuepfte Signal-Identitaet; bestehende Hinweise,
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Restart:** Seit dem Restart `1/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 19 weiteren Commits.
+
 ## Bezug
 
 - Vorheriger Plan:
