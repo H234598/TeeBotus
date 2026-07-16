@@ -1376,6 +1376,27 @@ ausgeloest. Naechster Restart nach 17 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `5/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 15 weiteren Commits.
 
+### Leere-Secondary-Collection-nicht-promoten
+
+- 2026-07-16: Fallback-Recovery pruefte bei SQL-Collections nur
+  `last_collection_skipped`, nicht `last_collection_read_error`. Zusaetzlich
+  wurde die Leere der Primary-Resultmenge statt der Recovery-Menge bewertet.
+  Primary-Teilrows plus leerer Secondary konnten dadurch als erfolgreiche
+  Recovery gelten und Primary-Collection leeren.
+- Recovery wertet jetzt `repair_data`/Secondary und Fehlertext oder Skip als
+  Unrecoverable-Kriterium. Bei leerem Secondary bleibt Rueckgabe fail-closed;
+  kein Repair-Write auf Primary. Bestehende Semantik fuer bewusst leere,
+  fehlerfreie Secondary-Daten bleibt unveraendert.
+- Regression mit sichtbarer Primary-Teilrow, Fehlertext ohne Skip und leerem
+  Secondary; bestehende Entry-/Index-Schutztests; gesamte
+  `tests/test_account_store.py` `269 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `7eb48c15 fix: block empty fallback collection promotion`;
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `7/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 13 weiteren Commits.
+
 ### Leerer-By-ID-Read-und-stale-Missing-Diagnose
 
 - 2026-07-16: `WarningFallbackAccountMemoryBackend.read_entries_by_ids()`
