@@ -1417,14 +1417,17 @@ ausgeloest. Naechster Restart nach 12 weiteren Commits.
 - Der Append-Guard ignoriert Missing-Diagnose nur bei explizit fehlender
   Datenbank. Partielle Reads, Entschluesselungsfehler und uebersprungene Rows
   bleiben unveraendert fail-closed.
-- Regression: Append auf neuem SQLite-Pfad legt DB an und liest Entry danach
-  wieder; gesamte `tests/test_account_store.py` `263 passed`; Ruff,
-  `py_compile` und `git diff --check` gruen.
+- Regression: Strukturierter Append auf neuem SQLite-Pfad legt DB an und
+  liest den normalisierten Entry danach wieder; gesamte
+  `tests/test_account_store.py` `263 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
 - Code-Commit: `086c3c1b fix: allow first memory write on missing database`;
   kein Provider/API-Aufruf.
+- Testpraezisierung: `c8a9006c test: cover structured first memory append`;
+  kein Provider/API-Aufruf.
 
-**Laufstand nach Fix:** Seit dem Restart `10/20` Commits; kein Push
-ausgeloest. Naechster Restart nach 10 weiteren Commits.
+**Laufstand nach Fix:** Seit dem Restart `12/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 8 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
