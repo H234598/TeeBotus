@@ -2161,6 +2161,27 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 Dokumentationscommit. Kein Push. Naechster manueller Restart nach 15 weiteren
 Commits; naechster Push bleibt bei 100 Commits.
 
+### Secret-Service-Retry
+
+- 2026-07-16: `runtime_secret_provider()` konfigurierte zwar sechs Lookups,
+  aber `SecretToolInstanceSecretProvider._lookup_with_retries()` wiederholte
+  nur leere Lookup-Ergebnisse. Timeout, Secret-Service-Neustart oder ein
+  kurzfristig nicht startbares `secret-tool` brachen beim ersten Versuch ab.
+- Solche Transportfehler haben jetzt einen eigenen internen Fehlerpfad und
+  werden bis zur konfigurierten Retrygrenze erneut versucht. Der interne
+  Cooldown wird zwischen diesen Versuchen aufgehoben; die bestehende
+  Schonung direkter Einzelaufrufe bleibt erhalten. Fehlende Secrets,
+  ungueltige Schluessel und mehrdeutige Secret-Service-Eintraege werden nicht
+  als transient behandelt.
+- Regression: AccountStore-Suite -> `280 passed`; Runtime-Admin-/Codex-
+  Secret-Suiten -> `199 passed`; Ruff, `compileall` und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b3f43f95 fix: retry transient secret service failures`.
+
+**Aktueller Laufstand:** Seit dem manuellen Restart `7/20` Commits inklusive
+Dokumentationscommit. Kein Push. Naechster manueller Restart nach 13 weiteren
+Commits; naechster Push bleibt bei 100 Commits.
+
 ### Telegram-RemoteDisconnect
 
 - 2026-07-16: `RemoteDisconnected` aus `urllib` wurde beim Telegram-

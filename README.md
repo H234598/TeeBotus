@@ -469,6 +469,10 @@ Statuslauf erzeugt keine neuen Secrets.
 Instanz-Purposes. Wenn der Desktop Secret Service ploetzlich einen fehlenden
 oder anderen Key liefert, stoppt der Store dadurch hart, statt einen neuen
 Memory-/Mapping-Key zu erzeugen und alte Memories unlesbar zu machen.
+Transienter Secret-Service-Transportfehler (z.B. Timeout waehrend eines
+Restarts) wird innerhalb der konfigurierten Lookup-Retrygrenze erneut versucht;
+fehlende Eintraege, ungueltige Schluessel und mehrdeutige Secret-Service-Treffer
+bleiben harte Fehler.
 `account_identity_warning=...` nennt bei Fragmentierungsgefahr auch
 `configured_runtime_slots`, `runtime_labels` und `identity_channels`. So ist
 sichtbar, ob zum Beispiel `signal:1` konfiguriert ist, aber im AccountStore
