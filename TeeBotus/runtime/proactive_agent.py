@@ -2100,6 +2100,13 @@ def _apply_proactive_llm_queue_decision(
     reason_memory_ids = _valid_memory_ids(decision.get("reason_memory_ids"), memory_ids)
     if not reason_memory_ids:
         return "error:missing_reason_memory_ids"
+    due_at = str(decision.get("due_at") or "").strip()
+    if due_at:
+        parsed_due_at = _parse_proactive_datetime(due_at)
+        if parsed_due_at is None:
+            return "error:invalid_due_at"
+        if parsed_due_at <= now:
+            return "error:due_at_not_future"
     planner = {
         "source": "llm",
         "schema_version": PROACTIVE_LLM_PLAN_SCHEMA_VERSION,
@@ -2115,7 +2122,7 @@ def _apply_proactive_llm_queue_decision(
         intent=str(decision.get("intent") or "llm_planner").strip()[:80] or "llm_planner",
         message_text=message_text,
         reason_memory_ids=reason_memory_ids,
-        due_at=str(decision.get("due_at") or _default_proactive_due_at(now)).strip(),
+        due_at=due_at or _default_proactive_due_at(now),
         now=now,
         risk_gate=risk_gate,
         planner=planner,

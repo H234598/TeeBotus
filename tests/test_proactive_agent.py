@@ -1923,6 +1923,49 @@ def test_llm_plan_validator_applies_safe_memory_and_queue_decisions(tmp_path) ->
     assert outbox[0]["reason_memory_ids"] == [source_id]
 
 
+def test_llm_plan_validator_rejects_past_or_invalid_queue_due_at(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    source_id = account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spazieren gehen."},
+    )
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {
+            "schema_version": 1,
+            "decisions": [
+                {
+                    "action": "queue",
+                    "category": "reminder",
+                    "intent": "past",
+                    "message_text": "Alte Erinnerung",
+                    "reason_memory_ids": [source_id],
+                    "due_at": "2023-03-16T17:47:00+00:00",
+                },
+                {
+                    "action": "queue",
+                    "category": "reminder",
+                    "intent": "invalid",
+                    "message_text": "Kaputte Erinnerung",
+                    "reason_memory_ids": [source_id],
+                    "due_at": "10. Mai 14:30",
+                },
+            ],
+        },
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.queued_item_ids == ()
+    assert result.errors == ("decision_0_due_at_not_future", "decision_1_invalid_due_at")
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
 def test_llm_plan_validator_can_cancel_and_snooze_queued_items(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
