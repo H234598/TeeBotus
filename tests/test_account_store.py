@@ -1129,6 +1129,47 @@ def test_memory_reads_hold_account_lock(tmp_path):
     assert lock_states == []
 
 
+def test_memory_retrieval_holds_account_lock_across_snapshot(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    lock_states: list[str] = []
+
+    @contextmanager
+    def recording_lock(locked_account_id):
+        lock_states.append(locked_account_id)
+        try:
+            yield
+        finally:
+            lock_states.pop()
+
+    def read_entries(_account_id):
+        assert lock_states == [account_id]
+        return []
+
+    def read_index(_account_id):
+        assert lock_states == [account_id]
+        return {}
+
+    def read_entries_by_ids(_account_id, _memory_ids):
+        assert lock_states == [account_id]
+        return []
+
+    with patch.object(store, "account_memory_lock", recording_lock), patch.object(
+        store,
+        "read_memory_entries",
+        side_effect=read_entries,
+    ), patch.object(store, "read_memory_index", side_effect=read_index), patch.object(
+        store,
+        "read_memory_entries_by_ids",
+        side_effect=read_entries_by_ids,
+    ):
+        assert store.rank_structured_memory_ids(account_id) == ()
+        assert store.select_structured_memory(account_id).selected_ids == ()
+        assert store.select_structured_memory_by_ids(account_id, ["missing"], mark_accessed=False).selected_ids == ()
+
+    assert lock_states == []
+
+
 def test_rotate_secret_invalidates_old_secret(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Bote_der_Wahrheit", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

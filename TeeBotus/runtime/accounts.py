@@ -3020,6 +3020,7 @@ class AccountStore:
             errors.append(f"semantic_cache entries stale: {', '.join(sorted(set(stale_semantic_ids)))}")
         return AccountMemoryIndexHealth(account_id, not errors, tuple(errors))
 
+    @_serialize_account_memory
     def rank_structured_memory_ids(
         self,
         account_id: str,
@@ -3044,6 +3045,7 @@ class AccountStore:
                 break
         return tuple(ranked_ids)
 
+    @_serialize_account_memory
     def select_structured_memory(
         self,
         account_id: str,
@@ -3074,6 +3076,7 @@ class AccountStore:
             mark_accessed=True,
         )
 
+    @_serialize_account_memory
     def select_structured_memory_by_ids(
         self,
         account_id: str,
