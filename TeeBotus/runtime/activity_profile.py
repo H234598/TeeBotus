@@ -43,9 +43,16 @@ def record_account_activity(
         if not isinstance(observations, list):
             observations = []
             profile["observations"] = observations
+        event_id = str(event.event_id or "").strip()
+        if event_id and any(
+            isinstance(value, Mapping) and str(value.get("event_id") or "").strip() == event_id
+            for value in observations
+        ):
+            return
         observations.append(
             {
                 "at": observed_at,
+                "event_id": event_id,
                 "channel": event.channel,
                 "route_key": f"{event.channel}:{event.adapter_slot}:{event.chat_id}",
                 "text_length": min(4000, len(str(event.text or ""))),

@@ -17,9 +17,9 @@ def store(tmp_path) -> AccountStore:
     return AccountStore(tmp_path / "accounts", "Depressionsbot", StaticSecretProvider(b"a" * 32))
 
 
-def event(identity: str, *, text: str = "Hallo") -> IncomingEvent:
+def event(identity: str, *, text: str = "Hallo", event_id: str = "signal:1") -> IncomingEvent:
     return IncomingEvent(
-        event_id="signal:1",
+        event_id=event_id,
         instance="Depressionsbot",
         channel="signal",
         adapter_slot=1,
@@ -58,7 +58,11 @@ def record_hours(account_store: AccountStore, account_id: str, identity: str, va
         record_account_activity(
             account_store,
             account_id,
-            event(identity, text="Ich schreibe gerade etwas laenger ueber meinen Tag."),
+            event(
+                identity,
+                text="Ich schreibe gerade etwas laenger ueber meinen Tag.",
+                event_id=f"signal:{day}:{hour}:{minute}",
+            ),
             now=datetime(2026, 6, day, hour, minute, tzinfo=LOCAL),
         )
 
@@ -95,6 +99,30 @@ def test_engine_records_private_activity_observations(tmp_path, monkeypatch) -> 
     assert observations[0]["text_length"] == len("/status")
 
 
+def test_record_account_activity_ignores_replayed_event(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity, account_id = prepare_account(account_store)
+    incoming = event(identity, event_id="signal:replayed")
+
+    record_account_activity(
+        account_store,
+        account_id,
+        incoming,
+        now=datetime(2026, 6, 15, 9, 0, tzinfo=LOCAL),
+    )
+    record_account_activity(
+        account_store,
+        account_id,
+        incoming,
+        now=datetime(2026, 6, 15, 10, 0, tzinfo=LOCAL),
+    )
+
+    observations = account_store.read_agent_state(account_id)["activity_profile"]["observations"]
+    assert len(observations) == 1
+    assert observations[0]["event_id"] == "signal:replayed"
+    assert observations[0]["at"] == "2026-06-15T09:00:00+02:00"
+
+
 def test_record_account_activity_serializes_concurrent_state_updates(tmp_path, monkeypatch) -> None:
     root = tmp_path / "accounts"
     first = store(tmp_path)
@@ -124,7 +152,7 @@ def test_record_account_activity_serializes_concurrent_state_updates(tmp_path, m
             record_account_activity(
                 account_store,
                 account_id,
-                event(identity),
+                event(identity, event_id=f"signal:{hour}"),
                 now=datetime(2026, 6, 15, hour, 0, tzinfo=LOCAL),
             )
         except BaseException as exc:  # pragma: no cover - only used to report thread failures.
