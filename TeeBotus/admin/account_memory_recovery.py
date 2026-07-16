@@ -605,6 +605,15 @@ def _unreadable_metadata_items(accounts_root: Path, instance_name: str, provider
         ("identity_mapping", store.identities_path, {}),
         ("account_secrets", store.secrets_path, {}),
     ):
+        if path.is_symlink():
+            items.append(
+                {
+                    "kind": kind,
+                    "path": path,
+                    "error": f"refusing symlinked metadata file: {path}",
+                }
+            )
+            continue
         if not path.exists():
             continue
         try:
@@ -612,11 +621,31 @@ def _unreadable_metadata_items(accounts_root: Path, instance_name: str, provider
         except AccountStoreError as exc:
             items.append({"kind": kind, "path": path, "error": str(exc)})
     accounts_dir = store.accounts_dir
-    if accounts_dir.exists():
+    if accounts_dir.is_symlink():
+        items.append(
+            {
+                "kind": "accounts_dir",
+                "path": accounts_dir,
+                "account_ids": [],
+                "error": f"refusing symlinked accounts directory: {accounts_dir}",
+                "quarantine_safe": False,
+            }
+        )
+    elif accounts_dir.exists():
         unreadable_profiles: list[str] = []
         unreadable_profile_accounts: list[str] = []
-        for account_dir in sorted(path for path in accounts_dir.iterdir() if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name)):
+        for account_dir in sorted(path for path in accounts_dir.iterdir() if TOKEN_HEX_RE.fullmatch(path.name)):
+            if account_dir.is_symlink():
+                unreadable_profiles.append(f"{account_dir.name}:refusing symlinked account directory: {account_dir}")
+                unreadable_profile_accounts.append(account_dir.name)
+                continue
+            if not account_dir.is_dir():
+                continue
             profile_path = account_dir / ACCOUNT_PROFILE_FILENAME
+            if profile_path.is_symlink():
+                unreadable_profiles.append(f"{account_dir.name}:refusing symlinked metadata file: {profile_path}")
+                unreadable_profile_accounts.append(account_dir.name)
+                continue
             if not profile_path.exists():
                 continue
             try:

@@ -1360,6 +1360,54 @@ def test_memory_recovery_metadata_quarantine_refuses_missing_secret(tmp_path: Pa
     assert not (tmp_path / "quarantine").exists()
 
 
+def test_memory_recovery_metadata_quarantine_blocks_symlinked_metadata_file(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    external = tmp_path / "outside-index.json"
+    external.write_text("outside\n", encoding="utf-8")
+    index_path = accounts_root / "Account_Index.json"
+    index_path.parent.mkdir(parents=True)
+    index_path.symlink_to(external)
+
+    result = quarantine_unreadable_account_metadata(
+        instances_dir=tmp_path,
+        provider=provider(),
+        apply=True,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[],
+    )
+
+    assert result["status"] == "blocked"
+    assert external.read_text(encoding="utf-8") == "outside\n"
+    assert index_path.is_symlink()
+    assert not (tmp_path / "quarantine").exists()
+
+
+def test_memory_recovery_metadata_quarantine_blocks_symlinked_account_dir(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    external = tmp_path / "outside-account"
+    external.mkdir(parents=True)
+    (external / "Account_Profile.json").write_text("outside\n", encoding="utf-8")
+    account_id = "d" * 128
+    account_dir = accounts_root / "accounts" / account_id
+    account_dir.parent.mkdir(parents=True)
+    account_dir.symlink_to(external, target_is_directory=True)
+
+    result = quarantine_unreadable_account_metadata(
+        instances_dir=tmp_path,
+        provider=provider(),
+        apply=True,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[],
+    )
+
+    assert result["status"] == "blocked"
+    assert external.joinpath("Account_Profile.json").read_text(encoding="utf-8") == "outside\n"
+    assert account_dir.is_symlink()
+    assert not (tmp_path / "quarantine").exists()
+
+
 def test_memory_recovery_metadata_quarantine_keeps_truncated_auth_failure_blocked(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
