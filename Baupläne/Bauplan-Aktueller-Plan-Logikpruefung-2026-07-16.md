@@ -1358,6 +1358,24 @@ ausgeloest. Naechster Restart nach 19 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `3/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 17 weiteren Commits.
 
+### Empty-By-ID-Read-muss-Diagnosen-zuruecksetzen
+
+- 2026-07-16: `AccountStore.read_memory_entries_by_ids()` gab bei leerer
+  ID-Liste sofort `[]` zurueck. Direkte Backend-Read-Diagnosen aus einem
+  vorherigen Fehler blieben dadurch stehen; der Backend-eigene Empty-Read-
+  Reset wurde nie erreicht.
+- AccountStore ruft bei vorhandener Backend-API den kostenfreien Empty-Read-
+  Reset auf; Adapter ohne diese API erhalten best-effort denselben Entry-
+  Diagnose-Reset. Keine DB-/Fallback-Abfrage fuer leere Anfrage.
+- Regression fuer direkten AccountStore-Aufruf; gesamte
+  `tests/test_account_store.py` `268 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `4dee118d fix: clear diagnostics on empty memory id reads`;
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `5/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 15 weiteren Commits.
+
 ### Leerer-By-ID-Read-und-stale-Missing-Diagnose
 
 - 2026-07-16: `WarningFallbackAccountMemoryBackend.read_entries_by_ids()`
