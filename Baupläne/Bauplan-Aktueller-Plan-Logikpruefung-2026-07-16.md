@@ -3196,3 +3196,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `20/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart jetzt erforderlich. Naechster Push bleibt erst
 bei 100 Commits.
+
+### Explizite-Instanznamen-ohne-Pfadescape
+
+- 2026-07-17: `discover_instances(explicit=...)` gab Namen ungeprueft zurueck.
+  `../`, absolute oder symlinked Instanzziele konnten dadurch Admin-/Recovery-
+  Aufrufer aus dem Instances-Baum herausfuehren.
+- Explizite Namen verwerfen jetzt Punkt-/Separatornamen, Symlink-Instanzen und
+  symlinked `Bot_Verhalten.md`. Sichere, noch nicht angelegte Namen bleiben fuer
+  bestehende Bootstrap- und Missing-Instance-Reports kompatibel.
+- Regression: Symlink plus `../`/absolute Namen -> `1 passed`; komplette
+  `tests/test_admin_accounts.py` -> `85 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `cf2e200d fix: validate explicit instance discovery names`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
