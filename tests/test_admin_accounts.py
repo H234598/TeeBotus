@@ -1238,6 +1238,41 @@ def test_memory_recovery_quarantines_unreadable_account_metadata(tmp_path: Path)
     assert (timestamp_dir / "manifest.json").exists()
 
 
+def test_memory_recovery_metadata_quarantine_preserves_readable_account_dirs(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    good_store = AccountStore(accounts_root, "Depressionsbot", provider())
+    readable_account = good_store.resolve_or_create_account("telegram:user:1")
+    unreadable_account = good_store.resolve_or_create_account("telegram:user:2")
+    wrong_store = AccountStore(
+        accounts_root,
+        "Depressionsbot",
+        StaticSecretProvider(b"b" * 32),
+        create_dirs=False,
+        memory_backend_enabled=False,
+    )
+    bad_profile = json.dumps({"account_id": unreadable_account, "status": "active"}).encode("utf-8")
+    bad_profile_path = good_store.account_dir(unreadable_account) / "Account_Profile.json"
+    bad_profile_path.write_bytes(wrong_store.vault.encrypt(bad_profile, kind=bad_profile_path.name))
+
+    result = quarantine_unreadable_account_metadata(
+        instances_dir=tmp_path,
+        provider=provider(),
+        apply=True,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[],
+    )
+
+    assert result["status"] == "applied"
+    assert result["totals"]["account_dirs_quarantined"] == 1
+    accounts_dir = accounts_root / "accounts"
+    assert (accounts_dir / readable_account / "Account_Profile.json").exists()
+    assert not (accounts_dir / unreadable_account).exists()
+    metadata_quarantine = tmp_path / "quarantine" / "Depressionsbot" / "metadata"
+    timestamp_dir = next(metadata_quarantine.iterdir())
+    assert (timestamp_dir / "accounts" / unreadable_account / "Account_Profile.json").exists()
+
+
 def test_memory_recovery_report_includes_unreadable_metadata_account_ids(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"

@@ -483,6 +483,38 @@ def _quarantine_instance_unreadable_metadata(
     moved_items = []
     for item in items:
         path = item["path"]
+        if item["kind"] == "accounts_dir":
+            account_ids = [
+                str(account_id)
+                for account_id in item.get("account_ids", [])
+                if TOKEN_HEX_RE.fullmatch(str(account_id))
+            ]
+            moved_account_dirs = []
+            for account_id in account_ids:
+                account_dir = path / account_id
+                if not account_dir.is_dir() or account_dir.is_symlink():
+                    continue
+                target = instance_quarantine_dir / "accounts" / account_id
+                if target.exists():
+                    target = instance_quarantine_dir / "accounts" / f"{account_id}.account_dir"
+                _prepare_private_dir(target.parent)
+                shutil.move(str(account_dir), str(target))
+                moved_account_dirs.append(
+                    {
+                        "path": str(account_dir),
+                        "quarantine_path": str(target),
+                    }
+                )
+            moved_items.append(
+                {
+                    "kind": item["kind"],
+                    "path": str(path),
+                    "account_ids": account_ids,
+                    "quarantine_paths": [entry["quarantine_path"] for entry in moved_account_dirs],
+                    "error": item["error"],
+                }
+            )
+            continue
         target = instance_quarantine_dir / path.name
         if target.exists():
             target = instance_quarantine_dir / f"{path.name}.{safe_artifact_name(item['kind'], default='item')}"
