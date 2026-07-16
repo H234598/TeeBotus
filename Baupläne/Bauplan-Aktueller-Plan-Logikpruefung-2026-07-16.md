@@ -2158,6 +2158,25 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 Plan-Commit macht `11/20`; kein Push. Naechster Restart nach 9 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### Proactive-Pause-als-harte-Planner-Grenze
+
+- 2026-07-16: `/proactive pause` blockierte Queue/Dispatch, aber Reflection-,
+  LLM- und Tool-Planner prueften nur `enabled`. Pausierte Accounts konnten
+  deshalb weiter Provideraufrufe ausloesen und direkte LLM-Plan-Anwendung
+  konnte interne Planner-Memories schreiben.
+- Pause wird jetzt vor allen Plannerpfaden geprueft: Reflection liefert
+  `proactive_paused`, Modell-/Tool-Planner rufen keinen Client auf, der
+  Scheduler startet keinen Modellplaner und direkte LLM-Plan-Anwendung wird
+  abgewiesen. `resume` hebt die Grenze weiterhin auf.
+- Regression: alle Plannerpfade plus direkte Anwendung mit Client-Assertions;
+  Fokus -> `12 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `ea996b93 fix: honor proactive pause in planners`.
+
+**Aktueller Laufstand:** Seit dem Restart `12/20` Code-Commits. Dieser
+Plan-Commit macht `13/20`; kein Push. Naechster Restart nach 7 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
+
 ### RouteTo-Purpose-Ziel
 
 - 2026-07-16: Explorer-Biene fand widerspruechliche Discovery. Die
