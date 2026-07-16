@@ -3840,6 +3840,7 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._write_account_jsonl_collection(account_id, CODEX_HISTORY_PROJECTS_FILENAME, CODEX_HISTORY_PROJECTS_COLLECTION, list(rows))
 
+    @_serialize_account_memory
     def read_account_text(self, account_id: str, filename: str) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         path = self.account_dir(account_id) / _safe_account_text_filename(filename)
@@ -3848,6 +3849,7 @@ class AccountStore:
         except FileNotFoundError:
             return ""
 
+    @_serialize_account_memory
     def write_account_text(self, account_id: str, filename: str, text: str) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         _atomic_write_text(self.account_dir(account_id) / _safe_account_text_filename(filename), str(text or ""))
