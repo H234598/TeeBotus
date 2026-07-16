@@ -122,6 +122,8 @@ def discover_instances(instances_dir: Path, explicit: Sequence[str] = ()) -> tup
             instance_dir = instances_dir / name
             if instance_dir.is_symlink():
                 continue
+            if instance_dir.exists() and not instance_dir.is_dir():
+                continue
             instruction_path = instance_dir / BOT_INSTRUCTION_FILENAME
             if instruction_path.is_symlink():
                 continue

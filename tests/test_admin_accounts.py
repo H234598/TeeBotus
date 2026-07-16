@@ -83,7 +83,10 @@ def test_admin_instance_discovery_ignores_symlinked_instances_and_instructions(t
     (local_instance / "Bot_Verhalten.md").symlink_to(instruction_target)
 
     assert accounts_report_module.discover_instances(instances_root) == ()
-    assert accounts_report_module.discover_instances(instances_root, ("LinkedInstance", "../external-instance", "safe")) == ("safe",)
+    (instances_root / "NotAnInstance").write_text("file\n", encoding="utf-8")
+    assert accounts_report_module.discover_instances(
+        instances_root, ("LinkedInstance", "../external-instance", "NotAnInstance", "safe")
+    ) == ("safe",)
 
     linked_root = tmp_path / "linked-root"
     linked_root.symlink_to(instances_root, target_is_directory=True)
