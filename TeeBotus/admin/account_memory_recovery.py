@@ -1249,6 +1249,8 @@ def _sqlite_raw_counts(path: Path, instance_name: str, account_id: str) -> tuple
 
 @contextlib.contextmanager
 def _connect_sqlite_readonly(path: Path):
+    if path.is_symlink():
+        raise OSError(f"refusing symlinked SQLite recovery source: {path}")
     if not path.exists():
         raise sqlite3.OperationalError(f"database does not exist: {path}")
     with tempfile.TemporaryDirectory(prefix="teebotus-sqlite-readonly-") as temp_dir:
@@ -1257,6 +1259,8 @@ def _connect_sqlite_readonly(path: Path):
         for suffix in ("-wal", "-shm"):
             sidecar = Path(str(path) + suffix)
             if sidecar.exists():
+                if sidecar.is_symlink():
+                    raise OSError(f"refusing symlinked SQLite recovery sidecar: {sidecar}")
                 shutil.copy2(sidecar, Path(str(copied_path) + suffix))
         connection = sqlite3.connect(f"{copied_path.resolve().as_uri()}?mode=ro", uri=True)
         try:

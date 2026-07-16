@@ -788,6 +788,37 @@ def test_memory_recovery_sqlite_probes_report_disappearing_sources(monkeypatch, 
     assert errors == ["sqlite: source disappeared during probe"]
 
 
+def test_memory_recovery_sqlite_probes_reject_symlinked_source_and_sidecar(tmp_path: Path) -> None:
+    source = tmp_path / "Account_Memory.sqlite3"
+    target = tmp_path / "outside.sqlite3"
+    target.write_bytes(b"not a database")
+    source.symlink_to(target)
+
+    assert _sqlite_account_ids(source) == set()
+    assert _sqlite_raw_counts(source, "Depressionsbot", "a" * 128) == (0, False, 0)
+    _, _, _, source_errors = account_memory_recovery_module._read_sqlite_snapshot_payloads(
+        source,
+        instance_name="Depressionsbot",
+        account_id="a" * 128,
+        provider=provider(),
+    )
+    assert source_errors == [f"sqlite: refusing symlinked SQLite recovery source: {source}"]
+
+    real_source = tmp_path / "real.sqlite3"
+    real_source.write_bytes(b"not a database")
+    sidecar = Path(str(real_source) + "-wal")
+    sidecar_target = tmp_path / "outside-wal"
+    sidecar_target.write_bytes(b"outside")
+    sidecar.symlink_to(sidecar_target)
+    _, _, _, sidecar_errors = account_memory_recovery_module._read_sqlite_snapshot_payloads(
+        real_source,
+        instance_name="Depressionsbot",
+        account_id="a" * 128,
+        provider=provider(),
+    )
+    assert sidecar_errors == [f"sqlite: refusing symlinked SQLite recovery sidecar: {sidecar}"]
+
+
 def test_memory_recovery_report_counts_sqlite_collections_and_skips_instance_state_account(tmp_path: Path, monkeypatch) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
