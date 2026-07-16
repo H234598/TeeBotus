@@ -185,6 +185,31 @@ def test_working_memory_store_instances_share_path_lock(tmp_path, store_class):
     assert len(entries) == 40
 
 
+@pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
+def test_working_memory_store_instances_share_symlinked_path_lock(tmp_path, store_class):
+    instances_dir = tmp_path / "instances"
+    instances_alias = tmp_path / "instances-alias"
+    instances_dir.mkdir()
+    instances_alias.symlink_to(instances_dir, target_is_directory=True)
+    stores = (
+        store_class("Depressionsbot", instances_dir),
+        store_class("Depressionsbot", instances_alias),
+    )
+    index_path = stores[0].ensure()
+
+    def append(number):
+        return stores[number % 2].append_manual(f"Symlink entry {number}")
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        memory_ids = list(executor.map(append, range(40)))
+
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    entries = _read_jsonl(index_path.parent / "Working_Memorys.entries.jsonl")
+    assert len(set(memory_ids)) == 40
+    assert len(payload["index"]["entries"]) == 40
+    assert len(entries) == 40
+
+
 def test_working_memory_unreadable_index_is_not_replaced(tmp_path, caplog):
     instances_dir = tmp_path / "instances"
     store = WorkingMemoryStore("Depressionsbot", instances_dir)

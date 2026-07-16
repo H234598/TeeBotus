@@ -3604,7 +3604,7 @@ def _new_working_memory_data(instance_name: str) -> dict[str, Any]:
 
 
 def _working_memory_process_lock(path: Path) -> threading.RLock:
-    key = os.path.abspath(os.fspath(path))
+    key = os.path.realpath(os.fspath(path))
     with _WORKING_MEMORY_LOCKS_GUARD:
         lock = _WORKING_MEMORY_LOCKS.get(key)
         if lock is None:
