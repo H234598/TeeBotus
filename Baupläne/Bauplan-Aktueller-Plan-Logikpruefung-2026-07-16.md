@@ -1032,6 +1032,21 @@ Diagnose und Tests.
 - Code-Commit: `5d441d80 fix: quarantine invalid utf8 working memory indexes`;
   kein Provider/API-Aufruf.
 
+### Working-Memory-Reparatur bei Read/Prepare
+
+- 2026-07-16: `prepare()` verschob einen korrupten Index zwar nach
+  `Working_Memorys.json.corrupt.*`, schrieb den neu erzeugten Index aber nur
+  indirekt bei `ensure()` oder dem naechsten Append. Nach Prozessabbruch blieb
+  damit kein aktiver Index bestehen.
+- Beide Working-Memory-Pfade persistieren den reparierten Index jetzt direkt
+  in `_load_or_initialize()`. Original bleibt quarantiniert; Read/Prepare ist
+  danach crash-resistenter und wiederholbar.
+- Regression parametrisiert ueber Runtime- und Telegram-Store:
+  `tests/test_working_memory.py`: `31 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `5234fe0a fix: persist working memory repairs from reads`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
