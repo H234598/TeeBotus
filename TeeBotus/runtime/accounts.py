@@ -2224,9 +2224,11 @@ class AccountStore:
             source_entries = self.read_memory_entries(source_account_id)
             target_entries = self.read_memory_entries(target_account_id)
             self._raise_if_account_memory_entries_unreadable("cannot merge account memory")
-            self.write_memory_entries(target_account_id, _merge_account_jsonl_rows(target_entries, source_entries))
             source_index = self.read_memory_index(source_account_id)
-            target_index = self._normalized_memory_index(target_account_id, self.read_memory_index(target_account_id))
+            self._raise_if_account_memory_index_unreadable("cannot merge source account memory index")
+            raw_target_index = self.read_memory_index(target_account_id)
+            self._raise_if_account_memory_index_unreadable("cannot merge target account memory index")
+            target_index = self._normalized_memory_index(target_account_id, raw_target_index)
             source_nested_index = source_index.get("index") if isinstance(source_index.get("index"), dict) else {}
             target_nested_index = target_index.setdefault("index", {})
             target_accessed_ids = target_nested_index.setdefault("accessed_ids", [])
@@ -2240,6 +2242,7 @@ class AccountStore:
                 if (memory_id := str(value or "").strip())
                 and memory_id not in target_accessed_ids
             )
+            self.write_memory_entries(target_account_id, _merge_account_jsonl_rows(target_entries, source_entries))
             self.write_memory_index(target_account_id, target_index)
         self.rebuild_structured_memory_index(target_account_id)
         self._merge_json_objects(source_dir / ACCOUNT_PROFILE_FILENAME, target_dir / ACCOUNT_PROFILE_FILENAME, preserve_target=True, vault=self.vault)

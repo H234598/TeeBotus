@@ -1531,6 +1531,48 @@ def test_merge_accounts_merges_and_clears_sql_memory(tmp_path, monkeypatch):
     assert store.read_proactive_outbox(source) == []
 
 
+def test_merge_accounts_validates_indexes_before_target_entry_write(tmp_path):
+    class Backend:
+        last_entry_read_error = ""
+        last_entry_skipped = 0
+        last_index_read_error = ""
+
+        def __init__(self) -> None:
+            self.write_entries_accounts: list[str] = []
+            self.source_account_id = ""
+            self.target_account_id = ""
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            return [{"id": "mem_source"}] if account_id == self.source_account_id else []
+
+        def read_index(self, account_id: str) -> dict[str, object]:
+            self.last_index_read_error = "target index could not be decrypted" if account_id == self.target_account_id else ""
+            return {}
+
+        def write_entries(self, account_id: str, _rows: list[dict[str, str]]) -> None:
+            self.write_entries_accounts.append(account_id)
+
+        def write_index(self, _account_id: str, _data: dict[str, object]) -> None:
+            return None
+
+        def clear_account_unchecked(self, _account_id: str) -> None:
+            return None
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    target = store.resolve_or_create_account(telegram_identity_key(1))
+    source = store.resolve_or_create_account(signal_identity_key(source_uuid="index-order"))
+    backend = Backend()
+    backend.source_account_id = source
+    backend.target_account_id = target
+    store._account_memory_backend = backend
+
+    with patch.object(store, "rebuild_structured_memory_index"):
+        with pytest.raises(AccountStoreError, match="index is unreadable"):
+            store.merge_accounts(source, target)
+
+    assert target not in backend.write_entries_accounts
+
+
 def test_merge_accounts_resumes_tombstone_cleanup_after_failure(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))
