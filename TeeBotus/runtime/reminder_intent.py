@@ -71,7 +71,7 @@ RELATIVE_TEXT_RE = re.compile(
     re.IGNORECASE,
 )
 DATE_RE = re.compile(
-    r"\b(?:am\s+)?(?P<day>[0-3]?\d)[.](?P<month>[01]?\d)(?:[.](?P<year>\d{2,4}))?"
+    r"\b(?:am\s+)?(?P<day>[0-3]?\d)[.](?P<month>[01]?\d)(?:[.](?P<year>\d{2,4}))?[.]?"
     rf"(?:\s+(?:um|gegen)?\s*(?P<hour>{_CLOCK_HOUR})(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?)?",
     re.IGNORECASE,
 )

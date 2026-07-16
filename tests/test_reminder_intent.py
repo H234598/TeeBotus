@@ -182,6 +182,24 @@ def test_parse_reminder_supports_german_month_names_and_explicit_year() -> None:
     assert umlaut.due_at == march.due_at
 
 
+def test_parse_reminder_supports_trailing_dot_before_numeric_time() -> None:
+    now = datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc)
+
+    with_year = parse_reminder_intent(
+        "Erinnere mich am 16.03.2027. um 17:47 an Dr. Oliver",
+        now=now,
+    )
+    without_year = parse_reminder_intent(
+        "Erinnere mich am 16.03. um 17:47 an Dr. Oliver",
+        now=now,
+    )
+
+    assert with_year.due_at == "2027-03-16T17:47:00+00:00"
+    assert with_year.subject == "Dr. Oliver"
+    assert without_year.due_at == "2027-03-16T17:47:00+00:00"
+    assert without_year.subject == "Dr. Oliver"
+
+
 def test_parse_reminder_rejects_invalid_named_month_date_without_fallback() -> None:
     intent = parse_reminder_intent("Erinnere mich am 31. Februar 2027 um 10 an den Termin", now=fixed_now())
 
