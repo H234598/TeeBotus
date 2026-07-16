@@ -144,6 +144,17 @@ class SQLiteAccountMemoryBackend:
         self._cipher_key: bytes | None = None
         self._cipher: AESGCM | None = None
 
+    def _clear_write_diagnostics(self, kind: str) -> None:
+        self.last_database_missing = False
+        if kind == "entries":
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+        elif kind == "index":
+            self.last_index_read_error = ""
+        elif kind == "collection":
+            self.last_collection_read_error = ""
+            self.last_collection_skipped = 0
+
     def _secondary_database_exists(self) -> bool:
         fallback_path = self.config.fallback_path
         if fallback_path is None:
@@ -334,6 +345,7 @@ class SQLiteAccountMemoryBackend:
                 )
                 for ordinal, row in enumerate(normalized_rows):
                     self._insert_entry(connection, account_id, row, ordinal)
+        self._clear_write_diagnostics("entries")
 
     def read_index(self, account_id: str) -> dict[str, Any]:
         self.last_index_read_error = ""
@@ -403,6 +415,7 @@ class SQLiteAccountMemoryBackend:
                     """,
                     (self.instance_name, account_id, nonce, ciphertext, utc_now()),
                 )
+        self._clear_write_diagnostics("index")
 
     def read_collection(self, account_id: str, collection: str) -> list[dict[str, Any]]:
         collection_name = _normalize_collection_name(collection)
@@ -499,6 +512,7 @@ class SQLiteAccountMemoryBackend:
                 )
                 for ordinal, row in enumerate(normalized_rows):
                     self._insert_collection_item(connection, account_id, collection_name, row, ordinal)
+        self._clear_write_diagnostics("collection")
 
     def append_collection_items(self, account_id: str, collection: str, rows: Iterable[dict[str, Any]]) -> None:
         collection_name = _normalize_collection_name(collection)
@@ -519,6 +533,7 @@ class SQLiteAccountMemoryBackend:
                 ).fetchone()[0]
                 for offset, row in enumerate(normalized_rows):
                     self._insert_collection_item(connection, account_id, collection_name, row, int(start_ordinal) + offset)
+        self._clear_write_diagnostics("collection")
 
     def replace_collection_item(self, account_id: str, collection: str, item_key: str, row: dict[str, Any]) -> bool:
         collection_name = _normalize_collection_name(collection)

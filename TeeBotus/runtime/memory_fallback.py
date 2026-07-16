@@ -501,6 +501,7 @@ class WarningFallbackAccountMemoryBackend:
             self._copy_diagnostics(self.primary)
             dirty_set.discard(resolved_dirty_key)
             self._mirror_write(operation, account_id, callback)
+            self._clear_write_diagnostics(operation)
             self._clear_recovered_if_clean(operation, account_id)
         except Exception as exc:  # noqa: BLE001
             self._fallback_active = True
@@ -538,6 +539,7 @@ class WarningFallbackAccountMemoryBackend:
                 )
                 raise AccountStoreError(self.fallback_sync_error_for_account(account_id) or self.last_fallback_sync_error) from fallback_exc
             self._copy_diagnostics(self.fallback)
+            self._clear_write_diagnostics(operation)
             dirty_set.add(resolved_dirty_key)
             self._fallback_stale_set(operation).discard(resolved_dirty_key)
             self._fallback_sync_failed_set(operation).discard(resolved_dirty_key)
@@ -1208,6 +1210,15 @@ class WarningFallbackAccountMemoryBackend:
         elif operation.startswith("read_collection:"):
             self.last_collection_read_error = ""
             self.last_collection_skipped = 0
+
+    def _clear_write_diagnostics(self, operation: str) -> None:
+        self.last_database_missing = False
+        if operation == "write_entries":
+            self._clear_read_diagnostics("read_entries")
+        elif operation == "write_index":
+            self._clear_read_diagnostics("read_index")
+        elif operation.startswith("write_collection:"):
+            self._clear_read_diagnostics(operation.replace("write_", "read_", 1))
 
     @property
     @_serialize_fallback_operation

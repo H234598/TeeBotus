@@ -2226,6 +2226,10 @@ def test_account_memory_append_initializes_missing_sqlite_database(tmp_path):
     assert rows[0]["id"] == "mem_first"
     assert rows[0]["user_text"] == "Erster Eintrag"
     assert sqlite_path.exists()
+    assert backend.last_entry_read_error == ""
+    assert backend.last_entry_skipped == 0
+    assert backend.last_index_read_error == ""
+    assert backend.last_database_missing is False
 
 
 def test_rebuild_structured_account_memory_rolls_back_entries_when_index_write_fails(tmp_path):
@@ -2406,6 +2410,10 @@ def test_account_store_sqlite_backend_stores_memory_outside_json_files(tmp_path,
     )
 
     assert memory_id == "mem_sqlite"
+    backend = store.account_memory_backend
+    assert backend.last_entry_read_error == ""
+    assert backend.last_index_read_error == ""
+    assert backend.last_database_missing is False
     entries = store.read_memory_entries(account_id)
     index = store.read_memory_index(account_id)
     assert entries[0]["id"] == "mem_sqlite"
