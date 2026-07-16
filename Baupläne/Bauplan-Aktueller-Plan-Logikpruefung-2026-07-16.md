@@ -3058,3 +3058,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Quarantaene-Manifest-exklusiv-schreiben
+
+- 2026-07-17: Quarantaene-Manifeste wurden per `Path.write_text()` geschrieben.
+  Ein vorhandener `manifest.json`-Symlink konnte dadurch auf externe Datei
+  zeigen und ueberschrieben werden.
+- Beide Manifest-Pfade reservieren die Datei jetzt mit `O_CREAT|O_EXCL` und
+  Modus `0600`. Vorhandene Dateien und Symlinks blockieren; kein externes
+  Ziel wird verfolgt.
+- Regression: Manifest-Symlink -> `3 passed` im Manifest-/Quarantaene-Fokus;
+  komplette `tests/test_admin_accounts.py` -> `79 passed`. Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ac1d5a15 fix: reserve quarantine manifests exclusively`.
+
+**Aktueller Laufstand:** Seit dem Restart `6/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 14 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
