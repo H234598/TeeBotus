@@ -3291,3 +3291,18 @@ nach 8 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `13/20` Commits. Kein Push. Restart
 nach 7 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Status-Auth-Report-fangt-Store-Init-Fehler
+
+- 2026-07-17: `build_instance_status_auth_report()` liess
+  `AccountStore(...)`-Fehler ungefangen. Fehlende oder inkompatible Keys
+  konnten dadurch den gesamten Status-Auth-Report abbrechen.
+- Store-Initialisierungsfehler werden jetzt als `status_auth.errors` mit
+  `store_errors`-Totals erfasst; andere Instanzen bleiben berichtbar.
+- Regression: erzwungener Init-Fehler plus Status-Auth-Fokus -> `10 passed`;
+  komplette `tests/test_admin_accounts.py` -> `89 passed`. Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5f4d0c4a fix: report status auth store init failures`.
+
+**Aktueller Laufstand:** Seit dem Restart `15/20` Commits. Kein Push. Restart
+nach 5 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
