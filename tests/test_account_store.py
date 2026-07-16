@@ -2033,6 +2033,23 @@ def test_structured_account_memory_migrates_legacy_top_level_index(tmp_path):
     assert index["index"]["keywords"]["kaffee"] == ["mem_new"]
 
 
+def test_append_structured_memory_repairs_missing_live_index_entries(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_memory_entries(
+        account_id,
+        [{"id": "mem_old", "user_text": "Mond", "bot_text": "Tee"}],
+    )
+    store.write_memory_index(account_id, {})
+
+    store.append_structured_memory_entry(account_id, {"id": "mem_new", "user_text": "Kaffee", "bot_text": "Tasse"})
+
+    index = store.read_memory_index(account_id)["index"]
+    assert index["keywords"]["mond"] == ["mem_old"]
+    assert index["keywords"]["kaffee"] == ["mem_new"]
+    assert set(index["semantic_cache"]["entries"]) == {"mem_old", "mem_new"}
+
+
 def test_structured_account_memory_rolls_back_entries_when_index_write_fails(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

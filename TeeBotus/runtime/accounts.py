@@ -4078,6 +4078,28 @@ class AccountStore:
             if memory_id not in values:
                 values.append(memory_id)
             del values[:-ACCOUNT_MEMORY_KEYWORD_ENTRY_LIMIT]
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            row_id = str(row.get("id") or "").strip()
+            if not row_id:
+                continue
+            row_keywords = row.get("keywords") if isinstance(row.get("keywords"), list) else None
+            if row_keywords is None or not all(isinstance(keyword, str) for keyword in row_keywords):
+                row_keywords = _account_memory_keywords(
+                    f"{row.get('user_text', '')}\n{row.get('bot_text', '')}\n{row.get('text', '')}"
+                )
+            for keyword in row_keywords:
+                key = str(keyword or "").strip()
+                if not key:
+                    continue
+                values = keyword_index.setdefault(key, [])
+                if not isinstance(values, list):
+                    values = []
+                    keyword_index[key] = values
+                if row_id not in values:
+                    values.append(row_id)
+                del values[:-ACCOUNT_MEMORY_KEYWORD_ENTRY_LIMIT]
 
         recent_ids = nested_index.setdefault("recent_ids", [])
         if not isinstance(recent_ids, list):
@@ -5494,6 +5516,12 @@ def _update_account_memory_semantic_cache(nested_index: dict[str, Any], rows: li
         elif raw_memory_id != memory_id:
             metadata = entries.pop(raw_memory_id)
             entries.setdefault(memory_id, metadata)
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        memory_id = str(row.get("id", "")).strip()
+        if memory_id and memory_id not in entries:
+            entries[memory_id] = _account_memory_semantic_cache_entry(row)
     memory_id = str(entry.get("id", "")).strip()
     if memory_id:
         entries.pop(memory_id, None)
