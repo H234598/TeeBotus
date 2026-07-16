@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `3/20` Commits vorhanden; naechster Restart
-  nach 17 weiteren Commits.
+  letzten Restart ist aktuell `5/20` Commits vorhanden; naechster Restart
+  nach 15 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -155,6 +155,15 @@ Diagnose und Tests.
 - Regressionen fuer Identity-Write-Fehler und fehlgeschlagenes Tombstone-
   Cleanup ergaenzt. Fokussiert `4 passed`; AccountStore-Suite `208 passed in
   7.37s`; Logik-Audit-Suite `10 passed`.
+- 2026-07-16: Merge-Retry-Nachaudit reproduzierte einen Restfehler fuer alte
+  Source-Rows ohne `id`: Zielnormalisierung konnte die gleiche Source-Zeile
+  beim Retry erneut einfuegen. `merge_accounts()` normalisiert die Quelle
+  jetzt vor dem ersten Merge. Tombstone-Cleanup loescht ausserdem zuerst das
+  Quellverzeichnis und entfernt den Source-Index erst danach; bei Cleanup-
+  Fehler bleibt der Index sichtbar und der Retry eindeutig.
+- Regression fuer Legacy-Row-Duplikation und Cleanup-Reihenfolge ergaenzt;
+  fokussiert `4 passed`, AccountStore-Suite danach `231 passed in 6.97s`.
+  Code-Commit: `5900f36c`.
 - Offener Bienenbefund: `unlink_identity()` hat weiterhin getrennte Profil-,
 - Index- und Mapping-Writes. Eine Biene reproduzierte die drei Teilfehler;
   die bestehende Reihenfolge konvergiert beim Retry bereits sicher, daher kein
@@ -511,8 +520,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `3/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 17 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `5/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 15 weiteren Commits.
 
 ## Bezug
 
