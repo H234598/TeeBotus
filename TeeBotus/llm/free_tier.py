@@ -93,11 +93,11 @@ class GeminiFreeTierGuard:
         minute_bucket = int(now.timestamp() // 60)
         day_bucket = _pacific_day(now)
         with state.lock:
-            if state.minute_bucket != minute_bucket:
+            if state.minute_bucket < 0 or minute_bucket > state.minute_bucket:
                 state.minute_bucket = minute_bucket
                 state.minute_requests = 0
                 state.minute_input_tokens = 0
-            if state.day_bucket != day_bucket:
+            if state.day_bucket == "" or day_bucket > state.day_bucket:
                 state.day_bucket = day_bucket
                 state.day_requests = 0
 

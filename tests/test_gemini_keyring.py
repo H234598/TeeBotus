@@ -411,3 +411,28 @@ def test_gemini_free_tier_guard_blocks_before_limit() -> None:
     assert second.allowed is False
     assert "TPM free-tier budget would be exceeded" in second.reason
     assert other_project.allowed is True
+
+
+def test_gemini_free_tier_guard_does_not_reset_budgets_on_clock_rollback() -> None:
+    reset_gemini_free_tier_budget_state()
+    current = [datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc)]
+    guard = GeminiFreeTierGuard(
+        GeminiFreeTierLimits(
+            requests_per_minute=10,
+            input_tokens_per_minute=100,
+            requests_per_day=1,
+            reserve_input_tokens=0,
+        ),
+        now=lambda: current[0],
+    )
+
+    first = guard.reserve(quota_owner="rollback-project", model="gemini/gemini-2.5-flash", estimated_input_tokens=1)
+    current[0] = datetime(2026, 6, 16, 12, 0, tzinfo=timezone.utc)
+    next_day = guard.reserve(quota_owner="rollback-project", model="gemini/gemini-2.5-flash", estimated_input_tokens=1)
+    current[0] = datetime(2026, 6, 15, 12, 1, tzinfo=timezone.utc)
+    rolled_back = guard.reserve(quota_owner="rollback-project", model="gemini/gemini-2.5-flash", estimated_input_tokens=1)
+
+    assert first.allowed is True
+    assert next_day.allowed is True
+    assert rolled_back.allowed is False
+    assert "RPD free-tier budget exhausted" in rolled_back.reason
