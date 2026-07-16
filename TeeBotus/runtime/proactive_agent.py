@@ -2732,14 +2732,31 @@ def _next_recurrence_due_at(item: Mapping[str, Any], sent_at: str) -> str:
     if sent is None:
         return ""
     base = _parse_proactive_datetime(str(item.get("due_at") or "")) or sent
+
+    fixed_interval: timedelta | None = {
+        "daily": timedelta(days=1),
+        "weekly": timedelta(weeks=1),
+    }.get(recurrence)
+    match = re.fullmatch(r"every\s+(?P<count>\d{1,3})\s+(?P<unit>minutes|hours|days|weeks)", recurrence)
+    if match:
+        count = int(match.group("count"))
+        fixed_interval = {
+            "minutes": timedelta(minutes=count),
+            "hours": timedelta(hours=count),
+            "days": timedelta(days=count),
+            "weeks": timedelta(weeks=count),
+        }[match.group("unit")]
+    if fixed_interval is not None:
+        periods = max(1, int((sent - base) // fixed_interval) + 1)
+        return (base + fixed_interval * periods).isoformat(timespec="seconds")
+
     next_due = _advance_recurrence_due_at(base, recurrence)
-    for _ in range(366):
-        if next_due is None:
+    while next_due is not None and next_due <= sent:
+        following_due = _advance_recurrence_due_at(next_due, recurrence)
+        if following_due is None or following_due <= next_due:
             return ""
-        if next_due > sent:
-            return next_due.isoformat(timespec="seconds")
-        next_due = _advance_recurrence_due_at(next_due, recurrence)
-    return ""
+        next_due = following_due
+    return next_due.isoformat(timespec="seconds") if next_due is not None else ""
 
 
 def _advance_recurrence_due_at(base: datetime, recurrence: str) -> datetime | None:
