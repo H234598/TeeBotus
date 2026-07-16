@@ -853,7 +853,11 @@ def _discover_account_ids(accounts_root: Path) -> list[str]:
     account_ids: set[str] = set()
     accounts_dir = accounts_root / ACCOUNTS_DIRNAME
     if accounts_dir.exists():
-        account_ids.update(path.name for path in accounts_dir.iterdir() if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name))
+        account_ids.update(
+            path.name
+            for path in accounts_dir.iterdir()
+            if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name) and path.name != INSTANCE_STATE_ACCOUNT_ID
+        )
     for source in _discover_recovery_sources(accounts_root):
         if source.active and source.kind == "sqlite":
             account_ids.update(_sqlite_account_ids(source.path))
