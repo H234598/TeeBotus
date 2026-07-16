@@ -1242,6 +1242,45 @@ def test_status_uses_account_memory_backend_payload_size(tmp_path):
     assert "- Userfiles: Datenbank-Backend, Payloads verschluesselt" in text
 
 
+def test_memory_payload_size_reads_entries_and_index_under_one_lock():
+    lock_states: list[str] = []
+
+    class Store:
+        account_memory_backend = object()
+
+        class Lock:
+            def __init__(self, account_id: str):
+                self.account_id = account_id
+
+            def __enter__(self):
+                lock_states.append(self.account_id)
+                return self
+
+            def __exit__(self, _exc_type, _exc_value, _traceback):
+                lock_states.pop()
+                return False
+
+        def account_memory_lock(self, account_id: str):
+            return self.Lock(account_id)
+
+        def read_memory_entries(self, _account_id):
+            assert lock_states == ["account"]
+            return [{"id": "mem"}]
+
+        def read_memory_index(self, _account_id):
+            assert lock_states == ["account"]
+            return {"index": {}}
+
+    size = status_core.account_memory_payload_size(
+        account_store=Store(),
+        account_id="account",
+        fallback_directory=None,
+    )
+
+    assert size is not None
+    assert lock_states == []
+
+
 def test_status_does_not_fallback_to_legacy_files_when_memory_backend_fails(tmp_path):
     class FailingBackend:
         last_entry_read_error = "database unavailable"

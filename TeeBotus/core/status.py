@@ -1806,13 +1806,15 @@ def account_memory_payload_size(*, account_store: AccountStore | None, account_i
         except (AccountStoreError, OSError):
             LOGGER.exception("Failed to resolve account memory backend for status size.")
             return None
-        try:
-            entries = account_store.read_memory_entries(account_id)
-            index = account_store.read_memory_index(account_id)
-        except (AccountStoreError, OSError):
-            LOGGER.exception("Failed to read account memory payload size from store.")
-            return None
-        else:
+        lock_factory = getattr(account_store, "account_memory_lock", None)
+        lock = lock_factory(account_id) if callable(lock_factory) else contextlib.nullcontext()
+        with lock:
+            try:
+                entries = account_store.read_memory_entries(account_id)
+                index = account_store.read_memory_index(account_id)
+            except (AccountStoreError, OSError):
+                LOGGER.exception("Failed to read account memory payload size from store.")
+                return None
             if not isinstance(entries, list) or not isinstance(index, dict) or any(
                 not isinstance(entry, dict) for entry in entries
             ):
