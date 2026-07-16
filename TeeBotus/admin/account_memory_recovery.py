@@ -854,6 +854,12 @@ def _safe_json_accounts_dir(accounts_root: Path) -> Path | None:
 
 def _snapshot_sqlite_database(source: Path, target: Path) -> None:
     _prepare_private_dir(target.parent)
+    try:
+        descriptor = os.open(os.fspath(target), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError as exc:
+        raise AccountStoreError(f"refusing existing SQLite snapshot destination: {target}") from exc
+    else:
+        os.close(descriptor)
     with _connect_sqlite_readonly(source) as source_connection, sqlite3.connect(target) as target_connection:
         source_connection.backup(target_connection)
     try:

@@ -1083,6 +1083,21 @@ def test_memory_recovery_quarantines_unrecoverable_sqlite_rows(tmp_path: Path) -
     assert snapshot_backend.read_entries(account_id)[0]["id"] == "mem_bad"
 
 
+def test_memory_recovery_snapshot_rejects_existing_symlink_destination(tmp_path: Path) -> None:
+    source = tmp_path / "source.sqlite3"
+    source.write_bytes(b"sqlite placeholder")
+    outside = tmp_path / "outside.sqlite3"
+    outside.write_bytes(b"outside")
+    target = tmp_path / "quarantine" / "snapshot.sqlite3"
+    target.parent.mkdir()
+    target.symlink_to(outside)
+
+    with pytest.raises(AccountStoreError, match="existing SQLite snapshot destination"):
+        account_memory_recovery_module._snapshot_sqlite_database(source, target)
+
+    assert outside.read_bytes() == b"outside"
+
+
 def test_memory_recovery_quarantines_unrecoverable_sqlite_collection_rows(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
