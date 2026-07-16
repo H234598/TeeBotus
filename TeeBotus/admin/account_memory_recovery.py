@@ -376,11 +376,15 @@ def quarantine_unrecoverable_account_memory(
             quarantine_dir=quarantine_dir,
             timestamp=timestamp,
         )
+        if instance_result.get("status") == "blocked":
+            result["status"] = "blocked"
+            result["instances"].append(instance_result)
+            continue
         result["instances"].append(instance_result)
         totals = result["totals"]
         for key in totals:
             totals[key] += int(instance_result.get("totals", {}).get(key, 0) or 0)
-    if not result["totals"]["unrecoverable_accounts"]:
+    if result["status"] != "blocked" and not result["totals"]["unrecoverable_accounts"]:
         result["status"] = "no-op"
     return result
 
@@ -755,6 +759,16 @@ def _quarantine_instance_unrecoverable(
         "json_files": [],
     }
     if not account_ids:
+        return result
+    if (
+        not str(instance_report.get("accounts_root") or "").strip()
+        or _first_symlinked_path_component(accounts_root) is not None
+        or not accounts_root.is_dir()
+    ):
+        result["status"] = "blocked"
+        result["error"] = "Refusing quarantine because report accounts_root is missing, unsafe, or unavailable."
+        result["totals"]["unrecoverable_accounts"] = 0
+        result["account_ids"] = []
         return result
     sqlite_sources = _sqlite_sources_for_unrecoverable_accounts(unrecoverable_accounts, accounts_root=accounts_root)
     json_files = _json_memory_files_for_accounts(accounts_root, account_ids)

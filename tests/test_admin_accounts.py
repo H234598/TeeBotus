@@ -933,6 +933,32 @@ def test_memory_recovery_metadata_probe_errors_block_apply(monkeypatch, tmp_path
     assert not (tmp_path / "quarantine").exists()
 
 
+def test_memory_recovery_quarantine_blocks_missing_report_accounts_root(tmp_path: Path) -> None:
+    account_id = "e" * 128
+    report = {
+        "instances": [
+            {
+                "instance": "Depressionsbot",
+                "accounts_root": "",
+                "accounts": [
+                    {
+                        "account_id": account_id,
+                        "recovery_status": "unrecoverable",
+                        "sources": [],
+                    }
+                ],
+            }
+        ]
+    }
+
+    result = quarantine_unrecoverable_account_memory(report, apply=True, running_processes=[])
+
+    assert result["status"] == "blocked"
+    assert result["instances"][0]["status"] == "blocked"
+    assert "accounts_root" in result["instances"][0]["error"]
+    assert not (tmp_path / "accounts").exists()
+
+
 def test_memory_recovery_report_counts_sqlite_collections_and_skips_instance_state_account(tmp_path: Path, monkeypatch) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
