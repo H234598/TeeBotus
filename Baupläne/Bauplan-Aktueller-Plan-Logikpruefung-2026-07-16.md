@@ -537,6 +537,20 @@ Diagnose und Tests.
 - Code-Commit: `d474c0b7 fix: tolerate corrupt working memory entries`; kein
   Provider/API-Aufruf.
 
+### Working-Memory-Ranking-Drift
+
+- 2026-07-16: Vergleich beider Working-Memory-Pfade zeigte echte
+  Verhaltensdrift. Moderne Runtime fuegte nach Keyword-Treffern aktuelle
+  `recent_ids` an; Telegram-Kompatibilitaet liess sie weg.
+- Telegram-Pfad nutzt jetzt dieselbe Reihenfolge: Keyword-Relevanz zuerst,
+  danach aktuelle Eintraege ohne Duplikate. Damit bleibt gewuenschte
+  `Ranking + Recent`-Semantik erhalten.
+- Regression parametrisiert ueber beide Store-Klassen: Working-Memory `11
+  passed`, Telegram-Working-Memory `4 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `f40fc1c1 fix: preserve recent working memory ranking`; kein
+  Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -565,8 +579,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `13/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 7 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `15/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 5 weiteren Commits.
 
 ## Bezug
 
