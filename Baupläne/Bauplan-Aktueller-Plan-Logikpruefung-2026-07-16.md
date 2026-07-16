@@ -2787,3 +2787,21 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `14/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 6 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Metadata-Quarantaene-bei-Auth-Fehlern
+
+- 2026-07-17: Authentication-Tag-Fehler waren als bekannte Korruption fuer
+  Quarantaene-Apply zugelassen. Ein geaenderter oder falscher Secret-Service-
+  Key erzeugt denselben Fehler; Apply konnte damit gueltige Metadata aus dem
+  aktiven Store bewegen.
+- Auth-Fehler sind jetzt explizit unsafe und blockieren Apply. Nur eindeutig
+  malformed/unsupported Envelope- oder JSON-Fehler bleiben fuer selektive
+  Quarantaene zugelassen. Kein automatisches Verschieben bei Key-Mismatch.
+- Regression: Key-Mismatch blockiert, malformed Profil wird selektiv bewegt ->
+  `5 passed`; komplette `tests/test_admin_accounts.py` -> `65 passed`. Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `dc50a897 fix: block metadata quarantine on auth failures`.
+
+**Aktueller Laufstand:** Seit dem Restart `16/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 4 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
