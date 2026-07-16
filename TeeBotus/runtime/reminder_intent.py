@@ -688,7 +688,10 @@ def _has_invalid_explicit_time(text: str) -> bool:
         match = pattern.search(candidate_text)
         if match is None:
             continue
-        hour = int(match.group("hour"))
+        hour_text = match.group("hour")
+        if hour_text is None:
+            continue
+        hour = int(hour_text)
         minute = int(match.group("minute") or 0)
         if hour > 23 or minute > 59:
             return True

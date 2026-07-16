@@ -54,6 +54,16 @@ def test_parse_reminder_keeps_iso_date_inside_reverse_question_subject() -> None
     assert intent.subject == "Version 2026-06-01"
 
 
+def test_parse_reminder_subject_month_date_without_time_does_not_crash() -> None:
+    intent = parse_reminder_intent(
+        "Kannst du mich in 2 Stunden an 16. Maerz 2027 erinnern?",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-06-15T14:00:00+00:00"
+    assert intent.subject == "16. Maerz 2027"
+
+
 def test_parse_reminder_with_relative_time_and_loose_wording() -> None:
     intent = parse_reminder_intent("Bitte denk in 30 Minuten dran Wasser zu trinken.", now=fixed_now())
 
