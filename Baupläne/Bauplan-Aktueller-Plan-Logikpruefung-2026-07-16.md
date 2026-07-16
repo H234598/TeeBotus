@@ -1328,6 +1328,18 @@ Diagnose und Tests.
 **Laufstand:** Seit dem letzten Restart `20/20` Commits; Restart jetzt faellig,
 kein Push ausgeloest.
 
+- Restart nach Commit 20 ausgefuehrt ueber die aktive User-Unit
+  `teebotus.service`: `active/running`, PID `1847835`, Start
+  `2026-07-16 12:05:21 CEST`. Die systemweite Unit ist erwartungsgemaess
+  nicht aktiv; Bot laeuft unter User-Systemd. Providerfreier
+  `--runtime-status` meldet Signal erreichbar, Qdrant `ready` und alle
+  Account-Crypto-/Memory-Pruefungen `ok`. Bekannte Konfigurationszustaende:
+  HF-Pool deaktiviert, GROQ-Key fehlt, Depressionsbot-Signal ohne verknuepfte
+  Identity. Kein Provider/API-Aufruf.
+
+**Laufstand nach Restart:** Seit dem Restart `1/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 19 weiteren Commits.
+
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
   `/v1/about` meldet Signal REST `0.100` im JSON-RPC-Modus;
