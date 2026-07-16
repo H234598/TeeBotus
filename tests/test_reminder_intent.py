@@ -83,6 +83,16 @@ def test_parse_reminder_accepts_daran_imperative() -> None:
     assert intent.subject == "den Antrag abzuschicken"
 
 
+def test_parse_reminder_ignores_first_person_reminder_statements() -> None:
+    now = fixed_now()
+
+    remembered = parse_reminder_intent("Ich erinnere mich an den Termin.", now=now)
+    thought = parse_reminder_intent("Ich denke daran, morgen den Antrag zu schicken.", now=now)
+
+    assert remembered.is_request is False
+    assert thought.is_request is False
+
+
 def test_parse_reminder_relative_days_and_weeks_keep_explicit_clock() -> None:
     now = datetime(2026, 6, 15, 12, 34, tzinfo=timezone.utc)
 
