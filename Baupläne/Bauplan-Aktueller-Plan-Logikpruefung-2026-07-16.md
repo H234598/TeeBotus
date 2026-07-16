@@ -1340,6 +1340,25 @@ kein Push ausgeloest.
 **Laufstand nach Restart:** Seit dem Restart `1/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 19 weiteren Commits.
 
+### Leerer-By-ID-Read-und-stale-Missing-Diagnose
+
+- 2026-07-16: `WarningFallbackAccountMemoryBackend.read_entries_by_ids()`
+  setzte bei leerer Anfrage Entry-Fehler zurueck, liess aber
+  `last_database_missing=True` stehen. Nach einer vorherigen DB-Stoerung
+  konnten Status-/Doctor-Ausgaben dadurch weiter eine falsche Missing-Lage
+  anzeigen.
+- Leere By-ID-Anfrage setzt jetzt alle Entry-Read-Diagnosen einschliesslich
+  `last_database_missing` konsistent zurueck. Kein Datenzugriff, kein
+  Fallback-Sync und kein Provider-Aufruf.
+- Regression zusammen mit SQLite-Gegenprobe; gesamte
+  `tests/test_account_store.py` `260 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `d61d7a7c fix: clear stale fallback missing diagnostics`;
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `2/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 18 weiteren Commits.
+
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
   `/v1/about` meldet Signal REST `0.100` im JSON-RPC-Modus;
