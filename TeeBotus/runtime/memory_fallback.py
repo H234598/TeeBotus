@@ -271,6 +271,17 @@ class WarningFallbackAccountMemoryBackend:
                     raise _FallbackReadFailure(
                         self.fallback_sync_error_for_account(account_id) or self.last_fallback_sync_error
                     )
+                can_repair_collections = callable(getattr(self.fallback, "read_collection", None)) and (
+                    callable(getattr(self.primary, "_repair_collection_from_verified_fallback", None))
+                    or callable(getattr(self.primary, "write_collection", None))
+                )
+                if can_repair_collections:
+                    self._failed_collection_name_reads.add(account_id)
+                    self._set_fallback_sync_error(
+                        "read_collection_names",
+                        account_id,
+                        "read_collection_names: primary unavailable; fallback collection list requires repair",
+                    )
                 return names
             except Exception as fallback_exc:
                 if self._backend_database_missing(self.fallback):
