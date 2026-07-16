@@ -861,6 +861,12 @@ def test_account_store_rejects_profile_without_matching_identity_metadata(tmp_pa
     assert store._account_is_resolvable(account_id) is False
     assert profile_path.exists()
 
+    store._write_account_profile(
+        account_id,
+        {"account_id": account_id, "instance": "Depressionsbot", "status": "unknown"},
+    )
+    assert store._account_is_resolvable(account_id) is False
+
 
 def test_account_index_rejects_profile_with_wrong_ownership(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
@@ -872,6 +878,16 @@ def test_account_index_rejects_profile_with_wrong_ownership(tmp_path):
             {
                 "account_id": "f" * 128,
                 "instance": "Otherbot",
+                "linked_identities": [],
+            }
+        )
+
+    with pytest.raises(AccountStoreError, match="status is invalid"):
+        store._upsert_account_index(
+            {
+                "account_id": account_id,
+                "instance": "Depressionsbot",
+                "status": "unknown",
                 "linked_identities": [],
             }
         )

@@ -4194,10 +4194,11 @@ class AccountStore:
             return False
         profile_account_id = str(profile.get("account_id") or "").strip().casefold()
         profile_instance = str(profile.get("instance") or "").strip()
+        profile_status = str(profile.get("status") or "").strip().casefold()
         return (
             profile_account_id == account_id
             and profile_instance == self.instance_name
-            and profile.get("status") != "tombstoned"
+            and profile_status in {"active", "orphaned"}
         )
 
     @_serialize_identity_map
@@ -4784,6 +4785,9 @@ class AccountStore:
         account_id = validate_sha512_token(profile.get("account_id", ""), field_name="account_id")
         if str(profile.get("instance") or "").strip() != self.instance_name:
             raise AccountStoreError("account profile instance does not match account store")
+        profile_status = str(profile.get("status") or "").strip().casefold()
+        if profile_status not in {"active", "orphaned"}:
+            raise AccountStoreError("account profile status is invalid")
         index = self._load_index()
         accounts = index.setdefault("accounts", {})
         linked_identities = self._profile_linked_identities(profile)
