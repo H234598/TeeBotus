@@ -2659,3 +2659,20 @@ Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `19/20` Code-Commits. Dieser
 Plan-Commit macht `20/20`; danach Restart. Kein Push. Naechster Push bleibt
 erst bei 100 Commits.
+
+### SQL-Keyscan-leere-Account-ID
+
+- 2026-07-17: `_sqlite_memory_account_ids()` und der analoge PostgreSQL-Scan
+  filterten leere `account_id`-Werte still heraus. Bei einer Datenbank, die nur
+  solche malformed Payload-Rows enthielt, konnte ein neuer/falscher Key ohne
+  Entschluesselungspruefung manifestiert werden.
+- Leere oder nur aus Whitespace bestehende Account-IDs sind jetzt harte
+  Diagnosefehler. Kein Secret-Fingerprint wird geschrieben, solange SQL-
+  Payload nicht vollstaendig adressierbar ist.
+- Regression: falscher Key, korrupte Datei und malformed SQLite-Account-ID ->
+  `3 passed`; komplette `tests/test_account_store.py` -> `287 passed`. Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3908d69c fix: reject malformed sql memory account ids`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Kein Push. Naechster
+Restart nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
