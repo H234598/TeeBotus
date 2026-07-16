@@ -29,7 +29,7 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit letztem
-  Restart sind aktuell `10/20` Commits vorhanden; naechster Restart nach 10
+  Restart sind aktuell `12/20` Commits vorhanden; naechster Restart nach 8
   weiteren Commits.
 
 ## Aktueller Plan
@@ -260,6 +260,29 @@ Diagnose und Tests.
 - Regression fuer Partial-Full-Read: fokussiert `5 passed`; AccountStore-Suite
   `229 passed in 6.27s`; Ruff, `py_compile` und `git diff --check` gruen.
   Code-Commit: `d1f55162 fix: reject partial fallback repair reads`.
+- 2026-07-16: Eine Biene fand einen Folgefehler: Nach fehlgeschlagener Primary-
+  Reparatur wurde nur `stale`, nicht `sync_failed` gesetzt. Beim naechsten
+  Primary-Ausfall konnte der veraltete Fallback dadurch wieder ausgeliefert
+  werden.
+- Der Reparaturfehler markiert jetzt `sync_failed`; Folgezugriff bleibt
+  fail-closed, bis eine erfolgreiche Synchronisierung den Zustand bereinigt.
+  Regression geaendert; fokussiert `5 passed`, AccountStore-Suite danach
+  `229 passed in 7.75s`. Code-Commit: `0c1da884 fix: block stale fallback after repair failure`.
+
+### RuntimeState-Reset-Retry
+
+- 2026-07-16: Eine Biene fand drei zusammenhaengende Fehler in
+  `RuntimeStateStore`: Ein Reset ueberschrieb einen bereits vorhandenen
+  fehlgeschlagenen Set-Retry-Marker; Reset verglich bei gleicher Response-ID
+  den Provider-/Model-Scope nicht; verwaiste Scope-Felder ohne Response-ID
+  wurden beim Retry wegen Kurzschluss nicht geloescht.
+- Retry-Marker enthalten jetzt Response-ID und Scope. Vorhandene Marker bleiben
+  beim Reset erhalten. Nur derselbe persistierte ID-/Scope-Stand darf geloescht
+  werden; gleiche ID mit neuem Scope bleibt erhalten. Expliziter Reset bereinigt
+  auch verwaiste oder unvollstaendige Scope-Felder.
+- Drei Regressionen ergaenzt; `tests/test_runtime_state.py`: `81 passed in
+  1.14s`; Ruff und `py_compile` gruen. Commit:
+  `4e4ffc5d fix: preserve response scope during reset retries`.
 
 ## Akzeptanzkriterien
 
