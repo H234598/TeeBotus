@@ -1174,6 +1174,20 @@ Diagnose und Tests.
 - Code-Commit: `ef984a36 fix: preserve fallback database diagnostics`;
   kein Provider/API-Aufruf.
 
+### Fallback-Collection-Name-Diagnose
+
+- 2026-07-16: `read_collection_names()` synchronisierte den Wrapper-Status
+  nicht. Nach einem vorherigen Missing-Database-Read konnte ein spaeter
+  erfolgreicher Primary- oder Fallback-Name-Read den alten
+  `last_database_missing`-Wert stehen lassen.
+- Erfolgreiche Name-Reads kopieren jetzt Diagnosen vom tatsaechlich gelesenen
+  Backend; beide fehlenden Datenbanken setzen den Primary-Missing-Status
+  explizit. Das verhindert stale Health-/Migrationssignale ohne Datenrewrite.
+- Regression mit vorherigem Missing-State und anschliessendem Erfolgs-Read:
+  Fallback-Block `56 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `22f69b2e fix: refresh fallback collection diagnostics`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -1213,8 +1227,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `3/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 17 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `5/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 15 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
