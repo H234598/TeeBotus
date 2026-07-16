@@ -59,7 +59,7 @@ from TeeBotus.runtime.dotenv import load_dotenv_defaults
 from TeeBotus.runtime.message_tracking import MessageTracker, SentMessageRef
 from TeeBotus.runtime.state import RuntimeStateStore
 from TeeBotus.adapters.telegram import (
-    TELEGRAM_MESSAGE_CHUNK_SIZE,
+    TELEGRAM_MESSAGE_CHUNK_SIZE,  # noqa: F401 - compatibility export via TeeBotus.bot
     _telegram_text_chunks,
     _telegram_unexpected_keyword,
     _telegram_reply_markup,
@@ -3973,15 +3973,13 @@ def run_polling(
                             break
                         if not _complete_telegram_dispatch_journal(runtime_context, update):
                             LOGGER.error(
-                                "Telegram dispatch journal was not finalized; keeping update retryable "
+                                "Telegram dispatch journal was not finalized after offset persistence; "
+                                "update is acknowledged and journal cleanup remains pending "
                                 "instance=%s token_slot=%s update_id=%s.",
                                 instance,
                                 token_label,
                                 update_id,
                             )
-                            time.sleep(retry_delay)
-                            retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
-                            break
                         offset = persisted_offset
             except KeyboardInterrupt:
                 LOGGER.info("Bot stopped.")

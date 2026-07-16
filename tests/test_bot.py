@@ -9,7 +9,7 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import call, patch
+from unittest.mock import Mock, call, patch
 
 from TeeBotus.bot import (
     BotIdentity,
@@ -5273,6 +5273,56 @@ class BotTests(unittest.TestCase):
         self.assertEqual(process_calls, 1)
         self.assertEqual(api.offsets, [None, None, 8])
         self.assertEqual(write_offset.call_count, 2)
+
+    def test_run_polling_does_not_reprocess_acknowledged_update_when_journal_cleanup_fails(self) -> None:
+        class JournalCleanupFailurePollingAPI(FakeAPI):
+            def __init__(self) -> None:
+                super().__init__()
+                self.offsets: list[int | None] = []
+                self.calls = 0
+
+            def get_updates(self, offset, timeout=50):
+                self.offsets.append(offset)
+                self.calls += 1
+                if self.calls == 1:
+                    return [
+                        {
+                            "update_id": 7,
+                            "message": {
+                                "message_id": 11,
+                                "text": "/ping",
+                                "chat": {"id": 123, "type": "private"},
+                                "from": {"id": 456},
+                            },
+                        }
+                    ]
+                raise KeyboardInterrupt
+
+        api = JournalCleanupFailurePollingAPI()
+        runtime_context = SimpleNamespace(
+            account_store=object(),
+            bot_identity=BotIdentity(),
+            instance_name="Demo",
+            adapter_slot=1,
+            dispatch_journal=SimpleNamespace(complete=Mock(side_effect=RuntimeError("journal unavailable"))),
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            with (
+                patch.dict("os.environ", {"TELEGRAM_BOT_INSTANCES_DIR": directory}, clear=False),
+                patch("TeeBotus.adapters.telegram_runtime.handle_update") as handle,
+                patch("TeeBotus.adapters.telegram_runtime.time.sleep"),
+            ):
+                run_polling(
+                    api,
+                    runtime_context=runtime_context,
+                    chat_state=ChatState(),
+                    youtube_job_runner=FakeJobRunner(),
+                )
+
+        self.assertEqual(handle.call_count, 1)
+        self.assertEqual(api.offsets, [None, 8])
+        runtime_context.dispatch_journal.complete.assert_called_once()
 
     def test_run_polling_all_cleans_up_when_bridge_setup_fails(self) -> None:
         from TeeBotus.adapters.telegram_runtime import run_polling_all
