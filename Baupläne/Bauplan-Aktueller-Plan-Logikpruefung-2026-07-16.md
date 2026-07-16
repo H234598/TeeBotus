@@ -2138,3 +2138,22 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Dieser
 Plan-Commit macht `6/20`; kein Push. Naechster Restart nach 14 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Codex-Bare-Status-Im-Legacy-Pfad
+
+- 2026-07-16: Der Legacy-Telegram-Handler behandelte bare `/codex` vor dem
+  Executor als Usage. Der Parser und der moderne Executor definieren bare
+  `/codex` jedoch als Statusabfrage. Dadurch war der Codex-Schalter im
+  Legacy-Pfad fuer autorisierte Accounts nicht erreichbar.
+- Die vorgezogene Argument-Guard ist entfernt. Auch der Legacy-Pfad reicht
+  bare `/codex` jetzt an `execute_codex_admin_command` weiter; die
+  Admin-Pruefung bleibt davor unveraendert.
+- Regression: autorisierter Legacy-Account mit bare `/codex` erreicht den
+  Status-Executor; bestehender Resume-Test und `tests/test_codex_command.py`
+  -> `9 passed`. Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `e8a87643 fix: expose bare codex status in legacy path`.
+
+**Aktueller Laufstand:** Seit dem Restart `7/20` Code-Commits. Dieser
+Plan-Commit macht `8/20`; kein Push. Naechster Restart nach 12 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
