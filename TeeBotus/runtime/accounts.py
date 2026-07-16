@@ -4990,8 +4990,8 @@ def _sqlite_memory_account_ids(path: Path, instance_name: str) -> tuple[str, ...
                 ).fetchall()
                 account_ids.update(str(row[0] or "").strip() for row in rows if str(row[0] or "").strip())
             return tuple(sorted(account_ids))
-    except sqlite3.DatabaseError:
-        return ()
+    except sqlite3.DatabaseError as exc:
+        raise AccountStoreError(f"could not inspect SQLite account-memory payload: {path}") from exc
 
 
 def _sqlite_guard_table_exists(connection: Any, table: str) -> bool:

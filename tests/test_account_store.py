@@ -509,6 +509,33 @@ def test_account_store_refuses_to_record_manifest_for_wrong_sqlite_memory_key(tm
     assert ACCOUNT_MEMORY_KEY_PURPOSE not in manifest["purposes"]
 
 
+def test_account_store_refuses_manifest_for_uninspectable_sqlite_memory(tmp_path, monkeypatch) -> None:
+    sqlite_path = tmp_path / "corrupt-memory.sqlite3"
+    sqlite_path.write_bytes(b"not a sqlite database")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+
+    def lookup(_instance: str, purpose: str) -> bytes | None:
+        if purpose == INSTANCE_MAPPING_KEY_PURPOSE:
+            return b"a" * 32
+        if purpose == ACCOUNT_MEMORY_KEY_PURPOSE:
+            return b"b" * 32
+        return None
+
+    monkeypatch.setattr(secret_provider, "_lookup", lookup)
+    monkeypatch.setattr(
+        secret_provider,
+        "_store",
+        lambda _instance, _purpose, _secret: pytest.fail("uninspectable SQLite memory must not record a key"),
+    )
+
+    with pytest.raises(AccountStoreError, match="could not inspect SQLite account-memory payload"):
+        AccountStore(tmp_path / "accounts", "Depressionsbot", secret_provider, create_dirs=False)
+
+    assert not (tmp_path / "accounts" / ACCOUNT_KEYRING_FILENAME).exists()
+
+
 def test_account_store_refuses_to_autocreate_memory_secret_for_existing_sqlite_rows_without_env(tmp_path, monkeypatch) -> None:
     root = tmp_path / "accounts"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
