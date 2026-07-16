@@ -265,6 +265,7 @@ def _build_codex_history_summary_item(
     *,
     repo_root: str | Path,
     title: str,
+    summary_text: str = "",
     bullets: Sequence[str] = (),
     changed_files: Sequence[str] = (),
     tests: Sequence[str] = (),
@@ -279,6 +280,7 @@ def _build_codex_history_summary_item(
     version = resolve_repo_version(repo["repo_root"])
     created_at = timestamp or utc_now()
     redacted_title = redact_codex_history_text(title).strip() or "Codex run summary"
+    redacted_summary_text = redact_codex_history_text(summary_text).strip()
     redacted_bullets = [redact_codex_history_text(item).strip() for item in bullets if str(item or "").strip()]
     redacted_changed_files = [redact_codex_history_text(item).strip() for item in changed_files if str(item or "").strip()]
     redacted_tests = [redact_codex_history_text(item).strip() for item in tests if str(item or "").strip()]
@@ -291,6 +293,7 @@ def _build_codex_history_summary_item(
     markdown = build_codex_history_markdown(
         summary_prefix=summary_prefix,
         title=redacted_title,
+        summary_text=redacted_summary_text,
         repo=repo,
         version=version,
         bullets=redacted_bullets,
@@ -327,6 +330,7 @@ def _build_codex_history_summary_item(
         "codex": codex_payload,
         "summary": {
             "title": redacted_title,
+            "text": redacted_summary_text,
             "markdown": markdown,
             "bullets": redacted_bullets,
             "changed_files": redacted_changed_files,
@@ -363,6 +367,7 @@ def append_codex_history_summary(
     *,
     repo_root: str | Path,
     title: str,
+    summary_text: str = "",
     bullets: Sequence[str] = (),
     changed_files: Sequence[str] = (),
     tests: Sequence[str] = (),
@@ -380,6 +385,7 @@ def append_codex_history_summary(
             rows,
             repo_root=repo_root,
             title=title,
+            summary_text=summary_text,
             bullets=bullets,
             changed_files=changed_files,
             tests=tests,
@@ -1893,6 +1899,7 @@ def _build_codex_session_import_result(
             rows,
             repo_root=repo_root,
             title=_codex_session_title(final_text),
+            summary_text=final_text,
             bullets=_codex_session_bullets(final_text),
             tests=_codex_session_tests(final_text),
             session_id=session_id,
@@ -3030,6 +3037,7 @@ def build_codex_history_markdown(
     changed_files: Sequence[str],
     tests: Sequence[str],
     created_at: str,
+    summary_text: str = "",
     goal: str = "",
     auftrag: str = "",
     current_task: str = "",
@@ -3076,7 +3084,10 @@ def build_codex_history_markdown(
         context_block.append(f"bearbeiteter_auftrag={current_task_text}")
     lines.extend(["", _markdown_code_fence("\n".join(context_block), language="text")])
     lines.extend(["", "## Zusammenfassung"])
-    if bullets:
+    normalized_summary_text = redact_codex_history_text(summary_text).strip()
+    if normalized_summary_text:
+        lines.extend(["", _markdown_code_fence(normalized_summary_text, language="text")])
+    elif bullets:
         lines.extend(f"- {bullet}" for bullet in bullets)
     else:
         lines.append("- Keine Detailpunkte angegeben.")
@@ -3085,17 +3096,26 @@ def build_codex_history_markdown(
         lines.append("")
         lines.append("## Arbeitsverlauf")
         lines.append(f"- Zwischenantworten: `{len(normalized_intermediate)}`")
-        if len(normalized_intermediate) > 5:
-            lines.append(f"- Angezeigt: `5`, weitere: `{len(normalized_intermediate) - 5}`")
-        for index, message in enumerate(normalized_intermediate[:5], start=1):
+        if len(normalized_intermediate) > 10:
+            lines.append(f"- Angezeigt: `10`, weitere: `{len(normalized_intermediate) - 10}`")
+        for index, message in enumerate(normalized_intermediate[:10], start=1):
             phase = _markdown_header_value(message.get("phase", "")) or "commentary"
             turn_id = _markdown_header_value(message.get("turn_id", ""), max_length=96)
             text = str(message.get("text") or "").strip()
             if text:
-                lines.extend(["", f"### Kommentar {index}", f"- Phase: `{phase}`"])
+                lines.extend(
+                    [
+                        "",
+                        "<details>",
+                        f"<summary>Kommentar {index} - {html.escape(phase, quote=True)}</summary>",
+                        "",
+                    ]
+                )
                 if turn_id:
                     lines.append(f"- Turn: `{turn_id}`")
-                lines.extend(["", _markdown_code_fence(_truncate(text, 900), language="text")])
+                lines.append(f"- Phase: `{phase}`")
+                lines.extend(["", _markdown_code_fence(text, language="text")])
+                lines.extend(["", "</details>"])
     lines.append("")
     lines.append("## Geaenderte Dateien")
     if changed_files:
@@ -4792,7 +4812,7 @@ def _parse_codex_session_file(path: Path) -> dict[str, Any]:
                     {
                         "turn_id": turn_id,
                         "phase": phase,
-                        "text": _truncate(redact_codex_history_text(payload_text).strip(), 1000),
+                        "text": redact_codex_history_text(payload_text).strip(),
                     }
                 )
             text = _assistant_text_from_codex_payload(payload)

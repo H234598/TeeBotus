@@ -421,7 +421,8 @@ def test_codex_history_markdown_separates_comments_and_embeds_code_blocks() -> N
     assert "## Metadaten" in markdown
     assert "```text\nprojekt=TeeBotus" in markdown
     assert "## Arbeitsverlauf" in markdown
-    assert "### Kommentar 1" in markdown
+    assert "<details>" in markdown
+    assert "<summary>Kommentar 1 - commentary</summary>" in markdown
     assert "- Phase: `commentary`" in markdown
     assert "- Turn: `turn-1`" in markdown
     assert "````text\nIch trenne Kommentare und pruefe ```Fences```.\n````" in markdown
@@ -429,6 +430,38 @@ def test_codex_history_markdown_separates_comments_and_embeds_code_blocks() -> N
     assert "```text\nTeeBotus/admin/codex_history.py\ntests/test_codex_history.py\n```" in markdown
     assert "- Checks: `1`" in markdown
     assert "```bash\npytest tests/test_codex_history.py\n```" in markdown
+
+
+def test_codex_history_markdown_keeps_full_summary_and_ten_collapsible_comments() -> None:
+    summary_text = "Summary Anfang\n" + ("S" * 1400) + "\nSummary Ende"
+    intermediate_messages = [
+        {
+            "phase": "commentary",
+            "turn_id": f"turn-{index}",
+            "text": f"Kommentar {index}\n" + ("C" * 1200),
+        }
+        for index in range(1, 13)
+    ]
+
+    markdown = build_codex_history_markdown(
+        summary_prefix="v1.2.3 #0001",
+        title="Vollstaendigkeit",
+        repo={"repo_name": "TeeBotus", "repo_root": "/tmp/TeeBotus", "head_commit": "abc", "branch": "main"},
+        version={"tag": "v1.2.3"},
+        bullets=["Abgeleiteter Index-Bullet"],
+        summary_text=summary_text,
+        changed_files=[],
+        tests=[],
+        created_at="2026-06-19T12:00:00+00:00",
+        intermediate_messages=intermediate_messages,
+    )
+
+    assert summary_text in markdown
+    assert "- Angezeigt: `10`, weitere: `2`" in markdown
+    assert markdown.count("<details>") == 10
+    assert "<summary>Kommentar 10 - commentary</summary>" in markdown
+    assert "<summary>Kommentar 11 - commentary</summary>" not in markdown
+    assert "C" * 1200 in markdown
 
 
 def test_codex_history_markdown_time_rewrite_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -4050,7 +4083,7 @@ def test_import_codex_session_file_prefers_final_answer_over_commentary(tmp_path
     assert "- Auftrag: `Bitte Summary-Import pruefen.`" in rows[0]["summary"]["markdown"]
     assert "## Arbeitsverlauf" in rows[0]["summary"]["markdown"]
     assert "- Zwischenantworten: `1`" in rows[0]["summary"]["markdown"]
-    assert "### Kommentar 1" in rows[0]["summary"]["markdown"]
+    assert "<summary>Kommentar 1 - commentary</summary>" in rows[0]["summary"]["markdown"]
     assert "```text\nZwischenstand darf nicht Summary werden.\n```" in rows[0]["summary"]["markdown"]
 
 
