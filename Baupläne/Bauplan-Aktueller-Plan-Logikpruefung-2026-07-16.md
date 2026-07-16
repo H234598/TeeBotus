@@ -1970,3 +1970,23 @@ Naechster Restart nach 16 weiteren Commits.
 **Aktueller Laufstand:** Seit dem Restart `7/20` Code-Commits. Dieser
 Plan-Commit macht `8/20`; kein Push. Naechster Restart nach 12 weiteren
 Commits.
+
+### Proactive-Reflection-Fingerprint-Race
+
+- 2026-07-16: Der Reflection-Planner pruefte vorhandene Fingerprints und
+  schrieb danach in mehreren einzelnen, verschachtelten Store-Aufrufen.
+  Zwei gleichzeitig gestartete Scheduler-Laeufe konnten denselben Fingerprint
+  sehen und dadurch neun Plan-Memories sowie einen Outbox-Eintrag doppelt
+  erzeugen.
+- Der oeffentliche Planner haelt jetzt `account_memory_lock(account_id)` ueber
+  den kompletten Check-/Write-Ablauf. Die bestehenden Store-Locks bleiben fuer
+  einzelne Aufrufe erhalten und sind reentrant.
+- Regression mit zwei parallelen Threads: zusammen genau ein Outbox-Item und
+  neun Plan-Memories; kompletter `tests/test_proactive_agent.py`-Lauf ->
+  `121 passed`. Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `8506e161 fix: serialize proactive reflection planning`.
+
+**Aktueller Laufstand:** Seit dem Restart `9/20` Code-Commits. Dieser
+Plan-Commit macht `10/20`; kein Push. Naechster Restart nach 10 weiteren
+Commits.
