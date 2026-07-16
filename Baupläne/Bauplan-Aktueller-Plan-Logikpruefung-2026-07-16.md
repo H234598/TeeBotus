@@ -2766,6 +2766,24 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 8 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Quarantaene-Mehrfachquellen-vor-Delete-snapshotten
+
+- 2026-07-17: `_quarantine_instance_unrecoverable()` mischte Snapshot und
+  Delete pro SQLite-Quelle. Wenn eine spaetere Quelle scheiterte, konnten Rows
+  frueherer Quellen bereits geloescht sein; JSON-Moves liefen erst danach.
+- Apply snapshot't jetzt alle SQL-Quellen zuerst ueber den geschuetzten
+  read-only Probeweg. Erst danach werden JSON-Artefakte bewegt und SQL-Rows
+  geloescht. Snapshot-Fehler verhindern jeden SQL-Delete; Snapshots sichern
+  bereits erhaltene Daten auch bei spaeterem Folgefehler.
+- Regression: Quarantaene-/Snapshot-Fokus -> `14 passed`; kompletter
+  `tests/test_admin_accounts.py` -> `71 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `32ee119f fix: snapshot recovery sources before deletion`.
+
+**Aktueller Laufstand:** Seit dem Restart `14/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 6 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Metadata-Quarantaene-bei-Secret-Fehlern
 
 - 2026-07-17: `_unreadable_metadata_items()` meldete fehlendes, nicht
