@@ -1062,6 +1062,19 @@ Diagnose und Tests.
 - Code-Commit: `5fa1eb3d fix: rebuild working memory index from entries`;
   kein Provider/API-Aufruf.
 
+### Working-Memory-Normalisierung bei Prepare
+
+- 2026-07-16: `prepare()` normalisierte veraltete oder fremde Metadaten nur
+  im Speicher. Nach Prozessende konnte derselbe inkonsistente Index erneut
+  geladen werden.
+- Persistiert werden jetzt nur tatsaechliche Normalisierungsveraenderungen;
+  unveraenderte Read-Pfade bleiben schreibfrei. Entfernte Legacy-/Privacy-
+  Felder bleiben entfernt.
+- Regression parametrisiert ueber beide Stores: `tests/test_working_memory.py`:
+  `35 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `7ff3a0a3 fix: persist working memory metadata normalization`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
