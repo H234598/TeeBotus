@@ -1468,6 +1468,23 @@ ausgeloest. Naechster Restart nach 6 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `16/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 4 weiteren Commits.
 
+### Healthcheck-muss-auch-stille-Skips-melden
+
+- 2026-07-16: `check_structured_memory_index()` nahm
+  `last_entry_skipped` nur zusammen mit nichtleerem Fehlertext ernst. Ein
+  Backend konnte Rows ueberspringen, aber keinen Detailtext liefern; Health
+  blieb dann trotz unvollstaendiger Entry-Menge scheinbar gesund.
+- Health wertet jetzt `entry_read_error` **oder** `entry_skipped > 0` als
+  Datenbankfehler und verwendet bei fehlendem Detailtext `error=unspecified`.
+- Regression mit zwei uebersprungenen Rows ohne Fehlertext; gesamte
+  `tests/test_account_store.py` `265 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `d1ff530c fix: report skipped memory rows in health check`;
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `18/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 2 weiteren Commits.
+
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
   `/v1/about` meldet Signal REST `0.100` im JSON-RPC-Modus;
