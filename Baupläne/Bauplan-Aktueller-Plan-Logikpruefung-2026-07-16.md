@@ -2985,3 +2985,22 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `16/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 4 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### JSON-Recovery-lehnt-Symlink-Pfade-ab
+
+- 2026-07-17: JSON-Recovery-Discovery und `_inspect_json_source()` konnten
+  Symlink-Accountdirs oder einzelne Symlink-Dateien als externe JSON/JSONL-
+  Quellen behandeln. Damit konnten Berichte fremde Dateien lesen; Discovery
+  konnte solche Accounts ausserdem als lokale Accounts melden.
+- Recovery-Accountdirs, aktive `accounts/`-Wurzeln, JSON/JSONL-Dateien und
+  Snapshot-Symlinks werden jetzt fail-closed verworfen. Nur echte Verzeichnisse
+  und Dateien werden gelesen oder zur Quarantaene vorgemerkt.
+- Regression: Symlink-Accountdir, Discovery und Symlink-Memorydatei ->
+  `6 passed` im JSON-Fokus; komplette `tests/test_admin_accounts.py` ->
+  `74 passed`. Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `6ac6a9e8 fix: reject symlinked json recovery paths`.
+
+**Aktueller Laufstand:** Seit dem Restart `18/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 2 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
