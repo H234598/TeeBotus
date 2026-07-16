@@ -2394,6 +2394,7 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         backend = self.account_memory_backend
         if backend is not None:
+            self._raise_if_account_memory_index_unreadable("cannot write account memory index")
             backend.write_index(account_id, data)
             return
         self.account_memory_vault.write_json(self.account_dir(account_id) / USER_MEMORY_INDEX_FILENAME, data)
@@ -2489,6 +2490,7 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         backend = self.account_memory_backend
         if backend is not None:
+            self._raise_if_account_memory_entries_unreadable("cannot write account memory entries")
             backend.write_entries(account_id, rows)
             return
         self.account_memory_vault.write_jsonl(self.account_dir(account_id) / USER_MEMORY_ENTRIES_FILENAME, rows)

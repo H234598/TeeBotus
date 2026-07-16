@@ -141,11 +141,21 @@ class SQLiteAccountMemoryBackend:
         self.last_collection_read_error = ""
         self.last_collection_skipped = 0
         self.last_database_missing = False
+        self._database_missing_diagnostic = False
         self._cipher_key: bytes | None = None
         self._cipher: AESGCM | None = None
 
     def _clear_write_diagnostics(self, kind: str) -> None:
+        database_was_missing = self.last_database_missing or self._database_missing_diagnostic
         self.last_database_missing = False
+        self._database_missing_diagnostic = False
+        if database_was_missing:
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+            self.last_index_read_error = ""
+            self.last_collection_read_error = ""
+            self.last_collection_skipped = 0
+            return
         if kind == "entries":
             self.last_entry_read_error = ""
             self.last_entry_skipped = 0
@@ -654,6 +664,7 @@ class SQLiteAccountMemoryBackend:
             self._ensure_schema_locked(allow_incomplete_schema=allow_incomplete_schema)
 
     def _ensure_schema_locked(self, *, allow_incomplete_schema: bool = False) -> None:
+        self._database_missing_diagnostic = bool(self.last_database_missing)
         self.last_database_missing = False
         existing_database = self.config.path.exists()
         if not existing_database and self._secondary_database_exists() and not allow_incomplete_schema:

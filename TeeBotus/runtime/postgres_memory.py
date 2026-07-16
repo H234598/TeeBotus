@@ -94,7 +94,15 @@ class PostgresAccountMemoryBackend:
         self._cipher: AESGCM | None = None
 
     def _clear_write_diagnostics(self, kind: str) -> None:
+        database_was_missing = self.last_database_missing
         self.last_database_missing = False
+        if database_was_missing:
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+            self.last_index_read_error = ""
+            self.last_collection_read_error = ""
+            self.last_collection_skipped = 0
+            return
         if kind == "entries":
             self.last_entry_read_error = ""
             self.last_entry_skipped = 0

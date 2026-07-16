@@ -2265,6 +2265,34 @@ def test_account_memory_read_modify_and_retrieval_paths_refuse_partial_rows(tmp_
     assert backend.write_entries_calls == 0
 
 
+def test_account_memory_direct_writes_refuse_partial_rows(tmp_path):
+    class PartiallyUnreadableBackend:
+        last_entry_read_error = "corrupt row"
+        last_entry_skipped = 1
+        last_index_read_error = "corrupt index"
+        write_entries_calls = 0
+        write_index_calls = 0
+
+        def write_entries(self, _account_id, _rows):
+            self.write_entries_calls += 1
+
+        def write_index(self, _account_id, _data):
+            self.write_index_calls += 1
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    backend = PartiallyUnreadableBackend()
+    store._account_memory_backend = backend
+
+    with pytest.raises(AccountStoreError, match="entries are unreadable"):
+        store.write_memory_entries(account_id, [{"id": "replacement"}])
+    with pytest.raises(AccountStoreError, match="index is unreadable"):
+        store.write_memory_index(account_id, {"index": {}})
+
+    assert backend.write_entries_calls == 0
+    assert backend.write_index_calls == 0
+
+
 def test_account_memory_append_initializes_missing_sqlite_database(tmp_path):
     sqlite_path = tmp_path / "new-memory.sqlite3"
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
