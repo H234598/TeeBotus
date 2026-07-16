@@ -1386,8 +1386,26 @@ ausgeloest. Naechster Restart nach 19 weiteren Commits.
 - Code-Commit: `8de2da94 fix: block partial collection merges`;
   kein Provider/API-Aufruf.
 
-**Laufstand nach Fix:** Seit dem Restart `6/20` Commits; kein Push
-ausgeloest. Naechster Restart nach 14 weiteren Commits.
+### Partielle-SQL-Collections-vor-direktem-Write
+
+- 2026-07-16: Direkte Ersatzschreiber fuer JSONL-Collections,
+  Account-Zustandsdokumente und Instanz-JSON prueften bisher keine
+  partiellen SQL-Lese-Diagnosen. Ein Aufruf wie `write_proactive_outbox()`
+  konnte dadurch unlesbare bestehende Rows durch einen neuen Gesamtbestand
+  ersetzen.
+- Gemeinsamer fail-closed Guard sitzt jetzt unmittelbar vor jedem direkten
+  `write_collection()` in diesen drei Schreibpfaden. Append-, Status-,
+  History-, LLM-, Agent-, Auth- und Instanz-Status-Schreiber behalten ihre
+  bisherige API und schreiben bei unvollstaendiger Collection nicht.
+- Regression erweitert: sieben Append-Pfade plus direkte Outbox-, LLM-,
+  Agent-, Auth- und Instanz-JSON-Schreiber; gesamte
+  `tests/test_account_store.py` `262 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `09e8cb99 fix: guard direct account collection writes`;
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `8/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 12 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
