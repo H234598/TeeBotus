@@ -1070,6 +1070,30 @@ def test_register_generates_single_secret_and_verifier_not_plaintext(tmp_path):
         store.register_account(account_id)
 
 
+def test_register_holds_identity_lock_across_active_secret_check_and_rotation(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Bote_der_Wahrheit", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    lock_states: list[bool] = []
+
+    @contextmanager
+    def recording_lock():
+        lock_states.append(True)
+        try:
+            yield
+        finally:
+            lock_states.pop()
+
+    with patch.object(store, "account_identity_lock", recording_lock), patch.object(
+        store,
+        "rotate_secret",
+        return_value=(account_id, "b" * 128),
+    ) as rotate_secret:
+        assert store.register_account(account_id) == (account_id, "b" * 128)
+
+    rotate_secret.assert_called_once_with(account_id)
+    assert lock_states == []
+
+
 def test_rotate_secret_invalidates_old_secret(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Bote_der_Wahrheit", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
