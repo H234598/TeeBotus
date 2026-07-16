@@ -1015,6 +1015,28 @@ def test_reset_structured_account_memory_rolls_back_entries_when_index_write_fai
     assert store.read_memory_index(account_id) == previous_index
 
 
+def test_reset_structured_memory_rolls_back_memory_when_privacy_clear_fails(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(395935293), display_label="Teladi")
+    store.append_structured_memory_entry(account_id, {"id": "mem_old", "user_text": "Mond", "bot_text": "Gemerkt."})
+    store.confirm_privacy(account_id, source="telegram")
+    previous_rows = store.read_memory_entries(account_id)
+    previous_index = store.read_memory_index(account_id)
+    profile_path = store.account_dir(account_id) / "Account_Profile.json"
+    previous_profile = profile_path.read_bytes()
+    previous_account_index = store.account_index_path.read_bytes()
+
+    with patch.object(store, "_upsert_account_index", side_effect=AccountStoreError("index write failed")):
+        with pytest.raises(AccountStoreError, match="index write failed"):
+            store.reset_structured_memory(account_id)
+
+    assert store.read_memory_entries(account_id) == previous_rows
+    assert store.read_memory_index(account_id) == previous_index
+    assert profile_path.read_bytes() == previous_profile
+    assert store.account_index_path.read_bytes() == previous_account_index
+    assert store.has_privacy_confirmation(account_id) is True
+
+
 def test_register_generates_single_secret_and_verifier_not_plaintext(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Bote_der_Wahrheit", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
