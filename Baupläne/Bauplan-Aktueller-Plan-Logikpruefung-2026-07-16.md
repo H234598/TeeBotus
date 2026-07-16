@@ -2101,3 +2101,21 @@ Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `1/20` Code-Commits. Dieser
 Plan-Commit macht `2/20`; kein Push. Naechster Restart nach 18 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Reminder-Named-Date-Late-Hour
+
+- 2026-07-16: Die Stundenalternative im gemeinsamen Reminder-RegEx begann
+  mit `[01]?\d`. Bei `23:59` gewann deshalb der einstellige Praefix `2`; ein
+  named-date Reminder wie `31. Dezember um 23:59` wurde als `02:00` gespeichert.
+- `_CLOCK_HOUR` prueft jetzt `2[0-3]` zuerst und erzwingt danach eine
+  Nicht-Ziffer. Dadurch werden `23:59` und alle anderen Spaetstunden vollstaendig
+  gelesen; `25:00` wird nicht als `2:00` still fehlinterpretiert, sondern als
+  ungueltige explizite Zeit abgelehnt.
+- Regression: gueltiges `31. Dezember um 23:59` sowie ungueltiges `25:00`;
+  Reminder-Suite `30 passed`, Reminder-/Decision-Suite `59 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6eac9d0b fix: parse late reminder hours correctly`.
+
+**Aktueller Laufstand:** Seit dem Restart `3/20` Code-Commits. Dieser
+Plan-Commit macht `4/20`; kein Push. Naechster Restart nach 16 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
