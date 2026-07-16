@@ -350,7 +350,7 @@ Diagnose und Tests.
   durch vorhandene Regressionen abgedeckt. `tests/test_cinnamon_applet.py`:
   `238 passed in 30.23s`.
 - Kein Patch fuer eine unbelegte Anzeige erstellt. Seit dem Restart stehen
-  `2/20` Commits an; kein weiterer Restart erforderlich.
+  `3/20` Commits an; kein weiterer Restart erforderlich.
 
 ## Akzeptanzkriterien
 
