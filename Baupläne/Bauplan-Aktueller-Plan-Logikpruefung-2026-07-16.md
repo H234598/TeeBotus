@@ -3260,3 +3260,19 @@ erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Kein Push. Restart
 nach 10 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Explizite-Instanznamen-nur-Verzeichnisse
+
+- 2026-07-17: Ein vorhandener regulaerer File mit explizitem Instanznamen
+  wurde als sichere Auswahl akzeptiert. Nachfolgende Pfadlogik konnte ihn
+  dadurch wie einen Instanzbaum behandeln.
+- Explizite Auswahl verwirft jetzt vorhandene Nicht-Verzeichnisse. Noch nicht
+  angelegte, sichere Namen bleiben fuer Bootstrap- und Missing-Instance-
+  Reports kompatibel.
+- Regression: regulaeres File plus Pfad-/Symlinknamen -> `3 passed`; komplette
+  `tests/test_admin_accounts.py` -> `87 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4e2fcdcf fix: reject explicit file instance paths`.
+
+**Aktueller Laufstand:** Seit dem Restart `12/20` Commits. Kein Push. Restart
+nach 8 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
