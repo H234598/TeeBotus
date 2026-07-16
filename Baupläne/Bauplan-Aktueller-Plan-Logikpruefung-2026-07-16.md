@@ -2768,3 +2768,22 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `12/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 8 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Account-Index-Ownership
+
+- 2026-07-17: `_upsert_account_index()` vertraute dem uebergebenen Profil und
+  schrieb `profile["account_id"]` ohne Ownership-/Instanzpruefung. Ein
+  manipuliertes oder falsch zusammengefuehrtes Profil konnte damit einen
+  fremden Account in den Index schreiben, obwohl Resolvability bereits
+  geschuetzt war.
+- Der zentrale Index-Write validiert jetzt SHA-512-Account-ID und exakte
+  Instanzzugehoerigkeit vor jedem Index-Read/Write. Bei Fehler bleibt der
+  bestehende Index unveraendert.
+- Regression: Profile- und Index-Ownership -> `3 passed`; komplette
+  `tests/test_account_store.py` -> `290 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1a94b319 fix: enforce profile ownership on index writes`.
+
+**Aktueller Laufstand:** Seit dem Restart `14/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 6 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
