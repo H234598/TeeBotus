@@ -1158,6 +1158,22 @@ Diagnose und Tests.
 - Code-Commit: `a511a866 fix: serialize PostgreSQL schema retries`;
   kein Provider/API-Aufruf.
 
+### Fallback-Datenbank-Diagnose
+
+- 2026-07-16: Der `WarningFallbackAccountMemoryBackend` reichte
+  Entry-/Index-/Collection-Diagnosen durch, verlor aber
+  `last_database_missing`. Wenn Primaer- und Fallback-SQLite fehlten, konnte
+  ein Wrapper-Consumer den leeren Zustand deshalb nicht von einem gesunden
+  leeren Account unterscheiden.
+- Der Wrapper fuehrt das Feld jetzt selbst, kopiert es aus dem zuletzt
+  gelesenen Backend und stellt bei beiden fehlenden Datenbanken den
+  Primaerzustand wieder her. Fallback-Sync-Fehler bleiben separat erhalten;
+  kein automatisches Loeschen oder Ueberschreiben vorhandener Daten.
+- Regression: `tests/test_account_store.py` Fallback-Block `55 passed`;
+  Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `ef984a36 fix: preserve fallback database diagnostics`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -1197,8 +1213,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `1/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 19 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `3/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 17 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
