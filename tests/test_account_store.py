@@ -842,6 +842,26 @@ def test_list_account_ids_discovers_resolvable_accounts(tmp_path):
     assert set(store.list_account_ids(include_unresolvable=True)) == {first, second}
 
 
+def test_account_store_rejects_profile_without_matching_identity_metadata(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    profile_path = store.account_dir(account_id) / "Account_Profile.json"
+
+    store._write_account_profile(account_id, {"status": "active"})
+
+    assert store._account_is_resolvable(account_id) is False
+    assert store.get_account_for_identity(telegram_identity_key(1)) is None
+    assert account_id not in store.list_account_ids()
+    assert account_id in store.list_account_ids(include_unresolvable=True)
+
+    store._write_account_profile(
+        account_id,
+        {"account_id": "f" * 128, "instance": "Depressionsbot", "status": "active"},
+    )
+    assert store._account_is_resolvable(account_id) is False
+    assert profile_path.exists()
+
+
 def test_telegram_identity_key_uses_username_and_display_fallbacks() -> None:
     assert telegram_identity_key(395935293, username="Teladi") == "telegram:user:395935293"
     assert telegram_identity_key("", username="@Teladi") == "telegram:username:teladi"

@@ -4190,7 +4190,15 @@ class AccountStore:
         if not profile_path.exists():
             return False
         profile = self._read_account_profile(account_id)
-        return profile.get("status") != "tombstoned"
+        if not isinstance(profile, dict):
+            return False
+        profile_account_id = str(profile.get("account_id") or "").strip().casefold()
+        profile_instance = str(profile.get("instance") or "").strip()
+        return (
+            profile_account_id == account_id
+            and profile_instance == self.instance_name
+            and profile.get("status") != "tombstoned"
+        )
 
     @_serialize_identity_map
     def _active_identities_for_account(self, account_id: str) -> list[str]:
