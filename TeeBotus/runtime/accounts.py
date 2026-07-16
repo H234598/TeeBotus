@@ -4989,7 +4989,11 @@ def _sqlite_memory_account_ids(path: Path, instance_name: str) -> tuple[str, ...
                     f"SELECT DISTINCT account_id FROM {table} WHERE instance_name = ?",
                     (instance_name,),
                 ).fetchall()
-                account_ids.update(str(row[0] or "").strip() for row in rows if str(row[0] or "").strip())
+                for row in rows:
+                    account_id = str(row[0] or "").strip()
+                    if not account_id:
+                        raise AccountStoreError(f"could not inspect SQLite account-memory payload: {path}")
+                    account_ids.add(account_id)
             return tuple(sorted(account_ids))
     except sqlite3.DatabaseError as exc:
         raise AccountStoreError(f"could not inspect SQLite account-memory payload: {path}") from exc
@@ -5051,7 +5055,11 @@ def _postgres_memory_account_ids(dsn: str, instance_name: str, connect_timeout: 
                     f"SELECT DISTINCT account_id FROM {table} WHERE instance_name = %s",
                     (instance_name,),
                 ).fetchall()
-                account_ids.update(str(row[0] or "").strip() for row in rows if str(row[0] or "").strip())
+                for row in rows:
+                    account_id = str(row[0] or "").strip()
+                    if not account_id:
+                        raise AccountStoreError("could not inspect existing PostgreSQL account-memory payload: empty account_id")
+                    account_ids.add(account_id)
             return tuple(sorted(account_ids))
     except AccountStoreError:
         raise

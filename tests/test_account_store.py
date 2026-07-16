@@ -536,6 +536,42 @@ def test_account_store_refuses_manifest_for_uninspectable_sqlite_memory(tmp_path
     assert not (tmp_path / "accounts" / ACCOUNT_KEYRING_FILENAME).exists()
 
 
+def test_account_store_refuses_manifest_for_malformed_sqlite_memory_account_id(tmp_path, monkeypatch) -> None:
+    import sqlite3
+
+    sqlite_path = tmp_path / "malformed-memory.sqlite3"
+    with sqlite3.connect(sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE memory_entries (instance_name TEXT, account_id TEXT, memory_id TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO memory_entries(instance_name, account_id, memory_id) VALUES (?, ?, ?)",
+            ("Depressionsbot", "", "mem_malformed"),
+        )
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    secret_provider = SecretToolInstanceSecretProvider(create_if_missing=True)
+
+    def lookup(_instance: str, purpose: str) -> bytes | None:
+        if purpose == INSTANCE_MAPPING_KEY_PURPOSE:
+            return b"a" * 32
+        if purpose == ACCOUNT_MEMORY_KEY_PURPOSE:
+            return b"b" * 32
+        return None
+
+    monkeypatch.setattr(secret_provider, "_lookup", lookup)
+    monkeypatch.setattr(
+        secret_provider,
+        "_store",
+        lambda _instance, _purpose, _secret: pytest.fail("malformed SQLite memory must not record a key"),
+    )
+
+    with pytest.raises(AccountStoreError, match="could not inspect SQLite account-memory payload"):
+        AccountStore(tmp_path / "accounts", "Depressionsbot", secret_provider, create_dirs=False)
+
+    assert not (tmp_path / "accounts" / ACCOUNT_KEYRING_FILENAME).exists()
+
+
 def test_account_store_refuses_to_autocreate_memory_secret_for_existing_sqlite_rows_without_env(tmp_path, monkeypatch) -> None:
     root = tmp_path / "accounts"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
