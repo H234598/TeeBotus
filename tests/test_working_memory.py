@@ -3,6 +3,9 @@ from __future__ import annotations
 import json
 from unittest.mock import patch
 
+import pytest
+
+from TeeBotus.adapters.telegram_runtime import WorkingMemoryStore as TelegramWorkingMemoryStore
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
 
@@ -32,6 +35,23 @@ def test_working_memory_files_are_instance_scoped_and_sanitize_manual_entries(tm
     assert "ada@example.com" not in entry_text
     assert "https://example.com" not in entry_text
     assert "123456789" not in entry_text
+
+
+@pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
+def test_working_memory_repairs_stale_instance_name(tmp_path, store_class):
+    instances_dir = tmp_path / "instances"
+    index_path = instances_dir / "Depressionsbot" / "data" / "Working_Memorys.json"
+    index_path.parent.mkdir(parents=True)
+    index_path.write_text(
+        json.dumps({"instance_name": "OldInstance", "scope": "instance", "index": {}}),
+        encoding="utf-8",
+    )
+
+    store = store_class("Depressionsbot", instances_dir)
+    store.ensure()
+
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    assert payload["instance_name"] == "Depressionsbot"
 
 
 def test_working_memory_corrupt_index_is_preserved_without_traceback_log(tmp_path, caplog):

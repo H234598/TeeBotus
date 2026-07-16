@@ -208,7 +208,7 @@ def _new_working_memory_data(instance_name: str) -> dict[str, Any]:
 def _normalize_working_memory_data(data: dict[str, Any], instance_name: str) -> None:
     data["schema_version"] = MEMORY_SCHEMA_VERSION
     data["scope"] = "instance"
-    data["instance_name"] = str(data.get("instance_name") or instance_name)
+    data["instance_name"] = str(instance_name)
     data["privacy"] = WORKING_MEMORY_PRIVACY_NOTE
     data.setdefault("created_at", _utc_timestamp())
     data.setdefault("updated_at", data["created_at"])
