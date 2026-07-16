@@ -899,6 +899,11 @@ def _snapshot_sqlite_database(source: Path, target: Path) -> None:
 
 def _delete_sqlite_account_rows(path: Path, instance_name: str, account_ids: Sequence[str]) -> int:
     deleted = 0
+    _reject_unsafe_sqlite_link(path, label="source")
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(str(path) + suffix)
+        if sidecar.exists() or sidecar.is_symlink():
+            _reject_unsafe_sqlite_link(sidecar, label="sidecar")
     with sqlite3.connect(path) as connection:
         with connection:
             for account_id in account_ids:
@@ -1343,8 +1348,7 @@ def _sqlite_raw_counts(path: Path, instance_name: str, account_id: str) -> tuple
 
 @contextlib.contextmanager
 def _connect_sqlite_readonly(path: Path):
-    if path.is_symlink():
-        raise OSError(f"refusing symlinked SQLite recovery source: {path}")
+    _reject_unsafe_sqlite_link(path, label="source")
     if not path.exists():
         raise sqlite3.OperationalError(f"database does not exist: {path}")
     with tempfile.TemporaryDirectory(prefix="teebotus-sqlite-readonly-") as temp_dir:
@@ -1352,15 +1356,21 @@ def _connect_sqlite_readonly(path: Path):
         shutil.copy2(path, copied_path)
         for suffix in ("-wal", "-shm"):
             sidecar = Path(str(path) + suffix)
-            if sidecar.exists():
-                if sidecar.is_symlink():
-                    raise OSError(f"refusing symlinked SQLite recovery sidecar: {sidecar}")
+            if sidecar.exists() or sidecar.is_symlink():
+                _reject_unsafe_sqlite_link(sidecar, label="sidecar")
                 shutil.copy2(sidecar, Path(str(copied_path) + suffix))
         connection = sqlite3.connect(f"{copied_path.resolve().as_uri()}?mode=ro", uri=True)
         try:
             yield connection
         finally:
             connection.close()
+
+
+def _reject_unsafe_sqlite_link(path: Path, *, label: str) -> None:
+    if path.is_symlink():
+        raise OSError(f"refusing symlinked SQLite recovery {label}: {path}")
+    if path.exists() and path.stat().st_nlink > 1:
+        raise OSError(f"refusing hardlinked SQLite recovery {label}: {path}")
 
 
 def _sqlite_table_exists(connection: sqlite3.Connection, table: str) -> bool:

@@ -821,6 +821,26 @@ def test_memory_recovery_sqlite_probes_reject_symlinked_source_and_sidecar(tmp_p
     assert sidecar_errors == [f"sqlite: refusing symlinked SQLite recovery sidecar: {sidecar}"]
 
 
+def test_memory_recovery_rejects_hardlinked_sqlite_sources_before_delete(tmp_path: Path) -> None:
+    source = tmp_path / "Account_Memory.sqlite3"
+    external = tmp_path / "external.sqlite3"
+    external.write_bytes(b"not a database")
+    source.hardlink_to(external)
+
+    assert _sqlite_account_ids(source) == set()
+    _, _, _, errors = account_memory_recovery_module._read_sqlite_snapshot_payloads(
+        source,
+        instance_name="Depressionsbot",
+        account_id="a" * 128,
+        provider=provider(),
+    )
+    assert errors == [f"sqlite: refusing hardlinked SQLite recovery source: {source}"]
+
+    with pytest.raises(OSError, match="hardlinked SQLite recovery source"):
+        account_memory_recovery_module._delete_sqlite_account_rows(source, "Depressionsbot", ["a" * 128])
+    assert external.read_bytes() == b"not a database"
+
+
 def test_memory_recovery_report_counts_sqlite_collections_and_skips_instance_state_account(tmp_path: Path, monkeypatch) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
