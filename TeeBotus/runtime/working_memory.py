@@ -216,9 +216,10 @@ class WorkingMemoryStore:
             repaired = True
         if repaired:
             payload = _rebuild_working_memory_data(entries_path, self.instance_name)
+        before_normalization = json.dumps(payload, ensure_ascii=False, sort_keys=True)
         _normalize_working_memory_data(payload, self.instance_name)
         entries_path.touch(exist_ok=True)
-        if repaired:
+        if repaired or before_normalization != json.dumps(payload, ensure_ascii=False, sort_keys=True):
             _write_json_file(path, payload)
         return payload
 

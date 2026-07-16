@@ -125,6 +125,31 @@ def test_working_memory_prepare_rebuilds_entries_after_index_corruption(tmp_path
 
 
 @pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
+def test_working_memory_prepare_persists_metadata_normalization(tmp_path, store_class):
+    instances_dir = tmp_path / "instances"
+    index_path = instances_dir / "Depressionsbot" / "data" / "Working_Memorys.json"
+    index_path.parent.mkdir(parents=True)
+    index_path.write_text(
+        json.dumps(
+            {
+                "instance_name": "OldInstance",
+                "scope": "instance",
+                "sender_id": "must be removed",
+                "index": {"keywords": {}, "recent_ids": [], "entries": {}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    store = store_class("Depressionsbot", instances_dir)
+
+    store.prepare("irrelevant")
+
+    payload = json.loads(index_path.read_text(encoding="utf-8"))
+    assert payload["instance_name"] == "Depressionsbot"
+    assert "sender_id" not in payload
+
+
+@pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
 def test_working_memory_invalid_utf8_index_is_preserved(tmp_path, caplog, store_class):
     instances_dir = tmp_path / "instances"
     index_path = instances_dir / "Depressionsbot" / "data" / "Working_Memorys.json"
