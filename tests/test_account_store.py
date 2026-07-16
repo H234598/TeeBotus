@@ -28,6 +28,7 @@ from TeeBotus.runtime.accounts import (
     AccountStoreError,
     LLM_STATE_FILENAME,
     OPENAI_STATE_FILENAME,
+    _SecretServiceUnavailableError,
     SecretToolInstanceSecretProvider,
     StaticSecretProvider,
     _merge_account_jsonl_rows,
@@ -206,6 +207,27 @@ def test_secret_tool_provider_retries_transient_missing_lookup(monkeypatch) -> N
         calls += 1
         if calls < 3:
             return None
+        return b"a" * 32
+
+    monkeypatch.setattr(provider_instance, "_lookup", lookup)
+
+    assert provider_instance.get_secret("Demo", "account_memory") == b"a" * 32
+    assert calls == 3
+
+
+def test_secret_tool_provider_retries_transient_service_failure(monkeypatch) -> None:
+    calls = 0
+    provider_instance = SecretToolInstanceSecretProvider(
+        create_if_missing=False,
+        lookup_retries=2,
+        lookup_retry_delay_seconds=0,
+    )
+
+    def lookup(_instance: str, _purpose: str) -> bytes:
+        nonlocal calls
+        calls += 1
+        if calls < 3:
+            raise _SecretServiceUnavailableError("Secret Service restarting")
         return b"a" * 32
 
     monkeypatch.setattr(provider_instance, "_lookup", lookup)

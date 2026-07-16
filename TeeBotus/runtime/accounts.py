@@ -308,6 +308,10 @@ class AccountStoreError(RuntimeError):
     """Raised for account-store integrity or crypto errors."""
 
 
+class _SecretServiceUnavailableError(AccountStoreError):
+    """Raised when Secret Service transport may recover on a later lookup."""
+
+
 class _AccountCollectionReadError(AccountStoreError):
     """Raised when a collection backend read fails before migration can start."""
 
@@ -531,7 +535,7 @@ class SecretToolInstanceSecretProvider:
 
     def _run(self, args: list[str], *, input_text: str = "") -> subprocess.CompletedProcess[str]:
         if self._service_unavailable_until > time.monotonic():
-            raise AccountStoreError(self._service_unavailable_error)
+            raise _SecretServiceUnavailableError(self._service_unavailable_error)
         self._service_unavailable_until = 0.0
         self._service_unavailable_error = ""
         command = [self._secret_tool(), *args]
@@ -560,12 +564,12 @@ class SecretToolInstanceSecretProvider:
                     "Secret Service may be locked, unavailable, or waiting for a graphical prompt"
                 )
                 self._mark_service_unavailable(error)
-                raise AccountStoreError(error) from exc
+                raise _SecretServiceUnavailableError(error) from exc
             return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)
         except OSError as exc:
             error = "secret-tool could not be started"
             self._mark_service_unavailable(error)
-            raise AccountStoreError(error) from exc
+            raise _SecretServiceUnavailableError(error) from exc
 
     def _mark_service_unavailable(self, error: str) -> None:
         self._service_unavailable_error = str(error or "Secret Service unavailable")
@@ -603,7 +607,15 @@ class SecretToolInstanceSecretProvider:
 
     def _lookup_with_retries(self, instance_name: str, purpose: str) -> bytes | None:
         for attempt in range(self.lookup_retries + 1):
-            existing = self._lookup(instance_name, purpose)
+            try:
+                existing = self._lookup(instance_name, purpose)
+            except _SecretServiceUnavailableError:
+                if attempt >= self.lookup_retries:
+                    raise
+                self._service_unavailable_until = 0.0
+                if self.lookup_retry_delay_seconds > 0:
+                    self._sleep(self.lookup_retry_delay_seconds)
+                continue
             if existing is not None:
                 return existing
             if attempt >= self.lookup_retries:
