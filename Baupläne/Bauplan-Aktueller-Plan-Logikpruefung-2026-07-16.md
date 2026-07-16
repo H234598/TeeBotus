@@ -2693,3 +2693,20 @@ Restart nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Kein Push. Naechster
 Restart nach 16 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### SQLite-WAL-Sidecars-beim-Keyscan
+
+- 2026-07-17: `_sqlite_memory_has_instance_payload_rows()` ignorierte
+  nichtleere `Account_Memory.sqlite3-wal`/`-shm`-Dateien, wenn die Hauptdatei
+  fehlte oder leer war. Der Key-Guard konnte dadurch vorhandenen, nicht
+  checkpointeten Payload uebersehen.
+- Nicht aufloesbare, nichtleere SQLite-Sidecars gelten jetzt als vorhandener,
+  aber uninspectierbarer Payload. Secret-Autocreate und Manifest-Fingerprint
+  brechen fail-closed ab; Sidecars werden nicht veraendert.
+- Regression: vier SQL-Key-Guard-Faelle -> `4 passed`; komplette
+  `tests/test_account_store.py` -> `288 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7f6f3121 fix: guard sqlite sidecar payloads`.
+
+**Aktueller Laufstand:** Seit dem Restart `5/20` Commits. Kein Push. Naechster
+Restart nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
