@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `13/20` Commits vorhanden; naechster Restart
-  nach 7 weiteren Commits.
+  letzten Restart ist aktuell `15/20` Commits vorhanden; naechster Restart
+  nach 5 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -436,6 +436,23 @@ Diagnose und Tests.
   zwei Wochen. Ruff, `py_compile` und `git diff --check` gruen. Code-Commit:
   `630c5192 fix: parse written reminder intervals`.
 
+### Proactive-Dispatch nach externer Zustellung
+
+- 2026-07-16: Der Audit fand einen Post-Send-Fehler: Nach erfolgreicher
+  externer Zustellung konnten Outbox-Statuswrite oder Message-Tracker-Write
+  ungefangen den Dispatcher abbrechen. Die Nachricht war dann bereits beim
+  Empfaenger, aber Runtime meldete keinen stabilen Versandabschluss.
+- Statuspersistenzfehler werden jetzt pro Item abgefangen, mit Account-,
+  Item-, Kanal- und Message-Referenz geloggt und als
+  `status_update_failed` zur Dispatch-Result-Persistenz weitergereicht. Das
+  Item bleibt `dispatching`; die vorhandene Lease-Recovery kann es spaeter
+  erneut aufnehmen. Ein Trackerfehler downgradet ein bereits als `sent`
+  markiertes Outbox-Item nicht.
+- Regressionen fuer Outbox-Writefehler nach Sendererfolg und Trackerfehler
+  ergaenzt. `tests/test_proactive_agent.py`: `119 passed`; CLI-Suite:
+  `48 passed`; Ruff, `py_compile` und `git diff --check` gruen. Code-Commit:
+  `d134d41d fix: preserve proactive delivery after post-send errors`.
+
 ## Akzeptanzkriterien
 
 - Kein geaenderter Pfad kann nach einem simulierten zweiten Schreibfehler
@@ -448,8 +465,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `13/20` Commits; kein Restart oder
-Push ausgeloest. Naechster Restart nach 7 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `15/20` Commits; kein Restart oder
+Push ausgeloest. Naechster Restart nach 5 weiteren Commits.
 
 ## Bezug
 
