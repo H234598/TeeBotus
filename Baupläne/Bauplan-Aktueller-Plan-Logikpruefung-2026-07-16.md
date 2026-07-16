@@ -1203,6 +1203,22 @@ Diagnose und Tests.
 - Code-Commit: `8a2335fb fix: repair missing memory index entries`;
   kein Provider/API-Aufruf.
 
+### Structured-Memory-Rebuild-bei-unlesbaren-Entries
+
+- 2026-07-16: Rebuild und Append konnten nach einem partiellen SQL-Read mit
+  nur lesbaren Rows weiterarbeiten. Bei anschliessender Normalisierung waere
+  eine unlesbare, aber noch vorhandene Row durch einen destruktiven Write
+  verschwunden.
+- Beide Pfade brechen jetzt bei `last_entry_read_error` oder
+  `last_entry_skipped` fail-closed ab. Ein sauberer Fallback darf weiterhin
+  vorher ueber den Warning-Backend reparieren; der isolierte Primary schreibt
+  keine Teilmenge zurueck.
+- Regression mit realer korrupter SQLite-Ciphertext-Row: Rebuild und Append
+  blockiert, beide SQL-Rows bleiben erhalten; Index-/Account-Regressionen
+  gruen, Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `bfd653aa fix: block memory rebuilds on unreadable rows`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -1242,8 +1258,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `8/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 12 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `10/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 10 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
