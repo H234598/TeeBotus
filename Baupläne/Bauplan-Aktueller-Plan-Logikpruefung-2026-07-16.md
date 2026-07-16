@@ -2859,3 +2859,21 @@ bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Kein Push. Restart
 nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Metadata-Quarantaene-Unsupported-Envelope
+
+- 2026-07-17: `version/algorithm/kind unsupported` war als sichere Korruption
+  klassifiziert. Das kann aber valide alte, inkompatible oder falsch benannte
+  Payload sein; Quarantaene-Apply haette sie aus dem aktiven Store entfernt.
+- Diese Fehler sind jetzt ebenfalls unsicher und blockieren Apply. Zulassung
+  bleibt auf eindeutig strukturell malformed/invalid Envelope- oder JSON-
+  Fehler begrenzt. Keine automatische Migration oder Verschiebung unbekannter
+  Formate.
+- Regression: unsupported Envelope blockiert plus Metadata-Sicherheitsmatrix ->
+  `7 passed`; kompletter `tests/test_admin_accounts.py` -> `69 passed`. Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `344e51e9 fix: block unsupported metadata envelopes`.
+
+**Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
