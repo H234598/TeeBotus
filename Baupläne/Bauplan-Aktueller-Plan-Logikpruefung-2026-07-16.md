@@ -2565,6 +2565,28 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Kein Push. Naechster
 Restart nach 12 weiteren Commits.
 
+### Secondary-Only-Collection-Namen
+
+- 2026-07-16: Bei einem Primary-Ausfall gab `read_collection_names()` eine
+  nichtleere Collection-Liste aus dem Secondary zurueck, setzte aber keinen
+  Reparaturmarker. Nach Primary-Erholung wurde deshalb erneut nur die alte
+  Primary-Liste gelesen; Secondary-only Collections verschwanden wieder aus
+  dem sichtbaren Zustand.
+- Wenn beide Backends echten Collection-Read und -Write/Repair anbieten,
+  markiert der Fallback die ausgegebene Namensliste jetzt als pending. Der
+  naechste gesunde Name-Read kopiert fehlende Collections aus dem Secondary
+  zurueck in den Primary und loest den Warnzustand erst danach. Name-only-
+  Adapter ohne Reparaturvertrag behalten Kompatibilitaet und werden nicht
+  faelschlich als reparierbar markiert.
+- Regression: Secondary-only-Collection mit Recovery plus bestehende
+  Name-Failure-Pfade -> `4 passed`; komplette `tests/test_account_store.py` ->
+  `282 passed`. Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `18885852 fix: repair fallback collection name reads`.
+
+**Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Kein Push. Naechster
+Restart nach 10 weiteren Commits.
+
 **Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Dieser
 Plan-Commit macht `6/20`; kein Push. Naechster Restart nach 14 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
