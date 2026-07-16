@@ -29,7 +29,7 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit letztem
-  Restart sind aktuell `8/20` Commits vorhanden; naechster Restart nach 12
+  Restart sind aktuell `10/20` Commits vorhanden; naechster Restart nach 10
   weiteren Commits.
 
 ## Aktueller Plan
@@ -54,7 +54,7 @@ Diagnose und Tests.
    Erfolg: Ergebnisse reproduzierbar dokumentiert.
 5. **Plan und Git-Stand pflegen.**
    Befund, Fix, Commit und Testresultat hier eintragen. Lokalen Commit nach
-   jedem Fix erstellen. Nicht pushen und nicht vor Commit 40 restarten.
+   jedem Fix erstellen. Nicht pushen und nicht vor Commit 20 restarten.
 
 ## Bereits umgesetzt
 
@@ -244,6 +244,22 @@ Diagnose und Tests.
   Artefaktstand. Befund daher widerlegt; kein Runtime-Fix.
 - Regressionsnachweis fuer LLM-State-Pfade: `6 passed`; Ruff,
   `py_compile` und `git diff --check` gruen.
+
+### Fallback-Reparatur nach Partial-Read
+
+- 2026-07-16: Der Audit fand einen destruktiven Reparaturpfad in
+  `WarningFallbackAccountMemoryBackend._read()`. Ein gezielter
+  `read_entries_by_ids()`-Read konnte gueltige Rows liefern, waehrend der
+  anschliessende vollstaendige Primary-Read nur einen Teilbestand plus
+  Decrypt-/Skip-Diagnose lieferte. Dieser Teilbestand konnte den validen
+  Fallback ueberschreiben.
+- Die Reparatur prueft jetzt Exceptions und Read-Diagnosen des vollstaendigen
+  Primary-Reads. Bei Partial-Read bleibt der Fallback unveraendert; Repair wird
+  als stale/sync_failed markiert und erst nach sauberem Full-Read erneut
+  versucht. Der bereits erfolgreich gelesene Teilrequest bleibt unveraendert.
+- Regression fuer Partial-Full-Read: fokussiert `5 passed`; AccountStore-Suite
+  `229 passed in 6.27s`; Ruff, `py_compile` und `git diff --check` gruen.
+  Code-Commit: `d1f55162 fix: reject partial fallback repair reads`.
 
 ## Akzeptanzkriterien
 
