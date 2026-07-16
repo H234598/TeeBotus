@@ -3715,6 +3715,28 @@ def test_account_memory_fallback_marks_both_collection_name_reads_as_unsafe(capl
     assert backend.last_fallback_sync_error == ""
 
 
+def test_account_memory_fallback_blocks_collection_names_when_secondary_is_missing() -> None:
+    class Backend:
+        def __init__(self, *, database_missing: bool) -> None:
+            self.last_database_missing = database_missing
+
+        def read_collection_names(self, _account_id: str) -> tuple[str, ...]:
+            raise OSError("collection schema unavailable")
+
+    account_id = "a" * 128
+    primary = Backend(database_missing=False)
+    fallback = Backend(database_missing=True)
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    with pytest.raises(AccountStoreError, match="fallback database is missing"):
+        backend.read_collection_names(account_id)
+
+    assert backend.last_fallback_sync_error == (
+        "read_collection_names: fallback database is missing; no secondary data available"
+    )
+    assert account_id not in backend._failed_collection_name_reads
+
+
 def test_account_memory_fallback_repairs_fallback_only_collection_after_name_read_recovery() -> None:
     class Backend:
         def __init__(self, *, fail_names: bool = False) -> None:

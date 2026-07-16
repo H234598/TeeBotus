@@ -244,6 +244,9 @@ class WarningFallbackAccountMemoryBackend:
                             account_id,
                             "read_collection_names: fallback database is missing; no secondary data available",
                         )
+                        raise _FallbackReadFailure(
+                            self.fallback_sync_error_for_account(account_id) or self.last_fallback_sync_error
+                        ) from fallback_exc
                     return ()
                 self._failed_collection_name_reads.add(account_id)
                 self._set_fallback_sync_error(
