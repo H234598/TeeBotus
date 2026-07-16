@@ -1407,6 +1407,25 @@ ausgeloest. Naechster Restart nach 19 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `8/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 12 weiteren Commits.
 
+### Erstschreibpfad-bei-fehlender-SQLite-Datenbank
+
+- 2026-07-16: `read_entries()` meldet bei einer noch nicht angelegten
+  SQLite-Datenbank `last_database_missing=True` und eine technische
+  Missing-Diagnose. Der AccountStore behandelte diese leere
+  Erstinitialisierung wie korrupte Entries und blockierte dadurch den ersten
+  Memory-Write.
+- Der Append-Guard ignoriert Missing-Diagnose nur bei explizit fehlender
+  Datenbank. Partielle Reads, Entschluesselungsfehler und uebersprungene Rows
+  bleiben unveraendert fail-closed.
+- Regression: Append auf neuem SQLite-Pfad legt DB an und liest Entry danach
+  wieder; gesamte `tests/test_account_store.py` `263 passed`; Ruff,
+  `py_compile` und `git diff --check` gruen.
+- Code-Commit: `086c3c1b fix: allow first memory write on missing database`;
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `10/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 10 weiteren Commits.
+
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
   `/v1/about` meldet Signal REST `0.100` im JSON-RPC-Modus;
