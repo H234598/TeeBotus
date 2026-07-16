@@ -29,7 +29,7 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit letztem
-  Restart sind aktuell `6/20` Commits vorhanden; naechster Restart nach 14
+  Restart sind aktuell `7/20` Commits vorhanden; naechster Restart nach 13
   weiteren Commits.
 
 ## Aktueller Plan
@@ -229,8 +229,8 @@ Diagnose und Tests.
 - `unlink_identity_and_rotate_secret()` prueft jetzt Zielaccount vor dem
   Unlink und stellt Metadaten wieder her, wenn Secret-Rotation fehlschlaegt.
 - Fokustests: `32 passed`; AccountStore-Suite: `228 passed in 6.69s`;
-  Ruff, `py_compile` und `git diff --check` gruen. Code-Commit wird im
-  folgenden Planpflege-Commit referenziert.
+  Ruff, `py_compile` und `git diff --check` gruen. Commit:
+  `5770bf8f fix: rollback identity metadata updates`.
 
 ## Akzeptanzkriterien
 
