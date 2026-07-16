@@ -2228,3 +2228,20 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `13/20` Code-Commits. Dieser
 Plan-Commit macht `14/20`; kein Push. Naechster Restart nach 6 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Reminder-Optionaler-Datumszeit-Crash
+
+- 2026-07-16: `_has_invalid_explicit_time()` konvertierte optionale
+  Datumsstunden ohne Vorhandensein. Ein Subject wie `16. Maerz 2027` im Satz
+  `Kannst du mich in 2 Stunden an ... erinnern?` loeste deshalb
+  `TypeError: int(None)` aus statt die relative Erinnerung anzulegen.
+- Die Validierung ueberspringt Datums-/Monatstreffer ohne explizite Stunde;
+  vorhandene Stunden und Minuten werden weiterhin auf gueltige Werte geprueft.
+- Regression fuer deutsches Monatsdatum ohne Uhrzeit; Reminder-Suite ->
+  `35 passed`; Decision-/Engine-Fokus -> `14 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `698b8e5e fix: ignore missing reminder date hour`.
+
+**Aktueller Laufstand:** Seit dem Restart `15/20` Code-Commits. Dieser
+Plan-Commit macht `16/20`; kein Push. Naechster Restart nach 4 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
