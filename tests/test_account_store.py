@@ -1311,6 +1311,37 @@ def test_merge_accounts_locks_source_and_target_memory_during_read_merge_write(t
     assert {row["id"] for row in store.read_memory_entries(target)} == {"mem_source", "mem_concurrent"}
 
 
+def test_merge_accounts_preserves_json_account_collections(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider(), memory_backend_enabled=False)
+    target = store.resolve_or_create_account(telegram_identity_key(1))
+    source = store.resolve_or_create_account(signal_identity_key(source_uuid="json-collections"))
+
+    store.write_agent_state(source, {"proactive": {"enabled": True}})
+    store.write_status_auth_state(source, {"authorized": True, "source": "test"})
+    store.append_proactive_outbox_item(source, {"id": "pro_source", "message_text": "Proaktiv"})
+    store.append_proactive_audit_event(source, {"id": "audit_source", "event_type": "test"})
+    store.append_proactive_dispatch_result(source, {"id": "pro_dispatch", "status": "sent"})
+    store.append_status_outbox_item(source, {"id": "status_source", "message_text": "Status"})
+    store.append_status_dispatch_result(source, {"id": "status_dispatch", "status": "sent"})
+    store.append_codex_history_item(source, {"id": "history_source", "summary": "Codex"})
+    store.append_codex_history_dispatch_result(source, {"id": "history_dispatch", "status": "sent"})
+    store.write_codex_history_projects(source, [{"id": "project_source", "repo": "TeeBotus"}])
+
+    store.merge_accounts(source, target)
+
+    assert store.read_agent_state(target)["proactive"]["enabled"] is True
+    assert store.read_status_auth_state(target)["authorized"] is True
+    assert store.read_proactive_outbox(target)[0]["id"] == "pro_source"
+    assert store.read_proactive_audit(target)[0]["id"] == "audit_source"
+    assert store.read_proactive_dispatch_results(target)[0]["id"] == "pro_dispatch"
+    assert store.read_status_outbox(target)[0]["id"] == "status_source"
+    assert store.read_status_dispatch_results(target)[0]["id"] == "status_dispatch"
+    assert store.read_codex_history_outbox(target)[0]["id"] == "history_source"
+    assert store.read_codex_history_dispatch_results(target)[0]["id"] == "history_dispatch"
+    assert store.read_codex_history_projects(target)[0]["id"] == "project_source"
+    assert not (store.account_dir(source) / PROACTIVE_OUTBOX_FILENAME).exists()
+
+
 def test_merge_accounts_normalizes_source_before_retry_deduplication(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))

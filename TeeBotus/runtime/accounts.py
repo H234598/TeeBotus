@@ -2228,6 +2228,7 @@ class AccountStore:
         self._merge_text(source_dir / USER_HABITS_FILENAME, target_dir / USER_HABITS_FILENAME, heading=f"Merged from {source_account_id}")
         if memory_backend is None:
             self._merge_llm_state(source_dir, target_dir)
+            self._merge_json_account_memory_collections(source_dir, target_dir)
         else:
             self._merge_sql_account_memory_collections(memory_backend, source_account_id, target_account_id)
         identities = self._load_identities()
@@ -2246,6 +2247,34 @@ class AccountStore:
         self.vault.write_json(source_dir / "Account_Tombstone.json", tombstone)
         self._delete_dir_contents_except(source_dir, {"Account_Tombstone.json"})
         self._remove_account_from_index(source_account_id)
+
+    def _merge_json_account_memory_collections(self, source_dir: Path, target_dir: Path) -> None:
+        vault = self.account_memory_vault
+        jsonl_filenames = (
+            PROACTIVE_OUTBOX_FILENAME,
+            PROACTIVE_AUDIT_FILENAME,
+            PROACTIVE_DISPATCH_RESULTS_FILENAME,
+            STATUS_OUTBOX_FILENAME,
+            STATUS_DISPATCH_RESULTS_FILENAME,
+            CODEX_HISTORY_OUTBOX_FILENAME,
+            CODEX_HISTORY_DISPATCH_RESULTS_FILENAME,
+            CODEX_HISTORY_PROJECTS_FILENAME,
+        )
+        for filename in jsonl_filenames:
+            self._merge_jsonl(source_dir / filename, target_dir / filename, vault=vault)
+
+        for filename in (AGENT_STATE_FILENAME, STATUS_AUTH_STATE_FILENAME):
+            source_path = source_dir / filename
+            if not source_path.exists():
+                continue
+            target_path = target_dir / filename
+            source_data = self._read_json_with_fallback(source_path, {}, vault=vault)
+            target_data = self._read_json_with_fallback(target_path, {}, vault=vault) if target_path.exists() else {}
+            merged = _merge_nested_json_documents(source_data, target_data)
+            if filename == STATUS_AUTH_STATE_FILENAME:
+                merged["authorized"] = bool(source_data.get("authorized") or target_data.get("authorized"))
+            if merged != target_data:
+                self._write_json_with_vault(target_path, merged, vault=vault)
 
     def _merge_sql_account_memory_collections(self, backend: Any, source_account_id: str, target_account_id: str) -> None:
         jsonl_collections: tuple[
