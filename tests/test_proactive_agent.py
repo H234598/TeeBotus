@@ -2604,6 +2604,54 @@ def test_disabled_proactive_account_skips_model_planner_before_provider_call(tmp
     assert account_store.read_proactive_audit(account_id)[0]["reason"] == "proactive_disabled"
 
 
+def test_paused_proactive_account_skips_all_planners_before_provider_call(tmp_path) -> None:
+    class Client:
+        def create_reply(self, *_args):
+            raise AssertionError("paused proactive account must not call the LLM")
+
+        def create_tool_calls(self, *_args):
+            raise AssertionError("paused proactive account must not call the tool agent")
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spazieren gehen."},
+    )
+    pause_proactive_agent(account_store, account_id)
+
+    assert should_run_proactive_model_planner(account_store, account_id) == (False, "proactive_paused")
+    assert run_proactive_reflection_planner(account_store, account_id).skipped_reason == "proactive_paused"
+    llm_result = run_proactive_llm_planner(
+        account_store,
+        account_id,
+        openai_client=Client(),
+        instructions=object(),
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    tool_result = run_proactive_tool_agent(
+        account_store,
+        account_id,
+        openai_client=Client(),
+        instructions=object(),
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    direct_result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {"schema_version": 1, "decisions": [{"action": "memory", "kind": "reflection", "text": "Nicht speichern."}]},
+    )
+
+    assert llm_result.errors == ("proactive_paused",)
+    assert tool_result.errors == ("proactive_paused",)
+    assert direct_result.errors == ("proactive_paused",)
+    assert [entry["id"] for entry in account_store.read_memory_entries(account_id)] == ["mem_goal"]
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
 def test_disabled_proactive_account_blocks_safe_llm_memory_write(tmp_path) -> None:
     account_store = store(tmp_path)
     account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
