@@ -28,9 +28,9 @@ Diagnose und Tests.
 - Healthcheck und Status-Applet bleiben read-only.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
-- Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit letztem
-  Restart sind aktuell `19/20` Commits vorhanden; naechster Restart nach dem
-  Plan-Commit.
+- Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
+  letzten Restart ist aktuell `1/20` Commit vorhanden; naechster Restart nach
+  19 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -329,8 +329,16 @@ Diagnose und Tests.
 - Replay-Regression ergaenzt. `tests/test_activity_profile.py`: `13 passed in
   0.80s`; `py_compile` und `git diff --check` gruen. Code-Commit:
   `be4ce9d9 fix: deduplicate replayed activity events`.
-- Nach dem folgenden Plan-Commit steht der Zaehler bei `20/20`; danach ist der
-  vereinbarte lokale Bot-/Service-Restart auszufuehren.
+- Nach Plan-Commit `e884a09d` wurde der vereinbarte lokale Restart ausgefuehrt;
+  `teebotus.service` ist `active`, MainPID `132170`, Start `2026-07-16
+  03:14:52 CEST`.
+- Folgeaudit: Telegram-`message_id`s sind nur innerhalb eines Chats eindeutig.
+  Deduplizierung vergleicht jetzt `event_id` plus `route_key`, damit zwei
+  verschiedene Chats derselben Accountgruppe nicht kollabieren.
+- Regression fuer gleiche ID auf verschiedenen Routen ergaenzt.
+  `tests/test_activity_profile.py`: `14 passed in 0.89s`; Ruff,
+  `py_compile` und `git diff --check` gruen. Commit:
+  `eb4f2475 fix: scope activity replay deduplication`.
 
 ## Akzeptanzkriterien
 
