@@ -2498,7 +2498,7 @@ def test_structured_memory_mutations_refuse_unreadable_index(tmp_path):
         def write_index(self, _account_id, _data):
             self.write_index_calls += 1
 
-    for operation_name in ("append", "access", "reset"):
+    for operation_name in ("append", "access", "reset", "rank", "select"):
         store = AccountStore(tmp_path / operation_name, "Depressionsbot", provider())
         account_id = store.resolve_or_create_account(telegram_identity_key(1))
         backend = PartiallyUnreadableIndexBackend()
@@ -2507,6 +2507,8 @@ def test_structured_memory_mutations_refuse_unreadable_index(tmp_path):
             "append": lambda: store.append_structured_memory_entry(account_id, {"id": "mem_new", "user_text": "Neu"}),
             "access": lambda: store.mark_structured_memory_accessed(account_id, ["mem_live"]),
             "reset": lambda: store.reset_structured_memory(account_id),
+            "rank": lambda: store.rank_structured_memory_ids(account_id, query_text="Mond"),
+            "select": lambda: store.select_structured_memory(account_id, query_text="Mond"),
         }
 
         with pytest.raises(AccountStoreError, match="index is unreadable"):

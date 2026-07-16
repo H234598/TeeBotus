@@ -3145,7 +3145,9 @@ class AccountStore:
         excluded_ids = {str(memory_id or "").strip() for memory_id in exclude_ids if str(memory_id or "").strip()}
         entries = self.read_memory_entries(account_id)
         self._raise_if_account_memory_entries_unreadable("cannot rank account memory")
-        index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
+        index_document = self.read_memory_index(account_id)
+        self._raise_if_account_memory_index_unreadable("cannot rank account memory")
+        index = self._normalized_memory_index(account_id, index_document)
         ranked_ids: list[str] = []
         for entry in self._rank_structured_memory_entries(entries, index, query_text):
             memory_id = str(entry.get("id") or "").strip()
@@ -3173,7 +3175,9 @@ class AccountStore:
         excluded_ids = {str(memory_id or "").strip() for memory_id in exclude_ids if str(memory_id or "").strip()}
         entries = self.read_memory_entries(account_id)
         self._raise_if_account_memory_entries_unreadable("cannot select account memory")
-        index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
+        index_document = self.read_memory_index(account_id)
+        self._raise_if_account_memory_index_unreadable("cannot select account memory")
+        index = self._normalized_memory_index(account_id, index_document)
         ordered_entries = [
             entry
             for entry in self._rank_structured_memory_entries(entries, index, query_text)
