@@ -2728,6 +2728,24 @@ def test_account_jsonl_collection_keeps_merged_rows_when_verify_read_reports_dia
     assert legacy_path.exists()
 
 
+def test_account_jsonl_collection_discards_non_object_sql_rows(tmp_path):
+    class MixedReadBackend:
+        last_collection_read_error = ""
+        last_collection_skipped = 0
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[object]:
+            return ["corrupt row", {"id": "pro_valid", "status": "queued"}]
+
+        def write_collection(self, _account_id: str, _collection: str, _rows: list[dict[str, object]]) -> None:
+            raise AssertionError("invalid SQL rows must not trigger a rewrite")
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store._account_memory_backend = MixedReadBackend()
+
+    assert store.read_proactive_outbox(account_id) == [{"id": "pro_valid", "status": "queued"}]
+
+
 @pytest.mark.parametrize(
     ("reader_name", "filename", "expected"),
     (

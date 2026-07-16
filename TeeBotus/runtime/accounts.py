@@ -3563,7 +3563,7 @@ class AccountStore:
         write_collection = getattr(backend, "write_collection", None) if backend is not None else None
         if callable(read_collection) and callable(write_collection):
             try:
-                rows = list(read_collection(account_id, collection))
+                rows = [row for row in read_collection(account_id, collection) if isinstance(row, dict)]
             except Exception:
                 if path.exists():
                     return self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
