@@ -2622,3 +2622,22 @@ Restart nach 10 weiteren Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `14/20` Commits. Kein Push. Naechster
 Restart nach 6 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Partial-Read-darf-Primary-nicht-leeren
+
+- 2026-07-16: `read_entries_by_ids()` behandelte eine Primary-Ausnahme mit
+  leerem Secondary als selektiv leere Antwort. Der anschliessende Full-Read des
+  leeren Secondary wurde als Reparaturdaten benutzt und konnte vorhandene
+  Primary-Eintraege loeschen.
+- Bei `partial_result=True` und leerem Full-Read des Secondary wird jetzt keine
+  leere Menge in Primary geschrieben. Der Account wird als unrecoverable
+  markiert und bleibt bis erfolgreicher Primary-Recovery schreibgeschuetzt;
+  normale selektive Reads mit nichtleerer Full-Menge reparieren weiter.
+- Regression: alle `entries_by_ids`-Fallbackpfade -> `5 passed`; komplette
+  `tests/test_account_store.py` -> `285 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `58167ac0 fix: protect primary entries during partial fallback reads`.
+
+**Aktueller Laufstand:** Seit dem Restart `17/20` Code-Commits. Dieser
+Plan-Commit macht `18/20`. Kein Push. Restart nach 2 weiteren Commits.
+Naechster Push bleibt erst bei 100 Commits.
