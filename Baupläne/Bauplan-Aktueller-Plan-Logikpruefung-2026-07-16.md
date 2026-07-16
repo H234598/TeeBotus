@@ -1220,6 +1220,24 @@ Diagnose und Tests.
 - Code-Commit: `bfd653aa fix: block memory rebuilds on unreadable rows`;
   kein Provider/API-Aufruf.
 
+### Teilreads-in-Account-Memory-Pfaden
+
+- 2026-07-16: SQL-Backends liefern bei korrupten Ciphertext-Zeilen bewusst
+  sichtbare Rows plus `last_entry_read_error`/`last_entry_skipped`. Mehrere
+  nachgelagerte Pfade ignorierten diese Diagnose: Ranking, Memory-Auswahl,
+  Access-Tracking, ID-Reads, Legacy-Append und Account-Merge konnten mit einer
+  unvollstaendigen Row-Menge weiterarbeiten. Ein anschliessender Write haette
+  die unlesbare Zeile aus dem SQL-Backend entfernen koennen.
+- Gemeinsamer Guard in `AccountStore` bricht diese Pfade fail-closed ab. Ein
+  gesunder Warning-Fallback darf weiterhin vorher reparieren; ein isolierter
+  partieller Primary-Read wird weder als Kontext verwendet noch zur Grundlage
+  eines destruktiven Writes.
+- Regression deckt alle sechs betroffenen Read-/Modify-/Retrieval-Pfade ab und
+  prueft, dass kein Entry-Write erfolgt. Gesamte `tests/test_account_store.py`:
+  `257 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `b00fcea1 fix: refuse partial account memory reads`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -1259,7 +1277,7 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `12/20` Commits; Restart erledigt,
+**Laufstand:** Seit dem letzten Restart `14/20` Commits; Restart erledigt,
 kein Push ausgeloest. Naechster Restart nach 8 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
