@@ -1124,7 +1124,7 @@ def _read_sqlite_snapshot_payloads(
                         skipped_error = skipped_error or str(exc)
                 if skipped_error:
                     errors.append(f"collections: {skipped_error}")
-    except sqlite3.Error as exc:
+    except (sqlite3.Error, OSError) as exc:
         errors.append(f"sqlite: {exc}")
     return entries, index, collections, errors
 
@@ -1210,7 +1210,7 @@ def _sqlite_account_ids(path: Path) -> set[str]:
                 for account_id in ids
                 if TOKEN_HEX_RE.fullmatch(account_id) and account_id != INSTANCE_STATE_ACCOUNT_ID
             }
-    except sqlite3.Error:
+    except (sqlite3.Error, OSError):
         return set()
 
 
@@ -1243,7 +1243,7 @@ def _sqlite_raw_counts(path: Path, instance_name: str, account_id: str) -> tuple
                     ).fetchone()[0]
                 )
             return entries, index_present, collections
-    except sqlite3.Error:
+    except (sqlite3.Error, OSError):
         return 0, False, 0
 
 

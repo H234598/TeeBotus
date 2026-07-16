@@ -765,6 +765,29 @@ def test_memory_recovery_sqlite_probes_do_not_create_missing_databases(tmp_path:
     assert not missing.parent.exists()
 
 
+def test_memory_recovery_sqlite_probes_report_disappearing_sources(monkeypatch, tmp_path: Path) -> None:
+    def disappear(_path: Path):
+        raise OSError("source disappeared during probe")
+
+    monkeypatch.setattr(account_memory_recovery_module, "_connect_sqlite_readonly", disappear)
+    missing = tmp_path / "Account_Memory.sqlite3"
+    missing.write_bytes(b"sqlite placeholder")
+
+    assert _sqlite_account_ids(missing) == set()
+    assert _sqlite_raw_counts(missing, "Depressionsbot", "a" * 128) == (0, False, 0)
+    entries, index, collections, errors = account_memory_recovery_module._read_sqlite_snapshot_payloads(
+        missing,
+        instance_name="Depressionsbot",
+        account_id="a" * 128,
+        provider=provider(),
+    )
+
+    assert entries == []
+    assert index == {}
+    assert collections == []
+    assert errors == ["sqlite: source disappeared during probe"]
+
+
 def test_memory_recovery_report_counts_sqlite_collections_and_skips_instance_state_account(tmp_path: Path, monkeypatch) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
