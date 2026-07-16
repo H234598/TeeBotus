@@ -1485,6 +1485,24 @@ ausgeloest. Naechster Restart nach 4 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `18/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 2 weiteren Commits.
 
+### Rebuild-vor-unlesbarem-Index-stoppen
+
+- 2026-07-16: `rebuild_structured_memory_index()` validierte Entry-Reads,
+  las den bestehenden Index danach aber ohne Diagnose-Guard. Ein
+  unlesbarer Index konnte so durch einen Rebuild ersetzt werden; Backend-
+  Schutz war nicht fuer jeden Adapter garantiert.
+- Rebuild prueft den Index direkt nach dem Read und stoppt fail-closed vor
+  Entry- oder Index-Write. Eine explizit fehlende, noch nicht initialisierte
+  DB bleibt als leerer Erstzustand zulaessig.
+- Regression mit unlesbarem Index und Write-Zaehlern; gesamte
+  `tests/test_account_store.py` `266 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `7bcd96d4 fix: refuse rebuild with unreadable memory index`;
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `20/20` Commits; Restart jetzt
+faellig, kein Push ausgeloest.
+
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
   `/v1/about` meldet Signal REST `0.100` im JSON-RPC-Modus;
