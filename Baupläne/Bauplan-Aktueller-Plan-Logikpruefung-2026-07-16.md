@@ -1499,6 +1499,20 @@ ausgeloest. Naechster Restart nach 12 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `10/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 10 weiteren Commits.
 
+### Editable-Installation-auf-Quellversion-angleichen
+
+- 2026-07-16: Lokale Metadaten enthielten parallel `TeeBotus` `1.8.0` und
+  die Quellversion `1.9.498`. Ursache war eine alte editable Installation in
+  `/home/teladi/.local/lib/python3.14/site-packages`.
+- `python3 -m pip install --no-deps --editable .` aktualisierte die lokale
+  Installation auf `1.9.498`; Dependencies und Repo-Dateien blieben
+  unangetastet.
+- `tests/test_pyproject_metadata.py`: `7 passed`; danach nur noch eine
+  sichtbare TeeBotus-Distribution mit `1.9.498`. Kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `12/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 8 weiteren Commits.
+
 ### Erstschreibpfad-bei-fehlender-SQLite-Datenbank
 
 - 2026-07-16: `read_entries()` meldet bei einer noch nicht angelegten
