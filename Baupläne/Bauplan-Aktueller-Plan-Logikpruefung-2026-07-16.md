@@ -2315,3 +2315,32 @@ Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `2/20` Code-Commits. Dieser
 Plan-Commit macht `3/20`; kein Push. Naechster Restart nach 17 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Reminder-Erstperson-False-Positive
+
+- 2026-07-16: Der klassische Parser behandelte `Ich erinnere mich an ...`
+  und `Ich denke daran ...` als Erinnerungsauftrag. Ohne Zeit folgte eine
+  falsche Rueckfrage; mit Zeit konnte sogar eine Erinnerung angelegt werden.
+- Die beiden Imperativzweige ignorieren jetzt Treffer direkt nach `ich `.
+  Imperative wie `Erinnere mich ...` und `Denk bitte daran ...` bleiben
+  unveraendert.
+- Regression: Erstperson-Aussagen werden abgewiesen; Reminder-Suite ->
+  `38 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `5178a113 fix: ignore first-person reminder statements`.
+
+### Reminder-Kurzwortlaut
+
+- 2026-07-16: `Denk an den Termin morgen` wurde nicht als Reminder erkannt.
+  Zusaetzlich fehlte `vergiss nicht` im lokalen Gate nach der Umstellung der
+  Structured-Reminder-Klassifikation.
+- Der direkte Parser akzeptiert `Denk an ...`; der Structured-Runner-Gate
+  erkennt auch `vergiss nicht`, ohne normale `Ich denke an ...`-Aussagen zu
+  aktivieren.
+- Regression: direkte Kurzform plus bestehende Reminderpfade -> `39 passed`;
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c0b4f661 fix: accept direct reminder wording`.
+
+**Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Dieser
+Plan-Commit macht `6/20`; kein Push. Naechster Restart nach 14 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
