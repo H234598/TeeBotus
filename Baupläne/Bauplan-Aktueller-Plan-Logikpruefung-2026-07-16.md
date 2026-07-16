@@ -2078,3 +2078,26 @@ Commits.
 **Aktueller Laufstand:** Seit dem Restart `19/20` Code-Commits. Dieser
 Plan-Commit macht `20/20`; kein Push. Restart jetzt faellig. Naechster
 Push bleibt erst bei 100 Commits.
+
+### Notification-Loudness-Dispatch-Race
+
+- 2026-07-16: `notification_loudness_outbox_item_is_active()` las State und
+  aktuelle Route ohne denselben Outbox-Lock wie Antwort- und Dispatch-Pfade.
+  Eine Bestaetigung konnte deshalb zwischen Active-Check und Versand den
+  Status aendern; ein bereits gecanceltes Item konnte noch extern gesendet
+  werden.
+- Der Active-Check laeuft jetzt unter dem Account-Outbox-Lock. Ein Worker-
+  Claim (`dispatching`) gilt als bereits uebernommener Versand: Antworten
+  canceln nur noch `queued`. Der Active-Recheck entscheidet damit sauber, ob
+  die Bestaetigung vor oder nach dem Claim linearisiert wird; kein Versand aus
+  einem danach als `cancelled` gespeicherten Zustand.
+- Regression deckt beide Reihenfolgen ab: Antwort vor Recheck blockiert den
+  Versand; Antwort nach Recheck laesst den uebernommenen Versand konsistent
+  als `sent` abschliessen. `tests/test_notification_loudness.py` -> `165
+  passed`; Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-
+  Aufruf.
+- Code-Commit: `18005ca7 fix: linearize notification loudness dispatch`.
+
+**Aktueller Laufstand:** Seit dem Restart `1/20` Code-Commits. Dieser
+Plan-Commit macht `2/20`; kein Push. Naechster Restart nach 18 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
