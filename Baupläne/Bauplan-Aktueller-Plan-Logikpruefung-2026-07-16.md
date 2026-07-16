@@ -2805,3 +2805,22 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `16/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 4 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### SQLite-Recovery-Quelle-verschwindet-waehrend-Probe
+
+- 2026-07-17: Die Recovery-Probes fingen bei Datei-/Sidecar-Races nur
+  `sqlite3.Error`, nicht `OSError`. Ein Backup-Cleanup oder paralleler Move
+  zwischen Discovery und `copy2()` konnte damit den gesamten Admin-Report
+  abbrechen.
+- `_sqlite_account_ids()`, `_sqlite_raw_counts()` und der Payload-Reader
+  behandeln solche OS-Fehler jetzt als leere bzw. fehlerhafte Quelle. Der
+  Report bleibt erzeugbar und markiert die Snapshot-Quelle mit `sqlite:`-Fehler;
+  keine automatische Reparatur oder Datenveraenderung.
+- Regression: verschwindende SQLite-Quelle -> `2 passed`; komplette
+  `tests/test_admin_accounts.py` -> `66 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5313ebd1 fix: tolerate disappearing sqlite recovery sources`.
+
+**Aktueller Laufstand:** Seit dem Restart `18/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 2 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
