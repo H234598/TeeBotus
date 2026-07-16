@@ -2139,6 +2139,27 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 Plan-Commit macht `6/20`; kein Push. Naechster Restart nach 14 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### Telegram-RemoteDisconnect
+
+- 2026-07-16: `RemoteDisconnected` aus `urllib` wurde beim Telegram-
+  Polling nicht als `TelegramNetworkError` behandelt. Ein kurzzeitiger
+  Verbindungsabbruch beendete deshalb den Hauptprozess; systemd musste ihn
+  erst neu starten.
+- Normale Requests, Multipart-Uploads und Datei-Downloads wandeln sonstige
+  `OSError`-Netzwerkfehler jetzt nach `URLError` in `TelegramNetworkError`
+  um. Der vorhandene Polling-Backoff greift dadurch auch bei vom Peer
+  geschlossenen Verbindungen.
+- Regression: `RemoteDisconnected` ohne Telegram-Aufruf sowie Timeout und
+  Polling-Retry -> `3 passed`; Ruff, `compileall` und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `551e1479 fix: retry Telegram disconnects as network errors`.
+- Der Dienst ist aktuell `active`, MainPID `514461`, nachdem systemd den
+  vor dem Fix abgebrochenen Prozess automatisch neu gestartet hat.
+
+**Aktueller Laufstand:** Seit dem manuellen Restart `2/20` Commits. Dieser
+Plan-Commit macht `3/20`; kein Push. Naechster manueller Restart nach 17
+weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
 ### Wetter-Rate-Limit-und-Uhrsprung
 
 - 2026-07-16: Das Wetter-Rate-Limit behandelte einen zukuenftigen
