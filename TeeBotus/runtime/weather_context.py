@@ -90,7 +90,8 @@ def _update_city_and_weather_context_unlocked(
         account_store.write_agent_state(account_id, state) if city else None
         return WeatherContextResult(skipped_reason="no_city")
     last_checked = _parse_datetime(str(weather_state.get("last_checked_at") or ""))
-    if last_checked is not None and resolved_now - last_checked < WEATHER_CHECK_INTERVAL:
+    elapsed_since_check = resolved_now - last_checked if last_checked is not None else None
+    if elapsed_since_check is not None and timedelta(0) <= elapsed_since_check < WEATHER_CHECK_INTERVAL:
         if city_changed:
             account_store.write_agent_state(account_id, state)
         return WeatherContextResult(

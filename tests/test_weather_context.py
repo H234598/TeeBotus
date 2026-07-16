@@ -194,6 +194,39 @@ def test_weather_provider_error_does_not_expose_stale_summary(tmp_path) -> None:
     assert "offline" in weather_state["last_error"]
 
 
+def test_future_weather_check_timestamp_does_not_block_recheck(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    calls: list[str] = []
+
+    def provider(city: str) -> str:
+        calls.append(city)
+        return f"{city}: 13 C"
+
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        provider=provider,
+    )
+    state = account_store.read_agent_state(account_id)
+    state["weather_context"]["last_checked_at"] = "2026-06-15T15:00:00+00:00"
+    account_store.write_agent_state(account_id, state)
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Hallo.",
+        now=datetime(2026, 6, 15, 12, 1, tzinfo=timezone.utc),
+        provider=provider,
+    )
+
+    assert result.checked is True
+    assert result.skipped_reason == ""
+    assert calls == ["Berlin", "Berlin"]
+
+
 def test_parallel_weather_updates_share_one_rate_limited_check(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
