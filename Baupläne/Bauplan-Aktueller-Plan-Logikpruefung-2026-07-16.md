@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart sind aktuell `4/20` Commits vorhanden; naechster Restart
-  nach 16 weiteren Commits.
+  letzten Restart sind aktuell `6/20` Commits vorhanden; naechster Restart
+  nach 14 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -520,6 +520,20 @@ Diagnose und Tests.
   `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `62d73474 fix: lock version notification state`.
 
+### Account-Memory-Backend-Lazy-Init
+
+- 2026-07-16: `account_memory_backend` wurde bei parallelem Erstzugriff
+  ohne Initialisierungs-Lock erzeugt. Mehrere Threads konnten getrennte
+  SQLite-/Fallback-/Postgres-Objekte bauen; zuletzt zugewiesenes Objekt
+  konnte den Zustand des anderen verlieren.
+- Backend-Erzeugung liegt jetzt in `_create_account_memory_backend()` und
+  wird per globalem reentrantem Lock mit Double-Check einmalig installiert.
+  Bereits injizierte Test-/Spezial-Backends bleiben unangetastet.
+- Regression prueft Konstruktion innerhalb des Locks und genau einen
+  Factory-Aufruf; fokussiert `2 passed`, AccountStore komplett `246 passed`.
+  Ruff, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `46558ca2 fix: serialize memory backend initialization`.
+
 ### LLM-State-SQL/JSON-Audit
 
 - 2026-07-16: Biene Herschel meldete einen vorzeitigen SQL-Return in
@@ -938,8 +952,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `4/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 16 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `6/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 14 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
