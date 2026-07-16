@@ -1397,6 +1397,24 @@ ausgeloest. Naechster Restart nach 15 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `7/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 13 weiteren Commits.
 
+### Account-Merge-Index-vor-Entry-Write-validieren
+
+- 2026-07-16: `merge_accounts()` schrieb Ziel-Entries vor dem Read und
+  Diagnosecheck von Source-/Target-Index. Bei defektem Zielindex konnte Merge
+  mit halbem Zielzustand abbrechen; wiederholter Merge musste danach einen
+  Zwischenstand behandeln.
+- Beide Indexe werden jetzt vor dem ersten Ziel-Entry-Write gelesen und
+  fail-closed validiert. Keine Zielmutation bei unlesbarem Index; vorhandene
+  Entry-/Index-Rollbacklogik bleibt zusaetzlich aktiv.
+- Regression prueft defekten Zielindex und protokolliert keine Ziel-Writes;
+  gesamte `tests/test_account_store.py` `270 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `323c0895 fix: validate merge indexes before writes`;
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `9/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 11 weiteren Commits.
+
 ### Leerer-By-ID-Read-und-stale-Missing-Diagnose
 
 - 2026-07-16: `WarningFallbackAccountMemoryBackend.read_entries_by_ids()`
