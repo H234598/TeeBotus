@@ -93,6 +93,14 @@ def test_parse_reminder_ignores_first_person_reminder_statements() -> None:
     assert thought.is_request is False
 
 
+def test_parse_reminder_accepts_short_think_of_wording() -> None:
+    intent = parse_reminder_intent("Denk an den Termin morgen.", now=fixed_now())
+
+    assert intent.is_request is True
+    assert intent.due_at == "2026-06-16T09:00:00+00:00"
+    assert intent.subject == "den Termin"
+
+
 def test_parse_reminder_relative_days_and_weeks_keep_explicit_clock() -> None:
     now = datetime(2026, 6, 15, 12, 34, tzinfo=timezone.utc)
 

@@ -37,7 +37,7 @@ REMINDER_REQUEST_RE = re.compile(
     r"\b("
     r"(?<!ich )erinner(?:e|st|n)?\s+(?:mich|mi|uns)|"
     r"(?<!ich )erinnere?\s+(?:mich|mi|uns)|"
-    r"(?<!ich )denk(?:e)?(?:\s+bitte)?(?:\s+(?:fuer\s+)?(?:mich|uns))?(?:\s+.{0,80}?)?\s+(?:dran|daran)|"
+    r"(?<!ich )denk(?:e)?(?:\s+bitte)?(?:\s+(?:fuer\s+)?(?:mich|uns))?(?:\s+.{0,80}?)?\s+(?:an|dran|daran)|"
     r"sag(?:e)?\s+(?:mir|uns)\s+(?:bitte\s+)?bescheid|"
     r"remind\s+(?:me|us)|"
     r"(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+(?!irgendwann\b)"
@@ -51,7 +51,7 @@ STRUCTURED_REMINDER_CUE_RE = re.compile(
     r"(?:"
     r"\b(?:erinner\w*|remind\w*|remember\w*|reminder|dran|daran|bescheid|stups\w*|anstups\w*)\b|"
     r"\bdenk(?:e|en)?\s+(?:bitte\s+)?(?:an|dran|daran)\b|"
-    r"\bnicht\s+vergessen\b|\bdon['’]?t\s+forget\b|\bdo\s+not\s+forget\b|"
+    r"\b(?:nicht\s+vergessen|vergiss\w*\s+nicht)\b|\bdon['’]?t\s+forget\b|\bdo\s+not\s+forget\b|"
     r"\b(?:ping|notify|alert)\s+(?:mich|me|uns|us)\b|"
     r"\bauf\s+dem\s+schirm\b"
     r")",
