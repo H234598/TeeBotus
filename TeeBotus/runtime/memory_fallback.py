@@ -1024,6 +1024,17 @@ class WarningFallbackAccountMemoryBackend:
         existing_rows = list(backend.read_collection(account_id, collection))
         backend.write_collection(account_id, collection, existing_rows + [dict(row) for row in rows])
 
+    def _read_clean_collection_for_mirror(self, backend: Any, account_id: str, collection: str) -> list[dict[str, Any]]:
+        rows = list(backend.read_collection(account_id, collection))
+        self._copy_diagnostics(backend)
+        operation = f"read_collection:{collection}"
+        if self._read_diagnostic_failed(operation):
+            raise AccountStoreError(
+                f"{operation}: source collection read has diagnostics; fallback mirror blocked: "
+                f"{self._diagnostic_error_text(operation)}"
+            )
+        return rows
+
     def _replace_collection_item_on_backend(
         self,
         backend: Any,
@@ -1036,12 +1047,13 @@ class WarningFallbackAccountMemoryBackend:
         if backend is self.fallback and (
             stale_key in self._stale_fallback_collections or stale_key in self._fallback_sync_failed_collections
         ):
-            self.fallback.write_collection(account_id, collection, list(self.primary.read_collection(account_id, collection)))
+            primary_rows = self._read_clean_collection_for_mirror(self.primary, account_id, collection)
+            self.fallback.write_collection(account_id, collection, primary_rows)
             return True
         replace_collection_item = getattr(backend, "replace_collection_item", None)
         if callable(replace_collection_item):
             return bool(replace_collection_item(account_id, collection, item_key, row))
-        existing_rows = list(backend.read_collection(account_id, collection))
+        existing_rows = self._read_clean_collection_for_mirror(backend, account_id, collection)
         replaced = False
         for index, existing in enumerate(existing_rows):
             if not isinstance(existing, dict):
