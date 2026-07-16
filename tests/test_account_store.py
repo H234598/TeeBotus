@@ -3625,10 +3625,12 @@ def test_account_memory_fallback_empty_entry_id_read_clears_previous_diagnostics
     backend = WarningFallbackAccountMemoryBackend(object(), object(), label="Demo:sqlite")
     backend.last_entry_read_error = "stale error"
     backend.last_entry_skipped = 2
+    backend.last_database_missing = True
 
     assert backend.read_entries_by_ids("a" * 128, []) == []
     assert backend.last_entry_read_error == ""
     assert backend.last_entry_skipped == 0
+    assert backend.last_database_missing is False
 
 
 def test_account_memory_fallback_preserves_missing_database_diagnostic(tmp_path):

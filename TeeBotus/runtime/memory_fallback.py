@@ -73,6 +73,7 @@ class WarningFallbackAccountMemoryBackend:
         if not requested_ids:
             self.last_entry_read_error = ""
             self.last_entry_skipped = 0
+            self.last_database_missing = False
             return []
 
         def callback(backend: Any) -> list[dict[str, Any]]:
