@@ -1271,6 +1271,21 @@ Diagnose und Tests.
 - Code-Commit: `3df7a961 fix: preserve primary on partial id fallback`;
   kein Provider/API-Aufruf.
 
+### Leeres-JSON-Memoryartefakt-im-Healthcheck
+
+- 2026-07-16: Ein JSON-Account mit vorhandenem, aber leerem
+  `User_Memory_Index.json` (`{}`) wurde wie ein frischer Account ohne
+  Memoryartefakte als gesund bewertet. Dadurch konnten fehlendes `scope` und
+  fehlendes verschachteltes `index`-Schema unbemerkt bleiben.
+- Health-Check akzeptiert den leeren Sonderfall jetzt nur noch, wenn im
+  JSON-Backend weder Entries- noch Indexdatei existiert. SQL-Neuaccounts ohne
+  gespeicherte Memoryzeilen behalten bisherige gesunde Semantik.
+- Regression fuer frischen SQL-Account und leeres JSON-Artefakt; gesamte
+  `tests/test_account_store.py` `260 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `557df26f fix: detect empty memory index artifacts`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -1310,8 +1325,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `18/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 2 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `20/20` Commits; Restart jetzt faellig,
+kein Push ausgeloest.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
