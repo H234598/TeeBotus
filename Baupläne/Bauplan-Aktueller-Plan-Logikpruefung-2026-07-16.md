@@ -2119,3 +2119,22 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `3/20` Code-Commits. Dieser
 Plan-Commit macht `4/20`; kein Push. Naechster Restart nach 16 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Reminder-Subject-Datumsfalse-Positive
+
+- 2026-07-16: Absolute Datumsregexe wurden auch im Subject ausgewertet.
+  `morgen um 9 an 1.5 Liter Wasser` wurde dadurch als `01.05.` interpretiert;
+  `morgen um 9 an Version 2026-06-01` wurde wegen eines vergangenen ISO-Datums
+  komplett verworfen. Beide Nutzerwunsch-Termine waren falsch.
+- Numeric-, ISO- und Monatsnamen-Daten hinter einem Subject-Marker `an` gelten
+  jetzt nicht mehr als Zeitanker, ausser die Datumsangabe beginnt explizit mit
+  `am`. Die Subject-Bereinigung bewahrt solche Decimal-/ISO-/Monatstexte.
+  Explizite Formen wie `am 16.03.2027` und `am 1. um 10` bleiben aktiv.
+- Regression: Decimal- und ISO-Subject plus explizite Datum- und Monatsfälle;
+  Reminder-/Decision-Suite `61 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ab1c79bb fix: ignore subject dates in reminder parsing`.
+
+**Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Dieser
+Plan-Commit macht `6/20`; kein Push. Naechster Restart nach 14 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
