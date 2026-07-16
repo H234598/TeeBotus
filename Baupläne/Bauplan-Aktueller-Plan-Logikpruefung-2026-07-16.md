@@ -2947,21 +2947,6 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `5/20` Commits. Kein Push. Restart
 nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
-### Account-Reports-melden-Scanfehler
-
-- 2026-07-17: Verschwand `accounts/` waehrend `_account_dirs().iterdir()`,
-  konnte der Admin-Report abbrechen statt einen belastbaren Fehlerstatus zu
-  liefern.
-- `_build_store_report()` faengt den Scanfehler ab, markiert den Store als
-  `readable=false` und zaehlt ihn als `store_error`.
-- Regression: gezielter Scanfehler plus Symlinktest -> `2 passed`; komplette
-  `tests/test_admin_accounts.py` -> `87 passed`. Ruff, `compileall` und
-  `git diff --check` gruen. Kein Provider/API-Aufruf.
-- Code-Commit: `a73ee9b1 fix: report account directory scan errors`.
-
-**Aktueller Laufstand:** Seit dem Restart `7/20` Commits. Kein Push. Restart
-nach 13 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
-
 ### Quarantaene-Zielpfad-ohne-Symlinks
 
 - 2026-07-17: `_prepare_private_dir()` folgte bei `--quarantine-dir` bereits
@@ -3088,6 +3073,21 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Account-Reports-melden-Scanfehler
+
+- 2026-07-17: Verschwand `accounts/` waehrend `_account_dirs().iterdir()`,
+  konnte der Admin-Report abbrechen statt einen belastbaren Fehlerstatus zu
+  liefern.
+- `_build_store_report()` faengt den Scanfehler ab, markiert den Store als
+  `readable=false` und zaehlt ihn als `store_error`.
+- Regression: gezielter Scanfehler plus Symlinktest -> `2 passed`; komplette
+  `tests/test_admin_accounts.py` -> `87 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a73ee9b1 fix: report account directory scan errors`.
+
+**Aktueller Laufstand:** Seit dem Restart `9/20` Commits. Kein Push. Restart
+nach 11 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 ### Quarantaene-Manifest-exklusiv-schreiben
 
