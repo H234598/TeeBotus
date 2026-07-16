@@ -512,8 +512,9 @@ def run_proactive_reflection_planner(
     now: datetime | None = None,
     max_items: int = 1,
 ) -> ProactivePlanningResult:
-    with account_store.account_memory_lock(account_id):
-        return _run_proactive_reflection_planner(account_store, account_id, now=now, max_items=max_items)
+    with _account_proactive_outbox_lock(account_store, account_id):
+        with account_store.account_memory_lock(account_id):
+            return _run_proactive_reflection_planner(account_store, account_id, now=now, max_items=max_items)
 
 
 def _run_proactive_reflection_planner(
