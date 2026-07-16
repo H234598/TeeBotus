@@ -85,6 +85,7 @@ from TeeBotus.runtime.tts_dialect import (
     voice_instructions_for_account,
 )
 from TeeBotus.runtime.weather_context import update_city_and_weather_context, weather_context_text
+from TeeBotus.runtime.working_memory import _rebuild_working_memory_data
 
 LOGGER = logging.getLogger("TeeBotus")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -958,6 +959,8 @@ class WorkingMemoryStore:
             )
             payload = _new_working_memory_data(self.instance_name)
             repaired = True
+        if repaired:
+            payload = _rebuild_working_memory_data(entries_path, self.instance_name)
         _normalize_working_memory_data(payload, self.instance_name)
         entries_path.touch(exist_ok=True)
         if repaired:

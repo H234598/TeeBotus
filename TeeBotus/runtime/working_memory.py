@@ -214,6 +214,8 @@ class WorkingMemoryStore:
             )
             payload = _new_working_memory_data(self.instance_name)
             repaired = True
+        if repaired:
+            payload = _rebuild_working_memory_data(entries_path, self.instance_name)
         _normalize_working_memory_data(payload, self.instance_name)
         entries_path.touch(exist_ok=True)
         if repaired:
@@ -341,6 +343,59 @@ def _working_memory_prompt_payload(
         "selected_working_memory_ids": selected_ids,
         "memories": selected,
     }
+
+
+def _rebuild_working_memory_data(entries_path: Path, instance_name: str) -> dict[str, Any]:
+    data = _new_working_memory_data(instance_name)
+    index = data["index"]
+    entry_index = index["entries"]
+    keyword_index = index["keywords"]
+    recent_ids = index["recent_ids"]
+    skipped = 0
+    try:
+        with entries_path.open("rb") as file:
+            offset = 0
+            for line in file:
+                entry_offset = offset
+                offset += len(line)
+                if not line.strip():
+                    continue
+                try:
+                    entry = json.loads(line.decode("utf-8"))
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    skipped += 1
+                    continue
+                if not isinstance(entry, dict):
+                    skipped += 1
+                    continue
+                memory_id = str(entry.get("id", "")).strip()
+                if not memory_id:
+                    skipped += 1
+                    continue
+                text = _sanitize_working_memory_text(str(entry.get("text", "")))
+                keywords = _memory_keywords(text)
+                entry_index[memory_id] = {
+                    "offset": entry_offset,
+                    "length": len(line),
+                    "created_at": str(entry.get("created_at", "")),
+                    "updated_at": str(entry.get("updated_at", "")),
+                    "kind": str(entry.get("kind", "")),
+                    "keywords": keywords,
+                }
+                for keyword in keywords:
+                    bucket = keyword_index.setdefault(keyword, [])
+                    if memory_id not in bucket:
+                        bucket.append(memory_id)
+                        del bucket[:-MEMORY_KEYWORD_ENTRY_LIMIT]
+                if memory_id in recent_ids:
+                    recent_ids.remove(memory_id)
+                recent_ids.append(memory_id)
+                del recent_ids[:-MEMORY_RECENT_LIMIT]
+    except OSError as exc:
+        LOGGER.warning("Unable to rebuild instance working memory from %s: %s", entries_path, exc)
+    if skipped:
+        LOGGER.warning("Skipped %d invalid instance working memory JSONL entries in %s.", skipped, entries_path)
+    return data
 
 
 def _store_working_memory_entry(index_path: Path, data: dict[str, Any], entry: dict[str, Any]) -> int:
