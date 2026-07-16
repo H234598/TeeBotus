@@ -1943,3 +1943,30 @@ Naechster Restart nach 18 weiteren Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Kein Push.
 Naechster Restart nach 16 weiteren Commits.
+
+### Memory-Konsolidierung-inkrementell-und-retry-sicher
+
+- 2026-07-16: Der Audit reproduzierte zwei zusammenhaengende Fehler in
+  `consolidate_structured_memory()` und `run_memory_maintenance()`. Eine
+  vierte Episode mit gleichem Keyword erzeugte eine zweite Summary statt die
+  vorhandene Provenienz zu erweitern. Ein Rebuild-Fehler nach erfolgreicher
+  Konsolidierung liess die Summary ebenfalls liegen; der Retry erzeugte dann
+  ein Duplikat.
+- Konsolidierungs-Fingerprints basieren jetzt auf kanonisch sortierten Source-
+  IDs. Bestehende Summarys werden ueber `consolidation_key` oder ihr bisheriges
+  Summary-Format erkannt und bei neuen Episoden in place aktualisiert. Der
+  Index wird danach rebuildet; bei Schreib-/Rebuildfehlern wird der komplette
+  alte Entries-/Indexstand wiederhergestellt.
+- `run_memory_maintenance()` rebuildet zuerst und konsolidiert erst danach.
+  Damit bleibt ein fehlgeschlagener Rebuild ohne neue Summarywirkung und ein
+  Retry ist idempotent.
+- Regressionen: inkrementelles Summary-Update und Rebuild-Fehler mit Retry;
+  `tests/test_account_store.py` fokussiert `5 passed`, komplette Suite
+  `279 passed in 7.04s`; Ruff, `py_compile` und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commits: `7919d4d3 fix: update repeated memory consolidations`,
+  `a5e7b944 fix: make memory maintenance retry safe`.
+
+**Aktueller Laufstand:** Seit dem Restart `7/20` Code-Commits. Dieser
+Plan-Commit macht `8/20`; kein Push. Naechster Restart nach 12 weiteren
+Commits.
