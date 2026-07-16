@@ -1896,3 +1896,19 @@ ausgeloest. Naechster Restart nach 12 weiteren Commits.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `19/20` Commits. Kein Push.
 Naechster Restart nach einem weiteren Commit.
+
+### LLM-Proactive-Planer-keine-veralteten-Termine
+
+- 2026-07-16: Der LLM-Proactive-Queue-Pfad uebernahm `due_at` ungeprueft.
+  Vergangene oder nicht parsebare Zeitpunkte konnten so als queued Outbox
+  landen und beim naechsten Dispatcher-Lauf sofort versendet werden.
+- Vor dem Outbox-Write werden explizite LLM-Zeitpunkte jetzt validiert:
+  parsebar und strikt in der Zukunft. Fehler werden als
+  `invalid_due_at` oder `due_at_not_future` abgelehnt.
+- Regression mit `2023-03-16T17:47:00+00:00` und kaputtem Text-Zeitpunkt;
+  `tests/test_proactive_agent.py` -> `120 passed`; `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e7bcea07 fix: reject stale proactive planner reminders`.
+
+**Aktueller Laufstand:** Seit dem Restart `0/20` Commits. Kein Push.
+Naechster Restart nach 20 weiteren Commits.
