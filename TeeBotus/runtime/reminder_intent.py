@@ -64,6 +64,12 @@ RELATIVE_RE = re.compile(
     r"\bin\s+(?P<count>\d{1,3})\s*(?P<unit>min(?:ute)?n?|minuten?|std|stunden?|h|tage?n?|wochen?)\b",
     re.IGNORECASE,
 )
+RELATIVE_TEXT_RE = re.compile(
+    r"\bin\s+(?P<phrase>(?:ein|eine|einer|einem|einen|zwei|drei|vier|fuenf|sechs|sieben|acht|neun|zehn)"
+    r"(?:\s+(?:halbe|halben|viertel))?\s+(?:minute[n]?|stunde[n]?|tag(?:e|en)?|woche[n]?)"
+    r"|(?:ein|eine|einer)\s+viertelstunde)\b",
+    re.IGNORECASE,
+)
 DATE_RE = re.compile(
     r"\b(?:am\s+)?(?P<day>[0-3]?\d)[.](?P<month>[01]?\d)(?:[.](?P<year>\d{2,4}))?"
     rf"(?:\s+(?:um|gegen)?\s*(?P<hour>{_CLOCK_HOUR})(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?)?",
@@ -281,6 +287,14 @@ def _parse_due_at(text: str, now: datetime) -> str:
             return _iso(_apply_explicit_time(normalized_now + timedelta(days=count), text))
         if unit.startswith("woche"):
             return _iso(_apply_explicit_time(normalized_now + timedelta(weeks=count), text))
+    relative_text = RELATIVE_TEXT_RE.search(_normalize(text))
+    if relative_text:
+        delta = _relative_text_delta(relative_text.group("phrase"))
+        if delta is not None:
+            candidate = normalized_now + delta
+            if _relative_text_uses_calendar_unit(relative_text.group("phrase")):
+                candidate = _apply_explicit_time(candidate, text)
+            return _iso(candidate)
     iso = ISO_RE.search(text)
     if iso:
         return _build_datetime(
@@ -349,6 +363,70 @@ def _parse_due_at(text: str, now: datetime) -> str:
             due += timedelta(days=1)
         return _iso(due)
     return ""
+
+
+_RELATIVE_TEXT_COUNTS = {
+    "ein": 1.0,
+    "eine": 1.0,
+    "einer": 1.0,
+    "einem": 1.0,
+    "einen": 1.0,
+    "zwei": 2.0,
+    "drei": 3.0,
+    "vier": 4.0,
+    "fuenf": 5.0,
+    "sechs": 6.0,
+    "sieben": 7.0,
+    "acht": 8.0,
+    "neun": 9.0,
+    "zehn": 10.0,
+}
+_RELATIVE_TEXT_UNITS = {
+    "minute": "minutes",
+    "minuten": "minutes",
+    "stunde": "hours",
+    "stunden": "hours",
+    "tag": "days",
+    "tage": "days",
+    "tagen": "days",
+    "woche": "weeks",
+    "wochen": "weeks",
+}
+
+
+def _relative_text_delta(phrase: str) -> timedelta | None:
+    normalized = " ".join(str(phrase or "").casefold().split())
+    if normalized in {"einer viertelstunde", "eine viertelstunde", "ein viertelstunde"}:
+        return timedelta(minutes=15)
+    tokens = normalized.split()
+    if len(tokens) not in {2, 3}:
+        return None
+    count = _RELATIVE_TEXT_COUNTS.get(tokens[0])
+    if count is None:
+        return None
+    modifier = tokens[1] if len(tokens) == 3 else ""
+    unit = _RELATIVE_TEXT_UNITS.get(tokens[-1])
+    if unit is None:
+        return None
+    factor = {"halbe": 0.5, "halben": 0.5, "viertel": 0.25}.get(modifier, 1.0)
+    amount = count * factor
+    if unit == "minutes":
+        return timedelta(minutes=amount)
+    if unit == "hours":
+        return timedelta(hours=amount)
+    if unit == "days":
+        return timedelta(days=amount)
+    return timedelta(weeks=amount)
+
+
+def _relative_text_uses_calendar_unit(phrase: str) -> bool:
+    return str(phrase or "").casefold().split()[-1] in {
+        "tag",
+        "tage",
+        "tagen",
+        "woche",
+        "wochen",
+    }
 
 
 def _move_due_to_weekday(due_at: str, now: datetime) -> str:
@@ -534,6 +612,7 @@ def _reminder_subject(text: str) -> str:
     cleaned = re.sub(r"(?i)\b(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+", "", cleaned)
     cleaned = RECURRENCE_MARKER_RE.sub(" ", cleaned)
     cleaned = re.sub(r"(?i)\b(bit+e|bitte|please)\b", "", cleaned)
+    cleaned = RELATIVE_TEXT_RE.sub("", cleaned)
     cleaned = RELATIVE_RE.sub("", cleaned)
     cleaned = TIME_RE.sub("", cleaned)
     cleaned = ISO_RE.sub("", cleaned)

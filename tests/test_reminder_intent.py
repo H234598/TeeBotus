@@ -69,6 +69,18 @@ def test_parse_reminder_relative_days_and_weeks_keep_explicit_clock() -> None:
     assert in_weeks.due_at == "2026-06-29T08:15:00+00:00"
 
 
+def test_parse_reminder_accepts_written_relative_times() -> None:
+    now = datetime(2026, 6, 15, 12, 34, tzinfo=timezone.utc)
+
+    in_hour = parse_reminder_intent("Erinnere mich in einer Stunde an den Termin", now=now)
+    half_hour = parse_reminder_intent("Erinnere mich in einer halben Stunde an den Termin", now=now)
+    in_days = parse_reminder_intent("Erinnere mich in zwei Tagen um 9 an den Termin", now=now)
+
+    assert (in_hour.due_at, in_hour.subject) == ("2026-06-15T13:34:00+00:00", "den Termin")
+    assert (half_hour.due_at, half_hour.subject) == ("2026-06-15T13:04:00+00:00", "den Termin")
+    assert in_days.due_at == "2026-06-17T09:00:00+00:00"
+
+
 def test_parse_reminder_extracts_supported_recurrence_rules() -> None:
     now = datetime(2026, 6, 15, 8, 0, tzinfo=timezone.utc)
 
