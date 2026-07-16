@@ -455,6 +455,18 @@ class BotTests(unittest.TestCase):
             with self.assertRaises(TelegramNetworkError):
                 api.request("getUpdates", {})
 
+    def test_telegram_remote_disconnect_is_network_error(self) -> None:
+        import http.client
+
+        api = TelegramAPI("123:test-token")
+
+        with patch(
+            "TeeBotus.bot.urllib.request.urlopen",
+            side_effect=http.client.RemoteDisconnected("Remote end closed connection without response"),
+        ):
+            with self.assertRaises(TelegramNetworkError):
+                api.request("getUpdates", {})
+
     def test_telegram_http_rate_limit_exposes_retry_after(self) -> None:
         import urllib.error
 

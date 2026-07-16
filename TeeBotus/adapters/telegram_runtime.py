@@ -273,6 +273,8 @@ class TelegramAPI:
             ) from exc
         except urllib.error.URLError as exc:
             raise TelegramNetworkError(f"Telegram network error: {exc.reason}") from exc
+        except OSError as exc:
+            raise TelegramNetworkError(f"Telegram network error: {exc}") from exc
 
         if not payload.get("ok"):
             status_code, retry_after = _telegram_error_metadata(payload)
@@ -313,6 +315,8 @@ class TelegramAPI:
             ) from exc
         except urllib.error.URLError as exc:
             raise TelegramNetworkError(f"Telegram network error: {exc.reason}") from exc
+        except OSError as exc:
+            raise TelegramNetworkError(f"Telegram network error: {exc}") from exc
 
         if not payload.get("ok"):
             status_code, retry_after = _telegram_error_metadata(payload)
@@ -575,6 +579,8 @@ class TelegramAPI:
             ) from exc
         except urllib.error.URLError as exc:
             raise TelegramNetworkError(f"Telegram file network error: {exc.reason}") from exc
+        except OSError as exc:
+            raise TelegramNetworkError(f"Telegram file network error: {exc}") from exc
 
     def send_chat_action(self, chat_id: int, action: str) -> None:
         self.request("sendChatAction", {"chat_id": chat_id, "action": action})
