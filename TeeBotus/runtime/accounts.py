@@ -4208,7 +4208,12 @@ class AccountStore:
         active = [
             str(identity_key)
             for identity_key, payload in identities.items()
-            if isinstance(payload, dict) and payload.get("account_id") == account_id
+            if isinstance(payload, dict)
+            and payload.get("account_id") == account_id
+            and (
+                not str(payload.get("instance") or "").strip()
+                or str(payload.get("instance") or "").strip() == self.instance_name
+            )
         ]
         return sorted(dict.fromkeys(active))
 

@@ -940,6 +940,7 @@ def test_identity_lookup_rejects_explicit_foreign_instance_mapping(tmp_path) -> 
     store._save_identities(identities)
 
     assert store.get_account_for_identity(identity) is None
+    assert store.list_identities_for_account(account_id) == []
     assert store._read_account_profile(account_id)["status"] == "active"
 
 
