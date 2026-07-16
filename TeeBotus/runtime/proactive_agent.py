@@ -379,6 +379,8 @@ def queue_proactive_message(
     planner: Mapping[str, Any] | None = None,
     file: Mapping[str, Any] | None = None,
     recurrence: str = "",
+    recurrence_anchor_day: int | None = None,
+    recurrence_anchor_end_of_month: bool | None = None,
     user_requested: bool = False,
 ) -> ProactiveDecision:
     resolved_now = _resolve_proactive_now(now)
@@ -421,8 +423,16 @@ def queue_proactive_message(
         if recurrence_timezone:
             payload["recurrence_timezone"] = recurrence_timezone
         if _recurrence_uses_months(normalized_recurrence):
-            payload["recurrence_anchor_day"] = anchor.day
-            payload["recurrence_anchor_end_of_month"] = anchor.day == calendar.monthrange(anchor.year, anchor.month)[1]
+            requested_anchor_day = _normalize_int(recurrence_anchor_day, default=0)
+            if 1 <= requested_anchor_day <= 31:
+                payload["recurrence_anchor_day"] = requested_anchor_day
+                payload["recurrence_anchor_end_of_month"] = _normalize_bool(
+                    recurrence_anchor_end_of_month,
+                    default=requested_anchor_day == 31,
+                )
+            else:
+                payload["recurrence_anchor_day"] = anchor.day
+                payload["recurrence_anchor_end_of_month"] = anchor.day == calendar.monthrange(anchor.year, anchor.month)[1]
     if file is not None:
         generated_file = normalize_generated_file(file)
         if generated_file is None:

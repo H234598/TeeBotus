@@ -3237,6 +3237,15 @@ def test_month_recurrence_preserves_original_calendar_day_after_short_month() ->
         anchor_day=30,
         anchor_end_of_month=False,
     ) == datetime(2026, 3, 30, 9, tzinfo=timezone.utc)
+    assert _next_recurrence_due_at(
+        {
+            "due_at": "2026-02-28T09:00:00+00:00",
+            "recurrence": "monthly",
+            "recurrence_anchor_day": 28,
+            "recurrence_anchor_end_of_month": False,
+        },
+        "2026-02-28T09:00:00+00:00",
+    ) == "2026-03-28T09:00:00+00:00"
     assert _advance_recurrence_due_at(jan_30, "monthly") == feb_28
 
 

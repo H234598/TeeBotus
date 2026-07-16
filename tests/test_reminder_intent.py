@@ -26,10 +26,14 @@ def test_parse_reminder_with_tomorrow_time() -> None:
 
 def test_parse_reminder_accepts_reverse_question_wording() -> None:
     intent = parse_reminder_intent("Kannst du mich morgen an den Zahnarzt erinnern?", now=fixed_now())
+    direct_subject = parse_reminder_intent("Kannst du mich bitte an Punkt 3.4 erinnern?", now=fixed_now())
+    daran_subject = parse_reminder_intent("Kannst du mich bitte daran erinnern, Wasser zu trinken?", now=fixed_now())
 
     assert intent.is_request is True
     assert intent.due_at == "2026-06-16T09:00:00+00:00"
     assert intent.subject == "den Zahnarzt"
+    assert direct_subject.subject == "Punkt 3.4"
+    assert daran_subject.subject == "Wasser zu trinken"
 
 
 def test_parse_reminder_accepts_reverse_question_without_subject() -> None:
@@ -38,6 +42,16 @@ def test_parse_reminder_accepts_reverse_question_without_subject() -> None:
     assert intent.is_request is True
     assert intent.due_at == "2026-06-16T09:00:00+00:00"
     assert intent.subject == "deinen Termin"
+
+
+def test_parse_reminder_keeps_iso_date_inside_reverse_question_subject() -> None:
+    intent = parse_reminder_intent(
+        "Kannst du mich bitte in 2 Stunden an Version 2026-06-01 erinnern?",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-06-15T14:00:00+00:00"
+    assert intent.subject == "Version 2026-06-01"
 
 
 def test_parse_reminder_with_relative_time_and_loose_wording() -> None:
@@ -338,6 +352,27 @@ def test_classic_recurring_reminder_persists_recurrence(tmp_path, monkeypatch) -
     assert reply == "Okay, ich erinnere dich am 15.06.2026 um 09:00: die Therapie"
     queued = account_store.read_proactive_outbox(account_id)
     assert queued[0]["recurrence"] == "weekly"
+
+
+def test_classic_monthly_day_28_is_not_inferred_as_month_end(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+
+    maybe_queue_natural_reminder(
+        account_store=account_store,
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        text="Erinnere mich monatlich am 28. um 10 an die Abrechnung",
+        now=datetime(2026, 1, 29, 12, 0, tzinfo=timezone.utc),
+    )
+
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["due_at"] == "2026-02-28T10:00:00+00:00"
+    assert item["recurrence_anchor_day"] == 28
+    assert item["recurrence_anchor_end_of_month"] is False
 
 
 def test_structured_reminder_fallback_interprets_naive_datetime_as_configured_local_time(tmp_path, monkeypatch) -> None:

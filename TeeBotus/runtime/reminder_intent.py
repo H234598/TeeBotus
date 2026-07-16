@@ -27,6 +27,8 @@ class ReminderIntent:
     due_at: str = ""
     subject: str = ""
     recurrence: str = ""
+    recurrence_anchor_day: int | None = None
+    recurrence_anchor_end_of_month: bool | None = None
     missing_time: bool = False
     source: str = "classic"
 
@@ -189,6 +191,8 @@ def maybe_queue_natural_reminder(
         now=now,
         risk_gate="none",
         recurrence=intent.recurrence,
+        recurrence_anchor_day=intent.recurrence_anchor_day,
+        recurrence_anchor_end_of_month=intent.recurrence_anchor_end_of_month,
         user_requested=True,
         planner={
             "source": "structured_reminder_decision" if intent.source == "model" else "natural_reminder_request",
@@ -219,7 +223,16 @@ def parse_reminder_intent(text: str, *, now: datetime | None = None) -> Reminder
     if not due_at and recurrence.startswith("every ") and not _has_invalid_explicit_time(raw):
         due_at = _initial_interval_due(normalized_now, recurrence)
     subject = _reminder_subject(raw)
-    return ReminderIntent(True, due_at=due_at, subject=subject, recurrence=recurrence, missing_time=not bool(due_at))
+    anchor_day, anchor_end_of_month = _recurrence_anchor_from_text(raw, recurrence)
+    return ReminderIntent(
+        True,
+        due_at=due_at,
+        subject=subject,
+        recurrence=recurrence,
+        recurrence_anchor_day=anchor_day,
+        recurrence_anchor_end_of_month=anchor_end_of_month,
+        missing_time=not bool(due_at),
+    )
 
 
 def _structured_reminder_intent(
@@ -241,18 +254,46 @@ def _structured_reminder_intent(
     if not decision.should_create or decision.confidence < 0.7:
         return ReminderIntent(False)
     subject = decision.text.strip() or "deinen Termin"
+    recurrence = str(decision.recurrence or "").strip()
+    anchor_day, anchor_end_of_month = _recurrence_anchor_from_text(raw, recurrence)
     if not decision.datetime_iso:
-        return ReminderIntent(True, subject=subject, recurrence=str(decision.recurrence or "").strip(), missing_time=True, source="model")
+        return ReminderIntent(
+            True,
+            subject=subject,
+            recurrence=recurrence,
+            recurrence_anchor_day=anchor_day,
+            recurrence_anchor_end_of_month=anchor_end_of_month,
+            missing_time=True,
+            source="model",
+        )
     parsed_due_at = _parse_structured_due_at(decision.datetime_iso)
     if parsed_due_at is None:
-        return ReminderIntent(True, subject=subject, recurrence=str(decision.recurrence or "").strip(), missing_time=True, source="model")
+        return ReminderIntent(
+            True,
+            subject=subject,
+            recurrence=recurrence,
+            recurrence_anchor_day=anchor_day,
+            recurrence_anchor_end_of_month=anchor_end_of_month,
+            missing_time=True,
+            source="model",
+        )
     if parsed_due_at <= resolved_now:
-        return ReminderIntent(True, subject=subject, recurrence=str(decision.recurrence or "").strip(), missing_time=True, source="model")
+        return ReminderIntent(
+            True,
+            subject=subject,
+            recurrence=recurrence,
+            recurrence_anchor_day=anchor_day,
+            recurrence_anchor_end_of_month=anchor_end_of_month,
+            missing_time=True,
+            source="model",
+        )
     return ReminderIntent(
         True,
         due_at=parsed_due_at.isoformat(timespec="seconds"),
         subject=subject[:240],
-        recurrence=str(decision.recurrence or "").strip(),
+        recurrence=recurrence,
+        recurrence_anchor_day=anchor_day,
+        recurrence_anchor_end_of_month=anchor_end_of_month,
         missing_time=False,
         source="model",
     )
@@ -588,6 +629,24 @@ def _parse_recurrence(text: str) -> str:
     return f"every {count} {normalized_unit}"
 
 
+def _recurrence_anchor_from_text(text: str, recurrence: str) -> tuple[int | None, bool | None]:
+    normalized_recurrence = str(recurrence or "").strip().casefold()
+    if normalized_recurrence != "monthly" and not re.fullmatch(r"every\s+\d{1,3}\s+months", normalized_recurrence):
+        return None, None
+    normalized = _normalize(text)
+    for pattern in (MONTH_DAY_RE, MONTH_NAME_DATE_RE, DATE_RE, ISO_RE):
+        match = pattern.search(normalized)
+        if match is None or _date_match_is_after_subject_marker(normalized, match):
+            continue
+        try:
+            day = int(match.group("day"))
+        except (TypeError, ValueError):
+            continue
+        if 1 <= day <= 31:
+            return day, day == 31
+    return None, None
+
+
 def _initial_interval_due(now: datetime, recurrence: str) -> str:
     match = re.fullmatch(r"every\s+(?P<count>\d{1,3})\s+(?P<unit>minutes|hours|days|weeks|months)", recurrence)
     if not match:
@@ -667,7 +726,7 @@ def _reminder_subject(text: str) -> str:
     cleaned = re.sub(
         r"(?i)\b(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+(?:bitte\s+)?"
         r"(?!irgendwann\b)(?:(?!\b(?:an|daran)\b).){0,80}\b(?:an|daran)\b\s+",
-        "",
+        lambda match: "daran " if re.search(r"(?i)\bdaran\b", match.group(0)) else "an ",
         cleaned,
     )
     cleaned = re.sub(r"(?i)\b(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+", "", cleaned)
@@ -696,7 +755,7 @@ def _reminder_subject(text: str) -> str:
         cleaned,
     )
     cleaned = re.sub(r"(?i)\b(?:erinnern|erinnerst|erinnere?)\b", " ", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .,:;!?-")
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" \t\r\n.,:;!?-")
     return cleaned[:240] or "deinen Termin"
 
 
