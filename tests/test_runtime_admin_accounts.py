@@ -133,6 +133,7 @@ def test_admin_account_status_summarizes_not_local_accounts_without_ids(tmp_path
         "accounts=1 local=0 cross_instance=0 not_local=1 routable=0 warnings=0 invalid=0",
     )
     assert DEFAULT_ADMIN_ACCOUNT_IDS[0] not in "\n".join(lines)
+    assert not account_store.account_dir(DEFAULT_ADMIN_ACCOUNT_IDS[0]).exists()
 
 
 def test_admin_account_status_reports_cross_instance_routable_admin(tmp_path) -> None:

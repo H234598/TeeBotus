@@ -470,10 +470,15 @@ def _status_notification_candidate_account_ids(
         normalized = str(account_id or "").strip().casefold()
         if not normalized or normalized in seen:
             continue
-        try:
-            opted_out = status_auth_state_admin_opted_out(store, normalized)
-        except Exception:  # noqa: BLE001 - configured admins should still be diagnosable when opt-out lookup fails.
-            opted_out = False
+        # Account-memory reads acquire a per-account lock and therefore create
+        # the account directory. Do not turn a remote configured admin into a
+        # local account merely to check local opt-out state.
+        opted_out = False
+        if _account_dir_exists(store, normalized):
+            try:
+                opted_out = status_auth_state_admin_opted_out(store, normalized)
+            except Exception:  # noqa: BLE001 - configured admins should still be diagnosable when opt-out lookup fails.
+                opted_out = False
         if opted_out:
             continue
         seen.add(normalized)
