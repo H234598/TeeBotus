@@ -1738,6 +1738,23 @@ ausgeloest. Naechster Restart nach 19 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `3/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 17 weiteren Commits.
 
+### SQLite-Backup-gegen-verschwindende-WAL-Sidecars-haerten
+
+- 2026-07-16: Backup-Sync sammelte SQLite-Hauptdatei, `-wal` und `-shm`
+  zuerst als Dateifamilie und kopierte danach. SQLite kann Sidecars zwischen
+  diesen beiden Schritten checkpointen oder loeschen; ein verschwundenes
+  Sidecar brach den gesamten Backup-Sync mit `FileNotFoundError` ab.
+- Sidecar-Kopien sind jetzt best-effort. Verschwindendes `-wal`/`-shm` wird
+  uebersprungen; verschwindende Hauptdatei bleibt fatal. Backup-Zaehler
+  entspricht tatsaechlich kopierten Dateien.
+- Regression simuliert verschwundenes Sidecar; `tests/test_sqlite_backup_sync.py`:
+  `12 passed`; Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `dd9cb882 fix: tolerate disappearing sqlite sidecars`.
+
+**Laufstand nach Fix:** Seit dem Restart `4/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 16 weiteren Commits.
+
 ## Bezug
 
 - Vorheriger Plan:
