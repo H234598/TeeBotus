@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart ist aktuell `8/20` Commits vorhanden; naechster Restart
-  nach 12 weiteren Commits.
+  letzten Restart sind aktuell `10/20` Commits vorhanden; naechster Restart
+  nach 10 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -400,6 +400,24 @@ Diagnose und Tests.
   dedupliziert. Produktions-Deduplizierung unveraendert.
 - Code-Commit: `c4d0fa3c fix: serialize account collection access`; kein
   Provider/API-Aufruf.
+
+### Instance-State-Locks-und-Fallback-Reparatur
+
+- 2026-07-16: `Version_Notifications` wurde ueber dieselbe SQL/JSON-
+  Account-Memory-Infrastruktur gelesen und geschrieben wie Accountdaten,
+  aber ohne den gemeinsamen Instance-State-Lock. Parallele Versions-
+  Benachrichtigungen konnten dadurch Read-Modify-Write-Staende ueberholen.
+- `read_instance_json_state()` und `write_instance_json_state()` verwenden
+  jetzt den reentranten Lock des reservierten Instance-State-Accounts.
+- Ein zusaetzlicher Recovery-Bug wurde behoben: Verifizierte Fallback-Daten
+  durften eine korrupt gewordene Zielpartition nicht reparieren, weil der
+  Destructive-Write-Guard genau diese kaputte Partition mitpruefte. Nur die
+  explizit reparierte Entries-, Index- oder Collection-Partition wird beim
+  Fallback-Recovery uebersprungen; alle anderen Payloads bleiben geschuetzt.
+- Regressionen: Version-Notifications `215 passed`, AccountStore `239
+  passed`, Proactive-/Notification-/Codex-Suiten `460 passed`; Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `93511ccf fix: serialize and repair instance state`.
 
 ### LLM-State-SQL/JSON-Audit
 
@@ -819,8 +837,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `8/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 12 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `10/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 10 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
