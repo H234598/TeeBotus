@@ -2710,3 +2710,22 @@ Restart nach 16 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `5/20` Commits. Kein Push. Naechster
 Restart nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Metadata-Quarantaene-nur-betroffene-Accounts
+
+- 2026-07-17: `_quarantine_instance_unreadable_metadata()` verschob bei einem
+  unlesbaren Account-Profil den kompletten `accounts/`-Elternordner. Dadurch
+  konnten lesbare aktive Accounts zusammen mit dem defekten Profil aus dem
+  aktiven Store verschwinden.
+- Die Quarantaene verschiebt jetzt bei `kind=accounts_dir` nur die konkret
+  gemeldeten betroffenen Account-Verzeichnisse nach `metadata/<timestamp>/accounts/`.
+  `Account_Index.json`, `Account_Identities.json`, `Account_Secrets.json` und
+  nicht betroffene Account-Verzeichnisse bleiben am aktiven Ort.
+- Regression: Metadata-Quarantaene -> `3 passed`; komplette
+  `tests/test_admin_accounts.py` -> `64 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e10b8b11 fix: quarantine unreadable account dirs individually`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
