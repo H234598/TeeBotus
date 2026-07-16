@@ -2245,3 +2245,22 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `15/20` Code-Commits. Dieser
 Plan-Commit macht `16/20`; kein Push. Naechster Restart nach 4 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Reminder-Monatsintervall-Startanker
+
+- 2026-07-16: `alle 1 Monate` ohne expliziten Tag startete am 28., 29., 30.
+  oder 31. Januar jeweils am 28. Februar. Die Outbox leitete aus diesem
+  gekappten Folgetermin faelschlich Monatsende-Semantik ab; ein 28.-Start
+  lief danach als 31. Maerz weiter.
+- Bei Monatsregeln ohne Datumstext wird der Starttag jetzt aus `now`
+  uebernommen. Bei explizitem Datum bleibt dessen Tag und `31.`-Monatsende-
+  Absicht autoritativ. Parser reicht beides in die Outbox.
+- Regression fuer 28.-Januar-Intervall plus bestehende direkte Folgeplanung;
+  Reminder + Proactive -> `163 passed`; Decision-/Engine-Fokus -> `14
+  passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `2a29c075 fix: preserve interval month start day`.
+
+**Aktueller Laufstand:** Seit dem Restart `17/20` Code-Commits. Dieser
+Plan-Commit macht `18/20`; kein Push. Naechster Restart nach 2 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
