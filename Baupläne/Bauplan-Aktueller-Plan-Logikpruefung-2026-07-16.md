@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart ist aktuell `19/20` Commits vorhanden; naechster Restart
-  nach 1 weiterem Commit.
+  letzten Restart ist aktuell `1/20` Commit vorhanden; naechster Restart
+  nach 19 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -337,6 +337,22 @@ Diagnose und Tests.
   Merge-Suite `5 passed`, vollstaendig `237 passed`; Ruff, `py_compile` und
   `git diff --check` gruen.
 - Code-Commit: `dba4db7d fix: serialize account merges`; kein
+  Provider/API-Aufruf.
+
+### Profile-Identity-List-Validation
+
+- 2026-07-16: `linked_identities` wurde in Profil-Mutationspfaden als
+  beliebiger iterierbarer Wert behandelt. Ein korruptes Stringfeld konnte
+  dadurch als Zeichenliste oder falscher Index-Count weitergeschrieben
+  werden.
+- `_profile_linked_identities()` akzeptiert jetzt nur eine Stringliste und
+  wird vor Index-, Link-, Unlink- und Merge-Profilmutationen verwendet.
+  Korruption wird sichtbar abgelehnt; kein stilles Normalisieren oder
+  Datenverlust.
+- Regression prueft korruptes Stringfeld auf unveraenderten Profil- und
+  Index-Stand; fokussiert `10 passed`, vollstaendig `238 passed`; Ruff,
+  `py_compile` und `git diff --check` gruen.
+- Code-Commit: `91accd50 fix: validate account identity lists`; kein
   Provider/API-Aufruf.
 
 ### LLM-State-SQL/JSON-Audit
@@ -757,8 +773,15 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `19/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 1 weiterem Commit.
+**Laufstand:** Seit dem letzten Restart `1/20` Commit; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 19 weiteren Commits.
+
+- Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
+  PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
+  `/v1/about` meldet Signal REST `0.100` im JSON-RPC-Modus;
+  `--runtime-status` meldet Signal erreichbar, Qdrant `ready` und alle
+  Account-Crypto-/Memory-Pruefungen `ok`. HF-Pool bleibt deaktiviert und
+  wird laut Status lokal ueber Ollama ersetzt; kein Provider-Testaufruf.
 
 ## Bezug
 
