@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart ist aktuell `6/20` Commits vorhanden; naechster Restart
-  nach 14 weiteren Commits.
+  letzten Restart ist aktuell `8/20` Commits vorhanden; naechster Restart
+  nach 12 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -382,6 +382,24 @@ Diagnose und Tests.
   `6 passed`, vollstaendig `239 passed`; Ruff, `py_compile` und
   `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `96123b26 fix: merge json account collections`.
+
+### Account-Collection-Locks-und-Event-Deduplizierung
+
+- 2026-07-16: JSON-Merge hielt den Account-Memory-Lock, waehrend direkte
+  Outbox-/Status-/Codex-Store-Zugriffe ihn umgehen konnten. Parallel laufende
+  Dispatch- oder Review-Read-Modify-Write-Pfade konnten Merge-Daten
+  ueberschreiben.
+- Lesen/Schreiben aller Account-Kollektionen nimmt jetzt den gemeinsamen
+  Account-Memory-Lock. Bestehende dedizierte Outbox-Locks bleiben erhalten;
+  verschachtelte Nutzung ist reentrant.
+- Breiter providerfreier Lauf: Proactive-/Notification-/Codex-Suiten
+  `460 passed`; AccountStore `239 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Dabei wurde ein fehlerhafter Testdatensatz korrigiert: sechs historische
+  Aktivitaetsereignisse hatten dieselbe `event_id` und wurden deshalb korrekt
+  dedupliziert. Produktions-Deduplizierung unveraendert.
+- Code-Commit: `c4d0fa3c fix: serialize account collection access`; kein
+  Provider/API-Aufruf.
 
 ### LLM-State-SQL/JSON-Audit
 
@@ -801,8 +819,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `6/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 14 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `8/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 12 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
