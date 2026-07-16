@@ -505,6 +505,17 @@ def run_proactive_reflection_planner(
     now: datetime | None = None,
     max_items: int = 1,
 ) -> ProactivePlanningResult:
+    with account_store.account_memory_lock(account_id):
+        return _run_proactive_reflection_planner(account_store, account_id, now=now, max_items=max_items)
+
+
+def _run_proactive_reflection_planner(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    now: datetime | None = None,
+    max_items: int = 1,
+) -> ProactivePlanningResult:
     resolved_now = _resolve_proactive_now(now)
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
     if max_items <= 0:

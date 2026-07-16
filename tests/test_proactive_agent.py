@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timedelta, timezone
+import threading
+import time
 from typing import Any
 
 import pytest
@@ -44,6 +46,7 @@ from TeeBotus.runtime.proactive_agent import (
     _proactive_daily_count,
     _proactive_last_sent_within,
     _queued_proactive_outbox_item_exists,
+    _existing_proactive_plan_fingerprints,
     _normalize_proactive_route,
     _advance_recurrence_due_at,
     _update_proactive_outbox_item_due_at,
@@ -1784,6 +1787,69 @@ def test_reflection_planner_is_idempotent_per_source_memory(tmp_path) -> None:
     assert len(first.queued_item_ids) == 1
     assert second.queued_item_ids == ()
     assert second.skipped_reason == "no_candidate"
+    assert len(account_store.read_proactive_outbox(account_id)) == 1
+    assert len([entry for entry in account_store.read_memory_entries(account_id) if entry.get("proactive_plan_fingerprint")]) == 9
+
+
+def test_reflection_planner_serializes_concurrent_fingerprint_checks(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_goal",
+            "kind": "treatment_goal",
+            "user_text": "Schlafrhythmus stabilisieren.",
+            "created_at": "2026-06-15T08:00:00+00:00",
+            "updated_at": "2026-06-15T08:00:00+00:00",
+        },
+    )
+    original = _existing_proactive_plan_fingerprints
+    state = {"active": 0, "maximum": 0}
+    state_lock = threading.Lock()
+
+    def observe_fingerprint_check(current_store, current_account_id):
+        with state_lock:
+            state["active"] += 1
+            state["maximum"] = max(state["maximum"], state["active"])
+        try:
+            time.sleep(0.03)
+            return original(current_store, current_account_id)
+        finally:
+            with state_lock:
+                state["active"] -= 1
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.proactive_agent._existing_proactive_plan_fingerprints",
+        observe_fingerprint_check,
+    )
+    results = []
+    errors = []
+
+    def run() -> None:
+        try:
+            results.append(
+                run_proactive_reflection_planner(
+                    account_store,
+                    account_id,
+                    now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+                )
+            )
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    threads = [threading.Thread(target=run), threading.Thread(target=run)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert state["maximum"] == 1
+    assert sum(len(result.queued_item_ids) for result in results) == 1
     assert len(account_store.read_proactive_outbox(account_id)) == 1
     assert len([entry for entry in account_store.read_memory_entries(account_id) if entry.get("proactive_plan_fingerprint")]) == 9
 
