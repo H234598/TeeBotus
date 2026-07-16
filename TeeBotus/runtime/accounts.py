@@ -3622,7 +3622,7 @@ class AccountStore:
 
     def append_proactive_outbox_item(self, account_id: str, item: dict[str, Any]) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")
-        with self.proactive_outbox_lock(account_id):
+        with self.proactive_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_proactive_outbox(account_id)
             normalized = dict(item)
             item_id = str(normalized.get("id") or f"pro_{uuid.uuid4().hex}").strip()
@@ -3651,7 +3651,7 @@ class AccountStore:
 
     def append_proactive_audit_event(self, account_id: str, event: dict[str, Any]) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")
-        with self.proactive_outbox_lock(account_id):
+        with self.proactive_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_proactive_audit(account_id)
             normalized = dict(event)
             event_id = str(normalized.get("id") or f"paud_{uuid.uuid4().hex}").strip()
@@ -3693,7 +3693,7 @@ class AccountStore:
         normalized_results = [dict(result) for result in results if isinstance(result, dict)]
         if not normalized_results:
             return ()
-        with self.proactive_outbox_lock(account_id):
+        with self.proactive_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_proactive_dispatch_results(account_id)
             existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
             timestamp = utc_now()
@@ -3741,7 +3741,7 @@ class AccountStore:
 
     def append_status_outbox_item(self, account_id: str, item: dict[str, Any]) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")
-        with self.status_outbox_lock(account_id):
+        with self.status_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_status_outbox(account_id)
             normalized = dict(item)
             item_id = str(normalized.get("id") or f"stat_{uuid.uuid4().hex}").strip()
@@ -3785,7 +3785,7 @@ class AccountStore:
         normalized_results = [dict(result) for result in results if isinstance(result, dict)]
         if not normalized_results:
             return ()
-        with self.status_outbox_lock(account_id):
+        with self.status_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_status_dispatch_results(account_id)
             existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
             timestamp = utc_now()
@@ -3831,7 +3831,7 @@ class AccountStore:
 
     def append_codex_history_item(self, account_id: str, item: dict[str, Any]) -> str:
         account_id = validate_sha512_token(account_id, field_name="account_id")
-        with self.codex_history_outbox_lock(account_id):
+        with self.codex_history_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_codex_history_outbox(account_id)
             normalized = dict(item)
             item_id = str(normalized.get("id") or f"hist_{uuid.uuid4().hex}").strip()
@@ -3879,7 +3879,7 @@ class AccountStore:
         timestamp = utc_now()
         backend = self.account_memory_backend
         append_collection_items = getattr(backend, "append_collection_items", None) if backend is not None else None
-        with self.codex_history_outbox_lock(account_id):
+        with self.codex_history_outbox_lock(account_id), self.account_memory_lock(account_id):
             rows = self.read_codex_history_dispatch_results(account_id)
             existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
             created_ids: list[str] = []

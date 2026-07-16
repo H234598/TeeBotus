@@ -2365,6 +2365,62 @@ def test_proactive_outbox_lock_is_reentrant(tmp_path):
     assert store.read_proactive_audit(account_id)[0]["id"] == event_id
 
 
+def test_status_outbox_append_holds_memory_lock_across_read_modify_write(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_status_outbox(account_id, [{"id": "existing", "status": "queued"}])
+    original_read = store.read_status_outbox
+    first_read_started = threading.Event()
+    release_first_read = threading.Event()
+    writer_finished = threading.Event()
+    read_count = [0]
+    read_count_lock = threading.Lock()
+    errors: list[BaseException] = []
+
+    def blocking_read(target_account_id: str):
+        rows = original_read(target_account_id)
+        with read_count_lock:
+            read_count[0] += 1
+            is_first_read = read_count[0] == 1
+        if is_first_read:
+            first_read_started.set()
+            if not release_first_read.wait(2):
+                raise AssertionError("append read did not get released")
+        return rows
+
+    def append_item() -> None:
+        try:
+            store.append_status_outbox_item(account_id, {"id": "appended", "status": "queued"})
+        except BaseException as exc:  # noqa: BLE001 - surface thread failures below.
+            errors.append(exc)
+
+    def append_directly() -> None:
+        try:
+            rows = store.read_status_outbox(account_id)
+            rows.append({"id": "direct", "status": "queued"})
+            store.write_status_outbox(account_id, rows)
+        except BaseException as exc:  # noqa: BLE001 - surface thread failures below.
+            errors.append(exc)
+        finally:
+            writer_finished.set()
+
+    with patch.object(store, "read_status_outbox", side_effect=blocking_read):
+        append_thread = threading.Thread(target=append_item)
+        append_thread.start()
+        assert first_read_started.wait(2)
+        writer_thread = threading.Thread(target=append_directly)
+        writer_thread.start()
+        assert not writer_finished.wait(0.2)
+        release_first_read.set()
+        append_thread.join(2)
+        writer_thread.join(2)
+
+    assert not append_thread.is_alive()
+    assert not writer_thread.is_alive()
+    assert not errors
+    assert {row["id"] for row in store.read_status_outbox(account_id)} == {"existing", "appended", "direct"}
+
+
 @pytest.mark.parametrize(
     ("lock_method", "lock_filename"),
     (
