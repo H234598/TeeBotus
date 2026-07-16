@@ -2842,3 +2842,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `20/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart jetzt erforderlich. Naechster Push bleibt erst
 bei 100 Commits.
+
+### Metadata-Quarantaene-gekuerzte-Fehlerliste
+
+- 2026-07-17: Bei mehr als fuenf unlesbaren Profilen wurde nur der erste
+  Fehlertext in `accounts_dir.error` gespeichert. Ein Auth-Fehler hinter dem
+  Limit konnte dadurch im Apply-Guard unsichtbar werden; bekannte Malformed-
+  Fehler haetten Quarantaene freigegeben.
+- Der interne Item-Marker `quarantine_safe` ist jetzt nur wahr, wenn jeder
+  einzelne Profilfehler sicher klassifizierbar ist. Gekuerzter Text bleibt fuer
+  Darstellung erlaubt, aber jeder unbekannte/Auth-Fehler blockiert Apply.
+- Regression: sechs Profile mit Auth-Fehler an Position 6 -> `6 passed` im
+  Metadata-Fokus; kompletter `tests/test_admin_accounts.py` -> `68 passed`.
+  Ruff, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a3b7f6a5 fix: preserve quarantine safety across truncated errors`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Kein Push. Restart
+nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
