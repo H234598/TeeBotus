@@ -1113,6 +1113,37 @@ def test_ensure_external_account_repairs_index_after_partial_write(tmp_path):
     assert account_id in store._load_index().get("accounts", {})
 
 
+def test_ensure_external_account_preserves_multiple_source_links(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = "a" * 128
+
+    store.ensure_external_account(account_id, source_instance="Bote_der_Wahrheit", source_account_id="source-a")
+    store.ensure_external_account(account_id, source_instance="TeeBotus_Logger", source_account_id="source-b")
+    store.ensure_external_account(account_id, source_instance="Bote_der_Wahrheit", source_account_id="source-a")
+
+    links = store._read_account_profile(account_id)["external_links"]
+    assert [(link["source_instance"], link["source_account_id"]) for link in links] == [
+        ("Bote_der_Wahrheit", "source-a"),
+        ("TeeBotus_Logger", "source-b"),
+    ]
+
+
+def test_ensure_external_account_rolls_back_new_source_link_on_index_failure(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = "a" * 128
+    store.ensure_external_account(account_id, source_instance="Bote_der_Wahrheit", source_account_id="source-a")
+    profile_path = store.account_dir(account_id) / "Account_Profile.json"
+    previous_profile = profile_path.read_bytes()
+    previous_index = store.account_index_path.read_bytes()
+
+    with patch.object(store, "_upsert_account_index", side_effect=AccountStoreError("index write failed")):
+        with pytest.raises(AccountStoreError, match="index write failed"):
+            store.ensure_external_account(account_id, source_instance="TeeBotus_Logger", source_account_id="source-b")
+
+    assert profile_path.read_bytes() == previous_profile
+    assert store.account_index_path.read_bytes() == previous_index
+
+
 def test_link_identity_merges_temporary_memory_and_tombstones_temp(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))

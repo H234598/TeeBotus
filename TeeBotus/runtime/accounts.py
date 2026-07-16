@@ -1976,6 +1976,7 @@ class AccountStore:
             raise AccountStoreError("ID or secret is invalid")
         return self.link_identity_to_account(identity_key, target_account_id, display_label=display_label)
 
+    @_serialize_identity_map
     def ensure_external_account(self, account_id: str, *, source_instance: str, source_account_id: str = "") -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         source_account_id = source_account_id.strip().casefold() if source_account_id else account_id
@@ -1987,7 +1988,35 @@ class AccountStore:
                 raise AccountStoreError("target account is tombstoned")
             if self._account_is_resolvable(account_id):
                 profile["account_id"] = account_id
-                self._upsert_account_index(profile)
+                external_links = profile.get("external_links")
+                if not isinstance(external_links, list):
+                    external_links = []
+                link = {
+                    "source_instance": source_instance,
+                    "source_account_id": source_account_id,
+                    "linked_at": utc_now(),
+                }
+                link_key = (source_instance, source_account_id)
+                known_link_keys = {
+                    (
+                        str(item.get("source_instance") or "").strip(),
+                        str(item.get("source_account_id") or "").strip().casefold(),
+                    )
+                    for item in external_links
+                    if isinstance(item, dict)
+                }
+                if link_key not in known_link_keys:
+                    snapshot = self._snapshot_identity_metadata((account_id,))
+                    try:
+                        profile["external_links"] = [*external_links, link]
+                        profile["updated_at"] = link["linked_at"]
+                        self._write_account_profile(account_id, profile)
+                        self._upsert_account_index(profile)
+                    except Exception:
+                        self._restore_identity_metadata(snapshot, operation="external account link")
+                        raise
+                else:
+                    self._upsert_account_index(profile)
                 return
         now = utc_now()
         profile = {
