@@ -2177,6 +2177,23 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 Plan-Commit macht `13/20`; kein Push. Naechster Restart nach 7 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### Notification-Loudness-Zeitmetadaten
+
+- 2026-07-16: `queue_due_notification_loudness_prompts(now=...)` schrieb
+  Route-State mit dem gelieferten Zeitpunkt, aber Outbox-Erstellung und
+  Statushistorie mit `utc_now()`. Replays, Healthchecks und Tests konnten
+  dadurch widerspruechliche Zeitachsen sehen.
+- System-Prompts schreiben `created_at`, `updated_at`, `due_at` und ersten
+  `status_history.at` jetzt aus demselben aufgeloesten `now`.
+- Regression: deterministischer Scheduler-Zeitpunkt bleibt in allen vier
+  Metadatenfeldern; Scheduler/Outbox-Fokus -> `25 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2205b449 fix: preserve loudness prompt timestamps`.
+
+**Aktueller Laufstand:** Seit dem Restart `14/20` Code-Commits. Dieser
+Plan-Commit macht `15/20`; kein Push. Naechster Restart nach 5 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
+
 ### RouteTo-Purpose-Ziel
 
 - 2026-07-16: Explorer-Biene fand widerspruechliche Discovery. Die
