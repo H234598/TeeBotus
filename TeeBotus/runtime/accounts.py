@@ -2223,6 +2223,7 @@ class AccountStore:
         else:
             source_entries = self.read_memory_entries(source_account_id)
             target_entries = self.read_memory_entries(target_account_id)
+            self._raise_if_account_memory_entries_unreadable("cannot merge account memory")
             self.write_memory_entries(target_account_id, _merge_account_jsonl_rows(target_entries, source_entries))
             source_index = self.read_memory_index(source_account_id)
             target_index = self._normalized_memory_index(target_account_id, self.read_memory_index(target_account_id))
@@ -2390,6 +2391,21 @@ class AccountStore:
             allow_plaintext_legacy=False,
         )
 
+    def _raise_if_account_memory_entries_unreadable(self, operation: str) -> None:
+        backend = self.account_memory_backend
+        if backend is None:
+            return
+        try:
+            read_error = str(getattr(backend, "last_entry_read_error", "") or "").strip()
+            skipped = int(getattr(backend, "last_entry_skipped", 0) or 0)
+        except Exception as exc:  # noqa: BLE001 - broken diagnostics must fail closed.
+            raise AccountStoreError(
+                f"{operation}: account entries are unreadable: diagnostics unavailable"
+            ) from exc
+        if read_error or skipped:
+            detail = read_error or f"skipped={skipped}"
+            raise AccountStoreError(f"{operation}: account entries are unreadable: {detail}")
+
     @_serialize_account_memory
     def read_memory_entries_by_ids(self, account_id: str, memory_ids: Iterable[str]) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
@@ -2409,6 +2425,7 @@ class AccountStore:
                 vault=self.account_memory_vault,
                 allow_plaintext_legacy=False,
             )
+        self._raise_if_account_memory_entries_unreadable("cannot read selected account memory entries")
         entries_by_id = {
             str(row.get("id") or "").strip(): row
             for row in rows
@@ -2428,6 +2445,7 @@ class AccountStore:
     @_serialize_account_memory
     def append_memory_entry(self, account_id: str, entry: dict[str, Any]) -> None:
         rows = self.read_memory_entries(account_id)
+        self._raise_if_account_memory_entries_unreadable("cannot append account memory entry")
         rows.append(dict(entry))
         self.write_memory_entries(account_id, rows)
 
@@ -2443,14 +2461,7 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
         rows = self.read_memory_entries(account_id)
-        backend = self.account_memory_backend
-        entry_read_error = str(getattr(backend, "last_entry_read_error", "") or "") if backend is not None else ""
-        entry_read_skipped = int(getattr(backend, "last_entry_skipped", 0) or 0) if backend is not None else 0
-        if entry_read_error or entry_read_skipped:
-            detail = entry_read_error or f"skipped={entry_read_skipped}"
-            raise AccountStoreError(
-                f"cannot append structured memory while account entries are unreadable: {detail}"
-            )
+        self._raise_if_account_memory_entries_unreadable("cannot append structured memory")
         previous_rows = [dict(row) for row in rows if isinstance(row, dict)]
         previous_index = self.read_memory_index(account_id)
         normalized_entry = dict(entry)
@@ -2605,14 +2616,7 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
         rows = self.read_memory_entries(account_id)
-        backend = self.account_memory_backend
-        entry_read_error = str(getattr(backend, "last_entry_read_error", "") or "") if backend is not None else ""
-        entry_read_skipped = int(getattr(backend, "last_entry_skipped", 0) or 0) if backend is not None else 0
-        if entry_read_error or entry_read_skipped:
-            detail = entry_read_error or f"skipped={entry_read_skipped}"
-            raise AccountStoreError(
-                f"cannot rebuild structured memory index while account entries are unreadable: {detail}"
-            )
+        self._raise_if_account_memory_entries_unreadable("cannot rebuild structured memory index")
         previous_rows = [dict(row) for row in rows if isinstance(row, dict)]
         previous_index = self.read_memory_index(account_id)
         changed = False
@@ -3059,6 +3063,7 @@ class AccountStore:
             return ()
         excluded_ids = {str(memory_id or "").strip() for memory_id in exclude_ids if str(memory_id or "").strip()}
         entries = self.read_memory_entries(account_id)
+        self._raise_if_account_memory_entries_unreadable("cannot rank account memory")
         index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
         ranked_ids: list[str] = []
         for entry in self._rank_structured_memory_entries(entries, index, query_text):
@@ -3086,6 +3091,7 @@ class AccountStore:
             return AccountMemorySelection("", ())
         excluded_ids = {str(memory_id or "").strip() for memory_id in exclude_ids if str(memory_id or "").strip()}
         entries = self.read_memory_entries(account_id)
+        self._raise_if_account_memory_entries_unreadable("cannot select account memory")
         index = self._normalized_memory_index(account_id, self.read_memory_index(account_id))
         ordered_entries = [
             entry
@@ -3197,6 +3203,7 @@ class AccountStore:
             return
         requested = set(requested_ids)
         rows = self.read_memory_entries(account_id)
+        self._raise_if_account_memory_entries_unreadable("cannot mark account memory accessed")
         previous_rows = [dict(row) for row in rows if isinstance(row, dict)]
         previous_index = self.read_memory_index(account_id)
         timestamp = utc_now()

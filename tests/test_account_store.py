@@ -2168,6 +2168,45 @@ def test_rebuild_structured_account_memory_refuses_partial_sql_entries(tmp_path,
     assert memory_ids == {"mem_good", "mem_bad"}
 
 
+def test_account_memory_read_modify_and_retrieval_paths_refuse_partial_rows(tmp_path):
+    class PartiallyUnreadableBackend:
+        last_entry_read_error = "corrupt row"
+        last_entry_skipped = 1
+        last_index_read_error = ""
+        write_entries_calls = 0
+
+        def read_entries(self, _account_id):
+            return [{"id": "mem_visible", "user_text": "Mond"}]
+
+        def read_entries_by_ids(self, _account_id, _memory_ids):
+            return [{"id": "mem_visible", "user_text": "Mond"}]
+
+        def read_index(self, _account_id):
+            return {}
+
+        def write_entries(self, _account_id, _rows):
+            self.write_entries_calls += 1
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    backend = PartiallyUnreadableBackend()
+    store._account_memory_backend = backend
+
+    operations = (
+        lambda: store.append_memory_entry(account_id, {"id": "mem_new"}),
+        lambda: store.read_memory_entries_by_ids(account_id, ["mem_visible"]),
+        lambda: store.rank_structured_memory_ids(account_id, query_text="Mond"),
+        lambda: store.select_structured_memory(account_id, query_text="Mond"),
+        lambda: store.select_structured_memory_by_ids(account_id, ["mem_visible"]),
+        lambda: store.mark_structured_memory_accessed(account_id, ["mem_visible"]),
+    )
+
+    for operation in operations:
+        with pytest.raises(AccountStoreError, match="entries are unreadable"):
+            operation()
+    assert backend.write_entries_calls == 0
+
+
 def test_rebuild_structured_account_memory_rolls_back_entries_when_index_write_fails(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
