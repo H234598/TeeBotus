@@ -28,9 +28,9 @@ Diagnose und Tests.
 - Healthcheck und Status-Applet bleiben read-only.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
-- Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `9/20` Commits vorhanden; naechster Restart
-  nach 11 weiteren Commits.
+- Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
+  letzten Restart ist aktuell `1/20` Commit vorhanden; naechster Restart
+  nach 19 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -581,6 +581,21 @@ Diagnose und Tests.
 - Code-Commit: `1f9add4c fix: quarantine malformed working memory indexes`;
   kein Provider/API-Aufruf.
 
+### Working-Memory-Append-Rollback
+
+- 2026-07-16: `append_manual()` schrieb Entry-JSONL vor dem atomaren
+  Index-Write. Bei einem Indexfehler blieb ein verwaistes JSONL-Entry hinter
+  dem alten Index liegen und wuchs bei jedem Retry weiter.
+- Der alte JSONL-Dateioffset wird jetzt gesichert. Scheitert Entry-Write oder
+  Index-Write, wird auf diesen Offset zurueckgesetzt; scheitert auch der
+  Rollback, bleibt der Fehler sichtbar geloggt.
+- Regression fuer beide Store-Klassen prueft unveraenderten Index und leere
+  JSONL-Datei nach simuliertem Indexfehler: `tests/test_working_memory.py`:
+  `23 passed`; Telegram-Working-Memory `4 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `2f4b1813 fix: roll back working memory append failures`; kein
+  Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -596,6 +611,11 @@ Diagnose und Tests.
   Folgeprobe nach Bereitschaft meldete Signal `2/2 reachable`,
   `health=ok`, `actionable_problem_count=0`. Das ist ein bestaetigter
   transienter Startzustand, kein dauerhafter Health-Fehler.
+- Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
+  PID `358493`, Start `2026-07-16 04:20:43 CEST`, Runtime-Version `1.9.498`.
+  Signal-REST `/v1/about` meldet Version `0.100`; `--runtime-status` meldet
+  Signal erreichbar, Qdrant `ready` und Account-Memorys `ok`. Kein
+  providerseitiger Testaufruf.
 
 ## Akzeptanzkriterien
 
@@ -609,8 +629,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `19/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 1 weiterem Commit.
+**Laufstand:** Seit dem letzten Restart `1/20` Commit; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 19 weiteren Commits.
 
 ## Bezug
 
