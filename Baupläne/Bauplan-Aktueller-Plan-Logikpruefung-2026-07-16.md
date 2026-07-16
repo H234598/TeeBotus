@@ -1603,6 +1603,24 @@ faellig, kein Push ausgeloest.
 **Laufstand nach Restart:** Seit dem Restart `1/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 19 weiteren Commits.
 
+### Collection-Diagnose-nach-Item-Replacement-zuruecksetzen
+
+- 2026-07-16: `replace_collection_item()` schrieb erfolgreiche Status- und
+  Outbox-Updates in SQLite und PostgreSQL, loeschte aber keine vorherige
+  `last_collection_read_error`-, Skip- oder Database-Missing-Diagnose. Ein
+  alter Fehler konnte dadurch nach erfolgreicher Reparatur weiter im
+  Healthcheck erscheinen.
+- SQLite und PostgreSQL setzen Collection-Diagnosen nur nach einer wirklich
+  ersetzten Zeile zurueck. Ungueltige Keys, nicht gefundene Zeilen und
+  Write-Fehler behalten ihre Diagnose unveraendert.
+- Regression fuer SQLite-Replacement mit vorheriger stale Diagnose;
+  gesamte `tests/test_account_store.py`: `271 passed`; Ruff, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `dd017f53 fix: clear collection diagnostics after replacement`.
+
+**Laufstand nach Fix:** Seit dem Restart `11/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 9 weiteren Commits.
+
 ## Bezug
 
 - Vorheriger Plan:
