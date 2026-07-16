@@ -3093,3 +3093,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Recovery-Accounts-Dir-Race-fail-closed
+
+- 2026-07-17: `_discover_account_ids()` und
+  `_unreadable_metadata_items()` konnten bei einem parallelen Move/Backup-
+  Cleanup waehrend `iterdir()` mit `OSError` abbrechen.
+- JSON-Discovery behandelt verschwundene Verzeichnisse jetzt als leere Quelle;
+  Metadata-Recovery meldet den Race als unsicheren `accounts_dir`-Befund und
+  blockiert Apply. Kein automatischer Read oder Move.
+- Regression: simuliertes verschwundenes `accounts/` -> `11 passed` im
+  Fokus; komplette `tests/test_admin_accounts.py` -> `81 passed`. Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c093e02d fix: tolerate disappearing recovery account directories`.
+
+**Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
