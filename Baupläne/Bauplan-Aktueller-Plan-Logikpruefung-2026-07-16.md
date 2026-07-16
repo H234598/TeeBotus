@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart ist aktuell `1/20` Commit vorhanden; naechster Restart
-  nach 19 weiteren Commits.
+  letzten Restart ist aktuell `10/20` Commits vorhanden; naechster Restart
+  nach 10 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -266,11 +266,16 @@ Diagnose und Tests.
   `(source_instance, source_account_id)`-Paare dedupliziert an und schreibt
   Profil/Account-Index mit gemeinsamem Rollback. Wiederholungen bleiben
   idempotent.
+- Auch die Erstanlage schreibt Profil und Account-Index transaktional:
+  scheitert der Index, werden beide Metadaten zurueckgesetzt. Ein dabei neu
+  entstandenes leeres Account-Verzeichnis wird entfernt; vorhandene Dateien
+  bleiben unangetastet.
 - Regressionen fuer zwei Quellen, Duplikat und Indexfehler ergaenzt;
   fokussiert `18 passed`, vollstaendig `234 passed`; Ruff, `py_compile` und
   `git diff --check` gruen.
-- Code-Commit: `004293e8 fix: preserve external account source links`; kein
-  Provider/API-Aufruf.
+- Code-Commits: `004293e8 fix: preserve external account source links`,
+  `8bb48c2e fix: roll back external account creation`; kein Provider/API-
+  Aufruf.
 
 ### LLM-State-SQL/JSON-Audit
 
@@ -690,8 +695,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `9/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 11 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `10/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 10 weiteren Commits.
 
 ## Bezug
 
