@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `12/20` Commits vorhanden; naechster Restart
-  nach 8 weiteren Commits.
+  letzten Restart ist aktuell `13/20` Commits vorhanden; naechster Restart
+  nach 7 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -422,6 +422,20 @@ Diagnose und Tests.
   `git diff --check` gruen. Commit:
   `4857c518 fix: clear stale message refs after storage loss`.
 
+### Ausgeschriebene Reminder-Zeitangaben
+
+- 2026-07-16: Der Reminder-Parser erkannte `in einer Stunde`, `in einer
+  halben Stunde` und vergleichbare ausgeschriebene Intervalle als Anfrage,
+  liess `due_at` aber leer und behielt die Zeitangabe im Betreff.
+- Ein kleiner lokaler Parser deckt deutsche Zahlwoerter bis zehn sowie
+  Minuten, Stunden, Tage, Wochen, Halb- und Viertelintervalle ab. Explizite
+  Uhrzeiten bleiben bei Tages-/Wochenintervallen erhalten; Betreff wird von
+  der Intervallphrase bereinigt.
+- Regression: `tests/test_reminder_intent.py`: `25 passed`; zusaetzlicher
+  Direktcheck fuer Stunde, halbe Stunde, Viertelstunde, fuenf Minuten und
+  zwei Wochen. Ruff, `py_compile` und `git diff --check` gruen. Code-Commit:
+  `630c5192 fix: parse written reminder intervals`.
+
 ## Akzeptanzkriterien
 
 - Kein geaenderter Pfad kann nach einem simulierten zweiten Schreibfehler
@@ -433,6 +447,9 @@ Diagnose und Tests.
 - Plan nennt exakt Commit, Testlauf und verbleibende offene Abnahme.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
+
+**Laufstand:** Seit dem letzten Restart `13/20` Commits; kein Restart oder
+Push ausgeloest. Naechster Restart nach 7 weiteren Commits.
 
 ## Bezug
 
