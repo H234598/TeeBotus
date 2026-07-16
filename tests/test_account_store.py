@@ -4150,9 +4150,53 @@ def test_account_memory_fallback_warning_rate_limit_is_scoped_per_account(caplog
     warnings = [
         record.getMessage()
         for record in caplog.records
-        if "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in record.getMessage()
+        if "ACCOUNT MEMORY PRIMARY DATABASE FAILED. USING FALLBACK DATABASE." in record.getMessage()
     ]
     assert len(warnings) == 3
+
+
+def test_account_memory_fallback_keeps_warning_cooldown_while_other_operation_is_broken(caplog) -> None:
+    class Backend:
+        def __init__(self, *, fail_entries_read: bool = False, fail_entries_write: bool = False) -> None:
+            self.fail_entries_read = fail_entries_read
+            self.fail_entries_write = fail_entries_write
+            self.entries: dict[str, list[dict[str, str]]] = {}
+            self.indexes: dict[str, dict[str, object]] = {}
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            if self.fail_entries_read:
+                raise OSError("entries unavailable")
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def write_entries(self, account_id: str, rows: list[dict[str, str]]) -> None:
+            if self.fail_entries_write:
+                raise OSError("entries repair unavailable")
+            self.entries[account_id] = [dict(row) for row in rows]
+
+        def read_index(self, account_id: str) -> dict[str, object]:
+            return dict(self.indexes.get(account_id, {}))
+
+        def write_index(self, account_id: str, data: dict[str, object]) -> None:
+            self.indexes[account_id] = dict(data)
+
+    account_id = "a" * 128
+    primary = Backend(fail_entries_read=True, fail_entries_write=True)
+    fallback = Backend()
+    fallback.entries[account_id] = [{"id": "fallback_entry"}]
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        assert backend.read_entries(account_id) == [{"id": "fallback_entry"}]
+        backend.write_index(account_id, {"scope": "account"})
+        with pytest.raises(AccountStoreError, match="read blocked because primary is unavailable"):
+            backend.read_entries(account_id)
+
+    warnings = [
+        record.getMessage()
+        for record in caplog.records
+        if "ACCOUNT MEMORY PRIMARY DATABASE FAILED. USING FALLBACK DATABASE." in record.getMessage()
+    ]
+    assert len(warnings) == 1
 
 
 def test_account_memory_fallback_marks_both_read_failures_as_unsafe(caplog) -> None:

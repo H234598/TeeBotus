@@ -950,10 +950,11 @@ class WarningFallbackAccountMemoryBackend:
 
     def _clear_recovered_if_clean(self, operation: str, account_id: str | None = None) -> None:
         if account_id is not None:
-            warning_keys = [key for key in self._last_warning_at if key[2] == account_id]
-            for key in warning_keys:
-                self._last_warning_at.pop(key, None)
-            if not self._account_has_pending_state(account_id):
+            account_has_pending_state = self._account_has_pending_state(account_id)
+            if not account_has_pending_state:
+                warning_keys = [key for key in self._last_warning_at if key[2] == account_id]
+                for key in warning_keys:
+                    self._last_warning_at.pop(key, None)
                 self._clear_fallback_sync_errors_for_account(account_id)
             elif not self._operation_has_pending_state(operation, account_id):
                 self._clear_fallback_sync_error(operation, account_id)
