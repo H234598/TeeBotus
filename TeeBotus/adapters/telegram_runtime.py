@@ -3621,6 +3621,7 @@ def _select_working_memory_prompt(index_path: Path, data: dict[str, Any], query_
             ),
             reverse=True,
         )
+        ordered_ids.extend(memory_id for memory_id in reversed(recent_ids) if memory_id in entry_index and memory_id not in ordered_ids)
     else:
         ordered_ids = list(reversed(recent_ids))
     if not ordered_ids:

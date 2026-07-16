@@ -131,9 +131,10 @@ def test_working_memory_prepare_selects_relevant_entry(tmp_path):
     assert "selected_working_memory_ids" in record.prompt_text
 
 
-def test_working_memory_appends_recent_entries_after_keyword_matches(tmp_path):
+@pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
+def test_working_memory_appends_recent_entries_after_keyword_matches(tmp_path, store_class):
     instances_dir = tmp_path / "instances"
-    store = WorkingMemoryStore("Depressionsbot", instances_dir)
+    store = store_class("Depressionsbot", instances_dir)
     relevant = store.append_manual("Architekturfragen zuerst kurz strukturieren.")
     recent = store.append_manual("Katzenbilder nur mit Quellenhinweis.")
 
