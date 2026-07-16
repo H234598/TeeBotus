@@ -2932,6 +2932,21 @@ nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Account-Reports-ignorieren-Symlink-Ordner
+
+- 2026-07-17: `_account_dirs()` akzeptierte symlinked Account-Verzeichnisse,
+  wenn ihr Name wie eine Account-ID aussah. Dadurch konnten externe Daten in
+  Admin-Reports einbezogen werden.
+- Symlinked Account-Verzeichnisse werden jetzt vor `account_summary()` und vor
+  der Zaehllogik verworfen.
+- Regression: symlinked Account-Ordner -> `2 passed`; komplette
+  `tests/test_admin_accounts.py` -> `86 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `21d551f5 fix: ignore symlinked account directories`.
+
+**Aktueller Laufstand:** Seit dem Restart `5/20` Commits. Kein Push. Restart
+nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
 ### Quarantaene-Zielpfad-ohne-Symlinks
 
 - 2026-07-17: `_prepare_private_dir()` folgte bei `--quarantine-dir` bereits
