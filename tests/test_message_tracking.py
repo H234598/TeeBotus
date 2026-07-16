@@ -75,6 +75,28 @@ def test_message_tracker_deduplicates_duplicate_rows_loaded_from_disk(tmp_path) 
     assert tracker.list_for_chat("+491", instance_name="Demo", channel="signal") == [ref]
 
 
+def test_message_tracker_drops_stale_refs_when_storage_file_becomes_invalid(tmp_path) -> None:
+    path = tmp_path / "runtime" / "refs.json"
+    tracker = MessageTracker(path)
+    tracker.record(_ref("persisted"))
+
+    path.write_text("{broken", encoding="utf-8")
+
+    assert tracker.list_for_chat("+491", instance_name="Demo", channel="signal") == []
+
+
+def test_message_tracker_drops_stale_refs_when_storage_parent_disappears(tmp_path) -> None:
+    path = tmp_path / "runtime" / "refs.json"
+    tracker = MessageTracker(path)
+    tracker.record(_ref("persisted"))
+
+    path.unlink()
+    path.with_name(f".{path.name}.lock").unlink()
+    path.parent.rmdir()
+
+    assert tracker.list_for_chat("+491", instance_name="Demo", channel="signal") == []
+
+
 def test_message_tracker_finds_ref_without_knowing_chat() -> None:
     tracker = MessageTracker()
     ref = _ref("123")

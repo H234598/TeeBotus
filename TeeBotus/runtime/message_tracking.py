@@ -180,12 +180,12 @@ class MessageTracker:
         if path is None:
             return
         if not path.exists():
-            if path.parent.exists():
-                self.refs = {}
+            self.refs = {}
             return
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
+            self.refs = {}
             return
         rows = payload.get("refs") if isinstance(payload, dict) else None
         if not isinstance(rows, list):
