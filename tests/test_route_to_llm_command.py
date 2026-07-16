@@ -233,3 +233,27 @@ def test_route_to_llm_pending_prompt_is_bound_to_the_originating_chat(tmp_path, 
     pending = engine.state.get_pending_flow("Depressionsbot", account_id, "llm_route_to")
     assert pending is not None
     assert pending["context"]["chat_id"] == "chat-1"
+
+
+def test_route_to_llm_cancel_is_bound_to_the_originating_chat(tmp_path, monkeypatch) -> None:
+    account_store = _store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    monkeypatch.setenv("TEEBOTUS_ADMIN_ACCOUNT_IDS_DEPRESSIONSBOT", account_id)
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(llm_enabled=True),
+        route_to_client_factory=lambda **_kwargs: object(),
+    )
+
+    armed = engine.process(_event(identity, "/RouteToHF", chat_id="chat-1"))
+    foreign_cancel = engine.process(_event(identity, "/cancel", chat_id="chat-2"))
+
+    assert "Route bereit" in armed[0].text
+    assert all("RouteTo abgebrochen" not in getattr(action, "text", "") for action in foreign_cancel)
+    assert engine.state.get_pending_flow("Depressionsbot", account_id, "llm_route_to") is not None
+
+    local_cancel = engine.process(_event(identity, "/cancel", chat_id="chat-1"))
+
+    assert local_cancel[0].text == "RouteTo abgebrochen."
+    assert engine.state.get_pending_flow("Depressionsbot", account_id, "llm_route_to") is None

@@ -298,7 +298,7 @@ class TeeBotusEngine:
             )
         pending_route_to = self.state.get_pending_flow(event.instance, result.account_id, ROUTE_TO_FLOW)
         if pending_route_to is not None:
-            if command == "/cancel":
+            if command == "/cancel" and _route_to_pending_context_matches(pending_route_to, event):
                 self.state.pop_pending_flow(event.instance, result.account_id, ROUTE_TO_FLOW)
                 return EngineResult(result.account_id, [SendText(event.chat_id, "RouteTo abgebrochen.", track=False)], handled=True)
             if not command and text and _route_to_pending_context_matches(pending_route_to, event):
