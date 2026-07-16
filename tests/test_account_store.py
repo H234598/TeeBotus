@@ -6746,6 +6746,47 @@ def test_structured_account_memory_maintenance_consolidates_repeated_episodes(tm
     assert consolidated["supports"] == ["mem_episode_0", "mem_episode_1", "mem_episode_2"]
 
 
+def test_structured_account_memory_maintenance_updates_existing_summary(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    for index in range(3):
+        store.append_structured_memory_entry(
+            account_id,
+            {
+                "id": f"mem_episode_{index}",
+                "memory_type": "episodic",
+                "user_text": f"Spaziergang hilft gegen Druck {index}.",
+                "bot_text": "Notiert.",
+            },
+        )
+
+    first = store.run_memory_maintenance(account_id)
+    store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_episode_3",
+            "memory_type": "episodic",
+            "user_text": "Spaziergang hilft gegen Druck 3.",
+            "bot_text": "Notiert.",
+        },
+    )
+
+    second = store.run_memory_maintenance(account_id)
+    summaries = [entry for entry in store.read_memory_entries(account_id) if entry.get("kind") == "summary"]
+
+    assert len(first) == 1
+    assert second == ()
+    assert len(summaries) == 1
+    assert summaries[0]["consolidation_key"] == "druck"
+    assert summaries[0]["supports"] == [
+        "mem_episode_0",
+        "mem_episode_1",
+        "mem_episode_2",
+        "mem_episode_3",
+    ]
+    assert store.check_structured_memory_index(account_id).ok
+
+
 def test_structured_account_memory_consolidation_zero_limit_is_a_noop(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable, Iterator, Protocol
+from typing import Any, Callable, Iterable, Iterator, Mapping, Protocol
 
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
@@ -3337,11 +3337,19 @@ class AccountStore:
         if max_new_entries <= 0:
             return ()
         rows = self.read_memory_entries(account_id)
+        self._raise_if_account_memory_entries_unreadable("cannot consolidate structured memory")
         existing_fingerprints = {
             str(row.get("consolidation_fingerprint") or "")
             for row in rows
             if isinstance(row, dict) and str(row.get("consolidation_fingerprint") or "")
         }
+        existing_summaries: dict[str, dict[str, Any]] = {}
+        for row in rows:
+            if not isinstance(row, dict) or _normalize_account_memory_type(row.get("memory_type"), row.get("kind")) != "semantic":
+                continue
+            key = _consolidation_summary_key(row)
+            if key and key not in existing_summaries:
+                existing_summaries[key] = row
         candidates: dict[tuple[str, str], list[str]] = {}
         for row in rows:
             if not isinstance(row, dict):
@@ -3356,12 +3364,61 @@ class AccountStore:
                     continue
                 candidates.setdefault(("keyword", key), []).append(memory_id)
         created: list[str] = []
+        handled = 0
         for (_scope, keyword), source_ids in sorted(candidates.items(), key=lambda item: (-len(set(item[1])), item[0][1])):
             unique_source_ids = list(dict.fromkeys(source_ids))
             if len(unique_source_ids) < 3:
                 continue
-            fingerprint = hashlib.sha256(("semantic:" + keyword + ":" + ",".join(unique_source_ids)).encode("utf-8")).hexdigest()[:24]
+            canonical_source_ids = sorted(unique_source_ids)
+            fingerprint = hashlib.sha256(("semantic:" + keyword + ":" + ",".join(canonical_source_ids)).encode("utf-8")).hexdigest()[:24]
             if fingerprint in existing_fingerprints:
+                continue
+            existing_summary = existing_summaries.get(keyword)
+            if existing_summary is not None:
+                previous_rows = [dict(row) for row in rows if isinstance(row, dict)]
+                previous_index = self.read_memory_index(account_id)
+                self._raise_if_account_memory_index_unreadable("cannot update consolidated memory")
+                timestamp = utc_now()
+                existing_summary.update(
+                    {
+                        "consolidation_key": keyword,
+                        "consolidation_fingerprint": fingerprint,
+                        "user_text": f"Wiederkehrendes Thema/Faktensignal aus {len(unique_source_ids)} Episoden: {keyword}.",
+                        "related_ids": canonical_source_ids[:ACCOUNT_MEMORY_KEYWORD_LIMIT],
+                        "supports": canonical_source_ids[:ACCOUNT_MEMORY_KEYWORD_LIMIT],
+                        "relations": [
+                            {
+                                "type": "derived_from",
+                                "target_id": source_id,
+                                "provenance": {"job": "account-memory-consolidation", "source": USER_MEMORY_ENTRIES_FILENAME},
+                            }
+                            for source_id in canonical_source_ids[:ACCOUNT_MEMORY_KEYWORD_LIMIT]
+                        ],
+                        "updated_at": timestamp,
+                    }
+                )
+                try:
+                    self.write_memory_entries(account_id, rows)
+                    self.rebuild_structured_memory_index(account_id)
+                except Exception:  # noqa: BLE001 - restore the complete pre-update snapshot.
+                    rollback_errors: list[Exception] = []
+                    for restore in (
+                        lambda: self.write_memory_entries(account_id, previous_rows),
+                        lambda: self.write_memory_index(account_id, previous_index),
+                    ):
+                        try:
+                            restore()
+                        except Exception as rollback_exc:  # noqa: BLE001 - report inconsistent rollback explicitly.
+                            rollback_errors.append(rollback_exc)
+                    if rollback_errors:
+                        raise AccountStoreError(
+                            "account memory consolidation rollback failed; index and entries may be inconsistent"
+                        ) from rollback_errors[0]
+                    raise
+                existing_fingerprints.add(fingerprint)
+                handled += 1
+                if handled >= max_new_entries:
+                    break
                 continue
             text = f"Wiederkehrendes Thema/Faktensignal aus {len(unique_source_ids)} Episoden: {keyword}."
             memory_id = self.append_structured_memory_entry(
@@ -3372,22 +3429,24 @@ class AccountStore:
                     "user_text": text,
                     "bot_text": "Automatisch konsolidiert aus episodischem Account-Memory.",
                     "importance": 3,
-                    "related_ids": unique_source_ids[:ACCOUNT_MEMORY_KEYWORD_LIMIT],
-                    "supports": unique_source_ids[:ACCOUNT_MEMORY_KEYWORD_LIMIT],
+                    "consolidation_key": keyword,
+                    "related_ids": canonical_source_ids[:ACCOUNT_MEMORY_KEYWORD_LIMIT],
+                    "supports": canonical_source_ids[:ACCOUNT_MEMORY_KEYWORD_LIMIT],
                     "relations": [
                         {
                             "type": "derived_from",
                             "target_id": source_id,
                             "provenance": {"job": "account-memory-consolidation", "source": USER_MEMORY_ENTRIES_FILENAME},
                         }
-                        for source_id in unique_source_ids[:ACCOUNT_MEMORY_KEYWORD_LIMIT]
+                        for source_id in canonical_source_ids[:ACCOUNT_MEMORY_KEYWORD_LIMIT]
                     ],
                     "consolidation_fingerprint": fingerprint,
                 },
             )
             existing_fingerprints.add(fingerprint)
             created.append(memory_id)
-            if len(created) >= max_new_entries:
+            handled += 1
+            if handled >= max_new_entries:
                 break
         return tuple(created)
 
@@ -5486,6 +5545,18 @@ def _new_account_memory_index() -> dict[str, Any]:
         },
         "retention": _account_memory_retention_policy(),
     }
+
+
+def _consolidation_summary_key(row: Mapping[str, Any]) -> str:
+    explicit = str(row.get("consolidation_key") or "").strip()
+    if explicit:
+        return explicit
+    text = str(row.get("user_text") or "").strip()
+    marker = " Episoden: "
+    prefix = "Wiederkehrendes Thema/Faktensignal aus "
+    if not text.startswith(prefix) or marker not in text:
+        return ""
+    return text.split(marker, 1)[1].rstrip(".").strip()
 
 
 def _rebuild_account_memory_accessed_ids(rows: list[dict[str, Any]], existing_accessed_ids: list[Any]) -> list[str]:
