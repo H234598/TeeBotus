@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart ist aktuell `15/20` Commits vorhanden; naechster Restart
-  nach 5 weiteren Commits.
+  letzten Restart ist aktuell `17/20` Commits vorhanden; naechster Restart
+  nach 3 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -305,6 +305,22 @@ Diagnose und Tests.
   Wiederherstellung und erfolgreichen Retry; fokussiert `21 passed`,
   vollstaendig `235 passed`; Ruff, `py_compile` und `git diff --check` gruen.
 - Code-Commit: `dbc93f34 fix: roll back privacy metadata updates`; kein
+  Provider/API-Aufruf.
+
+### Full-Memory-Reset-Rollback
+
+- 2026-07-16: `reset_structured_memory()` schrieb Entries und leeren Index
+  zuerst und loeschte Datenschutzbestaetigung erst danach. Ein Fehler beim
+  zweiten Schritt konnte leeres Memory mit weiterhin bestaetigtem Datenschutz
+  hinterlassen.
+- Reset haelt jetzt Identity- und Account-Memory-Lock in konsistenter
+  Reihenfolge, schreibt beide Memory-Dateien und Datenschutzstatus innerhalb
+  eines gemeinsamen Fehlerpfads und stellt bei jedem Teilfehler alle alten
+  Staende wieder her.
+- Regression prueft Fehler beim Datenschutz-Indexschreiben bytegleich fuer
+  Entries, Memory-Index, Profil und Account-Index; fokussiert `6 passed`,
+  vollstaendig `236 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `89e7c265 fix: roll back full memory reset`; kein
   Provider/API-Aufruf.
 
 ### LLM-State-SQL/JSON-Audit
@@ -725,8 +741,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `15/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 5 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `17/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 3 weiteren Commits.
 
 ## Bezug
 
