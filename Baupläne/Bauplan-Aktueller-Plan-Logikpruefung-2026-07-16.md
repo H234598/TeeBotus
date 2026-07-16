@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart sind aktuell `10/20` Commits vorhanden; naechster Restart
-  nach 10 weiteren Commits.
+  letzten Restart sind aktuell `16/20` Commits vorhanden; naechster Restart
+  nach 4 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -594,6 +594,28 @@ Diagnose und Tests.
   Provider/API-Aufruf.
 - Code-Commit: `e41c2597 fix: serialize outbox append snapshots`.
 
+### Fallback-Diagnose-Snapshot-Lock
+
+- 2026-07-16: Biene Sartre fand einen echten Cross-Account-Race. SQLite und
+  PostgreSQL liefern Read-Diagnosen ueber mutable `last_*`-Felder. Zwischen
+  Primary-Callback und `_copy_diagnostics()` konnte ein sauberer Read von
+  Account B die Partial-/Decrypt-Diagnose von Account A loeschen. A bekam
+  dann Teilbestand statt Fallback-Daten.
+- `WarningFallbackAccountMemoryBackend` haelt jetzt einen pro Wrapper
+  reentranten Operation-Lock ueber Callback, Diagnose-Capture,
+  Failover-Entscheidung und Reparatur. Direkte Collection-Name-Reads,
+  `read_entries_by_ids()` inklusive leerem Request und Account-Clear sind
+  ebenfalls geschuetzt. Der Lock serialisiert Fallback-Operationen innerhalb
+  eines Prozesses; dadurch bleibt die bestehende Backend-Schnittstelle fuer
+  SQLite und PostgreSQL unveraendert.
+- Deterministische Race-Regression prueft, dass Account B waehrend eines
+  blockierten Partial-Reads von A nicht dazwischenkommt und A beide
+  Fallback-Entries zurueckgibt. Fokussiert `1 passed`; AccountStore komplett
+  `249 passed`. Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf. Kein separates `tests/test_memory_fallback.py`
+  vorhanden.
+- Code-Commit: `cee5b3b1 fix: serialize fallback diagnostic capture`.
+
 ### LLM-State-SQL/JSON-Audit
 
 - 2026-07-16: Biene Herschel meldete einen vorzeitigen SQL-Return in
@@ -1012,8 +1034,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `14/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 6 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `16/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 4 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
