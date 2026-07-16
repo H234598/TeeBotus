@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `1/20` Commit vorhanden; naechster Restart
-  nach 19 weiteren Commits.
+  letzten Restart ist aktuell `3/20` Commits vorhanden; naechster Restart
+  nach 17 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -234,16 +234,19 @@ Diagnose und Tests.
 
 ### LLM-State-SQL/JSON-Audit
 
-- 2026-07-16: Biene Herschel meldete einen vermeintlich vorzeitigen SQL-Return
-  in `read_llm_state()`, der einen neueren `LLM_State.json`-Stand ignorieren
-  sollte.
-- Aufrufkette geprueft: `_read_account_json_document()` vergleicht SQL und
-  `LLM_State.json` bereits vor dem Return, schreibt den neueren Stand und
-  loescht die Datei nur nach verifiziertem Readback. Bleibt die Datei nach
-  stillem oder diagnostischem Readback-Fehler liegen, schuetzt der Return den
-  Artefaktstand. Befund daher widerlegt; kein Runtime-Fix.
-- Regressionsnachweis fuer LLM-State-Pfade: `6 passed`; Ruff,
-  `py_compile` und `git diff --check` gruen.
+- 2026-07-16: Biene Herschel meldete einen vorzeitigen SQL-Return in
+  `read_llm_state()`. Providerfreier Repro bestaetigte den Fehler: Der
+  Dokument-Helper konnte einen neueren Legacy-Stand als scheinbar bestaetigten
+  SQL-State zurueckgeben; danach loeschte `read_llm_state()` die Datei ohne
+  eigenen Read-back-Nachweis.
+- Der LLM-Read trennt SQL-Read und Legacy-Read, waehlt den neuesten Stand,
+  schreibt ihn direkt in SQL und loescht `LLM_State.json`/
+  `OpenAI_State.json` erst nach exakt verifiziertem SQL-Read-back. Stille
+  Read-back-Verluste lassen Legacy liegen und bleiben retrybar.
+- Regression fuer neuere Datei gegen aelteren SQL-State sowie stille
+  Read-back-Verluste ergaenzt. Fokussiert `8 passed`; AccountStore- und
+  RuntimeState-Suiten `311 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Code-Commit: `b35f57a3`.
 
 ### Fallback-Reparatur nach Partial-Read
 
@@ -508,8 +511,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `1/20` Commit; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 19 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `3/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 17 weiteren Commits.
 
 ## Bezug
 
