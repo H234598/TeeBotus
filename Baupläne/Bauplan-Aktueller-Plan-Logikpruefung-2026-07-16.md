@@ -1189,6 +1189,20 @@ Diagnose und Tests.
 - Code-Commit: `22f69b2e fix: refresh fallback collection diagnostics`;
   kein Provider/API-Aufruf.
 
+### Structured-Memory-Index-Reparatur-beim-Append
+
+- 2026-07-16: `append_structured_memory_entry()` aktualisierte bei leerem
+  oder teilbeschaedigtem Index nur den neuen Datensatz. Alte Live-Entries
+  blieben dadurch aus Keyword- und semantischem Cache-Retrieval verschwunden.
+- Append stellt fehlende Live-IDs jetzt inkrementell wieder her. Fehlende
+  Keywords werden aus `user_text`/`bot_text`/`text` abgeleitet; semantische
+  Cache-Metadaten werden nur fuer fehlende IDs berechnet. Kein Voll-Rebuild
+  bei gesundem Index.
+- Regression: Index-/Ranking-Block `42 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `8a2335fb fix: repair missing memory index entries`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -1228,8 +1242,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `5/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 15 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `8/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 12 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
