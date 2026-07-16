@@ -2404,6 +2404,8 @@ class AccountStore:
         if backend is None:
             return
         try:
+            if bool(getattr(backend, "last_database_missing", False)):
+                return
             read_error = str(getattr(backend, "last_entry_read_error", "") or "").strip()
             skipped = int(getattr(backend, "last_entry_skipped", 0) or 0)
         except Exception as exc:  # noqa: BLE001 - broken diagnostics must fail closed.

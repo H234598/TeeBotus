@@ -2207,6 +2207,24 @@ def test_account_memory_read_modify_and_retrieval_paths_refuse_partial_rows(tmp_
     assert backend.write_entries_calls == 0
 
 
+def test_account_memory_append_initializes_missing_sqlite_database(tmp_path):
+    sqlite_path = tmp_path / "new-memory.sqlite3"
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=sqlite_path, fallback_path=None),
+    )
+    store._account_memory_backend = backend
+
+    store.append_memory_entry(account_id, {"id": "mem_first", "user_text": "Erster Eintrag"})
+
+    assert backend.read_entries(account_id) == [{"id": "mem_first", "user_text": "Erster Eintrag"}]
+    assert sqlite_path.exists()
+
+
 def test_rebuild_structured_account_memory_rolls_back_entries_when_index_write_fails(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
