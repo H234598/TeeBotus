@@ -643,7 +643,20 @@ def _unreadable_metadata_items(accounts_root: Path, instance_name: str, provider
     elif accounts_dir.exists():
         unreadable_profiles: list[str] = []
         unreadable_profile_accounts: list[str] = []
-        for account_dir in sorted(path for path in accounts_dir.iterdir() if TOKEN_HEX_RE.fullmatch(path.name)):
+        try:
+            account_dirs = sorted(path for path in accounts_dir.iterdir() if TOKEN_HEX_RE.fullmatch(path.name))
+        except OSError as exc:
+            items.append(
+                {
+                    "kind": "accounts_dir",
+                    "path": accounts_dir,
+                    "account_ids": [],
+                    "error": f"unable to inspect accounts directory: {exc}",
+                    "quarantine_safe": False,
+                }
+            )
+            account_dirs = []
+        for account_dir in account_dirs:
             if account_dir.is_symlink():
                 unreadable_profiles.append(f"{account_dir.name}:refusing symlinked account directory: {account_dir}")
                 unreadable_profile_accounts.append(account_dir.name)
@@ -1036,9 +1049,13 @@ def _discover_account_ids(accounts_root: Path) -> list[str]:
     account_ids: set[str] = set()
     accounts_dir = _safe_json_accounts_dir(accounts_root)
     if accounts_dir is not None:
+        try:
+            account_dirs = accounts_dir.iterdir()
+        except OSError:
+            account_dirs = ()
         account_ids.update(
             path.name
-            for path in accounts_dir.iterdir()
+            for path in account_dirs
             if not path.is_symlink()
             and path.is_dir()
             and TOKEN_HEX_RE.fullmatch(path.name)

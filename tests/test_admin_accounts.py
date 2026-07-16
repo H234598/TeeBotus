@@ -861,6 +861,34 @@ def test_memory_recovery_rejects_symlinked_sqlite_parent_before_probe(tmp_path: 
     assert errors == [f"sqlite: refusing symlinked SQLite recovery path component: {linked_root}"]
 
 
+def test_memory_recovery_accounts_directory_race_stays_fail_closed(monkeypatch, tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    accounts_dir = accounts_root / "accounts"
+    accounts_dir.mkdir(parents=True)
+    original_iterdir = Path.iterdir
+
+    def race_iterdir(path: Path):
+        if path == accounts_dir:
+            raise OSError("accounts directory disappeared")
+        return original_iterdir(path)
+
+    monkeypatch.setattr(Path, "iterdir", race_iterdir)
+
+    assert account_memory_recovery_module._discover_account_ids(accounts_root) == []
+    items = account_memory_recovery_module._unreadable_metadata_items(accounts_root, "Depressionsbot", provider())
+
+    assert items == [
+        {
+            "kind": "accounts_dir",
+            "path": accounts_dir,
+            "account_ids": [],
+            "error": "unable to inspect accounts directory: accounts directory disappeared",
+            "quarantine_safe": False,
+        }
+    ]
+
+
 def test_memory_recovery_report_counts_sqlite_collections_and_skips_instance_state_account(tmp_path: Path, monkeypatch) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
