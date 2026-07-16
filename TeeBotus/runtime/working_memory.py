@@ -177,6 +177,12 @@ class WorkingMemoryStore:
         except OSError as exc:
             raise OSError(f"Unable to read instance working memory at {path}") from exc
         if not isinstance(payload, dict):
+            backup_path = _move_corrupt_json_file(path)
+            LOGGER.warning(
+                "Resetting invalid instance working memory at %s: expected JSON object. Corrupt file preserved at %s.",
+                path,
+                backup_path,
+            )
             payload = _new_working_memory_data(self.instance_name)
         _normalize_working_memory_data(payload, self.instance_name)
         entries_path.touch(exist_ok=True)
