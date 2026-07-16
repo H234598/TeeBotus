@@ -565,6 +565,22 @@ Diagnose und Tests.
 - Code-Commit: `a4d26531 fix: preserve malformed working memory indexes`; kein
   Provider/API-Aufruf.
 
+### Working-Memory-Index-Teilstruktur
+
+- 2026-07-16: Gueltiges JSON mit falscher Index-Teilstruktur wurde bisher
+  ebenfalls still repariert. `keywords`, `recent_ids` oder `entries` mit
+  falschem Typ konnten dadurch den bisherigen Indexinhalt verlieren.
+- Vor Normalisierung pruefen beide Pfade jetzt vorhandene Teilstrukturen.
+  Falsche Typen werden wie Korruption nach
+  `Working_Memorys.json.corrupt.*` verschoben; fehlende optionale Felder
+  bleiben normalisierbar.
+- Regression fuer Array-Index sowie alle drei falschen Teilstrukturtypen,
+  jeweils in beiden Store-Klassen: `tests/test_working_memory.py`:
+  `21 passed`; Telegram-Working-Memory `4 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen.
+- Code-Commit: `1f9add4c fix: quarantine malformed working memory indexes`;
+  kein Provider/API-Aufruf.
+
 ### Restart-Checkpoint
 
 - Providerfreie Nachweise dieses Auditblocks: Reminder `25 passed`,
@@ -593,8 +609,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `17/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 3 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `19/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 1 weiterem Commit.
 
 ## Bezug
 
