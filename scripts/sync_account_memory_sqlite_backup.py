@@ -262,9 +262,17 @@ def _backup_existing_secondary(path: Path) -> tuple[str, int]:
         return "", 0
     backup_dir = _unique_backup_dir(path.parent, ".pre-account-memory-backup-sync")
     backup_dir.mkdir(parents=True, exist_ok=True)
+    backups_created = 0
     for candidate in candidates:
-        shutil.copy2(candidate, backup_dir / candidate.name)
-    return str(backup_dir), len(candidates)
+        try:
+            shutil.copy2(candidate, backup_dir / candidate.name)
+        except FileNotFoundError:
+            # SQLite can checkpoint/delete WAL or SHM between family scan and copy.
+            if candidate == path:
+                raise
+            continue
+        backups_created += 1
+    return str(backup_dir), backups_created
 
 
 def _sqlite_file_family(path: Path) -> tuple[Path, Path, Path]:

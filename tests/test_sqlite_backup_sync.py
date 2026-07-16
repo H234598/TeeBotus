@@ -57,6 +57,31 @@ def test_sqlite_backup_sync_validates_and_preserves_old_secondary(tmp_path: Path
     assert (backup_dir / "Account_Memory.backup.sqlite3").exists()
 
 
+def test_sqlite_backup_sync_tolerates_disappearing_secondary_sidecar(tmp_path: Path, monkeypatch) -> None:
+    secondary = tmp_path / "Account_Memory.backup.sqlite3"
+    write_sqlite_memory(secondary, memory_id="mem_old_secondary")
+    sidecar = Path(f"{secondary}-wal")
+    if not sidecar.exists():
+        sidecar = Path(f"{secondary}-shm")
+    if not sidecar.exists():
+        pytest.skip("SQLite did not create a sidecar for this filesystem")
+
+    original_copy2 = sqlite_backup_sync.shutil.copy2
+
+    def disappear_sidecar(source, destination):
+        if Path(source) == sidecar:
+            sidecar.unlink()
+            raise FileNotFoundError(sidecar)
+        return original_copy2(source, destination)
+
+    monkeypatch.setattr(sqlite_backup_sync.shutil, "copy2", disappear_sidecar)
+
+    backup_dir, backups_created = sqlite_backup_sync._backup_existing_secondary(secondary)
+
+    assert Path(backup_dir, secondary.name).exists()
+    assert backups_created >= 1
+
+
 def test_sqlite_backup_sync_refuses_unreadable_primary_without_overwriting_secondary(tmp_path: Path) -> None:
     accounts_root = tmp_path / "instances" / "Depressionsbot" / "data" / "accounts"
     primary = accounts_root / "Account_Memory.sqlite3"
