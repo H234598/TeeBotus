@@ -4601,7 +4601,12 @@ class AccountStore:
         return key
 
     def _identity_payload_for_key(self, identities: dict[str, Any], key: str) -> dict[str, Any] | None:
-        candidates = self._identity_payload_candidates_for_key(identities, key)
+        candidates = [
+            (candidate_key, candidate_payload)
+            for candidate_key, candidate_payload in self._identity_payload_candidates_for_key(identities, key)
+            if not str(candidate_payload.get("instance") or "").strip()
+            or str(candidate_payload.get("instance") or "").strip() == self.instance_name
+        ]
         if not candidates:
             return None
         selected_key, selected_payload = candidates[0]

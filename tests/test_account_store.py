@@ -931,6 +931,18 @@ def test_identity_lookup_normalizes_case_insensitive_fallback_keys(tmp_path) -> 
     assert store.resolve_or_create_account("matrix:localpart:ADA") == matrix_account
 
 
+def test_identity_lookup_rejects_explicit_foreign_instance_mapping(tmp_path) -> None:
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    identity = telegram_identity_key(1)
+    account_id = store.resolve_or_create_account(identity)
+    identities = store._load_identities()
+    identities[identity]["instance"] = "Otherbot"
+    store._save_identities(identities)
+
+    assert store.get_account_for_identity(identity) is None
+    assert store._read_account_profile(account_id)["status"] == "active"
+
+
 def test_identity_lookup_migrates_legacy_case_variant_key(tmp_path) -> None:
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     canonical_key = "signal:uuid:abc-def"
