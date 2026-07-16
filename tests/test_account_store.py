@@ -3960,6 +3960,29 @@ def test_account_memory_fallback_blocks_collection_names_when_secondary_is_missi
     assert account_id not in backend._failed_collection_name_reads
 
 
+def test_account_memory_fallback_does_not_treat_empty_secondary_collection_names_as_recovered() -> None:
+    class Backend:
+        def __init__(self, *, fail_read: bool = False) -> None:
+            self.fail_read = fail_read
+
+        def read_collection_names(self, _account_id: str) -> tuple[str, ...]:
+            if self.fail_read:
+                raise OSError("primary unavailable")
+            return ()
+
+    account_id = "a" * 128
+    backend = WarningFallbackAccountMemoryBackend(
+        Backend(fail_read=True),
+        Backend(),
+        label="Demo:sqlite",
+    )
+
+    with pytest.raises(AccountStoreError, match="fallback has no recoverable data"):
+        backend.read_collection_names(account_id)
+
+    assert account_id in backend._failed_collection_name_reads
+
+
 def test_account_memory_fallback_repairs_fallback_only_collection_after_name_read_recovery() -> None:
     class Backend:
         def __init__(self, *, fail_names: bool = False) -> None:
