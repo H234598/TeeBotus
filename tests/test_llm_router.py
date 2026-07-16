@@ -320,6 +320,8 @@ def test_runtime_route_client_uses_gemini_key_ring_for_gemini_fallback(monkeypat
             "OPENAI_API_KEY": "openai-key",
             "GEMINI_API_KEY": "single-gemini-key",
             "TEEBOTUS_GEMINI_API_KEYS_DEMO_ACCOUNT_1": "demo-a1,demo-a2",
+            "TEEBOTUS_GEMINI_FREE_TIER_DEMO_RPM": "7",
+            "TEEBOTUS_GEMINI_FREE_TIER_RPM": "2",
             "GEMINI_API_KEYS_ACCOUNT_1": "a1,a2",
             "GEMINI_API_KEYS_ACCOUNT_2": "b1",
         },
@@ -331,6 +333,35 @@ def test_runtime_route_client_uses_gemini_key_ring_for_gemini_fallback(monkeypat
     assert client.api_key_ring is not None
     assert client.api_key_ring.keys == ("demo-a1", "demo-a2")
     assert client.gemini_free_tier_limits.active
+    assert client.gemini_free_tier_limits.requests_per_minute == 7
+    assert client.service_tier == "flex"
+
+
+def test_profiled_text_client_uses_instance_scoped_gemini_service_tier() -> None:
+    profiles = {
+        "gemini_flash": LLMProfile(
+            "gemini_flash",
+            "litellm",
+            "gemini/gemini-3.5-flash",
+            api_key_env="GEMINI_API_KEY",
+        ),
+    }
+    routing = {"normal_chat": LLMRoutingRule("normal_chat", "gemini_flash")}
+
+    client = build_profiled_text_llm_client(
+        purpose="normal_chat",
+        instructions=BotInstructions(),
+        openai_client=None,
+        profiles=profiles,
+        routing=routing,
+        instance_name="Demo",
+        env={
+            "TEEBOTUS_GEMINI_SERVICE_TIER_DEMO": "flex",
+            "TEEBOTUS_GEMINI_SERVICE_TIER": "standard",
+        },
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
     assert client.service_tier == "flex"
 
 
