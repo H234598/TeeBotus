@@ -2877,3 +2877,20 @@ nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Quarantaene-Zielpfad-ohne-Symlinks
+
+- 2026-07-17: `_prepare_private_dir()` folgte bei `--quarantine-dir` bereits
+  existierenden Symlinks. Ein Ziel ausserhalb des vorgesehenen Quarantaene-
+  Baums konnte dadurch unbemerkt als Ablage dienen.
+- Zielpfad und alle vorhandenen Eltern werden jetzt vor `mkdir`, `chmod` und
+  Move auf Symlinks geprueft. Symlink-Ziel blockiert mit `AccountStoreError`,
+  bevor irgendeine Quelle bewegt wird.
+- Regression: symlinked Quarantaeneziel -> `8 passed` im Metadata-Fokus;
+  kompletter `tests/test_admin_accounts.py` -> `70 passed`. Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4e6d6c57 fix: reject symlinked quarantine destinations`.
+
+**Aktueller Laufstand:** Seit dem Restart `6/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 14 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
