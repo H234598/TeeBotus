@@ -118,7 +118,7 @@ def notify_recent_telegram_users_for_version(
         return 0
     version_state = _version_state(state, normalized_version)
     sent_identities = set(_telegram_identity_list(version_state.get("sent_identities")))
-    identities = account_store._load_identities()
+    identities = _load_identity_map(account_store)
     failed_identities = _failed_identity_map(version_state.get("failed_identities"))
     historical_sent_identities = _historical_sent_identity_set(state, normalized_version, resolved_now)
     historical_failed_identities = _historical_failed_identity_map(state, normalized_version, identities, resolved_now)
@@ -214,7 +214,7 @@ def recent_telegram_recipients(
         return []
     recipients: list[VersionNotificationRecipient] = []
     try:
-        identities = account_store._load_identities()
+        identities = _load_identity_map(account_store)
     except AccountStoreError:
         raise
     for identity_key, payload in identities.items():
@@ -1172,6 +1172,13 @@ def _sync_version_delivery_state(
 def _sql_state_backend_available(account_store: AccountStore) -> bool:
     checker = getattr(account_store, "instance_json_state_backend_available", None)
     return callable(checker) and bool(checker())
+
+
+def _load_identity_map(account_store: AccountStore) -> dict[str, Any]:
+    lock_factory = getattr(account_store, "account_identity_lock", None)
+    lock = lock_factory() if callable(lock_factory) else nullcontext()
+    with lock:
+        return account_store._load_identities()
 
 
 def _sql_state_collection_has_rows(account_store: AccountStore) -> bool:

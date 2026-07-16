@@ -20,6 +20,7 @@ from TeeBotus.core.version_notifications import (
     notify_recent_telegram_users_for_version,
     recent_telegram_recipients,
     _clear_sql_state_collection,
+    _load_identity_map,
     _sql_state_collection_has_rows,
 )
 from TeeBotus.core.status import (
@@ -89,6 +90,34 @@ def test_version_notification_sql_helpers_hold_instance_state_lock(tmp_path: Pat
     with patch.object(store, "account_memory_lock", recording_lock):
         assert _sql_state_collection_has_rows(store) is True
         _clear_sql_state_collection(store)
+
+    assert lock_states == []
+
+
+def test_version_notification_identity_reads_hold_identity_lock(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    lock_states: list[bool] = []
+    original_load_identities = store._load_identities
+
+    class RecordingLock:
+        def __enter__(self):
+            lock_states.append(True)
+            return self
+
+        def __exit__(self, _exc_type, _exc_value, _traceback):
+            lock_states.pop()
+            return False
+
+    def load_identities():
+        assert lock_states == [True]
+        return original_load_identities()
+
+    with patch.object(store, "account_identity_lock", return_value=RecordingLock()), patch.object(
+        store,
+        "_load_identities",
+        side_effect=load_identities,
+    ):
+        assert _load_identity_map(store) == {}
 
     assert lock_states == []
 
