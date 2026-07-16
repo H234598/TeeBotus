@@ -2232,6 +2232,38 @@ def test_account_memory_append_initializes_missing_sqlite_database(tmp_path):
     assert backend.last_database_missing is False
 
 
+def test_rebuild_structured_memory_refuses_unreadable_index(tmp_path):
+    class PartiallyUnreadableIndexBackend:
+        last_entry_read_error = ""
+        last_entry_skipped = 0
+        last_index_read_error = "index payload could not be decrypted"
+        write_entries_calls = 0
+        write_index_calls = 0
+
+        def read_entries(self, _account_id):
+            return [{"id": "mem_live", "user_text": "Mond"}]
+
+        def read_index(self, _account_id):
+            return {}
+
+        def write_entries(self, _account_id, _rows):
+            self.write_entries_calls += 1
+
+        def write_index(self, _account_id, _data):
+            self.write_index_calls += 1
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    backend = PartiallyUnreadableIndexBackend()
+    store._account_memory_backend = backend
+
+    with pytest.raises(AccountStoreError, match="index is unreadable"):
+        store.rebuild_structured_memory_index(account_id)
+
+    assert backend.write_entries_calls == 0
+    assert backend.write_index_calls == 0
+
+
 def test_rebuild_structured_account_memory_rolls_back_entries_when_index_write_fails(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

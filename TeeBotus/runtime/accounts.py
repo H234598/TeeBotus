@@ -2424,6 +2424,21 @@ class AccountStore:
             detail = read_error or f"skipped={skipped}"
             raise AccountStoreError(f"{operation}: account entries are unreadable: {detail}")
 
+    def _raise_if_account_memory_index_unreadable(self, operation: str) -> None:
+        backend = self.account_memory_backend
+        if backend is None:
+            return
+        try:
+            if bool(getattr(backend, "last_database_missing", False)):
+                return
+            read_error = str(getattr(backend, "last_index_read_error", "") or "").strip()
+        except Exception as exc:  # noqa: BLE001 - broken diagnostics must fail closed.
+            raise AccountStoreError(
+                f"{operation}: account memory index is unreadable: diagnostics unavailable"
+            ) from exc
+        if read_error:
+            raise AccountStoreError(f"{operation}: account memory index is unreadable: {read_error}")
+
     @_serialize_account_memory
     def read_memory_entries_by_ids(self, account_id: str, memory_ids: Iterable[str]) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
@@ -2637,6 +2652,7 @@ class AccountStore:
         self._raise_if_account_memory_entries_unreadable("cannot rebuild structured memory index")
         previous_rows = [dict(row) for row in rows if isinstance(row, dict)]
         previous_index = self.read_memory_index(account_id)
+        self._raise_if_account_memory_index_unreadable("cannot rebuild structured memory index")
         changed = False
         normalized_rows: list[dict[str, Any]] = []
         seen_ids: set[str] = set()
