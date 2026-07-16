@@ -591,6 +591,15 @@ def _metadata_error_is_safe_to_quarantine(error: str) -> bool:
 
 
 def _unreadable_metadata_items(accounts_root: Path, instance_name: str, provider: InstanceSecretProvider) -> list[dict[str, Any]]:
+    symlink_component = _first_symlinked_path_component(accounts_root)
+    if symlink_component is not None:
+        return [
+            {
+                "kind": "account_store",
+                "path": accounts_root,
+                "error": f"refusing symlinked metadata path component: {symlink_component}",
+            }
+        ]
     store = AccountStore(
         accounts_root,
         instance_name,
@@ -876,7 +885,7 @@ def _json_memory_files_for_accounts(accounts_root: Path, account_ids: Sequence[s
 
 def _safe_json_accounts_dir(accounts_root: Path) -> Path | None:
     accounts_dir = accounts_root / ACCOUNTS_DIRNAME
-    if accounts_dir.is_symlink() or not accounts_dir.is_dir():
+    if _first_symlinked_path_component(accounts_root) is not None or accounts_dir.is_symlink() or not accounts_dir.is_dir():
         return None
     return accounts_dir
 
@@ -944,12 +953,9 @@ def _delete_row_count(cursor: sqlite3.Cursor) -> int:
 
 def _prepare_private_dir(path: Path) -> None:
     absolute = Path(os.path.abspath(os.fspath(path)))
-    for candidate in (absolute, *absolute.parents):
-        try:
-            if candidate.is_symlink():
-                raise AccountStoreError(f"refusing symlinked quarantine directory: {candidate}")
-        except OSError as exc:
-            raise AccountStoreError(f"could not inspect quarantine directory: {candidate}") from exc
+    symlink_component = _first_symlinked_path_component(absolute)
+    if symlink_component is not None:
+        raise AccountStoreError(f"refusing symlinked quarantine directory: {symlink_component}")
     path.mkdir(parents=True, exist_ok=True)
     if path.is_symlink() or not path.is_dir():
         raise AccountStoreError(f"refusing unsafe quarantine directory: {path}")
@@ -967,6 +973,17 @@ def _write_quarantine_manifest(path: Path, payload: Mapping[str, Any]) -> None:
         raise AccountStoreError(f"refusing existing quarantine manifest: {path}") from exc
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
         stream.write(serialized)
+
+
+def _first_symlinked_path_component(path: Path) -> Path | None:
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    for candidate in (absolute, *absolute.parents):
+        try:
+            if candidate.is_symlink():
+                return candidate
+        except OSError:
+            return candidate
+    return None
 
 
 def _quarantine_apply_allowed_now(running_processes: Sequence[Mapping[str, str]], *, allow_running_bot: bool) -> bool:
@@ -1221,8 +1238,8 @@ def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_
     index: dict[str, Any] = {}
     collections = 0
     raw_collections = 0
-    if source.path.is_symlink() or (source.path / account_id).is_symlink():
-        rejected_path = source.path if source.path.is_symlink() else source.path / account_id
+    symlink_component = _first_symlinked_path_component(source.path / account_id)
+    if symlink_component is not None:
         return {
             "name": source.name,
             "kind": source.kind,
@@ -1236,7 +1253,7 @@ def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_
             "raw_index_present": False,
             "collections": 0,
             "raw_collections": 0,
-            "error": f"refusing symlinked JSON recovery path: {rejected_path}",
+            "error": f"refusing symlinked JSON recovery path: {symlink_component}",
         }
     if entries_path.exists():
         if entries_path.is_symlink():
@@ -1379,6 +1396,9 @@ def _connect_sqlite_readonly(path: Path):
 def _reject_unsafe_sqlite_link(path: Path, *, label: str) -> None:
     if path.is_symlink():
         raise OSError(f"refusing symlinked SQLite recovery {label}: {path}")
+    symlink_component = _first_symlinked_path_component(path)
+    if symlink_component is not None:
+        raise OSError(f"refusing symlinked SQLite recovery path component: {symlink_component}")
     if path.exists() and path.stat().st_nlink > 1:
         raise OSError(f"refusing hardlinked SQLite recovery {label}: {path}")
 

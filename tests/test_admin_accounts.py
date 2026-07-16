@@ -841,6 +841,26 @@ def test_memory_recovery_rejects_hardlinked_sqlite_sources_before_delete(tmp_pat
     assert external.read_bytes() == b"not a database"
 
 
+def test_memory_recovery_rejects_symlinked_sqlite_parent_before_probe(tmp_path: Path) -> None:
+    real_root = tmp_path / "real"
+    real_root.mkdir()
+    source = real_root / "Account_Memory.sqlite3"
+    source.write_bytes(b"not a database")
+    linked_root = tmp_path / "linked"
+    linked_root.symlink_to(real_root, target_is_directory=True)
+    linked_source = linked_root / "Account_Memory.sqlite3"
+
+    assert _sqlite_account_ids(linked_source) == set()
+    _, _, _, errors = account_memory_recovery_module._read_sqlite_snapshot_payloads(
+        linked_source,
+        instance_name="Depressionsbot",
+        account_id="a" * 128,
+        provider=provider(),
+    )
+
+    assert errors == [f"sqlite: refusing symlinked SQLite recovery path component: {linked_root}"]
+
+
 def test_memory_recovery_report_counts_sqlite_collections_and_skips_instance_state_account(tmp_path: Path, monkeypatch) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
