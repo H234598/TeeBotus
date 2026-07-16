@@ -3448,6 +3448,63 @@ def test_sqlite_memory_recreates_schema_after_table_is_removed(tmp_path):
     assert backend.read_entries(account_id) == [{"id": "after"}]
 
 
+def test_sqlite_memory_serializes_concurrent_schema_initialization(tmp_path):
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=tmp_path / "memory.sqlite3", fallback_path=None),
+    )
+    first_started = threading.Event()
+    second_started = threading.Event()
+    release = threading.Event()
+    state_lock = threading.Lock()
+    active = 0
+    max_active = 0
+
+    class BlockingConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def executescript(self, _script):
+            nonlocal active, max_active
+            with state_lock:
+                active += 1
+                max_active = max(max_active, active)
+                if active == 1:
+                    first_started.set()
+                elif active == 2:
+                    second_started.set()
+            assert release.wait(2)
+            with state_lock:
+                active -= 1
+
+    backend._connect = lambda: BlockingConnection()
+    errors = []
+
+    def ensure_schema():
+        try:
+            backend._ensure_schema()
+        except BaseException as exc:  # noqa: BLE001
+            errors.append(exc)
+
+    threads = [threading.Thread(target=ensure_schema) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    assert first_started.wait(2)
+    assert not second_started.wait(0.25)
+    release.set()
+    for thread in threads:
+        thread.join(2)
+        assert not thread.is_alive()
+
+    assert errors == []
+    assert max_active == 1
+
+
 def test_sqlite_empty_entry_id_read_clears_previous_diagnostics(tmp_path):
     backend = SQLiteAccountMemoryBackend(
         instance_name="Depressionsbot",

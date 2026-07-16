@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import sqlite3
+import threading
 import uuid
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from TeeBotus.runtime.accounts import AccountStoreError, InstanceSecretProvider, utc_now
 
 LOGGER = logging.getLogger("TeeBotus")
+_SCHEMA_INIT_LOCK = threading.RLock()
 
 SQLITE_BACKEND_ENV = "TEEBOTUS_ACCOUNT_MEMORY_BACKEND"
 SQLITE_PATH_ENV = "TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH"
@@ -630,6 +632,10 @@ class SQLiteAccountMemoryBackend:
         return error
 
     def _ensure_schema(self, *, allow_incomplete_schema: bool = False) -> None:
+        with _SCHEMA_INIT_LOCK:
+            self._ensure_schema_locked(allow_incomplete_schema=allow_incomplete_schema)
+
+    def _ensure_schema_locked(self, *, allow_incomplete_schema: bool = False) -> None:
         self.last_database_missing = False
         existing_database = self.config.path.exists()
         if not existing_database and self._secondary_database_exists() and not allow_incomplete_schema:

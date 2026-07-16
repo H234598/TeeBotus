@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import uuid
 from dataclasses import dataclass
 from functools import wraps
@@ -17,6 +18,7 @@ POSTGRES_CONNECT_TIMEOUT_ENV = "TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_CONNECT_TIMEOUT
 POSTGRES_BACKEND_TOKENS = {"postgres", "postgresql", "pg"}
 POSTGRES_READ_ENTRIES_BY_IDS_CHUNK_SIZE = 500
 LOGGER = logging.getLogger("TeeBotus")
+_SCHEMA_INIT_LOCK = threading.RLock()
 
 
 def _retry_after_missing_schema(method):  # noqa: ANN001
@@ -459,6 +461,10 @@ class PostgresAccountMemoryBackend:
             raise AccountStoreError(f"could not connect to PostgreSQL account memory backend: {exc}") from exc
 
     def _ensure_schema(self) -> None:
+        with _SCHEMA_INIT_LOCK:
+            self._ensure_schema_locked()
+
+    def _ensure_schema_locked(self) -> None:
         if self._initialized:
             return
         with self._connect() as connection:
