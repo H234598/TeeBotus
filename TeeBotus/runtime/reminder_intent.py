@@ -46,7 +46,7 @@ REMINDER_REQUEST_RE = re.compile(
     re.IGNORECASE,
 )
 
-_CLOCK_HOUR = r"(?:[01]?\d|2[0-3])"
+_CLOCK_HOUR = r"(?:2[0-3]|[01]?\d)(?!\d)"
 EXPLICIT_TIME_CANDIDATE_RE = re.compile(
     r"\b(?:um|gegen)\s+(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\s*(?:uhr)?",
     re.IGNORECASE,

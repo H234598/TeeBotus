@@ -182,6 +182,25 @@ def test_parse_reminder_supports_german_month_names_and_explicit_year() -> None:
     assert umlaut.due_at == march.due_at
 
 
+def test_parse_reminder_named_month_keeps_late_evening_hour() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich am 31. Dezember um 23:59 an Silvester",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-12-31T23:59:00+00:00"
+
+
+def test_parse_reminder_named_month_rejects_out_of_range_hour() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich am 31. Dezember um 25:00 an Silvester",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == ""
+    assert intent.missing_time is True
+
+
 def test_parse_reminder_supports_trailing_dot_before_numeric_time() -> None:
     now = datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc)
 
