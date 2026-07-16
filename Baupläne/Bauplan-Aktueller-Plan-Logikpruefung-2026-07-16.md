@@ -2894,3 +2894,21 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `6/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 14 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Account-Profilstatus-nur-bekannte-Zustaende
+
+- 2026-07-17: `_account_is_resolvable()` behandelte jeden Profilstatus ausser
+  `tombstoned` als aktiv. Auch `_upsert_account_index()` akzeptierte unbekannte
+  Statuswerte. Beschädigte oder fremde Status konnten damit nutzbare Accounts
+  und Indexeintraege erzeugen.
+- Resolvability und Index-Write akzeptieren jetzt nur `active` und `orphaned`.
+  Unbekannte, leere und sonstige Statuswerte blockieren; Tombstone-/Cleanup-
+  Pfade bleiben separat.
+- Regression: Ownership-/Status-Guard -> `3 passed`; komplette
+  `tests/test_account_store.py` -> `290 passed`. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `14eb7203 fix: reject unknown account profile statuses`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
