@@ -1429,6 +1429,26 @@ ausgeloest. Naechster Restart nach 12 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `12/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 8 weiteren Commits.
 
+### Stale-Read-Diagnosen-nach-erfolgreichem-Write
+
+- 2026-07-16: SQLite-Reads auf fehlender DB hinterliessen
+  `last_*_read_error`. Ein anschliessender erfolgreicher Write legte die DB
+  zwar an, loeschte die alten Read-Diagnosen aber nicht. Der Fallback-Router
+  kopierte sie danach erneut; Status und Folge-Guards konnten so eine bereits
+  behobene Stoerung weiter melden.
+- SQLite-, PostgreSQL- und Fallback-Write-Erfolgspfad setzt jetzt jeweils nur
+  die betroffene Entry-, Index- oder Collection-Diagnose sowie das
+  Datenbank-Missing-Flag zurueck. Fehler vor/nach dem Write bleiben sichtbar;
+  kein pauschales Loeschen fremder Operation-Diagnosen.
+- Regression mit strukturiertem Erstwrite auf direktem SQLite-Backend und
+  konfiguriertem SQLite-Fallback; gesamte `tests/test_account_store.py`
+  `263 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `8a2cbe35 fix: clear stale memory diagnostics after writes`;
+  kein Provider/API-Aufruf.
+
+**Laufstand nach Fix:** Seit dem Restart `14/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 6 weiteren Commits.
+
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
   `/v1/about` meldet Signal REST `0.100` im JSON-RPC-Modus;
