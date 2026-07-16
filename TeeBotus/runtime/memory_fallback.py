@@ -206,6 +206,7 @@ class WarningFallbackAccountMemoryBackend:
                 for collection in sorted(collections_to_sync):
                     self._sync_collection_from_fallback(account_id, collection, force=True)
             names = tuple(getattr(self.primary, "read_collection_names")(account_id))
+            self._copy_diagnostics(self.primary)
             if name_read_repair_pending:
                 self._failed_collection_name_reads.discard(account_id)
             self._warn_if_fallback_repair_pending("read_collection:*", account_id)
@@ -230,16 +231,20 @@ class WarningFallbackAccountMemoryBackend:
                 )
                 raise AccountStoreError(self.fallback_sync_error_for_account(account_id) or self.last_fallback_sync_error) from exc
             try:
-                return tuple(getattr(self.fallback, "read_collection_names")(account_id))
+                names = tuple(getattr(self.fallback, "read_collection_names")(account_id))
+                self._copy_diagnostics(self.fallback)
+                return names
             except Exception as fallback_exc:
                 if self._backend_database_missing(self.fallback):
                     if self._backend_database_missing(self.primary):
+                        self.last_database_missing = True
                         self._set_fallback_sync_error(
                             "read_collection_names",
                             account_id,
                             "read_collection_names: primary and fallback databases are not initialized",
                         )
                     else:
+                        self.last_database_missing = False
                         self._set_fallback_sync_error(
                             "read_collection_names",
                             account_id,

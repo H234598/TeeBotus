@@ -3554,6 +3554,33 @@ def test_account_memory_fallback_preserves_missing_database_diagnostic(tmp_path)
     assert backend.last_fallback_sync_error == "read_collection:proactive_outbox: primary and fallback databases are not initialized"
 
 
+def test_account_memory_fallback_refreshes_collection_name_diagnostics() -> None:
+    class Backend:
+        def __init__(self, names: tuple[str, ...], *, missing: bool) -> None:
+            self.names = names
+            self.last_database_missing = missing
+
+        def read_collection_names(self, _account_id: str) -> tuple[str, ...]:
+            if self.last_database_missing:
+                raise AccountStoreError("database missing")
+            return self.names
+
+    primary = Backend((), missing=True)
+    fallback = Backend(("proactive_outbox",), missing=False)
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+    backend.last_database_missing = True
+
+    assert backend.read_collection_names("a" * 128) == ("proactive_outbox",)
+    assert backend.last_database_missing is False
+
+    primary.last_database_missing = False
+    primary.names = ("llm_state",)
+    backend.last_database_missing = True
+
+    assert backend.read_collection_names("a" * 128) == ("llm_state",)
+    assert backend.last_database_missing is False
+
+
 def test_sqlite_entry_id_read_chunks_large_requests(tmp_path):
     backend = SQLiteAccountMemoryBackend(
         instance_name="Depressionsbot",
