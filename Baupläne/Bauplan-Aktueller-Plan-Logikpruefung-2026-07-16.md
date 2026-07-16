@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart ist aktuell `13/20` Commits vorhanden; naechster Restart
-  nach 7 weiteren Commits.
+  letzten Restart ist aktuell `15/20` Commits vorhanden; naechster Restart
+  nach 5 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -291,6 +291,20 @@ Diagnose und Tests.
   Neuanlage beim Retry; fokussiert `18 passed`, vollstaendig `234 passed`;
   Ruff, `py_compile` und `git diff --check` gruen.
 - Code-Commit: `4d5f7976 fix: roll back account creation metadata`; kein
+  Provider/API-Aufruf.
+
+### Privacy-Metadata-Rollback
+
+- 2026-07-16: `confirm_privacy()` und `clear_privacy_confirmation()` schrieben
+  Profil und Account-Index ohne gemeinsamen Fehlerpfad. Ein Indexfehler
+  konnte bestaetigten Datenschutzstatus und Index auseinanderziehen.
+- Beide Methoden laufen jetzt unter dem Identity-Lock und sichern Profil,
+  Identity-Map sowie Index vor der Mutation. Bei Teilfehlern wird der alte
+  Byte-Stand wiederhergestellt; Restore-Fehler bleiben sichtbar.
+- Regressionen fuer Bestaetigung und Loeschung pruefen bytegleiche
+  Wiederherstellung und erfolgreichen Retry; fokussiert `21 passed`,
+  vollstaendig `235 passed`; Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `dbc93f34 fix: roll back privacy metadata updates`; kein
   Provider/API-Aufruf.
 
 ### LLM-State-SQL/JSON-Audit
@@ -711,8 +725,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `13/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 7 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `15/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 5 weiteren Commits.
 
 ## Bezug
 
