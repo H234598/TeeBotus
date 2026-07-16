@@ -278,6 +278,22 @@ def test_admin_report_ignores_symlinked_account_directories(tmp_path: Path) -> N
     assert store_report["account_directory_ids"] == []
 
 
+def test_admin_report_marks_account_directory_scan_error(monkeypatch, tmp_path: Path) -> None:
+    make_instance(tmp_path)
+
+    def fail_scan(_accounts_dir: Path) -> list[Path]:
+        raise OSError("accounts directory disappeared")
+
+    monkeypatch.setattr(accounts_report_module, "_account_dirs", fail_scan)
+
+    report = build_accounts_admin_report(instances_dir=tmp_path, provider=provider())
+
+    store_report = report["instances"][0]["account_store"]
+    assert store_report["readable"] is False
+    assert store_report["errors"] == ["account_directories: accounts directory disappeared"]
+    assert report["totals"]["store_errors"] == 1
+
+
 def test_text_report_contains_account_store_and_identity_summary(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())

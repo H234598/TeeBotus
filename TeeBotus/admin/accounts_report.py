@@ -231,10 +231,15 @@ def build_instance_admin_report(
 
 def _build_store_report(store: AccountStore) -> dict[str, Any]:
     accounts_dir = store.accounts_dir
-    account_dirs = _account_dirs(accounts_dir)
+    account_dirs_error = ""
+    try:
+        account_dirs = _account_dirs(accounts_dir)
+    except OSError as exc:
+        account_dirs = []
+        account_dirs_error = f"account_directories: {exc}"
     report: dict[str, Any] = {
-        "readable": True,
-        "errors": [],
+        "readable": not account_dirs_error,
+        "errors": [account_dirs_error] if account_dirs_error else [],
         "accounts_root_exists": store.root.exists(),
         "account_directories": len(account_dirs),
         "account_directory_ids": [path.name for path in account_dirs],
