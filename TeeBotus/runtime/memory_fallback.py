@@ -169,8 +169,13 @@ class WarningFallbackAccountMemoryBackend:
             if backend is self.primary:
                 replace_result["replaced"] = bool(replaced)
                 replace_result["primary_completed"] = True
-            elif not replace_result["primary_completed"]:
-                replace_result["replaced"] = bool(replaced)
+            else:
+                if replace_result["primary_completed"] and replace_result["replaced"] and not replaced:
+                    raise AccountStoreError(
+                        f"write_collection:{collection_name}: fallback item {normalized_item_key!r} missing after primary replacement"
+                    )
+                if not replace_result["primary_completed"]:
+                    replace_result["replaced"] = bool(replaced)
 
         self._write(
             f"write_collection:{collection_name}",
