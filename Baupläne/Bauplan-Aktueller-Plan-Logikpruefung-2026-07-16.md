@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart sind aktuell `10/20` Commits vorhanden; naechster Restart
-  nach 10 weiteren Commits.
+  letzten Restart sind aktuell `12/20` Commits vorhanden; naechster Restart
+  nach 8 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -418,6 +418,20 @@ Diagnose und Tests.
   passed`, Proactive-/Notification-/Codex-Suiten `460 passed`; Ruff,
   `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `93511ccf fix: serialize and repair instance state`.
+
+### Account-Registration-Lock
+
+- 2026-07-16: `register_account()` las den Secret-Zustand vor dem
+  Identity-Lock und delegierte erst danach an `rotate_secret()`. Parallele
+  Registrierungen konnten beide die Vorpruefung als "kein aktives Secret"
+  sehen und danach unerwartet nacheinander Secrets rotieren.
+- Der Identity-Lock umfasst jetzt Vorpruefung und Rotation. Der innere
+  `rotate_secret()`-Lock bleibt reentrant; direkte Rotationen behalten ihre
+  bisherige Semantik.
+- Regression prueft, dass Rotation erst innerhalb des gehaltenen Locks
+  aufgerufen wird; fokussiert `2 passed`, AccountStore komplett `240 passed`.
+  Ruff, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e8e7bde7 fix: serialize account registration`.
 
 ### LLM-State-SQL/JSON-Audit
 
@@ -837,8 +851,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `10/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 10 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `12/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 8 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
