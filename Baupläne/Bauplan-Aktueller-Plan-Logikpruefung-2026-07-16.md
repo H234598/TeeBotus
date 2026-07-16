@@ -2587,6 +2587,26 @@ Restart nach 12 weiteren Commits.
 **Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Kein Push. Naechster
 Restart nach 10 weiteren Commits.
 
+### Collection-Read-trotz-Name-Reparatur
+
+- 2026-07-16: Der neue Pending-Marker fuer eine aus dem Secondary gelieferte
+  Collection-Namensliste wurde von `_operation_has_unsafe_fallback()` auch auf
+  konkrete `read_collection()`-Aufrufe angewendet. Dadurch war bekannte,
+  lesbare Secondary-Nutzlast nicht mehr erreichbar, obwohl sie den Primary
+  reparieren konnte.
+- Der Marker blockiert jetzt nur unsichere Collection-Name-/Write-Pfade.
+  Explizite Collection-Reads duerfen Secondary nutzen und reparieren den
+  Primary weiterhin; echte Collection-`sync_failed`-/`unrecoverable`- oder
+  Clear-Wildcard-Zustaende bleiben fail-closed.
+- Regression: direkter Read waehrend ausstehender Name-Reparatur plus bestehende
+  Name-Failure-Pfade -> `3 passed`; komplette `tests/test_account_store.py` ->
+  `283 passed`. Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `c60a64cd fix: keep named collection fallback reads available`.
+
+**Aktueller Laufstand:** Seit dem Restart `13/20` Commits. Kein Push. Naechster
+Restart nach 7 weiteren Commits.
+
 **Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Dieser
 Plan-Commit macht `6/20`; kein Push. Naechster Restart nach 14 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
