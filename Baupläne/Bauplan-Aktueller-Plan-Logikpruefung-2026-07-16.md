@@ -340,6 +340,18 @@ Diagnose und Tests.
   `py_compile` und `git diff --check` gruen. Commit:
   `eb4f2475 fix: scope activity replay deduplication`.
 
+### Healthcheck-/Applet-Datenvertrag
+
+- 2026-07-16: Nachaudit der aktuellen Health-Klassifikation und des Cinnamon-
+  Applets ausgefuehrt. Quell-Applet und installierte Kopie sind bytegleich;
+  kein Installationsdrift.
+- Kein neuer belegter Quellfehler: V2-Health-Validator, Qdrant-Ueberlappungs-
+  zaehlung, informative Fallback-Zustaende und actionable Detailzeilen sind
+  durch vorhandene Regressionen abgedeckt. `tests/test_cinnamon_applet.py`:
+  `238 passed in 30.23s`.
+- Kein Patch fuer eine unbelegte Anzeige erstellt. Seit dem Restart stehen
+  `2/20` Commits an; kein weiterer Restart erforderlich.
+
 ## Akzeptanzkriterien
 
 - Kein geaenderter Pfad kann nach einem simulierten zweiten Schreibfehler
