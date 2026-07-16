@@ -1639,6 +1639,24 @@ ausgeloest. Naechster Restart nach 9 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `13/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 7 weiteren Commits.
 
+### Keine-partiellen-Primary-Rows-in-stale-Fallback-spiegeln
+
+- 2026-07-16: Der stale-Repair fuer `replace_collection_item()` las die
+  komplette Collection aus Primary und schrieb sie direkt in den Fallback.
+  Bei einem partiellen Primary-Read konnten gueltige Fallback-Rows dadurch
+  geloescht werden.
+- Mirror-Reparaturen validieren den Quell-Read jetzt ueber Read-Error und
+  Skip-Diagnosen. Bei nicht sauberem Read wird keine Fallback-Collection
+  geschrieben; stale/sync-failed bleibt aktiv und erzwingt spaetere Reparatur.
+- Regression mit erfolgreichem Primary-Replacement, partieller Primary-Read-
+  Diagnose und unveraendertem Fallback; gesamte `tests/test_account_store.py`:
+  `273 passed`; Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `d36df6c7 fix: block partial fallback mirror repairs`.
+
+**Laufstand nach Fix:** Seit dem Restart `15/20` Commits; kein Push
+ausgeloest. Naechster Restart nach 5 weiteren Commits.
+
 ## Bezug
 
 - Vorheriger Plan:
