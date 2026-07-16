@@ -60,6 +60,7 @@ _ACCOUNT_IDENTITY_LOCK = threading.RLock()
 _ACCOUNT_IDENTITY_LOCK_STATE = threading.local()
 _ACCOUNT_MEMORY_LOCK = threading.RLock()
 _ACCOUNT_MEMORY_LOCK_STATE = threading.local()
+_ACCOUNT_MEMORY_BACKEND_LOCK = threading.RLock()
 _PROACTIVE_OUTBOX_LOCK = threading.RLock()
 _PROACTIVE_OUTBOX_LOCK_STATE = threading.local()
 PROACTIVE_OUTBOX_FILENAME = "Proactive_Outbox.jsonl"
@@ -1288,39 +1289,43 @@ class AccountStore:
         if not self.memory_backend_enabled:
             return None
         if self._account_memory_backend is None:
-            from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
-            from TeeBotus.runtime.postgres_memory import PostgresAccountMemoryBackend, PostgresMemoryConfig
-
-            sqlite_config = SQLiteMemoryConfig.from_env(self.root)
-            if sqlite_config is not None:
-                primary = SQLiteAccountMemoryBackend(
-                    instance_name=self.instance_name,
-                    provider=self.secret_provider,
-                    purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
-                    config=sqlite_config,
-                )
-                if sqlite_config.fallback_path is not None:
-                    from TeeBotus.runtime.memory_fallback import WarningFallbackAccountMemoryBackend
-
-                    fallback = SQLiteAccountMemoryBackend(
-                        instance_name=self.instance_name,
-                        provider=self.secret_provider,
-                        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
-                        config=SQLiteMemoryConfig(path=sqlite_config.fallback_path, fallback_path=None),
-                    )
-                    self._account_memory_backend = WarningFallbackAccountMemoryBackend(primary, fallback, label=f"{self.instance_name}:sqlite")
-                else:
-                    self._account_memory_backend = primary
-                return self._account_memory_backend
-            postgres_config = PostgresMemoryConfig.from_env()
-            if postgres_config is not None:
-                self._account_memory_backend = PostgresAccountMemoryBackend(
-                    instance_name=self.instance_name,
-                    provider=self.secret_provider,
-                    purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
-                    config=postgres_config,
-                )
+            with _ACCOUNT_MEMORY_BACKEND_LOCK:
+                if self._account_memory_backend is None:
+                    self._account_memory_backend = self._create_account_memory_backend()
         return self._account_memory_backend
+
+    def _create_account_memory_backend(self) -> Any | None:
+        from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
+        from TeeBotus.runtime.postgres_memory import PostgresAccountMemoryBackend, PostgresMemoryConfig
+
+        sqlite_config = SQLiteMemoryConfig.from_env(self.root)
+        if sqlite_config is not None:
+            primary = SQLiteAccountMemoryBackend(
+                instance_name=self.instance_name,
+                provider=self.secret_provider,
+                purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+                config=sqlite_config,
+            )
+            if sqlite_config.fallback_path is not None:
+                from TeeBotus.runtime.memory_fallback import WarningFallbackAccountMemoryBackend
+
+                fallback = SQLiteAccountMemoryBackend(
+                    instance_name=self.instance_name,
+                    provider=self.secret_provider,
+                    purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+                    config=SQLiteMemoryConfig(path=sqlite_config.fallback_path, fallback_path=None),
+                )
+                return WarningFallbackAccountMemoryBackend(primary, fallback, label=f"{self.instance_name}:sqlite")
+            return primary
+        postgres_config = PostgresMemoryConfig.from_env()
+        if postgres_config is not None:
+            return PostgresAccountMemoryBackend(
+                instance_name=self.instance_name,
+                provider=self.secret_provider,
+                purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+                config=postgres_config,
+            )
+        return None
 
     def _guard_secret_autocreate_against_existing_payloads(self) -> None:
         tool_provider = _as_secret_tool_provider(self.secret_provider)

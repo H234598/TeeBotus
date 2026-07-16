@@ -1129,6 +1129,36 @@ def test_memory_reads_hold_account_lock(tmp_path):
     assert lock_states == []
 
 
+def test_account_memory_backend_lazy_init_is_serialized(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    lock_states: list[bool] = []
+    backend = object()
+
+    class RecordingLock:
+        def __enter__(self):
+            lock_states.append(True)
+            return self
+
+        def __exit__(self, _exc_type, _exc_value, _traceback):
+            lock_states.pop()
+            return False
+
+    def create_backend():
+        assert lock_states == [True]
+        return backend
+
+    with patch("TeeBotus.runtime.accounts._ACCOUNT_MEMORY_BACKEND_LOCK", RecordingLock()), patch.object(
+        store,
+        "_create_account_memory_backend",
+        side_effect=create_backend,
+    ) as create:
+        assert store.account_memory_backend is backend
+        assert store.account_memory_backend is backend
+
+    create.assert_called_once_with()
+    assert lock_states == []
+
+
 def test_memory_retrieval_holds_account_lock_across_snapshot(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
