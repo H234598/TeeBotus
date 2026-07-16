@@ -1273,6 +1273,35 @@ def test_memory_recovery_metadata_quarantine_preserves_readable_account_dirs(tmp
     assert (timestamp_dir / "accounts" / unreadable_account / "Account_Profile.json").exists()
 
 
+def test_memory_recovery_metadata_quarantine_refuses_missing_secret(tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    accounts_root = instance_dir / "data" / "accounts"
+    store = AccountStore(accounts_root, "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:1")
+
+    class MissingSecretProvider:
+        def get_secret(self, _instance_name: str, _purpose: str) -> bytes:
+            raise AccountStoreError("instance secret is missing")
+
+        def has_secret(self, _instance_name: str, _purpose: str) -> bool:
+            return False
+
+    result = quarantine_unreadable_account_metadata(
+        instances_dir=tmp_path,
+        provider=MissingSecretProvider(),
+        apply=True,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[],
+    )
+
+    assert result["status"] == "blocked"
+    assert result["totals"]["items_quarantined"] == 0
+    assert (accounts_root / "Account_Index.json").exists()
+    assert (accounts_root / "Account_Identities.json").exists()
+    assert (accounts_root / "accounts" / account_id / "Account_Profile.json").exists()
+    assert not (tmp_path / "quarantine").exists()
+
+
 def test_memory_recovery_report_includes_unreadable_metadata_account_ids(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"

@@ -432,12 +432,16 @@ def quarantine_unreadable_account_metadata(
             quarantine_dir=quarantine_dir,
             timestamp=timestamp,
         )
+        if instance_result.get("status") == "blocked":
+            result["status"] = "blocked"
+            result["instances"].append(instance_result)
+            continue
         if instance_result["totals"]["items_quarantined"]:
             result["instances"].append(instance_result)
             result["totals"]["instances_with_unreadable_metadata"] += 1
             result["totals"]["items_quarantined"] += int(instance_result["totals"]["items_quarantined"])
             result["totals"]["account_dirs_quarantined"] += int(instance_result["totals"]["account_dirs_quarantined"])
-    if not result["totals"]["items_quarantined"]:
+    if result["status"] != "blocked" and not result["totals"]["items_quarantined"]:
         result["status"] = "no-op"
     return result
 
@@ -477,6 +481,26 @@ def _quarantine_instance_unreadable_metadata(
             "account_dirs_quarantined": sum(1 for item in items if item["kind"] == "accounts_dir"),
         },
     }
+    if apply:
+        unsafe_items = [item for item in items if not _metadata_error_is_safe_to_quarantine(str(item.get("error") or ""))]
+        if unsafe_items:
+            result["status"] = "blocked"
+            result["error"] = (
+                "Refusing metadata quarantine because at least one read failure may be caused by an unavailable, "
+                "missing, or changed secret rather than corrupted payload."
+            )
+            result["totals"]["items_quarantined"] = 0
+            result["totals"]["account_dirs_quarantined"] = 0
+            result["items"] = [
+                {
+                    "kind": item["kind"],
+                    "path": str(item["path"]),
+                    "error": item["error"],
+                    "would_move": False,
+                }
+                for item in unsafe_items
+            ]
+            return result
     if not items or not apply:
         return result
     _prepare_private_dir(instance_quarantine_dir)
@@ -532,6 +556,36 @@ def _quarantine_instance_unreadable_metadata(
     manifest_path = instance_quarantine_dir / "manifest.json"
     manifest_path.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return result
+
+
+def _metadata_error_is_safe_to_quarantine(error: str) -> bool:
+    lowered = str(error or "").casefold()
+    if not lowered:
+        return False
+    unsafe_markers = (
+        "secret-tool",
+        "secret service",
+        "instance secret is missing",
+        "instance secret verifier mismatch",
+        "keyring",
+        "provider",
+    )
+    if any(marker in lowered for marker in unsafe_markers):
+        return False
+    corruption_markers = (
+        "encrypted envelope authentication failed",
+        "encrypted envelope is malformed",
+        "encrypted envelope must be an object",
+        "encrypted envelope version is unsupported",
+        "encrypted envelope algorithm is unsupported",
+        "encrypted envelope kind does not match",
+        "encrypted envelope fields are invalid",
+        "encrypted envelope nonce has invalid length",
+        "encrypted envelope ciphertext is empty",
+        "encrypted json file is invalid",
+        "encrypted json file must contain an object",
+    )
+    return any(marker in lowered for marker in corruption_markers)
 
 
 def _unreadable_metadata_items(accounts_root: Path, instance_name: str, provider: InstanceSecretProvider) -> list[dict[str, Any]]:
