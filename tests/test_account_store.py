@@ -1164,6 +1164,24 @@ def test_merge_accounts_retry_after_identity_write_failure_is_idempotent(tmp_pat
     assert not (store.account_dir(source) / USER_MEMORY_ENTRIES_FILENAME).exists()
 
 
+def test_merge_accounts_normalizes_source_before_retry_deduplication(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    target = store.resolve_or_create_account(telegram_identity_key(1))
+    source = store.resolve_or_create_account(signal_identity_key(source_uuid="retry-legacy-row"))
+    store.write_memory_entries(source, [{"text": "einmal ohne id"}])
+
+    with patch.object(store, "_save_identities", side_effect=AccountStoreError("identity write failed")):
+        with pytest.raises(AccountStoreError, match="identity write failed"):
+            store.merge_accounts(source, target)
+
+    store.merge_accounts(source, target)
+
+    entries = store.read_memory_entries(target)
+    assert len(entries) == 1
+    assert entries[0]["text"] == "einmal ohne id"
+    assert entries[0]["id"]
+
+
 def test_merge_accounts_resumes_tombstone_cleanup_after_failure(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     target = store.resolve_or_create_account(telegram_identity_key(1))
@@ -1174,6 +1192,7 @@ def test_merge_accounts_resumes_tombstone_cleanup_after_failure(tmp_path):
             store.merge_accounts(source, target)
 
     assert (store.account_dir(source) / "Account_Tombstone.json").exists()
+    assert source in store._load_index().get("accounts", {})
     store.merge_accounts(source, target)
 
     assert (store.account_dir(source) / "Account_Tombstone.json").exists()

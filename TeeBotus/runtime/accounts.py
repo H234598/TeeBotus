@@ -2136,11 +2136,12 @@ class AccountStore:
             if str(tombstone.get("status") or "") == "tombstoned":
                 if str(tombstone.get("merged_into") or "") != target_account_id:
                     raise AccountStoreError("source account is already tombstoned")
-                self._remove_account_from_index(source_account_id)
                 self._delete_dir_contents_except(source_dir, {"Account_Tombstone.json"})
+                self._remove_account_from_index(source_account_id)
                 return
         self._ensure_account_resolvable(source_account_id)
         target_dir.mkdir(parents=True, exist_ok=True)
+        self.rebuild_structured_memory_index(source_account_id)
         self._merge_jsonl(source_dir / USER_MEMORY_ENTRIES_FILENAME, target_dir / USER_MEMORY_ENTRIES_FILENAME, vault=self.account_memory_vault)
         self._merge_json_objects(source_dir / USER_MEMORY_INDEX_FILENAME, target_dir / USER_MEMORY_INDEX_FILENAME, preserve_target=True, vault=self.account_memory_vault)
         self.rebuild_structured_memory_index(target_account_id)
@@ -2156,8 +2157,8 @@ class AccountStore:
         tombstone = self._read_account_profile(source_account_id) if (source_dir / ACCOUNT_PROFILE_FILENAME).exists() else {}
         tombstone.update({"account_id": source_account_id, "status": "tombstoned", "merged_into": target_account_id, "updated_at": utc_now()})
         self.vault.write_json(source_dir / "Account_Tombstone.json", tombstone)
-        self._remove_account_from_index(source_account_id)
         self._delete_dir_contents_except(source_dir, {"Account_Tombstone.json"})
+        self._remove_account_from_index(source_account_id)
 
     def account_summary(self, account_id: str) -> dict[str, Any]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
