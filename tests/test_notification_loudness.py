@@ -506,6 +506,38 @@ def test_scheduler_queues_notification_loudness_follow_up_when_recently_active_i
     assert check_proactive_agent_account(account_store, account_id).ok is True
 
 
+def test_scheduler_uses_outbox_as_wake_window_recovery_marker_after_state_write_failure(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    assert maybe_notification_loudness_prompt_action(
+        event(identity), account_store, account_id, now=now - timedelta(hours=7)
+    ) is not None
+    set_identity_last_seen(account_store, identity, now - timedelta(minutes=2))
+    original_write = account_store.write_agent_state
+    failed = True
+
+    def fail_once(current_account_id, state):
+        nonlocal failed
+        if failed:
+            failed = False
+            raise AccountStoreError("agent state write unavailable")
+        return original_write(current_account_id, state)
+
+    account_store.write_agent_state = fail_once  # type: ignore[method-assign]
+
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=now) == ()
+    rows = account_store.read_proactive_outbox(account_id)
+    assert len(rows) == 1
+    rows[0]["status"] = "sent"
+    account_store.write_proactive_outbox(account_id, rows)
+
+    account_store.write_agent_state = original_write  # type: ignore[method-assign]
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=now) == ()
+    assert len(account_store.read_proactive_outbox(account_id)) == 1
+
+
 def test_scheduler_respects_adaptive_activity_profile_for_notification_loudness(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

@@ -1848,6 +1848,8 @@ def _queue_due_notification_loudness_prompts_unlocked(
                 continue
         if _has_queued_notification_loudness_item(account_store, account_id, route_key):
             continue
+        if _has_notification_loudness_item_in_wake_window(account_store, account_id, route_key, resolved_now):
+            continue
         _mark_route_state_prompted(route_state, resolved_now)
         queued_ids.append(
             account_store.append_proactive_outbox_item(
@@ -3221,6 +3223,31 @@ def _has_queued_notification_loudness_item(account_store: AccountStore, account_
             continue
         if _notification_loudness_outbox_status(item) in {"queued", "dispatching"}:
             return True
+    return False
+
+
+def _has_notification_loudness_item_in_wake_window(
+    account_store: AccountStore,
+    account_id: str,
+    route_key: str,
+    now: datetime,
+) -> bool:
+    date_key = _wake_date_key(now)
+    window = _wake_window_label(now)
+    if not window:
+        return False
+    for item in account_store.read_proactive_outbox(account_id):
+        if not isinstance(item, dict) or not is_notification_loudness_outbox_item(item):
+            continue
+        if _outbox_route_key(item) != _normalize_route_key(route_key):
+            continue
+        for field_name in ("due_at", "created_at", "updated_at"):
+            item_at = _parse_datetime(str(item.get(field_name) or ""))
+            if item_at is None:
+                continue
+            if _wake_date_key(item_at) == date_key and _wake_window_label(item_at) == window:
+                return True
+            break
     return False
 
 
