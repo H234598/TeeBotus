@@ -112,6 +112,8 @@ WORKING_MEMORY_INDEX_FILENAME = "Working_Memorys.json"
 WORKING_MEMORY_ENTRIES_FILENAME = "Working_Memorys.entries.jsonl"
 TELADI_CALL_STATE_FILENAME = "Teladi_Emergency_State.json"
 WORKING_MEMORY_MAX_PROMPT_CHARS = 6000
+_WORKING_MEMORY_LOCKS: dict[str, threading.RLock] = {}
+_WORKING_MEMORY_LOCKS_GUARD = threading.Lock()
 WORKING_MEMORY_PRIVACY_NOTE = (
     "Instanzweites Arbeitsgedaechtnis. Darf keine User-IDs, Namen, Usernames, Chat-IDs, "
     "Chat-Titel, Rohzitate aus Usernachrichten oder eindeutig userbezogene Fakten enthalten."
@@ -849,7 +851,7 @@ class WorkingMemoryStore:
     def __init__(self, instance_name: str, instances_dir: str | Path | None = None) -> None:
         self.instance_name = instance_name
         self.instances_dir = Path(instances_dir) if instances_dir is not None else _resolve_instances_dir()
-        self._lock = threading.Lock()
+        self._lock = _working_memory_process_lock(self._path())
 
     def ensure(self) -> Path:
         path = self._path()
@@ -3599,6 +3601,16 @@ def _new_working_memory_data(instance_name: str) -> dict[str, Any]:
             "entries": {},
         },
     }
+
+
+def _working_memory_process_lock(path: Path) -> threading.RLock:
+    key = os.path.abspath(os.fspath(path))
+    with _WORKING_MEMORY_LOCKS_GUARD:
+        lock = _WORKING_MEMORY_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _WORKING_MEMORY_LOCKS[key] = lock
+        return lock
 
 
 def _normalize_working_memory_data(data: dict[str, Any], instance_name: str) -> None:

@@ -24,6 +24,8 @@ MEMORY_SCHEMA_VERSION = 1
 MEMORY_RECENT_LIMIT = 200
 MEMORY_KEYWORD_LIMIT = 24
 MEMORY_KEYWORD_ENTRY_LIMIT = 250
+_WORKING_MEMORY_LOCKS: dict[str, threading.RLock] = {}
+_WORKING_MEMORY_LOCKS_GUARD = threading.Lock()
 MEMORY_STOPWORDS = {
     "aber",
     "alle",
@@ -107,7 +109,7 @@ class WorkingMemoryStore:
     def __init__(self, instance_name: str, instances_dir: str | Path = "instances") -> None:
         self.instance_name = instance_name
         self.instances_dir = Path(instances_dir)
-        self._lock = threading.Lock()
+        self._lock = _working_memory_process_lock(self._path())
 
     def ensure(self) -> Path:
         path = self._path()
@@ -215,6 +217,16 @@ class WorkingMemoryStore:
 
 def _utc_timestamp() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _working_memory_process_lock(path: Path) -> threading.RLock:
+    key = os.path.abspath(os.fspath(path))
+    with _WORKING_MEMORY_LOCKS_GUARD:
+        lock = _WORKING_MEMORY_LOCKS.get(key)
+        if lock is None:
+            lock = threading.RLock()
+            _WORKING_MEMORY_LOCKS[key] = lock
+        return lock
 
 
 def _new_working_memory_data(instance_name: str) -> dict[str, Any]:
