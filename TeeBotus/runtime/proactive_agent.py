@@ -2033,7 +2033,7 @@ def _proactive_planner_message(source: Mapping[str, Any]) -> str:
 
 
 def _default_proactive_due_at(now: datetime) -> str:
-    due = now + timedelta(days=1)
+    due = to_local(now) + timedelta(days=1)
     due = due.replace(hour=10, minute=0, second=0, microsecond=0)
     return due.isoformat()
 

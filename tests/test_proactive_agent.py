@@ -1921,6 +1921,7 @@ def test_llm_plan_validator_applies_safe_memory_and_queue_decisions(tmp_path) ->
     assert outbox[0]["id"] == result.queued_item_ids[0]
     assert outbox[0]["planner"]["source"] == "llm"
     assert outbox[0]["reason_memory_ids"] == [source_id]
+    assert outbox[0]["due_at"] == "2026-06-16T10:00:00+02:00"
 
 
 def test_llm_plan_validator_rejects_past_or_invalid_queue_due_at(tmp_path) -> None:
