@@ -29,7 +29,7 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit letztem
-  Restart sind aktuell `16/20` Commits vorhanden; naechster Restart nach 4
+  Restart sind aktuell `18/20` Commits vorhanden; naechster Restart nach 2
   weiteren Commits.
 
 ## Aktueller Plan
@@ -299,6 +299,22 @@ Diagnose und Tests.
 - Regression fuer Cleanup-Fehler ergaenzt. `tests/test_bot.py`: `199 passed,
   17 subtests passed in 3.65s`; Ruff, `py_compile` und `git diff --check`
   gruen. Commit: `7e9c73e2 fix: stop retrying acknowledged telegram updates`.
+
+### Notification-Loudness-Outbox
+
+- 2026-07-16: Der Audit fand einen Teilfehler bei
+  `queue_due_notification_loudness_prompts()`: Outbox-Item wurde zuerst
+  geschrieben, danach konnte `write_agent_state()` scheitern. Der persistierte
+  Outbox-Eintrag schuetzte nur solange er `queued` war. Nach Versand fehlte der
+  Wake-Window-Marker und derselbe Prompt konnte im selben Fenster erneut
+  entstehen.
+- Der Outbox-Zeitpunkt (`due_at`, danach Erstell-/Updatezeit) wird jetzt als
+  Recovery-Marker fuer Route und Wake-Window geprueft. Das verhindert
+  Duplikate auch nach State-Write-Teilfehlern, ohne Folgefenster zu blockieren.
+- Regression fuer fehlgeschlagenen State-Write plus anschliessenden Versand:
+  `tests/test_notification_loudness.py` `164 passed in 11.72s`; Ruff,
+  `py_compile` und `git diff --check` gruen. Commit:
+  `6a30a0f1 fix: recover loudness wake window from outbox`.
 
 ## Akzeptanzkriterien
 
