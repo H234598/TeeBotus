@@ -1990,3 +1990,22 @@ Commits.
 **Aktueller Laufstand:** Seit dem Restart `9/20` Code-Commits. Dieser
 Plan-Commit macht `10/20`; kein Push. Naechster Restart nach 10 weiteren
 Commits.
+
+### Proactive-Rezidiv-Intervalle-nach-Langverzug
+
+- 2026-07-16: `_next_recurrence_due_at()` begrenzte das Nachholen faelliger
+  Wiederholungen auf `366` Schleifendurchlaeufe. Bei `every 5 minutes` und
+  laengerem Dispatcher-Ausfall wurde deshalb keine naechste Wiederholung mehr
+  geplant; der Reminder verschwand nach dem ersten Versand aus dem Zyklus.
+- Feste Intervalle (`daily`, `weekly`, `every N minutes|hours|days|weeks`)
+  berechnen jetzt direkt den naechsten Zeitpunkt strikt nach `sent_at`. Monats-
+  und Werktagsregeln laufen bis zum naechsten zukuenftigen Zeitpunkt weiter
+  und brechen nur bei nicht fortschreitender/ungueltiger Regel ab.
+- Regression mit Januar-bis-Juli-Verzug: 5-Minuten-, 2-Stunden- und Tages-
+  intervalle; kompletter `tests/test_proactive_agent.py`-Lauf -> `122 passed`.
+  Ruff, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ac7a092d fix: preserve delayed proactive recurrences`.
+
+**Aktueller Laufstand:** Seit dem Restart `11/20` Code-Commits. Dieser
+Plan-Commit macht `12/20`; kein Push. Naechster Restart nach 8 weiteren
+Commits.
