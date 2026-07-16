@@ -116,11 +116,18 @@ def _update_city_and_weather_context_unlocked(
 
 
 def _append_city_memory(account_store: AccountStore, account_id: str, city: str, now: datetime) -> None:
+    memory_id = f"mem_residence_city_{_city_id_token(city)}"
     try:
+        if any(
+            str(entry.get("id") or "").strip() == memory_id
+            for entry in account_store.read_memory_entries(account_id)
+            if isinstance(entry, Mapping)
+        ):
+            return
         account_store.append_structured_memory_entry(
             account_id,
             {
-                "id": f"mem_residence_city_{_city_id_token(city)}",
+                "id": memory_id,
                 "created_at": now.isoformat(timespec="seconds"),
                 "updated_at": now.isoformat(timespec="seconds"),
                 "kind": "biographical_fact",

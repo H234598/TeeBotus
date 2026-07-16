@@ -3,6 +3,9 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 import time
+from unittest.mock import patch
+
+import pytest
 
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
@@ -119,6 +122,45 @@ def test_city_change_is_persisted_even_when_weather_check_is_rate_limited(tmp_pa
     assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "Potsdam"
     assert weather_context_text(account_store, account_id) == ""
     assert calls == ["Berlin"]
+
+
+def test_city_memory_is_not_duplicated_when_state_write_fails_after_append(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    original_write_agent_state = account_store.write_agent_state
+    failed = False
+
+    def fail_once(write_account_id: str, state: dict[str, object]) -> None:
+        nonlocal failed
+        if not failed:
+            failed = True
+            raise OSError("state write failed")
+        original_write_agent_state(write_account_id, state)
+
+    with patch.object(account_store, "write_agent_state", side_effect=fail_once):
+        with pytest.raises(OSError, match="state write failed"):
+            update_city_and_weather_context(
+                account_store,
+                account_id,
+                "Ich wohne in Berlin.",
+                now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+                provider=lambda city: f"{city}: 12 C",
+            )
+        update_city_and_weather_context(
+            account_store,
+            account_id,
+            "Ich wohne in Berlin.",
+            now=datetime(2026, 6, 15, 9, 1, tzinfo=timezone.utc),
+            provider=lambda city: f"{city}: 12 C",
+        )
+
+    city_memories = [
+        entry
+        for entry in account_store.read_memory_entries(account_id)
+        if entry.get("kind") == "biographical_fact" and "Berlin" in str(entry.get("user_text"))
+    ]
+    assert len(city_memories) == 1
+    assert city_memories[0]["id"] == "mem_residence_city_berlin"
 
 
 def test_weather_provider_error_does_not_expose_stale_summary(tmp_path) -> None:
