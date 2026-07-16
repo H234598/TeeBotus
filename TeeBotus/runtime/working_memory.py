@@ -170,6 +170,7 @@ class WorkingMemoryStore:
             _write_json_file(path, data)
             entries_path.touch(exist_ok=True)
             return data
+        repaired = False
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -181,6 +182,7 @@ class WorkingMemoryStore:
                 backup_path,
             )
             payload = _new_working_memory_data(self.instance_name)
+            repaired = True
         except OSError as exc:
             raise OSError(f"Unable to read instance working memory at {path}") from exc
         if not isinstance(payload, dict):
@@ -191,6 +193,7 @@ class WorkingMemoryStore:
                 backup_path,
             )
             payload = _new_working_memory_data(self.instance_name)
+            repaired = True
         index = payload.get("index")
         invalid_index = "index" in payload and not isinstance(index, dict)
         if isinstance(index, dict):
@@ -210,8 +213,11 @@ class WorkingMemoryStore:
                 backup_path,
             )
             payload = _new_working_memory_data(self.instance_name)
+            repaired = True
         _normalize_working_memory_data(payload, self.instance_name)
         entries_path.touch(exist_ok=True)
+        if repaired:
+            _write_json_file(path, payload)
         return payload
 
 

@@ -93,6 +93,22 @@ def test_working_memory_corrupt_index_is_preserved_without_traceback_log(tmp_pat
 
 
 @pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
+def test_working_memory_prepare_persists_corrupt_index_repair(tmp_path, store_class):
+    instances_dir = tmp_path / "instances"
+    index_path = instances_dir / "Depressionsbot" / "data" / "Working_Memorys.json"
+    index_path.parent.mkdir(parents=True)
+    index_path.write_text("not json", encoding="utf-8")
+    store = store_class("Depressionsbot", instances_dir)
+
+    record = store.prepare("irrelevant")
+
+    assert record.prompt_text == ""
+    assert record.selected_ids == ()
+    assert json.loads(index_path.read_text(encoding="utf-8"))["scope"] == "instance"
+    assert len(list(index_path.parent.glob("Working_Memorys.json.corrupt.*"))) == 1
+
+
+@pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
 def test_working_memory_invalid_utf8_index_is_preserved(tmp_path, caplog, store_class):
     instances_dir = tmp_path / "instances"
     index_path = instances_dir / "Depressionsbot" / "data" / "Working_Memorys.json"
