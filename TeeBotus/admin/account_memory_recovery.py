@@ -559,7 +559,7 @@ def _quarantine_instance_unreadable_metadata(
         )
     result["items"] = moved_items
     manifest_path = instance_quarantine_dir / "manifest.json"
-    manifest_path.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _write_quarantine_manifest(manifest_path, result)
     return result
 
 
@@ -778,7 +778,7 @@ def _quarantine_instance_unrecoverable(
         snapshot_record["rows_deleted"] = deleted_rows
     result["totals"]["accounts_quarantined"] = len(account_ids)
     manifest_path = instance_quarantine_dir / "manifest.json"
-    manifest_path.write_text(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    _write_quarantine_manifest(manifest_path, result)
     return result
 
 
@@ -957,6 +957,16 @@ def _prepare_private_dir(path: Path) -> None:
         os.chmod(path, 0o700)
     except OSError:
         pass
+
+
+def _write_quarantine_manifest(path: Path, payload: Mapping[str, Any]) -> None:
+    serialized = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    try:
+        descriptor = os.open(os.fspath(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError as exc:
+        raise AccountStoreError(f"refusing existing quarantine manifest: {path}") from exc
+    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        stream.write(serialized)
 
 
 def _quarantine_apply_allowed_now(running_processes: Sequence[Mapping[str, str]], *, allow_running_bot: bool) -> bool:

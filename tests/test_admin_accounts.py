@@ -1118,6 +1118,19 @@ def test_memory_recovery_snapshot_rejects_existing_symlink_destination(tmp_path:
     assert outside.read_bytes() == b"outside"
 
 
+def test_memory_recovery_manifest_rejects_existing_symlink_destination(tmp_path: Path) -> None:
+    outside = tmp_path / "outside-manifest.json"
+    outside.write_text("outside\n", encoding="utf-8")
+    manifest = tmp_path / "quarantine" / "manifest.json"
+    manifest.parent.mkdir()
+    manifest.symlink_to(outside)
+
+    with pytest.raises(AccountStoreError, match="existing quarantine manifest"):
+        account_memory_recovery_module._write_quarantine_manifest(manifest, {"status": "applied"})
+
+    assert outside.read_text(encoding="utf-8") == "outside\n"
+
+
 def test_memory_recovery_quarantines_unrecoverable_sqlite_collection_rows(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
