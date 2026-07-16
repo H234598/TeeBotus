@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart ist aktuell `10/20` Commits vorhanden; naechster Restart
-  nach 10 weiteren Commits.
+  letzten Restart ist aktuell `13/20` Commits vorhanden; naechster Restart
+  nach 7 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -276,6 +276,22 @@ Diagnose und Tests.
 - Code-Commits: `004293e8 fix: preserve external account source links`,
   `8bb48c2e fix: roll back external account creation`; kein Provider/API-
   Aufruf.
+
+### Account-Creation-Rollback
+
+- 2026-07-16: `resolve_or_create_account()` schrieb das Profil und die
+  Identity-Map, bevor der Account-Index geschrieben wurde. Ein Indexfehler
+  liess deshalb einen halb angelegten Account zurueck; der naechste Aufruf
+  reparierte ihn nur zufaellig.
+- Profil, Identity-Map und Index werden bei Erstanlage jetzt gemeinsam
+  gesichert und bei jedem Teilfehler zurueckgesetzt. Der gemeinsame
+  Rollback-Helfer entfernt danach nur ein leeres, neu entstandenes
+  Account-Verzeichnis. Vorhandene Dateien bleiben unangetastet.
+- Regression prueft Indexfehler auf komplett fehlenden Account und saubere
+  Neuanlage beim Retry; fokussiert `18 passed`, vollstaendig `234 passed`;
+  Ruff, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `4d5f7976 fix: roll back account creation metadata`; kein
+  Provider/API-Aufruf.
 
 ### LLM-State-SQL/JSON-Audit
 
@@ -695,8 +711,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `10/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 10 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `13/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 7 weiteren Commits.
 
 ## Bezug
 
