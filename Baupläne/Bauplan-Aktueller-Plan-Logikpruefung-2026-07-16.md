@@ -2604,9 +2604,21 @@ Restart nach 10 weiteren Commits.
   Provider/API-Aufruf.
 - Code-Commit: `c60a64cd fix: keep named collection fallback reads available`.
 
-**Aktueller Laufstand:** Seit dem Restart `13/20` Commits. Kein Push. Naechster
-Restart nach 7 weiteren Commits.
+### SQLite-Keyscan-bei-korrupter-Datei
 
-**Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Dieser
-Plan-Commit macht `6/20`; kein Push. Naechster Restart nach 14 weiteren
-Commits. Naechster Push bleibt erst bei 100 Commits.
+- 2026-07-16: `_sqlite_memory_has_instance_payload_rows()` erkannte eine
+  unlesbare SQLite-Datei konservativ als vorhandenen Payload. Der nachfolgende
+  `_sqlite_memory_account_ids()`-Scan fing denselben Datenbankfehler aber ab und
+  lieferte `()`. Bei fehlendem Key-Manifest konnte dadurch ein falscher
+  Secret-Service-Key als gueltig manifestiert werden; verschluesselte Memorys
+  waeren danach dauerhaft unlesbar gewesen.
+- Der Account-ID-Scan wirft bei SQLite-Diagnosefehlern jetzt einen harten
+  `AccountStoreError`. Unlesbare Daten bleiben damit Fail-closed; kein
+  Fingerprint- oder Manifest-Write.
+- Regression: falsche Schluessel- und korrupte SQLite-Datei -> `2 passed`;
+  komplette `tests/test_account_store.py` -> `284 passed`. Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f4f38abf fix: fail closed on corrupt sqlite key scans`.
+
+**Aktueller Laufstand:** Seit dem Restart `14/20` Commits. Kein Push. Naechster
+Restart nach 6 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
