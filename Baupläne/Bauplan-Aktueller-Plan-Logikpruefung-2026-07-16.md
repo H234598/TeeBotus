@@ -3040,3 +3040,21 @@ bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### SQLite-Recovery-lehnt-Hardlinks-ab
+
+- 2026-07-17: SQLite-Recovery pruefte Symlinks, aber keine Hardlinks. Ein
+  hardgelinktes `Account_Memory.sqlite3` teilt seine Inode mit externer DB;
+  `_delete_sqlite_account_rows()` haette dadurch externe Daten veraendern
+  koennen.
+- Hauptdatei und WAL/SHM-Sidecars werden jetzt vor Probe, Snapshot und Delete
+  auf `st_nlink > 1` geprueft. Hardlinks blockieren fail-closed; kein externer
+  SQLite-Inode wird mutiert.
+- Regression: hardgelinkte Quelle vor Probe/Delete -> `2 passed` im SQLite-
+  Fokus; komplette `tests/test_admin_accounts.py` -> `78 passed`. Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ffbfeeeb fix: reject hardlinked sqlite recovery sources`.
+
+**Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
