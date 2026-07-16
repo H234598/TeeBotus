@@ -890,9 +890,14 @@ class WorkingMemoryStore:
         }
         with self._lock:
             data = self._load_or_initialize(path)
-            _store_working_memory_entry(path, data, entry)
+            entries_path = _working_memory_entries_path(path)
+            offset = _store_working_memory_entry(path, data, entry)
             data["updated_at"] = timestamp
-            _write_json_file(path, data)
+            try:
+                _write_json_file(path, data)
+            except Exception:
+                _truncate_working_memory_entries(entries_path, offset)
+                raise
         return str(entry["id"])
 
     def _path(self) -> Path:
@@ -3691,7 +3696,7 @@ def _working_memory_prompt_payload(
     }
 
 
-def _store_working_memory_entry(index_path: Path, data: dict[str, Any], entry: dict[str, Any]) -> None:
+def _store_working_memory_entry(index_path: Path, data: dict[str, Any], entry: dict[str, Any]) -> int:
     _normalize_working_memory_data(data, str(data.get("instance_name", "")))
     memory_id = str(entry.get("id") or _new_working_memory_id())
     entry["id"] = memory_id
@@ -3702,9 +3707,14 @@ def _store_working_memory_entry(index_path: Path, data: dict[str, Any], entry: d
     entries_path = _working_memory_entries_path(index_path)
     entries_path.parent.mkdir(parents=True, exist_ok=True)
     line = (json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
-    with entries_path.open("ab") as file:
-        offset = file.tell()
-        file.write(line)
+    offset = 0
+    try:
+        with entries_path.open("ab") as file:
+            offset = file.tell()
+            file.write(line)
+    except Exception:
+        _truncate_working_memory_entries(entries_path, offset)
+        raise
 
     index = data.setdefault("index", {})
     entry_index = index.setdefault("entries", {})
@@ -3741,6 +3751,15 @@ def _store_working_memory_entry(index_path: Path, data: dict[str, Any], entry: d
         recent_ids.remove(memory_id)
     recent_ids.append(memory_id)
     del recent_ids[:-MEMORY_RECENT_LIMIT]
+    return offset
+
+
+def _truncate_working_memory_entries(path: Path, offset: int) -> None:
+    try:
+        with path.open("r+b") as file:
+            file.truncate(offset)
+    except OSError:
+        LOGGER.exception("Failed to roll back instance working memory entries path=%s.", path)
 
 
 def _read_working_memory_entry(index_path: Path, data: dict[str, Any], memory_id: str) -> dict[str, Any] | None:

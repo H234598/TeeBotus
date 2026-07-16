@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from importlib import import_module
 from unittest.mock import patch
 
 import pytest
@@ -136,6 +137,28 @@ def test_working_memory_invalid_index_structure_is_preserved(tmp_path, caplog, i
     payload = json.loads(index_path.read_text(encoding="utf-8"))
     assert payload["index"]["entries"] == {}
     assert any("invalid index structure" in record.message for record in caplog.records)
+
+
+@pytest.mark.parametrize(
+    ("store_class", "module_name"),
+    (
+        (WorkingMemoryStore, "TeeBotus.runtime.working_memory"),
+        (TelegramWorkingMemoryStore, "TeeBotus.adapters.telegram_runtime"),
+    ),
+)
+def test_working_memory_append_rolls_back_entry_when_index_write_fails(tmp_path, store_class, module_name):
+    instances_dir = tmp_path / "instances"
+    store = store_class("Depressionsbot", instances_dir)
+    index_path = store.ensure()
+    entries_path = index_path.parent / "Working_Memorys.entries.jsonl"
+    original_index = index_path.read_bytes()
+
+    with patch.object(import_module(module_name), "_write_json_file", side_effect=OSError("replace failed")):
+        with pytest.raises(OSError, match="replace failed"):
+            store.append_manual("Nicht dauerhaft speichern")
+
+    assert index_path.read_bytes() == original_index
+    assert entries_path.read_bytes() == b""
 
 
 def test_working_memory_unreadable_index_is_not_replaced(tmp_path, caplog):
