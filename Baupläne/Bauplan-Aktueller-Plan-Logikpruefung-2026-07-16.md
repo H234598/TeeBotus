@@ -1482,6 +1482,20 @@ ausgeloest. Naechster Restart nach 11 weiteren Commits.
 **Laufstand nach Fix:** Seit dem Restart `8/20` Commits; kein Push
 ausgeloest. Naechster Restart nach 12 weiteren Commits.
 
+### Vollsuite-nach-Store-Guard
+
+- 2026-07-16: Zweiter Vollsuite-Lauf nach dem minimalen Store-Guard ist
+  vollstaendig gruen: `3864 passed, 2 skipped, 1 warning, 17 subtests
+  passed` in `270.54s`. Die acht Codex-History-Regressionsfehler sind weg.
+- Verbleibender Hinweis: LangChain importiert Pydantic-V1-Kompatibilitaet,
+  die Python 3.14 als inkompatibel meldet. Kein Testfehler und keine
+  Runtime-Umstellung ohne gezielte Kompatibilitaetspruefung.
+- Kein Provider/API-Aufruf.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `14/20` Commits; dieser
+Dokumentationscommit erhoeht auf `15/20`. Kein Push. Naechster Restart nach
+5 weiteren Commits.
+
 ### Modern-Engine-Tracker-Test-im-Persistenz-Scope-halten
 
 - 2026-07-16: Der Modern-Engine-Test pruefte gespeicherte Message-Refs erst
