@@ -576,6 +576,24 @@ Diagnose und Tests.
   `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `a3a211e4 fix: serialize status memory size snapshot`.
 
+### Outbox-Append-Snapshot-Locks
+
+- 2026-07-16: Die sieben `append_*`-Methoden fuer Proactive-, Status- und
+  Codex-History-Outbox hielten bisher Spezial-Lock, aber den
+  Account-Memory-Lock nur waehrend einzelner Read-/Write-Aufrufe. Ein
+  paralleler Read-Modify-Write-Aufrufer konnte dadurch zwischen Read und
+  Write eintreten und einen Append verlieren.
+- Jeder Append haelt jetzt Spezial-Lock und Account-Memory-Lock gemeinsam
+  ueber den gesamten Read-Modify-Write-Abschnitt. Lock-Reihenfolge bleibt
+  `Spezial-Lock -> Account-Memory-Lock`, damit bestehende Aufrufer wie
+  Notification-Loudness nicht invertiert werden.
+- Deterministische Regression blockiert den ersten Append-Read und prueft,
+  dass ein paralleler direkter Read-Modify-Write wartet und danach alle drei
+  Eintraege erhalten bleiben; fokussiert `2 passed`. AccountStore komplett
+  `248 passed`. Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `e41c2597 fix: serialize outbox append snapshots`.
+
 ### LLM-State-SQL/JSON-Audit
 
 - 2026-07-16: Biene Herschel meldete einen vorzeitigen SQL-Return in
@@ -994,8 +1012,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `12/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 8 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `14/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 6 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
