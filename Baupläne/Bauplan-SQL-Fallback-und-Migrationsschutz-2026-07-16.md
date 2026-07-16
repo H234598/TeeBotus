@@ -52,4 +52,4 @@ Migration verifiziert ist. Tests bleiben providerfrei.
 - Diesen Bauplan erst nach Abschluss des uebergeordneten Audits nach
   `Pläne/` verschieben.
 - Kein Push und kein Restart durch diesen Schritt; seit letztem Restart
-  `5/20` Commits.
+  `6/20` Commits.

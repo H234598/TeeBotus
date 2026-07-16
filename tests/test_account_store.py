@@ -1269,11 +1269,18 @@ def test_unlink_identity_retry_converges_after_partial_write_failure(tmp_path, f
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     identity_key = telegram_identity_key(1)
     account_id = store.resolve_or_create_account(identity_key)
+    metadata_paths = (
+        store.identities_path,
+        store.account_index_path,
+        store.account_dir(account_id) / "Account_Profile.json",
+    )
+    previous_metadata = {path: path.read_bytes() for path in metadata_paths}
 
     with patch.object(store, failing_method, side_effect=AccountStoreError(error_text)):
         with pytest.raises(AccountStoreError, match=error_text):
             store.unlink_identity(identity_key)
 
+    assert {path: path.read_bytes() for path in metadata_paths} == previous_metadata
     assert store.get_account_for_identity(identity_key) == account_id
     assert store.unlink_identity(identity_key) == account_id
     profile = store._read_account_profile(account_id)
@@ -1321,13 +1328,54 @@ def test_link_identity_retry_repairs_profile_after_mapping_write_succeeds(tmp_pa
         with pytest.raises(AccountStoreError, match="profile write failed"):
             store.link_identity_to_account(identity_key, account_id, display_label="Signal")
 
-    assert store.get_account_for_identity(identity_key) == account_id
+    assert store.get_account_for_identity(identity_key) is None
     assert identity_key not in store._read_account_profile(account_id)["linked_identities"]
 
     result = store.link_identity_to_account(identity_key, account_id, display_label="Signal")
 
-    assert result["already_linked"] is True
+    assert result.get("already_linked") is not True
     assert identity_key in store._read_account_profile(account_id)["linked_identities"]
+
+
+@pytest.mark.parametrize("failing_method", ["_write_account_profile", "_upsert_account_index", "_save_identities"])
+def test_link_identity_rolls_back_all_metadata_after_partial_write(tmp_path, failing_method):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    identity_key = signal_identity_key(source_uuid=f"rollback-{failing_method}")
+    metadata_paths = (
+        store.identities_path,
+        store.account_index_path,
+        store.account_dir(account_id) / "Account_Profile.json",
+    )
+    previous_metadata = {path: path.read_bytes() for path in metadata_paths}
+
+    with patch.object(store, failing_method, side_effect=AccountStoreError("identity metadata write failed")):
+        with pytest.raises(AccountStoreError, match="identity metadata write failed"):
+            store.link_identity_to_account(identity_key, account_id, display_label="Signal")
+
+    assert {path: path.read_bytes() for path in metadata_paths} == previous_metadata
+    assert store.get_account_for_identity(identity_key) is None
+    assert identity_key not in store._read_account_profile(account_id)["linked_identities"]
+
+
+def test_unlink_identity_and_rotate_secret_rolls_back_unlink_when_rotation_fails(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    identity_key = telegram_identity_key(1)
+    account_id = store.resolve_or_create_account(identity_key)
+    _, old_secret = store.register_account(account_id)
+
+    with patch.object(store, "rotate_secret", side_effect=AccountStoreError("rotation failed")):
+        with pytest.raises(AccountStoreError, match="rotation failed"):
+            store.unlink_identity_and_rotate_secret(identity_key, account_id)
+
+    assert store.get_account_for_identity(identity_key) == account_id
+    assert identity_key in store._read_account_profile(account_id)["linked_identities"]
+    assert store.verify_secret(account_id, old_secret)
+
+    unlinked_account_id, new_secret = store.unlink_identity_and_rotate_secret(identity_key, account_id)
+    assert unlinked_account_id == account_id
+    assert store.get_account_for_identity(identity_key) is None
+    assert store.verify_secret(account_id, new_secret)
 
 
 def test_encrypted_memory_with_wrong_instance_secret_does_not_fallback_to_envelope(tmp_path):

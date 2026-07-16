@@ -2021,9 +2021,14 @@ class AccountStore:
         now = utc_now()
         merged_from: str | None = None
         if current_account_id == target_account_id:
-            self._add_identity_to_profile(target_account_id, key)
-            identities = self._load_identities()
-            self._touch_identity(identities, key)
+            snapshot = self._snapshot_identity_metadata((target_account_id,))
+            try:
+                self._add_identity_to_profile(target_account_id, key)
+                identities = self._load_identities()
+                self._touch_identity(identities, key)
+            except Exception:
+                self._restore_identity_metadata(snapshot, operation="identity link")
+                raise
             return {
                 "account_id": target_account_id,
                 "identity_key": key,
@@ -2036,20 +2041,25 @@ class AccountStore:
                 raise AccountStoreError("current identity is already linked to another registered account; use account_edit")
             self.merge_accounts(current_account_id, target_account_id)
             merged_from = current_account_id
-        identities = self._load_identities()
-        previous_identity = self._identity_payload_for_key(identities, key)
-        first_seen_at = previous_identity.get("first_seen_at", now) if isinstance(previous_identity, dict) else now
-        identities[key] = {
-            "schema_version": ACCOUNT_SCHEMA_VERSION,
-            "instance": self.instance_name,
-            "identity_key": key,
-            "account_id": target_account_id,
-            "display_label": display_label,
-            "first_seen_at": first_seen_at,
-            "last_seen_at": now,
-        }
-        self._save_identities(identities)
-        self._add_identity_to_profile(target_account_id, key)
+        snapshot = self._snapshot_identity_metadata((target_account_id,))
+        try:
+            identities = self._load_identities()
+            previous_identity = self._identity_payload_for_key(identities, key)
+            first_seen_at = previous_identity.get("first_seen_at", now) if isinstance(previous_identity, dict) else now
+            identities[key] = {
+                "schema_version": ACCOUNT_SCHEMA_VERSION,
+                "instance": self.instance_name,
+                "identity_key": key,
+                "account_id": target_account_id,
+                "display_label": display_label,
+                "first_seen_at": first_seen_at,
+                "last_seen_at": now,
+            }
+            self._save_identities(identities)
+            self._add_identity_to_profile(target_account_id, key)
+        except Exception:
+            self._restore_identity_metadata(snapshot, operation="identity link")
+            raise
         return {
             "account_id": target_account_id,
             "identity_key": key,
@@ -2068,28 +2078,33 @@ class AccountStore:
         if not isinstance(account_id, str) or not TOKEN_HEX_RE.fullmatch(account_id):
             return None
 
-        new_identities = dict(identities)
-        new_identities.pop(key, None)
-        profile_path = self.account_dir(account_id) / ACCOUNT_PROFILE_FILENAME
-        if not profile_path.exists():
-            # Stale mapping only: remove the mapping, but do not create a fresh profile
-            # for a missing/tombstoned account during unlink cleanup.
+        snapshot = self._snapshot_identity_metadata((account_id,))
+        try:
+            new_identities = dict(identities)
+            new_identities.pop(key, None)
+            profile_path = self.account_dir(account_id) / ACCOUNT_PROFILE_FILENAME
+            if not profile_path.exists():
+                # Stale mapping only: remove the mapping, but do not create a fresh profile
+                # for a missing/tombstoned account during unlink cleanup.
+                self._save_identities(new_identities)
+                return account_id
+
+            # Pre-read and validate the profile before mutating the identity mapping. If
+            # the encrypted profile is unreadable, no mapping is removed.
+            profile = self._read_account_profile(account_id)
+            linked = [value for value in profile.get("linked_identities", []) if value != key]
+            profile["linked_identities"] = linked
+            profile["updated_at"] = utc_now()
+            if not linked:
+                profile["status"] = "orphaned"
+
+            self._write_account_profile(account_id, profile)
+            self._upsert_account_index(profile)
             self._save_identities(new_identities)
             return account_id
-
-        # Pre-read and validate the profile before mutating the identity mapping. If
-        # the encrypted profile is unreadable, no mapping is removed.
-        profile = self._read_account_profile(account_id)
-        linked = [value for value in profile.get("linked_identities", []) if value != key]
-        profile["linked_identities"] = linked
-        profile["updated_at"] = utc_now()
-        if not linked:
-            profile["status"] = "orphaned"
-
-        self._write_account_profile(account_id, profile)
-        self._upsert_account_index(profile)
-        self._save_identities(new_identities)
-        return account_id
+        except Exception:
+            self._restore_identity_metadata(snapshot, operation="identity unlink")
+            raise
 
     @_serialize_identity_map
     def unlink_identity_if_linked_to(self, identity_key: str, expected_account_id: str) -> str | None:
@@ -3679,8 +3694,14 @@ class AccountStore:
         _atomic_write_text(self.account_dir(account_id) / _safe_account_text_filename(filename), str(text or ""))
 
     def unlink_identity_and_rotate_secret(self, identity_key: str, account_id: str) -> tuple[str | None, str]:
-        unlinked_account_id = self.unlink_identity(identity_key)
-        _, new_secret = self.rotate_secret(account_id)
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        snapshot = self._snapshot_identity_metadata((account_id,))
+        unlinked_account_id = self.unlink_identity_if_linked_to(identity_key, account_id)
+        try:
+            _, new_secret = self.rotate_secret(account_id)
+        except Exception:
+            self._restore_identity_metadata(snapshot, operation="identity unlink and secret rotation")
+            raise
         return unlinked_account_id, new_secret
 
     def _can_auto_merge_source_account(self, account_id: str, *, current_identity_key: str) -> bool:
@@ -4167,6 +4188,31 @@ class AccountStore:
             changed = True
         if changed:
             self._save_identities(identities)
+
+    def _snapshot_identity_metadata(self, account_ids: Iterable[str]) -> dict[Path, bytes | None]:
+        paths = {self.identities_path, self.account_index_path}
+        for account_id in account_ids:
+            paths.add(self.account_dir(account_id) / ACCOUNT_PROFILE_FILENAME)
+        snapshot: dict[Path, bytes | None] = {}
+        for path in paths:
+            try:
+                snapshot[path] = path.read_bytes()
+            except FileNotFoundError:
+                snapshot[path] = None
+        return snapshot
+
+    def _restore_identity_metadata(self, snapshot: dict[Path, bytes | None], *, operation: str) -> None:
+        rollback_errors: list[Exception] = []
+        for path, previous_bytes in snapshot.items():
+            try:
+                if previous_bytes is None:
+                    path.unlink(missing_ok=True)
+                else:
+                    _atomic_write_bytes(path, previous_bytes)
+            except Exception as rollback_exc:  # noqa: BLE001 - surface metadata rollback failures explicitly.
+                rollback_errors.append(rollback_exc)
+        if rollback_errors:
+            raise AccountStoreError(f"{operation} rollback failed; identity metadata may be inconsistent") from rollback_errors[0]
 
     def _load_identities(self) -> dict[str, Any]:
         return self.vault.read_json(self.identities_path, {})

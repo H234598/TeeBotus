@@ -29,7 +29,7 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit letztem
-  Restart sind aktuell `5/20` Commits vorhanden; naechster Restart nach 15
+  Restart sind aktuell `6/20` Commits vorhanden; naechster Restart nach 14
   weiteren Commits.
 
 ## Aktueller Plan
@@ -217,6 +217,20 @@ Diagnose und Tests.
   6.50s`, Ruff, `py_compile` und `git diff --check` gruen.
 - Neuer fokussierter Bauplan:
   `Baupläne/Bauplan-SQL-Fallback-und-Migrationsschutz-2026-07-16.md`.
+
+### Identity-Metadaten und Compound-Retry
+
+- 2026-07-16: Eine Biene reproduzierte, dass `link_identity_to_account()`
+  Identity-Map vor Profil/Index und `unlink_identity()` Profil/Index vor Map
+  speichern konnte. Teilfehler liessen widerspruechliche Rohzustaende zurueck.
+- Link/Unlink sichern `Account_Identities`, `Account_Index` und betroffene
+  Profile als Rohbytes. Jeder Teilfehler stellt alle drei Dateien wieder her;
+  fehlgeschlagener Restore bleibt sichtbar.
+- `unlink_identity_and_rotate_secret()` prueft jetzt Zielaccount vor dem
+  Unlink und stellt Metadaten wieder her, wenn Secret-Rotation fehlschlaegt.
+- Fokustests: `32 passed`; AccountStore-Suite: `228 passed in 6.69s`;
+  Ruff, `py_compile` und `git diff --check` gruen. Code-Commit wird im
+  folgenden Planpflege-Commit referenziert.
 
 ## Akzeptanzkriterien
 
