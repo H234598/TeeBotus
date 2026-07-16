@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart sind aktuell `20/20` Commits vorhanden; Restart jetzt
-  faellig.
+  letzten Restart sind aktuell `0/20` Commits vorhanden; naechster Restart
+  nach 20 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -1052,6 +1052,12 @@ Diagnose und Tests.
   Signal-REST `/v1/about` meldet Version `0.100`; `--runtime-status` meldet
   Signal erreichbar, Qdrant `ready` und Account-Memorys `ok`. Kein
   providerseitiger Testaufruf.
+- Nach Commit 20 dieses Blocks erneut ausgefuehrt: `teebotus.service`
+  `active/running`, PID `1574082`, Start `2026-07-16 10:48:36 CEST`.
+  `--runtime-status` meldet Signal erreichbar, Qdrant `ready` und alle
+  Account-Crypto-/Memory-Pruefungen `ok`; Depressionsbot-Signal bleibt ohne
+  verknuepfte Identity und meldet deshalb die bekannte separate-Account-
+  Notice. Kein Provider/API-Aufruf.
 
 ## Akzeptanzkriterien
 
@@ -1065,9 +1071,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `20/20` Commits; Restart jetzt
-faellig, kein Push ausgeloest. Nach dem Restart beginnt neuer Block bei
-`0/20`.
+**Laufstand:** Seit dem letzten Restart `0/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 20 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
