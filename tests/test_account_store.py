@@ -1108,6 +1108,9 @@ def test_ensure_external_account_repairs_index_after_partial_write(tmp_path):
     with patch.object(store, "_upsert_account_index", side_effect=fail_once):
         with pytest.raises(AccountStoreError, match="index write failed"):
             store.ensure_external_account(account_id, source_instance="Bote_der_Wahrheit")
+        assert not (store.account_dir(account_id) / "Account_Profile.json").exists()
+        assert account_id not in store._load_index().get("accounts", {})
+        assert account_id not in store.list_account_ids(include_unresolvable=True)
         store.ensure_external_account(account_id, source_instance="Bote_der_Wahrheit")
 
     assert account_id in store._load_index().get("accounts", {})

@@ -2037,8 +2037,27 @@ class AccountStore:
                 }
             ],
         }
-        self._write_account_profile(account_id, profile)
-        self._upsert_account_index(profile)
+        snapshot = self._snapshot_identity_metadata((account_id,))
+        account_dir = self.account_dir(account_id)
+        try:
+            self._write_account_profile(account_id, profile)
+            self._upsert_account_index(profile)
+        except Exception:
+            rollback_error: Exception | None = None
+            try:
+                self._restore_identity_metadata(snapshot, operation="external account creation")
+            except Exception as exc:  # noqa: BLE001 - surface rollback failures explicitly.
+                rollback_error = exc
+            try:
+                if account_dir.exists() and not any(account_dir.iterdir()):
+                    account_dir.rmdir()
+            except OSError as exc:
+                rollback_error = rollback_error or exc
+            if rollback_error:
+                raise AccountStoreError(
+                    "external account creation rollback failed; identity metadata may be inconsistent"
+                ) from rollback_error
+            raise
 
     @_serialize_identity_map
     def link_identity_to_account(self, identity_key: str, account_id: str, *, display_label: str = "") -> dict[str, Any]:
