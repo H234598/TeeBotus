@@ -2062,3 +2062,19 @@ Commits.
 **Aktueller Laufstand:** Seit dem Restart `17/20` Code-Commits. Dieser
 Plan-Commit macht `18/20`; kein Push. Naechster Restart nach 2 weiteren
 Commits.
+
+### Reminder-Numerisches-Datum-mit-Abschlusspunkt
+
+- 2026-07-16: `DATE_RE` beendete ein deutsches Datum ohne Jahr bei
+  `16.03.` vor der Uhrzeit. In `16.03. um 17:47` blieb der Punkt liegen;
+  der Parser fiel auf Default `09:00` zurueck und verlor die explizite Zeit.
+- Numerische Datumswerte akzeptieren jetzt optionalen Abschlusspunkt sowohl
+  mit als auch ohne Jahr. Subject-Bereinigung nutzt dieselbe Regex weiter.
+- Regression mit `16.03.2027. um 17:47` und `16.03. um 17:47`: Reminder-Suite
+  `28 passed`, relevante Engine-Tests `3 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9cb68bf9 fix: parse dotted numeric reminder dates`.
+
+**Aktueller Laufstand:** Seit dem Restart `19/20` Code-Commits. Dieser
+Plan-Commit macht `20/20`; kein Push. Restart jetzt faellig. Naechster
+Push bleibt erst bei 100 Commits.
