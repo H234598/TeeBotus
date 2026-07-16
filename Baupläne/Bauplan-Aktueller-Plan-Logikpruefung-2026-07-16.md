@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart sind aktuell `14/20` Commits vorhanden; naechster Restart
-  nach 6 weiteren Commits.
+  letzten Restart sind aktuell `16/20` Commits vorhanden; naechster Restart
+  nach 4 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -446,6 +446,22 @@ Diagnose und Tests.
   fokussiert `2 passed`, AccountStore komplett `241 passed`. Ruff,
   `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `dd8a336a fix: serialize account memory reads`.
+
+### Identity-Secret-Transaction-Lock
+
+- 2026-07-16: `unlink_identity_and_rotate_secret()` hielt den
+  Identity-Lock nur indirekt, jeweils separat in Unlink und Secret-Rotation.
+  Ein paralleler Identity-Write konnte zwischen beiden Schritten eintreten;
+  ein fehlgeschlagenes Rotations-Rollback haette diesen Zwischenstand
+  ueberschreiben koennen.
+- Der Gesamtpfad verwendet jetzt einen reentranten Identity-Lock. Die
+  bestehenden Unterpfade bleiben einzeln geschuetzt und koennen innerhalb
+  dieses Locks weiterlaufen.
+- Regression prueft Lock-Haltung waehrend Unlink und Rotation sowie den
+  bestehenden Rollbackfall; fokussiert `2 passed`, AccountStore komplett
+  `242 passed`. Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `c51babf0 fix: serialize identity secret rotation`.
 
 ### LLM-State-SQL/JSON-Audit
 
@@ -865,8 +881,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `14/20` Commits; Restart erledigt,
-kein Push ausgeloest. Naechster Restart nach 6 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `16/20` Commits; Restart erledigt,
+kein Push ausgeloest. Naechster Restart nach 4 weiteren Commits.
 
 - Nach Commit 20 erneut ausgefuehrt: `teebotus.service` `active/running`,
   PID `449932`, Start `2026-07-16 04:47:43 CEST`, Runtime-Version `1.9.498`.
