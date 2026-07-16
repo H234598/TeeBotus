@@ -3075,3 +3075,21 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `6/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 14 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Recovery-lehnt-Symlink-Pfadkomponenten-ab
+
+- 2026-07-17: Link-Guards prueften bisher oft nur den letzten Pfadbestandteil.
+  Ein Symlink-Elternordner konnte JSON-, Metadata- oder SQLite-Operationen auf
+  externe Daten umlenken.
+- Eine zentrale Komponentenpruefung laeuft jetzt ueber alle absoluten
+  Pfadbestandteile. JSON-/Metadata-/SQLite-Reads, SQLite-Deletes und
+  Quarantaene-Ziele blockieren bei Symlink-Eltern fail-closed.
+- Regression: symlinked SQLite-Elternpfad plus bestehende JSON-/Metadata-
+  Symlinktests -> `5 passed` im Fokus; komplette `tests/test_admin_accounts.py`
+  -> `80 passed`. Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `06f86e97 fix: reject symlinked recovery path components`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
