@@ -1245,6 +1245,31 @@ def test_read_llm_state_removes_older_legacy_openai_state_after_plaintext_migrat
     assert not openai_path.exists()
 
 
+def test_read_llm_state_migrates_newer_file_state_over_sql_state(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_llm_state(
+        account_id,
+        {"previous_response_id": "resp-sql", "updated_at": "2026-06-01T00:00:00+00:00"},
+    )
+    llm_path = store.account_dir(account_id) / LLM_STATE_FILENAME
+    store.account_memory_vault.write_json(
+        llm_path,
+        {"previous_response_id": "resp-file", "updated_at": "2026-06-02T00:00:00+00:00"},
+    )
+
+    state = store.read_llm_state(account_id)
+
+    assert state["previous_response_id"] == "resp-file"
+    assert not llm_path.exists()
+    backend = store.account_memory_backend
+    assert backend is not None
+    assert backend.read_collection(account_id, "llm_state") == [state]
+
+
 def test_unlink_identity_marks_orphaned_when_last_identity_removed(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

@@ -3119,6 +3119,7 @@ class AccountStore:
                     LLM_STATE_COLLECTION,
                     {},
                     fallback_to_legacy_on_read_error=False,
+                    merge_legacy_file=not (llm_path.exists() or legacy_path.exists()),
                 )
             except _AccountCollectionReadError:
                 if not llm_path.exists() and not legacy_path.exists():
@@ -3127,14 +3128,25 @@ class AccountStore:
                 sql_state_available = False
             if sql_state_available and self._collection_read_diagnostic_error(self.account_memory_backend):
                 return sql_state
-            if sql_state_available and llm_path.exists():
-                return sql_state
             llm_state = self._read_json_with_fallback(llm_path, {}, vault=self.account_memory_vault) if llm_path.exists() else {}
             legacy_state = self._read_json_with_fallback(legacy_path, {}, vault=self.account_memory_vault) if legacy_path.exists() else {}
             selected = _choose_newer_state(legacy_state, _choose_newer_state(llm_state, sql_state))
+            sql_state_verified = selected == sql_state
             if sql_state_available and selected != sql_state:
-                self._write_account_json_document(account_id, LLM_STATE_FILENAME, LLM_STATE_COLLECTION, selected)
-            if sql_state_available:
+                self.account_memory_backend.write_collection(account_id, LLM_STATE_COLLECTION, [dict(selected)])
+                try:
+                    verified_rows = [
+                        row
+                        for row in self.account_memory_backend.read_collection(account_id, LLM_STATE_COLLECTION)
+                        if isinstance(row, dict)
+                    ]
+                except Exception:
+                    verified_rows = []
+                sql_state_verified = (
+                    not self._collection_read_diagnostic_error(self.account_memory_backend)
+                    and _merge_json_document_rows(verified_rows, {}) == selected
+                )
+            if sql_state_available and sql_state_verified:
                 self._unlink_migrated_account_file(llm_path)
                 if not llm_path.exists():
                     self._unlink_migrated_account_file(legacy_path)
@@ -3284,6 +3296,7 @@ class AccountStore:
         default: dict[str, Any],
         *,
         fallback_to_legacy_on_read_error: bool = True,
+        merge_legacy_file: bool = True,
     ) -> dict[str, Any]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         backend = self.account_memory_backend
@@ -3307,7 +3320,7 @@ class AccountStore:
                 return data
             should_compact = len(rows) > 1
             should_unlink_legacy = False
-            if path.exists():
+            if merge_legacy_file and path.exists():
                 legacy_data = self._read_json_with_fallback(path, dict(default), vault=self.account_memory_vault)
                 selected = _choose_newer_state(legacy_data, data)
                 if selected != data:
