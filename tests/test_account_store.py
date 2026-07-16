@@ -6787,6 +6787,32 @@ def test_structured_account_memory_maintenance_updates_existing_summary(tmp_path
     assert store.check_structured_memory_index(account_id).ok
 
 
+def test_structured_account_memory_maintenance_retries_after_rebuild_failure_without_duplicate(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    for index in range(3):
+        store.append_structured_memory_entry(
+            account_id,
+            {
+                "id": f"mem_episode_{index}",
+                "memory_type": "episodic",
+                "user_text": f"Spaziergang hilft gegen Druck {index}.",
+                "bot_text": "Notiert.",
+            },
+        )
+
+    with patch.object(store, "rebuild_structured_memory_index", side_effect=AccountStoreError("injected rebuild failure")):
+        with pytest.raises(AccountStoreError, match="injected rebuild failure"):
+            store.run_memory_maintenance(account_id)
+
+    assert [entry for entry in store.read_memory_entries(account_id) if entry.get("kind") == "summary"] == []
+    created = store.run_memory_maintenance(account_id)
+    summaries = [entry for entry in store.read_memory_entries(account_id) if entry.get("kind") == "summary"]
+
+    assert len(created) == 1
+    assert len(summaries) == 1
+
+
 def test_structured_account_memory_consolidation_zero_limit_is_a_noop(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

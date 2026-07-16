@@ -3452,9 +3452,8 @@ class AccountStore:
 
     @_serialize_account_memory
     def run_memory_maintenance(self, account_id: str) -> tuple[str, ...]:
-        created = self.consolidate_structured_memory(account_id, max_new_entries=1)
         self.rebuild_structured_memory_index(account_id)
-        return created
+        return self.consolidate_structured_memory(account_id, max_new_entries=1)
 
     @_serialize_account_memory
     def read_llm_state(self, account_id: str) -> dict[str, Any]:
