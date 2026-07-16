@@ -1912,3 +1912,18 @@ Naechster Restart nach einem weiteren Commit.
 
 **Aktueller Laufstand:** Seit dem Restart `0/20` Commits. Kein Push.
 Naechster Restart nach 20 weiteren Commits.
+
+### Proactive-Default-Zeit-in-Userzeitzone
+
+- 2026-07-16: `_default_proactive_due_at()` setzte automatische Folge-
+  erinnerungen auf `10:00` in UTC. Bei konfigurierter Europe/Berlin-Zeit
+  wurde dadurch lokal `11:00` oder `12:00` geplant.
+- Default-Folgezeit wird jetzt zuerst mit `to_local()` in die konfigurierte
+  Userzeitzone umgerechnet und danach auf lokalen Folgetag `10:00` gesetzt.
+- Regression im LLM-Plan-Test erwartet `2026-06-16T10:00:00+02:00`;
+  `tests/test_proactive_agent.py` -> `120 passed`; `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `863985ee fix: schedule proactive defaults in local time`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Kein Push.
+Naechster Restart nach 18 weiteren Commits.
