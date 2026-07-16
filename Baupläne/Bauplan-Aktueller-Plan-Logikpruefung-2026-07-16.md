@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit dem
-  letzten Restart ist aktuell `15/20` Commits vorhanden; naechster Restart
-  nach 5 weiteren Commits.
+  letzten Restart ist aktuell `17/20` Commits vorhanden; naechster Restart
+  nach 3 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -350,7 +350,13 @@ Diagnose und Tests.
   durch vorhandene Regressionen abgedeckt. `tests/test_cinnamon_applet.py`:
   `238 passed in 30.23s`.
 - Kein Patch fuer eine unbelegte Anzeige erstellt. Seit dem Restart stehen
-  `12/20` Commits an; kein weiterer Restart erforderlich.
+  `17/20` Commits an; kein weiterer Restart erforderlich.
+- Live-Status danach ohne Provideraufruf reproduziert: Service
+  `active/running`, Qdrant `2/2 ready`, `health=ok`,
+  `total_problem_count=0`, `actionable_problem_count=0`. Die 20 gezählten
+  Hinweise bleiben `informational_problem_count`; darunter bewusst aktive
+  lokale Fallbacks und fehlende optionale Groq-/HF-Konfiguration. Kein neuer
+  Health-Quellfehler belegt.
 
 ### Reminder-Intent und Werktags-Rekurrenz
 
@@ -465,8 +471,8 @@ Diagnose und Tests.
 - Der Plan bleibt aktiv, bis die naechste Logikpruefung und ihre Tests fertig
   sind.
 
-**Laufstand:** Seit dem letzten Restart `15/20` Commits; kein Restart oder
-Push ausgeloest. Naechster Restart nach 5 weiteren Commits.
+**Laufstand:** Seit dem letzten Restart `17/20` Commits; kein Restart oder
+Push ausgeloest. Naechster Restart nach 3 weiteren Commits.
 
 ## Bezug
 
