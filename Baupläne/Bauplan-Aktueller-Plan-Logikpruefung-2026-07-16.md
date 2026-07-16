@@ -29,7 +29,7 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Seit letztem
-  Restart sind aktuell `7/20` Commits vorhanden; naechster Restart nach 13
+  Restart sind aktuell `8/20` Commits vorhanden; naechster Restart nach 12
   weiteren Commits.
 
 ## Aktueller Plan
@@ -231,6 +231,19 @@ Diagnose und Tests.
 - Fokustests: `32 passed`; AccountStore-Suite: `228 passed in 6.69s`;
   Ruff, `py_compile` und `git diff --check` gruen. Commit:
   `5770bf8f fix: rollback identity metadata updates`.
+
+### LLM-State-SQL/JSON-Audit
+
+- 2026-07-16: Biene Herschel meldete einen vermeintlich vorzeitigen SQL-Return
+  in `read_llm_state()`, der einen neueren `LLM_State.json`-Stand ignorieren
+  sollte.
+- Aufrufkette geprueft: `_read_account_json_document()` vergleicht SQL und
+  `LLM_State.json` bereits vor dem Return, schreibt den neueren Stand und
+  loescht die Datei nur nach verifiziertem Readback. Bleibt die Datei nach
+  stillem oder diagnostischem Readback-Fehler liegen, schuetzt der Return den
+  Artefaktstand. Befund daher widerlegt; kein Runtime-Fix.
+- Regressionsnachweis fuer LLM-State-Pfade: `6 passed`; Ruff,
+  `py_compile` und `git diff --check` gruen.
 
 ## Akzeptanzkriterien
 
