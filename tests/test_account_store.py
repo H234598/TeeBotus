@@ -4674,6 +4674,42 @@ def test_account_memory_fallback_does_not_mirror_partial_primary_append() -> Non
     assert "source collection read has diagnostics" in backend.last_fallback_sync_error
 
 
+def test_account_memory_fallback_does_not_mutate_extra_fallback_replace_row() -> None:
+    class Backend:
+        def __init__(self, rows: list[dict[str, str]]) -> None:
+            self.rows = [dict(row) for row in rows]
+
+        def read_collection(self, _account_id: str, _collection: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.rows]
+
+        def write_collection(self, _account_id: str, _collection: str, rows: list[dict[str, str]]) -> None:
+            self.rows = [dict(row) for row in rows]
+
+        def replace_collection_item(
+            self,
+            _account_id: str,
+            _collection: str,
+            item_key: str,
+            row: dict[str, str],
+        ) -> bool:
+            for index, existing in enumerate(self.rows):
+                if str(existing.get("id") or "").strip() == item_key:
+                    self.rows[index] = dict(row)
+                    return True
+            return False
+
+    account_id = "a" * 128
+    collection = "codex_history_dispatch_results"
+    primary = Backend([])
+    fallback = Backend([{"id": "row_1", "status": "pending"}])
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    assert backend.replace_collection_item(account_id, collection, "row_1", {"id": "row_1", "status": "sent"}) is False
+    assert primary.rows == []
+    assert fallback.rows == [{"id": "row_1", "status": "pending"}]
+    assert (account_id, collection) in backend._fallback_sync_failed_collections
+
+
 @pytest.mark.parametrize("kind", ["entries", "index", "collection"])
 def test_account_memory_fallback_does_not_promote_corrupt_dirty_data(kind: str) -> None:
     class Backend:

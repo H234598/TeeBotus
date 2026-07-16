@@ -165,6 +165,21 @@ class WarningFallbackAccountMemoryBackend:
         replace_result = {"replaced": False, "primary_completed": False}
 
         def callback(backend: Any) -> None:
+            stale_key = (account_id, collection_name)
+            if (
+                backend is self.fallback
+                and replace_result["primary_completed"]
+                and not replace_result["replaced"]
+                and stale_key not in self._stale_fallback_collections
+                and stale_key not in self._fallback_sync_failed_collections
+            ):
+                fallback_rows = self._read_clean_collection_for_mirror(self.fallback, account_id, collection_name)
+                if any(str(existing.get("id") or "").strip() == normalized_item_key for existing in fallback_rows):
+                    raise AccountStoreError(
+                        f"write_collection:{collection_name}: fallback item {normalized_item_key!r} exists although "
+                        "primary replacement was not found"
+                    )
+                return
             replaced = self._replace_collection_item_on_backend(backend, account_id, collection_name, normalized_item_key, dict(row))
             if backend is self.primary:
                 replace_result["replaced"] = bool(replaced)
