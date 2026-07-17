@@ -1712,16 +1712,20 @@ class TeeBotusEngine:
     def _codex_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         if not self._account_is_route_to_admin(event.instance, account_id):
             return [SendText(event.chat_id, instructions.codex_unauthorized, track=False)]
-        result = execute_codex_admin_command(
-            self.account_store,
-            instance_name=event.instance,
-            text=event.text,
-            project_root=self.project_root,
-            timeout_seconds=instructions.codex_timeout_seconds,
-            session_roots=self.codex_session_roots,
-            runner=self.codex_runner,
-            executable=self.codex_executable,
-        )
+        try:
+            result = execute_codex_admin_command(
+                self.account_store,
+                instance_name=event.instance,
+                text=event.text,
+                project_root=self.project_root,
+                timeout_seconds=instructions.codex_timeout_seconds,
+                session_roots=self.codex_session_roots,
+                runner=self.codex_runner,
+                executable=self.codex_executable,
+            )
+        except Exception as exc:  # noqa: BLE001 - Codex history/session failures must not abort message processing.
+            LOGGER.exception("Codex admin command failed instance=%s account=%s", event.instance, account_id)
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.codex_error.format(error=f"{type(exc).__name__}: {exc}"), track=False)]
         if result.status == "usage":
             return [SendText(event.chat_id, instructions.codex_usage, track=False)]
         if result.status == "not_found":

@@ -1707,6 +1707,23 @@ def test_engine_codex_command_is_admin_only(tmp_path):
     assert actions[0].text == "Nein."
 
 
+def test_engine_codex_command_reports_runner_failure_without_aborting_loop(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine.execute_codex_admin_command",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("codex history unavailable")),
+    )
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_status_auth_state(account_id, {"authorized": True})
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(codex_enabled=True))
+
+    actions = engine.process(event(identity, "/codex status"))
+
+    assert len(actions) == 2
+    assert "RuntimeError: codex history unavailable" in actions[1].text
+
+
 def test_engine_codex_admin_resumes_latest_repo_session(tmp_path, monkeypatch):
     repo = tmp_path / "TeeBotus"
     repo.mkdir()
