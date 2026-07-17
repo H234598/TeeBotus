@@ -414,9 +414,12 @@ def test_postgres_replace_collection_item_rejects_invalid_binary_fields(monkeypa
         backend.replace_collection_item("a" * 128, "status_outbox", "row_1", {"id": "row_1"})
 
 
-def test_postgres_backend_rebuilds_schema_after_missing_relation(monkeypatch) -> None:
+@pytest.mark.parametrize("sqlstate", ["42P01", "42703"])
+def test_postgres_backend_rebuilds_schema_after_missing_schema_error(monkeypatch, sqlstate) -> None:
     class MissingRelationError(Exception):
-        sqlstate = "42P01"
+        pass
+
+    MissingRelationError.sqlstate = sqlstate
 
     class FakeResult:
         def __init__(self, rows=()) -> None:

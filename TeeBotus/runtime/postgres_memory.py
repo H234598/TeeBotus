@@ -17,6 +17,7 @@ POSTGRES_DSN_ENV = "TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN"
 POSTGRES_CONNECT_TIMEOUT_ENV = "TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_CONNECT_TIMEOUT"
 POSTGRES_BACKEND_TOKENS = {"postgres", "postgresql", "pg"}
 POSTGRES_READ_ENTRIES_BY_IDS_CHUNK_SIZE = 500
+POSTGRES_MISSING_SCHEMA_SQLSTATES = {"42P01", "42703"}
 POSTGRES_REQUIRED_COLUMNS = {
     "teebotus_memory_entries": (
         "instance_name",
@@ -74,7 +75,7 @@ def _is_missing_postgres_relation(exc: BaseException) -> bool:
     current: BaseException | None = exc
     while current is not None and id(current) not in seen:
         seen.add(id(current))
-        if str(getattr(current, "sqlstate", "") or "") == "42P01":
+        if str(getattr(current, "sqlstate", "") or "") in POSTGRES_MISSING_SCHEMA_SQLSTATES:
             return True
         current = current.__cause__ or current.__context__
     return False
