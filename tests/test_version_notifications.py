@@ -6080,6 +6080,27 @@ def test_account_memory_index_health_reports_sqlite_account_without_profile(tmp_
     assert "account_memory=Demo status=none" not in lines
 
 
+def test_account_memory_index_health_ignores_sqlite_artifact_only_accounts(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    sqlite_path = tmp_path / "instances" / "Demo" / "data" / "accounts" / "Account_Memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    monkeypatch.setattr(
+        "TeeBotus.core.status.SecretToolInstanceSecretProvider",
+        lambda **_kwargs: StaticSecretProvider(b"x" * 32),
+    )
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Demo",
+        provider=StaticSecretProvider(b"x" * 32),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=sqlite_path, fallback_path=None),
+    )
+    backend.write_collection("a" * 128, "status_outbox", [{"id": "status-1"}])
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == ["account_memory=Demo status=none"]
+
+
 def test_account_memory_index_health_skips_lock_only_account_dir(tmp_path: Path) -> None:
     account_dir = tmp_path / "instances" / "Demo" / "data" / "accounts" / "accounts" / ("a" * 128)
     account_dir.mkdir(parents=True)

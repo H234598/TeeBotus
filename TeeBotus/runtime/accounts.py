@@ -5280,7 +5280,7 @@ def _sqlite_memory_account_ids(path: Path, instance_name: str) -> tuple[str, ...
     try:
         with _connect_sqlite_inspection(path) as connection:
             account_ids: set[str] = set()
-            for table in ("memory_entries", "memory_indexes", "account_jsonl_collections"):
+            for table in ("memory_entries", "memory_indexes", "memory_keywords"):
                 if not _sqlite_guard_table_exists(connection, table):
                     continue
                 rows = connection.execute(
@@ -5374,7 +5374,7 @@ def _postgres_memory_account_ids(dsn: str, instance_name: str, connect_timeout: 
     try:
         with psycopg.connect(dsn, connect_timeout=connect_timeout) as connection:
             account_ids: set[str] = set()
-            for table in ("teebotus_memory_entries", "teebotus_memory_indexes", "teebotus_account_jsonl_collections"):
+            for table in ("teebotus_memory_entries", "teebotus_memory_indexes", "teebotus_memory_keywords"):
                 exists = connection.execute(
                     "SELECT 1 FROM information_schema.tables WHERE table_schema = current_schema() AND table_name = %s",
                     (table,),
