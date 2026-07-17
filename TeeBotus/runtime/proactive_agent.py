@@ -1447,6 +1447,7 @@ def _update_proactive_outbox_item_status_locked(
                 item["status"] = "queued"
                 item["due_at"] = next_due_at
                 item["updated_at"] = timestamp
+                item["dispatch_attempts"] = 0
                 count = _normalize_int(item.get("recurrence_count"), default=0) + 1
                 item["recurrence_count"] = count
                 history.append({"at": timestamp, "status": "queued", "reason": f"recurrence:{item.get('recurrence')}"})

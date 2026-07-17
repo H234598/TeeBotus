@@ -3571,6 +3571,72 @@ def test_dispatch_reschedules_recurring_user_reminder_after_successful_send(tmp_
     assert due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 16, 11, tzinfo=timezone.utc))[0]["id"] == item_id
 
 
+def test_recurring_dispatch_attempts_reset_after_successful_occurrence(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="recurring_retry_reset",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        recurrence="daily",
+        now=now,
+        user_requested=True,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    calls = 0
+
+    async def sender(_route: dict, _action: SendText, _item: dict) -> str:
+        nonlocal calls
+        calls += 1
+        if calls in {1, 3}:
+            raise TimeoutError("temporary sender timeout")
+        return "sent-ref"
+
+    first = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now,
+        )
+    )
+    assert first[0].status == "queued"
+    second = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now + timedelta(minutes=2),
+        )
+    )
+    assert second[0].status == "sent"
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["id"] == item_id
+    assert item["status"] == "queued"
+    assert item["dispatch_attempts"] == 0
+
+    third = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=datetime(2026, 6, 16, 11, tzinfo=timezone.utc),
+        )
+    )
+    assert third[0].status == "queued"
+    assert third[0].reason.startswith("retry_scheduled:send_error:TimeoutError")
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["dispatch_attempts"] == 1
+    assert calls == 3
+
+
 def test_weekday_recurrence_skips_weekend_after_send() -> None:
     friday = datetime(2026, 6, 19, 9, 0, tzinfo=timezone.utc)
 
