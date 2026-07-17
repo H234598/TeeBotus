@@ -7855,6 +7855,24 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `13/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### Runtime-LLM-Profile: Instruktions-Fallbacks erhalten
+
+- 2026-07-18: Der Runtime-Profilpfad verwendete bei leerer Runtime-Konfiguration
+  keine `llm_fallback_models` aus `BotInstructions`. Dadurch konnten Fallbacks
+  aus `Bot_Verhalten.md` bei explizit gewaehltem Profil verschwinden, obwohl
+  Direktrouten dieselbe Einstellung nutzten.
+- Profil-Clients verwenden jetzt bei leerem Runtime-Wert die Instruktions-
+  Fallbacks und filtern sie weiterhin anhand von `allow_remote_fallback`.
+  Explizite Runtime-Fallbacks bleiben vorrangig. Keyring-, Free-Tier- und
+  Service-Tier-Aufloesung nutzen dieselbe effektive Liste.
+- Test: vollstaendige `tests/test_llm_router.py` -> `66 passed`; neuer
+  Regressionstest deckt leere Runtime-Konfiguration ab. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3cf92d08 fix: preserve instruction fallbacks for runtime profiles`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `14/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Arbeitsgedaechtnis: Index muss zur JSONL passen
 
 - 2026-07-17: `WorkingMemoryStore` und der noch vorhandene Telegram-Store
