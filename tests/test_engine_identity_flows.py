@@ -174,6 +174,17 @@ def test_status_auth_persistence_failure_fails_closed_in_engine(tmp_path, monkey
     assert status_auth_state_authorized(account_store, account_id) is False
 
 
+def test_status_auth_identity_lookup_failure_fails_closed_in_engine(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path, "TeeBotus_Logger")
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    monkeypatch.setattr(account_store, "get_account_for_identity", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("auth identity state unavailable")))
+
+    assert engine.process(event(identity, "/help", instance="TeeBotus_Logger")) == []
+
+
 def test_observation_backend_failures_do_not_block_ping(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
