@@ -5286,6 +5286,23 @@ bleibt erst bei 100 Commits.
 `16/20` Commits. Kein Push. Restart nach 4 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Instanz- und Storefehler bleiben reportierbar
+
+- 2026-07-17: `store_factory` und `_account_ids` fingen nur bekannte
+  Store-/Value-Fehler. Unerwartete Backend-Fehler konnten den gesamten
+  Proactive-Scheduler ohne strukturierten Report beenden.
+- Instanz- und Account-Discovery faengt jetzt sonstige `Exception` ab und
+  setzt `instance.error`. Andere Instanzen bleiben auswertbar; Top-Level
+  `ok` wird korrekt `false`.
+- Test: `tests/test_proactive_cli.py` `61 passed`; Factory-/Store-Fokus `4
+  passed`; Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-
+  Aufruf.
+- Code-Commit: `2f149469 fix: report proactive store failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`18/20` Commits. Kein Push. Restart nach 2 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Consentzustand fail-closed bei korruptem enabled-State
 
 - 2026-07-17: Ein inkonsistenter Agent-State mit `enabled=true`, aber leerem
