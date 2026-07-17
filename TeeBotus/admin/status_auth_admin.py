@@ -242,6 +242,7 @@ def bootstrap_instance_status_auth_secrets(
     instance_name: str,
     provider: InstanceSecretProvider,
 ) -> dict[str, Any]:
+    instance_name = _validate_instance_name(instances_dir, instance_name)
     instance_dir = instances_dir / instance_name
     accounts_root = instance_dir / "data" / "accounts"
     bootstrap: dict[str, Any] = {
@@ -291,6 +292,7 @@ def build_instance_status_auth_report(
     instance_name: str,
     provider: InstanceSecretProvider,
 ) -> dict[str, Any]:
+    instance_name = _validate_instance_name(instances_dir, instance_name)
     accounts_root = instances_dir / instance_name / "data" / "accounts"
     status_auth: dict[str, Any] = {
         "accounts": [],
@@ -523,6 +525,13 @@ def _public_route(route: Mapping[str, Any] | None) -> dict[str, Any]:
     if route.get("adapter_slot") is not None:
         result["adapter_slot"] = route.get("adapter_slot")
     return result
+
+
+def _validate_instance_name(instances_dir: Path, instance_name: str) -> str:
+    normalized = str(instance_name or "").strip()
+    if not normalized or discover_instances(instances_dir, (normalized,)) != (normalized,):
+        raise ValueError(f"invalid instance name: {instance_name}")
+    return normalized
 
 
 def _status_counts(rows: Sequence[Mapping[str, Any]]) -> dict[str, int]:

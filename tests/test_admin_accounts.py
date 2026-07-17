@@ -606,6 +606,21 @@ def test_status_auth_bootstrap_rejects_instance_path_escape(tmp_path: Path) -> N
     assert not (tmp_path.parent / "outside").exists()
 
 
+def test_status_auth_instance_helpers_reject_instance_path_escape(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="invalid instance name"):
+        status_auth_admin_module.bootstrap_instance_status_auth_secrets(
+            instances_dir=tmp_path,
+            instance_name="../outside",
+            provider=provider(),
+        )
+    with pytest.raises(ValueError, match="invalid instance name"):
+        status_auth_admin_module.build_instance_status_auth_report(
+            instances_dir=tmp_path,
+            instance_name="../outside",
+            provider=provider(),
+        )
+
+
 def test_status_auth_report_keeps_account_when_route_lookup_fails(tmp_path: Path, monkeypatch) -> None:
     instance_dir = make_instance(tmp_path)
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
