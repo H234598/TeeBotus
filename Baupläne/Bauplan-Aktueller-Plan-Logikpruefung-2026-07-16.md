@@ -6889,6 +6889,24 @@ Commits. Kein Push. Restart nach 10 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `11/20` sichtbar.
 
+### Emergency-Aktivierung prueft Cooldown-Persistenz
+
+- 2026-07-17: `/Call_a_Teladi` ignorierte das Ergebnis von
+  `_mark_teladi_emergency_used`. Bei fehlgeschlagener State-Persistenz wurde
+  trotzdem der Bestätigungs-Prompt gesendet; ein späterer Versand konnte ohne
+  gesicherten Cooldown erfolgen.
+- Pending-Flow und Cooldown werden jetzt als Aktivierung behandelt. Bei
+  fehlendem State-Schreiben gibt es nur den Fehlertext; Pending-State wird
+  best-effort entfernt. Kein falsches Versandversprechen.
+- Test: `tests/test_engine_identity_flows.py -k 'teladi'` `5 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3d43e455 fix: fail closed on emergency cooldown persistence`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `12/20`
+Commits. Kein Push. Restart nach 8 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `13/20` sichtbar.
+
 ### Login kapselt Rückgabe- und Notificationfehler
 
 - 2026-07-17: Primäres Login vertraute blind auf `result["account_id"]` und
