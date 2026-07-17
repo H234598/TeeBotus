@@ -3531,6 +3531,20 @@ def test_engine_reports_llm_error_for_api_failure(tmp_path):
     assert actions[1].text == "LLM kaputt."
 
 
+def test_engine_reports_llm_error_for_unexpected_provider_failure(tmp_path):
+    class BrokenLLMClient:
+        def create_reply(self, *_args, **_kwargs):
+            raise RuntimeError("provider adapter unavailable")
+
+    instructions = BotInstructions(openai_enabled=True, llm_error="LLM kaputt.")
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, llm_client=BrokenLLMClient())
+
+    actions = engine.process(event(telegram_identity_key(1), "Hallo"))
+
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == "LLM kaputt."
+
+
 def test_engine_transcribes_audio_attachment_for_openai_input(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:

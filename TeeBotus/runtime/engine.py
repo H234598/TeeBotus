@@ -1527,6 +1527,9 @@ class TeeBotusEngine:
                 exc,
             )
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
+        except Exception:  # noqa: BLE001 - provider adapters must not abort the message loop.
+            LOGGER.exception("LLM action pipeline failed unexpectedly instance=%s event_id=%s", event.instance, event.event_id)
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         response_id = _persistable_previous_response_id(response)
         if response_id:
             provider, model, key_fingerprint = _llm_state_scope(response, client=llm_client, instructions=instructions)
@@ -2292,6 +2295,10 @@ class TeeBotusEngine:
                     ),
                 )
         except (OpenAIAPIError, LLMAPIError):
+            self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
+        except Exception:  # noqa: BLE001 - provider adapters must not abort the YouTube message loop.
+            LOGGER.exception("YouTube LLM pipeline failed unexpectedly instance=%s event=%s", event.instance, event.event_id)
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         response_id = _persistable_previous_response_id(response)
