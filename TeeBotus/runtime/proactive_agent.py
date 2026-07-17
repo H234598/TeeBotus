@@ -7,6 +7,7 @@ import re
 import calendar
 from collections.abc import Iterable as IterableABC
 from contextlib import nullcontext
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -650,37 +651,79 @@ def _run_proactive_reflection_planner(
         )
         if not preflight.allowed:
             return ProactivePlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids), preflight.reason)
-        plan_memory_ids = _append_proactive_planner_memory_entries(
-            account_store,
-            account_id,
-            source,
-            source_id=source_id,
-            fingerprint=fingerprint,
-            now=resolved_now,
-        )
+        try:
+            previous_memory_rows = deepcopy(account_store.read_memory_entries(account_id))
+            previous_memory_index = deepcopy(account_store.read_memory_index(account_id))
+            previous_outbox_rows = deepcopy(account_store.read_proactive_outbox(account_id))
+        except Exception:  # pragma: no cover - concrete storage failures vary by backend.
+            LOGGER.exception("Proactive reflection snapshot failed account=%s source=%s", account_id, source_id)
+            return ProactivePlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids), "memory_snapshot_failed")
+        try:
+            plan_memory_ids = _append_proactive_planner_memory_entries(
+                account_store,
+                account_id,
+                source,
+                source_id=source_id,
+                fingerprint=fingerprint,
+                now=resolved_now,
+            )
+        except Exception:  # pragma: no cover - concrete storage failures vary by backend.
+            LOGGER.exception("Proactive reflection memory batch failed account=%s source=%s", account_id, source_id)
+            reason = "memory_persistence_failed"
+            if not _rollback_proactive_planner_batch(
+                account_store,
+                account_id,
+                memory_rows=previous_memory_rows,
+                memory_index=previous_memory_index,
+                outbox_rows=previous_outbox_rows,
+            ):
+                reason = "memory_rollback_failed"
+            return ProactivePlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids), reason)
         reflection_id = plan_memory_ids[0]
-        decision = queue_proactive_message(
-            account_store,
-            account_id,
-            category="reminder",
-            intent="planner_follow_up",
-            message_text=_proactive_planner_message(source),
-            reason_memory_ids=(source_id, *plan_memory_ids),
-            due_at=_default_proactive_due_at(resolved_now),
-            now=resolved_now,
-            risk_gate="none",
-            planner={
-                "fingerprint": fingerprint,
-                "source_memory_id": source_id,
-                "reflection_memory_id": reflection_id,
-                "memory_ids": list(plan_memory_ids),
-                "collaboration_marker": "agent_suggested",
-                "intervention_type": "reminder",
-                "review_signal": "User berichtet erledigt/nicht erledigt/Belastung",
-            },
-        )
+        try:
+            decision = queue_proactive_message(
+                account_store,
+                account_id,
+                category="reminder",
+                intent="planner_follow_up",
+                message_text=_proactive_planner_message(source),
+                reason_memory_ids=(source_id, *plan_memory_ids),
+                due_at=_default_proactive_due_at(resolved_now),
+                now=resolved_now,
+                risk_gate="none",
+                planner={
+                    "fingerprint": fingerprint,
+                    "source_memory_id": source_id,
+                    "reflection_memory_id": reflection_id,
+                    "memory_ids": list(plan_memory_ids),
+                    "collaboration_marker": "agent_suggested",
+                    "intervention_type": "reminder",
+                    "review_signal": "User berichtet erledigt/nicht erledigt/Belastung",
+                },
+            )
+        except Exception:  # pragma: no cover - concrete storage failures vary by backend.
+            LOGGER.exception("Proactive reflection queue failed account=%s source=%s", account_id, source_id)
+            reason = "queue_persistence_failed"
+            if not _rollback_proactive_planner_batch(
+                account_store,
+                account_id,
+                memory_rows=previous_memory_rows,
+                memory_index=previous_memory_index,
+                outbox_rows=previous_outbox_rows,
+            ):
+                reason = "memory_rollback_failed"
+            return ProactivePlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids), reason)
         if not decision.allowed:
-            return ProactivePlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids), decision.reason)
+            reason = decision.reason
+            if not _rollback_proactive_planner_batch(
+                account_store,
+                account_id,
+                memory_rows=previous_memory_rows,
+                memory_index=previous_memory_index,
+                outbox_rows=previous_outbox_rows,
+            ):
+                reason = "memory_rollback_failed"
+            return ProactivePlanningResult(account_id, tuple(created_memory_ids), tuple(queued_item_ids), reason)
         created_memory_ids.extend(plan_memory_ids)
         queued_item_ids.append(decision.reason.removeprefix("queued:"))
         existing_fingerprints.add(fingerprint)
@@ -2731,6 +2774,30 @@ def _append_proactive_planner_memory_entries(
         account_store.append_structured_memory_entry(account_id, payload)
         for payload in _proactive_planner_memory_payloads(source, source_id=source_id, fingerprint=fingerprint, now=now)
     )
+
+
+def _rollback_proactive_planner_batch(
+    account_store: AccountStore,
+    account_id: str,
+    *,
+    memory_rows: list[dict[str, Any]],
+    memory_index: dict[str, Any],
+    outbox_rows: list[dict[str, Any]],
+) -> bool:
+    rollback_errors: list[Exception] = []
+    for restore in (
+        lambda: account_store.write_memory_entries(account_id, memory_rows),
+        lambda: account_store.write_memory_index(account_id, memory_index),
+        lambda: account_store.write_proactive_outbox(account_id, outbox_rows),
+    ):
+        try:
+            restore()
+        except Exception as exc:  # pragma: no cover - concrete storage failures vary by backend.
+            rollback_errors.append(exc)
+    if rollback_errors:
+        LOGGER.error("Proactive reflection batch rollback failed account=%s error=%s", account_id, rollback_errors[0])
+        return False
+    return True
 
 
 def _proactive_planner_memory_payloads(
