@@ -5361,6 +5361,21 @@ bleibt erst bei 100 Commits.
 `6/20` Commits. Kein Push. Restart nach 14 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Tool-Agent faellt bei leerem Wrapper-Cache auf Responses-Output zurueck
+
+- 2026-07-17: Ein Adapter mit `tool_calls=[]` konnte gleichzeitig echte
+  Responses-API-Function-Calls in `output` liefern. Der Extraktor nahm die
+  leere Liste als endgueltig und meldete faelschlich keinen Tool-Call.
+- Leere Listen/Tupel aus Wrappern pruefen jetzt ebenfalls den strukturierten
+  `output`-Pfad. Nichtleere explizite Tool-Call-Listen behalten Vorrang.
+- Test: `tests/test_proactive_agent.py` `155 passed`; Responses-Fokus `3 passed`;
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `edea927d fix: recover proactive tool calls from response output`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`8/20` Commits. Kein Push. Restart nach 12 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
