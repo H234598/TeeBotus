@@ -3385,6 +3385,21 @@ nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `6/20` Commits. Kein Push. Restart
 nach 14 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### JSON-Recovery-erkennt-dangling-Symlinks
+
+- 2026-07-17: JSON-Recovery pruefte Entries-/Index-Dateien erst nach
+  `exists()`. Dangling Symlinks wurden dadurch wie fehlende Dateien als leer
+  behandelt und konnten einen falschen leeren Recovery-Befund erzeugen.
+- `is_symlink()` wird jetzt vor `exists()` geprueft. Dangling JSON-Symlinks
+  blockieren die Recovery fail-closed und werden nicht verschoben.
+- Regression: JSON-Recovery-Symlink-Fokus -> `2 passed`; Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `de5df753 fix: reject dangling json recovery symlinks`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Direkter-Recovery-Report-validiert-Instanznamen
 
 - 2026-07-17: `build_instance_recovery_report()` war direkt aufrufbar und
