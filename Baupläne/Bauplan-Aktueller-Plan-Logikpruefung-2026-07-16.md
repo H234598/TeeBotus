@@ -5220,6 +5220,23 @@ bleibt erst bei 100 Commits.
 `8/20` Commits. Kein Push. Restart nach 12 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Codex-History lehnt kaputte Delivery-Metadaten ab
+
+- 2026-07-17: Codex-Statusupdate und Worker-Claim ersetzten einen vorhandenen
+  nicht-dict `delivery`-Container durch `{}`. Attempt-/Receipt-Rohdaten konnten
+  dadurch beim Versand verschwinden.
+- Items ohne `delivery` bleiben kompatibel und erhalten den Standardcontainer.
+  Vorhandene kaputte Container blockieren Statusupdate und Claim fail-closed;
+  Originaldaten bleiben unveraendert fuer Diagnose/Repair.
+- Test: `tests/test_codex_history.py` `188 passed`; Delivery-/History-Fokus
+  `3 passed`; Ruff mit bestehendem `E402`-Importbefund ausgenommen,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `64a3edcb fix: reject corrupt codex delivery metadata`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`10/20` Commits. Kein Push. Restart nach 10 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Consentzustand fail-closed bei korruptem enabled-State
 
 - 2026-07-17: Ein inkonsistenter Agent-State mit `enabled=true`, aber leerem
