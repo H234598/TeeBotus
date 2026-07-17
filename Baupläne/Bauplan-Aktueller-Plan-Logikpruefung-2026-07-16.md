@@ -5016,6 +5016,28 @@ Commits.
   `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `6f7e2e72 fix: include store-only proactive accounts`.
 
-**Aktueller Laufstand:** Seit dem letzten Restart `1/20` Code-Commits. Kein
-Push. Restart nach 19 weiteren Commits. Naechster Push bleibt erst bei 100
+### Status-Auth-Export-faengt-Route-ValueError
+
+- 2026-07-17: Der Status-Auth-Export fing beim Route-Lookup nur
+  `AccountStoreError` und `OSError`. Malformed/decryptete Routendokumente
+  konnten als `ValueError` den gesamten Export abbrechen.
+- Export meldet den Account jetzt strukturiert mit `route_error`, ohne andere
+  Accounts zu verlieren.
+- Tests: fokussierter Status-Auth-Report `2 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `881e0a44 fix: keep status auth reports structured`.
+
+### Proactive-Review-nutzt-Store-IDs
+
+- 2026-07-17: Die Human-Review-Liste scannte ebenfalls nur lokale
+  Account-Verzeichnisse und verlor `review_pending`-Items von SQL-/Index-only
+  Accounts.
+- Review-Enumeration nutzt jetzt dieselbe Union aus Directory- und Store-IDs
+  wie der Proactive-Scheduler.
+- Tests: Proactive-Review-/CLI-Fokus `56 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e14bfe19 fix: include store-only review accounts`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `4/20` Code-Commits. Kein
+Push. Restart nach 16 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
