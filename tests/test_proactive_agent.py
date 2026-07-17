@@ -1373,6 +1373,17 @@ def test_proactive_agent_health_reports_agent_state_read_error() -> None:
     assert health.errors == ("agent_state read failed: AccountStoreError: encrypted envelope authentication failed",)
 
 
+def test_proactive_agent_health_reports_unexpected_agent_state_read_error() -> None:
+    class BrokenStore:
+        def read_agent_state(self, _account_id: str) -> dict:
+            raise RuntimeError("backend unavailable")
+
+    health = check_proactive_agent_account(BrokenStore(), "a" * 128)  # type: ignore[arg-type]
+
+    assert health.ok is False
+    assert health.errors == ("agent_state read failed: RuntimeError: backend unavailable",)
+
+
 def test_proactive_agent_health_reports_corrupt_sql_agent_state(tmp_path, monkeypatch) -> None:
     import sqlite3
 
@@ -1417,6 +1428,49 @@ def test_proactive_agent_health_reports_outbox_read_error() -> None:
 
     assert health.ok is False
     assert health.errors == ("proactive_outbox read failed: AccountStoreError: encrypted envelope authentication failed",)
+
+
+def test_proactive_agent_health_reports_unexpected_outbox_read_error() -> None:
+    class BrokenStore:
+        def read_agent_state(self, _account_id: str) -> dict:
+            return {}
+
+        def read_proactive_outbox(self, _account_id: str) -> list:
+            raise RuntimeError("backend unavailable")
+
+    health = check_proactive_agent_account(BrokenStore(), "a" * 128)  # type: ignore[arg-type]
+
+    assert health.ok is False
+    assert health.errors == ("proactive_outbox read failed: RuntimeError: backend unavailable",)
+
+
+def test_proactive_agent_health_reports_unexpected_route_check_error(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        reason_memory_ids=("mem_follow_up",),
+        due_at="2026-06-15T12:30:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    monkeypatch.setattr(
+        "TeeBotus.runtime.proactive_agent._account_has_matching_proactive_route",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("backend unavailable")),
+    )
+
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert health.ok is False
+    assert len(health.errors) == 1
+    assert health.errors[0].startswith("queued outbox item pro_")
+    assert health.errors[0].endswith("route check failed: RuntimeError: backend unavailable")
 
 
 def test_proactive_agent_health_does_not_duplicate_missing_outbox_ids(tmp_path) -> None:

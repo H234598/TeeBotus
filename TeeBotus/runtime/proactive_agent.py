@@ -2198,7 +2198,7 @@ def check_proactive_agent_account(
     resolved_now = _resolve_proactive_now(now)
     try:
         state = account_store.read_agent_state(account_id)
-    except (AccountStoreError, OSError, ValueError) as exc:
+    except Exception as exc:  # noqa: BLE001 - health checks must report backend failures.
         return ProactiveAgentHealth(account_id, False, (f"agent_state read failed: {_health_exception_name(exc)}: {exc}",), 0, 0, 0)
     if not isinstance(state, Mapping):
         return ProactiveAgentHealth(account_id, False, ("agent_state is not an object",), 0, 0, 0)
@@ -2213,7 +2213,7 @@ def check_proactive_agent_account(
         normalized_state = _normalized_agent_state({})
     try:
         outbox = account_store.read_proactive_outbox(account_id)
-    except (AccountStoreError, OSError, ValueError) as exc:
+    except Exception as exc:  # noqa: BLE001 - health checks must report backend failures.
         return ProactiveAgentHealth(account_id, False, (f"proactive_outbox read failed: {_health_exception_name(exc)}: {exc}",), 0, 0, 0)
     if not isinstance(outbox, list):
         return ProactiveAgentHealth(account_id, False, ("proactive_outbox is not a list",), 0, 0, 0)
@@ -2305,7 +2305,7 @@ def check_proactive_agent_account(
                     errors.append(f"{status} outbox item {item_id or index} missing route chat_id")
                 try:
                     route_matches = _account_has_matching_proactive_route(account_store, account_id, route)
-                except (AccountStoreError, OSError, ValueError) as exc:
+                except Exception as exc:  # noqa: BLE001 - health checks must report backend failures.
                     errors.append(f"{status} outbox item {item_id or index} route check failed: {type(exc).__name__}: {exc}")
                 else:
                     if not route_matches:
