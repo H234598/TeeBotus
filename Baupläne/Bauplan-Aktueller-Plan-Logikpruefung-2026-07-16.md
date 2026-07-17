@@ -4238,6 +4238,24 @@ nach 19 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `3/20` Commits. Kein Push. Restart
 nach 17 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### Signal-Sync-Read-Receipts-aus-Raw-Payload
+
+- 2026-07-17: `_signal_receipt_message_refs()` las nur geparste
+  `message.read_messages` und `envelope.receiptMessage`. SignalBot kann bei
+  `SYNC_MESSAGE`-Read-Receipts aber nur `envelope.syncMessage.readMessages`
+  liefern; dann wurde kein Receipt verarbeitet.
+- Raw-`syncMessage.readMessages` wird jetzt mit denselben Timestamp-Feldern wie
+  der geparste Pfad ausgewertet. Doppelte Referenzen bleiben durch den
+  bestehenden Receipt-Pfad idempotent.
+- Regression: vorhandener Sync-Read-Test läuft jetzt ohne
+  `message.read_messages` und prüft nur Raw-JSON; Signal-Adapter-/Runner-Suite
+  `245 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `ca8a8465 fix: parse signal sync read receipts from raw payload`.
+
+**Aktueller Laufstand:** Seit dem Restart `0/20` Code-Commits. Kein Push.
+Restart nach 20 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
 ### Signal-Reply-Text-aus-Raw-Envelope
 
 - 2026-07-17: Der Signal-Adapter setzte `reply_to_text` nur aus dem geparsten
