@@ -6298,6 +6298,24 @@ bleibt erst bei 100 Commits.
 `15/20` Commits. Kein Push. Restart nach 5 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-LLM-Plan kapselt Memory-/Queue-Schreibfehler
+
+- 2026-07-17: `apply_proactive_llm_plan` liess Ausnahmen aus
+  `append_structured_memory_entry` und `append_proactive_outbox_item` bis zum
+  Aufrufer durch. Ein einzelner SQL-/JSON-Schreibfehler brach dadurch den Plan
+  ab und unterdrueckte spaetere Entscheidungen sowie deren Audit-Eintraege.
+- Memory- und Queue-Mutationen melden Schreibausnahmen jetzt als
+  `storage_write_failed`; `apply_proactive_llm_plan` verarbeitet danach weitere
+  Entscheidungen. Kein Erfolg wird bei unsicherer Persistenz behauptet.
+- Test: `tests/test_proactive_agent.py` `185 passed`; Regressionen fuer beide
+  Schreibpfade und Fortsetzung nach Memory-Fehler; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6d185489 fix: contain proactive llm write failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`17/20` Commits. Kein Push. Restart nach 3 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Admin-Status kapselt Route-Backendfehler
 
 - 2026-07-17: Admin-Statuszeilen sowie Runtime- und Benchmark-Summary-
