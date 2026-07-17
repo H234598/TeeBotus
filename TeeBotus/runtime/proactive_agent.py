@@ -1131,6 +1131,17 @@ def apply_proactive_llm_plan(
     *,
     now: datetime | None = None,
 ) -> ProactiveLLMPlanningResult:
+    with _account_proactive_outbox_lock(account_store, account_id), account_store.account_memory_lock(account_id):
+        return _apply_proactive_llm_plan_locked(account_store, account_id, payload, now=now)
+
+
+def _apply_proactive_llm_plan_locked(
+    account_store: AccountStore,
+    account_id: str,
+    payload: Mapping[str, Any],
+    *,
+    now: datetime | None = None,
+) -> ProactiveLLMPlanningResult:
     resolved_now = _resolve_proactive_now(now)
     if _normalized_agent_state(account_store.read_agent_state(account_id))["proactive"].get("paused") is True:
         return _proactive_planning_disabled_result(
@@ -1159,6 +1170,22 @@ def apply_proactive_llm_plan(
     errors: list[str] = []
     audit_event_ids: list[str] = []
     memory_ids = _account_memory_ids(account_store, account_id)
+    existing_llm_memory_ids = {
+        str(entry.get("proactive_llm_plan_fingerprint") or "").strip(): str(entry.get("id") or "").strip()
+        for entry in account_store.read_memory_entries(account_id)
+        if isinstance(entry, Mapping)
+        and str(entry.get("proactive_llm_plan_fingerprint") or "").strip()
+        and str(entry.get("id") or "").strip()
+    }
+    existing_llm_queue_ids = {
+        str(item.get("planner", {}).get("fingerprint") or "").strip(): str(item.get("id") or "").strip()
+        for item in account_store.read_proactive_outbox(account_id)
+        if isinstance(item, Mapping)
+        and _proactive_item_status(item) in {"queued", "review_pending", "dispatching", "sent"}
+        and isinstance(item.get("planner"), Mapping)
+        and str(item.get("planner", {}).get("fingerprint") or "").strip()
+        and str(item.get("id") or "").strip()
+    }
     for index, raw_decision in enumerate(decisions[:PROACTIVE_LLM_MAX_DECISIONS]):
         if not isinstance(raw_decision, Mapping):
             error = f"decision_{index}_not_object"
@@ -1168,8 +1195,21 @@ def apply_proactive_llm_plan(
         action = str(raw_decision.get("action") or "none").strip().casefold()
         if action == "none":
             continue
+        decision_fingerprint = _proactive_llm_decision_fingerprint(account_id, raw_decision)
         if action == "memory":
-            memory_result = _apply_proactive_llm_memory_decision(account_store, account_id, raw_decision, memory_ids, resolved_now)
+            existing_memory_id = existing_llm_memory_ids.get(decision_fingerprint)
+            if existing_memory_id:
+                created_memory_ids.append(existing_memory_id)
+                memory_ids.add(existing_memory_id)
+                continue
+            memory_result = _apply_proactive_llm_memory_decision(
+                account_store,
+                account_id,
+                raw_decision,
+                memory_ids,
+                resolved_now,
+                fingerprint=decision_fingerprint,
+            )
             if memory_result.startswith("error:"):
                 error = f"decision_{index}_{memory_result.removeprefix('error:')}"
                 errors.append(error)
@@ -1177,15 +1217,28 @@ def apply_proactive_llm_plan(
             else:
                 created_memory_ids.append(memory_result)
                 memory_ids.add(memory_result)
+                existing_llm_memory_ids[decision_fingerprint] = memory_result
             continue
         if action == "queue":
-            queue_result = _apply_proactive_llm_queue_decision(account_store, account_id, raw_decision, memory_ids, resolved_now)
+            existing_queue_id = existing_llm_queue_ids.get(decision_fingerprint)
+            if existing_queue_id:
+                queued_item_ids.append(existing_queue_id)
+                continue
+            queue_result = _apply_proactive_llm_queue_decision(
+                account_store,
+                account_id,
+                raw_decision,
+                memory_ids,
+                resolved_now,
+                fingerprint=decision_fingerprint,
+            )
             if queue_result.startswith("error:"):
                 error = f"decision_{index}_{queue_result.removeprefix('error:')}"
                 errors.append(error)
                 audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="llm_decision_rejected", reason=error, decision_index=index, decision=raw_decision, now=resolved_now))
             else:
                 queued_item_ids.append(queue_result)
+                existing_llm_queue_ids[decision_fingerprint] = queue_result
             continue
         if action == "cancel":
             cancel_result = _apply_proactive_llm_cancel_decision(account_store, account_id, raw_decision, resolved_now)
@@ -2941,6 +2994,17 @@ def _proactive_plan_fingerprint(account_id: str, source: Mapping[str, Any]) -> s
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()[:24]
 
 
+def _proactive_llm_decision_fingerprint(account_id: str, decision: Mapping[str, Any]) -> str:
+    payload = json.dumps(
+        {"account_id": str(account_id), "decision": decision},
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    )
+    return f"llm_{hashlib.sha256(payload.encode('utf-8')).hexdigest()[:24]}"
+
+
 def _proactive_source_excerpt(source: Mapping[str, Any], *, max_chars: int = 140) -> str:
     text = " ".join(str(source.get("user_text") or source.get("bot_text") or "dem gespeicherten Thema").split())
     if len(text) > max_chars:
@@ -2967,6 +3031,8 @@ def _apply_proactive_llm_memory_decision(
     decision: Mapping[str, Any],
     memory_ids: set[str],
     now: datetime,
+    *,
+    fingerprint: str = "",
 ) -> str:
     kind = str(decision.get("kind") or "").strip().casefold()
     if kind not in PROACTIVE_LLM_MEMORY_KINDS:
@@ -3004,6 +3070,7 @@ def _apply_proactive_llm_memory_decision(
                 "supports": source_ids,
                 "relations": relations,
                 "proactive_llm_plan": True,
+                "proactive_llm_plan_fingerprint": fingerprint,
             },
         )
     except Exception:  # noqa: BLE001 - report persistence failure to planner audit.
@@ -3017,6 +3084,8 @@ def _apply_proactive_llm_queue_decision(
     decision: Mapping[str, Any],
     memory_ids: set[str],
     now: datetime,
+    *,
+    fingerprint: str = "",
 ) -> str:
     category = str(decision.get("category") or "").strip().casefold()
     if category not in PROACTIVE_ALLOWED_CATEGORIES:
@@ -3042,6 +3111,7 @@ def _apply_proactive_llm_queue_decision(
     planner = {
         "source": "llm",
         "schema_version": PROACTIVE_LLM_PLAN_SCHEMA_VERSION,
+        "fingerprint": fingerprint,
         "intervention_type": str(decision.get("intervention_type") or category).strip()[:80],
         "expected_response": str(decision.get("expected_response") or "").strip()[:240],
         "review_signal": str(decision.get("review_signal") or "").strip()[:240],

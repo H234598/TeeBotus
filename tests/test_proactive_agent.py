@@ -2475,6 +2475,58 @@ def test_reflection_planner_serializes_concurrent_fingerprint_checks(tmp_path, m
     assert len([entry for entry in account_store.read_memory_entries(account_id) if entry.get("proactive_plan_fingerprint")]) == 9
 
 
+def test_llm_plan_application_serializes_concurrent_duplicate_plans(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    source_id = account_store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_goal", "kind": "treatment_goal", "user_text": "Schlafrhythmus stabilisieren."},
+    )
+    payload = {
+        "schema_version": 1,
+        "decisions": [
+            {
+                "action": "queue",
+                "category": "reminder",
+                "intent": "same_plan",
+                "message_text": "Einmalige Erinnerung.",
+                "reason_memory_ids": [source_id],
+                "risk_gate": "none",
+                "due_at": "2026-06-16T10:00:00+00:00",
+            }
+        ],
+    }
+    results: list[Any] = []
+    errors: list[BaseException] = []
+
+    def run() -> None:
+        try:
+            results.append(
+                apply_proactive_llm_plan(
+                    account_store,
+                    account_id,
+                    payload,
+                    now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+                )
+            )
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    threads = [threading.Thread(target=run), threading.Thread(target=run)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert errors == []
+    assert len(results) == 2
+    assert len({result.queued_item_ids[0] for result in results}) == 1
+    assert len(account_store.read_proactive_outbox(account_id)) == 1
+
+
 def test_reflection_planner_does_not_write_memories_when_route_policy_blocks(tmp_path) -> None:
     account_store = store(tmp_path)
     account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
