@@ -5023,7 +5023,7 @@ def _sqlite_memory_has_instance_payload_rows(path: Path, instance_name: str) -> 
     import sqlite3
 
     try:
-        with sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True) as connection:
+        with _connect_sqlite_inspection(path) as connection:
             for table in ("memory_entries", "memory_indexes", "account_jsonl_collections"):
                 if not _sqlite_guard_table_exists(connection, table):
                     continue
@@ -5035,6 +5035,8 @@ def _sqlite_memory_has_instance_payload_rows(path: Path, instance_name: str) -> 
                     return True
     except sqlite3.DatabaseError:
         return True
+    except OSError as exc:
+        raise AccountStoreError(f"could not inspect SQLite account-memory payload: {path}") from exc
     return False
 
 
@@ -5042,8 +5044,15 @@ def _sqlite_memory_has_nonempty_sidecar(path: Path) -> bool:
     for suffix in ("-wal", "-shm"):
         sidecar = path.with_name(f"{path.name}{suffix}")
         try:
-            if sidecar.is_file() and sidecar.stat().st_size > 0:
+            sidecar_stat = os.stat(sidecar, follow_symlinks=False)
+            if stat.S_ISLNK(sidecar_stat.st_mode):
+                raise AccountStoreError(f"could not inspect SQLite account-memory payload: {sidecar} sidecar")
+            if stat.S_ISREG(sidecar_stat.st_mode) and sidecar_stat.st_size > 0:
                 return True
+        except AccountStoreError:
+            raise
+        except FileNotFoundError:
+            continue
         except OSError:
             return True
     return False
@@ -5062,7 +5071,7 @@ def _sqlite_memory_account_ids(path: Path, instance_name: str) -> tuple[str, ...
     import sqlite3
 
     try:
-        with sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True) as connection:
+        with _connect_sqlite_inspection(path) as connection:
             account_ids: set[str] = set()
             for table in ("memory_entries", "memory_indexes", "account_jsonl_collections"):
                 if not _sqlite_guard_table_exists(connection, table):
@@ -5079,6 +5088,38 @@ def _sqlite_memory_account_ids(path: Path, instance_name: str) -> tuple[str, ...
             return tuple(sorted(account_ids))
     except sqlite3.DatabaseError as exc:
         raise AccountStoreError(f"could not inspect SQLite account-memory payload: {path}") from exc
+    except OSError as exc:
+        raise AccountStoreError(f"could not inspect SQLite account-memory payload: {path}") from exc
+
+
+@contextmanager
+def _connect_sqlite_inspection(path: Path) -> Iterator[Any]:
+    import sqlite3
+
+    from TeeBotus.runtime.sqlite_memory import (
+        _open_stable_sqlite_target,
+        _sqlite_parent_uri,
+        _verify_stable_sqlite_target,
+    )
+
+    parent_descriptor, target_descriptor, target_identity = _open_stable_sqlite_target(
+        path,
+        access_flags=os.O_RDONLY,
+        create=False,
+    )
+    connection: Any | None = None
+    try:
+        connection = sqlite3.connect(
+            _sqlite_parent_uri(parent_descriptor, path.name, mode="ro"),
+            uri=True,
+        )
+        _verify_stable_sqlite_target(parent_descriptor, path.name, target_identity, path)
+        yield connection
+    finally:
+        if connection is not None:
+            connection.close()
+        os.close(target_descriptor)
+        os.close(parent_descriptor)
 
 
 def _sqlite_guard_table_exists(connection: Any, table: str) -> bool:

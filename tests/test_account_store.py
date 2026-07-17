@@ -536,6 +536,38 @@ def test_account_store_refuses_manifest_for_uninspectable_sqlite_memory(tmp_path
     assert not (tmp_path / "accounts" / ACCOUNT_KEYRING_FILENAME).exists()
 
 
+def test_sqlite_secret_inspection_rejects_database_path_swap(tmp_path, monkeypatch) -> None:
+    import os
+    import sqlite3
+
+    import TeeBotus.runtime.accounts as accounts_module
+
+    sqlite_path = tmp_path / "memory.sqlite3"
+    replacement_path = tmp_path / "replacement.sqlite3"
+    for path, value in ((sqlite_path, "original"), (replacement_path, "replacement")):
+        with sqlite3.connect(path) as connection:
+            connection.execute("CREATE TABLE memory_entries (instance_name TEXT, account_id TEXT)")
+            connection.execute("INSERT INTO memory_entries(instance_name, account_id) VALUES (?, ?)", ("Depressionsbot", value))
+    real_connect = sqlite3.connect
+    swapped = False
+
+    def swap_path_before_connect(database, *args, **kwargs):
+        nonlocal swapped
+        if not swapped and str(database).startswith("file:/proc/self/fd/"):
+            os.replace(replacement_path, sqlite_path)
+            swapped = True
+        return real_connect(database, *args, **kwargs)
+
+    monkeypatch.setattr(sqlite3, "connect", swap_path_before_connect)
+
+    with pytest.raises(AccountStoreError, match="could not inspect SQLite account-memory payload"):
+        accounts_module._sqlite_memory_has_instance_payload_rows(sqlite_path, "Depressionsbot")
+
+    assert swapped is True
+    with sqlite3.connect(sqlite_path) as connection:
+        assert connection.execute("SELECT account_id FROM memory_entries").fetchone() == ("replacement",)
+
+
 def test_account_store_refuses_manifest_for_malformed_sqlite_memory_account_id(tmp_path, monkeypatch) -> None:
     import sqlite3
 
