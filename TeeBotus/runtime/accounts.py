@@ -1558,7 +1558,7 @@ class AccountStore:
                 continue
             try:
                 safe_path = _safe_rooted_path(path, allowed_roots=(self.root, self.root.parent), operation="candidate vault payload")
-                vault.decrypt(safe_path.read_bytes(), kind=safe_path.name)
+                vault.decrypt(_read_stable_account_file(safe_path, label="candidate vault payload"), kind=safe_path.name)
             except Exception as exc:  # noqa: BLE001
                 raise AccountStoreError(
                     "refusing to record instance secret fingerprint because existing encrypted "
@@ -5013,11 +5013,9 @@ def _looks_like_teebotus_encrypted_payload(
 ) -> bool:
     path = _safe_rooted_path(path, allowed_roots=allowed_roots, operation="encrypted payload inspection")
     try:
-        raw = path.read_bytes()
+        raw = _read_stable_account_file(path, label="encrypted payload inspection")
     except FileNotFoundError:
         return False
-    except OSError as exc:
-        raise AccountStoreError(f"could not inspect encrypted file: {path}") from exc
     return _is_any_teebotus_encrypted_payload(raw)
 
 
@@ -5035,11 +5033,9 @@ def _account_secret_payload_has_verifier(payload: Any) -> bool:
 def _secret_verifier_file_has_payload(path: Path, *, allowed_roots: Iterable[Path] = ()) -> bool:
     path = _safe_rooted_path(path, allowed_roots=allowed_roots, operation="secret verifier inspection")
     try:
-        raw = path.read_bytes()
+        raw = _read_stable_account_file(path, label="secret verifier inspection")
     except FileNotFoundError:
         return False
-    except OSError as exc:
-        raise AccountStoreError(f"could not inspect account secret verifier file: {path}") from exc
     if not raw.strip():
         return False
     if _is_any_teebotus_encrypted_payload(raw):

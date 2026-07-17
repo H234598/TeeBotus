@@ -28,6 +28,7 @@ from TeeBotus.runtime.accounts import (
     AccountStore,
     AccountStoreError,
     _KeyringManifestSecretProvider,
+    _looks_like_teebotus_encrypted_payload,
     LLM_STATE_FILENAME,
     OPENAI_STATE_FILENAME,
     _SecretServiceUnavailableError,
@@ -3161,6 +3162,39 @@ def test_keyring_manifest_read_keeps_stable_parent_when_path_is_swapped(tmp_path
 
     assert manifest_provider._load_manifest()["instance"] == "Demo"
     assert json.loads(outside_manifest_path.read_text(encoding="utf-8"))["instance"] == "External"
+
+
+def test_encrypted_payload_inspection_keeps_stable_parent_when_path_is_swapped(tmp_path, monkeypatch):
+    parent = tmp_path / "payload-inspection-parent"
+    parent.mkdir()
+    outside = tmp_path / "outside-payload-inspection"
+    outside.mkdir()
+    target = parent / "payload.json"
+    target.write_text('{"magic":"TMBMEM1","ciphertext":"present"}', encoding="utf-8")
+    outside_target = outside / target.name
+    outside_target.write_text("external", encoding="utf-8")
+    moved_parent = tmp_path / "payload-inspection-parent-moved"
+
+    real_open = os.open
+    real_read_bytes = Path.read_bytes
+
+    def swap_parent_on_stable_open(file, flags, mode=0o777, *, dir_fd=None):
+        if file == target.name and dir_fd is not None and parent.exists():
+            parent.rename(moved_parent)
+            parent.symlink_to(outside, target_is_directory=True)
+        return real_open(file, flags, mode, dir_fd=dir_fd)
+
+    def swap_parent_on_path_read(candidate):
+        if candidate == target and parent.exists():
+            parent.rename(moved_parent)
+            parent.symlink_to(outside, target_is_directory=True)
+        return real_read_bytes(candidate)
+
+    monkeypatch.setattr(os, "open", swap_parent_on_stable_open)
+    monkeypatch.setattr(Path, "read_bytes", swap_parent_on_path_read)
+
+    assert _looks_like_teebotus_encrypted_payload(target, allowed_roots=(tmp_path,)) is True
+    assert outside_target.read_text(encoding="utf-8") == "external"
 
 
 def test_account_json_document_falls_back_on_sql_diagnostics(tmp_path):
