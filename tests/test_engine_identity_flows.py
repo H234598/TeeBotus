@@ -2693,6 +2693,17 @@ def test_youtube_llm_reply_survives_response_state_failure(tmp_path, monkeypatch
     assert any(getattr(action, "text", "") == "YouTube-Antwort trotz Statefehler." for action in actions)
 
 
+def test_llm_reset_state_failure_does_not_claim_success(tmp_path, monkeypatch):
+    engine = TeeBotusEngine(account_store=store(tmp_path))
+    identity = telegram_identity_key(1)
+
+    monkeypatch.setattr(engine.state, "reset_previous_response_id", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("state reset unavailable")))
+
+    actions = engine.process(event(identity, "/reset"))
+
+    assert actions[0].text == "LLM-Kontext konnte gerade nicht zurückgesetzt werden. Bitte spaeter erneut versuchen."
+
+
 def test_engine_keeps_state_on_non_stale_llm_error(tmp_path):
     provider = StaticSecretProvider(b"e" * 32)
     data_dir = tmp_path / "Depressionsbot" / "data"

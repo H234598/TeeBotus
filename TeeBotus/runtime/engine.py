@@ -426,11 +426,19 @@ class TeeBotusEngine:
                 handled=True,
             )
         if command == "/reset":
-            self.state.reset_previous_response_id(
-                event.instance,
-                result.account_id,
-                conversation_scope=_llm_conversation_scope(event),
-            )
+            try:
+                self.state.reset_previous_response_id(
+                    event.instance,
+                    result.account_id,
+                    conversation_scope=_llm_conversation_scope(event),
+                )
+            except Exception:  # noqa: BLE001 - reset must not claim success when local state is unavailable.
+                LOGGER.exception("LLM reset persistence failed instance=%s account=%s", event.instance, result.account_id)
+                return EngineResult(
+                    result.account_id,
+                    [SendText(event.chat_id, "LLM-Kontext konnte gerade nicht zurückgesetzt werden. Bitte spaeter erneut versuchen.", track=False)],
+                    handled=True,
+                )
             return EngineResult(result.account_id, [SendText(event.chat_id, self._current_instructions().llm_reset)], handled=True)
         if command == "/voice":
             return EngineResult(result.account_id, self._voice_actions(event, result.account_id, self._current_instructions()), handled=True)
