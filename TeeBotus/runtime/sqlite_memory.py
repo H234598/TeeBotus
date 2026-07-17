@@ -225,7 +225,7 @@ class SQLiteAccountMemoryBackend:
             return []
         with self._connect_readonly() as connection:
             if not _table_exists(connection, "memory_entries"):
-                if self._secondary_database_exists():
+                if self._secondary_database_exists() or self._database_file_is_nonempty():
                     self.last_entry_read_error = str(self._missing_table_error("memory_entries"))
                 return []
             rows = connection.execute(
@@ -276,7 +276,7 @@ class SQLiteAccountMemoryBackend:
             return []
         with self._connect_readonly() as connection:
             if not _table_exists(connection, "memory_entries"):
-                if self._secondary_database_exists():
+                if self._secondary_database_exists() or self._database_file_is_nonempty():
                     self.last_entry_read_error = str(self._missing_table_error("memory_entries"))
                 return []
             rows: list[tuple[Any, ...]] = []
@@ -385,7 +385,7 @@ class SQLiteAccountMemoryBackend:
             return {}
         with self._connect_readonly() as connection:
             if not _table_exists(connection, "memory_indexes"):
-                if self._secondary_database_exists():
+                if self._secondary_database_exists() or self._database_file_is_nonempty():
                     self.last_index_read_error = str(self._missing_table_error("memory_indexes"))
                 return {}
             row = connection.execute(
@@ -457,7 +457,7 @@ class SQLiteAccountMemoryBackend:
             return []
         with self._connect_readonly() as connection:
             if not _table_exists(connection, "account_jsonl_collections"):
-                if self._secondary_database_exists():
+                if self._secondary_database_exists() or self._database_file_is_nonempty():
                     self.last_collection_read_error = str(self._missing_table_error("account_jsonl_collections"))
                 return []
             rows = connection.execute(
@@ -623,7 +623,7 @@ class SQLiteAccountMemoryBackend:
             raise self._missing_database_error()
         with self._connect_readonly() as connection:
             if not _table_exists(connection, "account_jsonl_collections"):
-                if self._secondary_database_exists():
+                if self._secondary_database_exists() or self._database_file_is_nonempty():
                     error = self._missing_table_error("account_jsonl_collections")
                     self.last_collection_read_error = str(error)
                     raise error
@@ -720,6 +720,13 @@ class SQLiteAccountMemoryBackend:
         error = AccountStoreError(f"SQLite account-memory database is missing: {self.config.path}")
         LOGGER.critical("%s", error)
         return error
+
+    def _database_file_is_nonempty(self) -> bool:
+        try:
+            metadata = os.stat(self.config.path, follow_symlinks=False)
+        except OSError:
+            return True
+        return metadata.st_size > 0
 
     def _ensure_schema(self, *, allow_incomplete_schema: bool = False) -> None:
         with _SCHEMA_INIT_LOCK:

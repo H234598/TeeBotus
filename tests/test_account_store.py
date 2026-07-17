@@ -7170,6 +7170,23 @@ def test_sqlite_first_run_without_secondary_keeps_missing_schema_empty(tmp_path)
     assert backend.last_database_missing is False
 
 
+def test_sqlite_nonempty_database_without_secondary_schema_is_diagnostic(tmp_path):
+    import sqlite3
+
+    primary_path = tmp_path / "primary.sqlite3"
+    with sqlite3.connect(primary_path) as connection:
+        connection.execute("CREATE TABLE unrelated (value TEXT)")
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary_path, fallback_path=None),
+    )
+
+    assert backend.read_entries("a" * 128) == []
+    assert "schema table is missing: memory_entries" in backend.last_entry_read_error
+
+
 def test_sqlite_missing_primary_schema_recovers_from_secondary(tmp_path):
     import sqlite3
 
