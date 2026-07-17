@@ -266,7 +266,12 @@ class TeeBotusEngine:
                 handled=True,
             )
         result = self.process_identity_flows(event)
-        if result.account_id and proactive_agent_instance_enabled(event.instance):
+        proactive_enabled = False
+        try:
+            proactive_enabled = bool(result.account_id and proactive_agent_instance_enabled(event.instance))
+        except Exception:  # noqa: BLE001 - optional instance config must not block the user message.
+            LOGGER.exception("Proactive instance flag lookup failed instance=%s", event.instance)
+        if proactive_enabled:
             try:
                 record_account_activity(self.account_store, result.account_id, event)
             except (AccountStoreError, OSError, ValueError):

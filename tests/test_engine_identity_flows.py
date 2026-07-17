@@ -431,6 +431,19 @@ def test_observation_backend_failures_do_not_block_ping(tmp_path, monkeypatch) -
     assert actions[0].text == "Pong"
 
 
+def test_proactive_instance_flag_failure_does_not_block_ping(tmp_path, monkeypatch) -> None:
+    engine = TeeBotusEngine(account_store=store(tmp_path))
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine.proactive_agent_instance_enabled",
+        lambda _instance: (_ for _ in ()).throw(RuntimeError("flag unavailable")),
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "/ping"))
+
+    assert actions
+    assert actions[0].text == "Pong"
+
+
 def test_dialect_observation_backend_failure_does_not_block_addressed_message(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store, bot_address_names={"mondbot"})
