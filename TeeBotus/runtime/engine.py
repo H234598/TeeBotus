@@ -1354,6 +1354,15 @@ class TeeBotusEngine:
                     track=False,
                 )
             ]
+        except Exception as exc:  # noqa: BLE001 - route setup failures must not abort admin command handling.
+            LOGGER.exception("Route client initialization failed target=%s instance=%s", target.name, event.instance)
+            return [
+                SendText(
+                    event.chat_id,
+                    f"Route {target.label} konnte nicht initialisiert werden: {type(exc).__name__}: {exc}",
+                    track=False,
+                )
+            ]
         if client is None:
             return [SendText(event.chat_id, f"Route {target.label} ist nicht verfuegbar.", track=False)]
         create_reply = getattr(client, "create_reply", None)
@@ -1399,7 +1408,11 @@ class TeeBotusEngine:
     def _account_is_route_to_admin(self, instance_name: str, account_id: str) -> bool:
         if not account_id:
             return False
-        return is_runtime_admin_account(self.account_store, account_id, instance_name=instance_name)
+        try:
+            return is_runtime_admin_account(self.account_store, account_id, instance_name=instance_name)
+        except Exception:  # noqa: BLE001 - route authorization must fail closed.
+            LOGGER.exception("RouteTo admin lookup failed instance=%s account=%s", instance_name, account_id)
+            return False
 
     def _account_is_help_admin(self, instance_name: str, account_id: str) -> bool:
         if not account_id:

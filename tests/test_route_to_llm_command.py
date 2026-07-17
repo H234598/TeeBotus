@@ -179,6 +179,28 @@ def test_route_to_llm_accepts_status_auth_admin(tmp_path) -> None:
     assert "direkt: Hallo" in actions[1].text
 
 
+def test_route_to_llm_factory_failure_is_user_visible(tmp_path) -> None:
+    account_store = _store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_status_auth_state(account_id, {"schema_version": 1, "authorized": True, "admin_opt_out": False})
+
+    def broken_factory(**_kwargs):
+        raise RuntimeError("route backend unavailable")
+
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(llm_enabled=True),
+        route_to_client_factory=broken_factory,
+    )
+
+    actions = engine.process(_event(identity, "/RouteToOAI Hallo"))
+
+    assert len(actions) == 1
+    assert "konnte nicht initialisiert werden" in actions[0].text
+    assert "RuntimeError" in actions[0].text
+
+
 def test_route_to_llm_without_prompt_routes_next_admin_message_once(tmp_path, monkeypatch) -> None:
     account_store = _store(tmp_path)
     identity = telegram_identity_key(1)
