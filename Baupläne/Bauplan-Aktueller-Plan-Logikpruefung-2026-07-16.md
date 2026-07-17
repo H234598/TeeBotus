@@ -7974,3 +7974,22 @@ Push. Restart abgeschlossen.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `1/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Bibliothekar: Index- und Chunk-Snapshots atomar lesen und schreiben
+
+- 2026-07-17: `BibliothekarStore.rebuild()` schrieb `index.json` und
+  `chunks.jsonl` ohne Prozesslock und in getrennten direkten Schreibvorgaengen.
+  Ein paralleler Leser konnte neue Index-Metadaten mit alten oder halb
+  geschriebenen Chunks kombinieren.
+- Rebuild, `ensure`, `ensure_current`, `select` und Chunk-/Index-Lesen nutzen
+  jetzt Thread- plus POSIX-Dateisperre. Index und JSONL werden ueber temporaere
+  Dateien mit `fsync` und `os.replace` geschrieben. Bibliothekar-Servicepfade
+  verwenden den Store-Snapshot statt direkter Dateizugriffe.
+- Test: `tests/test_bibliothekar.py` -> `97 passed`, inklusive deterministischem
+  Rebuild-/Leser-Race-Test; Ruff fuer Produktionsdateien, `py_compile` und
+  `git diff --check` gruen. Ein vorhandener Ruff-Fehler in Testzeile 2604
+  (`SimpleSelection`) bleibt unberuehrt. Kein Provider/API-Aufruf.
+- Code-Commit: `5200ea07 fix: serialize bibliothekar index snapshots`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `2/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
