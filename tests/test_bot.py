@@ -2271,6 +2271,66 @@ class BotTests(unittest.TestCase):
         self.assertEqual(api.sent_messages, [("123", "first"), ("123", "second")])
         self.assertEqual(process_calls, 1)
 
+    def test_modern_dispatch_retry_does_not_reapply_current_address_gate(self) -> None:
+        from TeeBotus.runtime.actions import SendText
+        from TeeBotus.runtime.engine import EngineResult
+
+        class InstructionBox:
+            def get(self):
+                return BotInstructions()
+
+        class PartialFailureAPI(FakeAPI):
+            def __init__(self) -> None:
+                super().__init__()
+                self.failed_once = False
+
+            def send_message(self, chat_id: int, text: str) -> int:
+                if text == "second" and not self.failed_once:
+                    self.failed_once = True
+                    raise TelegramAPIError("temporary second action failure")
+                return super().send_message(chat_id, text)
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            secret_provider = StaticSecretProvider(b"e" * 32)
+            api = PartialFailureAPI()
+            context = build_telegram_runtime_context(
+                api=api,
+                instance_name="Demo",
+                adapter_slot=1,
+                instruction_store=InstructionBox(),
+                account_store=AccountStore(root / "accounts", "Demo", secret_provider),
+                state_store=RuntimeStateStore(root / "data", instance_name="Demo", secret_provider=secret_provider),
+                message_tracker=MessageTracker(root / "runtime" / "Sent_Message_Refs.json"),
+                openai_client=None,
+                working_memory_store=None,
+                bibliothekar_store=None,
+                youtube_job_runner=None,
+                bot_identity=BotIdentity(first_name="Mondbot", username="MondBot"),
+            )
+            context.engine.process_result = lambda event: EngineResult(  # type: ignore[method-assign]
+                event.account_id,
+                [SendText(event.chat_id, "first"), SendText(event.chat_id, "second")],
+                handled=True,
+            )
+            update = {
+                "update_id": 44,
+                "message": {
+                    "message_id": 10,
+                    "text": "/ping",
+                    "chat": {"id": 123, "type": "private"},
+                    "from": {"id": 456},
+                },
+            }
+            with self.assertRaisesRegex(TelegramAPIError, "temporary second action failure"):
+                handle_update(api, update, chat_state=ChatState(), runtime_context=context)
+
+            context.engine.should_ignore_without_account = Mock(return_value=True)  # type: ignore[method-assign]
+            handle_update(api, update, chat_state=ChatState(), runtime_context=context)
+
+        self.assertEqual(api.sent_messages, [("123", "first"), ("123", "second")])
+        context.engine.should_ignore_without_account.assert_not_called()
+
     def test_modern_dispatch_timeout_does_not_send_fallback_while_worker_is_in_flight(self) -> None:
         from TeeBotus.runtime.actions import SendText
         from TeeBotus.runtime.engine import EngineResult

@@ -1160,37 +1160,40 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
                 completed_action_indices=set(journal_entry.completed_action_indices),
             )
             context.dispatch_retries[retry_key] = retry_state
-    status_auth = _telegram_status_auth_pre_gate(context.account_store, event)
-    if status_auth is not None:
-        return _dispatch_telegram_status_auth_pre_gate(context.api, event, status_auth)
-    try:
-        should_ignore = context.engine.should_ignore_without_account(event)
-    except (AccountStoreError, OSError, ValueError, AttributeError):
-        LOGGER.exception(
-            "Telegram account lookup failed before routing instance=%s chat_id=%s message_id=%s.",
-            context.instance_name,
-            chat_id,
-            message.get("message_id", "unknown"),
-        )
+    if retry_state is None:
+        status_auth = _telegram_status_auth_pre_gate(context.account_store, event)
+        if status_auth is not None:
+            return _dispatch_telegram_status_auth_pre_gate(context.api, event, status_auth)
         try:
-            context.api.send_message(str(chat_id), context.instruction_store.get().user_memory_error)
-        except (TelegramAPIError, TelegramNetworkError, OSError):
+            should_ignore = context.engine.should_ignore_without_account(event)
+        except (AccountStoreError, OSError, ValueError, AttributeError):
             LOGGER.exception(
-                "Telegram memory error notification failed instance=%s chat_id=%s.",
+                "Telegram account lookup failed before routing instance=%s chat_id=%s message_id=%s.",
                 context.instance_name,
                 chat_id,
+                message.get("message_id", "unknown"),
             )
-        return True
-    if should_ignore:
-        LOGGER.info(
-            "Ignoring Telegram message chat_id=%s message_id=%s reason=not_addressed_to_bot",
-            chat_id,
-            message.get("message_id", "unknown"),
-        )
-        return True
-    if retry_state is None:
+            try:
+                context.api.send_message(str(chat_id), context.instruction_store.get().user_memory_error)
+            except (TelegramAPIError, TelegramNetworkError, OSError):
+                LOGGER.exception(
+                    "Telegram memory error notification failed instance=%s chat_id=%s.",
+                    context.instance_name,
+                    chat_id,
+                )
+            return True
+        if should_ignore:
+            LOGGER.info(
+                "Ignoring Telegram message chat_id=%s message_id=%s reason=not_addressed_to_bot",
+                chat_id,
+                message.get("message_id", "unknown"),
+            )
+            return True
         event = _with_telegram_attachments(context.api, event, message)
     else:
+        # Journaled actions already passed routing, auth, and attachment loading.
+        # Re-running those gates after a restart could acknowledge the update while
+        # silently discarding its durable response.
         event = retry_state.event
     LOGGER.debug(
         "Telegram runtime event prepared instance=%s slot=%s event_id=%s message_id=%s attachments=%s",
