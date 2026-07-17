@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import multiprocessing
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from importlib import import_module
 from unittest.mock import patch
@@ -8,11 +10,17 @@ from unittest.mock import patch
 import pytest
 
 from TeeBotus.adapters.telegram_runtime import WorkingMemoryStore as TelegramWorkingMemoryStore
-from TeeBotus.runtime.working_memory import WorkingMemoryStore
+from TeeBotus.runtime.working_memory import WorkingMemoryStore, _working_memory_file_lock
 
 
 def _read_jsonl(path):
     return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+
+
+def _hold_working_memory_file_lock(path, ready, release):
+    with _working_memory_file_lock(path):
+        ready.set()
+        release.wait(5)
 
 
 def test_working_memory_files_are_instance_scoped_and_sanitize_manual_entries(tmp_path):
@@ -399,6 +407,40 @@ def test_working_memory_store_instances_share_symlinked_path_lock(tmp_path, stor
     assert len(set(memory_ids)) == 40
     assert len(payload["index"]["entries"]) == 40
     assert len(entries) == 40
+
+
+def test_working_memory_file_lock_serializes_separate_process(tmp_path):
+    instances_dir = tmp_path / "instances"
+    store = WorkingMemoryStore("Depressionsbot", instances_dir)
+    index_path = store.ensure()
+    context = multiprocessing.get_context("fork")
+    ready = context.Event()
+    release = context.Event()
+    process = context.Process(target=_hold_working_memory_file_lock, args=(index_path, ready, release))
+    process.start()
+    append_done = threading.Event()
+    appended: dict[str, str] = {}
+
+    def append() -> None:
+        appended["id"] = store.append_manual("Separate process entry")
+        append_done.set()
+
+    thread = threading.Thread(target=append)
+    try:
+        assert ready.wait(5)
+        thread.start()
+        assert not append_done.wait(0.2)
+    finally:
+        release.set()
+        thread.join(5)
+        process.join(5)
+        if process.is_alive():
+            process.terminate()
+            process.join(5)
+
+    assert process.exitcode == 0
+    assert append_done.is_set()
+    assert appended["id"].startswith("wm_")
 
 
 def test_working_memory_unreadable_index_is_not_replaced(tmp_path, caplog):

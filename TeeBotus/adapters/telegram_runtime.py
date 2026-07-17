@@ -14,10 +14,16 @@ import urllib.parse
 import urllib.request
 import uuid
 from contextvars import copy_context
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Iterator
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - fcntl is unavailable on non-POSIX platforms.
+    fcntl = None  # type: ignore[assignment]
 
 from TeeBotus import __version__
 from TeeBotus.admin.codex_history import record_codex_history_reply
@@ -115,6 +121,7 @@ TELEGRAM_RUNTIME_LLM_TIMEOUT_FALLBACK = "Ich kann das Textmodell gerade nicht er
 YOUTUBE_LIVE_CHUNK_WORDS = 310
 WORKING_MEMORY_INDEX_FILENAME = "Working_Memorys.json"
 WORKING_MEMORY_ENTRIES_FILENAME = "Working_Memorys.entries.jsonl"
+WORKING_MEMORY_LOCK_FILENAME = ".Working_Memorys.lock"
 TELADI_CALL_STATE_FILENAME = "Teladi_Emergency_State.json"
 WORKING_MEMORY_MAX_PROMPT_CHARS = 6000
 _WORKING_MEMORY_LOCKS: dict[str, threading.RLock] = {}
@@ -867,7 +874,7 @@ class WorkingMemoryStore:
     def ensure(self) -> Path:
         path = self._path()
         try:
-            with self._lock:
+            with self._lock, _working_memory_file_lock(path):
                 data = self._load_or_initialize(path)
                 _write_json_file(path, data)
                 _working_memory_entries_path(path).touch(exist_ok=True)
@@ -881,7 +888,7 @@ class WorkingMemoryStore:
 
     def prepare(self, query_text: str, max_chars: int = WORKING_MEMORY_MAX_PROMPT_CHARS) -> WorkingMemoryRecord:
         path = self._path()
-        with self._lock:
+        with self._lock, _working_memory_file_lock(path):
             data = self._load_or_initialize(path)
             prompt_text, selected_ids = _select_working_memory_prompt(path, data, query_text, max_chars)
         return WorkingMemoryRecord(path=path, prompt_text=prompt_text, selected_ids=tuple(selected_ids))
@@ -901,7 +908,7 @@ class WorkingMemoryStore:
             "text": sanitized,
             "keywords": _memory_keywords(sanitized),
         }
-        with self._lock:
+        with self._lock, _working_memory_file_lock(path):
             data = self._load_or_initialize(path)
             entries_path = _working_memory_entries_path(path)
             offset = _store_working_memory_entry(path, data, entry)
@@ -3646,6 +3653,22 @@ def _working_memory_process_lock(path: Path) -> threading.RLock:
             lock = threading.RLock()
             _WORKING_MEMORY_LOCKS[key] = lock
         return lock
+
+
+@contextmanager
+def _working_memory_file_lock(path: Path) -> Iterator[None]:
+    lock_path = path.with_name(WORKING_MEMORY_LOCK_FILENAME)
+    lock_path.parent.mkdir(parents=True, exist_ok=True)
+    with lock_path.open("a+") as handle:
+        locked = False
+        try:
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                locked = True
+            yield
+        finally:
+            if locked:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _normalize_working_memory_data(data: dict[str, Any], instance_name: str) -> None:
