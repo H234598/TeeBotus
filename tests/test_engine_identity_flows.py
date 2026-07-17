@@ -642,6 +642,31 @@ def test_account_edit_unlink_survives_pending_cleanup_failure(tmp_path, monkeypa
     assert result.account_id == account_id
 
 
+def test_account_edit_setup_failure_is_user_visible(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    monkeypatch.setattr(engine.state, "set_pending_flow", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("flow setup unavailable")))
+
+    result = engine.process_identity_flows(event(identity, "/account_edit"))
+
+    assert result.actions[0].text == "Account-Bearbeitung konnte gerade nicht gestartet werden. Bitte spaeter erneut versuchen."
+
+
+def test_account_edit_unlink_confirmation_setup_failure_keeps_start_flow(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    engine.process_identity_flows(event(identity, "/account_edit"))
+    monkeypatch.setattr(engine.state, "set_pending_flow", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("flow setup unavailable")))
+
+    result = engine.process_identity_flows(event(identity, "unlink"))
+
+    assert result.actions[0].text == "Account-Bearbeitung konnte gerade nicht gestartet werden. Bitte spaeter erneut versuchen."
+    assert engine.state.get_pending_flow("Depressionsbot", account_id, "account_edit")["step"] == "start"
+
+
 def test_help_admin_lookup_failure_fails_closed(tmp_path, monkeypatch):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)

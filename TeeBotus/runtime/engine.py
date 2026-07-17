@@ -689,13 +689,21 @@ class TeeBotusEngine:
                 )
             return self._handle_login(event, current_account_id=account_id, target_account_id=intent.account_id, secret=intent.account_secret)
         if intent.action == RegistrationAction.ACCOUNT_EDIT:
-            self.state.set_pending_flow(
-                event.instance,
-                account_id,
-                "account_edit",
-                {"step": "start", "chat_id": event.chat_id, "channel": event.channel, "identity_key": event.identity_key},
-                conversation_scope=_pending_flow_conversation_scope(event),
-            )
+            try:
+                self.state.set_pending_flow(
+                    event.instance,
+                    account_id,
+                    "account_edit",
+                    {"step": "start", "chat_id": event.chat_id, "channel": event.channel, "identity_key": event.identity_key},
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
+            except Exception:  # noqa: BLE001 - account edit state setup must not abort identity handling.
+                LOGGER.exception("Account edit flow setup failed instance=%s account=%s", event.instance, account_id)
+                return EngineResult(
+                    account_id,
+                    [SendText(event.chat_id, "Account-Bearbeitung konnte gerade nicht gestartet werden. Bitte spaeter erneut versuchen.", track=False)],
+                    handled=True,
+                )
             return EngineResult(
                 account_id,
                 [
@@ -826,18 +834,26 @@ class TeeBotusEngine:
             return EngineResult(account_id, [SendText(event.chat_id, "Okay, ich trenne nichts.", track=False)], handled=True)
         if step == "start":
             if text in {"unlink", "trennen", "kanal trennen", "diesen kanal trennen"}:
-                self.state.set_pending_flow(
-                    event.instance,
-                    account_id,
-                    "account_edit",
-                    {
-                        "step": "confirm_unlink",
-                        "chat_id": event.chat_id,
-                        "channel": event.channel,
-                        "identity_key": event.identity_key,
-                    },
-                    conversation_scope=_pending_flow_conversation_scope(event),
-                )
+                try:
+                    self.state.set_pending_flow(
+                        event.instance,
+                        account_id,
+                        "account_edit",
+                        {
+                            "step": "confirm_unlink",
+                            "chat_id": event.chat_id,
+                            "channel": event.channel,
+                            "identity_key": event.identity_key,
+                        },
+                        conversation_scope=_pending_flow_conversation_scope(event),
+                    )
+                except Exception:  # noqa: BLE001 - account edit state setup must not abort channel management.
+                    LOGGER.exception("Account edit unlink confirmation setup failed instance=%s account=%s", event.instance, account_id)
+                    return EngineResult(
+                        account_id,
+                        [SendText(event.chat_id, "Account-Bearbeitung konnte gerade nicht gestartet werden. Bitte spaeter erneut versuchen.", track=False)],
+                        handled=True,
+                    )
                 return EngineResult(
                     account_id,
                     [
