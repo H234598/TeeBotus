@@ -2745,6 +2745,21 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 14 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Codex-History-Tail-Record-an-exakter-Byte-Grenze
+
+- 2026-07-17: Der Large-File-Reader verwarf nach `seek(tail_start)` immer die
+  erste Zeile. Lag `tail_start` exakt auf einem JSONL-Record-Anfang, ging ein
+  vollstaendiger Record verloren.
+- Der Reader erkennt jetzt `LF`, einzelnes `CR` und `CRLF` als echte
+  Record-Grenzen; nur ein angeschnittener erster Tail-Record wird verworfen.
+- Regression mit exakter Head-/Tail-Grenze: Codex-History-Fokus `184 passed`;
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `882de4fa fix: preserve codex tail record at boundary`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Codex-Dispatch-Receipt-darf-Multi-Admin-Retry-nicht-blockieren
 
 - 2026-07-17: Der Dispatcher hatte in der oeffentlichen Python-Funktion und im
