@@ -62,6 +62,20 @@ PROACTIVE_RISK_MEMORY_KINDS = frozenset(
 PROACTIVE_RISK_BLOCK_GATES = frozenset({"blocked", "crisis", "red", "acute", "unsafe"})
 PROACTIVE_RISK_REVIEW_GATES = frozenset({"needs_review", "review", "human_review"})
 PROACTIVE_RISK_LOOKBACK_DAYS = 30
+# Policy blocks caused by current timing/state must leave queued work visible
+# until a later dispatch cycle can retry it.
+PROACTIVE_TRANSIENT_POLICY_REASONS = frozenset(
+    {
+        "proactive_paused",
+        "outside_allowed_hours",
+        "daily_limit_reached",
+        "min_interval_not_elapsed",
+        "outside_adaptive_contact_window",
+        "activity_profile_insufficient",
+        "no_private_route",
+        "notification_loudness_state_unavailable",
+    }
+)
 # A worker crash after claiming an item must not turn the reminder into a
 # permanently invisible `dispatching` row.  Recovery is deliberately delayed
 # so a slow sender is not reclaimed while it is still active.
@@ -1098,6 +1112,10 @@ def proactive_policy_decision(
     return ProactiveDecision(True, "allowed", route)
 
 
+def _proactive_policy_reason_is_transient(reason: str) -> bool:
+    return str(reason or "").strip().casefold() in PROACTIVE_TRANSIENT_POLICY_REASONS
+
+
 def due_proactive_outbox_items(account_store: AccountStore, account_id: str, *, now: datetime | None = None) -> tuple[dict[str, Any], ...]:
     resolved_now = _resolve_proactive_now(now)
     due: list[dict[str, Any]] = []
@@ -1444,6 +1462,9 @@ async def dispatch_due_proactive_outbox_items(
         category = str(item.get("category") or "").strip().casefold()
         decision = proactive_policy_decision(account_store, account_id, category=category, now=resolved_now, exclude_item_id=item_id, item=item)
         if not decision.allowed:
+            if _proactive_policy_reason_is_transient(decision.reason):
+                results.append(ProactiveDispatchResult(account_id, item_id, "queued", decision.reason, _item_channel(item)))
+                continue
             update_proactive_outbox_item_status(
                 account_store,
                 account_id,
@@ -1532,6 +1553,9 @@ async def dispatch_due_proactive_outbox_items(
             now=resolved_now,
         )
         if not claim_decision.allowed:
+            if _proactive_policy_reason_is_transient(claim_decision.reason):
+                results.append(ProactiveDispatchResult(account_id, item_id, "queued", claim_decision.reason, channel))
+                continue
             update_proactive_outbox_item_status(
                 account_store,
                 account_id,

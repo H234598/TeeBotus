@@ -3101,6 +3101,57 @@ def test_dispatch_due_proactive_items_sends_with_mocked_channel_and_tracks_ref(t
     assert refs[0].ref_kind == "signal_timestamp"
 
 
+def test_dispatch_defers_transient_policy_block_without_terminalizing_item(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Spaeter senden",
+        due_at="2026-06-15T09:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    sent: list[str] = []
+
+    async def sender(_route: dict, _action: SendText, _item: dict) -> str:
+        sent.append(item_id)
+        return "sent-ref"
+
+    outside_hours = datetime(2026, 6, 16, 5, tzinfo=timezone.utc)
+    deferred = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=outside_hours,
+        )
+    )
+
+    assert deferred[0].status == "queued"
+    assert deferred[0].reason == "outside_allowed_hours"
+    assert sent == []
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "queued"
+
+    delivered = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=datetime(2026, 6, 16, 10, tzinfo=timezone.utc),
+        )
+    )
+
+    assert delivered[0].item_id == item_id
+    assert delivered[0].status == "sent"
+    assert sent == [item_id]
+
+
 def test_dispatch_survives_post_send_outbox_persistence_error(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
