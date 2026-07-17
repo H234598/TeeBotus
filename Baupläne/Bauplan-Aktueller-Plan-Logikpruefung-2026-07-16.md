@@ -7006,6 +7006,22 @@ Commits. Kein Push. Restart nach 16 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `5/20` sichtbar.
 
+### Status-Health-Backendreads diagnostizieren unerwartete Fehler
+
+- 2026-07-17: Status-Accountverzeichnis und Proactive-Health fingen nur
+  bekannte Store-/OS-Fehler. Unerwartete Backendfehler konnten den gesamten
+  `/status`-Aufbau abbrechen.
+- Beide Helfer liefern jetzt ihre bestehende Fehlerdiagnose auch bei
+  unerwarteten Exceptions. Andere Statusbereiche bleiben sichtbar.
+- Test: fokussierter Statuspfad `41 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4f243212 fix: harden status health backend reads`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `6/20`
+Commits. Kein Push. Restart nach 14 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `7/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
