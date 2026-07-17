@@ -899,8 +899,13 @@ def _harvest_manifest_is_stale(index: dict[str, Any], library_dir: Path) -> bool
 
 def _chunk_store_is_stale(index: dict[str, Any], chunks_path: Path) -> bool:
     expected_count = int(index.get("chunk_count") or 0)
-    if expected_count < 1:
-        return False
+    if expected_count < 0:
+        return True
+    if expected_count == 0:
+        try:
+            return chunks_path.exists() and chunks_path.stat().st_size > 0
+        except OSError:
+            return True
     if not chunks_path.exists():
         return True
     chunks = _read_chunks(chunks_path)

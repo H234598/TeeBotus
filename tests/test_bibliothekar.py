@@ -170,6 +170,27 @@ def test_bibliothekar_selection_waits_for_atomic_rebuild_snapshot(tmp_path, monk
     assert "Beta source text." in selection_result["prompt"]
 
 
+def test_bibliothekar_rebuilds_nonempty_chunk_store_for_zero_chunk_index(tmp_path):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    source = library_dir / "notes.txt"
+    source.write_text("Stale source text.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+
+    source.unlink()
+    index = json.loads(store.index_path.read_text(encoding="utf-8"))
+    index["documents"] = {}
+    index["chunk_count"] = 0
+    store.index_path.write_text(json.dumps(index, ensure_ascii=False), encoding="utf-8")
+
+    rebuilt_index, chunks = store.read_snapshot()
+
+    assert rebuilt_index["chunk_count"] == 0
+    assert chunks == []
+    assert store.chunks_path.read_text(encoding="utf-8") == ""
+
+
 def test_bibliothekar_rebuilds_local_chunk_store_without_citation_metadata(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
