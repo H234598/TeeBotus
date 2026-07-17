@@ -2767,6 +2767,24 @@ Push bleibt erst bei 100 Commits.
 zaehlt mit: `10/20`. Kein Push. Restart nach 10 weiteren Commits. Naechster
 Push bleibt erst bei 100 Commits.
 
+### Codex-History-Status-bleibt-read-only
+
+- 2026-07-17: Der Statuspfad nutzte den normalen Codex-History-Read. Bei
+  vorhandener Legacy-JSONL-Datei konnte ein Healthcheck dadurch mergen,
+  zurueckschreiben, verifizieren und die Legacy-Datei loeschen.
+- `AccountStore.read_codex_history_outbox_readonly()` liest SQL-Daten ohne
+  Migration; `codex_history_status_lines()` bevorzugt diesen Pfad. Writer und
+  explizite Migrationsreads behalten bisheriges Verhalten.
+- Regression: SQLite-Read-only-Migration plus bestehende Legacy-Migration ->
+  `3 passed`; Codex-History-Status -> `8 passed`; kompletter AccountStore-
+  Lauf -> `313 passed`; Ruff, Compileall und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `5c4963af fix: keep codex history status reads read-only`.
+
+**Aktueller Laufstand:** Seit dem Restart `11/20` Commits. Dieser Plan-Commit
+zaehlt mit: `12/20`. Kein Push. Restart nach 8 weiteren Commits. Naechster
+Push bleibt erst bei 100 Commits.
+
 ### PostgreSQL-Memory-Schema-vor-Initialisierung-validieren
 
 - 2026-07-17: `_ensure_schema_locked()` markierte PostgreSQL als initialisiert,
