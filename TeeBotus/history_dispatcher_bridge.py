@@ -116,7 +116,10 @@ class CallbackSpool:
 
     def events(self, *, limit: int = MAX_SPOOL_EVENTS_PER_FLUSH) -> list[tuple[Path, dict[str, Any]]]:
         result: list[tuple[Path, dict[str, Any]]] = []
-        for path in sorted(self.root.glob("*.json"))[: max(1, min(int(limit), MAX_SPOOL_EVENTS_PER_FLUSH))]:
+        max_events = max(1, min(int(limit), MAX_SPOOL_EVENTS_PER_FLUSH))
+        for path in sorted(self.root.glob("*.json")):
+            if len(result) >= max_events:
+                break
             if path.is_symlink() or not path.is_file():
                 continue
             try:

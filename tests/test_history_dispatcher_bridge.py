@@ -103,6 +103,17 @@ def test_callback_spool_persists_generated_event_id(tmp_path: Path) -> None:
     assert events[0][1]["event_id"] == path.stem
 
 
+def test_callback_spool_skips_invalid_files_without_starving_valid_batch_entries(tmp_path: Path) -> None:
+    spool = CallbackSpool(tmp_path / "spool")
+    for index in range(100):
+        (spool.root / f"000-invalid-{index:03d}.json").write_text("{broken", encoding="utf-8")
+    valid = spool.enqueue({"event_id": "999-valid", "item_id": "item", "event_type": "delivered"})
+
+    events = spool.events(limit=100)
+
+    assert events == [(valid, {"event_id": "999-valid", "item_id": "item", "event_type": "delivered"})]
+
+
 def test_bridge_keeps_spooled_event_when_inner_dispatcher_result_fails(tmp_path: Path) -> None:
     spool = CallbackSpool(tmp_path / "spool")
 
