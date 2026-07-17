@@ -870,6 +870,41 @@ def test_proactive_cycle_isolates_account_discovery_errors_per_instance(tmp_path
     assert report["instances"][1]["accounts"] == []
 
 
+def test_proactive_cycle_does_not_hide_store_account_discovery_errors(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    broken_dir = instances_dir / "BrokenInstance" / "data" / "accounts"
+    healthy_dir = instances_dir / "HealthyInstance" / "data" / "accounts"
+    broken_dir.mkdir(parents=True)
+    healthy_dir.mkdir(parents=True)
+
+    class BrokenStore:
+        accounts_dir = broken_dir / "accounts"
+
+        def list_account_ids(self, *, include_unresolvable=False):
+            assert include_unresolvable is False
+            raise AccountStoreError("account index unavailable")
+
+    class EmptyStore:
+        accounts_dir = healthy_dir / "accounts"
+
+    def factory(_root, instance_name):
+        return BrokenStore() if instance_name == "BrokenInstance" else EmptyStore()
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=instances_dir,
+            selected_instances=("BrokenInstance", "HealthyInstance"),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "BrokenInstance,HealthyInstance"},
+            store_factory=factory,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert report["ok"] is False
+    assert report["instances"][0]["error"] == "AccountStoreError: account index unavailable"
+    assert report["instances"][1]["accounts"] == []
+
+
 def test_proactive_cycle_can_run_local_planner_before_due_selection(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)

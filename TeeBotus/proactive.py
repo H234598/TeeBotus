@@ -784,10 +784,7 @@ def _account_ids(store: AccountStore) -> tuple[str, ...]:
     }
     list_account_ids = getattr(store, "list_account_ids", None)
     if callable(list_account_ids):
-        try:
-            listed_ids = list_account_ids(include_unresolvable=False)
-        except (AccountStoreError, OSError, ValueError):
-            listed_ids = ()
+        listed_ids = list_account_ids(include_unresolvable=False)
         ids.update(
             account_id
             for account_id in (str(value or "").strip().casefold() for value in listed_ids)
