@@ -7624,3 +7624,31 @@ Commits. Kein Push. Restart nach 6 weiteren Commits.
 Commits. Kein Push. Restart nach 4 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `17/20` sichtbar.
+
+### Optionaler Wetterkontext darf LLM-Antwort nicht blockieren
+
+- 2026-07-17: `weather_context_text()` wurde in Freitext- und YouTube-LLM-Pfad
+  direkt gelesen. Ein defekter Agent-State konnte dadurch eine ansonsten
+  erfolgreiche Antwort in den generischen Engine-Fehler umleiten.
+- Beide Pfade nutzen jetzt einen best-effort Wrapper. Wetter bleibt optional;
+  bei Lesefehler läuft die Antwort ohne Wetterkontext weiter.
+- Test: `tests/test_engine_identity_flows.py -k
+  'unexpected_weather_context_failure or youtube_transcript_natural_request_uses_llm_pipeline'`
+  `3 passed`; Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `abf21c3f fix: keep llm replies on weather context failure`.
+
+### Key-Ring-Metadaten dürfen Stateful-LLM nicht blockieren
+
+- 2026-07-17: Die Ermittlung des Key-Fingerprints rief
+  `api_key_ring.ordered_keys()` ungefangen auf. Ein defekter Metadatenzugriff
+  konnte dadurch vor oder nach dem Provideraufruf die Antwort verwerfen.
+- Key-Ring-Inspektion ist jetzt best-effort. Fehlende Metadaten verlieren nur
+  den State-Scope; die LLM-Antwort bleibt auslieferbar.
+- Test: `tests/test_engine_identity_flows.py -k
+  'unexpected_key_ring_scope_failure or unexpected_local_response_state_failure or
+  engine_persists_previous_response_id_for_stateful_gemini_alias'` `4 passed`;
+  Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ceb0d5a5 fix: keep llm replies on key ring metadata failure`.
+
+**Aktueller Laufstand:** Nach den beiden Code-Commits seit dem Restart `19/20`
+Commits. Dieser Plan-Commit macht `20/20` sichtbar. Kein Push. Restart jetzt.
