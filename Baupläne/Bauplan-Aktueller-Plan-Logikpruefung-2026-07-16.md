@@ -2819,6 +2819,25 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 2 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Verschluesselte-Vault-Reads-ueber-stabile-Datei-FDs
+
+- 2026-07-17: `EncryptedJsonVault.read_text()` und der Existing-Payload-Guard
+  lasen nach einer Pfadpruefung per `Path.read_bytes()`. Finaler Datei- oder
+  Parent-Swap konnte dadurch fremde verschluesselte Daten in Memory-/Secret-
+  Entscheidungen bringen.
+- Reads oeffnen Parent und regulare Single-Link-Zieldatei jetzt stabil mit
+  `O_NOFOLLOW`; gelesen wird ueber den Datei-FD. Fehlende Dateien bleiben
+  normaler Default-Fall, unsichere oder beschaedigte Ziele blockieren
+  fail-closed.
+- Regression: finaler/Parent-Swap beim Vault-Read -> `3 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `299 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e47b6cde fix: read encrypted memory files through stable descriptors`.
+
+**Aktueller Laufstand:** Seit dem Restart `20/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart jetzt. Naechster Push bleibt erst bei 100
+Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
