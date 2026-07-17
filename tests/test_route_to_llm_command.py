@@ -228,6 +228,75 @@ def test_route_to_llm_without_prompt_routes_next_admin_message_once(tmp_path, mo
     assert engine.state.get_pending_flow("Depressionsbot", account_id, "llm_route_to") is None
 
 
+def test_route_to_llm_reports_pending_state_setup_failure(tmp_path, monkeypatch) -> None:
+    account_store = _store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    monkeypatch.setenv("TEEBOTUS_ADMIN_ACCOUNT_IDS_DEPRESSIONSBOT", account_id)
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions())
+
+    monkeypatch.setattr(
+        engine.state,
+        "set_pending_flow",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("pending state unavailable")),
+    )
+
+    actions = engine.process(_event(identity, "/RouteToHF"))
+
+    assert actions[0].text == "RouteTo konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
+
+
+def test_route_to_llm_reports_pending_state_lookup_failure(tmp_path, monkeypatch) -> None:
+    account_store = _store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    monkeypatch.setenv("TEEBOTUS_ADMIN_ACCOUNT_IDS_DEPRESSIONSBOT", account_id)
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions())
+    original_get = engine.state.get_pending_flow
+
+    def broken_get(instance, current_account_id, flow_type, **kwargs):
+        if flow_type == "llm_route_to":
+            raise RuntimeError("pending state unavailable")
+        return original_get(instance, current_account_id, flow_type, **kwargs)
+
+    monkeypatch.setattr(engine.state, "get_pending_flow", broken_get)
+
+    actions = engine.process(_event(identity, "normale Nachricht"))
+
+    assert actions[0].text == "RouteTo konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
+
+
+def test_route_to_llm_does_not_route_when_pending_state_consumption_fails(tmp_path, monkeypatch) -> None:
+    account_store = _store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    monkeypatch.setenv("TEEBOTUS_ADMIN_ACCOUNT_IDS_DEPRESSIONSBOT", account_id)
+    prompts: list[str] = []
+
+    class FakeClient:
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            prompts.append(user_text)
+            return LLMResponse("unerwartete route", provider="fake", model="fake-model")
+
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(llm_enabled=True),
+        route_to_client_factory=lambda **_kwargs: FakeClient(),
+    )
+    armed = engine.process(_event(identity, "/RouteToHF"))
+    monkeypatch.setattr(
+        engine.state,
+        "pop_pending_flow",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("pending state unavailable")),
+    )
+
+    actions = engine.process(_event(identity, "direkt an hf bitte"))
+
+    assert "Route bereit" in armed[0].text
+    assert actions[0].text == "RouteTo konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
+    assert prompts == []
+
+
 def test_route_to_llm_pending_prompt_is_bound_to_the_originating_chat(tmp_path, monkeypatch) -> None:
     account_store = _store(tmp_path)
     identity = telegram_identity_key(1)

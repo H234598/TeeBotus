@@ -96,6 +96,7 @@ YOUTUBE_LINK_FLOW = "youtube_link"
 YOUTUBE_OPTIONS_FLOW = "youtube_options"
 YOUTUBE_PENDING_STATE_ERROR = "YouTube-Transkript konnte gerade nicht fortgesetzt werden."
 YOUTUBE_JOB_START_ERROR = "Lokale YouTube-Transkription konnte nicht gestartet werden."
+ROUTE_TO_STATE_ERROR = "RouteTo konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
 ADMIN_AUTH_FLOW = "admin_auth"
 ADMIN_AUTH_USAGE = "Nutzung: /admin yes <secret> oder /admin no."
 ADMIN_AUTH_PROMPT = "Admin-Secret bitte senden. /cancel bricht ab."
@@ -325,28 +326,64 @@ class TeeBotusEngine:
                 self._route_to_llm_actions(event, result.account_id, route_to_command.target, route_to_command.prompt, instructions),
                 handled=True,
             )
-        pending_route_to = self.state.get_pending_flow(
-            event.instance,
-            result.account_id,
-            ROUTE_TO_FLOW,
-            conversation_scope=_pending_flow_conversation_scope(event),
-        )
+        try:
+            pending_route_to = self.state.get_pending_flow(
+                event.instance,
+                result.account_id,
+                ROUTE_TO_FLOW,
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
+        except Exception:  # noqa: BLE001 - route state failures must not abort the message loop.
+            LOGGER.exception("RouteTo pending-state lookup failed instance=%s account=%s", event.instance, result.account_id)
+            return EngineResult(
+                result.account_id,
+                [SendText(event.chat_id, ROUTE_TO_STATE_ERROR, track=False)],
+                handled=True,
+            )
         if pending_route_to is not None:
             if command == "/cancel" and _route_to_pending_context_matches(pending_route_to, event):
-                self.state.pop_pending_flow(
-                    event.instance,
-                    result.account_id,
-                    ROUTE_TO_FLOW,
-                    conversation_scope=_pending_flow_conversation_scope(event),
-                )
+                try:
+                    popped_route_to = self.state.pop_pending_flow(
+                        event.instance,
+                        result.account_id,
+                        ROUTE_TO_FLOW,
+                        conversation_scope=_pending_flow_conversation_scope(event),
+                    )
+                except Exception:  # noqa: BLE001 - route state failures must fail closed.
+                    LOGGER.exception("RouteTo pending-state cancellation failed instance=%s account=%s", event.instance, result.account_id)
+                    return EngineResult(
+                        result.account_id,
+                        [SendText(event.chat_id, ROUTE_TO_STATE_ERROR, track=False)],
+                        handled=True,
+                    )
+                if popped_route_to is None:
+                    return EngineResult(
+                        result.account_id,
+                        [SendText(event.chat_id, ROUTE_TO_STATE_ERROR, track=False)],
+                        handled=True,
+                    )
                 return EngineResult(result.account_id, [SendText(event.chat_id, "RouteTo abgebrochen.", track=False)], handled=True)
             if not command and text and _route_to_pending_context_matches(pending_route_to, event):
-                self.state.pop_pending_flow(
-                    event.instance,
-                    result.account_id,
-                    ROUTE_TO_FLOW,
-                    conversation_scope=_pending_flow_conversation_scope(event),
-                )
+                try:
+                    popped_route_to = self.state.pop_pending_flow(
+                        event.instance,
+                        result.account_id,
+                        ROUTE_TO_FLOW,
+                        conversation_scope=_pending_flow_conversation_scope(event),
+                    )
+                except Exception:  # noqa: BLE001 - route state failures must fail closed.
+                    LOGGER.exception("RouteTo pending-state consumption failed instance=%s account=%s", event.instance, result.account_id)
+                    return EngineResult(
+                        result.account_id,
+                        [SendText(event.chat_id, ROUTE_TO_STATE_ERROR, track=False)],
+                        handled=True,
+                    )
+                if popped_route_to is None:
+                    return EngineResult(
+                        result.account_id,
+                        [SendText(event.chat_id, ROUTE_TO_STATE_ERROR, track=False)],
+                        handled=True,
+                    )
                 return EngineResult(
                     result.account_id,
                     self._route_to_llm_actions(event, result.account_id, str(pending_route_to.get("target") or ""), text, instructions),
@@ -1553,24 +1590,28 @@ class TeeBotusEngine:
                 )
             ]
         if not prompt.strip():
-            self.state.set_pending_flow(
-                event.instance,
-                account_id,
-                ROUTE_TO_FLOW,
-                {
-                    "target": target_name,
-                    "target_label": target.label,
-                    "provider": target.provider,
-                    "model": target.model,
-                    "context": {
-                        "channel": event.channel,
-                        "adapter_slot": event.adapter_slot,
-                        "chat_id": event.chat_id,
-                        "identity_key": event.identity_key,
+            try:
+                self.state.set_pending_flow(
+                    event.instance,
+                    account_id,
+                    ROUTE_TO_FLOW,
+                    {
+                        "target": target_name,
+                        "target_label": target.label,
+                        "provider": target.provider,
+                        "model": target.model,
+                        "context": {
+                            "channel": event.channel,
+                            "adapter_slot": event.adapter_slot,
+                            "chat_id": event.chat_id,
+                            "identity_key": event.identity_key,
+                        },
                     },
-                },
-                conversation_scope=_pending_flow_conversation_scope(event),
-            )
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
+            except Exception:  # noqa: BLE001 - route state failures must stay user-visible.
+                LOGGER.exception("RouteTo pending-state setup failed instance=%s account=%s", event.instance, account_id)
+                return [SendText(event.chat_id, ROUTE_TO_STATE_ERROR, track=False)]
             return [
                 SendText(
                     event.chat_id,
