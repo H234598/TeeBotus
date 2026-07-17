@@ -93,3 +93,24 @@ def test_faster_whisper_subprocess_receives_language(monkeypatch, tmp_path: Path
     assert "language = sys.argv[5].strip()" in command[2]
     assert 'transcribe_kwargs = {"language": language} if language else {}' in command[2]
     assert captured["instance_name"] == "Depressionsbot"
+
+
+def test_youtube_whisper_cli_does_not_force_english(monkeypatch, tmp_path: Path) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(command, workdir, timeout, *, instance_name=""):
+        captured.update({"command": command, "workdir": workdir, "timeout": timeout, "instance_name": instance_name})
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setattr(youtube, "_run_local_command", fake_run)
+    monkeypatch.setattr(youtube, "_read_first_srt_as_text", lambda _workdir: "deutsches Transkript")
+    audio_path = tmp_path / "audio.mp3"
+    audio_path.write_bytes(b"audio")
+
+    result = youtube._transcribe_audio_with_openai_whisper_cli(audio_path, tmp_path, instance_name="Demo")
+
+    assert result == "deutsches Transkript"
+    command = captured["command"]
+    assert isinstance(command, list)
+    assert "--language" not in command
+    assert captured["instance_name"] == "Demo"

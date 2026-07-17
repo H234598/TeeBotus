@@ -7776,3 +7776,16 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `8/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Lokaler YouTube-Whisper-Fallback: Sprache nicht hart verdrahten
+
+- 2026-07-17: Der lokale `whisper`-CLI-Fallback setzte bisher immer
+  `--language English`. Das verschlechterte deutsche und andere Audios ohne
+  Untertitel. Die feste Vorgabe ist entfernt; Whisper erkennt Sprache wieder
+  selbst.
+- Test: `tests/test_local_transcription.py` -> `4 passed`; Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: folgt direkt.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `9/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.

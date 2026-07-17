@@ -812,8 +812,6 @@ def _transcribe_audio_with_openai_whisper_cli(audio_path: Path, workdir: Path, i
             str(audio_path),
             "--model",
             YOUTUBE_WHISPER_MODEL,
-            "--language",
-            "English",
             "--output_format",
             "srt",
             "--output_dir",
