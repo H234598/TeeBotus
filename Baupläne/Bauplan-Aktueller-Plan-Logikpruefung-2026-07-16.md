@@ -7852,7 +7852,7 @@ Push. Restart erst bei `20/20`.
   Zeitpunkt sortiert, nicht nach lokaler Textdarstellung.
 - Test: Access-Recency-Suite `3 passed`; Ruff, `py_compile` und
   `git diff --check` gruen. Kein Provider/API-Aufruf.
-- Code-Commit: folgt direkt.
+- Code-Commit: `566f4a2b fix: order memory access timestamps by instant`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `14/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
