@@ -3670,3 +3670,19 @@ Commits.
 **Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### SQLite-Memory-Config-verweigert-Symlink-Pfade
+
+- 2026-07-17: SQLite-Primary/Fallback-Pfade konnten ueber Symlink-Komponenten
+  konfiguriert werden. `_connect()` haette danach fremde Ziele verfolgen und
+  Memory-Daten ausserhalb des vorgesehenen Baums schreiben koennen.
+- Backend-Init verweigert jetzt Symlink-Komponenten und unsichere
+  `resolve()`-Fehler fail-closed; bestehende Hardlink-Pruefung bleibt aktiv.
+- Regression: SQLite-Config-Fokus -> `5 passed`; komplette
+  `tests/test_account_store.py` -> `292 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `96cec064 fix: reject symlinked sqlite memory paths`.
+
+**Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
