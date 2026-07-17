@@ -1192,8 +1192,11 @@ def _proactive_policy_reason_is_transient(reason: str) -> bool:
 
 def due_proactive_outbox_items(account_store: AccountStore, account_id: str, *, now: datetime | None = None) -> tuple[dict[str, Any], ...]:
     resolved_now = _resolve_proactive_now(now)
+    rows = account_store.read_proactive_outbox(account_id)
+    if not isinstance(rows, list):
+        raise ValueError("proactive_outbox is not a list")
     due: list[dict[str, Any]] = []
-    for item in account_store.read_proactive_outbox(account_id):
+    for item in rows:
         if not isinstance(item, dict):
             continue
         if _proactive_item_status(item) != "queued":

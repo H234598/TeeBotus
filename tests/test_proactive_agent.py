@@ -1444,6 +1444,15 @@ def test_proactive_agent_health_reports_unexpected_outbox_read_error() -> None:
     assert health.errors == ("proactive_outbox read failed: RuntimeError: backend unavailable",)
 
 
+def test_due_proactive_outbox_rejects_corrupt_container_shape(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(telegram_identity_key(1))
+    monkeypatch.setattr(account_store, "read_proactive_outbox", lambda _account_id: {"broken": True})
+
+    with pytest.raises(ValueError, match="proactive_outbox is not a list"):
+        due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))
+
+
 def test_proactive_agent_health_reports_unexpected_route_check_error(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
