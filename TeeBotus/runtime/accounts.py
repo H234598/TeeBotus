@@ -14,7 +14,6 @@ import secrets
 import shutil
 import stat
 import subprocess
-import tempfile
 import threading
 import time
 import uuid
@@ -988,7 +987,7 @@ def _safe_account_lock_handle(lock_path: Path, *, label: str) -> Iterator[Any]:
         yield handle
 
 
-def _open_stable_directory_descriptor(path: Path, *, label: str) -> int:
+def _open_stable_directory_descriptor(path: Path, *, label: str, create_missing: bool = False) -> int:
     no_follow = getattr(os, "O_NOFOLLOW", 0)
     directory_flag = getattr(os, "O_DIRECTORY", 0)
     if not no_follow or not directory_flag:
@@ -998,7 +997,16 @@ def _open_stable_directory_descriptor(path: Path, *, label: str) -> int:
     descriptor = os.open(os.sep, flags)
     try:
         for component in absolute.parts[1:]:
-            next_descriptor = os.open(component, flags, dir_fd=descriptor)
+            try:
+                next_descriptor = os.open(component, flags, dir_fd=descriptor)
+            except FileNotFoundError:
+                if not create_missing:
+                    raise
+                try:
+                    os.mkdir(component, stat.S_IRWXU, dir_fd=descriptor)
+                except FileExistsError:
+                    pass
+                next_descriptor = os.open(component, flags, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = next_descriptor
         return descriptor
@@ -5997,22 +6005,37 @@ def _atomic_write_text(path: Path, text: str) -> None:
 
 
 def _atomic_write_bytes(path: Path, payload: bytes) -> None:
-    _ensure_safe_account_memory_path(path.parent, label="atomic-write parent", require_directory=True)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _ensure_safe_account_memory_path(path.parent, label="atomic-write parent", require_directory=True)
+    path = Path(path)
     try:
-        os.chmod(path.parent, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
-    except OSError:
-        pass
-    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=f".{uuid.uuid4().hex}.tmp", dir=str(path.parent))
-    temp_path = Path(temp_name)
+        parent_descriptor = _open_stable_directory_descriptor(
+            path.parent,
+            label="atomic-write parent",
+            create_missing=True,
+        )
+    except OSError as exc:
+        raise AccountStoreError(f"refusing unsafe account memory atomic-write parent: {path.parent}") from exc
+    temp_name = f".{path.name}.{uuid.uuid4().hex}.tmp"
+    temp_descriptor: int | None = None
     try:
-        with os.fdopen(fd, "wb") as handle:
+        os.fchmod(parent_descriptor, stat.S_IRUSR | stat.S_IWUSR | stat.S_IXUSR)
+        temp_descriptor = os.open(
+            temp_name,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0),
+            stat.S_IRUSR | stat.S_IWUSR,
+            dir_fd=parent_descriptor,
+        )
+        with os.fdopen(temp_descriptor, "wb") as handle:
+            temp_descriptor = None
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
-        os.chmod(temp_path, stat.S_IRUSR | stat.S_IWUSR)
-        os.replace(temp_path, path)
+        os.replace(temp_name, path.name, src_dir_fd=parent_descriptor, dst_dir_fd=parent_descriptor)
+        os.fsync(parent_descriptor)
     finally:
-        if temp_path.exists():
-            temp_path.unlink(missing_ok=True)
+        if temp_descriptor is not None:
+            os.close(temp_descriptor)
+        try:
+            os.unlink(temp_name, dir_fd=parent_descriptor)
+        except FileNotFoundError:
+            pass
+        os.close(parent_descriptor)

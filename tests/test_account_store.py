@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import os
 import re
 import subprocess
 import threading
@@ -3037,6 +3038,28 @@ def test_atomic_write_rejects_symlinked_parent(tmp_path):
     with pytest.raises(AccountStoreError, match="unsafe account memory atomic-write parent"):
         _atomic_write_text(linked_parent / "payload.txt", "must not escape")
 
+    assert not (outside / "payload.txt").exists()
+
+
+def test_atomic_write_keeps_stable_parent_when_path_is_swapped(tmp_path, monkeypatch):
+    parent = tmp_path / "atomic-write-parent"
+    parent.mkdir()
+    moved_parent = tmp_path / "atomic-write-parent-moved"
+    outside = tmp_path / "outside-atomic-write-race"
+    outside.mkdir()
+    target = parent / "payload.txt"
+    real_replace = os.replace
+
+    def swap_parent_before_replace(source, destination, **kwargs):
+        parent.rename(moved_parent)
+        parent.symlink_to(outside, target_is_directory=True)
+        return real_replace(source, destination, **kwargs)
+
+    monkeypatch.setattr(os, "replace", swap_parent_before_replace)
+
+    _atomic_write_text(target, "must stay in original directory")
+
+    assert (moved_parent / "payload.txt").read_text(encoding="utf-8") == "must stay in original directory"
     assert not (outside / "payload.txt").exists()
 
 
