@@ -2997,6 +2997,24 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 2 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Account-Verzeichnisse-werden-ueber-stabile-FDs-erstellt
+
+- 2026-07-17: `_prepare_account_memory_directory()` pruefte Root,
+  `accounts/` und Account-Verzeichnis und nutzte danach `mkdir()` per Pfad.
+  Ein Redirect-Race konnte Verzeichnisse ausserhalb des vorgesehenen Baums
+  anlegen.
+- Root, `accounts/` und Account-Verzeichnis werden jetzt komponentenweise
+  relativ zu `O_NOFOLLOW|O_DIRECTORY`-Deskriptoren erstellt und sofort wieder
+  geschlossen. Keine Pfad-basierte Verzeichnisanlage mehr im Account-Lock-
+  Vorlauf.
+- Regression: kompletter `tests/test_account_store.py`-Lauf -> `306 passed`;
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `31de19e2 fix: create account directories through stable fds`.
+
+**Aktueller Laufstand:** Seit dem Restart `20/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart jetzt. Naechster Push bleibt erst bei 100
+Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
