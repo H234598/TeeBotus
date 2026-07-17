@@ -4,6 +4,8 @@ import hashlib
 import json
 import os
 import stat
+import threading
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import pytest
@@ -39,6 +41,46 @@ def test_source_harvester_routes_accepted_file_without_blind_ingest(tmp_path):
     assert manifest[0]["route"] == "accepted"
     assert manifest[0]["accepted_for_ingest"] is True
     assert manifest[0]["decision"]["status"] == "trusted"
+
+
+def test_source_harvester_serializes_duplicate_hash_check_and_copy(tmp_path, monkeypatch):
+    source_dir = tmp_path / "download"
+    source_dir.mkdir()
+    source_text = "Schlafhygiene und Aktivierung."
+    first_source = source_dir / "first.txt"
+    second_source = source_dir / "second.txt"
+    first_source.write_text(source_text, encoding="utf-8")
+    second_source.write_text(source_text, encoding="utf-8")
+    harvester = SourceHarvester(
+        tmp_path / "library",
+        quality_pipeline=SourceQualityPipeline(nli_verifier=FakeNLIVerifier(stance="entailment", confidence=0.91)),
+    )
+    original_copy = source_harvester_module._copy_file_private
+    first_copy_started = threading.Event()
+    release_first_copy = threading.Event()
+    first_copy = True
+
+    def blocking_copy(source, destination):
+        nonlocal first_copy
+        if first_copy:
+            first_copy = False
+            first_copy_started.set()
+            assert release_first_copy.wait(timeout=5)
+        return original_copy(source, destination)
+
+    monkeypatch.setattr(source_harvester_module, "_copy_file_private", blocking_copy)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        first = executor.submit(harvester.harvest_path, first_source, metadata={"license": "private"})
+        assert first_copy_started.wait(timeout=5)
+        second = executor.submit(harvester.harvest_path, second_source, metadata={"license": "private"})
+        release_first_copy.set()
+        results = [first.result(timeout=5), second.result(timeout=5)]
+
+    assert sum(result.duplicate_of is None for result in results) == 1
+    assert sum(result.duplicate_of is not None for result in results) == 1
+    rows = [json.loads(line) for line in harvester.manifest_path.read_text(encoding="utf-8").splitlines()]
+    assert len(rows) == 2
+    assert sum(bool(row["duplicate_of"]) for row in rows) == 1
 
 
 def test_source_harvester_refuses_symlink_harvest_destination_file(tmp_path):

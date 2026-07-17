@@ -6,18 +6,29 @@ import json
 import os
 import shutil
 import stat
+import threading
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterable, Mapping
+from typing import Any, Iterable, Iterator, Mapping
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - fcntl is unavailable on non-POSIX platforms.
+    fcntl = None  # type: ignore[assignment]
 
 from TeeBotus.runtime.bibliothekar import _coerce_bool, _is_allowed_library_source_path, _manifest_library_path, _manifest_sha256, _manifest_token
 from TeeBotus.runtime.source_quality import SourceQualityInput, SourceQualityPipeline, SourceQualityReport, SourceRoute
 
 
 HARVEST_MANIFEST = "harvest_manifest.jsonl"
+HARVEST_LOCK_FILENAME = ".harvest.lock"
 HARVEST_DIRS = ("inbox", "quarantine", "accepted", "rejected")
 PROMOTED_DIR = "books"
+
+_HARVEST_LOCK_GUARD = threading.Lock()
+_HARVEST_LOCKS: dict[str, threading.RLock] = {}
 
 
 @dataclass(frozen=True)
@@ -86,27 +97,28 @@ class SourceHarvester:
             evidence=evidence,
         )
         report = self.quality_pipeline.evaluate(source_input)
-        duplicate = self._existing_path_for_hash(sha256, route=report.route)
-        if duplicate is not None:
-            result = SourceHarvestResult(source, report.route, None, sha256, report, duplicate_of=duplicate)
-            self._append_manifest(result)
-            return result
+        with _harvest_library_lock(self.library_root):
+            duplicate = self._existing_path_for_hash(sha256, route=report.route)
+            if duplicate is not None:
+                result = SourceHarvestResult(source, report.route, None, sha256, report, duplicate_of=duplicate)
+                self._append_manifest(result)
+                return result
 
-        stored_path = self._stored_path(source, sha256, report.route)
-        _refuse_symlink_destination_file(stored_path)
-        stored_existed = stored_path.exists()
-        source_stat = _copy_file_private(source, stored_path)
-        stored_stat = _stat_regular_file(stored_path)
-        result = SourceHarvestResult(source, report.route, stored_path, sha256, report)
-        try:
-            self._append_manifest(result)
-        except Exception:
-            if not stored_existed and stored_stat is not None:
-                _unlink_new_destination_if_same(stored_path, stored_stat)
-            raise
-        if not copy:
-            _unlink_if_same_file(source, source_stat, expected_sha256=sha256)
-        return result
+            stored_path = self._stored_path(source, sha256, report.route)
+            _refuse_symlink_destination_file(stored_path)
+            stored_existed = stored_path.exists()
+            source_stat = _copy_file_private(source, stored_path)
+            stored_stat = _stat_regular_file(stored_path)
+            result = SourceHarvestResult(source, report.route, stored_path, sha256, report)
+            try:
+                self._append_manifest(result)
+            except Exception:
+                if not stored_existed and stored_stat is not None:
+                    _unlink_new_destination_if_same(stored_path, stored_stat)
+                raise
+            if not copy:
+                _unlink_if_same_file(source, source_stat, expected_sha256=sha256)
+            return result
 
     def promote_accepted(
         self,
@@ -129,27 +141,28 @@ class SourceHarvester:
             raise ValueError("Only files from the accepted harvest staging directory can be promoted") from exc
 
         sha256 = _file_sha256(staged)
-        if not self._manifest_accepts_hash(sha256, staged):
-            raise ValueError("Accepted source is not marked accepted_for_ingest in the harvest manifest")
         target_dir = self.library_root / _safe_destination_dir(destination_dir)
         candidate_path = target_dir / staged.name
         if not _is_allowed_library_source_path(candidate_path, self.library_root):
             raise ValueError("destination_dir must resolve to an indexed Bibliothek source path")
-        _ensure_private_dir(target_dir, label="promote destination directory", root=self.library_root)
-        promoted_path = _unique_destination(candidate_path, sha256=sha256)
-        promoted_existed = promoted_path.exists()
-        source_stat = _copy_file_private(staged, promoted_path)
-        promoted_stat = _stat_regular_file(promoted_path)
-        result = SourcePromoteResult(staged, promoted_path, sha256, copied=copy)
-        try:
-            self._append_promote_manifest(result)
-        except Exception:
-            if not promoted_existed and promoted_stat is not None:
-                _unlink_new_destination_if_same(promoted_path, promoted_stat)
-            raise
-        if not copy:
-            _unlink_if_same_file(staged, source_stat, expected_sha256=sha256)
-        return result
+        with _harvest_library_lock(self.library_root):
+            if not self._manifest_accepts_hash(sha256, staged):
+                raise ValueError("Accepted source is not marked accepted_for_ingest in the harvest manifest")
+            _ensure_private_dir(target_dir, label="promote destination directory", root=self.library_root)
+            promoted_path = _unique_destination(candidate_path, sha256=sha256)
+            promoted_existed = promoted_path.exists()
+            source_stat = _copy_file_private(staged, promoted_path)
+            promoted_stat = _stat_regular_file(promoted_path)
+            result = SourcePromoteResult(staged, promoted_path, sha256, copied=copy)
+            try:
+                self._append_promote_manifest(result)
+            except Exception:
+                if not promoted_existed and promoted_stat is not None:
+                    _unlink_new_destination_if_same(promoted_path, promoted_stat)
+                raise
+            if not copy:
+                _unlink_if_same_file(staged, source_stat, expected_sha256=sha256)
+            return result
 
     def _stored_path(self, source: Path, sha256: str, route: SourceRoute) -> Path:
         safe_name = _safe_filename(source.name)
@@ -245,6 +258,42 @@ def _route_dir(route: SourceRoute) -> str:
     if route == "rejected":
         return "rejected"
     return "quarantine"
+
+
+@contextmanager
+def _harvest_library_lock(library_root: Path) -> Iterator[None]:
+    key = str(library_root.resolve(strict=False))
+    with _HARVEST_LOCK_GUARD:
+        process_lock = _HARVEST_LOCKS.setdefault(key, threading.RLock())
+    with process_lock:
+        fd = -1
+        handle = None
+        lock_path = library_root / HARVEST_LOCK_FILENAME
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+        try:
+            fd = os.open(lock_path, flags, 0o600)
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                raise ValueError(f"SourceHarvester refuses symlink lock file: {lock_path}") from exc
+            raise
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise ValueError(f"SourceHarvester requires regular lock file: {lock_path}")
+            _chmod_private_fd(fd)
+            handle = os.fdopen(fd, "r+b")
+            fd = -1
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            yield
+        finally:
+            if handle is not None:
+                if fcntl is not None:
+                    try:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+                    except OSError:
+                        pass
+                handle.close()
+            _close_fd_if_open(fd)
 
 
 def _file_sha256(path: Path) -> str:
@@ -521,4 +570,12 @@ def _chmod_private_fd(fd: int) -> None:
         return
 
 
-__all__ = ["HARVEST_DIRS", "HARVEST_MANIFEST", "PROMOTED_DIR", "SourceHarvestResult", "SourceHarvester", "SourcePromoteResult"]
+__all__ = [
+    "HARVEST_DIRS",
+    "HARVEST_LOCK_FILENAME",
+    "HARVEST_MANIFEST",
+    "PROMOTED_DIR",
+    "SourceHarvestResult",
+    "SourceHarvester",
+    "SourcePromoteResult",
+]
