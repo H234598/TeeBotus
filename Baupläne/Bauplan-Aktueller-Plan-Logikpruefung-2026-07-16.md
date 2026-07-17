@@ -6255,3 +6255,19 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `13/20` Commits. Kein Push. Restart nach 7 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Due-Auswahl lehnt kaputte Outbox-Container ab
+
+- 2026-07-17: `due_proactive_outbox_items` iterierte einen Mapping-Container
+  als Schluessel und lieferte dadurch scheinbar korrekt `0` Faelliges. Ein
+  Scheduler-Dry-Run konnte eine kaputte Outbox so als gesund erscheinen lassen.
+- Die Containerform wird vor der Due-Auswahl auf `list` geprueft. Andere
+  Container liefern jetzt `ValueError: proactive_outbox is not a list`; die
+  aufrufende Cycle-Schicht kann den Accountfehler strukturiert reportieren.
+- Test: `tests/test_proactive_agent.py` `177 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b83ccae2 fix: reject malformed proactive outbox container`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`15/20` Commits. Kein Push. Restart nach 5 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
