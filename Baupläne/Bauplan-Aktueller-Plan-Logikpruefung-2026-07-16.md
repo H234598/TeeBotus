@@ -8050,6 +8050,21 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `0/20` Code-Commits. Kein Push.
 Restart nach weiteren 20 Code-Fixes.
 
+### 2026-07-18: Wettercache bei Wohnortwechsel sofort erneuern
+
+- Bei erkannter neuer Wohnstadt wurde der alte Wettertext zwar geloescht,
+  aber `last_checked_at` blockierte den neuen Check noch bis zu zwei Stunden.
+  Der User bekam dadurch fuer neue Stadt leeren Wetterkontext.
+- Ein Wohnortwechsel invalidiert den alten Wettercache jetzt vollstaendig fuer
+  den aktuellen Aufruf; normale Folgekontakte bleiben weiterhin auf maximal
+  einen Check je zwei Stunden begrenzt.
+- Verifikation: `tests/test_weather_context.py` -> `11 passed`; Compile und
+  `git diff --check` gruen; kein Provider/API-Aufruf.
+- Code-Commit: `aa5e120f fix: refresh weather after residence changes`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `1/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Proactive-LLM-Plan: parallele identische Entscheidungen idempotent anwenden
 
 - 2026-07-18: Zwei gleichzeitig laufende LLM-/Tool-Planner konnten denselben
