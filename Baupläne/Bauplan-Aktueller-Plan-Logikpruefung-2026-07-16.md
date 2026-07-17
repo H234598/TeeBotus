@@ -5184,6 +5184,22 @@ bleibt erst bei 100 Commits.
 `10/20` Commits. Kein Push. Restart nach 10 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Risk-Gate strikt validiert
+
+- 2026-07-17: `risk_gate` wurde nur normalisiert. Unbekannte Werte wie
+  `red-ish` konnten dadurch die Risikopruefung umgehen und als erlaubte
+  proaktive Nachricht weiterlaufen.
+- Bekannte Gates sind jetzt explizit begrenzt. Neue unbekannte Werte werden
+  abgelehnt; queued Altbestand wird vor Due-Auswahl als
+  `failed/invalid_risk_gate` markiert. Health meldet unbekannte Gates.
+- Test: `tests/test_proactive_agent.py` `140 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `35f9f55f fix: reject unknown proactive risk gates`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`12/20` Commits. Kein Push. Restart nach 8 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Wiederholungsregel-validiert
 
 - 2026-07-17: Nicht parsebare Wiederholungen wie `every fortnight` wurden
