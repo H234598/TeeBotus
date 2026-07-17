@@ -5445,6 +5445,22 @@ bleibt erst bei 100 Commits.
 `16/20` Commits. Kein Push. Restart nach 4 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-LLM-Planner liest Mapping-Responses korrekt
+
+- 2026-07-17: `run_proactive_llm_planner` nutzte `getattr(response, "text", ...)`.
+  Bei Provider-/Test-Responses als `{"text": "..."}` wurde dadurch das ganze
+  Mapping als Text serialisiert und als kaputtes JSON abgelehnt.
+- LLM-Planner und Tool-Fallback nutzen jetzt denselben strukturierten
+  Response-Text-Parser; direkte String-Responses bleiben kompatibel.
+- Test: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `215 passed`; Mapping-Response-Fokus `2 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3d2968c7 fix: parse mapping responses in proactive llm planner`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`18/20` Commits. Kein Push. Restart nach 2 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
