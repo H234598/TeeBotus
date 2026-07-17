@@ -104,6 +104,19 @@ def test_rotating_key_ring_advances_only_when_limited() -> None:
     assert ring.ordered_keys()[0] == "k3"
 
 
+def test_rotating_key_ring_ignores_late_results_from_previous_key() -> None:
+    ring = RotatingAPIKeyRing(("late-k1", "late-k2", "late-k3"), name="test-late-results")
+
+    ring.mark_limited("late-k1")
+    ring.mark_limited("late-k2")
+    assert ring.ordered_keys()[0] == "late-k3"
+
+    ring.mark_success("late-k1")
+    ring.mark_limited("late-k1")
+
+    assert ring.ordered_keys()[0] == "late-k3"
+
+
 def test_resolve_gemini_free_tier_limits_uses_instance_override() -> None:
     env = {
         "TEEBOTUS_GEMINI_FREE_TIER_DEMO_RPM": "7",

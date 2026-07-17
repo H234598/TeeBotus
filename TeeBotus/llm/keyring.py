@@ -37,6 +37,9 @@ class RotatingAPIKeyRing:
         except ValueError:
             return
         with self._state.lock:
+            # Ignore late results from requests that started before rotation.
+            if index != self._state.cursor % len(self.keys):
+                return
             self._state.cursor = (index + offset) % len(self.keys)
 
 
