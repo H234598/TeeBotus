@@ -7608,3 +7608,19 @@ Commits. Kein Push. Restart nach 8 weiteren Commits.
 Commits. Kein Push. Restart nach 6 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `15/20` sichtbar.
+
+### Emergency-Dispatch verifiziert persistierten Cooldown
+
+- 2026-07-17: Wenn Cooldown-Persistenz und anschließendes Pending-Cleanup
+  gleichzeitig scheiterten, blieb ein Emergency-Pending-State liegen. Der
+  nächste Text konnte ohne nachgewiesenes `used_at` an Teladi gehen.
+- Vor Emergency-Dispatch wird jetzt ein persistierter Cooldown-Zeitpunkt
+  verlangt. Fehlender oder unlesbarer Cooldown blockiert den Versand.
+- Test: `tests/test_engine_identity_flows.py -k 'teladi'` `10 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `163ae191 fix: verify emergency cooldown before dispatch`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `16/20`
+Commits. Kein Push. Restart nach 4 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `17/20` sichtbar.
