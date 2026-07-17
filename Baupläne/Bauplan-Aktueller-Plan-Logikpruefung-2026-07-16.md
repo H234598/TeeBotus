@@ -6942,6 +6942,23 @@ Commits. Kein Push. Restart nach 4 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `17/20` sichtbar.
 
+### YouTube-Link-Follow-up verlangt persistierten Pending-State
+
+- 2026-07-17: `/youtube_transcript` ohne URL meldete den Follow-up-Prompt auch
+  dann, wenn `set_pending_flow()` scheiterte. Der nachfolgende Link konnte
+  dadurch nicht sicher zugeordnet werden und lief in einen anderen Pfad.
+- Der Prompt wird nur noch nach erfolgreichem State-Setup gesendet; bei
+  Fehlern kommt ein kontrollierter Vorbereitungsfehler. Kein falsches
+  Transkriptversprechen.
+- Test: `tests/test_engine_identity_flows.py -k 'youtube_transcript_requires_link or youtube_transcript_reports_pending_state_failure'`
+  `2 passed`; Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f7cd1d85 fix: require persisted youtube link followup state`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `18/20`
+Commits. Kein Push. Restart nach 2 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `19/20` sichtbar.
+
 ### Login kapselt Rückgabe- und Notificationfehler
 
 - 2026-07-17: Primäres Login vertraute blind auf `result["account_id"]` und
