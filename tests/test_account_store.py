@@ -4753,6 +4753,27 @@ def test_sqlite_memory_backend_rejects_symlinked_primary_without_fallback(tmp_pa
         )
 
 
+def test_sqlite_memory_backend_creates_missing_parent_through_stable_walker(tmp_path, monkeypatch):
+    database_path = tmp_path / "missing" / "nested" / "memory.sqlite3"
+    original_mkdir = Path.mkdir
+
+    def reject_path_mkdir(self, *args, **kwargs):
+        raise AssertionError(f"SQLite backend must not create parents through Path.mkdir: {self}")
+
+    monkeypatch.setattr(Path, "mkdir", reject_path_mkdir)
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=database_path, fallback_path=None),
+    )
+
+    backend.write_entries("a" * 128, [])
+
+    monkeypatch.setattr(Path, "mkdir", original_mkdir)
+    assert database_path.is_file()
+
+
 def test_account_memory_fallback_warning_rate_limit_is_scoped_per_account(caplog) -> None:
     backend = WarningFallbackAccountMemoryBackend(object(), object(), label="Demo:sqlite")
     account_a = "a" * 128

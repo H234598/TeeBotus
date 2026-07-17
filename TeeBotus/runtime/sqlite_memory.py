@@ -662,7 +662,6 @@ class SQLiteAccountMemoryBackend:
 
     @contextlib.contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
-        self.config.path.parent.mkdir(parents=True, exist_ok=True)
         parent_descriptor, target_descriptor, target_identity = _open_stable_sqlite_target(
             self.config.path,
             access_flags=os.O_RDWR,
@@ -1095,7 +1094,11 @@ def _open_stable_sqlite_target(
     if not no_follow or not directory_flag:
         raise OSError("stable SQLite access requires O_NOFOLLOW and O_DIRECTORY")
     absolute = Path(os.path.abspath(os.fspath(path)))
-    parent_descriptor = _open_stable_sqlite_directory_descriptor(absolute.parent, no_follow=no_follow)
+    parent_descriptor = _open_stable_sqlite_directory_descriptor(
+        absolute.parent,
+        no_follow=no_follow,
+        create_missing=create,
+    )
     descriptor: int | None = None
     try:
         try:
@@ -1153,7 +1156,7 @@ def _verify_stable_sqlite_target(
         raise OSError(f"SQLite database file changed during connection: {path}")
 
 
-def _open_stable_sqlite_directory_descriptor(path: Path, *, no_follow: int) -> int:
+def _open_stable_sqlite_directory_descriptor(path: Path, *, no_follow: int, create_missing: bool = False) -> int:
     directory_flag = getattr(os, "O_DIRECTORY", 0)
     if not directory_flag:
         raise OSError("stable SQLite directory access requires O_DIRECTORY")
@@ -1162,7 +1165,16 @@ def _open_stable_sqlite_directory_descriptor(path: Path, *, no_follow: int) -> i
     descriptor = os.open(os.sep, flags)
     try:
         for component in absolute.parts[1:]:
-            next_descriptor = os.open(component, flags, dir_fd=descriptor)
+            try:
+                next_descriptor = os.open(component, flags, dir_fd=descriptor)
+            except FileNotFoundError:
+                if not create_missing:
+                    raise
+                try:
+                    os.mkdir(component, stat.S_IRWXU, dir_fd=descriptor)
+                except FileExistsError:
+                    pass
+                next_descriptor = os.open(component, flags, dir_fd=descriptor)
             os.close(descriptor)
             descriptor = next_descriptor
         return descriptor
