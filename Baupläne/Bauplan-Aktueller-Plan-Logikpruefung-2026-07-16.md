@@ -4738,3 +4738,128 @@ Commits.
 **Aktueller Laufstand:** Seit dem letzten Restart `17/20` Code-Commits. Kein
 Push. Restart nach 3 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
+
+### Proactive-CLI-stellt-Prozessumgebung-wieder-her
+
+- 2026-07-17: `TeeBotus.proactive.main()` lud `.env`-Werte in globale
+  `os.environ`, stellte sie bei direktem Funktionsaufruf aber nicht wieder her.
+  Das verursachte Test- und eingebettete-CLI-Leaks.
+- Oeffentliche Funktion snapshotet die Umgebung, nutzt geladene Werte waehrend
+  des Laufs und stellt danach den vorherigen Prozesszustand wieder her.
+- Tests: Proactive-CLI-Fokus `3 passed`; Ruff und `compileall` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `4caee093 fix: restore environment after proactive cli`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `18/20` Code-Commits. Kein
+Push. Restart nach 2 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
+
+### Proactive-Due-At-Testvertrag
+
+- 2026-07-17: Drei Proactive-Tests erwarteten alte UTC-Defaultwerte oder
+  faellige Items trotz `due_at`-Fail-Closed-Validierung. Lokale Defaultzeit
+  traegt korrekt den konfigurierten Europe/Berlin-Offset.
+- Erwartungen auf `+02:00` und zukuenftige Queue-Items angepasst. Planner plant;
+  derselbe Zyklus versendet noch nicht faellige Items nicht.
+- Tests: Proactive-Zeitfokus `3 passed`; Ruff und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Test-Commit: `5d9b5e6d test: align proactive due time expectations`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `19/20` Code-Commits. Kein
+Push. Restart nach 1 weiterem Commit. Naechster Push bleibt erst bei 100
+Commits.
+
+### Status-Metadaten-faengt-ValueError
+
+- 2026-07-17: `/status` fing beim Lesen von Account-Metadaten nur
+  `AccountStoreError` und `OSError`. Malformed/decryptetes, aber syntaktisch
+  ungueltiges JSON konnte `ValueError` bis in den Applet-Status propagieren.
+- Metadata- und Profilprobe faengt jetzt auch `ValueError` und meldet
+  `account_memory_metadata=... status=broken`; Status bleibt strukturiert.
+- Regression plus Status-/Notification-Suite: `222 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `26e52310 fix: report malformed metadata in status health`.
+- Nach `20/20` Commit wurde `teebotus.service` neu gestartet: `active`,
+  `SubState=running`, `ExecMainStatus=0`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `0/20` Code-Commits. Kein
+Push. Restart nach 20 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
+
+### Bot-Test-isoliert-Logging-Umgebung
+
+- 2026-07-17: Ein unittest-Test rief privaten `_main_impl()` direkt auf,
+  setzte dabei `TEEBOTUS_LOG_LEVEL=debug_all` und liess die Prozessumgebung fuer
+  folgende Engine-Tests veraendert.
+- `patch.dict(os.environ, ...)` begrenzt den absichtlichen Test-Override auf
+  den Testkontext; Produktionswrapper bleibt unveraendert.
+- Tests: Bot-/Engine-Fokus `191 passed`; Ruff und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Test-Commit: `9025232f test: isolate bot logging environment`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `1/20` Code-Commits. Kein
+Push. Restart nach 19 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
+
+### Account-Lock-erhaelt-Body-Fehler
+
+- 2026-07-17: `_safe_account_lock_handle()` fing `OSError` auch ueber den
+  `yield` hinweg. Ein absichtlicher Fehler aus dem geschuetzten Schreib-
+  operation wurde dadurch als `could not open ... lock` maskiert.
+- Open-/fdopen-/fstat-Fehler werden jetzt nur an ihren jeweiligen
+  Systemaufrufen normalisiert; Exceptions aus dem Lock-Body propagieren
+  unverfaelscht.
+- Tests: AccountStore `316 passed` inklusive Weather-Schreibfehler; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `55602422 fix: preserve account lock body errors`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `2/20` Code-Commits. Kein
+Push. Restart nach 18 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
+
+### Pending-Scope-bleibt-legacy-kompatibel
+
+- 2026-07-17: Direkte Legacy-Event-Objekte ohne `adapter_slot` brachen beim
+  neuen Pending-Flow-Scope mit `AttributeError`.
+- Scope nutzt fuer alte Event-Objekte jetzt Slot `1` als bisherigen Default;
+  echte `IncomingEvent`-Objekte behalten ihren konkreten Adapter-Slot.
+- Tests: Signal-/Engine-Fokus `191 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6eb78bd9 fix: keep pending flow scope legacy compatible`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `3/20` Code-Commits. Kein
+Push. Restart nach 17 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
+
+### Loudness-Recheck-testet-lock-internen-Claim
+
+- 2026-07-17: Dispatch nutzt nach Deadlock-Fix den lock-internen Claim-Helper;
+  ein Regressionstest patchte noch den alten oeffentlichen Claim und pruefte
+  dadurch keinen Race-Pfad.
+- Test patcht jetzt den tatsaechlichen Helper, bestaetigt waehrend Claim
+  `ja, laut` und prueft, dass der bereits beanspruchte Prompt storniert statt
+  versendet wird.
+- Tests: Notification-Loudness `166 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Test-Commit: `ba03ebce test: exercise loudness recheck after worker claim`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `4/20` Code-Commits. Kein
+Push. Restart nach 16 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
+
+### Gemini-Fallback-Keyring-Prioritaet
+
+- 2026-07-17: Der Gemini-Keyring kombiniert absichtlich instance-spezifische
+  Buckets mit globalen Buckets gleicher Accountposition als Fallback. Ein
+  Router-Test erwartete noch, dass globale Account-2-Schluessel komplett
+  verschwinden.
+- Erwartung auf reale Rotation `demo-a1, b1, demo-a2` angepasst. Globale
+  Account-1-Schluessel werden bei vorhandener Instanzposition nicht doppelt
+  eingefuegt; globale spaetere Positionen bleiben nutzbar.
+- Tests: LLM-Router-/Gemini-Keyring-Fokus `89 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Test-Commit: `6eb8332e test: align fallback keyring precedence`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `6/20` Code-Commits. Kein
+Push. Restart nach 14 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
