@@ -4696,3 +4696,24 @@ Commits.
 **Aktueller Laufstand:** Seit dem letzten Restart `13/20` Code-Commits. Kein
 Push. Restart nach 7 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
+
+### Pending-Flows-nach-Conversation-Scope
+
+- 2026-07-17: `RuntimeState` hatte nur einen Pending-Slot je
+  `(instance, account_id, flow_type)`. Startete derselbe Account denselben
+  Flow in Chat B, wurde Chat A still ueberschrieben; Follow-up in A lief ins
+  Leere.
+- Pending-Key akzeptiert jetzt optionalen Scope aus Kanal, Adapter-Slot,
+  Chattyp, Chat-ID und Identity. Engine und AccountCommandHandler reichen ihn
+  fuer RouteTo, Admin, Account-Edit, Emergency, Memory-Reset und YouTube durch.
+  Mehrere gleiche Flows bleiben parallel isoliert.
+- Unscoped Legacy-API bleibt kompatibel: eindeutiger scoped Flow wird gelesen,
+  mehrere scoped Flows werden absichtlich nicht geraten; alte 3-Tuple-States
+  bleiben lesbar.
+- Tests: Runtime-State `85 passed`, Engine-Identity `190 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c0fe55ae fix: scope pending flows per conversation`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `15/20` Code-Commits. Kein
+Push. Restart nach 5 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
