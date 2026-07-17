@@ -5495,6 +5495,7 @@ class BotTests(unittest.TestCase):
             recorded["tee_stdio"] = tee_stdio
 
         with (
+            patch.dict(os.environ, {}, clear=False),
             patch("TeeBotus.bot._load_runtime_environment", side_effect=fake_load_runtime_environment),
             patch("TeeBotus.runtime.maintenance.configure_runtime_logging", side_effect=fake_configure_runtime_logging),
             patch("TeeBotus.bot._runtime_config_from_main_args", side_effect=RuntimeError("stop")),
