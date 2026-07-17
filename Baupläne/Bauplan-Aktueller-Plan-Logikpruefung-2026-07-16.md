@@ -2730,6 +2730,23 @@ Restart nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### SQLite-Schema-Probe-behandelt-IO-Fehler
+
+- 2026-07-17: Der stabile SQLite-Open-/FD-Guard kann beim Schema-Probeweg
+  `OSError` liefern. `_missing_schema_table()` fing bisher nur
+  `sqlite3.Error`; dadurch erreichte Fallback-Recovery nicht die vorhandene
+  fail-closed-Diagnose `schema is unreadable`, sondern warf rohe IO-Fehler.
+- Schema-Probe klassifiziert jetzt `sqlite3.Error` und `OSError` gemeinsam als
+  `<unreadable>`. Automatische Reparatur bleibt bei vorhandener Sekundaer-DB
+  verweigert; Daten bleiben unangetastet.
+- Regression: SQLite-Schema-Reparatur mit stabilem Open-`OSError` -> `2 passed`;
+  komplette `tests/test_cinnamon_applet.py` -> `240 passed`. Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4e3788d3 fix: classify sqlite schema probe io failures`.
+
+**Aktueller Laufstand:** Seit dem Restart `15/20` Commits. Kein Push. Restart
+nach 5 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
 ### Applet-Health-bei-Runtime-Timeouts-nicht-leer-werfen
 
 - 2026-07-17: `TeeBotus.cinnamon_applet._run()` verwarf bei einem Timeout alle
