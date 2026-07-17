@@ -447,6 +447,9 @@ class TeeBotusEngine:
             )
         except (AccountStoreError, OSError, ValueError):
             return "Ich konnte die Erinnerung gerade nicht speichern."
+        except Exception:  # noqa: BLE001 - reminder backend failures must not abort message processing.
+            LOGGER.exception("Natural reminder processing failed account=%s", account_id)
+            return "Ich konnte die Erinnerung gerade nicht speichern."
 
     def _reply_buttons(self, command: str, account_id: str, instructions: BotInstructions) -> tuple[MessageButton, ...]:
         if command != "/start" or not account_id or not instructions.user_memory_enabled:

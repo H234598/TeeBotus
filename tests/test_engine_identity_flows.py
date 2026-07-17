@@ -1741,6 +1741,25 @@ def test_engine_natural_reminder_queues_private_proactive_message(tmp_path, monk
     assert rows[0]["route"]["chat_id"] == "chat-1"
 
 
+def test_engine_natural_reminder_reports_unexpected_backend_failure(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="chat-1", chat_type="private", adapter_slot=1)
+
+    def fail_reminder(*_args, **_kwargs):
+        raise RuntimeError("reminder backend unavailable")
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.maybe_queue_natural_reminder", fail_reminder)
+    actions = engine.process(event(identity, "Erinnere mich morgen um 9 an den Termin"))
+
+    assert account_id == account_store.get_account_for_identity(identity)
+    assert actions
+    assert "Erinnerung gerade nicht speichern" in actions[0].text
+
+
 def test_engine_natural_reminder_requires_instance_enablement(tmp_path, monkeypatch):
     monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", raising=False)
     monkeypatch.delenv("TEEBOTUS_PROACTIVE_AGENT_DEPRESSIONSBOT", raising=False)
