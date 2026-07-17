@@ -5958,6 +5958,7 @@ def test_account_metadata_health_lines_fail_closed_on_value_error(tmp_path: Path
     root = tmp_path / "accounts"
     metadata_path = root / "Account_Index.json"
     metadata_path.parent.mkdir(parents=True)
+    metadata_path.write_text("{\"accounts\": []}", encoding="utf-8")
     metadata_path.write_text("malformed", encoding="utf-8")
     account_dir = root / "accounts" / ("a" * 128)
     account_dir.mkdir(parents=True)
@@ -5993,6 +5994,25 @@ def test_account_metadata_health_lines_rejects_non_object_documents(tmp_path: Pa
 
     assert lines == [
         f"account_memory_metadata=Demo status=broken item=account_index path={metadata_path} error=metadata document is not an object",
+    ]
+
+
+def test_account_metadata_health_lines_rejects_invalid_account_index_shape(tmp_path: Path) -> None:
+    root = tmp_path / "accounts"
+    metadata_path = root / "Account_Index.json"
+    metadata_path.parent.mkdir(parents=True)
+    metadata_path.write_text("{\"accounts\": []}", encoding="utf-8")
+
+    class BrokenShapeVault:
+        def read_json(self, _path: Path, _default: object) -> object:
+            return {"accounts": []}
+
+    store = SimpleNamespace(root=root, vault=BrokenShapeVault(), accounts_dir=root / "accounts")
+
+    lines = _account_metadata_health_lines(store, [], instance_name="Demo")
+
+    assert lines == [
+        f"account_memory_metadata=Demo status=broken item=account_index path={metadata_path} error=account index accounts is not an object",
     ]
 
 

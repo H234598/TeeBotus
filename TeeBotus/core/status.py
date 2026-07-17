@@ -2139,6 +2139,8 @@ def _account_metadata_health_lines(store: AccountStore, account_dirs: list[Path]
             document = vault.read_json(path, {})
             if not isinstance(document, Mapping):
                 raise ValueError("metadata document is not an object")
+            if kind == "account_index" and not isinstance(document.get("accounts"), Mapping):
+                raise ValueError("account index accounts is not an object")
         except (AccountStoreError, OSError, ValueError) as exc:
             lines.append(_account_metadata_broken_line(instance_name=instance_name, kind=kind, path=path, error=str(exc)))
 
