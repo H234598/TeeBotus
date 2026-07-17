@@ -2908,6 +2908,24 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Secret-Rotation-Verifier-Rollback-ueber-stabile-Pfade
+
+- 2026-07-17: `rotate_secret()` las den alten Verifier mit
+  `exists()+read_bytes()` und entfernte einen neu erzeugten Verifier im
+  Rollback per `Path.unlink()`. Datei-/Parent-Swap konnte dadurch falschen
+  Zustand lesen oder fremde Ziele loeschen.
+- Der alte Verifier wird jetzt ueber stabilen Datei-FD gelesen. Wenn keiner
+  existiert, nutzt Rollback den bereits FD-gebundenen, regularen
+  Single-Link-Unlink-Helfer.
+- Regression: Rotation-/Rollback-Fokus -> `5 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `304 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c5d28dce fix: make secret rotation verifier rollback path-safe`.
+
+**Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
