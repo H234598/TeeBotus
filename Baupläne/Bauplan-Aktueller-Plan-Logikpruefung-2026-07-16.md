@@ -6424,6 +6424,24 @@ bleibt erst bei 100 Commits.
 `11/20` Commits. Kein Push. Restart nach 9 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Notification-Loudness bestaetigt trotz Outbox-Cleanup-Fehler
+
+- 2026-07-17: Der Response-Handler persistierte `confirmed`/`declined` zuerst
+  im Agent-State, liess danach aber einen Outbox-Cleanupfehler nach aussen
+  laufen. Dadurch bekam Nutzer keine Bestaetigung und Engine behandelte die
+  Antwort weiter als normale Nachricht.
+- Cleanupfehler werden jetzt geloggt und von der bereits sicheren Terminal-
+  Entscheidung getrennt. Nutzer bekommt Bestaetigung; der Dispatcher blockiert
+  weitere Loudness-Sendungen ueber den terminalen Agent-State.
+- Test: `tests/test_notification_loudness.py` `169 passed`; Regression fuer
+  Outbox-Write-Fehler nach Bestaetigung; Ruff und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `0e20d447 fix: preserve loudness confirmations after cleanup errors`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`13/20` Commits. Kein Push. Restart nach 7 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Admin-Status kapselt Route-Backendfehler
 
 - 2026-07-17: Admin-Statuszeilen sowie Runtime- und Benchmark-Summary-
