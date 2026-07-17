@@ -5171,6 +5171,23 @@ bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 `10/20` Commits. Kein Push. Restart nach 10 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Stale-Recovery respektiert Retry-Limit
+
+- 2026-07-17: Stale `dispatching`-Claims wurden nach Worker-Crash immer wieder
+  auf `queued` gesetzt. Das umging `PROACTIVE_DISPATCH_MAX_ATTEMPTS` und konnte
+  bei wiederholten Crashes unbegrenzt erneute Sendungen ausloesen.
+- Recovery setzt Claims am Versuchslimit jetzt fail-closed auf `failed`,
+  entfernt den Lease und schreibt die Begrenzung in `status_history`. Der
+  reine Recovery-Fall persistiert auch dann, wenn kein Claim requeued wird.
+- Test: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `222 passed`; Crash-Recovery-Fokus `4 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b10182ab fix: cap stale proactive dispatch recovery`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`12/20` Commits. Kein Push. Restart nach 8 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Runtime-Status zeigt Legacy-OpenAI-Modell
 
 - 2026-07-17: Legacy-Konfiguration aus `Bot_Verhalten.md` verwendete im
