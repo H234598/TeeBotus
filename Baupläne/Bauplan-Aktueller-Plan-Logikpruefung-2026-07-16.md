@@ -6240,3 +6240,18 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `11/20` Commits. Kein Push. Restart nach 9 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Review meldet kaputte Outbox-Shapes
+
+- 2026-07-17: Der Review-Scanner iterierte jede lesbare Outbox blind. Ein
+  Mapping statt Liste oder ein nicht-objektartiger Listeneintrag wurde still
+  uebersprungen; kaputte Reviewdaten erschienen als gesunder Leerstand.
+- Nicht-listige Outboxen und kaputte Eintraege erzeugen jetzt strukturierte
+  Fehler. Gueltige Items werden weiterhin gesammelt; Report `ok` wird false.
+- Test: `tests/test_proactive_review.py` `15 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9ad3061d fix: report corrupt proactive review outbox`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`13/20` Commits. Kein Push. Restart nach 7 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
