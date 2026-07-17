@@ -1045,7 +1045,7 @@ def test_loudness_paths_fail_closed_when_agent_state_storage_is_unavailable(tmp_
     original_read = account_store.read_agent_state
 
     def unavailable(_account_id):
-        raise AccountStoreError("agent state unavailable")
+        raise RuntimeError("agent state unavailable")
 
     account_store.read_agent_state = unavailable  # type: ignore[method-assign]
 

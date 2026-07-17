@@ -4,7 +4,7 @@ from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping
 
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, utc_now
+from TeeBotus.runtime.accounts import AccountStore, utc_now
 from TeeBotus.runtime.action_buttons import NOTIFICATION_LOUDNESS_BUTTONS
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.activity_profile import contact_timing_decision
@@ -1738,7 +1738,7 @@ def maybe_handle_notification_loudness_response(
             _cancel_pending_notification_loudness_items(account_store, account_id, event)
             text = NOTIFICATION_LOUDNESS_CONFIRMED_REPLY if decision == "confirmed" else NOTIFICATION_LOUDNESS_DECLINED_REPLY
             return (SendText(event.chat_id, text, track=False),)
-    except (AccountStoreError, OSError, ValueError):
+    except Exception:  # noqa: BLE001 - message handling must fail closed on backend errors.
         return None
 
 
@@ -1777,7 +1777,7 @@ def maybe_notification_loudness_prompt_action(
             _mark_notification_loudness_prompted(route_state, event, resolved_now)
             account_store.write_agent_state(account_id, state)
             return SendText(event.chat_id, NOTIFICATION_LOUDNESS_PROMPT, track=False, buttons=NOTIFICATION_LOUDNESS_BUTTONS)
-    except (AccountStoreError, OSError, ValueError):
+    except Exception:  # noqa: BLE001 - message handling must fail closed on backend errors.
         return None
 
 
@@ -1790,7 +1790,7 @@ def queue_due_notification_loudness_prompts(
     try:
         with _account_proactive_outbox_lock(account_store, account_id):
             return _queue_due_notification_loudness_prompts_unlocked(account_store, account_id, now=now)
-    except (AccountStoreError, OSError, ValueError):
+    except Exception:  # noqa: BLE001 - scheduler must fail closed on backend errors.
         return ()
 
 
