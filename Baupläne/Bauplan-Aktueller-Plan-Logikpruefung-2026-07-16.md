@@ -6331,8 +6331,10 @@ bleibt erst bei 100 Commits.
 - Code-Commit: `871ad94a fix: keep proactive plans alive when audit fails`.
 
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
-`19/20` Commits. Kein Push. Restart nach 1 weiterem Commit. Naechster Push
-bleibt erst bei 100 Commits.
+`8507bab8 docs: record proactive audit guard` machte `20/20` voll; Restart ist
+erfolgt. Seit diesem Plan-Commit neuer Zyklus `1/20` Commits. Kein Push.
+Naechster Restart nach 19 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
 
 ### Admin-Status kapselt Route-Backendfehler
 
