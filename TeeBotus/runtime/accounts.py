@@ -1343,11 +1343,23 @@ def _serialize_identity_map(method: Callable[..., Any]) -> Callable[..., Any]:
     return wrapped
 
 
+@contextmanager
+def _account_memory_backend_operation_lock(store: "AccountStore") -> Iterator[None]:
+    backend = store.account_memory_backend
+    lock = getattr(backend, "_operation_lock", None) if backend is not None else None
+    if lock is None:
+        yield
+        return
+    with lock:
+        yield
+
+
 def _serialize_account_memory(method: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(method)
     def wrapped(self: "AccountStore", account_id: str, *args: Any, **kwargs: Any) -> Any:
         with self.account_memory_lock(account_id):
-            return method(self, account_id, *args, **kwargs)
+            with _account_memory_backend_operation_lock(self):
+                return method(self, account_id, *args, **kwargs)
 
     return wrapped
 
@@ -1364,9 +1376,11 @@ def _serialize_account_memory_pair(method: Callable[..., Any]) -> Callable[..., 
         account_ids = sorted({str(source_account_id), str(target_account_id)})
         with self.account_memory_lock(account_ids[0]):
             if len(account_ids) == 1:
-                return method(self, source_account_id, target_account_id, *args, **kwargs)
+                with _account_memory_backend_operation_lock(self):
+                    return method(self, source_account_id, target_account_id, *args, **kwargs)
             with self.account_memory_lock(account_ids[1]):
-                return method(self, source_account_id, target_account_id, *args, **kwargs)
+                with _account_memory_backend_operation_lock(self):
+                    return method(self, source_account_id, target_account_id, *args, **kwargs)
 
     return wrapped
 
@@ -1375,7 +1389,8 @@ def _serialize_instance_memory(method: Callable[..., Any]) -> Callable[..., Any]
     @wraps(method)
     def wrapped(self: "AccountStore", *args: Any, **kwargs: Any) -> Any:
         with self.account_memory_lock(INSTANCE_STATE_ACCOUNT_ID):
-            return method(self, *args, **kwargs)
+            with _account_memory_backend_operation_lock(self):
+                return method(self, *args, **kwargs)
 
     return wrapped
 

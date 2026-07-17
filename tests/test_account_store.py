@@ -56,6 +56,60 @@ def provider() -> StaticSecretProvider:
     return StaticSecretProvider(b"a" * 32)
 
 
+def test_account_memory_diagnostics_are_serialized_across_accounts(tmp_path) -> None:
+    class DiagnosticBackend:
+        def __init__(self) -> None:
+            self._operation_lock = threading.RLock()
+            self.active = 0
+            self.max_active = 0
+            self._active_lock = threading.Lock()
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+            self.last_index_read_error = ""
+            self.last_database_missing = False
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            with self._active_lock:
+                self.active += 1
+                self.max_active = max(self.max_active, self.active)
+            self.last_entry_read_error = f"entry diagnostic {account_id}"
+            try:
+                threading.Event().wait(0.02)
+                return [{"id": f"memory-{account_id}"}]
+            finally:
+                with self._active_lock:
+                    self.active -= 1
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_ids = [
+        store.resolve_or_create_account(telegram_identity_key(1)),
+        store.resolve_or_create_account(telegram_identity_key(2)),
+    ]
+    backend = DiagnosticBackend()
+    store._account_memory_backend = backend
+    start = threading.Barrier(len(account_ids))
+    results: dict[str, object] = {}
+
+    def check(account_id: str) -> None:
+        start.wait()
+        results[account_id] = store.check_structured_memory_index(account_id)
+
+    threads = [threading.Thread(target=check, args=(account_id,)) for account_id in account_ids]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=2)
+
+    assert all(not thread.is_alive() for thread in threads)
+    assert backend.max_active == 1
+    for account_id in account_ids:
+        health = results[account_id]
+        assert f"entry diagnostic {account_id}" in " ".join(health.errors)  # type: ignore[union-attr]
+
+
 def test_secret_tool_provider_caches_lookup_result(monkeypatch) -> None:
     first = b"a" * 32
     second = b"b" * 32

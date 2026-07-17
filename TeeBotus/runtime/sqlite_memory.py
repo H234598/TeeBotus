@@ -152,6 +152,9 @@ class SQLiteAccountMemoryBackend:
         self.provider = provider
         self.purpose = purpose
         self.config = config
+        # Diagnostics live on backend instance; serialize calls so a different
+        # account cannot overwrite them before AccountStore reads the result.
+        self._operation_lock = threading.RLock()
         self._initialized = False
         self._schema_file_identity: tuple[int, int] | None = None
         self.last_entry_read_error = ""
