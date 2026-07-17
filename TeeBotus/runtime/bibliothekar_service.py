@@ -196,10 +196,9 @@ class HaystackBibliothekarBackend:
         return _selection_from_chunks(index, _apply_chunk_filters(chunks, query.filters), query)
 
     def rebuild(self) -> dict[str, Any]:
-        index = self.fallback_store.rebuild()
+        index, chunks = self.fallback_store.rebuild_snapshot()
         if not self.available:
             return index
-        chunks = self.fallback_store.read_chunks()
         documents = [self._document_from_chunk(chunk) for chunk in chunks]
         document_store = self._document_store()
         self._delete_stale_documents(document_store, current_ids={str(getattr(document, "id", "")) for document in documents if str(getattr(document, "id", ""))})

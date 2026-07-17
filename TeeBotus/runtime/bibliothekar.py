@@ -199,6 +199,11 @@ class BibliothekarStore:
         with self._storage_lock():
             return self._rebuild_unlocked()
 
+    def rebuild_snapshot(self) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        with self._storage_lock():
+            index = self._rebuild_unlocked()
+            return index, _read_chunks(self.chunks_path)
+
     def ensure_current(self) -> None:
         with self._storage_lock():
             self._ensure_current_unlocked()

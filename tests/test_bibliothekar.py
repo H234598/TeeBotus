@@ -949,6 +949,43 @@ def test_haystack_backend_rebuilds_document_store_and_searches_from_it(tmp_path)
     assert payload["selected_library_chunks"][0]["citation_format"].startswith("[Quelle:")
 
 
+def test_haystack_backend_rebuild_uses_atomic_local_snapshot(tmp_path, monkeypatch):
+    document_store = FakeDocumentStore()
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    chunk = {
+        "chunk_id": "snapshot-chunk",
+        "document_id": "snapshot-document",
+        "title": "snapshot",
+        "relative_path": "snapshot.txt",
+        "file_path": "snapshot.txt",
+        "file_sha256": "a" * 64,
+        "file_type": "txt",
+        "language": "de",
+        "locator": "Zeilen 1-1",
+        "license": "private",
+        "ingested_at": "2026-07-17T00:00:00Z",
+        "embedding_model": "intfloat/multilingual-e5-small",
+        "topics": [],
+        "categories": [],
+        "text": "snapshot text",
+    }
+    snapshot_index = {"chunk_count": 1, "documents": {"snapshot-document": {}}}
+    monkeypatch.setattr(store, "rebuild_snapshot", lambda: (snapshot_index, [chunk]))
+    monkeypatch.setattr(store, "rebuild", lambda: (_ for _ in ()).throw(AssertionError("separate rebuild must not be used")))
+    backend = HaystackBibliothekarBackend(
+        instance_name="Depressionsbot",
+        instances_dir=tmp_path / "instances",
+        fallback_store=store,
+        document_store_factory=lambda: document_store,
+        document_class=FakeDocument,
+    )
+
+    index = backend.rebuild()
+
+    assert index is snapshot_index
+    assert [document.id for document in document_store.documents] == ["snapshot-chunk"]
+
+
 def test_haystack_backend_custom_document_store_write_avoids_haystack_policy_import(tmp_path):
     library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
     library_dir.mkdir(parents=True)
