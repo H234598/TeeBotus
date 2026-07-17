@@ -5428,6 +5428,23 @@ bleibt erst bei 100 Commits.
 `14/20` Commits. Kein Push. Restart nach 6 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Consent deaktiviert Agent bei null Kategorien
+
+- 2026-07-17: `set_proactive_categories(..., ())` liess den Agenten aktiviert,
+  obwohl kein Consent-Kanal mehr vorhanden war. Health meldete dadurch
+  `proactive enabled without consent categories`; Scheduler blieb wirkungslos.
+- Leere Kategorien setzen jetzt `proactive.enabled=False` und loeschen keinen
+  Consent-Verlauf. `resume`/`enable` mit Kategorien aktiviert gezielt wieder;
+  kein implizites Reaktivieren.
+- Test: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `214 passed`; Consent-Fokus `2 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d5f6bdde fix: disable proactive agent without consent categories`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`16/20` Commits. Kein Push. Restart nach 4 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
