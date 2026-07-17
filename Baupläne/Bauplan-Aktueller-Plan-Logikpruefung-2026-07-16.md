@@ -7104,6 +7104,22 @@ Commits. Kein Push. Restart nach 4 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `17/20` sichtbar.
 
+### Account-Edit-Teilmutationen bleiben sichtbar
+
+- 2026-07-17: `/account_edit` konnte Secret rotieren oder Kanal trennen und
+  danach bei `pop_pending_flow()` scheitern. Globaler Safety-Rand meldete dann
+  keinen erfolgten Change bzw. verschluckte neues Secret.
+- Post-Mutation-Cleanup ist jetzt best-effort. Neues Secret bzw. erfolgte
+  Trennung werden mit Hinweis auf offenen internen Status ausgegeben.
+- Test: fokussierter Account-Edit-Pfad `7 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c54d34f7 fix: preserve account edit mutations on cleanup failure`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `18/20`
+Commits. Kein Push. Restart nach 2 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `19/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
