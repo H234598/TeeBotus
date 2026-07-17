@@ -3619,3 +3619,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `16/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 4 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Recovery-Discovery-behaelt-dangling-SQLite-Quellen
+
+- 2026-07-17: Primary-/Fallback-Symlinks wurden wegen `exists()` nicht als
+  Recovery-Quellen aufgenommen. Zusaetzlich konnte `source.path.resolve()` bei
+  einer Symlink-Schleife den gesamten Report abbrechen.
+- Symlink-Quellen werden jetzt auch dangling erfasst und spaeter als unlesbar
+  geprüft. `resolve()`-Fehler pro Quelle werden isoliert; der Report laeuft
+  weiter und verschweigt keine kaputten SQLite-Artefakte.
+- Regression: dangling-/looped-SQLite-Source-Discovery plus Snapshot-Fokus ->
+  `3 passed`; komplette `tests/test_admin_accounts.py` -> `107 passed`. Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `846a4ba2 fix: retain broken sqlite sources during recovery discovery`.
+
+**Aktueller Laufstand:** Seit dem Restart `18/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 2 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
