@@ -8037,6 +8037,19 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `16/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### Aktueller Stand nach Restart: Notification-Loudness-State gesichert
+
+- Code-Commit `1e661f0d` schuetzt Loudness-Prompt, Antwort und Scheduler mit
+  `proactive_outbox -> account_memory`; konkurrierende Agent-State-Updates
+  bleiben erhalten.
+- Verifikation: Loudness `173 passed`, Engine `284 passed`, Compile und
+  Diff-Check gruen; kein Provider/API-Aufruf.
+- Restart: `systemctl --user restart teebotus.service` erfolgreich,
+  Service `active`.
+
+**Aktueller Laufstand:** Seit dem Restart `0/20` Code-Commits. Kein Push.
+Restart nach weiteren 20 Code-Fixes.
+
 ### Proactive-LLM-Plan: parallele identische Entscheidungen idempotent anwenden
 
 - 2026-07-18: Zwei gleichzeitig laufende LLM-/Tool-Planner konnten denselben
@@ -8057,6 +8070,25 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `19/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Notification-Loudness: Agent-State-Read-Modify-Write atomar sichern
+
+- 2026-07-18: Loudness-Prompt, Loudness-Antwort und Scheduler hielten nur den
+  Proactive-Outbox-Lock. Parallel laufende Aktivitaets-, Wetter- oder TTS-
+  Updates konnten deshalb einen frisch geaenderten `Agent_State` mit einem
+  alten Snapshot ueberschreiben.
+- Alle drei Einstiegspunkte halten jetzt `proactive_outbox -> account_memory`
+  gemeinsam. Verschachtelte State-/Outbox-Operationen bleiben reentrant und
+  behalten die bestehende Lock-Reihenfolge.
+- Test: paralleler State-Writer bleibt erhalten; komplette
+  `tests/test_notification_loudness.py` -> `173 passed`; komplette
+  `tests/test_engine_identity_flows.py` -> `284 passed`; `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf. Ruff-Executable in
+  aktueller Umgebung nicht installiert.
+- Code-Commit: `1e661f0d fix: serialize loudness agent state updates`.
+
+**Aktueller Laufstand:** Seit dem Restart `0/20` Code-Commits. Kein Push.
+Restart nach weiteren 20 Code-Fixes.
 
 ### Stateful-LLM-Lock: keinen Deadlock mit Proactive-Locks erzeugen
 
@@ -8276,5 +8308,15 @@ Push. Restart erst bei `20/20`.
   `git diff --check` gruen. Kein Provider/API-Aufruf.
 * Code-Commit: `34723ccc fix: serialize stateful llm account chains`.
 
-**Aktueller Laufstand:** Seit dem letzten Restart `16/20` Code-Commits. Kein
-Push. Restart erst bei `20/20`.
+### Aktueller Stand nach Restart: Notification-Loudness-State gesichert
+
+- Code-Commit `1e661f0d` schuetzt Loudness-Prompt, Antwort und Scheduler mit
+  `proactive_outbox -> account_memory`; konkurrierende Agent-State-Updates
+  bleiben erhalten.
+- Verifikation: Loudness `173 passed`, Engine `284 passed`, Compile und
+  Diff-Check gruen; kein Provider/API-Aufruf.
+- Restart: `systemctl --user restart teebotus.service` erfolgreich,
+  Service `active`.
+
+**Aktueller Laufstand:** Seit dem Restart `0/20` Code-Commits. Kein Push.
+Restart nach weiteren 20 Code-Fixes.
