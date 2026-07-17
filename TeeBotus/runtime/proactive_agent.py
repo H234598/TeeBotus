@@ -175,6 +175,13 @@ class ProactiveLLMPlanningResult:
     errors: tuple[str, ...] = ()
     audit_event_ids: tuple[str, ...] = ()
 
+    def __post_init__(self) -> None:
+        object.__setattr__(
+            self,
+            "audit_event_ids",
+            tuple(str(event_id).strip() for event_id in self.audit_event_ids if str(event_id).strip()),
+        )
+
 
 @dataclass(frozen=True)
 class ProactiveAgentToolCall:
@@ -3293,7 +3300,11 @@ def _append_proactive_llm_audit_event(
         event["payload"] = _compact_audit_value(payload)
     if plan_text:
         event["plan_text_preview"] = _safe_llm_text(plan_text, max_chars=600)
-    return account_store.append_proactive_audit_event(account_id, event)
+    try:
+        return account_store.append_proactive_audit_event(account_id, event)
+    except Exception:  # noqa: BLE001 - audit loss must not abort safe plan handling.
+        LOGGER.exception("Proactive LLM audit persistence failed account=%s event=%s", account_id, event.get("event_type"))
+        return ""
 
 
 def _compact_audit_value(value: Any, *, max_string_chars: int = 400, max_items: int = 12) -> Any:

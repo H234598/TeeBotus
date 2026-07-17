@@ -2815,6 +2815,45 @@ def test_llm_plan_reports_queue_persistence_failure(tmp_path, monkeypatch) -> No
     assert account_store.read_proactive_outbox(account_id) == []
 
 
+def test_llm_plan_survives_audit_persistence_failure(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="cancel_without_audit",
+        message_text="Trotz Auditfehler sicher abbrechen",
+        due_at="2026-06-15T13:00:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+
+    def fail_audit_write(*_args, **_kwargs):
+        raise OSError("audit backend unavailable")
+
+    monkeypatch.setattr(account_store, "append_proactive_audit_event", fail_audit_write)
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {
+            "schema_version": 1,
+            "decisions": [
+                {"action": "cancel", "item_id": item_id, "reason": "nicht mehr passend"},
+                {"action": "unsupported", "reason": "audit still must not crash"},
+            ],
+        },
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ("decision_1_unsupported_action:unsupported",)
+    assert result.audit_event_ids == ()
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "cancelled"
+
+
 def test_llm_planner_prompt_includes_queued_outbox_ids_for_cancel_snooze(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
