@@ -3074,6 +3074,85 @@ def test_disabled_proactive_account_blocks_llm_cancel_and_snooze(tmp_path) -> No
     assert item["due_at"] == "2026-06-16T09:30:00+00:00"
 
 
+def test_corrupt_enabled_state_without_consent_blocks_all_model_mutations(tmp_path) -> None:
+    class Client:
+        def create_reply(self, *_args):
+            raise AssertionError("missing proactive consent must not call the LLM")
+
+        def create_tool_calls(self, *_args):
+            raise AssertionError("missing proactive consent must not call the tool agent")
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="protected_item",
+        message_text="Nicht mutieren",
+        due_at="2026-06-16T09:30:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    account_store.write_agent_state(
+        account_id,
+        {
+            "schema_version": 1,
+            "proactive": {"enabled": True, "paused": False},
+            "consent": {"categories": []},
+        },
+    )
+
+    health = check_proactive_agent_account(account_store, account_id)
+    assert health.ok is False
+    assert "proactive enabled without consent categories" in health.errors
+    assert should_run_proactive_model_planner(account_store, account_id) == (False, "proactive_no_consent")
+    assert run_proactive_reflection_planner(account_store, account_id).skipped_reason == "proactive_no_consent"
+    llm_result = run_proactive_llm_planner(
+        account_store,
+        account_id,
+        openai_client=Client(),
+        instructions=object(),
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    tool_result = run_proactive_tool_agent(
+        account_store,
+        account_id,
+        openai_client=Client(),
+        instructions=object(),
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    direct_result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {
+            "schema_version": 1,
+            "decisions": [
+                {"action": "memory", "kind": "reflection", "text": "Nicht speichern."},
+                {"action": "cancel", "item_id": item_id},
+                {"action": "snooze", "item_id": item_id, "due_at": "2026-06-17T09:30:00+00:00"},
+            ],
+        },
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert llm_result.errors == ("proactive_no_consent",)
+    assert tool_result.errors == ("proactive_no_consent",)
+    assert direct_result.errors == (
+        "decision_0_proactive_no_consent",
+        "decision_1_proactive_no_consent",
+        "decision_2_proactive_no_consent",
+    )
+    assert account_store.read_memory_entries(account_id) == []
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["id"] == item_id
+    assert item["status"] == "queued"
+    assert item["due_at"] == "2026-06-16T09:30:00+00:00"
+
+
 def test_llm_planner_prompt_has_schema_and_memory_context(tmp_path) -> None:
     account_store = store(tmp_path)
     account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))

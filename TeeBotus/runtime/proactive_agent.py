@@ -608,10 +608,9 @@ def _run_proactive_reflection_planner(
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
     if max_items <= 0:
         return ProactivePlanningResult(account_id, skipped_reason="max_items_reached")
-    if not state["proactive"]["enabled"]:
-        return ProactivePlanningResult(account_id, skipped_reason="proactive_disabled")
-    if state["proactive"].get("paused") is True:
-        return ProactivePlanningResult(account_id, skipped_reason="proactive_paused")
+    skip_reason = _proactive_planner_skip_reason(state)
+    if skip_reason:
+        return ProactivePlanningResult(account_id, skipped_reason=skip_reason)
     if active_proactive_risk_memory_ids(account_store, account_id, now=resolved_now):
         return ProactivePlanningResult(account_id, skipped_reason="active_risk_signal")
     created_memory_ids: list[str] = []
@@ -715,6 +714,16 @@ def _proactive_planning_disabled_result(
     return ProactiveLLMPlanningResult(account_id, errors=(reason,), audit_event_ids=(audit_id,))
 
 
+def _proactive_planner_skip_reason(state: Mapping[str, Any]) -> str | None:
+    if not state["proactive"]["enabled"]:
+        return "proactive_disabled"
+    if state["proactive"].get("paused") is True:
+        return "proactive_paused"
+    if not state["consent"]["categories"]:
+        return "proactive_no_consent"
+    return None
+
+
 def run_proactive_llm_planner(
     account_store: AccountStore,
     account_id: str,
@@ -726,20 +735,14 @@ def run_proactive_llm_planner(
 ) -> ProactiveLLMPlanningResult:
     resolved_now = _resolve_proactive_now(now)
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
-    if not state["proactive"]["enabled"]:
+    skip_reason = _proactive_planner_skip_reason(state)
+    if skip_reason:
         return _proactive_planning_disabled_result(
             account_store,
             account_id,
             event_type="llm_plan_skipped",
             now=resolved_now,
-        )
-    if state["proactive"].get("paused") is True:
-        return _proactive_planning_disabled_result(
-            account_store,
-            account_id,
-            event_type="llm_plan_skipped",
-            now=resolved_now,
-            reason="proactive_paused",
+            reason=skip_reason,
         )
     prompt = build_proactive_llm_planner_prompt(account_store, account_id, max_memory_chars=max_memory_chars)
     response = openai_client.create_reply(prompt, instructions)
@@ -757,20 +760,14 @@ def run_proactive_tool_agent(
 ) -> ProactiveLLMPlanningResult:
     resolved_now = _resolve_proactive_now(now)
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
-    if not state["proactive"]["enabled"]:
+    skip_reason = _proactive_planner_skip_reason(state)
+    if skip_reason:
         return _proactive_planning_disabled_result(
             account_store,
             account_id,
             event_type="tool_agent_skipped",
             now=resolved_now,
-        )
-    if state["proactive"].get("paused") is True:
-        return _proactive_planning_disabled_result(
-            account_store,
-            account_id,
-            event_type="tool_agent_skipped",
-            now=resolved_now,
-            reason="proactive_paused",
+            reason=skip_reason,
         )
     prompt = build_proactive_tool_agent_prompt(account_store, account_id, max_memory_chars=max_memory_chars)
     tool_definitions = proactive_agent_tool_definitions()
@@ -805,10 +802,9 @@ def run_proactive_tool_agent(
 
 def should_run_proactive_model_planner(account_store: AccountStore, account_id: str) -> tuple[bool, str]:
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
-    if not state["proactive"]["enabled"]:
-        return False, "proactive_disabled"
-    if state["proactive"].get("paused") is True:
-        return False, "proactive_paused"
+    skip_reason = _proactive_planner_skip_reason(state)
+    if skip_reason:
+        return False, skip_reason
     candidates = _proactive_planner_candidates(account_store, account_id)
     if candidates:
         return True, "planner_candidates"
@@ -2507,8 +2503,11 @@ def _apply_proactive_llm_memory_decision(
         return "error:missing_memory_text"
     if _text_has_unsafe_clinical_claim(text):
         return "error:unsafe_memory_text"
-    if not _normalized_agent_state(account_store.read_agent_state(account_id))["proactive"]["enabled"]:
+    state = _normalized_agent_state(account_store.read_agent_state(account_id))
+    if not state["proactive"]["enabled"]:
         return "error:proactive_disabled"
+    if not state["consent"]["categories"]:
+        return "error:proactive_no_consent"
     source_ids = _valid_memory_ids(decision.get("source_memory_ids"), memory_ids)
     relations = [
         {
@@ -2742,8 +2741,11 @@ def _apply_proactive_llm_cancel_decision(
     decision: Mapping[str, Any],
     now: datetime,
 ) -> str:
-    if not _normalized_agent_state(account_store.read_agent_state(account_id))["proactive"]["enabled"]:
+    state = _normalized_agent_state(account_store.read_agent_state(account_id))
+    if not state["proactive"]["enabled"]:
         return "error:proactive_disabled"
+    if not state["consent"]["categories"]:
+        return "error:proactive_no_consent"
     item_id = str(decision.get("item_id") or "").strip()
     if not item_id:
         return "error:missing_item_id"
@@ -2769,8 +2771,11 @@ def _apply_proactive_llm_snooze_decision(
     decision: Mapping[str, Any],
     now: datetime,
 ) -> str:
-    if not _normalized_agent_state(account_store.read_agent_state(account_id))["proactive"]["enabled"]:
+    state = _normalized_agent_state(account_store.read_agent_state(account_id))
+    if not state["proactive"]["enabled"]:
         return "error:proactive_disabled"
+    if not state["consent"]["categories"]:
+        return "error:proactive_no_consent"
     item_id = str(decision.get("item_id") or "").strip()
     if not item_id:
         return "error:missing_item_id"
