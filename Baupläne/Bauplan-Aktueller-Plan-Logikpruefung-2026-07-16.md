@@ -2747,6 +2747,25 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `15/20` Commits. Kein Push. Restart
 nach 5 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### Applet-Health-verlangt-bestaetigten-LLM-Fallback
+
+- 2026-07-17: Der Applet-Classifier stufte `structured_decision` mit
+  `route_status=unavailable` als Information ein, sobald irgendein
+  `fallback=...` gesetzt war. Ein bloss konfigurierter Fallback belegt aber
+  nicht, dass Ersatzroute funktioniert oder aktiv ist.
+- Downgrade zu Information erfolgt jetzt nur bei verifiziertem
+  `effective_status` aus der gesunden Statusmenge. Unverifizierte
+  Provider-/Routenfehler bleiben im Healthkopf handlungsrelevant.
+- Regression: gezielter Fallback-/Health-Fokus -> `31 passed`; komplette
+  `tests/test_cinnamon_applet.py` -> `240 passed`. Ruff mit bekannten alten
+  `F541`-Warnungen ausgenommen, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `b55f4b32 fix: require verified applet fallback status`.
+
+**Aktueller Laufstand:** Seit dem Restart `17/20` Commits. Dieser Plan-Commit
+zaehlt mit: `18/20`. Kein Push. Restart nach 2 weiteren Commits. Naechster
+Push bleibt erst bei 100 Commits.
+
 ### Applet-Health-bei-Runtime-Timeouts-nicht-leer-werfen
 
 - 2026-07-17: `TeeBotus.cinnamon_applet._run()` verwarf bei einem Timeout alle
