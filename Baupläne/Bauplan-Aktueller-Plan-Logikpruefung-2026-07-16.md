@@ -5203,6 +5203,23 @@ bleibt erst bei 100 Commits.
 `6/20` Commits. Kein Push. Restart nach 14 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Claim lehnt kaputte Versuchszahler ab
+
+- 2026-07-17: Der zentrale `queued -> dispatching`-Pfad behandelte einen
+  nicht numerischen `dispatch_attempts`-Wert wie `0` und schrieb still `1`.
+  Damit konnte ein kaputter Retry-Zustand unbemerkt werden.
+- Worker-Claims mit ungueltigem Versuchszahler brechen jetzt vor jeder
+  Mutation ab. Der Outbox-Status und Rohwert bleiben fuer Diagnose und
+  Reparatur erhalten. Negative numerische Werte bleiben wie bisher auf `0`
+  geklemmt.
+- Test: `tests/test_proactive_agent.py` `167 passed`; Retry-Fokus `3 passed`;
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `917e0d3b fix: fail closed on corrupt proactive attempts`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`8/20` Commits. Kein Push. Restart nach 12 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Consentzustand fail-closed bei korruptem enabled-State
 
 - 2026-07-17: Ein inkonsistenter Agent-State mit `enabled=true`, aber leerem
