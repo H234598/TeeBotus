@@ -190,6 +190,29 @@ def test_proactive_review_store_error_keeps_target_metadata(tmp_path: Path) -> N
     }
 
 
+def test_proactive_review_action_runtime_error_keeps_structured_report(tmp_path: Path, monkeypatch) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    (instance_dir / "data" / "accounts").mkdir(parents=True)
+
+    def broken_approval(*_args, **_kwargs):
+        raise RuntimeError("policy backend unavailable")
+
+    monkeypatch.setattr("TeeBotus.proactive_review.approve_proactive_review_item", broken_approval)
+    report = review_proactive_item(
+        instances_dir=tmp_path / "instances",
+        instance_name="Depressionsbot",
+        account_id="a" * 128,
+        item_id="pro_bad",
+        action="approve",
+        store_factory=lambda *_args: object(),
+    )
+
+    assert report["ok"] is False
+    assert report["reason"] == "review_store_error:RuntimeError: policy backend unavailable"
+    assert report["account_id"] == "a" * 128
+    assert report["item_id"] == "pro_bad"
+
+
 def test_proactive_review_approve_queues_item(tmp_path: Path) -> None:
     _instance_dir, store, account_id, item_id = _review_fixture(tmp_path)
 

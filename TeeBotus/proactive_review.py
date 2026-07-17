@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, TOKEN_HEX_RE
+from TeeBotus.runtime.accounts import AccountStore, TOKEN_HEX_RE
 from TeeBotus.runtime.proactive_agent import approve_proactive_review_item, reject_proactive_review_item
 
 StoreFactory = Callable[[Path, str], AccountStore]
@@ -183,7 +183,7 @@ def review_proactive_item(
             decision = approve_proactive_review_item(store, account_id, item_id, reviewer=reviewer, reason=reason, now=timestamp)
         else:
             decision = reject_proactive_review_item(store, account_id, item_id, reviewer=reviewer, reason=reason, now=timestamp)
-    except (AccountStoreError, OSError, ValueError) as exc:
+    except Exception as exc:  # noqa: BLE001 - review CLI must return structured failures.
         return {
             "ok": False,
             "action": normalized_action,
