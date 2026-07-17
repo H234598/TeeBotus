@@ -3101,6 +3101,43 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### SQLite-Parent-Erstellung-ueber-stabile-Directory-FDs
+
+- 2026-07-17: `SQLiteAccountMemoryBackend._connect()` legte fehlende
+  Parent-Verzeichnisse mit `Path.mkdir()` an und oeffnete sie erst danach
+  stabil. Ein Parent-Redirect-Race konnte dadurch Verzeichnisse ausserhalb des
+  vorgesehenen Baums erzeugen.
+- Der stabile SQLite-Directory-Walker erzeugt fehlende Komponenten jetzt
+  relativ zu bereits geprueften `O_NOFOLLOW|O_DIRECTORY`-FDs. Read-only-Pfade
+  erzeugen weiterhin nichts; Symlink-Komponenten bleiben blockiert.
+- Regression: SQLite-Parent-/Symlink-Fokus -> `3 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `308 passed`; `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4a12f7bf fix: create sqlite parents through stable descriptors`.
+
+**Aktueller Laufstand:** Seit dem Restart `12/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 8 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
+### Leere-Fallback-Collection-Liste-ist-gueltiger-Zustand
+
+- 2026-07-17: `WarningFallbackAccountMemoryBackend.read_collection_names()`
+  behandelte eine erfolgreich gelesene leere Liste aus dem Fallback als
+  „keine recoverbaren Daten“. Accounts ohne Collections wurden dadurch trotz
+  intakter Sicherung hart blockiert.
+- Eine frische, diagnostikfreie leere Fallback-Liste wird jetzt als gueltiger
+  leerer Zustand zurueckgegeben. Bereits offene Reparaturen oder Dirty-
+  Collections bleiben fail-closed und werden nicht durch leere Daten
+  quittiert.
+- Regression: Collection-Name-Fokus -> `5 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `308 passed`; `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `90ac50c6 fix: accept empty fallback collection lists`.
+
+**Aktueller Laufstand:** Seit dem Restart `14/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 6 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
