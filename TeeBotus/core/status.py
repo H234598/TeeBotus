@@ -1963,7 +1963,11 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
             has_broken_metadata = True
         try:
             with _suppress_expected_account_memory_health_logs():
-                health = store.check_structured_memory_index(account_id, require_resolvable=require_resolvable and not profile_error)
+                health = store.check_structured_memory_index(
+                    account_id,
+                    require_resolvable=require_resolvable and not profile_error,
+                    read_only=True,
+                )
         except AccountStoreError as exc:
             lines.append(
                 f"account_memory={safe_instance_name}/{account_id} status=broken "

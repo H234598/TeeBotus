@@ -159,11 +159,27 @@ class PostgresAccountMemoryBackend:
             self._cipher_key = key
         return self._cipher
 
+    def _ensure_schema_readonly(self) -> None:
+        with self._connect() as connection:
+            missing_object = self._missing_schema_object(connection)
+        if missing_object is None:
+            return
+        if "." in missing_object:
+            raise AccountStoreError(f"PostgreSQL account-memory schema column is missing: {missing_object}")
+        raise AccountStoreError(f"PostgreSQL account-memory schema table is missing: {missing_object}")
+
     @_retry_after_missing_schema
     def read_entries(self, account_id: str) -> list[dict[str, Any]]:
+        self._ensure_schema()
+        return self._read_entries(account_id)
+
+    def read_entries_readonly(self, account_id: str) -> list[dict[str, Any]]:
+        self._ensure_schema_readonly()
+        return self._read_entries(account_id)
+
+    def _read_entries(self, account_id: str) -> list[dict[str, Any]]:
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
-        self._ensure_schema()
         with self._connect() as connection:
             rows = connection.execute(
                 """
@@ -306,8 +322,15 @@ class PostgresAccountMemoryBackend:
 
     @_retry_after_missing_schema
     def read_index(self, account_id: str) -> dict[str, Any]:
-        self.last_index_read_error = ""
         self._ensure_schema()
+        return self._read_index(account_id)
+
+    def read_index_readonly(self, account_id: str) -> dict[str, Any]:
+        self._ensure_schema_readonly()
+        return self._read_index(account_id)
+
+    def _read_index(self, account_id: str) -> dict[str, Any]:
+        self.last_index_read_error = ""
         with self._connect() as connection:
             row = connection.execute(
                 """

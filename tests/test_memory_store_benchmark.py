@@ -122,6 +122,58 @@ def test_postgres_entry_id_read_chunks_large_requests(monkeypatch) -> None:
     assert [len(params) - 2 for params in connection.params] == [500, 500, 101]
 
 
+def test_postgres_readonly_memory_reads_do_not_initialize_schema(monkeypatch) -> None:
+    class FakeResult:
+        def __init__(self, rows: list[tuple[str, ...]]) -> None:
+            self.rows = rows
+
+        def fetchall(self):
+            return self.rows
+
+        def fetchone(self):
+            return self.rows[0] if self.rows else None
+
+    class FakeConnection:
+        def __init__(self) -> None:
+            self.executed: list[str] = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def execute(self, sql: str, _params=None) -> FakeResult:  # noqa: ANN001
+            self.executed.append(sql)
+            if "FROM information_schema.columns" in sql:
+                return FakeResult(
+                    [
+                        (table, column)
+                        for table, columns in POSTGRES_REQUIRED_COLUMNS.items()
+                        for column in columns
+                    ]
+                )
+            if "FROM teebotus_memory_entries" in sql or "FROM teebotus_memory_indexes" in sql:
+                return FakeResult([])
+            raise AssertionError(f"unexpected SQL in read-only test: {sql}")
+
+    backend = PostgresAccountMemoryBackend(
+        instance_name="Bench",
+        provider=StaticSecretProvider(b"p" * 32),
+        purpose="account-structured-memory-key",
+        config=PostgresMemoryConfig(dsn="postgresql://unused"),
+    )
+    connection = FakeConnection()
+    monkeypatch.setattr(backend, "_connect", lambda: connection)
+    account_id = "a" * 128
+
+    assert backend.read_entries_readonly(account_id) == []
+    assert backend.read_index_readonly(account_id) == {}
+
+    assert not any("CREATE TABLE" in sql or "CREATE INDEX" in sql for sql in connection.executed)
+    assert backend._initialized is False
+
+
 def test_postgres_collection_name_read_clears_previous_diagnostics(monkeypatch) -> None:
     class FakeResult:
         def fetchall(self):

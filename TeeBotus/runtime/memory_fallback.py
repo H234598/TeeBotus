@@ -67,6 +67,13 @@ class WarningFallbackAccountMemoryBackend:
             self._sync_entries_from_fallback,
         )
 
+    def read_entries_readonly(self, account_id: str) -> list[dict[str, Any]]:
+        return self._read_readonly(
+            "read_entries",
+            account_id,
+            lambda backend: self._read_backend_readonly(backend, "read_entries", account_id),
+        )
+
     @_serialize_fallback_operation
     def read_entries_by_ids(self, account_id: str, memory_ids: list[str]) -> list[dict[str, Any]]:
         requested_ids = list(dict.fromkeys(str(memory_id or "").strip() for memory_id in memory_ids if str(memory_id or "").strip()))
@@ -115,6 +122,13 @@ class WarningFallbackAccountMemoryBackend:
             account_id,
             lambda backend: backend.read_index(account_id),
             self._sync_index_from_fallback,
+        )
+
+    def read_index_readonly(self, account_id: str) -> dict[str, Any]:
+        return self._read_readonly(
+            "read_index",
+            account_id,
+            lambda backend: self._read_backend_readonly(backend, "read_index", account_id),
         )
 
     def write_index(self, account_id: str, data: dict[str, Any]) -> None:
@@ -479,6 +493,57 @@ class WarningFallbackAccountMemoryBackend:
                 recover_data,
                 partial_result=partial_result,
             )
+
+    @staticmethod
+    def _read_backend_readonly(backend: Any, operation: str, account_id: str) -> Any:
+        readonly_reader = getattr(backend, f"{operation}_readonly", None)
+        if callable(readonly_reader):
+            return readonly_reader(account_id)
+        return getattr(backend, operation)(account_id)
+
+    @_serialize_fallback_operation
+    def _read_readonly(
+        self,
+        operation: str,
+        account_id: str,
+        callback: Callable[[Any], Any],
+    ) -> Any:
+        try:
+            result = callback(self.primary)
+            self._copy_diagnostics(self.primary)
+            if not self._read_diagnostic_failed(operation):
+                return result
+            primary_error = self._diagnostic_error_text(operation)
+        except Exception as exc:  # noqa: BLE001 - status must diagnose primary failure without repairing it.
+            self._copy_diagnostics(self.primary)
+            self._set_readonly_primary_failure(operation, exc)
+            primary_error = self._diagnostic_error_text(operation)
+        self._fallback_active = True
+        try:
+            result = callback(self.fallback)
+        except Exception as fallback_exc:  # noqa: BLE001 - preserve fail-closed fallback diagnostics.
+            self._copy_diagnostics(self.fallback)
+            self._fallback_stale_set(operation).add(account_id)
+            self._fallback_sync_failed_set(operation).add(account_id)
+            self._set_fallback_sync_error(operation, account_id, f"{operation}: fallback read failed: {fallback_exc}")
+            raise AccountStoreError(self.fallback_sync_error_for_account(account_id)) from fallback_exc
+        self._copy_diagnostics(self.primary)
+        self._set_readonly_primary_failure(operation, AccountStoreError(primary_error))
+        self._fallback_stale_set(operation).add(account_id)
+        self._set_fallback_sync_error(
+            operation,
+            account_id,
+            f"{operation}: primary read failed; read-only fallback used; repair deferred: {primary_error}",
+        )
+        return result
+
+    def _set_readonly_primary_failure(self, operation: str, exc: Exception) -> None:
+        detail = f"{type(exc).__name__}: {exc}"
+        if operation == "read_entries":
+            self.last_entry_read_error = self.last_entry_read_error or detail
+            self.last_entry_skipped = max(self.last_entry_skipped, 1)
+        elif operation == "read_index":
+            self.last_index_read_error = self.last_index_read_error or detail
 
     @_serialize_fallback_operation
     def _write(

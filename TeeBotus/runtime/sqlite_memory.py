@@ -264,6 +264,9 @@ class SQLiteAccountMemoryBackend:
             )
         return entries
 
+    def read_entries_readonly(self, account_id: str) -> list[dict[str, Any]]:
+        return self.read_entries(account_id)
+
     def read_entries_by_ids(self, account_id: str, memory_ids: Iterable[str]) -> list[dict[str, Any]]:
         self.last_entry_read_error = ""
         self.last_entry_skipped = 0
@@ -411,6 +414,9 @@ class SQLiteAccountMemoryBackend:
                 exc,
             )
             return {}
+
+    def read_index_readonly(self, account_id: str) -> dict[str, Any]:
+        return self.read_index(account_id)
 
     def write_index(self, account_id: str, data: dict[str, Any]) -> None:
         self._write_index(account_id, data, allow_incomplete_schema=False)

@@ -589,7 +589,7 @@ def test_account_memory_health_redacts_backend_errors(tmp_path: Path, monkeypatc
         def _read_account_profile(self, _account_id: str) -> None:
             raise AccountStoreError("token=sk-profile-test-token")
 
-        def check_structured_memory_index(self, _account_id: str, *, require_resolvable: bool):
+        def check_structured_memory_index(self, _account_id: str, *, require_resolvable: bool, read_only: bool = False):
             raise AccountStoreError("dsn=postgres://user:password@example.invalid/db")
 
     monkeypatch.setattr("TeeBotus.core.status.AccountStore", FakeStore)
@@ -5896,7 +5896,13 @@ def test_account_memory_index_health_reports_stale_fallback_sync(tmp_path: Path,
         def _read_account_profile(self, _account_id: str) -> dict[str, object]:
             return {"status": "active"}
 
-        def check_structured_memory_index(self, _account_id: str, *, require_resolvable: bool = True) -> object:
+        def check_structured_memory_index(
+            self,
+            _account_id: str,
+            *,
+            require_resolvable: bool = True,
+            read_only: bool = False,
+        ) -> object:
             return SimpleNamespace(ok=True, errors=())
 
     monkeypatch.setattr("TeeBotus.core.status.AccountStore", FakeStore)
@@ -5927,7 +5933,13 @@ def test_account_memory_index_health_survives_broken_fallback_diagnostics(tmp_pa
         def _read_account_profile(self, _account_id: str) -> dict[str, object]:
             return {"status": "active"}
 
-        def check_structured_memory_index(self, _account_id: str, *, require_resolvable: bool = True) -> object:
+        def check_structured_memory_index(
+            self,
+            _account_id: str,
+            *,
+            require_resolvable: bool = True,
+            read_only: bool = False,
+        ) -> object:
             return SimpleNamespace(ok=True, errors=())
 
     monkeypatch.setattr("TeeBotus.core.status.AccountStore", FakeStore)
@@ -5963,7 +5975,13 @@ def test_account_memory_index_health_uses_account_specific_fallback_error(tmp_pa
         def _read_account_profile(self, _account_id: str) -> dict[str, object]:
             return {"status": "active"}
 
-        def check_structured_memory_index(self, _account_id: str, *, require_resolvable: bool = True) -> object:
+        def check_structured_memory_index(
+            self,
+            _account_id: str,
+            *,
+            require_resolvable: bool = True,
+            read_only: bool = False,
+        ) -> object:
             return SimpleNamespace(ok=True, errors=())
 
     monkeypatch.setattr("TeeBotus.core.status.AccountStore", FakeStore)
@@ -5996,7 +6014,13 @@ def test_account_memory_index_health_reports_stale_instance_collection_sync(tmp_
         def _read_account_profile(self, _account_id: str) -> dict[str, object]:
             return {"status": "active"}
 
-        def check_structured_memory_index(self, _account_id: str, *, require_resolvable: bool = True) -> object:
+        def check_structured_memory_index(
+            self,
+            _account_id: str,
+            *,
+            require_resolvable: bool = True,
+            read_only: bool = False,
+        ) -> object:
             return SimpleNamespace(ok=True, errors=())
 
     monkeypatch.setattr("TeeBotus.core.status.AccountStore", FakeStore)

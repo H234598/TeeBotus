@@ -2963,13 +2963,26 @@ class AccountStore:
             raise
 
     @_serialize_account_memory
-    def check_structured_memory_index(self, account_id: str, *, require_resolvable: bool = True) -> AccountMemoryIndexHealth:
+    def check_structured_memory_index(
+        self,
+        account_id: str,
+        *,
+        require_resolvable: bool = True,
+        read_only: bool = False,
+    ) -> AccountMemoryIndexHealth:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         if require_resolvable:
             self._ensure_account_resolvable(account_id)
         errors: list[str] = []
         backend = self.account_memory_backend
-        entries = self.read_memory_entries(account_id)
+        if read_only and backend is not None:
+            read_entries = getattr(backend, "read_entries_readonly", None)
+            read_index = getattr(backend, "read_index_readonly", None)
+            if not callable(read_entries) or not callable(read_index):
+                raise AccountStoreError("read-only account-memory backend is unavailable")
+            entries = read_entries(account_id)
+        else:
+            entries = self.read_memory_entries(account_id)
         entry_read_error = str(getattr(backend, "last_entry_read_error", "") or "") if backend is not None else ""
         entry_skipped = int(getattr(backend, "last_entry_skipped", 0) or 0) if backend is not None else 0
         database_read_errors: list[str] = []
@@ -2992,7 +3005,10 @@ class AccountStore:
         if duplicate_entry_ids:
             errors.append(f"duplicate entry ids: {', '.join(duplicate_entry_ids)}")
 
-        index_doc = self.read_memory_index(account_id)
+        if read_only and backend is not None:
+            index_doc = read_index(account_id)
+        else:
+            index_doc = self.read_memory_index(account_id)
         index_read_error = str(getattr(backend, "last_index_read_error", "") or "") if backend is not None else ""
         if index_read_error:
             database_read_errors.append(f"database index unreadable: {index_read_error}")

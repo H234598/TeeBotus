@@ -4890,6 +4890,36 @@ def test_account_memory_fallback_keeps_warning_cooldown_while_other_operation_is
     assert len(warnings) == 1
 
 
+def test_account_memory_fallback_readonly_does_not_repair_primary() -> None:
+    class Backend:
+        def __init__(self, *, fail_read: bool = False) -> None:
+            self.fail_read = fail_read
+            self.entries = {"a" * 128: [{"id": "fallback_entry"}]}
+            self.write_calls = 0
+
+        def read_entries(self, account_id: str) -> list[dict[str, str]]:
+            if self.fail_read:
+                raise OSError("primary unavailable")
+            return [dict(row) for row in self.entries.get(account_id, [])]
+
+        def read_index(self, _account_id: str) -> dict[str, object]:
+            return {}
+
+        def write_entries(self, _account_id: str, _rows: list[dict[str, str]]) -> None:
+            self.write_calls += 1
+
+    account_id = "a" * 128
+    primary = Backend(fail_read=True)
+    fallback = Backend()
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    assert backend.read_entries_readonly(account_id) == [{"id": "fallback_entry"}]
+    assert primary.write_calls == 0
+    assert fallback.write_calls == 0
+    assert account_id in backend.stale_fallback_entry_account_ids
+    assert "repair deferred" in backend.fallback_sync_error_for_account(account_id)
+
+
 def test_account_memory_fallback_marks_both_read_failures_as_unsafe(caplog) -> None:
     class Backend:
         def __init__(self, *, fail_read: bool = False) -> None:
