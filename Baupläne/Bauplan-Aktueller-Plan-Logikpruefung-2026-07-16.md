@@ -5152,6 +5152,25 @@ bleibt erst bei 100 Commits.
 `20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
 bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 
+### Proactive-Consentzustand fail-closed bei korruptem enabled-State
+
+- 2026-07-17: Ein inkonsistenter Agent-State mit `enabled=true`, aber leerem
+  `consent.categories`, wurde vom Healthcheck erkannt, konnte jedoch noch
+  Provider-Aufrufe sowie interne Memory-, Cancel- und Snooze-Mutationen
+  ausloesen.
+- Alle Proactive-Planner-Einstiegspunkte stoppen jetzt bei fehlendem Consent
+  mit `proactive_no_consent`; direkte LLM-Entscheidungen schreiben oder
+  veraendern dann ebenfalls nichts. Normale deaktivierte und pausierte Zustaende
+  behalten ihre bisherigen Gruende.
+- Test: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `221 passed`; Consent-Fokus `5 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d88546da fix: fail closed on missing proactive consent`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`10/20` Commits. Kein Push. Restart nach 10 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Runtime-Status zeigt Legacy-OpenAI-Modell
 
 - 2026-07-17: Legacy-Konfiguration aus `Bot_Verhalten.md` verwendete im
