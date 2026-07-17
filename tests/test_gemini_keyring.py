@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 import json
+from pathlib import Path
 
 from TeeBotus.llm.free_tier import (
     GeminiFreeTierGuard,
@@ -20,6 +21,7 @@ from TeeBotus.llm.gemini_limits_refresh import (
     parse_gemini_free_tier_limits_payload,
     refresh_gemini_free_tier_limits_if_due,
 )
+import TeeBotus.llm.gemini_limits_refresh as gemini_limits_refresh_module
 from TeeBotus.llm.keyring import RotatingAPIKeyRing, interleave_key_buckets, resolve_gemini_api_key_ring
 
 
@@ -239,6 +241,25 @@ def test_refresh_gemini_free_tier_limits_caches_parseable_source(tmp_path) -> No
         "tpm": 240_000,
         "rpd": 120,
     }
+
+
+def test_gemini_limit_cache_write_uses_unique_atomic_temp_files(tmp_path, monkeypatch) -> None:
+    cache_path = tmp_path / "gemini-limits.json"
+    observed: list[Path] = []
+    original_replace = gemini_limits_refresh_module.os.replace
+
+    def observe_replace(source, target):
+        observed.append(Path(source))
+        return original_replace(source, target)
+
+    monkeypatch.setattr(gemini_limits_refresh_module.os, "replace", observe_replace)
+    gemini_limits_refresh_module._write_cache(cache_path, {"models": {"a": {"rpm": 1}}})
+    gemini_limits_refresh_module._write_cache(cache_path, {"models": {"b": {"rpm": 2}}})
+
+    assert len(observed) == 2
+    assert observed[0] != observed[1]
+    assert not list(tmp_path.glob("*.tmp"))
+    assert json.loads(cache_path.read_text(encoding="utf-8"))["models"] == {"b": {"rpm": 2}}
 
 
 def test_refresh_gemini_free_tier_limits_preserves_cache_when_source_has_no_table(tmp_path) -> None:
