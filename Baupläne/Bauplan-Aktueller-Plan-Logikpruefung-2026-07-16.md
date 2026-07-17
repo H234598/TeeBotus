@@ -7938,3 +7938,21 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `19/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### History-Dispatcher-Callback: Application-Level-Fehler spulen
+
+- 2026-07-17: `record_delivery()` spulte nur Socket-/Transportfehler. Eine
+  erreichbare Dispatcher-Antwort mit `ok: false` oder ungueltigen Daten wurde
+  direkt zurueckgegeben; das Delivery-Event war damit verloren.
+- Jede nicht erfolgreiche Application-Level-Antwort wird jetzt mit derselben
+  Event-ID in den Callback-Spool geschrieben. Deduplizierter Retry bleibt
+  dadurch moeglich.
+- Test: `tests/test_history_dispatcher_bridge.py` -> `9 passed`; Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `24e7d8a4 fix: spool dispatcher application failures`.
+- Restart-Regel: Code-Laufstand `20/20` erreicht. `sudo systemctl restart
+  teebotus.service` wurde versucht; Terminal-Prompt lief nach 5 Minuten ohne
+  Passwort/Fingerprint ab. Service-Neustart bleibt offen.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `20/20` Code-Commits. Kein
+Push. Restart ausstehend wegen sudo-Authentifizierung.
