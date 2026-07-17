@@ -4540,3 +4540,20 @@ nach 19 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `3/20` Commits. Kein Push. Restart
 nach 17 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Telegram-Gruppen-Callback-Buttons
+
+- 2026-07-17: Bei Telegram-`callback_query` wurde `message.from` (der Bot)
+  durch `callback_query.from` (klickender Nutzer) ersetzt. In Gruppen verlor
+  die Buttonantwort dadurch `reply_to_bot`; der Eingangsfilter konnte sie als
+  nicht adressierte freie Nachricht verwerfen.
+- Die synthetische Callback-Nachricht bewahrt die originale Bot-Quelle unter
+  internem Feld. `_is_reply_to_bot()` nutzt diese Quelle für Gruppenrouting;
+  normale Replies bleiben unveraendert.
+- Regression: Callback-Fokus `3 passed`; komplette Adapter-/Bot-Suite
+  `356 passed` plus `17 subtests`; Ruff, `compileall` und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3a9857bb fix: preserve telegram callback bot origin`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Kein Push. Restart
+nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
