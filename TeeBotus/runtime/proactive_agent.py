@@ -1256,6 +1256,75 @@ def _proactive_dispatch_claimed_at(item: Mapping[str, Any]) -> datetime | None:
     return None
 
 
+def _update_proactive_outbox_item_status_locked(
+    account_store: AccountStore,
+    account_id: str,
+    item_id: str,
+    *,
+    normalized_status: str,
+    reason: str,
+    now: datetime | None,
+    dispatch: Mapping[str, Any] | None,
+    expected: str,
+) -> bool:
+    rows = account_store.read_proactive_outbox(account_id)
+    changed = False
+    timestamp = _resolve_proactive_now(now).isoformat(timespec="seconds")
+    normalized_item_id = str(item_id or "").strip()
+    for item in rows:
+        if not isinstance(item, dict) or str(item.get("id") or "").strip() != normalized_item_id:
+            continue
+        current_status = str(item.get("status") or "queued").strip().casefold()
+        if normalized_status not in PROACTIVE_STATUS_TRANSITIONS.get(current_status, ()):
+            return False
+        if expected and current_status != expected:
+            return False
+        item["status"] = normalized_status
+        item["updated_at"] = timestamp
+        if normalized_status == "dispatching":
+            item["dispatching_at"] = timestamp
+            item["dispatch_attempts"] = _normalize_int(item.get("dispatch_attempts"), default=0) + 1
+        else:
+            item.pop("dispatching_at", None)
+        if normalized_status == "sent":
+            item["sent_at"] = timestamp
+            item["last_sent_at"] = timestamp
+        if dispatch:
+            item["dispatch"] = {str(key): value for key, value in dispatch.items()}
+        history = item.setdefault("status_history", [])
+        if not isinstance(history, list):
+            history = []
+            item["status_history"] = history
+        history.append({"at": timestamp, "status": normalized_status, "reason": str(reason or "").strip()})
+        if normalized_status == "sent":
+            recurrence = _normalize_recurrence_rule(item.get("recurrence"))
+            if _recurrence_uses_months(recurrence):
+                anchor = _parse_proactive_datetime(str(item.get("due_at") or "")) or _parse_proactive_datetime(timestamp)
+                if anchor is not None:
+                    anchor_day = _normalize_int(item.get("recurrence_anchor_day"), default=0)
+                    if not 1 <= anchor_day <= 31:
+                        item["recurrence_anchor_day"] = anchor.day
+                    if "recurrence_anchor_end_of_month" not in item:
+                        item["recurrence_anchor_end_of_month"] = anchor.day == calendar.monthrange(anchor.year, anchor.month)[1]
+                    if "recurrence_timezone" not in item:
+                        recurrence_timezone = _recurrence_timezone_name(anchor)
+                        if recurrence_timezone:
+                            item["recurrence_timezone"] = recurrence_timezone
+            next_due_at = _next_recurrence_due_at(item, timestamp)
+            if next_due_at:
+                item["status"] = "queued"
+                item["due_at"] = next_due_at
+                item["updated_at"] = timestamp
+                count = _normalize_int(item.get("recurrence_count"), default=0) + 1
+                item["recurrence_count"] = count
+                history.append({"at": timestamp, "status": "queued", "reason": f"recurrence:{item.get('recurrence')}"})
+        changed = True
+        break
+    if changed:
+        account_store.write_proactive_outbox(account_id, rows)
+    return changed
+
+
 def update_proactive_outbox_item_status(
     account_store: AccountStore,
     account_id: str,
@@ -1274,62 +1343,16 @@ def update_proactive_outbox_item_status(
     if expected and expected not in PROACTIVE_OUTBOX_STATUSES:
         raise ValueError(f"unsupported proactive outbox expected status: {expected_status}")
     with _account_proactive_outbox_lock(account_store, account_id):
-        rows = account_store.read_proactive_outbox(account_id)
-        changed = False
-        timestamp = _resolve_proactive_now(now).isoformat(timespec="seconds")
-        normalized_item_id = str(item_id or "").strip()
-        for item in rows:
-            if not isinstance(item, dict) or str(item.get("id") or "").strip() != normalized_item_id:
-                continue
-            current_status = str(item.get("status") or "queued").strip().casefold()
-            if normalized_status not in PROACTIVE_STATUS_TRANSITIONS.get(current_status, ()):
-                return False
-            if expected and current_status != expected:
-                return False
-            item["status"] = normalized_status
-            item["updated_at"] = timestamp
-            if normalized_status == "dispatching":
-                item["dispatching_at"] = timestamp
-                item["dispatch_attempts"] = _normalize_int(item.get("dispatch_attempts"), default=0) + 1
-            else:
-                item.pop("dispatching_at", None)
-            if normalized_status == "sent":
-                item["sent_at"] = timestamp
-                item["last_sent_at"] = timestamp
-            if dispatch:
-                item["dispatch"] = {str(key): value for key, value in dispatch.items()}
-            history = item.setdefault("status_history", [])
-            if not isinstance(history, list):
-                history = []
-                item["status_history"] = history
-            history.append({"at": timestamp, "status": normalized_status, "reason": str(reason or "").strip()})
-            if normalized_status == "sent":
-                recurrence = _normalize_recurrence_rule(item.get("recurrence"))
-                if _recurrence_uses_months(recurrence):
-                    anchor = _parse_proactive_datetime(str(item.get("due_at") or "")) or _parse_proactive_datetime(timestamp)
-                    if anchor is not None:
-                        anchor_day = _normalize_int(item.get("recurrence_anchor_day"), default=0)
-                        if not 1 <= anchor_day <= 31:
-                            item["recurrence_anchor_day"] = anchor.day
-                        if "recurrence_anchor_end_of_month" not in item:
-                            item["recurrence_anchor_end_of_month"] = anchor.day == calendar.monthrange(anchor.year, anchor.month)[1]
-                        if "recurrence_timezone" not in item:
-                            recurrence_timezone = _recurrence_timezone_name(anchor)
-                            if recurrence_timezone:
-                                item["recurrence_timezone"] = recurrence_timezone
-                next_due_at = _next_recurrence_due_at(item, timestamp)
-                if next_due_at:
-                    item["status"] = "queued"
-                    item["due_at"] = next_due_at
-                    item["updated_at"] = timestamp
-                    count = _normalize_int(item.get("recurrence_count"), default=0) + 1
-                    item["recurrence_count"] = count
-                    history.append({"at": timestamp, "status": "queued", "reason": f"recurrence:{item.get('recurrence')}"})
-            changed = True
-            break
-        if changed:
-            account_store.write_proactive_outbox(account_id, rows)
-        return changed
+        return _update_proactive_outbox_item_status_locked(
+            account_store,
+            account_id,
+            item_id,
+            normalized_status=normalized_status,
+            reason=reason,
+            now=now,
+            dispatch=dispatch,
+            expected=expected,
+        )
 
 
 def claim_proactive_worker_job(account_store: AccountStore, account_id: str, item_id: str, *, now: datetime | None = None) -> bool:
@@ -1364,7 +1387,17 @@ def _claim_proactive_worker_job_if_allowed(
         )
         if not decision.allowed:
             return decision, False
-        return decision, claim_proactive_worker_job(account_store, account_id, item_id, now=now)
+        claimed = _update_proactive_outbox_item_status_locked(
+            account_store,
+            account_id,
+            item_id,
+            normalized_status="dispatching",
+            reason="worker_claimed",
+            now=now,
+            dispatch=None,
+            expected="queued",
+        )
+        return decision, claimed
 
 
 async def dispatch_due_proactive_outbox_items(

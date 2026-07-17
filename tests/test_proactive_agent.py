@@ -52,6 +52,7 @@ from TeeBotus.runtime.proactive_agent import (
     _next_recurrence_due_at,
     _risk_memory_is_active,
     _update_proactive_outbox_item_due_at,
+    _claim_proactive_worker_job_if_allowed,
 )
 
 
@@ -518,6 +519,41 @@ def test_proactive_worker_claim_normalizes_item_id_whitespace(tmp_path) -> None:
         "item_with_padding",
         now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
     ) is True
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "dispatching"
+
+
+def test_policy_checked_claim_does_not_require_reentrant_outbox_lock(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Lock-Test",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    lock = threading.Lock()
+    account_store.proactive_outbox_lock = lambda _account_id: lock  # type: ignore[method-assign]
+    item = account_store.read_proactive_outbox(account_id)[0]
+
+    decision, claimed = _claim_proactive_worker_job_if_allowed(
+        account_store,
+        account_id,
+        item_id,
+        category="reminder",
+        item=item,
+        now=now,
+    )
+
+    assert decision.allowed is True
+    assert claimed is True
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "dispatching"
 
 
