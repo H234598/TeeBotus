@@ -4659,3 +4659,23 @@ Commits.
 **Aktueller Laufstand:** Seit dem letzten Restart `9/20` Code-Commits. Kein
 Push. Restart nach 11 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
+
+### SQLite-Recovery-Symlink-Guard-vor-Backend-Konstruktion
+
+- 2026-07-17: `_read_sqlite_snapshot_payloads()` konstruierte den SQLite-
+  Backend-Wrapper vor dem Recovery-eigenen Sicherheitsguard. Symlink-/Hardlink-
+  Pfade wurden dadurch zwar abgelehnt, aber als generische Backend-
+  Validierungsfehler zurueckgegeben; der Recovery-Vertrag mit genauer
+  Fail-Closed-Diagnose ging verloren.
+- `_reject_unsafe_sqlite_link(path, label="source")` laeuft jetzt vor der
+  Backend-Konstruktion. Sicherheitsfehler werden als Recovery-Fehler gesammelt;
+  leere Payloads bleiben erhalten. Sidecar-Pruefung bleibt im read-only
+  Connector.
+- Tests: Symlink-/Hardlink-Fokus `3 passed`, kompletter
+  `tests/test_admin_accounts.py`-Lauf `109 passed`; Ruff und `compileall`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `30940718 fix: fail closed on sqlite recovery path validation`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `11/20` Code-Commits. Kein
+Push. Restart nach 9 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
