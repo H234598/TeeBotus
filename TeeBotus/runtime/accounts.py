@@ -1401,9 +1401,12 @@ class AccountStore:
             self.secret_guard_purposes = normalized_purposes
             self._secret_guard_purpose_set = frozenset(normalized_purposes)
         if self.create_dirs:
-            _ensure_safe_account_memory_path(self.accounts_dir, label="accounts directory", require_directory=True)
-            self.accounts_dir.mkdir(parents=True, exist_ok=True)
-            _ensure_safe_account_memory_path(self.accounts_dir, label="accounts directory", require_directory=True)
+            descriptor = _open_stable_directory_descriptor(
+                self.accounts_dir,
+                label="accounts directory",
+                create_missing=True,
+            )
+            os.close(descriptor)
         if isinstance(self.secret_provider, SecretToolInstanceSecretProvider):
             self.secret_provider = _KeyringManifestSecretProvider(
                 instance_name=self.instance_name,
@@ -2354,7 +2357,12 @@ class AccountStore:
                 self._remove_account_from_index(source_account_id)
                 return
         self._ensure_account_resolvable(source_account_id)
-        target_dir.mkdir(parents=True, exist_ok=True)
+        descriptor = _open_stable_directory_descriptor(
+            target_dir,
+            label="merge target account directory",
+            create_missing=True,
+        )
+        os.close(descriptor)
         self.rebuild_structured_memory_index(source_account_id)
         if memory_backend is None:
             self._merge_jsonl(source_dir / USER_MEMORY_ENTRIES_FILENAME, target_dir / USER_MEMORY_ENTRIES_FILENAME, vault=self.account_memory_vault)
@@ -5015,7 +5023,12 @@ class AccountStore:
     def _merge_jsonl(self, source: Path, target: Path, *, vault: EncryptedJsonVault) -> None:
         if not source.exists():
             return
-        target.parent.mkdir(parents=True, exist_ok=True)
+        descriptor = _open_stable_directory_descriptor(
+            target.parent,
+            label="JSONL merge target directory",
+            create_missing=True,
+        )
+        os.close(descriptor)
         existing = self._read_jsonl_with_fallback(target, vault=vault) if target.exists() else []
         addition = self._read_jsonl_with_fallback(source, vault=vault)
         self._write_jsonl_with_vault(target, _merge_account_jsonl_rows(existing, addition), vault=vault)
