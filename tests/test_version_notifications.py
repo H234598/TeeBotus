@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import threading
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
@@ -1364,6 +1365,53 @@ def test_notify_recent_telegram_users_for_version_is_idempotent(tmp_path: Path) 
     assert "Version 1.0.3" in sent[0][1]
     assert "https://github.com/H234598/TeeBotus" in sent[0][1]
     assert "ffmpeg" in sent[0][1]
+
+
+def test_notify_recent_telegram_users_serializes_parallel_runs(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+    first_send_started = threading.Event()
+    second_send_started = threading.Event()
+    release_first_send = threading.Event()
+    results: list[int] = []
+    errors: list[Exception] = []
+
+    def send_message(chat_id: int, _text: str) -> None:
+        if not first_send_started.is_set():
+            first_send_started.set()
+            assert release_first_send.wait(2)
+            return
+        second_send_started.set()
+
+    def run_notification() -> None:
+        try:
+            results.append(
+                notify_recent_telegram_users_for_version(
+                    version="1.0.3",
+                    instances_dir=tmp_path / "instances",
+                    instance_name="Demo",
+                    account_store=store,
+                    send_message=send_message,
+                    now=datetime(2026, 6, 14, 12, 0, tzinfo=timezone.utc),
+                )
+            )
+        except Exception as exc:  # pragma: no cover - failure is asserted below.
+            errors.append(exc)
+
+    first_thread = threading.Thread(target=run_notification)
+    second_thread = threading.Thread(target=run_notification)
+    first_thread.start()
+    assert first_send_started.wait(2)
+    second_thread.start()
+    assert not second_send_started.wait(0.1)
+    release_first_send.set()
+    first_thread.join(timeout=2)
+    second_thread.join(timeout=2)
+
+    assert not first_thread.is_alive()
+    assert not second_thread.is_alive()
+    assert errors == []
+    assert sorted(results) == [0, 1]
 
 
 @pytest.mark.parametrize(

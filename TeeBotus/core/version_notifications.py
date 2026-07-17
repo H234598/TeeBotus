@@ -6,6 +6,7 @@ import subprocess
 from contextlib import nullcontext
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from functools import wraps
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
@@ -90,6 +91,19 @@ class VersionNotificationRecipient:
     last_seen_at: datetime = datetime(1970, 1, 1, tzinfo=timezone.utc)
 
 
+def _serialize_version_notification(method: Callable[..., Any]) -> Callable[..., Any]:
+    @wraps(method)
+    def wrapped(*args: Any, **kwargs: Any) -> Any:
+        account_store = kwargs.get("account_store")
+        lock_factory = getattr(account_store, "account_memory_lock", None)
+        lock = lock_factory(INSTANCE_STATE_ACCOUNT_ID) if callable(lock_factory) else nullcontext()
+        with lock:
+            return method(*args, **kwargs)
+
+    return wrapped
+
+
+@_serialize_version_notification
 def notify_recent_telegram_users_for_version(
     *,
     version: str,
