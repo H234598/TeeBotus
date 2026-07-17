@@ -6459,6 +6459,23 @@ bleibt erst bei 100 Commits.
 `15/20` Commits. Kein Push. Restart nach 5 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Engine kapselt natuerliche Reminder-Backendfehler
+
+- 2026-07-17: `_natural_reminder_reply` fing nur bekannte Storage-/Value-
+  Fehler. Unerwartete Backend- oder Wrapper-Ausnahmen konnten den normalen
+  Message-Loop abbrechen.
+- Engine faengt solche Fehler jetzt am User-facing Reminder-Grenzpunkt ab,
+  loggt sie und liefert die bekannte Speicherfehlerantwort. Kein falscher
+  Reminder-Erfolg; anschliessende Verarbeitung bleibt moeglich.
+- Test: `tests/test_engine_identity_flows.py` `195 passed`; Regression fuer
+  unerwarteten Reminder-Backendfehler; Ruff und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `0707afce fix: contain natural reminder backend failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`17/20` Commits. Kein Push. Restart nach 3 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Admin-Status kapselt Route-Backendfehler
 
 - 2026-07-17: Admin-Statuszeilen sowie Runtime- und Benchmark-Summary-
