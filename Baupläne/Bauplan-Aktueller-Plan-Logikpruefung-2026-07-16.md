@@ -5152,6 +5152,24 @@ bleibt erst bei 100 Commits.
 `20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
 bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 
+### Proactive-Dispatch reportiert korrupte Claim-Zustaende
+
+- 2026-07-17: Ein wegen kaputter `status_history` oder
+  `dispatch_attempts` abgelehnter Worker-Claim erschien als harmloses
+  `skipped:worker_claim_failed`. Scheduler-/Cycle-Health konnte dadurch gruen
+  bleiben, obwohl Item blockiert war.
+- Bekannte Korruptionsgruende werden jetzt als `failed` im Dispatch-Report
+  ausgegeben. Item bleibt unveraendert und der Sender wird nicht aufgerufen;
+  Reparatur/Quarantaene kann den Rohzustand weiterhin auswerten.
+- Test: `tests/test_proactive_agent.py` `171 passed`; Claim-Korruptionsfokus
+  `6 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `0c777967 fix: surface corrupt proactive claim state`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`2/20` Commits. Kein Push. Restart nach 18 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Notification-Loudness-Outbox bewahrt kaputte Statushistorien
 
 - 2026-07-17: Der Loudness-Abbruch mutierte `queued`-Outbox-Items direkt zu
