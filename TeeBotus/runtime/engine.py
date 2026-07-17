@@ -809,14 +809,29 @@ class TeeBotusEngine:
                     track=False,
                 )
             ]
-        self.state.set_pending_flow(
-            event.instance,
-            account_id,
-            TELADI_EMERGENCY_FLOW,
-            {"channel": event.channel, "chat_id": event.chat_id, "identity_key": event.identity_key, "created_at": utc_now()},
-            conversation_scope=_pending_flow_conversation_scope(event),
-        )
-        _mark_teladi_emergency_used(self.account_store, account_id)
+        try:
+            self.state.set_pending_flow(
+                event.instance,
+                account_id,
+                TELADI_EMERGENCY_FLOW,
+                {"channel": event.channel, "chat_id": event.chat_id, "identity_key": event.identity_key, "created_at": utc_now()},
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
+        except Exception:  # noqa: BLE001 - emergency activation must fail closed when pending state is unavailable.
+            LOGGER.exception("Teladi emergency pending-state setup failed instance=%s account=%s", event.instance, account_id)
+            return [SendText(event.chat_id, instructions.teladi_call_error, track=False)]
+        if not _mark_teladi_emergency_used(self.account_store, account_id):
+            LOGGER.error("Teladi emergency cooldown state could not be persisted instance=%s account=%s", event.instance, account_id)
+            try:
+                self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    TELADI_EMERGENCY_FLOW,
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
+            except Exception:  # noqa: BLE001 - failed cleanup must not turn activation into a false success.
+                LOGGER.exception("Teladi emergency pending-state cleanup failed instance=%s account=%s", event.instance, account_id)
+            return [SendText(event.chat_id, instructions.teladi_call_error, track=False)]
         return [SendText(event.chat_id, instructions.teladi_call_prompt, track=False)]
 
     def _handle_account_edit_step(self, event: IncomingEvent, account_id: str, pending: dict[str, object]) -> EngineResult:

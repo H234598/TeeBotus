@@ -1359,6 +1359,21 @@ def test_engine_call_a_teladi_prompts_and_forwards_text_message(tmp_path):
     assert engine.state.get_pending_flow("Depressionsbot", account_id, "teladi_emergency") is None
 
 
+def test_engine_call_a_teladi_fails_closed_when_cooldown_state_cannot_persist(tmp_path, monkeypatch):
+    monkeypatch.setattr("TeeBotus.runtime.engine._mark_teladi_emergency_used", lambda *_args: False)
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    instructions = BotInstructions()
+    engine = TeeBotusEngine(account_store=account_store, instructions=instructions)
+
+    actions = engine.process(event(identity, "/Call_a_Teladi"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert actions[0].text == instructions.teladi_call_error
+    assert account_id is not None
+    assert engine.state.get_pending_flow("Depressionsbot", account_id, "teladi_emergency") is None
+
+
 def test_engine_call_a_teladi_repeated_command_uses_cooldown_without_forwarding(tmp_path):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
