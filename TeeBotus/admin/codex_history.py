@@ -2197,7 +2197,7 @@ def default_codex_session_roots() -> tuple[Path, ...]:
 
 def _is_default_codex_agent_dir(path: Path) -> bool:
     name = path.name
-    return len(name) == 2 and name[0].islower() and name[1] == "1"
+    return bool(re.fullmatch(r"[abc][1-9][0-9]*", name))
 
 
 def export_codex_history_bibliothekar_docs(

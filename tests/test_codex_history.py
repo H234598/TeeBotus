@@ -21,6 +21,7 @@ import TeeBotus.admin.codex_history as codex_history_module
 from TeeBotus.admin.codex_history import (
     _codex_history_graph_mermaid_source,
     CODEX_HISTORY_FOLLOW_REPORT_ITEMS_LIMIT,
+    _is_default_codex_agent_dir,
     _normalize_remote_url,
     _repo_provider,
     _update_watch_instance_report,
@@ -68,6 +69,14 @@ from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMem
 
 def provider() -> StaticSecretProvider:
     return StaticSecretProvider(b"a" * 32)
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    (("a1", True), ("a2", True), ("b1", True), ("b90", True), ("c100", True), ("a0", False), ("d1", False), ("templates", False)),
+)
+def test_default_codex_agent_dir_includes_numbered_worker_pools(tmp_path: Path, name: str, expected: bool) -> None:
+    assert _is_default_codex_agent_dir(tmp_path / name) is expected
 
 
 def make_instance(tmp_path: Path, name: str = "Depressionsbot") -> Path:
