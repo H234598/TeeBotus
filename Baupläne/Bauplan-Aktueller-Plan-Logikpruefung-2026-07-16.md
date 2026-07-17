@@ -6353,6 +6353,24 @@ Commits.
 `3/20` Commits. Kein Push. Restart nach 17 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Dispatch kapselt Housekeeping-Fehler
+
+- 2026-07-17: Die sechs Dispatch-Vorstufen fuer Recovery, kaputte Zeitfelder,
+  Recurrence, Risk-Gates und Ablauf liessen Backend-Ausnahmen ungefangen. Ein
+  einzelner fehlgeschlagener Schreibvorgang konnte dadurch den gesamten
+  `dispatch_due_proactive_outbox_items`-Lauf ohne Ergebnis abbrechen.
+- Jede Vorstufe laeuft jetzt isoliert weiter und meldet bei Fehler
+  `housekeeping_failed:<step>`. Normale Due-Items bleiben anschliessend
+  pruefbar; keine Sendung wird aus einem Housekeeping-Fehler heraus behauptet.
+- Test: `tests/test_proactive_agent.py` `188 passed`; Regression fuer
+  fehlgeschlagenes `invalid_due_at`-Housekeeping; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `072ff237 fix: contain proactive housekeeping failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`5/20` Commits. Kein Push. Restart nach 15 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Admin-Status kapselt Route-Backendfehler
 
 - 2026-07-17: Admin-Statuszeilen sowie Runtime- und Benchmark-Summary-
