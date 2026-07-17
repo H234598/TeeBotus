@@ -6643,6 +6643,23 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `2/20` voll.
 
+### LLM-Memory-Postprocessing blockiert keine Antwort
+
+- 2026-07-17: Nach erfolgreicher LLM-Antwort konnten Interaction-Write,
+  semantischer Nebenindex oder optionaler Memory-Classifier unerwartete
+  Backend-/Wrapperfehler nach oben werfen. Dadurch verlor Nutzer Antwort,
+  obwohl LLM bereits erfolgreich geantwortet hatte.
+- Alle drei Schritte sind jetzt best-effort: Fehler werden geloggt,
+  Memory/Index bleiben retry-/rebuildbar, Reply wird weiter ausgeliefert.
+- Test: `tests/test_engine_identity_flows.py` `208 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c7b4d364 fix: isolate memory postprocessing failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`3/20` Commits. Kein Push. Restart nach 17 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `4/20` voll.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
