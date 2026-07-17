@@ -301,7 +301,7 @@ def test_admin_flow_state_failure_is_user_visible_without_aborting_message_proce
     result = engine.process_result(event(identity, "/ping"))
 
     assert result.handled is True
-    assert result.actions[0].text == "Adminzugang konnte gerade nicht gelesen werden. Bitte spaeter erneut versuchen."
+    assert result.actions[0].text == "Adminzugang konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
 
 
 def test_process_result_dispatch_failure_is_user_visible_without_aborting_loop(tmp_path, monkeypatch) -> None:

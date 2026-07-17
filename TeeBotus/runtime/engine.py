@@ -561,12 +561,16 @@ class TeeBotusEngine:
                 LOGGER.exception("Admin auth pending-state removal failed instance=%s account=%s", event.instance, account_id)
                 return False, None
 
-        pending = self.state.get_pending_flow(
-            event.instance,
-            account_id,
-            ADMIN_AUTH_FLOW,
-            conversation_scope=_pending_flow_conversation_scope(event),
-        )
+        try:
+            pending = self.state.get_pending_flow(
+                event.instance,
+                account_id,
+                ADMIN_AUTH_FLOW,
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
+        except Exception:  # noqa: BLE001 - admin auth state failures must stay user-visible.
+            LOGGER.exception("Admin auth pending-state lookup failed instance=%s account=%s", event.instance, account_id)
+            return [SendText(event.chat_id, ADMIN_AUTH_STATE_ERROR, track=False)]
         if pending is not None and _pending_flow_matches_event(pending, event):
             if command == "/cancel":
                 popped, removed = pop_pending_admin_auth()
