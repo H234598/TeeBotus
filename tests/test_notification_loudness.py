@@ -667,16 +667,23 @@ def test_dispatch_rechecks_loudness_after_worker_claim(tmp_path, monkeypatch) ->
 
     import TeeBotus.runtime.proactive_agent as proactive_agent
 
-    original_claim = proactive_agent.claim_proactive_worker_job
+    original_claim = proactive_agent._claim_proactive_worker_job_if_allowed
 
-    def claim_then_confirm(current_store, current_account_id, item_id, *, now=None):
-        claimed = original_claim(current_store, current_account_id, item_id, now=now)
+    def claim_then_confirm(current_store, current_account_id, item_id, *, category, item, now):
+        decision, claimed = original_claim(
+            current_store,
+            current_account_id,
+            item_id,
+            category=category,
+            item=item,
+            now=now,
+        )
         assert maybe_handle_notification_loudness_response(
             event(identity, "ja, laut"), current_store, current_account_id, now=now
         ) is not None
-        return claimed
+        return decision, claimed
 
-    monkeypatch.setattr(proactive_agent, "claim_proactive_worker_job", claim_then_confirm)
+    monkeypatch.setattr(proactive_agent, "_claim_proactive_worker_job_if_allowed", claim_then_confirm)
     sent: list[SendText] = []
 
     async def sender(_route, action, _item):
