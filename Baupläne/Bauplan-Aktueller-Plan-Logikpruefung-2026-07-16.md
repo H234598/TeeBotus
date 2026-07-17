@@ -3384,3 +3384,19 @@ nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `7/20` Commits. Kein Push. Restart
 nach 13 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Recovery-JSON-Probe-ohne-Memory-Backend
+
+- 2026-07-17: `_JsonProbeStore` initialisierte standardmaessig auch das
+  Account-Memory-Backend. PostgreSQL-/SQLite-Probleme konnten dadurch eine
+  reine JSON-Recovery stoeren; Store-Init-Fehler wurden nicht als Source
+  gemeldet.
+- JSON-Probe laeuft jetzt mit `memory_backend_enabled=False`. Init- und
+  Leseprobleme werden pro JSON-Source als unlesbar erfasst.
+- Regression: JSON-Source-Init-Fehler plus JSON-Fokus -> `3 passed`; komplette
+  `tests/test_admin_accounts.py` -> `95 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0ecb9b8d fix: isolate JSON recovery probes from memory backend`.
+
+**Aktueller Laufstand:** Seit dem Restart `9/20` Commits. Kein Push. Restart
+nach 11 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
