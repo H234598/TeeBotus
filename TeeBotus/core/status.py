@@ -1890,6 +1890,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
         ]
     project_root = project_root.resolve()
     root = project_root / "instances" / safe_instance_name / "data" / "accounts"
+    memory_backend_initialization_warning = _status_memory_backend_initialization_warning(root)
     try:
         account_dirs = _account_memory_account_dirs(root / ACCOUNTS_DIRNAME)
     except (AccountStoreError, OSError) as exc:
@@ -1957,6 +1958,8 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
             has_broken_memory = True
             continue
         fallback_warning = _account_memory_fallback_warning(store, account_id)
+        if not fallback_warning:
+            fallback_warning = memory_backend_initialization_warning
         if health.ok:
             if profile_error:
                 lines.append(f"account_memory={safe_instance_name}/{account_id} status=broken error={profile_error}{fallback_warning}")
@@ -1990,6 +1993,23 @@ def _status_memory_backend_enabled(root: Path) -> bool:
     if sqlite_config.fallback_path is not None:
         sqlite_paths.append(sqlite_config.fallback_path)
     return any(path.exists() for path in sqlite_paths)
+
+
+def _status_memory_backend_initialization_warning(root: Path) -> str:
+    try:
+        from TeeBotus.runtime.sqlite_memory import SQLiteMemoryConfig
+
+        sqlite_config = SQLiteMemoryConfig.from_env(root)
+    except Exception:  # noqa: BLE001 - status must stay diagnostic.
+        return ""
+    if sqlite_config is None:
+        return ""
+    sqlite_paths = [sqlite_config.path]
+    if sqlite_config.fallback_path is not None:
+        sqlite_paths.append(sqlite_config.fallback_path)
+    if any(path.exists() for path in sqlite_paths):
+        return ""
+    return " warning=memory_database_uninitialized"
 
 
 def _account_memory_recovery_lines(*, instance_name: str, project_root: Path) -> list[str]:
@@ -2119,6 +2139,7 @@ def _account_memory_fallback_warning(store: AccountStore, account_id: str) -> st
         return ""
     snapshot_available = False
     try:
+        database_missing = bool(getattr(backend, "last_database_missing", False))
         diagnostics_snapshot = getattr(backend, "fallback_diagnostics_for_account", None)
         if callable(diagnostics_snapshot):
             snapshot_available = True
@@ -2148,7 +2169,12 @@ def _account_memory_fallback_warning(store: AccountStore, account_id: str) -> st
         detail = redact_status_text(f"{type(exc).__name__}: {exc}")
         suffix = f":{detail}" if detail else ""
         return f" warning=memory_backend_status_unavailable{suffix}"
-    if not stale_parts:
+    warning_parts: list[str] = []
+    if database_missing:
+        warning_parts.append("memory_database_uninitialized")
+    if stale_parts:
+        warning_parts.append(f"fallback_sync_stale:{'+'.join(stale_parts)}")
+    if not warning_parts:
         return ""
     if not snapshot_available and not error:
         try:
@@ -2162,8 +2188,10 @@ def _account_memory_fallback_warning(store: AccountStore, account_id: str) -> st
             detail = redact_status_text(f"{type(exc).__name__}: {exc}")
             suffix = f":{detail}" if detail else ""
             return f" warning=memory_backend_status_unavailable{suffix}"
+    if not stale_parts:
+        return f" warning={warning_parts[0]}"
     suffix = f":{error}" if error else ""
-    return f" warning=fallback_sync_stale:{'+'.join(stale_parts)}{suffix}"
+    return f" warning={'+'.join(warning_parts)}{suffix}"
 
 
 @contextlib.contextmanager

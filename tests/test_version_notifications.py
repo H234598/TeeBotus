@@ -5731,6 +5731,22 @@ def test_account_memory_index_health_sqlite_env_does_not_create_missing_database
     assert not fallback.exists()
 
 
+def test_account_memory_index_health_warns_for_uninitialized_sqlite_backend(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", raising=False)
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_FALLBACK_PATH", raising=False)
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"x" * 32))
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [f"account_memory=Demo/{account_id} status=ok warning=memory_database_uninitialized"]
+    accounts_root = tmp_path / "instances" / "Demo" / "data" / "accounts"
+    assert not (accounts_root / "Account_Memory.sqlite3").exists()
+    assert not (accounts_root / "Account_Memory.backup.sqlite3").exists()
+
+
 def test_account_memory_index_health_rejects_instance_path_traversal(tmp_path: Path) -> None:
     outside = tmp_path / "outside"
     outside.mkdir()
@@ -5786,7 +5802,11 @@ def test_account_memory_index_health_reports_unreadable_account_metadata(tmp_pat
     assert any("account_memory_metadata=Demo status=broken item=account_secrets" in line for line in lines)
     assert any("account_memory_metadata=Demo status=broken item=accounts_dir" in line and f"accounts={account_id[:12]}" in line for line in lines)
     assert any(
-        line == f"account_memory=Demo/{account_id} status=broken error=profile_unreadable:encrypted envelope authentication failed"
+        line == (
+            f"account_memory=Demo/{account_id} status=broken "
+            "error=profile_unreadable:encrypted envelope authentication failed "
+            "warning=memory_database_uninitialized"
+        )
         for line in lines
     )
     assert lines[-1] == (
