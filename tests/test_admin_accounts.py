@@ -1031,6 +1031,33 @@ def test_memory_recovery_rejects_hardlinked_sqlite_sources_before_delete(tmp_pat
     assert external.read_bytes() == b"not a database"
 
 
+def test_memory_recovery_delete_uses_stable_sqlite_descriptor(monkeypatch, tmp_path: Path) -> None:
+    source = tmp_path / "Account_Memory.sqlite3"
+    external = tmp_path / "external.sqlite3"
+    account_id = "e" * 128
+
+    for path in (source, external):
+        with sqlite3.connect(path) as connection:
+            connection.execute("CREATE TABLE memory_entries (instance_name TEXT, account_id TEXT)")
+            connection.execute("INSERT INTO memory_entries VALUES (?, ?)", ("Depressionsbot", account_id))
+
+    original_guard = account_memory_recovery_module._reject_unsafe_sqlite_link
+
+    def race_after_guard(path: Path, *, label: str) -> None:
+        original_guard(path, label=label)
+        if path == source and label == "source":
+            source.unlink()
+            source.symlink_to(external)
+
+    monkeypatch.setattr(account_memory_recovery_module, "_reject_unsafe_sqlite_link", race_after_guard)
+
+    with pytest.raises(OSError, match="Too many levels|symlink|SQLite recovery"):
+        account_memory_recovery_module._delete_sqlite_account_rows(source, "Depressionsbot", [account_id])
+
+    with sqlite3.connect(external) as connection:
+        assert connection.execute("SELECT count(*) FROM memory_entries").fetchone()[0] == 1
+
+
 def test_memory_recovery_rejects_symlinked_sqlite_parent_before_probe(tmp_path: Path) -> None:
     real_root = tmp_path / "real"
     real_root.mkdir()

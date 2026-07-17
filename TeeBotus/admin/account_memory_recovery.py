@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import shlex
+import stat
 import sqlite3
 import tempfile
 import sys
@@ -985,12 +986,7 @@ def _snapshot_sqlite_database(source: Path, target: Path) -> None:
 
 def _delete_sqlite_account_rows(path: Path, instance_name: str, account_ids: Sequence[str]) -> int:
     deleted = 0
-    _reject_unsafe_sqlite_link(path, label="source")
-    for suffix in ("-wal", "-shm"):
-        sidecar = Path(str(path) + suffix)
-        if sidecar.exists() or sidecar.is_symlink():
-            _reject_unsafe_sqlite_link(sidecar, label="sidecar")
-    with sqlite3.connect(path) as connection:
+    with _connect_sqlite_writable_stable(path) as connection:
         with connection:
             for account_id in account_ids:
                 if _sqlite_table_exists(connection, "memory_keywords"):
@@ -1543,6 +1539,36 @@ def _count_lines(path: Path) -> int:
         return sum(1 for line in path.read_text(encoding="utf-8", errors="replace").splitlines() if line.strip())
     except OSError:
         return 0
+
+
+@contextlib.contextmanager
+def _connect_sqlite_writable_stable(path: Path):
+    _reject_unsafe_sqlite_link(path, label="source")
+    for suffix in ("-wal", "-shm"):
+        sidecar = Path(str(path) + suffix)
+        if sidecar.exists() or sidecar.is_symlink():
+            _reject_unsafe_sqlite_link(sidecar, label="sidecar")
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    if not no_follow:
+        raise OSError("stable SQLite recovery delete requires O_NOFOLLOW")
+    flags = os.O_RDWR | no_follow | getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.open(os.fspath(path), flags)
+    try:
+        opened_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(opened_stat.st_mode):
+            raise OSError(f"refusing non-regular SQLite recovery source: {path}")
+        if opened_stat.st_nlink != 1:
+            raise OSError(f"refusing hardlinked SQLite recovery source: {path}")
+        current_stat = os.stat(os.fspath(path), follow_symlinks=False)
+        if (opened_stat.st_dev, opened_stat.st_ino) != (current_stat.st_dev, current_stat.st_ino):
+            raise OSError(f"SQLite recovery source changed during open: {path}")
+        connection = sqlite3.connect(f"file:/proc/self/fd/{descriptor}?mode=rw", uri=True)
+        try:
+            yield connection
+        finally:
+            connection.close()
+    finally:
+        os.close(descriptor)
 
 
 def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instances_dir: Path, instance_name: str) -> dict[str, Any]:
