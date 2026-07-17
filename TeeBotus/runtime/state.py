@@ -38,6 +38,7 @@ from TeeBotus.runtime.maintenance import (
 )
 
 FlowType = Literal["teladi_emergency", "memory_reset", "youtube_options", "account_edit", "link_wtf"] | str
+PendingFlowStateKey = tuple[str, str, str] | tuple[str, str, str, str]
 LINK_NOTIFICATIONS_FILENAME = "Link_Notifications.json"
 LINK_NOTIFICATION_TTL_SECONDS = 15 * 60
 PENDING_FLOW_TTL_SECONDS = 30 * 60
@@ -61,6 +62,7 @@ class PendingFlow:
     chat_id: str
     channel: str
     payload: dict[str, Any] = field(default_factory=dict)
+    conversation_scope: str = ""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -85,6 +87,28 @@ PreviousResponseStateKey = tuple[str, str] | tuple[str, str, str]
 
 def _clean_conversation_scope(conversation_scope: str = "") -> str:
     return str(conversation_scope or "").strip()
+
+
+def pending_flow_scope(
+    *,
+    channel: str,
+    adapter_slot: int | str,
+    chat_type: str,
+    chat_id: str,
+    identity_key: str,
+) -> str:
+    """Build stable in-memory scope for interactive flows."""
+    return json.dumps(
+        [
+            str(channel or "").strip().casefold(),
+            str(adapter_slot or "").strip(),
+            str(chat_type or "").strip().casefold(),
+            str(chat_id or "").strip(),
+            str(identity_key or "").strip(),
+        ],
+        ensure_ascii=True,
+        separators=(",", ":"),
+    )
 
 
 def _previous_response_entry_from_mapping(
@@ -145,8 +169,8 @@ def _clear_persisted_previous_response_fields(payload: dict[str, Any]) -> None:
 class RuntimeState:
     """Small in-memory state container for pending account-scoped flows."""
 
-    pending_flows: dict[tuple[str, str, str], dict[str, Any]] = field(default_factory=dict)
-    pending_flow_created_at: dict[tuple[str, str, str], float] = field(default_factory=dict)
+    pending_flows: dict[PendingFlowStateKey, dict[str, Any]] = field(default_factory=dict)
+    pending_flow_created_at: dict[PendingFlowStateKey, float] = field(default_factory=dict)
     link_notifications: dict[tuple[str, str, str], dict[str, str]] = field(default_factory=dict)
     previous_response_ids: dict[PreviousResponseStateKey, str] = field(default_factory=dict)
     previous_response_scopes: dict[PreviousResponseStateKey, tuple[str, str, str]] = field(default_factory=dict)
@@ -154,20 +178,72 @@ class RuntimeState:
     security_events: list[dict[str, Any]] = field(default_factory=list)
     security_events_persistence_error: str = ""
 
-    def set_pending_flow(self, instance_name: str, account_id: str, flow_type: str, payload: dict[str, Any]) -> None:
-        key = (instance_name, account_id, flow_type)
+    def _pending_flow_key(
+        self,
+        instance_name: str,
+        account_id: str,
+        flow_type: str,
+        conversation_scope: str = "",
+    ) -> PendingFlowStateKey:
+        clean_scope = str(conversation_scope or "").strip()
+        if clean_scope:
+            return (instance_name, account_id, flow_type, clean_scope)
+        return (instance_name, account_id, flow_type)
+
+    def _pending_flow_lookup_key(
+        self,
+        instance_name: str,
+        account_id: str,
+        flow_type: str,
+        conversation_scope: str = "",
+    ) -> PendingFlowStateKey:
+        key = self._pending_flow_key(instance_name, account_id, flow_type, conversation_scope)
+        if key in self.pending_flows:
+            return key
+        if len(key) == 4:
+            legacy_key = key[:3]
+            if legacy_key in self.pending_flows:
+                return legacy_key
+            return key
+        scoped_keys = [candidate for candidate in self.pending_flows if len(candidate) == 4 and candidate[:3] == key]
+        return scoped_keys[0] if len(scoped_keys) == 1 else key
+
+    def set_pending_flow(
+        self,
+        instance_name: str,
+        account_id: str,
+        flow_type: str,
+        payload: dict[str, Any],
+        *,
+        conversation_scope: str = "",
+    ) -> None:
+        key = self._pending_flow_key(instance_name, account_id, flow_type, conversation_scope)
         self.pending_flows[key] = deepcopy(payload)
         self.pending_flow_created_at[key] = time.time()
 
-    def pop_pending_flow(self, instance_name: str, account_id: str, flow_type: str) -> dict[str, Any] | None:
+    def pop_pending_flow(
+        self,
+        instance_name: str,
+        account_id: str,
+        flow_type: str,
+        *,
+        conversation_scope: str = "",
+    ) -> dict[str, Any] | None:
         self._purge_expired_pending_flows()
-        key = (instance_name, account_id, flow_type)
+        key = self._pending_flow_lookup_key(instance_name, account_id, flow_type, conversation_scope)
         self.pending_flow_created_at.pop(key, None)
         return self.pending_flows.pop(key, None)
 
-    def get_pending_flow(self, instance_name: str, account_id: str, flow_type: str) -> dict[str, Any] | None:
+    def get_pending_flow(
+        self,
+        instance_name: str,
+        account_id: str,
+        flow_type: str,
+        *,
+        conversation_scope: str = "",
+    ) -> dict[str, Any] | None:
         self._purge_expired_pending_flows()
-        key = (instance_name, account_id, flow_type)
+        key = self._pending_flow_lookup_key(instance_name, account_id, flow_type, conversation_scope)
         payload = self.pending_flows.get(key)
         return deepcopy(payload) if payload is not None else None
 
@@ -490,22 +566,42 @@ class RuntimeStateStore(RuntimeState):
             flow = args[0]
             self._ensure_instance_scope(flow.instance)
             with _PENDING_FLOW_LOCK:
-                super().set_pending_flow(flow.instance, flow.account_id, flow.flow_type, flow.as_dict())
+                super().set_pending_flow(
+                    flow.instance,
+                    flow.account_id,
+                    flow.flow_type,
+                    flow.as_dict(),
+                    conversation_scope=flow.conversation_scope,
+                )
             return
         instance_name = args[0] if args else kwargs.get("instance_name", "")
         self._ensure_instance_scope(instance_name)
         with _PENDING_FLOW_LOCK:
             return super().set_pending_flow(*args, **kwargs)
 
-    def pop_pending_flow(self, instance_name: str, account_id: str, flow_type: str) -> dict[str, Any] | None:
+    def pop_pending_flow(
+        self,
+        instance_name: str,
+        account_id: str,
+        flow_type: str,
+        *,
+        conversation_scope: str = "",
+    ) -> dict[str, Any] | None:
         self._ensure_instance_scope(instance_name)
         with _PENDING_FLOW_LOCK:
-            return super().pop_pending_flow(instance_name, account_id, flow_type)
+            return super().pop_pending_flow(instance_name, account_id, flow_type, conversation_scope=conversation_scope)
 
-    def get_pending_flow(self, instance_name: str, account_id: str, flow_type: str) -> dict[str, Any] | None:
+    def get_pending_flow(
+        self,
+        instance_name: str,
+        account_id: str,
+        flow_type: str,
+        *,
+        conversation_scope: str = "",
+    ) -> dict[str, Any] | None:
         self._ensure_instance_scope(instance_name)
         with _PENDING_FLOW_LOCK:
-            return super().get_pending_flow(instance_name, account_id, flow_type)
+            return super().get_pending_flow(instance_name, account_id, flow_type, conversation_scope=conversation_scope)
 
     def set_previous_response_id(
         self,

@@ -1237,6 +1237,19 @@ def test_runtime_state_store_isolates_nested_pending_flow_payloads(tmp_path):
     }
 
 
+def test_runtime_state_store_keeps_same_pending_flow_in_multiple_scopes(tmp_path):
+    state = RuntimeStateStore(tmp_path / "Bot" / "data", instance_name="Bot", secret_provider=StaticSecretProvider(b"s" * 32))
+
+    state.set_pending_flow("Bot", ACCOUNT_ID, "route", {"step": "a"}, conversation_scope="scope-a")
+    state.set_pending_flow("Bot", ACCOUNT_ID, "route", {"step": "b"}, conversation_scope="scope-b")
+
+    assert state.get_pending_flow("Bot", ACCOUNT_ID, "route", conversation_scope="scope-a") == {"step": "a"}
+    assert state.get_pending_flow("Bot", ACCOUNT_ID, "route", conversation_scope="scope-b") == {"step": "b"}
+    assert state.pop_pending_flow("Bot", ACCOUNT_ID, "route", conversation_scope="scope-a") == {"step": "a"}
+    assert state.get_pending_flow("Bot", ACCOUNT_ID, "route", conversation_scope="scope-a") is None
+    assert state.get_pending_flow("Bot", ACCOUNT_ID, "route", conversation_scope="scope-b") == {"step": "b"}
+
+
 def test_runtime_state_store_expires_stale_pending_flows(tmp_path, monkeypatch):
     import TeeBotus.runtime.state as state_module
 

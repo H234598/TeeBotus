@@ -37,7 +37,7 @@ from TeeBotus.runtime.engine import (
 from TeeBotus.runtime.events import IncomingAttachment, IncomingEvent, IncomingLinkPreview
 from TeeBotus.runtime.qdrant import QdrantError
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryResult
-from TeeBotus.runtime.state import RuntimeStateStore
+from TeeBotus.runtime.state import RuntimeStateStore, pending_flow_scope
 from TeeBotus.runtime.working_memory import WorkingMemoryStore
 
 
@@ -3543,6 +3543,47 @@ def test_engine_account_memory_reset_confirmation_is_scoped_to_chat(tmp_path):
 
     assert [action.text for action in actions if isinstance(action, SendText)] == ["Pong"] * 10
     assert account_store.read_memory_entries(account_id) == [{"id": "mem_old", "user_text": "Mond"}]
+
+
+def test_engine_keeps_same_memory_reset_flow_per_chat(tmp_path):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="parallel-scoped-memory")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_memory_entries(account_id, [{"id": "mem_old", "user_text": "Mond"}])
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+    first_chat = event(identity, "/reset_memorys", channel="signal")
+    second_chat = IncomingEvent(
+        event_id="signal:2",
+        instance="Depressionsbot",
+        channel="signal",
+        adapter_slot=1,
+        identity_key=identity,
+        chat_id="other-chat",
+        chat_type="private",
+        sender_id=identity,
+        sender_name=identity,
+        text="/reset_memorys",
+        message_ref="2",
+    )
+
+    engine.process(first_chat)
+    engine.process(second_chat)
+    done_actions = engine.process(event(identity, "ja", channel="signal"))
+
+    assert done_actions[0].text == BotInstructions().user_memory_reset_success
+    assert account_store.read_memory_entries(account_id) == []
+    assert engine.state.get_pending_flow(
+        "Depressionsbot",
+        account_id,
+        "memory_reset",
+        conversation_scope=pending_flow_scope(
+            channel=second_chat.channel,
+            adapter_slot=second_chat.adapter_slot,
+            chat_type=second_chat.chat_type,
+            chat_id=second_chat.chat_id,
+            identity_key=second_chat.identity_key,
+        ),
+    ) is not None
 
 
 def test_engine_account_memory_reset_refuses_global_targets(tmp_path):

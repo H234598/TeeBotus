@@ -7,7 +7,7 @@ from TeeBotus.core.registration import RegistrationAction, RegistrationIntent, p
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError
 from TeeBotus.runtime.actions import NotifyLinkedIdentity, OutgoingAction, SendText
 from TeeBotus.runtime.events import IncomingEvent
-from TeeBotus.runtime.state import RuntimeStateStore
+from TeeBotus.runtime.state import RuntimeStateStore, pending_flow_scope
 
 LINK_WTF_FLOW = "link_wtf"
 LINKED_NOTICE = "Ein neuer Kommunikationsweg wurde mit deinem TeeBotus-Account verbunden. Wenn du das nicht warst, schreibe innerhalb der Sicherheitsfrist: WTF?"
@@ -70,6 +70,13 @@ class AccountCommandHandler:
                     "chat_id": event.chat_id,
                     "channel": event.channel,
                 },
+                conversation_scope=pending_flow_scope(
+                    channel=event.channel,
+                    adapter_slot=event.adapter_slot,
+                    chat_type=event.chat_type,
+                    chat_id=event.chat_id,
+                    identity_key=event.identity_key,
+                ),
             )
             return AccountCommandResult(True, (self._reply(event.chat_id, "Account-Bearbeitung gestartet. Welchen Kommunikationsweg möchtest du ändern?"),))
         if intent.action == RegistrationAction.LINKED_ACCOUNTS:

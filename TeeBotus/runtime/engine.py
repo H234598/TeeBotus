@@ -59,7 +59,7 @@ from TeeBotus.runtime.memory_search import MemorySearchConfig, MemorySearchServi
 from TeeBotus.runtime.maintenance import debug_observation_warning_enabled
 from TeeBotus.runtime.qdrant import QdrantError
 from TeeBotus.runtime.qdrant_memory import QdrantMemoryIndex
-from TeeBotus.runtime.state import RuntimeState
+from TeeBotus.runtime.state import RuntimeState, pending_flow_scope
 from TeeBotus.runtime.status_auth import (
     authorize_status_recipient,
     deauthorize_status_recipient,
@@ -296,13 +296,28 @@ class TeeBotusEngine:
                 self._route_to_llm_actions(event, result.account_id, route_to_command.target, route_to_command.prompt, instructions),
                 handled=True,
             )
-        pending_route_to = self.state.get_pending_flow(event.instance, result.account_id, ROUTE_TO_FLOW)
+        pending_route_to = self.state.get_pending_flow(
+            event.instance,
+            result.account_id,
+            ROUTE_TO_FLOW,
+            conversation_scope=_pending_flow_conversation_scope(event),
+        )
         if pending_route_to is not None:
             if command == "/cancel" and _route_to_pending_context_matches(pending_route_to, event):
-                self.state.pop_pending_flow(event.instance, result.account_id, ROUTE_TO_FLOW)
+                self.state.pop_pending_flow(
+                    event.instance,
+                    result.account_id,
+                    ROUTE_TO_FLOW,
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
                 return EngineResult(result.account_id, [SendText(event.chat_id, "RouteTo abgebrochen.", track=False)], handled=True)
             if not command and text and _route_to_pending_context_matches(pending_route_to, event):
-                self.state.pop_pending_flow(event.instance, result.account_id, ROUTE_TO_FLOW)
+                self.state.pop_pending_flow(
+                    event.instance,
+                    result.account_id,
+                    ROUTE_TO_FLOW,
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
                 return EngineResult(
                     result.account_id,
                     self._route_to_llm_actions(event, result.account_id, str(pending_route_to.get("target") or ""), text, instructions),
@@ -438,18 +453,43 @@ class TeeBotusEngine:
     def _admin_membership_actions(self, event: IncomingEvent, account_id: str) -> list[OutgoingAction] | None:
         text = str(event.text or "").strip()
         command = _command_name(text)
-        pending = self.state.get_pending_flow(event.instance, account_id, ADMIN_AUTH_FLOW)
+        pending = self.state.get_pending_flow(
+            event.instance,
+            account_id,
+            ADMIN_AUTH_FLOW,
+            conversation_scope=_pending_flow_conversation_scope(event),
+        )
         if pending is not None and _pending_flow_matches_event(pending, event):
             if command == "/cancel":
-                self.state.pop_pending_flow(event.instance, account_id, ADMIN_AUTH_FLOW)
+                self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    ADMIN_AUTH_FLOW,
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
                 return [SendText(event.chat_id, ADMIN_AUTH_CANCELLED, track=False)]
             if command == "/admin":
-                self.state.pop_pending_flow(event.instance, account_id, ADMIN_AUTH_FLOW)
+                self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    ADMIN_AUTH_FLOW,
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
             elif command:
-                self.state.pop_pending_flow(event.instance, account_id, ADMIN_AUTH_FLOW)
+                self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    ADMIN_AUTH_FLOW,
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
                 return [SendText(event.chat_id, ADMIN_AUTH_CANCELLED, track=False)]
             elif text:
-                self.state.pop_pending_flow(event.instance, account_id, ADMIN_AUTH_FLOW)
+                self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    ADMIN_AUTH_FLOW,
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
                 return self._admin_authorize_actions(event, account_id, text)
         if command != "/admin":
             return None
@@ -466,6 +506,7 @@ class TeeBotusEngine:
                 account_id,
                 ADMIN_AUTH_FLOW,
                 {"chat_id": event.chat_id, "channel": event.channel, "identity_key": event.identity_key},
+                conversation_scope=_pending_flow_conversation_scope(event),
             )
             return [SendText(event.chat_id, ADMIN_AUTH_PROMPT, track=False)]
         if _admin_mode_is_no(mode):
@@ -530,7 +571,12 @@ class TeeBotusEngine:
         } and not event.is_private:
             return EngineResult(account_id, [SendText(event.chat_id, PRIVATE_ONLY, track=False)], handled=True)
 
-        pending_account_edit = self.state.get_pending_flow(event.instance, account_id, "account_edit")
+        pending_account_edit = self.state.get_pending_flow(
+            event.instance,
+            account_id,
+            "account_edit",
+            conversation_scope=_pending_flow_conversation_scope(event),
+        )
         if pending_account_edit is not None and not _pending_flow_matches_event(pending_account_edit, event):
             pending_account_edit = None
         if pending_account_edit is not None and not event.is_private:
@@ -568,6 +614,7 @@ class TeeBotusEngine:
                 account_id,
                 "account_edit",
                 {"step": "start", "chat_id": event.chat_id, "channel": event.channel, "identity_key": event.identity_key},
+                conversation_scope=_pending_flow_conversation_scope(event),
             )
             return EngineResult(
                 account_id,
@@ -611,14 +658,24 @@ class TeeBotusEngine:
         account_id: str,
         instructions: BotInstructions,
     ) -> list[OutgoingAction] | None:
-        pending = self.state.get_pending_flow(event.instance, account_id, TELADI_EMERGENCY_FLOW)
+        pending = self.state.get_pending_flow(
+            event.instance,
+            account_id,
+            TELADI_EMERGENCY_FLOW,
+            conversation_scope=_pending_flow_conversation_scope(event),
+        )
         if pending is None:
             return None
         if not _pending_flow_matches_event(pending, event):
             return None
         command = _command_name(event.text)
         if command == "/cancel":
-            self.state.pop_pending_flow(event.instance, account_id, TELADI_EMERGENCY_FLOW)
+            self.state.pop_pending_flow(
+                event.instance,
+                account_id,
+                TELADI_EMERGENCY_FLOW,
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
             _clear_teladi_emergency_cooldown(self.account_store, account_id)
             return [SendText(event.chat_id, "Call_a_Teladi abgebrochen.", track=False)]
         if command in TELADI_EMERGENCY_COMMANDS:
@@ -635,7 +692,12 @@ class TeeBotusEngine:
         text = str(event.text or "").strip()
         if not text:
             return [SendText(event.chat_id, "Bitte sende die Emergency Message als Text. /cancel bricht ab.", track=False)]
-        self.state.pop_pending_flow(event.instance, account_id, TELADI_EMERGENCY_FLOW)
+        self.state.pop_pending_flow(
+            event.instance,
+            account_id,
+            TELADI_EMERGENCY_FLOW,
+            conversation_scope=_pending_flow_conversation_scope(event),
+        )
         header = _build_teladi_emergency_header(event.with_account(account_id))
         return [
             SendText(TELADI_EMERGENCY_CHAT_ID, build_teladi_message(header, text), track=False),
@@ -664,6 +726,7 @@ class TeeBotusEngine:
             account_id,
             TELADI_EMERGENCY_FLOW,
             {"channel": event.channel, "chat_id": event.chat_id, "identity_key": event.identity_key, "created_at": utc_now()},
+            conversation_scope=_pending_flow_conversation_scope(event),
         )
         _mark_teladi_emergency_used(self.account_store, account_id)
         return [SendText(event.chat_id, instructions.teladi_call_prompt, track=False)]
@@ -674,7 +737,12 @@ class TeeBotusEngine:
         cancel_words = {"nein", "no", "cancel", "abbrechen", "stop"}
         yes_words = {"ja", "yes", "confirm", "bestätigen", "bestaetigen"}
         if text in cancel_words:
-            self.state.pop_pending_flow(event.instance, account_id, "account_edit")
+            self.state.pop_pending_flow(
+                event.instance,
+                account_id,
+                "account_edit",
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
             return EngineResult(account_id, [SendText(event.chat_id, "Okay, ich trenne nichts.", track=False)], handled=True)
         if step == "start":
             if text in {"unlink", "trennen", "kanal trennen", "diesen kanal trennen"}:
@@ -688,6 +756,7 @@ class TeeBotusEngine:
                         "channel": event.channel,
                         "identity_key": event.identity_key,
                     },
+                    conversation_scope=_pending_flow_conversation_scope(event),
                 )
                 return EngineResult(
                     account_id,
@@ -703,7 +772,12 @@ class TeeBotusEngine:
                 )
             if text in {"rotate", "rotate_secret", "secret", "secret rotieren"}:
                 _, secret = self.account_store.rotate_secret(account_id)
-                self.state.pop_pending_flow(event.instance, account_id, "account_edit")
+                self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    "account_edit",
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
                 return EngineResult(account_id, [SendText(event.chat_id, self._secret_text(account_id, secret, rotated=True), track=False)], handled=True)
             return EngineResult(
                 account_id,
@@ -713,14 +787,24 @@ class TeeBotusEngine:
         if step == "confirm_unlink":
             if text in yes_words:
                 unlinked_account = self.account_store.unlink_identity(event.identity_key) or account_id
-                self.state.pop_pending_flow(event.instance, account_id, "account_edit")
+                self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    "account_edit",
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
                 return EngineResult(unlinked_account, [SendText(event.chat_id, "Dieser Kommunikationsweg wurde vom Account getrennt.", track=False)], handled=True)
             return EngineResult(
                 account_id,
                 [SendText(event.chat_id, "Bitte bestaetige oder brich ab.", track=False, buttons=ACCOUNT_UNLINK_CONFIRM_BUTTONS)],
                 handled=True,
             )
-        self.state.pop_pending_flow(event.instance, account_id, "account_edit")
+        self.state.pop_pending_flow(
+            event.instance,
+            account_id,
+            "account_edit",
+            conversation_scope=_pending_flow_conversation_scope(event),
+        )
         return EngineResult(account_id, [SendText(event.chat_id, "Account-Bearbeitung wurde zurückgesetzt.", track=False)], handled=True)
 
     def _account_text(self, instance_name: str, account_id: str) -> str:
@@ -1200,6 +1284,7 @@ class TeeBotusEngine:
                         "identity_key": event.identity_key,
                     },
                 },
+                conversation_scope=_pending_flow_conversation_scope(event),
             )
             return [
                 SendText(
@@ -1301,12 +1386,22 @@ class TeeBotusEngine:
         return self._llm_actions(event, account_id, instructions)
 
     def _memory_reset_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction] | None:
-        pending = self.state.get_pending_flow(event.instance, account_id, "memory_reset")
+        pending = self.state.get_pending_flow(
+            event.instance,
+            account_id,
+            "memory_reset",
+            conversation_scope=_pending_flow_conversation_scope(event),
+        )
         if pending is not None:
             if not _pending_flow_matches_event(pending, event):
                 return None
             if _is_memory_reset_confirmation(event.text):
-                self.state.pop_pending_flow(event.instance, account_id, "memory_reset")
+                self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    "memory_reset",
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
                 try:
                     _delete_semantic_memory_index(self.account_store, account_id, instructions)
                     self.account_store.reset_structured_memory(account_id)
@@ -1314,14 +1409,29 @@ class TeeBotusEngine:
                     return [SendText(event.chat_id, instructions.user_memory_reset_error)]
                 return [SendText(event.chat_id, instructions.user_memory_reset_success)]
             if _is_memory_reset_cancellation(event.text):
-                self.state.pop_pending_flow(event.instance, account_id, "memory_reset")
+                self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    "memory_reset",
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
                 return [SendText(event.chat_id, instructions.user_memory_reset_cancelled)]
             if _is_memory_reset_intent(event.text):
                 if _memory_reset_targets_forbidden(event.text):
-                    self.state.pop_pending_flow(event.instance, account_id, "memory_reset")
+                    self.state.pop_pending_flow(
+                        event.instance,
+                        account_id,
+                        "memory_reset",
+                        conversation_scope=_pending_flow_conversation_scope(event),
+                    )
                     return [SendText(event.chat_id, instructions.user_memory_reset_only_own)]
                 return [SendText(event.chat_id, instructions.user_memory_reset_confirm, buttons=MEMORY_RESET_BUTTONS)]
-            self.state.pop_pending_flow(event.instance, account_id, "memory_reset")
+            self.state.pop_pending_flow(
+                event.instance,
+                account_id,
+                "memory_reset",
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
             return None
         if not _is_memory_reset_intent(event.text):
             return None
@@ -1334,6 +1444,7 @@ class TeeBotusEngine:
             account_id,
             "memory_reset",
             {"channel": event.channel, "chat_id": event.chat_id, "identity_key": event.identity_key},
+            conversation_scope=_pending_flow_conversation_scope(event),
         )
         return [SendText(event.chat_id, instructions.user_memory_reset_confirm, buttons=MEMORY_RESET_BUTTONS)]
 
@@ -1410,6 +1521,7 @@ class TeeBotusEngine:
                 account_id,
                 YOUTUBE_LINK_FLOW,
                 {"chat_id": event.chat_id, "channel": event.channel, "identity_key": event.identity_key},
+                conversation_scope=_pending_flow_conversation_scope(event),
             )
             reply = "Schick mir bitte den YouTube-Link, den ich transkribieren soll."
             self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
@@ -1429,17 +1541,37 @@ class TeeBotusEngine:
         return self._youtube_transcript_reply_actions(event, account_id, instructions, url, transcript, source)
 
     def _pending_youtube_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction] | None:
-        pending_link = self.state.get_pending_flow(event.instance, account_id, YOUTUBE_LINK_FLOW)
+        pending_link = self.state.get_pending_flow(
+            event.instance,
+            account_id,
+            YOUTUBE_LINK_FLOW,
+            conversation_scope=_pending_flow_conversation_scope(event),
+        )
         if pending_link is not None and _pending_flow_matches_event(pending_link, event):
             url = _extract_youtube_url(event.text)
             if url:
-                self.state.pop_pending_flow(event.instance, account_id, YOUTUBE_LINK_FLOW)
+                self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    YOUTUBE_LINK_FLOW,
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
                 return self._youtube_transcript_actions(event, account_id, instructions)
-        pending_options = self.state.get_pending_flow(event.instance, account_id, YOUTUBE_OPTIONS_FLOW)
+        pending_options = self.state.get_pending_flow(
+            event.instance,
+            account_id,
+            YOUTUBE_OPTIONS_FLOW,
+            conversation_scope=_pending_flow_conversation_scope(event),
+        )
         if pending_options is not None and _pending_flow_matches_event(pending_options, event):
             url = str(pending_options.get("url") or "").strip()
             if not url:
-                self.state.pop_pending_flow(event.instance, account_id, YOUTUBE_OPTIONS_FLOW)
+                self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    YOUTUBE_OPTIONS_FLOW,
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
                 reply = "YouTube-Transkript fehlgeschlagen: gespeicherte URL fehlt."
                 self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
                 return [SendText(event.chat_id, reply)]
@@ -1454,7 +1586,12 @@ class TeeBotusEngine:
                 reply = "Bitte antworte z. B. mit: live ja, llm ja"
                 self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
                 return [SendText(event.chat_id, reply, buttons=YOUTUBE_LOCAL_OPTIONS_BUTTONS)]
-            self.state.pop_pending_flow(event.instance, account_id, YOUTUBE_OPTIONS_FLOW)
+            self.state.pop_pending_flow(
+                event.instance,
+                account_id,
+                YOUTUBE_OPTIONS_FLOW,
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
             original_text = str(pending_options.get("original_text") or event.text)
             return self._youtube_run_local_transcript_actions(
                 event,
@@ -3019,6 +3156,16 @@ def _llm_conversation_scope(event: IncomingEvent) -> str:
         ],
         ensure_ascii=False,
         separators=(",", ":"),
+    )
+
+
+def _pending_flow_conversation_scope(event: IncomingEvent) -> str:
+    return pending_flow_scope(
+        channel=event.channel,
+        adapter_slot=event.adapter_slot,
+        chat_type=event.chat_type,
+        chat_id=event.chat_id,
+        identity_key=event.identity_key,
     )
 
 
