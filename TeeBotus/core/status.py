@@ -1934,7 +1934,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
     database_account_ids: set[str] = set()
     try:
         database_account_ids = _status_database_account_ids(store)
-    except (AccountStoreError, OSError) as exc:
+    except (AccountStoreError, OSError, ValueError) as exc:
         error = redact_status_text(f"{type(exc).__name__}: {exc}")
         lines.append(
             f"account_memory={safe_instance_name} status=broken "

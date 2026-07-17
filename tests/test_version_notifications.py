@@ -653,6 +653,28 @@ def test_account_memory_index_health_survives_malformed_account_state(
     ]
 
 
+def test_account_memory_index_health_survives_malformed_database_account_discovery(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr("TeeBotus.core.status.SecretToolInstanceSecretProvider", lambda **_kwargs: StaticSecretProvider(b"x" * 32))
+    store = _store(tmp_path)
+    account_id = store.resolve_or_create_account("telegram:user:111", display_label="Fresh")
+
+    def fail_database_discovery(_store: object) -> set[str]:
+        raise ValueError("malformed database configuration")
+
+    monkeypatch.setattr("TeeBotus.core.status._status_database_account_ids", fail_database_discovery)
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines[0] == (
+        "account_memory=Demo status=broken "
+        "error=database_account_discovery_failed:ValueError: malformed database configuration"
+    )
+    assert any(line.startswith(f"account_memory=Demo/{account_id} ") for line in lines)
+
+
 def test_account_secret_health_reports_missing_required_memory_secret(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     store = _store(tmp_path)
