@@ -5168,6 +5168,22 @@ bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 `8/20` Commits. Kein Push. Restart nach 12 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Outbox-Wiederholung aus Altbestand fail-closed
+
+- 2026-07-17: Neue Queue-Eintraege lehnen ungueltige Wiederholungsregeln ab,
+  alte Zeilen konnten aber `every fortnight` o. ae. enthalten. Dispatch haette
+  sie einmal gesendet und danach ohne naechste Faelligkeit terminal beendet.
+- Ungueltige nichtleere `recurrence`-Werte werden vor Due-Auswahl als
+  `failed/invalid_recurrence` markiert. Health meldet sie ebenfalls explizit;
+  leere Wiederholung bleibt eine gueltige Einmal-Nachricht.
+- Test: `tests/test_proactive_agent.py` `139 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bca60818 fix: fail closed on invalid proactive recurrence`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`10/20` Commits. Kein Push. Restart nach 10 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Wiederholungsregel-validiert
 
 - 2026-07-17: Nicht parsebare Wiederholungen wie `every fortnight` wurden
