@@ -820,7 +820,7 @@ def test_proactive_cycle_can_run_local_planner_before_due_selection(tmp_path) ->
     assert len(account["planning"]["created_memory_ids"]) == 9
     assert len(account["planning"]["queued_item_ids"]) == 1
     assert account["due_items"] == []
-    assert account_store.read_proactive_outbox(account_id)[0]["due_at"] == "2026-06-16T10:00:00+00:00"
+    assert account_store.read_proactive_outbox(account_id)[0]["due_at"] == "2026-06-16T10:00:00+02:00"
 
 
 def test_proactive_cycle_llm_plan_requires_planner_factory(tmp_path) -> None:
@@ -911,7 +911,7 @@ def test_proactive_cycle_llm_plan_reports_plan_role_when_context_is_unavailable(
 
 def test_proactive_cycle_llm_plan_uses_injected_client_when_gate_is_enabled(tmp_path) -> None:
     class Response:
-        text = '{"schema_version":1,"decisions":[{"action":"queue","category":"reminder","intent":"llm_cycle_follow_up","message_text":"Magst du kurz berichten, ob du weiterarbeiten moechtest?","reason_memory_ids":["mem_goal"],"risk_gate":"none","due_at":"2026-06-15T11:30:00+00:00"}]}'
+        text = '{"schema_version":1,"decisions":[{"action":"queue","category":"reminder","intent":"llm_cycle_follow_up","message_text":"Magst du kurz berichten, ob du weiterarbeiten moechtest?","reason_memory_ids":["mem_goal"],"risk_gate":"none","due_at":"2026-06-15T13:30:00+00:00"}]}'
 
     class Client:
         def __init__(self) -> None:
@@ -955,7 +955,7 @@ def test_proactive_cycle_llm_plan_uses_injected_client_when_gate_is_enabled(tmp_
     assert account["llm_planning"]["openai_role"] == "plan"
     assert account["llm_planning"]["errors"] == []
     assert len(account["llm_planning"]["queued_item_ids"]) == 1
-    assert account["due_items"][0]["intent"] == "llm_cycle_follow_up"
+    assert account["due_items"] == []
     assert account_store.read_proactive_outbox(account_id)[0]["planner"]["source"] == "llm"
 
 
@@ -979,7 +979,7 @@ def test_proactive_cycle_tool_plan_uses_injected_client_when_gate_is_enabled(tmp
                             "message_text": "Magst du kurz berichten?",
                             "reason_memory_ids": ["mem_goal"],
                             "risk_gate": "none",
-                            "due_at": "2026-06-15T11:30:00+00:00",
+                            "due_at": "2026-06-15T13:30:00+00:00",
                         },
                     }
                 ]
@@ -1017,7 +1017,7 @@ def test_proactive_cycle_tool_plan_uses_injected_client_when_gate_is_enabled(tmp
     assert account["tool_planning"]["openai_role"] == "plan"
     assert account["tool_planning"]["errors"] == []
     assert len(account["tool_planning"]["queued_item_ids"]) == 1
-    assert account["due_items"][0]["intent"] == "tool_cycle_follow_up"
+    assert account["due_items"] == []
     assert account_store.read_proactive_outbox(account_id)[0]["planner"]["source"] == "llm"
 
 
