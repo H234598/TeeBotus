@@ -4579,3 +4579,23 @@ nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem letzten Restart `0/20` Code-Commits. Kein
 Push. Plan-Commit zaehlt als naechster Commit. Restart nach 20 weiteren
 Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Proactive-Outbox-Claim-ohne-Selbstdeadlock
+
+- 2026-07-17: `_claim_proactive_worker_job_if_allowed()` hielt den
+  Proactive-Outbox-Lock und rief danach `claim_proactive_worker_job()` auf.
+  Dieses rief die oeffentliche Statusfunktion mit demselben Lock erneut auf.
+  Bei einem normalen `threading.Lock` hing der Worker vor
+  `queued -> dispatching`.
+- Statusuebergang in lock-internen Helper extrahiert. Oeffentliche Funktion
+  validiert weiter Eingaben; der Policy-Claim schreibt atomar im bereits
+  gehaltenen Lock. Keine Abhaengigkeit von `RLock`-Reentranz.
+- Regression: normaler `threading.Lock` plus Policy-Claim reproduziert und
+  behoben; fokussierte Claim-/Dispatch-Tests `3 passed`; kompletter
+  `tests/test_proactive_agent.py`-Lauf `130 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1fd9579a fix: avoid proactive outbox claim deadlock`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `2/20` Code-Commits. Kein
+Push. Restart nach 18 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
