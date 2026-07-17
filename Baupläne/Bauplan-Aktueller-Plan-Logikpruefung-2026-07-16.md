@@ -8037,6 +8037,27 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `16/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### Proactive-LLM-Plan: parallele identische Entscheidungen idempotent anwenden
+
+- 2026-07-18: Zwei gleichzeitig laufende LLM-/Tool-Planner konnten denselben
+  validierten Queue-Plan beide speichern. Einzelne Dateioperationen waren zwar
+  gesperrt, aber die Gesamtentscheidung hatte keinen Idempotenzschluessel.
+- `apply_proactive_llm_plan()` serialisiert Outbox und Account-Memory in der
+  festen Reihenfolge `proactive_outbox -> account_memory`. Jede Memory- und
+  Queue-Entscheidung erhaelt einen stabilen accountgebundenen Fingerprint.
+  Aktive oder bereits gesendete gleiche Entscheidungen liefern die bestehende
+  ID zurueck; fehlgeschlagene, abgebrochene oder abgelaufene Items blockieren
+  keine spaetere Neuplanung.
+- Test: parallele identische Plananwendung mit zwei Threads erzeugt eine
+  gemeinsame Outbox-ID und genau einen Outbox-Eintrag; gesamte
+  `tests/test_proactive_agent.py` -> `193 passed`; `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf. Ruff-Executable in
+  aktueller Umgebung nicht installiert.
+- Code-Commit: `c5902c0b fix: deduplicate concurrent proactive llm plans`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `19/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Stateful-LLM-Lock: keinen Deadlock mit Proactive-Locks erzeugen
 
 * 2026-07-18: Der Account-Memory-Lock aus Fix 16 hielt bei kompletter Engine-
