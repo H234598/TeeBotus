@@ -596,6 +596,32 @@ def test_scheduler_queues_notification_loudness_follow_up_when_recently_active_i
     assert check_proactive_agent_account(account_store, account_id).ok is True
 
 
+def test_scheduler_checks_all_outbox_timestamps_for_wake_window_deduplication(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    first_wake = datetime(2026, 6, 15, 8, tzinfo=timezone.utc)
+    second_wake = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=first_wake) is not None
+    set_identity_last_seen(account_store, identity, second_wake)
+    second_timestamp = second_wake.isoformat(timespec="seconds")
+    account_store.append_proactive_outbox_item(
+        account_id,
+        {
+            "status": "sent",
+            "system_item": "notification_loudness",
+            "route_key": "telegram:1:chat-1",
+            "route": {"channel": "telegram", "chat_id": "chat-1", "chat_type": "private", "adapter_slot": 1},
+            "due_at": first_wake.isoformat(timespec="seconds"),
+            "created_at": second_timestamp,
+            "updated_at": second_timestamp,
+        },
+    )
+
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=second_wake) == ()
+    assert len(account_store.read_proactive_outbox(account_id)) == 1
+
+
 def test_scheduler_persists_supplied_now_in_loudness_outbox_metadata(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_TIMEZONE", "Europe/Berlin")
     account_store = store(tmp_path)

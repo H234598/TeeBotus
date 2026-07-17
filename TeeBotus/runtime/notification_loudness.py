@@ -3273,7 +3273,6 @@ def _has_notification_loudness_item_in_wake_window(
                 continue
             if _wake_date_key(item_at) == date_key and _wake_window_label(item_at) == window:
                 return True
-            break
     return False
 
 
