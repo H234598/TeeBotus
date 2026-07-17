@@ -7315,3 +7315,21 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Status-Healthcheck kapselt unerwartete Backendfehler
+
+- 2026-07-17: Der Account-Memory-Healthcheck fing bei Verzeichnisauflistung,
+  Datenbank-Account-Discovery, Profil- und Indexpruefung nur bekannte Fehler.
+  Unerwartete SQL-, Secret-, Wrapper- oder defekte Backend-Ausnahmen konnten
+  `/status` vor dem Bericht abbrechen.
+- Alle vier Healthcheck-Grenzen melden kaputte Teilbereiche kontrolliert und
+  pruefen weitere Accounts weiter. Auch die Fallback-Diagnose bleibt bei einem
+  unvollstaendigen Backend auskunftsfaehig. Keine falsche Health-Zusage.
+- Test: `tests/test_engine_identity_flows.py -k 'status or memory_health'`
+  `46 passed`; Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `00f129d8 fix: contain unexpected status health failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `2/20`
+Commits. Kein Push. Restart nach 18 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `3/20` sichtbar.
