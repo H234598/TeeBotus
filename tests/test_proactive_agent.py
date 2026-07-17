@@ -268,6 +268,32 @@ def test_proactive_queue_rejects_invalid_due_at_before_write(tmp_path) -> None:
     assert account_store.read_proactive_outbox(account_id) == []
 
 
+def test_proactive_queue_rechecks_policy_under_outbox_lock(tmp_path, monkeypatch) -> None:
+    import TeeBotus.runtime.proactive_agent as proactive_module
+
+    account_store = store(tmp_path)
+    account_id = "a" * 128
+    decisions = iter(
+        (
+            ProactiveDecision(True, "allowed", {"channel": "signal", "chat_id": "+491", "chat_type": "private", "adapter_slot": 1}),
+            ProactiveDecision(False, "daily_limit_reached"),
+        )
+    )
+    monkeypatch.setattr(proactive_module, "proactive_policy_decision", lambda *_args, **_kwargs: next(decisions))
+
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert decision == ProactiveDecision(False, "daily_limit_reached")
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
 def test_proactive_policy_denies_non_consented_category_and_group_route(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

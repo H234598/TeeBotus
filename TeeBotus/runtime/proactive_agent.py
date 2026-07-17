@@ -467,8 +467,19 @@ def queue_proactive_message(
         if generated_file is None:
             return ProactiveDecision(False, "invalid_file")
         payload["file"] = generated_file_to_outbox_payload(generated_file)
-    item_id = account_store.append_proactive_outbox_item(account_id, payload)
-    return ProactiveDecision(True, f"{status}:{item_id}", decision.route)
+    with _account_proactive_outbox_lock(account_store, account_id):
+        final_decision = proactive_policy_decision(
+            account_store,
+            account_id,
+            category=normalized_category,
+            now=resolved_now,
+            item=policy_item,
+        )
+        if not final_decision.allowed:
+            return final_decision
+        payload["route"] = final_decision.route or {}
+        item_id = account_store.append_proactive_outbox_item(account_id, payload)
+    return ProactiveDecision(True, f"{status}:{item_id}", final_decision.route)
 
 
 def approve_proactive_review_item(
