@@ -7039,6 +7039,22 @@ Commits. Kein Push. Restart nach 12 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `9/20` sichtbar.
 
+### Status-Memory-Lock bleibt diagnostisch
+
+- 2026-07-17: Status-Senderlookup und Erzeugung des Account-Memory-Locks
+  fingen unerwartete Fehler nicht. Ein defekter Lock-/Storeadapter konnte
+  Memorystatus und damit `/status` abbrechen.
+- Beide Punkte liefern bei Fehlern `None` bzw. bestehende Nichtverfügbar-
+  Diagnose. Keine falsche Memorygröße.
+- Test: fokussierter Statuspfad `43 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f4565838 fix: contain status memory lock failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `10/20`
+Commits. Kein Push. Restart nach 10 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `11/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
