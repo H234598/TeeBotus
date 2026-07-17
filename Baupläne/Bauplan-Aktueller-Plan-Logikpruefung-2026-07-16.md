@@ -2748,6 +2748,25 @@ erst bei 100 Commits.
 zaehlt mit: `8/20`. Kein Push. Restart nach 12 weiteren Commits. Naechster
 Push bleibt erst bei 100 Commits.
 
+### SQLite-Read-Cipher-nicht-pro-Zeile-neu-auflösen
+
+- 2026-07-17: Jeder entschluesselte SQLite-Read rief bisher erneut den
+  Secret-Service-Provider auf. Grosse Codex-History-Collections erzeugten so
+  tausende identische Key-/Manifestpruefungen und konnten den Applet-Health-
+  Check in einen Timeout treiben.
+- Entries-, Entry-ID-, Index- und Collection-Reads verwenden jetzt einen
+  Cipher-Snapshot je Read-Vorgang. Secret-Rotation bleibt wirksam, weil jeder
+  neue Read den aktuellen Provider-Schluessel erneut aufloest.
+- Regression: `tests/test_account_store.py` -> `312 passed`,
+  Codex-History-Status -> `7 passed`, Ruff und Compileall gruen. Echter
+  `--runtime-status` fiel von ca. 17 auf ca. 5,4 Sekunden. Kein Provider/API-
+  Aufruf.
+- Code-Commit: `61fcfc02 perf: snapshot sqlite read cipher`.
+
+**Aktueller Laufstand:** Seit dem Restart `9/20` Commits. Dieser Plan-Commit
+zaehlt mit: `10/20`. Kein Push. Restart nach 10 weiteren Commits. Naechster
+Push bleibt erst bei 100 Commits.
+
 ### PostgreSQL-Memory-Schema-vor-Initialisierung-validieren
 
 - 2026-07-17: `_ensure_schema_locked()` markierte PostgreSQL als initialisiert,
