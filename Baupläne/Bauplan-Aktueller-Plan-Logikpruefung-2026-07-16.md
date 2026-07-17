@@ -7505,3 +7505,21 @@ bleibt erst bei 100 Commits.
 Commits. Kein Push. Restart nach 18 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `3/20` sichtbar.
+
+### RouteTo-Pending-State fail-closed behandeln
+
+- 2026-07-17: `/RouteTo` las, setzte und entfernte seinen Pending-State ohne
+  Fehler- oder Rueckgabewertpruefung. SQL-/Runtime-State-Fehler konnten den
+  Engine-Loop abbrechen, einen falschen Bereit-Prompt senden oder trotz
+  fehlender Zustandsloeschung direkt routen.
+- Lesen, Setzen, Abbrechen und einmaliger Verbrauch sind jetzt geschuetzt.
+  Unbekannter oder nicht entfernbarer Zustand ergibt eine kontrollierte
+  RouteTo-Fehlermeldung; Backend-LLM wird dann nicht aufgerufen.
+- Test: `tests/test_route_to_llm_command.py` `13 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ef8074df fix: contain route pending state failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `4/20`
+Commits. Kein Push. Restart nach 16 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `5/20` sichtbar.
