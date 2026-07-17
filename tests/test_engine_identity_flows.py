@@ -383,6 +383,23 @@ def test_account_command_shows_admin_status(tmp_path, monkeypatch):
     assert "Admin: ja" in admin_actions[0].text
 
 
+@pytest.mark.parametrize("command", ["/account", "/linked_accounts"])
+def test_account_summary_backend_failure_is_user_visible_without_aborting_flow(tmp_path, command):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    def fail_summary(_account_id):
+        raise RuntimeError("summary backend unavailable")
+
+    account_store.account_summary = fail_summary
+
+    actions = engine.process(event(identity, command))
+
+    assert len(actions) == 1
+    assert actions[0].text == "Accountdaten konnten gerade nicht gelesen werden. Bitte spaeter erneut versuchen."
+
+
 def test_status_auth_gate_is_case_insensitive_for_chat_type(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
     account_store = store(tmp_path, "TeeBotus_Logger")

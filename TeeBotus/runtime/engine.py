@@ -850,21 +850,29 @@ class TeeBotusEngine:
         return EngineResult(account_id, [SendText(event.chat_id, "Account-Bearbeitung wurde zurückgesetzt.", track=False)], handled=True)
 
     def _account_text(self, instance_name: str, account_id: str) -> str:
-        summary = self.account_store.account_summary(account_id)
-        identities = "\n".join(f"- {identity}" for identity in summary.get("linked_identities", [])) or "- keine"
-        registered = "ja" if summary.get("secret_exists") else "nein"
-        admin_status = "ja" if self._account_is_help_admin(instance_name, account_id) else "nein"
-        return (
-            f"Deine TeeBotus-Account-ID:\n{account_id}\n\n"
-            f"Secret vorhanden: {registered}\n"
-            f"Admin: {admin_status}\n\n"
-            f"Verknüpfte Kommunikationswege:\n{identities}"
-        )
+        try:
+            summary = self.account_store.account_summary(account_id)
+            identities = "\n".join(f"- {identity}" for identity in summary.get("linked_identities", [])) or "- keine"
+            registered = "ja" if summary.get("secret_exists") else "nein"
+            admin_status = "ja" if self._account_is_help_admin(instance_name, account_id) else "nein"
+            return (
+                f"Deine TeeBotus-Account-ID:\n{account_id}\n\n"
+                f"Secret vorhanden: {registered}\n"
+                f"Admin: {admin_status}\n\n"
+                f"Verknüpfte Kommunikationswege:\n{identities}"
+            )
+        except Exception:  # noqa: BLE001 - account diagnostics must not abort identity handling.
+            LOGGER.exception("Account summary failed instance=%s account=%s", instance_name, account_id)
+            return "Accountdaten konnten gerade nicht gelesen werden. Bitte spaeter erneut versuchen."
 
     def _linked_accounts_text(self, account_id: str) -> str:
-        summary = self.account_store.account_summary(account_id)
-        identities = "\n".join(f"- {identity}" for identity in summary.get("linked_identities", [])) or "- keine"
-        return f"Verknüpfte Kommunikationswege für deinen TeeBotus-Account:\n{identities}"
+        try:
+            summary = self.account_store.account_summary(account_id)
+            identities = "\n".join(f"- {identity}" for identity in summary.get("linked_identities", [])) or "- keine"
+            return f"Verknüpfte Kommunikationswege für deinen TeeBotus-Account:\n{identities}"
+        except Exception:  # noqa: BLE001 - account diagnostics must not abort identity handling.
+            LOGGER.exception("Linked account summary failed account=%s", account_id)
+            return "Accountdaten konnten gerade nicht gelesen werden. Bitte spaeter erneut versuchen."
 
     def _register_text(self, account_id: str) -> str:
         try:
