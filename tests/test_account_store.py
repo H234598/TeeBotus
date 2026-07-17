@@ -3054,6 +3054,23 @@ def test_proactive_outbox_lock_is_reentrant(tmp_path):
     assert store.read_proactive_audit(account_id)[0]["id"] == event_id
 
 
+def test_append_proactive_dispatch_results_deduplicates_dispatch_id(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider(), memory_backend_enabled=False)
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+
+    assert store.append_proactive_dispatch_results(
+        account_id,
+        [{"id": "dispatch-1", "dispatch_id": "dispatch-1", "status": "sent"}],
+    ) == ("dispatch-1",)
+    assert store.append_proactive_dispatch_results(
+        account_id,
+        [{"id": "different-id", "dispatch_id": "dispatch-1", "status": "sent"}],
+    ) == ("dispatch-1",)
+
+    rows = store.read_proactive_dispatch_results(account_id)
+    assert [row["dispatch_id"] for row in rows] == ["dispatch-1"]
+
+
 def test_status_outbox_append_holds_memory_lock_across_read_modify_write(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

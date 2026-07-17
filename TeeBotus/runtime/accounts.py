@@ -4162,9 +4162,20 @@ class AccountStore:
                 "cannot append proactive dispatch result",
             )
             existing_ids = {str(row.get("id", "")).strip() for row in rows if isinstance(row, dict)}
+            existing_dispatch_ids = {
+                str(row.get("dispatch_id", "")).strip(): str(row.get("id", "")).strip()
+                for row in rows
+                if isinstance(row, dict)
+                and str(row.get("dispatch_id", "")).strip()
+                and str(row.get("id", "")).strip()
+            }
             timestamp = utc_now()
             created_ids: list[str] = []
             for result in normalized_results:
+                dispatch_id = str(result.get("dispatch_id") or "").strip()
+                if dispatch_id and dispatch_id in existing_dispatch_ids:
+                    created_ids.append(existing_dispatch_ids[dispatch_id])
+                    continue
                 result_id = str(result.get("id") or f"pdisp_{uuid.uuid4().hex}").strip()
                 while not result_id or result_id in existing_ids:
                     result_id = f"pdisp_{uuid.uuid4().hex}"
@@ -4174,6 +4185,8 @@ class AccountStore:
                 result.setdefault("updated_at", result["created_at"])
                 rows.append(result)
                 existing_ids.add(result_id)
+                if dispatch_id:
+                    existing_dispatch_ids[dispatch_id] = result_id
                 created_ids.append(result_id)
             self.write_proactive_dispatch_results(account_id, rows)
             return tuple(created_ids)
