@@ -1578,6 +1578,39 @@ def test_proactive_agent_health_reports_invalid_status_history(tmp_path) -> None
     assert "last status sent does not match current status queued" in joined
 
 
+def test_outbox_status_update_preserves_invalid_status_history(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="corrupt_history",
+        message_text="Historie erhalten",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    item = account_store.read_proactive_outbox(account_id)[0]
+    item["status_history"] = {"broken": True}
+    account_store.write_proactive_outbox(account_id, [item])
+
+    assert not update_proactive_outbox_item_status(
+        account_store,
+        account_id,
+        item_id,
+        status="dispatching",
+        reason="must_not_overwrite",
+        now=datetime(2026, 6, 15, 12, 1, tzinfo=timezone.utc),
+        expected_status="queued",
+    )
+    preserved = account_store.read_proactive_outbox(account_id)[0]
+    assert preserved["status"] == "queued"
+    assert preserved["status_history"] == {"broken": True}
+
+
 def test_proactive_agent_health_reports_terminal_status_reactivation_history(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

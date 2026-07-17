@@ -567,6 +567,8 @@ def reject_proactive_review_item(
                 continue
             if str(item.get("status") or "queued").strip().casefold() != "review_pending":
                 return ProactiveDecision(False, "item_not_review_pending")
+            if not _proactive_status_history_allows_mutation(item, str(item_id or "").strip(), current_status="review_pending"):
+                return ProactiveDecision(False, "invalid_status_history")
             item["status"] = "cancelled"
             item["updated_at"] = timestamp
             item["human_review"] = {
@@ -1237,6 +1239,8 @@ def fail_invalid_recurrence_proactive_outbox_items(account_store: AccountStore, 
             item_id = str(item.get("id") or "").strip()
             if not item_id:
                 continue
+            if not _proactive_status_history_allows_mutation(item, item_id, current_status="queued"):
+                continue
             item["status"] = "failed"
             item["updated_at"] = timestamp
             history = item.setdefault("status_history", [])
@@ -1264,6 +1268,8 @@ def fail_invalid_risk_gate_proactive_outbox_items(account_store: AccountStore, a
                 continue
             item_id = str(item.get("id") or "").strip()
             if not item_id:
+                continue
+            if not _proactive_status_history_allows_mutation(item, item_id, current_status="queued"):
                 continue
             item["status"] = "failed"
             item["updated_at"] = timestamp
@@ -1299,6 +1305,8 @@ def _fail_invalid_proactive_outbox_datetime_items(
                 continue
             item_id = str(item.get("id") or "").strip()
             if not item_id:
+                continue
+            if not _proactive_status_history_allows_mutation(item, item_id, current_status="queued"):
                 continue
             item["status"] = "failed"
             item["updated_at"] = timestamp
@@ -1347,6 +1355,8 @@ def expire_stale_proactive_outbox_items(account_store: AccountStore, account_id:
             item_id = str(item.get("id") or "").strip()
             if not item_id:
                 continue
+            if not _proactive_status_history_allows_mutation(item, item_id, current_status="queued"):
+                continue
             item["status"] = "expired"
             item["updated_at"] = timestamp
             history = item.setdefault("status_history", [])
@@ -1390,6 +1400,8 @@ def recover_stale_proactive_dispatching_items(
                 continue
             item_id = str(item.get("id") or "").strip()
             if not item_id:
+                continue
+            if not _proactive_status_history_allows_mutation(item, item_id, current_status="dispatching"):
                 continue
             dispatch_attempts = _proactive_dispatch_attempts(item)
             if dispatch_attempts is None:
@@ -1498,6 +1510,8 @@ def _update_proactive_outbox_item_status_locked(
         if normalized_status not in PROACTIVE_STATUS_TRANSITIONS.get(current_status, ()):
             return False
         if expected and current_status != expected:
+            return False
+        if not _proactive_status_history_allows_mutation(item, normalized_item_id, current_status=current_status):
             return False
         item["status"] = normalized_status
         item["updated_at"] = timestamp
@@ -2313,6 +2327,10 @@ def _proactive_outbox_status_history_errors(item: Mapping[str, Any], item_label:
     return errors
 
 
+def _proactive_status_history_allows_mutation(item: Mapping[str, Any], item_label: str, *, current_status: str) -> bool:
+    return not _proactive_outbox_status_history_errors(item, item_label, current_status=current_status)
+
+
 def proactive_risk_policy_decision(
     account_store: AccountStore,
     account_id: str,
@@ -2868,6 +2886,8 @@ def _update_proactive_outbox_item_due_at(
             if not isinstance(item, dict) or str(item.get("id") or "").strip() != normalized_item_id:
                 continue
             if str(item.get("status") or "queued").strip().casefold() != "queued":
+                return False
+            if not _proactive_status_history_allows_mutation(item, normalized_item_id, current_status="queued"):
                 return False
             item["due_at"] = due_at
             item["updated_at"] = timestamp
