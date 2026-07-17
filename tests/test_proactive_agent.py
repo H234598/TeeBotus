@@ -379,6 +379,20 @@ def test_proactive_category_and_policy_setters_are_normalized(tmp_path) -> None:
     assert decision_at_night.allowed is True
 
 
+def test_removing_all_proactive_categories_disables_agent_cleanly(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+
+    state = set_proactive_categories(account_store, account_id, ())
+    health = check_proactive_agent_account(account_store, account_id)
+
+    assert state["consent"]["categories"] == []
+    assert state["proactive"]["enabled"] is False
+    assert state["proactive"]["paused"] is False
+    assert health.ok is True
+
+
 def test_proactive_state_setters_serialize_read_modify_write(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     account_id = account_store.resolve_or_create_account(telegram_identity_key(1))

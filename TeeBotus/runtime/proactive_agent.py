@@ -313,6 +313,10 @@ def set_proactive_categories(account_store: AccountStore, account_id: str, categ
         ]
         state["consent"]["categories"] = normalized
         state["consent"]["updated_at"] = utc_now()
+        if not normalized:
+            state["proactive"]["enabled"] = False
+            state["proactive"]["paused"] = False
+            state["proactive"]["updated_at"] = state["consent"]["updated_at"]
         account_store.write_agent_state(account_id, state)
         return state
 
