@@ -6748,6 +6748,23 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `14/20` voll.
 
+### Bot-Alias-Discovery kapselt Memory-Backendfehler
+
+- 2026-07-17: Alias-Lookup aus Agent-State, Memory-Index und Entries fing
+  unerwartete Backendfehler nicht. Gruppenrouting und Adress-Erkennung
+  konnten dadurch vor der eigentlichen Nachricht abbrechen.
+- Jeder optionale Alias-Read fail-opens jetzt auf bekannte Namen ohne neue
+  Aliasdaten; Fehler werden geloggt. Keine falsche Adressierung, keine
+  Antwortunterdrueckung durch kaputten Memory-Read.
+- Test: `tests/test_engine_identity_flows.py` `203 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a89bc697 fix: isolate bot alias lookup failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`15/20` Commits. Kein Push. Restart nach 5 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `16/20` voll.
+
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
