@@ -8043,3 +8043,18 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `5/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Bibliothekar-Haystack-Rebuild: Index und Chunks aus gleicher Generation
+
+- 2026-07-17: `HaystackBibliothekarBackend.rebuild()` rief erst
+  `fallback_store.rebuild()` und danach separat `read_chunks()` auf. Ein
+  paralleler Rebuild konnte dadurch Indexgeneration A mit Chunkgeneration B
+  an Qdrant schicken.
+- `BibliothekarStore.rebuild_snapshot()` erzeugt Index und liest Chunks unter
+  demselben Prozess-/Dateilock. Haystack verwendet diesen Snapshot direkt.
+- Test: Bibliothekar-Suite -> `98 passed`, inklusive Store-Snapshot-Vertrag;
+  Ruff, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5efc24ff fix: rebuild bibliothekar snapshots atomically`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `6/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
