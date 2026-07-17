@@ -6907,6 +6907,23 @@ Commits. Kein Push. Restart nach 8 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `13/20` sichtbar.
 
+### Emergency-Dispatch prueft Pending-Cleanup
+
+- 2026-07-17: Nach der Emergency-Bestaetigung wurde der Pending-Flow entfernt,
+  ohne das Ergebnis zu pruefen. Bei Statefehler oder verschwundenem Pending-
+  Datensatz konnte die Nachricht trotzdem an Teladi gesendet werden; Wieder-
+  holungen und Status waren dann unklar.
+- Dispatch erfolgt jetzt nur nach erfolgreichem Pending-Pop. Cancel meldet
+  einen fehlenden Cooldown-Reset explizit; kein falsches Abbruchversprechen.
+- Test: `tests/test_engine_identity_flows.py -k 'teladi'` `6 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8a05b17f fix: prevent emergency dispatch on state cleanup failure`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `14/20`
+Commits. Kein Push. Restart nach 6 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `15/20` sichtbar.
+
 ### Login kapselt Rückgabe- und Notificationfehler
 
 - 2026-07-17: Primäres Login vertraute blind auf `result["account_id"]` und
