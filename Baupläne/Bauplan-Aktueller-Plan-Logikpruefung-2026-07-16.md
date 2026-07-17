@@ -5188,6 +5188,24 @@ bleibt erst bei 100 Commits.
 `12/20` Commits. Kein Push. Restart nach 8 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Stale-Recovery lehnt kaputte Versuchszahler ab
+
+- 2026-07-17: Ein nicht numerischer `dispatch_attempts`-Altwert wurde in der
+  Crash-Recovery wie `0` behandelt. Health meldete den Fehler, Recovery konnte
+  das Retry-Limit aber trotzdem umgehen.
+- Stale Claims mit kaputtem Versuchszahler werden jetzt fail-closed auf
+  `failed` gesetzt, der Rohwert bleibt fuer Diagnose erhalten. Fehlende oder
+  negative Werte bleiben kompatibel normalisiert; negative Werte koennen das
+  Limit nicht mehr umgehen.
+- Test: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `223 passed`; Recovery-Fokus `4 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bf04eb89 fix: reject corrupt proactive attempt counters`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`14/20` Commits. Kein Push. Restart nach 6 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Runtime-Status zeigt Legacy-OpenAI-Modell
 
 - 2026-07-17: Legacy-Konfiguration aus `Bot_Verhalten.md` verwendete im
