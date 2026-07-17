@@ -1436,14 +1436,16 @@ def acknowledge_codex_history_item(
         instance_name=instance_name,
         message_ref=message_ref,
     )
-    _update_codex_history_item_status(
-        store,
-        normalized_item_id,
-        "acknowledged",
-        reason=reason,
-        now=timestamp,
-        dispatch_results=[dispatch_result],
-    )
+    if str(item.get("status") or "").strip().casefold() != "acknowledged":
+        latest_dispatch_results = _latest_codex_history_dispatch_results(store, normalized_item_id)
+        _update_codex_history_item_status(
+            store,
+            normalized_item_id,
+            _overall_dispatch_status(latest_dispatch_results),
+            reason=reason,
+            now=timestamp,
+            dispatch_results=latest_dispatch_results,
+        )
     return {
         "ok": True,
         "status": "acknowledged",

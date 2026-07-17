@@ -3833,6 +3833,33 @@ def test_codex_history_receipt_does_not_block_retry_for_other_admin(tmp_path: Pa
     assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["id"] == item["id"]
 
 
+def test_codex_history_manual_ack_does_not_block_retry_for_other_admin(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "manual-ack-mixed-admin-demo", version="1.0.37")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    first_admin = store.resolve_or_create_account(telegram_identity_key(95), display_label="Admin 1")
+    second_admin = store.resolve_or_create_account(telegram_identity_key(96), display_label="Admin 2")
+    item = append_codex_history_summary(store, repo_root=repo, title="Manual Ack", bullets=["Ein Ack darf anderen Retry nicht blockieren."])
+    store.append_codex_history_dispatch_results(
+        INSTANCE_STATE_ACCOUNT_ID,
+        [
+            {"codex_history_item_id": item["id"], "account_id": first_admin, "status": "accepted"},
+            {"codex_history_item_id": item["id"], "account_id": second_admin, "status": "failed", "reason": "send_error:TimeoutError"},
+        ],
+    )
+
+    result = acknowledge_codex_history_item(
+        store,
+        item["id"],
+        instance_name="TeeBotus_Logger",
+        account_id=first_admin,
+        reason="admin_ack",
+        now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+    )
+
+    assert result["status"] == "acknowledged"
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status"] == "queued"
+
+
 def test_codex_history_dispatch_ignores_fresh_in_flight_item(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "fresh-in-flight-demo", version="1.0.4")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
