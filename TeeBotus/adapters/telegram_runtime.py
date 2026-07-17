@@ -981,6 +981,7 @@ class TelegramRuntimeContext:
     dispatch_lock: Any = field(default_factory=threading.Lock)
     dispatch_journal: TelegramDispatchJournal | None = None
     dispatch_journal_completion_deferred: bool = False
+    dispatch_journal_pending_completions: set[str] = field(default_factory=set)
 
 
 @dataclass
@@ -1083,11 +1084,15 @@ def _telegram_dispatch_retry_key_for_update(context: TelegramRuntimeContext, upd
 
 
 def _complete_telegram_dispatch_journal(context: Any, update: dict[str, Any]) -> bool:
-    journal = getattr(context, "dispatch_journal", None)
-    if journal is None:
-        return True
     key = _telegram_dispatch_retry_key_for_update(context, update)
     if not key:
+        return True
+    return _complete_telegram_dispatch_journal_key(context, key)
+
+
+def _complete_telegram_dispatch_journal_key(context: Any, key: str) -> bool:
+    journal = getattr(context, "dispatch_journal", None)
+    if journal is None:
         return True
     try:
         journal.complete(key)
@@ -3988,10 +3993,17 @@ def run_polling(
     retry_delay = INITIAL_RETRY_DELAY_SECONDS
     if runtime_context is not None:
         runtime_context.dispatch_journal_completion_deferred = True
+        pending_journal_completions = getattr(runtime_context, "dispatch_journal_pending_completions", None)
+        if not isinstance(pending_journal_completions, set):
+            pending_journal_completions = set()
+            runtime_context.dispatch_journal_pending_completions = pending_journal_completions
 
     try:
         while stop_event is None or not stop_event.is_set():
             try:
+                for pending_key in tuple(pending_journal_completions):
+                    if _complete_telegram_dispatch_journal_key(runtime_context, pending_key):
+                        pending_journal_completions.discard(pending_key)
                 updates = api.get_updates(offset, timeout=poll_timeout)
                 retry_delay = INITIAL_RETRY_DELAY_SECONDS
                 for update in updates:
@@ -4043,6 +4055,9 @@ def run_polling(
                             retry_delay = min(retry_delay * 2, MAX_RETRY_DELAY_SECONDS)
                             break
                         if not _complete_telegram_dispatch_journal(runtime_context, update):
+                            pending_key = _telegram_dispatch_retry_key_for_update(runtime_context, update)
+                            if pending_key:
+                                pending_journal_completions.add(pending_key)
                             LOGGER.error(
                                 "Telegram dispatch journal was not finalized after offset persistence; "
                                 "update is acknowledged and journal cleanup remains pending "
