@@ -3430,3 +3430,18 @@ nach 9 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `13/20` Commits. Kein Push. Restart
 nach 7 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Recovery-Snapshot-Scan-ueberspringt-Resolve-Fehler
+
+- 2026-07-17: Snapshot-Discovery rief `Path.resolve()` vor dem Symlink-
+  Filter auf. Symlink-Schleifen in alten Backups konnten dadurch einen
+  `RuntimeError` und Report-Abbruch ausloesen.
+- Unaufloesbare Snapshot-Kandidaten werden jetzt uebersprungen; aktive Quellen
+  und andere Snapshots bleiben auswertbar.
+- Regression: Glob- und Symlink-Loop-Fokus -> `2 passed`; komplette
+  `tests/test_admin_accounts.py` -> `98 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `24afd085 fix: skip unresolved recovery snapshots`.
+
+**Aktueller Laufstand:** Seit dem Restart `15/20` Commits. Kein Push. Restart
+nach 5 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
