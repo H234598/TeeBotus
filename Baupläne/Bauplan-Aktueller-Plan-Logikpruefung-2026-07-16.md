@@ -7824,7 +7824,7 @@ Push. Restart erst bei `20/20`.
   Zustand jetzt wie unlesbares JSON.
 - Test: `tests/test_message_tracking.py` -> `9 passed`; Ruff, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
-- Code-Commit: folgt direkt.
+- Code-Commit: `f73d996f fix: clear tracker state on invalid schema`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `12/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
