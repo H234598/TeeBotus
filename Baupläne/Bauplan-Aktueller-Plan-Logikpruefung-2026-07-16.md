@@ -4384,3 +4384,19 @@ erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `1/20` Commits. Kein Push. Restart
 nach 19 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+### Read-only-Memory-Health-fuer-SQL
+
+- 2026-07-17: PostgreSQL-`read_entries()` und `read_index()` initialisierten
+  beim Statuscheck fehlende Tabellen per `CREATE TABLE/INDEX`. Der Fallback-
+  Reader konnte bei Healthchecks ausserdem die Primary-Datenbank reparieren.
+- Healthchecks verwenden jetzt eigene read-only Reader. PostgreSQL prueft nur
+  `information_schema`; SQLite bleibt read-only; der Fallback nutzt Secondary-
+  Daten ohne Promotion/Repair und meldet ausstehende Reparatur sichtbar.
+- Regressionen: PostgreSQL read-only ohne Schema-DDL -> `3 passed`; Fallback-
+  Read-only ohne Repair -> `3 passed`; komplette `tests/test_account_store.py`
+  -> `315 passed`; Memory-Benchmark plus Status/Notifications -> `240 passed`.
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `62f8c633 fix: keep memory health checks read-only`.
+
+**Aktueller Laufstand:** Seit dem Restart `3/20` Commits. Kein Push. Restart
+nach 17 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
