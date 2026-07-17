@@ -43,6 +43,7 @@ ACCOUNT_INDEX_FILENAME = "Account_Index.json"
 ACCOUNT_IDENTITIES_FILENAME = "Account_Identities.json"
 ACCOUNT_IDENTITIES_LOCK_FILENAME = ".Account_Identities.json.lock"
 ACCOUNT_MEMORY_LOCK_FILENAME = ".Account_Memory.lock"
+ACCOUNT_LLM_CHAIN_LOCK_FILENAME = ".Account_LLM_Chain.lock"
 ACCOUNT_SECRETS_FILENAME = "Account_Secrets.json"
 ACCOUNT_KEYRING_FILENAME = "Account_Keyring.json"
 ACCOUNTS_DIRNAME = "accounts"
@@ -1380,7 +1381,12 @@ def _serialize_instance_memory(method: Callable[..., Any]) -> Callable[..., Any]
 
 
 @contextmanager
-def account_memory_lock_for_root(root: Path, account_id: str) -> Iterator[None]:
+def account_memory_lock_for_root(
+    root: Path,
+    account_id: str,
+    *,
+    lock_filename: str = ACCOUNT_MEMORY_LOCK_FILENAME,
+) -> Iterator[None]:
     """Serialize account-memory/state operations for an AccountStore root."""
 
     account_id = validate_sha512_token(account_id, field_name="account_id")
@@ -1395,7 +1401,7 @@ def account_memory_lock_for_root(root: Path, account_id: str) -> Iterator[None]:
     ):
         descriptor = _open_stable_directory_descriptor(path, label=label, create_missing=True)
         os.close(descriptor)
-    lock_path = account_dir / ACCOUNT_MEMORY_LOCK_FILENAME
+    lock_path = account_dir / lock_filename
     lock_key = os.path.realpath(os.fspath(lock_path))
     with _ACCOUNT_MEMORY_LOCK:
         held_paths = getattr(_ACCOUNT_MEMORY_LOCK_STATE, "paths", None)
@@ -1957,6 +1963,17 @@ class AccountStore:
         """Serialize per-account memory read-modify-write operations."""
 
         with account_memory_lock_for_root(self.root, account_id):
+            yield
+
+    @contextmanager
+    def account_llm_chain_lock(self, account_id: str) -> Iterator[None]:
+        """Serialize one account's stateful LLM request and response pair."""
+
+        with account_memory_lock_for_root(
+            self.root,
+            account_id,
+            lock_filename=ACCOUNT_LLM_CHAIN_LOCK_FILENAME,
+        ):
             yield
 
     def account_id(self, identity_key: str, *, create: bool = False, display_label: str = "") -> str | None:

@@ -8019,6 +8019,23 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `16/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### Stateful-LLM-Lock: keinen Deadlock mit Proactive-Locks erzeugen
+
+* 2026-07-18: Der Account-Memory-Lock aus Fix 16 hielt bei kompletter Engine-
+  Verarbeitung. Proactive-Pfade verwenden aber die umgekehrte Reihenfolge
+  `proactive_outbox -> account_memory`; parallele Nachrichten und Scheduler
+  konnten dadurch gegenseitig warten.
+* Stateful-LLM-Ketten verwenden jetzt separaten `.Account_LLM_Chain.lock`.
+  Memory-, Proactive- und Status-Locks bleiben unabhängig; State-Persistenz
+  wird innerhalb der LLM-Kettensperre weiterhin vom Account-Memory-Lock
+  geschützt.
+* Test: komplette Engine-Suite -> `284 passed`; Account-/State-Suite -> `410
+  passed`; Ruff, Compile und `git diff --check` gruen. Kein Provider/API-Aufruf.
+* Code-Commit: `bf53aeea fix: isolate stateful llm chain lock`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `17/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Working-Memory: Prozessuebergreifende Schreibzugriffe serialisieren
 
 - 2026-07-17: `WorkingMemoryStore` nutzte nur einen prozesslokalen

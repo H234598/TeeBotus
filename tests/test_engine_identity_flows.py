@@ -3193,6 +3193,9 @@ def test_engine_serializes_stateful_requests_per_account(tmp_path):
     assert not client.overlapped
     assert sorted(client.previous_ids, key=lambda value: value is not None) == [None, "response-1"]
 
+    lock_path = account_store.account_dir(account_id) / ".Account_LLM_Chain.lock"
+    assert lock_path.exists()
+
 
 def test_engine_does_not_reuse_previous_response_id_after_provider_switch(tmp_path):
     provider = StaticSecretProvider(b"e" * 32)

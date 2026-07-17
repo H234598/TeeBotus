@@ -266,7 +266,10 @@ class TeeBotusEngine:
             validate_sha512_token(normalized_account_id, field_name="account_id")
         except AccountStoreError:
             return nullcontext()
-        lock_factory = getattr(self.account_store, "account_memory_lock", None)
+        lock_factory = getattr(self.account_store, "account_llm_chain_lock", None)
+        if not callable(lock_factory):
+            # Compatibility for small test/dummy stores predating the dedicated lock.
+            lock_factory = getattr(self.account_store, "account_memory_lock", None)
         if not callable(lock_factory):
             return nullcontext()
         return lock_factory(normalized_account_id)
