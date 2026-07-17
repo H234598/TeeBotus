@@ -3445,3 +3445,18 @@ nach 7 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `15/20` Commits. Kein Push. Restart
 nach 5 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Recovery-Source-Probes-isolieren-Fehler
+
+- 2026-07-17: `_inspect_source()` liess Probe-Ausnahmen aus einzelnen
+  SQLite-/JSON-Quellen bis zur Instanzliste durch. Eine fehlerhafte Source
+  konnte dadurch den gesamten Recovery-Report stoppen.
+- Probe-Ausnahmen werden jetzt in ein standardisiertes unlesbar-Source-
+  Ergebnis umgewandelt; andere Accounts und Quellen bleiben auswertbar.
+- Regression: Source-Probe-Fehler plus Snapshot-/JSON-Fokus -> `9 passed`;
+  komplette `tests/test_admin_accounts.py` -> `99 passed`. Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2dd34a6e fix: isolate recovery source probe failures`.
+
+**Aktueller Laufstand:** Seit dem Restart `17/20` Commits. Kein Push. Restart
+nach 3 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
