@@ -5231,3 +5231,20 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `10/20` Commits. Kein Push. Restart nach 10 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Instanz-Discovery-Fehler strukturiert
+
+- 2026-07-17: Ein nichtverzeichnisartiges `instances_dir` liess
+  `Path.iterdir()` ungefangen abbrechen. Der Scheduler lieferte dadurch keinen
+  maschinenlesbaren Fehlerreport.
+- Discovery-Fehler werden jetzt als Top-Level-
+  `instance_discovery_failed` mit `ok=False` ausgegeben; Store-Erzeugung wird
+  nicht versucht. Fehlendes Verzeichnis bleibt weiterhin leere Discovery.
+- CLI-Textreport zeigt den Top-Level-Fehler explizit.
+- Test: `tests/test_proactive_cli.py` `55 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1fecdc90 fix: report proactive instance discovery errors`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`12/20` Commits. Kein Push. Restart nach 8 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
