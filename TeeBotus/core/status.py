@@ -1839,6 +1839,9 @@ def account_memory_payload_size(*, account_store: AccountStore | None, account_i
         except (AccountStoreError, OSError, ValueError):
             LOGGER.exception("Failed to resolve account memory backend for status size.")
             return None
+        except Exception:  # noqa: BLE001 - unexpected memory backend failures must not abort /status.
+            LOGGER.exception("Unexpected failure while resolving account memory backend for status size.")
+            return None
         lock_factory = getattr(account_store, "account_memory_lock", None)
         lock = lock_factory(account_id) if callable(lock_factory) else contextlib.nullcontext()
         with lock:
@@ -1885,6 +1888,9 @@ def memory_encryption_status(directory: Path | None, *, account_store: AccountSt
             backend = account_store.account_memory_backend
         except (AccountStoreError, OSError, ValueError):
             LOGGER.exception("Failed to resolve account memory backend encryption status.")
+            return "Datenbank-Backend nicht verfuegbar"
+        except Exception:  # noqa: BLE001 - unexpected memory backend failures must not abort /status.
+            LOGGER.exception("Unexpected failure while resolving account memory backend encryption status.")
             return "Datenbank-Backend nicht verfuegbar"
         if backend is not None:
             return "Datenbank-Backend, Payloads verschluesselt"

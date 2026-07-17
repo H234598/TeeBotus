@@ -224,6 +224,26 @@ def test_status_proactive_health_failure_is_diagnosed() -> None:
     assert "- Agent enabled: Fehler beim Lesen" in lines
 
 
+def test_status_memory_backend_resolution_failure_is_diagnosed() -> None:
+    class BrokenMemoryStore:
+        @property
+        def account_memory_backend(self):
+            raise RuntimeError("memory backend unavailable")
+
+    store_with_failure = BrokenMemoryStore()
+
+    assert status_core.account_memory_payload_size(
+        account_store=store_with_failure,  # type: ignore[arg-type]
+        account_id="a" * 128,
+        fallback_directory=None,
+    ) is None
+    assert status_core.memory_encryption_status(
+        None,
+        account_store=store_with_failure,  # type: ignore[arg-type]
+        account_id="a" * 128,
+    ) == "Datenbank-Backend nicht verfuegbar"
+
+
 def test_admin_flow_state_failure_is_user_visible_without_aborting_message_processing(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
