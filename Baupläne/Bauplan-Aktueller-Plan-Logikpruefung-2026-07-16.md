@@ -5247,6 +5247,21 @@ bleibt erst bei 100 Commits.
 `18/20` Commits. Kein Push. Restart nach 2 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Dispatch-Attempts gegen negative Altwerte gehaertet
+
+- 2026-07-17: Negative `dispatch_attempts` aus kaputtem Altbestand konnten
+  unter null bleiben und dadurch das Retry-Limit fuer viele weitere Versuche
+  aushebeln.
+- Claim und Sendefehlerpfad klemmen Werte jetzt auf mindestens null; Health
+  meldet negative oder nicht numerische `dispatch_attempts` explizit.
+- Test: `tests/test_proactive_agent.py` `144 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1917838d fix: clamp proactive dispatch attempts`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
+bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
+
 ### Proactive-Wiederholungsregel-validiert
 
 - 2026-07-17: Nicht parsebare Wiederholungen wie `every fortnight` wurden
