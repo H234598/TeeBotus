@@ -6301,6 +6301,8 @@ bleibt erst bei 100 Commits.
   `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `3fa026c4 fix: report unexpected proactive discovery errors`.
 
-**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
-`19/20` Commits. Kein Push. Restart nach 1 weiterem Commit. Naechster Push
-bleibt erst bei 100 Commits.
+**Aktueller Laufstand:** Nach dem anschliessenden Plan-Commit
+`3b31b0bd docs: record proactive discovery guard` waren `20/20` Commits
+erreicht. Kein Push. Restart ist erfolgt; neuer Zyklus steht nach dieser
+Korrektur bei `1/20`.
+Naechster Push bleibt erst bei 100 Commits.
