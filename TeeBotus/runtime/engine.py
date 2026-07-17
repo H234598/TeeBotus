@@ -1125,10 +1125,14 @@ class TeeBotusEngine:
 
     def _handle_wtf(self, event: IncomingEvent, account_id: str) -> EngineResult:
         try:
-            notification = self.state.pop_link_notification(
-                instance_name=event.instance,
-                account_id=account_id,
-                old_identity_key=event.identity_key,
+            pending_notifications = self.state.list_link_notifications(instance_name=event.instance, account_id=account_id)
+            notification = next(
+                (
+                    item
+                    for item in pending_notifications
+                    if isinstance(item, dict) and str(item.get("old_identity_key") or "") == event.identity_key
+                ),
+                None,
             )
         except Exception:  # noqa: BLE001 - security state lookup must fail closed.
             LOGGER.exception("WTF notification lookup failed instance=%s account=%s", event.instance, account_id)
@@ -1138,16 +1142,7 @@ class TeeBotusEngine:
                 handled=True,
             )
         if not notification:
-            try:
-                has_pending_notifications = bool(self.state.list_link_notifications(instance_name=event.instance, account_id=account_id))
-            except Exception:  # noqa: BLE001 - security state lookup must fail closed.
-                LOGGER.exception("WTF notification listing failed instance=%s account=%s", event.instance, account_id)
-                return EngineResult(
-                    account_id,
-                    [SendText(event.chat_id, "Die Sicherheitsaktion konnte gerade nicht abgeschlossen werden. Bitte spaeter erneut versuchen.", track=False)],
-                    handled=True,
-                )
-            if has_pending_notifications:
+            if pending_notifications:
                 return EngineResult(
                     account_id,
                     [SendText(event.chat_id, "WTF? kann nur über einen bereits bestehenden Kommunikationsweg bestätigt werden.", track=False)],
@@ -1188,17 +1183,33 @@ class TeeBotusEngine:
             # communication path linked instead of half-unlinking without issuing a new secret.
             try:
                 _, new_secret = self.account_store.rotate_secret(account_id)
-                self.account_store.unlink_identity_if_linked_to(new_identity, account_id)
-                self.state.clear_link_notifications_for_new_identity(
-                    instance_name=event.instance,
-                    account_id=account_id,
-                    new_identity_key=new_identity,
-                )
+                unlinked_account = self.account_store.unlink_identity_if_linked_to(new_identity, account_id)
+                if unlinked_account is None:
+                    raise AccountStoreError("suspicious communication path is no longer linked")
             except Exception:  # noqa: BLE001 - security mutations must not claim completion after partial failure.
                 LOGGER.exception("WTF security mutation failed instance=%s account=%s", event.instance, account_id)
                 return EngineResult(
                     account_id,
                     [SendText(event.chat_id, "Die Sicherheitsaktion konnte gerade nicht abgeschlossen werden. Bitte spaeter erneut versuchen.", track=False)],
+                    handled=True,
+                )
+            try:
+                self.state.clear_link_notifications_for_new_identity(
+                    instance_name=event.instance,
+                    account_id=account_id,
+                    new_identity_key=new_identity,
+                )
+            except Exception:  # noqa: BLE001 - cleanup failure must not hide completed security mutation.
+                LOGGER.exception("WTF notification cleanup failed after mutation instance=%s account=%s", event.instance, account_id)
+                return EngineResult(
+                    account_id,
+                    [
+                        SendText(
+                            event.chat_id,
+                            f"Die neue Verknüpfung wurde getrennt und dein Secret wurde rotiert.\n\nNeues Secret:\n{new_secret}\n\nHinweis: Die Sicherheitsnotiz konnte noch nicht bereinigt werden.",
+                            track=False,
+                        )
+                    ],
                     handled=True,
                 )
         else:

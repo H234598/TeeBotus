@@ -575,7 +575,7 @@ def test_wtf_notification_lookup_failure_is_user_visible_without_aborting_flow(t
     engine = TeeBotusEngine(account_store=account_store)
     identity = telegram_identity_key(1)
 
-    monkeypatch.setattr(engine.state, "pop_link_notification", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("notification state unavailable")))
+    monkeypatch.setattr(engine.state, "list_link_notifications", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("notification state unavailable")))
 
     result = engine.process_identity_flows(event(identity, "WTF?"))
 
@@ -920,6 +920,40 @@ def test_wtf_security_mutation_failure_does_not_claim_success(tmp_path, monkeypa
     assert len(result.actions) == 1
     assert "nicht abgeschlossen" in result.actions[0].text
     assert account_store.get_account_for_identity(new_signal) == account_id
+    assert engine.state.list_link_notifications(instance_name="Depressionsbot", account_id=account_id)
+
+
+def test_wtf_does_not_claim_success_when_unlink_races_away(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    first = engine.process_identity_flows(event(telegram_identity_key(1), "/register"))
+    account_id, secret = _tokens(first.actions[0].text)
+    new_signal = signal_identity_key(source_uuid="new-race")
+
+    engine.process_identity_flows(event(new_signal, f"/login {account_id} {secret}", channel="signal"))
+    monkeypatch.setattr(account_store, "unlink_identity_if_linked_to", lambda *_args, **_kwargs: None)
+
+    result = engine.process_identity_flows(event(telegram_identity_key(1), "WTF?"))
+
+    assert "nicht abgeschlossen" in result.actions[0].text
+    assert "Secret wurde rotiert" not in result.actions[0].text
+    assert account_store.get_account_for_identity(new_signal) == account_id
+
+
+def test_wtf_reports_secret_when_notification_cleanup_fails_after_mutation(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    first = engine.process_identity_flows(event(telegram_identity_key(1), "/register"))
+    account_id, secret = _tokens(first.actions[0].text)
+    new_signal = signal_identity_key(source_uuid="new-cleanup")
+
+    engine.process_identity_flows(event(new_signal, f"/login {account_id} {secret}", channel="signal"))
+    monkeypatch.setattr(engine.state, "clear_link_notifications_for_new_identity", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("cleanup unavailable")))
+
+    result = engine.process_identity_flows(event(telegram_identity_key(1), "WTF?"))
+
+    assert "Neues Secret:" in result.actions[0].text
+    assert account_store.get_account_for_identity(new_signal) is None
 
 
 def test_new_identity_cannot_use_wtf_notification_for_itself(tmp_path):
