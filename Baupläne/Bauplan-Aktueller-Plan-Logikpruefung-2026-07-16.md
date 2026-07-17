@@ -6626,6 +6626,23 @@ bleibt erst bei 100 Commits.
 Dieser Plan-Commit macht Zyklus `20/20` voll. Kein Push. Dienst-Neustart jetzt;
 danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
+### Admin-Status kapselt Account-Verzeichnisfehler
+
+- 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
+  Store-Ausnahmen nach oben laufen. Admin-Status und Summary-Versand konnten
+  dadurch bei einem einzelnen kaputten Account-Backend komplett abbrechen.
+- Der Verzeichnischeck fail-closed jetzt auf `False`, loggt den Fehlertyp und
+  laesst Route-/Statusdiagnose fuer weitere Accounts weiterlaufen. Kein
+  Account wird dadurch autorisiert oder neu angelegt.
+- Test: `tests/test_runtime_admin_accounts.py` `34 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `87af7cdc fix: contain admin account directory errors`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`1/20` Commits. Kein Push. Restart nach 19 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `2/20` voll.
+
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
