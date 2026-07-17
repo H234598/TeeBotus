@@ -374,12 +374,21 @@ def quarantine_unrecoverable_account_memory(
     for instance in report.get("instances", []) if isinstance(report.get("instances"), list) else []:
         if not isinstance(instance, Mapping):
             continue
-        instance_result = _quarantine_instance_unrecoverable(
-            instance,
-            apply=apply,
-            quarantine_dir=quarantine_dir,
-            timestamp=timestamp,
-        )
+        try:
+            instance_result = _quarantine_instance_unrecoverable(
+                instance,
+                apply=apply,
+                quarantine_dir=quarantine_dir,
+                timestamp=timestamp,
+            )
+        except (AccountStoreError, OSError, ValueError, RuntimeError) as exc:
+            instance_result = {
+                "instance": str(instance.get("instance") or "instance"),
+                "accounts_root": str(instance.get("accounts_root") or ""),
+                "status": "blocked",
+                "error": f"quarantine: {exc}",
+                "totals": {key: 0 for key in result["totals"]},
+            }
         if instance_result.get("status") == "blocked":
             result["status"] = "blocked"
             result["instances"].append(instance_result)

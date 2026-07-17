@@ -1176,6 +1176,28 @@ def test_memory_recovery_source_probe_error_stays_account_local(monkeypatch, tmp
     assert report["error"] == "probe: SQLite config symlink loop"
 
 
+def test_memory_recovery_unrecoverable_quarantine_turns_instance_error_into_blocked(monkeypatch, tmp_path: Path) -> None:
+    report = {
+        "instances": [
+            {
+                "instance": "Depressionsbot",
+                "accounts_root": str(tmp_path / "accounts"),
+                "accounts": [{"account_id": "a" * 128, "recovery_status": "unrecoverable"}],
+            }
+        ]
+    }
+
+    def fail_quarantine(*_args: Any, **_kwargs: Any):
+        raise OSError("snapshot destination disappeared")
+
+    monkeypatch.setattr(account_memory_recovery_module, "_quarantine_instance_unrecoverable", fail_quarantine)
+
+    result = quarantine_unrecoverable_account_memory(report, apply=True, running_processes=[])
+
+    assert result["status"] == "blocked"
+    assert result["instances"][0]["error"] == "quarantine: snapshot destination disappeared"
+
+
 def test_memory_recovery_quarantine_blocks_missing_report_accounts_root(tmp_path: Path) -> None:
     account_id = "e" * 128
     report = {
@@ -1959,9 +1981,10 @@ def test_memory_recovery_snapshots_all_sqlite_sources_before_deleting(monkeypatc
         ]
     }
 
-    with pytest.raises(OSError, match="second snapshot failed"):
-        quarantine_unrecoverable_account_memory(report, apply=True, running_processes=[])
+    result = quarantine_unrecoverable_account_memory(report, apply=True, running_processes=[])
 
+    assert result["status"] == "blocked"
+    assert result["instances"][0]["error"] == "quarantine: second snapshot failed"
     assert snapshot_calls == [first, second]
     assert delete_calls == []
 
