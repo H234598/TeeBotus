@@ -6840,6 +6840,22 @@ Commits. Kein Push. Restart nach 16 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `5/20` sichtbar.
 
+### WTF-Link-Notification-State fail-closed
+
+- 2026-07-17: `_handle_wtf()` liess Notification-Lookup, Listing und Cleanup
+  ungefangen. Defekter Runtime-State konnte `WTF?` ohne Antwort abbrechen oder
+  einen falschen „keine Verknüpfung“-No-op melden.
+- Sicherheitslookup und Aufräumen melden jetzt kontrollierten Fehler. Eine
+  unklare State-Lage autorisiert keine Rotation und behauptet keine Änderung.
+- Test: fokussierter WTF-Statepfad `5 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `55de7953 fix: contain WTF notification state failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `6/20`
+Commits. Kein Push. Restart nach 14 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `7/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
