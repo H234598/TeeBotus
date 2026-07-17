@@ -2120,6 +2120,26 @@ def test_memory_recovery_json_report_rejects_symlinked_memory_file(tmp_path: Pat
     assert external.read_text(encoding="utf-8") == "outside\n"
 
 
+def test_memory_recovery_json_report_rejects_dangling_memory_symlink(tmp_path: Path) -> None:
+    accounts_root = tmp_path / "data" / "accounts"
+    account_id = "d" * 128
+    account_dir = accounts_root / "accounts" / account_id
+    account_dir.mkdir(parents=True)
+    (account_dir / "User_Memory_Entries.jsonl").symlink_to(tmp_path / "missing-entries.jsonl")
+
+    report = account_memory_recovery_module._inspect_json_source(
+        account_memory_recovery_module.RecoverySource("json_files", "json", account_dir.parent),
+        instance_name="Depressionsbot",
+        account_id=account_id,
+        provider=provider(),
+    )
+
+    assert report["readable"] is False
+    assert report["entries"] == 0
+    assert report["raw_entries"] == 0
+    assert "refusing symlinked JSON recovery file" in report["error"]
+
+
 def test_memory_recovery_report_includes_unreadable_metadata_account_ids(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"

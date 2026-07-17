@@ -1380,22 +1380,20 @@ def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_
             "raw_collections": 0,
             "error": f"refusing symlinked JSON recovery path: {symlink_component}",
         }
-    if entries_path.exists():
-        if entries_path.is_symlink():
-            errors.append(f"entries: refusing symlinked JSON recovery file: {entries_path}")
-        else:
-            try:
-                entries = store.account_memory_vault.read_jsonl(entries_path)
-            except (AccountStoreError, OSError, ValueError) as exc:
-                errors.append(f"entries: {exc}")
-    if index_path.exists():
-        if index_path.is_symlink():
-            errors.append(f"index: refusing symlinked JSON recovery file: {index_path}")
-        else:
-            try:
-                index = store.account_memory_vault.read_json(index_path, {})
-            except (AccountStoreError, OSError, ValueError) as exc:
-                errors.append(f"index: {exc}")
+    if entries_path.is_symlink():
+        errors.append(f"entries: refusing symlinked JSON recovery file: {entries_path}")
+    elif entries_path.exists():
+        try:
+            entries = store.account_memory_vault.read_jsonl(entries_path)
+        except (AccountStoreError, OSError, ValueError) as exc:
+            errors.append(f"entries: {exc}")
+    if index_path.is_symlink():
+        errors.append(f"index: refusing symlinked JSON recovery file: {index_path}")
+    elif index_path.exists():
+        try:
+            index = store.account_memory_vault.read_json(index_path, {})
+        except (AccountStoreError, OSError, ValueError) as exc:
+            errors.append(f"index: {exc}")
     for filename in JSON_ACCOUNT_STATE_FILES:
         path = source.path / account_id / filename
         if path.is_symlink():
