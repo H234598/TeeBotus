@@ -5977,6 +5977,25 @@ def test_account_metadata_health_lines_fail_closed_on_value_error(tmp_path: Path
     ]
 
 
+def test_account_metadata_health_lines_rejects_non_object_documents(tmp_path: Path) -> None:
+    root = tmp_path / "accounts"
+    metadata_path = root / "Account_Index.json"
+    metadata_path.parent.mkdir(parents=True)
+    metadata_path.write_text("[]", encoding="utf-8")
+
+    class BrokenShapeVault:
+        def read_json(self, _path: Path, _default: object) -> object:
+            return []
+
+    store = SimpleNamespace(root=root, vault=BrokenShapeVault(), accounts_dir=root / "accounts")
+
+    lines = _account_metadata_health_lines(store, [], instance_name="Demo")
+
+    assert lines == [
+        f"account_memory_metadata=Demo status=broken item=account_index path={metadata_path} error=metadata document is not an object",
+    ]
+
+
 def test_account_memory_index_health_reports_recovery_when_store_open_fails(tmp_path: Path, monkeypatch) -> None:
     account_id = "a" * 128
     account_dir = tmp_path / "instances" / "Demo" / "data" / "accounts" / "accounts" / account_id
