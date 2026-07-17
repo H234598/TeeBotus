@@ -441,8 +441,8 @@ class PostgresAccountMemoryBackend:
                 self._decrypt_json(
                     account_id,
                     _collection_payload_id(collection_name, normalized_item_key),
-                    bytes(existing[1]),
-                    bytes(existing[2]),
+                    _coerce_binary_payload(existing[1], "payload_nonce"),
+                    _coerce_binary_payload(existing[2], "payload_ciphertext"),
                 )
                 nonce, ciphertext = self._encrypt_json(account_id, _collection_payload_id(collection_name, normalized_item_key), dict(row))
                 updated = connection.execute(

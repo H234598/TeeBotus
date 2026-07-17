@@ -375,6 +375,44 @@ def test_postgres_backend_reports_invalid_binary_fields_as_corrupt(monkeypatch, 
     assert "skipped corrupt rows" in caplog.text
 
 
+def test_postgres_replace_collection_item_rejects_invalid_binary_fields(monkeypatch) -> None:
+    class FakeResult:
+        def fetchone(self):
+            return (0, "not-bytes", b"cipher")
+
+    class FakeTransaction:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def transaction(self):
+            return FakeTransaction()
+
+        def execute(self, _sql: str, _params: tuple) -> FakeResult:
+            return FakeResult()
+
+    backend = PostgresAccountMemoryBackend(
+        instance_name="Bench",
+        provider=StaticSecretProvider(b"p" * 32),
+        purpose="account-structured-memory-key",
+        config=PostgresMemoryConfig(dsn="postgresql://unused"),
+    )
+    monkeypatch.setattr(backend, "_ensure_schema", lambda: None)
+    monkeypatch.setattr(backend, "_connect", lambda: FakeConnection())
+
+    with pytest.raises(AccountStoreError, match="payload_nonce has invalid binary type"):
+        backend.replace_collection_item("a" * 128, "status_outbox", "row_1", {"id": "row_1"})
+
+
 def test_postgres_backend_rebuilds_schema_after_missing_relation(monkeypatch) -> None:
     class MissingRelationError(Exception):
         sqlstate = "42P01"
