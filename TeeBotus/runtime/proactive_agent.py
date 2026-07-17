@@ -404,6 +404,8 @@ def queue_proactive_message(
     normalized_category = str(category or "").strip().casefold()
     normalized_intent = str(intent or "").strip()
     normalized_message_text = str(message_text or "").strip()
+    raw_due_at = str(due_at or "").strip()
+    parsed_due_at = _parse_proactive_datetime(raw_due_at)
     raw_recurrence = str(recurrence or "").strip()
     normalized_recurrence = _normalize_recurrence_rule(raw_recurrence)
     normalized_risk_gate = _normalize_risk_gate(risk_gate)
@@ -418,6 +420,8 @@ def queue_proactive_message(
         return ProactiveDecision(False, "missing_intent")
     if not normalized_message_text:
         return ProactiveDecision(False, "missing_message_text")
+    if raw_due_at and parsed_due_at is None:
+        return ProactiveDecision(False, "invalid_due_at")
     if raw_recurrence and not normalized_recurrence:
         return ProactiveDecision(False, "invalid_recurrence")
     status = "review_pending" if normalized_risk_gate in PROACTIVE_RISK_REVIEW_GATES else "queued"
@@ -429,7 +433,7 @@ def queue_proactive_message(
         "intent": normalized_intent,
         "message_text": normalized_message_text,
         "reason_memory_ids": [str(memory_id) for memory_id in reason_memory_ids if str(memory_id or "").strip()],
-        "due_at": str(due_at or "").strip(),
+        "due_at": raw_due_at,
         "risk_gate": normalized_risk_gate,
         "planner": {str(key): value for key, value in (planner or {}).items()},
         "policy_result": policy_result,
@@ -443,7 +447,7 @@ def queue_proactive_message(
         payload["user_requested_reminder"] = True
     if normalized_recurrence:
         payload["recurrence"] = normalized_recurrence
-        anchor = _parse_proactive_datetime(str(due_at or "")) or resolved_now
+        anchor = parsed_due_at or resolved_now
         recurrence_timezone = _recurrence_timezone_name(anchor)
         if recurrence_timezone:
             payload["recurrence_timezone"] = recurrence_timezone

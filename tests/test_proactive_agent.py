@@ -247,6 +247,27 @@ def test_proactive_queue_rejects_unknown_recurrence_before_write(tmp_path) -> No
     assert account_store.read_proactive_outbox(account_id) == []
 
 
+def test_proactive_queue_rejects_invalid_due_at_before_write(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="morgen-frueh",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert decision == ProactiveDecision(False, "invalid_due_at")
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
 def test_proactive_policy_denies_non_consented_category_and_group_route(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)
@@ -3929,9 +3950,13 @@ def test_dispatch_fails_invalid_due_at_without_sending(tmp_path) -> None:
         category="reminder",
         intent="follow_up",
         message_text="Ping",
-        due_at="not-a-date",
+        due_at="2026-06-15T11:00:00+00:00",
         now=now,
     )
+    item_id = queued.reason.removeprefix("queued:")
+    item = account_store.read_proactive_outbox(account_id)[0]
+    item["due_at"] = "not-a-date"
+    account_store.write_proactive_outbox(account_id, [item])
     calls = []
 
     async def sender(route: dict, action: SendText, item: dict) -> str:
@@ -3947,7 +3972,6 @@ def test_dispatch_fails_invalid_due_at_without_sending(tmp_path) -> None:
         )
     )
 
-    item_id = queued.reason.removeprefix("queued:")
     assert [result.item_id for result in results] == [item_id]
     assert results[0].status == "failed"
     assert results[0].reason == "invalid_due_at"
