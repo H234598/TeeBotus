@@ -2926,6 +2926,24 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Identity-Metadata-Snapshots-und-Rollbacks-ueber-stabile-Pfade
+
+- 2026-07-17: Identity-Alias-Reparatur und allgemeine Identity-Rollbacks
+  lasen Snapshot-Dateien per `path.read_bytes()` und entfernten fehlende
+  Ziele per `path.unlink()`. Ein Swap konnte damit fremde Metadaten lesen oder
+  loeschen.
+- Snapshot-Reads nutzen jetzt stabile Parent-/Datei-FDs; fehlende
+  Rollback-Ziele werden ueber den FD-gebundenen, regularen Single-Link-Unlink
+  entfernt. Atomare Wiederherstellung bleibt erhalten.
+- Regression: Identity-/Merge-/Rollback-Fokus -> `16 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `304 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3460b601 fix: make identity metadata rollback path-safe`.
+
+**Aktueller Laufstand:** Seit dem Restart `12/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 8 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
