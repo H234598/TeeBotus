@@ -3692,6 +3692,56 @@ def test_concurrent_loudness_confirmations_reply_only_once(tmp_path) -> None:
     assert route_state["status"] == "confirmed"
 
 
+def test_scheduler_preserves_concurrent_agent_state_update(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    set_identity_last_seen(account_store, identity, now)
+    original_read = AccountStore.read_agent_state
+    scheduler_read = threading.Event()
+    release_scheduler = threading.Event()
+    errors: list[BaseException] = []
+
+    def gated_read(current_store, current_account_id):
+        value = original_read(current_store, current_account_id)
+        if threading.current_thread().name == "loudness-scheduler-state-race":
+            scheduler_read.set()
+            if not release_scheduler.wait(timeout=2):
+                raise AssertionError("scheduler read gate was not released")
+        return value
+
+    monkeypatch.setattr(AccountStore, "read_agent_state", gated_read)
+
+    def run_scheduler() -> None:
+        try:
+            queue_due_notification_loudness_prompts(account_store, account_id, now=now)
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    def run_state_writer() -> None:
+        try:
+            state = account_store.read_agent_state(account_id)
+            state["concurrent_state_marker"] = "preserve"
+            account_store.write_agent_state(account_id, state)
+        except BaseException as exc:  # pragma: no cover - only used to report thread failures.
+            errors.append(exc)
+
+    scheduler = threading.Thread(target=run_scheduler, name="loudness-scheduler-state-race")
+    writer = threading.Thread(target=run_state_writer, name="agent-state-writer")
+    scheduler.start()
+    assert scheduler_read.wait(timeout=1)
+    writer.start()
+    release_scheduler.set()
+    scheduler.join(timeout=2)
+    writer.join(timeout=2)
+
+    assert errors == []
+    assert not scheduler.is_alive()
+    assert not writer.is_alive()
+    assert account_store.read_agent_state(account_id).get("concurrent_state_marker") == "preserve"
+
+
 def test_scheduler_cannot_overwrite_concurrent_loudness_confirmation(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

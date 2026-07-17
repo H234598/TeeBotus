@@ -1717,7 +1717,7 @@ def maybe_handle_notification_loudness_response(
             return None
         if not _event_has_current_private_route(account_store, event):
             return None
-        with _account_proactive_outbox_lock(account_store, account_id):
+        with _account_proactive_outbox_lock(account_store, account_id), account_store.account_memory_lock(account_id):
             if not _event_belongs_to_account(account_store, event, account_id):
                 return None
             if not _event_has_current_private_route(account_store, event):
@@ -1761,7 +1761,7 @@ def maybe_notification_loudness_prompt_action(
             return None
         if not _event_has_current_private_route(account_store, event):
             return None
-        with _account_proactive_outbox_lock(account_store, account_id):
+        with _account_proactive_outbox_lock(account_store, account_id), account_store.account_memory_lock(account_id):
             if not _event_belongs_to_account(account_store, event, account_id):
                 return None
             if not _event_has_current_private_route(account_store, event):
@@ -1793,7 +1793,7 @@ def queue_due_notification_loudness_prompts(
     now: datetime | None = None,
 ) -> tuple[str, ...]:
     try:
-        with _account_proactive_outbox_lock(account_store, account_id):
+        with _account_proactive_outbox_lock(account_store, account_id), account_store.account_memory_lock(account_id):
             return _queue_due_notification_loudness_prompts_unlocked(account_store, account_id, now=now)
     except Exception:  # noqa: BLE001 - scheduler must fail closed on backend errors.
         return ()
