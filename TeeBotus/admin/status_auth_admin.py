@@ -553,7 +553,7 @@ def _build_account_status_auth_report(store: AccountStore, account_id: str) -> d
     if authorized:
         try:
             route = select_proactive_route(store, account_id)
-        except (AccountStoreError, OSError) as exc:
+        except (AccountStoreError, OSError, ValueError) as exc:
             route_error = f"{type(exc).__name__}:{exc}"
             route = None
     return {

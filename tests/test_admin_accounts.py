@@ -638,14 +638,15 @@ def test_status_auth_instance_helpers_reject_instance_path_escape(tmp_path: Path
         )
 
 
-def test_status_auth_report_keeps_account_when_route_lookup_fails(tmp_path: Path, monkeypatch) -> None:
+@pytest.mark.parametrize("route_error", [AccountStoreError("route lookup failed"), ValueError("malformed route state")])
+def test_status_auth_report_keeps_account_when_route_lookup_fails(tmp_path: Path, monkeypatch, route_error: Exception) -> None:
     instance_dir = make_instance(tmp_path)
     store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account("telegram:user:2", display_label="Ada")
     store.write_status_auth_state(account_id, {"schema_version": 1, "authorized": True})
 
     def _broken_route(_store: AccountStore, _account_id: str) -> dict[str, Any]:
-        raise AccountStoreError("route lookup failed")
+        raise route_error
 
     monkeypatch.setattr("TeeBotus.admin.status_auth_admin.select_proactive_route", _broken_route)
 
@@ -653,7 +654,7 @@ def test_status_auth_report_keeps_account_when_route_lookup_fails(tmp_path: Path
 
     account_report = report["instances"][0]["status_auth"]["accounts"][0]
     assert account_report["account_id"] == account_id
-    assert account_report["route_error"] == "AccountStoreError:route lookup failed"
+    assert account_report["route_error"] == f"{type(route_error).__name__}:{route_error}"
 
 
 def test_status_auth_report_handles_non_mapping_state(tmp_path: Path, monkeypatch) -> None:
