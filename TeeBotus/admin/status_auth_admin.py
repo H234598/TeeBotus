@@ -111,7 +111,14 @@ def _safe_output_path(output: str, *, base_dir: str | Path = ".") -> Path:
     is_absolute, parts = _split_safe_relative_parts(output, operation="output path")
     if is_absolute:
         raise ValueError(f"output path must be a safe relative path: {output}")
-    root = Path(base_dir).resolve()
+    base_path = Path(base_dir)
+    base_symlink = _first_symlinked_path_component(base_path)
+    if base_symlink is not None:
+        raise ValueError(f"output base must not use symlinked components: {base_symlink}")
+    try:
+        root = base_path.resolve()
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(f"output base could not be resolved: {base_dir}") from exc
     output_path = Path(*parts)
     lexical_target = root / output_path
     symlink_component = _first_symlinked_path_component(lexical_target)

@@ -823,6 +823,30 @@ def test_status_auth_report_cli_rejects_symlink_output_path(tmp_path: Path, caps
     assert target.read_text(encoding="utf-8") == "keep\n"
 
 
+def test_status_auth_report_cli_rejects_symlinked_output_base(tmp_path: Path, capsys) -> None:
+    real_root = tmp_path / "real-instances"
+    real_root.mkdir()
+    linked_root = tmp_path / "linked-instances"
+    linked_root.symlink_to(real_root, target_is_directory=True)
+
+    result = status_auth_admin_main(
+        [
+            "report",
+            "--instances-dir",
+            str(linked_root),
+            "--format",
+            "json",
+            "--output",
+            "status-auth.json",
+        ],
+        provider=provider(),
+    )
+
+    assert result == 2
+    assert "output base" in capsys.readouterr().err
+    assert not (real_root / "status-auth.json").exists()
+
+
 def test_memory_recovery_report_finds_readable_fallback_when_primary_key_drifted(tmp_path: Path, caplog) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
