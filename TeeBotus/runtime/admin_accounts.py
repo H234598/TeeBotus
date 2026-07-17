@@ -1000,7 +1000,15 @@ def _account_dir_exists(store: AccountStore, account_id: str) -> bool:
     account_dir = getattr(store, "account_dir", None)
     if not callable(account_dir):
         return False
-    return account_dir(account_id).is_dir()
+    try:
+        return account_dir(account_id).is_dir()
+    except Exception as exc:  # noqa: BLE001 - status diagnostics must survive backend filesystem failures.
+        LOGGER.warning(
+            "Admin account directory check failed account=%s error=%s",
+            _status_token(account_id),
+            type(exc).__name__,
+        )
+        return False
 
 
 def _env_instance_token(instance_name: str) -> str:

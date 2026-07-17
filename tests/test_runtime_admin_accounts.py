@@ -118,6 +118,28 @@ def test_admin_account_status_uses_account_route(tmp_path) -> None:
     assert f"admin_account=Depressionsbot/{account_id} status=routable channel=telegram slot=1 source_instance=Depressionsbot" in lines
 
 
+def test_admin_account_status_survives_account_directory_backend_error(tmp_path, monkeypatch, caplog) -> None:
+    account_store = store_for(tmp_path)
+    account_id = DEFAULT_ADMIN_ACCOUNT_IDS[0]
+
+    def broken_account_dir(_account_id):
+        raise RuntimeError("account directory unavailable")
+
+    monkeypatch.setattr(account_store, "account_dir", broken_account_dir)
+
+    with caplog.at_level(logging.WARNING, logger="TeeBotus.runtime.admin_accounts"):
+        lines = admin_account_group_status_lines(
+            instance_name="Depressionsbot",
+            project_root=tmp_path,
+            env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+            store=account_store,
+        )
+
+    assert lines[0].startswith("admin_accounts=Depressionsbot status=configured")
+    assert "not_local=1" in lines[0]
+    assert "Admin account directory check failed" in caplog.text
+
+
 def test_admin_account_status_reports_malformed_route_state(tmp_path, monkeypatch) -> None:
     account_store = store_for(tmp_path)
     identity = telegram_identity_key(123)
