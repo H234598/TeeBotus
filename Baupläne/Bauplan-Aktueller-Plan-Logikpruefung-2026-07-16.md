@@ -5063,6 +5063,24 @@ bleibt erst bei 100 Commits.
   drei Terminalpfade (`missing_sender`, `invalid_sender`, `invalid_file`) den
   Rueckgabewert des `dispatching -> failed`-Updates nicht. Ein Schreibfehler
   konnte dadurch als eigentliche Sender-/Dateifehlerursache erscheinen.
+- Gemeinsamer Status-Guard prueft jetzt Vor- und Post-Claim-Rueckgabewert und
+  Ausnahme. Bei fehlender Persistenz wird `status_update_failed` reportiert;
+  Versand bleibt unterdrueckt.
+- Test: `tests/test_proactive_agent.py` `180 passed`; gezielter
+  Queue-/Route-Refresh-/Sender-Persistenztest gruen; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bd756088 fix: surface proactive status persistence failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`11/20` Commits. Kein Push. Restart nach 9 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
+### Proactive-Worker meldet fehlgeschlagene Sender-Persistenz
+
+- 2026-07-17: Wenn sich die Route erst nach dem Claim aenderte, behandelten
+  drei Terminalpfade (`missing_sender`, `invalid_sender`, `invalid_file`) den
+  Rueckgabewert des `dispatching -> failed`-Updates nicht. Ein Schreibfehler
+  konnte dadurch als eigentliche Sender-/Dateifehlerursache erscheinen.
 - Gemeinsamer Post-Claim-Guard prueft jetzt Rueckgabewert und Ausnahme. Bei
   fehlender Persistenz wird `status_update_failed` reportiert; Item bleibt
   sichtbar und Versand bleibt unterdrueckt.
