@@ -1164,9 +1164,30 @@ def _snapshot_source_name(accounts_root: Path, path: Path, *, seen_names: set[st
 
 
 def _inspect_source(source: RecoverySource, *, instance_name: str, account_id: str, provider: InstanceSecretProvider) -> dict[str, Any]:
-    if source.kind == "sqlite":
-        return _inspect_sqlite_source(source, instance_name=instance_name, account_id=account_id, provider=provider)
-    return _inspect_json_source(source, instance_name=instance_name, account_id=account_id, provider=provider)
+    try:
+        if source.kind == "sqlite":
+            return _inspect_sqlite_source(source, instance_name=instance_name, account_id=account_id, provider=provider)
+        return _inspect_json_source(source, instance_name=instance_name, account_id=account_id, provider=provider)
+    except (AccountStoreError, OSError, ValueError, RuntimeError) as exc:
+        return _unreadable_source_report(source, f"probe: {exc}")
+
+
+def _unreadable_source_report(source: RecoverySource, error: str) -> dict[str, Any]:
+    return {
+        "name": source.name,
+        "kind": source.kind,
+        "payload_kind": "encrypted_account_memory",
+        "path": str(source.path),
+        "active": source.active,
+        "readable": False,
+        "entries": 0,
+        "raw_entries": 0,
+        "index_present": False,
+        "raw_index_present": False,
+        "collections": 0,
+        "raw_collections": 0,
+        "error": str(error or "source probe failed"),
+    }
 
 
 def _inspect_sqlite_source(source: RecoverySource, *, instance_name: str, account_id: str, provider: InstanceSecretProvider) -> dict[str, Any]:

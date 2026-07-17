@@ -1153,6 +1153,29 @@ def test_memory_recovery_snapshot_discovery_skips_symlink_loop(tmp_path: Path) -
     assert account_memory_recovery_module._discover_snapshot_sqlite_sources(accounts_root, existing_paths=set()) == []
 
 
+def test_memory_recovery_source_probe_error_stays_account_local(monkeypatch, tmp_path: Path) -> None:
+    source = account_memory_recovery_module.RecoverySource(
+        "sqlite_primary",
+        "sqlite",
+        tmp_path / "Account_Memory.sqlite3",
+    )
+
+    def fail_probe(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise RuntimeError("SQLite config symlink loop")
+
+    monkeypatch.setattr(account_memory_recovery_module, "_inspect_sqlite_source", fail_probe)
+
+    report = account_memory_recovery_module._inspect_source(
+        source,
+        instance_name="Depressionsbot",
+        account_id="a" * 128,
+        provider=provider(),
+    )
+
+    assert report["readable"] is False
+    assert report["error"] == "probe: SQLite config symlink loop"
+
+
 def test_memory_recovery_quarantine_blocks_missing_report_accounts_root(tmp_path: Path) -> None:
     account_id = "e" * 128
     report = {
