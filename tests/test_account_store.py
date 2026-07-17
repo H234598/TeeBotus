@@ -2691,6 +2691,20 @@ def test_reset_structured_memory_refuses_partial_entries(tmp_path):
     assert backend.write_index_calls == 0
 
 
+def test_reset_structured_memory_rejects_tombstoned_account(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_live", "user_text": "Mond"})
+    profile = store._read_account_profile(account_id)
+    profile["status"] = "tombstoned"
+    store._write_account_profile(account_id, profile)
+
+    with pytest.raises(AccountStoreError, match="account is not active"):
+        store.reset_structured_memory(account_id)
+
+    assert [row["id"] for row in store.read_memory_entries(account_id)] == ["mem_live"]
+
+
 def test_structured_memory_mutations_refuse_unreadable_index(tmp_path):
     class PartiallyUnreadableIndexBackend:
         last_entry_read_error = ""

@@ -2784,6 +2784,7 @@ class AccountStore:
     @_serialize_account_memory
     def reset_structured_memory(self, account_id: str) -> None:
         account_id = validate_sha512_token(account_id, field_name="account_id")
+        self._ensure_account_resolvable(account_id)
         previous_rows = self.read_memory_entries(account_id)
         self._raise_if_account_memory_entries_unreadable("cannot reset structured memory")
         previous_index = self.read_memory_index(account_id)
