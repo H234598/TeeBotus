@@ -5274,6 +5274,22 @@ bleibt erst bei 100 Commits.
 `16/20` Commits. Kein Push. Restart nach 4 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Tool-Agent meldet abgeschnittene Tool-Calls
+
+- 2026-07-17: `apply_proactive_agent_tool_calls` verwarf Tool-Calls oberhalb
+  des Limits fuenf still. LLM-Plan-JSON meldete dieselbe Begrenzung bereits.
+- Tool-Agent meldet jetzt `too_many_tool_calls_truncated` und schreibt einen
+  Audit-Eintrag mit der urspruenglichen Anzahl; die ersten fuenf validierten
+  Calls bleiben unveraendert verarbeitet.
+- Test: `tests/test_proactive_agent.py` `150 passed`; Tool-Agent-Fokus
+  `9 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `cb1f8424 fix: audit truncated proactive tool calls`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`18/20` Commits. Kein Push. Restart nach 2 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
