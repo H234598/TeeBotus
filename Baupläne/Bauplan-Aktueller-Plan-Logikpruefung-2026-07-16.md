@@ -7761,6 +7761,20 @@ Plan-Commit zaehlt als `20/20`. Kein Push. Restart jetzt.
 **Aktueller Laufstand:** Seit dem letzten Restart `7/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### YouTube-Parser-Misses: JSONL-Schreibzugriffe serialisieren
+
+- 2026-07-17: Engine und Telegram konnten dieselbe
+  `YouTube_Parser_Misses.jsonl` gleichzeitig erweitern. O_APPEND verhindert
+  nicht jede Zeilen-/Flush-Kollision ueber mehrere Prozesse.
+- Parser-Miss-Writes verwenden jetzt Thread-Lock plus POSIX-Dateisperre.
+  Pfad bleibt append-only; Lese- und Reportlogik unveraendert.
+- Test: lokale Transkriptionssuite -> `5 passed`, Lock-Aufruf verifiziert;
+  Ruff, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8103f503 fix: serialize YouTube parser miss writes`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `8/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Arbeitsgedaechtnis: Index muss zur JSONL passen
 
 - 2026-07-17: `WorkingMemoryStore` und der noch vorhandene Telegram-Store
