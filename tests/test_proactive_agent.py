@@ -4867,6 +4867,50 @@ def test_dispatch_send_error_fails_closed_on_corrupt_snapshot_attempts(tmp_path)
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "failed"
 
 
+@pytest.mark.parametrize(
+    ("field", "value", "reason"),
+    (
+        ("status_history", {"broken": True}, "invalid_status_history"),
+        ("dispatch_attempts", "kaputt", "invalid_dispatch_attempts"),
+    ),
+)
+def test_dispatch_reports_corrupt_claim_state_as_failure(tmp_path, field, value, reason) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid=f"corrupt-claim-{field}")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="corrupt_claim_state",
+        message_text="Nicht still ueberspringen",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item = account_store.read_proactive_outbox(account_id)[0]
+    item[field] = value
+    account_store.write_proactive_outbox(account_id, [item])
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda *_args: "must-not-send"},
+            now=now,
+        )
+    )
+
+    assert results[0].item_id == queued.reason.removeprefix("queued:")
+    assert results[0].status == "failed"
+    assert results[0].reason == reason
+    persisted = account_store.read_proactive_outbox(account_id)[0]
+    assert persisted["status"] == "queued"
+    assert persisted[field] == value
+
+
 def test_dispatch_does_not_overwrite_item_cancelled_during_send(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

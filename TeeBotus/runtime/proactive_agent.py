@@ -1628,6 +1628,10 @@ def _claim_proactive_worker_job_if_allowed(
             if item.get(field_name) != current_item.get(field_name):
                 return ProactiveDecision(False, "stale_outbox_item"), False
         category = str(current_item.get("category") or category).strip().casefold()
+        if not _proactive_status_history_allows_mutation(current_item, item_id, current_status="queued"):
+            return ProactiveDecision(False, "invalid_status_history"), False
+        if _proactive_dispatch_attempts(current_item) is None:
+            return ProactiveDecision(False, "invalid_dispatch_attempts"), False
         decision = proactive_policy_decision(
             account_store,
             account_id,
@@ -1793,6 +1797,9 @@ async def dispatch_due_proactive_outbox_items(
         )
         if claim_decision.reason == "stale_outbox_item":
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "stale_outbox_item", channel))
+            continue
+        if claim_decision.reason in {"invalid_status_history", "invalid_dispatch_attempts"}:
+            results.append(ProactiveDispatchResult(account_id, item_id, "failed", claim_decision.reason, channel))
             continue
         if not claim_decision.allowed:
             if _proactive_policy_reason_is_transient(claim_decision.reason):
