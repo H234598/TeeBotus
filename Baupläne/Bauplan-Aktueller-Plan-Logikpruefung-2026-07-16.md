@@ -5266,3 +5266,19 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `14/20` Commits. Kein Push. Restart nach 6 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Review-Aktion vor Store-I/O validiert
+
+- 2026-07-17: `review_proactive_item` oeffnete Store vor der Validierung der
+  Aktion. Ungueltige Aktionen konnten dadurch Secret-/SQL-I/O ausloesen und bei
+  fehlender Instanz den falschen Fehler melden.
+- `approve`/`reject` werden jetzt zuerst normalisiert und validiert;
+  ungueltige Aktionen liefern `unsupported_action` ohne Store-Zugriff.
+  Reports verwenden den normalisierten Instanznamen.
+- Test: `tests/test_proactive_review.py` `11 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `444f73ee fix: validate proactive review actions before I/O`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`16/20` Commits. Kein Push. Restart nach 4 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
