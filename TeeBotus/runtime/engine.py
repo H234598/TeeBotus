@@ -1096,13 +1096,30 @@ class TeeBotusEngine:
         )
 
     def _handle_wtf(self, event: IncomingEvent, account_id: str) -> EngineResult:
-        notification = self.state.pop_link_notification(
-            instance_name=event.instance,
-            account_id=account_id,
-            old_identity_key=event.identity_key,
-        )
+        try:
+            notification = self.state.pop_link_notification(
+                instance_name=event.instance,
+                account_id=account_id,
+                old_identity_key=event.identity_key,
+            )
+        except Exception:  # noqa: BLE001 - security state lookup must fail closed.
+            LOGGER.exception("WTF notification lookup failed instance=%s account=%s", event.instance, account_id)
+            return EngineResult(
+                account_id,
+                [SendText(event.chat_id, "Die Sicherheitsaktion konnte gerade nicht abgeschlossen werden. Bitte spaeter erneut versuchen.", track=False)],
+                handled=True,
+            )
         if not notification:
-            if self.state.list_link_notifications(instance_name=event.instance, account_id=account_id):
+            try:
+                has_pending_notifications = bool(self.state.list_link_notifications(instance_name=event.instance, account_id=account_id))
+            except Exception:  # noqa: BLE001 - security state lookup must fail closed.
+                LOGGER.exception("WTF notification listing failed instance=%s account=%s", event.instance, account_id)
+                return EngineResult(
+                    account_id,
+                    [SendText(event.chat_id, "Die Sicherheitsaktion konnte gerade nicht abgeschlossen werden. Bitte spaeter erneut versuchen.", track=False)],
+                    handled=True,
+                )
+            if has_pending_notifications:
                 return EngineResult(
                     account_id,
                     [SendText(event.chat_id, "WTF? kann nur über einen bereits bestehenden Kommunikationsweg bestätigt werden.", track=False)],
@@ -1121,11 +1138,19 @@ class TeeBotusEngine:
                     handled=True,
                 )
             if not still_linked:
-                self.state.clear_link_notifications_for_new_identity(
-                    instance_name=event.instance,
-                    account_id=account_id,
-                    new_identity_key=new_identity,
-                )
+                try:
+                    self.state.clear_link_notifications_for_new_identity(
+                        instance_name=event.instance,
+                        account_id=account_id,
+                        new_identity_key=new_identity,
+                    )
+                except Exception:  # noqa: BLE001 - security state cleanup must fail closed.
+                    LOGGER.exception("WTF notification cleanup failed instance=%s account=%s", event.instance, account_id)
+                    return EngineResult(
+                        account_id,
+                        [SendText(event.chat_id, "Die Sicherheitsaktion konnte gerade nicht abgeschlossen werden. Bitte spaeter erneut versuchen.", track=False)],
+                        handled=True,
+                    )
                 return EngineResult(
                     account_id,
                     [SendText(event.chat_id, "Die gemeldete Verknüpfung ist nicht mehr mit diesem Account verbunden; ich ändere nichts.", track=False)],

@@ -493,6 +493,31 @@ def test_login_notification_failure_does_not_negate_successful_link(tmp_path, mo
     assert all(not isinstance(action, NotifyLinkedIdentity) for action in result.actions)
 
 
+def test_wtf_notification_lookup_failure_is_user_visible_without_aborting_flow(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    monkeypatch.setattr(engine.state, "pop_link_notification", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("notification state unavailable")))
+
+    result = engine.process_identity_flows(event(identity, "WTF?"))
+
+    assert result.actions[0].text == "Die Sicherheitsaktion konnte gerade nicht abgeschlossen werden. Bitte spaeter erneut versuchen."
+
+
+def test_wtf_notification_listing_failure_is_user_visible_without_false_noop(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    monkeypatch.setattr(engine.state, "pop_link_notification", lambda **_kwargs: None)
+    monkeypatch.setattr(engine.state, "list_link_notifications", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("notification state unavailable")))
+
+    result = engine.process_identity_flows(event(identity, "WTF?"))
+
+    assert result.actions[0].text == "Die Sicherheitsaktion konnte gerade nicht abgeschlossen werden. Bitte spaeter erneut versuchen."
+
+
 def test_status_auth_gate_is_case_insensitive_for_chat_type(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
     account_store = store(tmp_path, "TeeBotus_Logger")
