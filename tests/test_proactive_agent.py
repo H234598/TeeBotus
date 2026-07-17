@@ -2253,6 +2253,29 @@ def test_dispatch_survives_safety_audit_persistence_failure(tmp_path, monkeypatc
     assert account_store.read_proactive_audit(account_id) == []
 
 
+def test_dispatch_reports_housekeeping_persistence_failure(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+
+    def fail_housekeeping(*_args, **_kwargs):
+        raise OSError("outbox backend unavailable")
+
+    monkeypatch.setattr("TeeBotus.runtime.proactive_agent.fail_invalid_due_proactive_outbox_items", fail_housekeeping)
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda *_args: "must-not-send"},
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert results == (ProactiveDispatchResult(account_id, "", "failed", "housekeeping_failed:invalid_due_at"),)
+
+
 def test_reflection_planner_creates_reflection_and_queues_safe_reminder(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

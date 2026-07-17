@@ -1674,6 +1674,18 @@ def _claim_proactive_worker_job_if_allowed(
         return decision, claimed
 
 
+def _run_proactive_housekeeping_step(
+    operation: Callable[[], tuple[str, ...]],
+    *,
+    name: str,
+) -> tuple[tuple[str, ...], bool]:
+    try:
+        return tuple(operation()), False
+    except Exception:  # pragma: no cover - concrete storage failures vary by backend.
+        LOGGER.exception("Proactive dispatch housekeeping failed step=%s", name)
+        return (), True
+
+
 async def dispatch_due_proactive_outbox_items(
     account_store: AccountStore,
     account_id: str,
@@ -1684,13 +1696,45 @@ async def dispatch_due_proactive_outbox_items(
     instance_name: str = "",
 ) -> tuple[ProactiveDispatchResult, ...]:
     resolved_now = _resolve_proactive_now(now)
-    recover_stale_proactive_dispatching_items(account_store, account_id, now=resolved_now)
-    invalid_due_item_ids = fail_invalid_due_proactive_outbox_items(account_store, account_id, now=resolved_now)
-    invalid_retry_item_ids = fail_invalid_retry_at_proactive_outbox_items(account_store, account_id, now=resolved_now)
-    invalid_recurrence_item_ids = fail_invalid_recurrence_proactive_outbox_items(account_store, account_id, now=resolved_now)
-    invalid_risk_gate_item_ids = fail_invalid_risk_gate_proactive_outbox_items(account_store, account_id, now=resolved_now)
-    expire_stale_proactive_outbox_items(account_store, account_id, now=resolved_now)
+    housekeeping_failures: list[str] = []
+    _, failed = _run_proactive_housekeeping_step(
+        lambda: recover_stale_proactive_dispatching_items(account_store, account_id, now=resolved_now),
+        name="recover_stale_dispatching",
+    )
+    if failed:
+        housekeeping_failures.append("recover_stale_dispatching")
+    invalid_due_item_ids, failed = _run_proactive_housekeeping_step(
+        lambda: fail_invalid_due_proactive_outbox_items(account_store, account_id, now=resolved_now),
+        name="invalid_due_at",
+    )
+    if failed:
+        housekeeping_failures.append("invalid_due_at")
+    invalid_retry_item_ids, failed = _run_proactive_housekeeping_step(
+        lambda: fail_invalid_retry_at_proactive_outbox_items(account_store, account_id, now=resolved_now),
+        name="invalid_retry_at",
+    )
+    if failed:
+        housekeeping_failures.append("invalid_retry_at")
+    invalid_recurrence_item_ids, failed = _run_proactive_housekeeping_step(
+        lambda: fail_invalid_recurrence_proactive_outbox_items(account_store, account_id, now=resolved_now),
+        name="invalid_recurrence",
+    )
+    if failed:
+        housekeeping_failures.append("invalid_recurrence")
+    invalid_risk_gate_item_ids, failed = _run_proactive_housekeeping_step(
+        lambda: fail_invalid_risk_gate_proactive_outbox_items(account_store, account_id, now=resolved_now),
+        name="invalid_risk_gate",
+    )
+    if failed:
+        housekeeping_failures.append("invalid_risk_gate")
+    _, failed = _run_proactive_housekeeping_step(
+        lambda: expire_stale_proactive_outbox_items(account_store, account_id, now=resolved_now),
+        name="expire_stale_items",
+    )
+    if failed:
+        housekeeping_failures.append("expire_stale_items")
     results: list[ProactiveDispatchResult] = []
+    results.extend(ProactiveDispatchResult(account_id, "", "failed", f"housekeeping_failed:{step}") for step in housekeeping_failures)
     for item_id in invalid_due_item_ids:
         results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_due_at"))
     for item_id in invalid_retry_item_ids:
