@@ -5326,6 +5326,23 @@ bleibt erst bei 100 Commits.
 `1/20` Commits. Kein Push. Restart nach 19 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Tool-Agent lehnt kaputtes Argument-JSON ab
+
+- 2026-07-17: `_tool_call_arguments` wandelte ungueltiges JSON in `{}` um.
+  Besonders `proactive_noop` wurde dadurch als gueltiger No-op akzeptiert und
+  Providerfehler blieben unsichtbar.
+- JSON-Argumente muessen jetzt ein Objekt sein und parsebar bleiben. Fehlende
+  Argumente behalten ihre bisherige Semantik; kaputte oder nicht-objektartige
+  JSON-Payloads laufen als `tool_0_invalid_tool_call` durch Audit und Resultat.
+- Test: `tests/test_proactive_agent.py` `153 passed`; Regression fokussiert
+  `2 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `29b5c578 fix: reject malformed proactive tool arguments`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`4/20` Commits. Kein Push. Restart nach 16 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
