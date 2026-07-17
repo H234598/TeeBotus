@@ -581,8 +581,7 @@ async def run_proactive_agent_cycle(
             instances.append(instance_report)
             continue
         store = resolved_store_factory(instance_dir / "data" / "accounts", instance_dir.name)
-        for account_dir in _account_dirs(store.accounts_dir):
-            account_id = account_dir.name
+        for account_id in _account_ids(store):
             account_report: dict[str, Any] = {"account_id": account_id, "due_items": []}
             try:
                 effective_llm_plan, effective_tool_plan = _effective_model_planners(
@@ -764,6 +763,26 @@ def _account_dirs(accounts_dir: Path) -> list[Path]:
     if not accounts_dir.exists():
         return []
     return sorted(path for path in accounts_dir.iterdir() if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name))
+
+
+def _account_ids(store: AccountStore) -> tuple[str, ...]:
+    ids = {
+        path.name
+        for path in _account_dirs(store.accounts_dir)
+        if TOKEN_HEX_RE.fullmatch(path.name)
+    }
+    list_account_ids = getattr(store, "list_account_ids", None)
+    if callable(list_account_ids):
+        try:
+            listed_ids = list_account_ids(include_unresolvable=False)
+        except (AccountStoreError, OSError, ValueError):
+            listed_ids = ()
+        ids.update(
+            account_id
+            for account_id in (str(value or "").strip().casefold() for value in listed_ids)
+            if TOKEN_HEX_RE.fullmatch(account_id)
+        )
+    return tuple(sorted(ids))
 
 
 def proactive_llm_planner_instance_enabled(instance_name: str, env: Mapping[str, str] | None = None) -> bool:

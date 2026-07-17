@@ -102,6 +102,26 @@ def test_proactive_dry_run_reports_due_items_for_enabled_instance(tmp_path) -> N
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "queued"
 
 
+def test_proactive_cycle_uses_store_account_ids_when_directory_scan_is_empty(tmp_path, monkeypatch) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    identity = signal_identity_key(source_uuid="sql-only-account")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    monkeypatch.setattr("TeeBotus.proactive._account_dirs", lambda _accounts_dir: [])
+
+    report = run_proactive_agent_dry_run(
+        instances_dir=tmp_path / "instances",
+        selected_instances=("Depressionsbot",),
+        env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+        store_factory=lambda _root, _instance: account_store,
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert [account["account_id"] for account in report["instances"][0]["accounts"]] == [account_id]
+
+
 def test_proactive_dry_run_reports_stale_stored_route_as_blocked(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)
