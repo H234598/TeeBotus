@@ -5250,10 +5250,10 @@ def _is_any_teebotus_encrypted_payload(raw: bytes) -> bool:
 def _read_json_object(path: Path, *, allowed_roots: Iterable[Path] = ()) -> dict[str, Any]:
     path = _safe_rooted_path(path, allowed_roots=allowed_roots, operation="legacy JSON read")
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(_read_stable_account_file(path, label="legacy JSON read").decode("utf-8"))
     except FileNotFoundError:
         return {}
-    except json.JSONDecodeError as exc:
+    except (AccountStoreError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise AccountStoreError(f"JSON file is invalid: {path}") from exc
     if not isinstance(data, dict):
         raise AccountStoreError(f"JSON file must contain an object: {path}")
@@ -5263,9 +5263,11 @@ def _read_json_object(path: Path, *, allowed_roots: Iterable[Path] = ()) -> dict
 def _read_jsonl_plain(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
     try:
-        text = path.read_text(encoding="utf-8")
+        text = _read_stable_account_file(path, label="legacy JSONL read").decode("utf-8")
     except FileNotFoundError:
         return rows
+    except (AccountStoreError, UnicodeDecodeError) as exc:
+        raise AccountStoreError(f"JSONL file is invalid: {path}") from exc
     for line in text.splitlines():
         if not line.strip():
             continue

@@ -29,6 +29,8 @@ from TeeBotus.runtime.accounts import (
     AccountStoreError,
     _KeyringManifestSecretProvider,
     _looks_like_teebotus_encrypted_payload,
+    _read_json_object,
+    _read_jsonl_plain,
     LLM_STATE_FILENAME,
     OPENAI_STATE_FILENAME,
     _SecretServiceUnavailableError,
@@ -3195,6 +3197,55 @@ def test_encrypted_payload_inspection_keeps_stable_parent_when_path_is_swapped(t
 
     assert _looks_like_teebotus_encrypted_payload(target, allowed_roots=(tmp_path,)) is True
     assert outside_target.read_text(encoding="utf-8") == "external"
+
+
+@pytest.mark.parametrize(
+    ("reader", "original", "external", "expected"),
+    (
+        (_read_json_object, '{"state":"original"}', "broken", {"state": "original"}),
+        (_read_jsonl_plain, '{"state":"original"}\n', "broken\n", [{"state": "original"}]),
+    ),
+)
+def test_plain_legacy_reads_keep_stable_parent_when_path_is_swapped(
+    tmp_path,
+    monkeypatch,
+    reader,
+    original,
+    external,
+    expected,
+):
+    parent = tmp_path / "legacy-read-parent"
+    parent.mkdir()
+    outside = tmp_path / "outside-legacy-read"
+    outside.mkdir()
+    target = parent / "legacy.json"
+    target.write_text(original, encoding="utf-8")
+    outside_target = outside / target.name
+    outside_target.write_text(external, encoding="utf-8")
+    moved_parent = tmp_path / "legacy-read-parent-moved"
+
+    real_open = os.open
+    real_read_text = Path.read_text
+
+    def swap_parent_on_stable_open(file, flags, mode=0o777, *, dir_fd=None):
+        if file == target.name and dir_fd is not None and parent.exists():
+            parent.rename(moved_parent)
+            parent.symlink_to(outside, target_is_directory=True)
+        return real_open(file, flags, mode, dir_fd=dir_fd)
+
+    def swap_parent_on_path_read(candidate, *args, **kwargs):
+        if candidate == target and parent.exists():
+            parent.rename(moved_parent)
+            parent.symlink_to(outside, target_is_directory=True)
+        return real_read_text(candidate, *args, **kwargs)
+
+    monkeypatch.setattr(os, "open", swap_parent_on_stable_open)
+    monkeypatch.setattr(Path, "read_text", swap_parent_on_path_read)
+
+    if reader is _read_json_object:
+        assert reader(target, allowed_roots=(tmp_path,)) == expected
+    else:
+        assert reader(target) == expected
 
 
 def test_account_json_document_falls_back_on_sql_diagnostics(tmp_path):
