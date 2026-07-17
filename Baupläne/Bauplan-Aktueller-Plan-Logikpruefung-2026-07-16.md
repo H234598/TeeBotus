@@ -4136,6 +4136,25 @@ erst bei 100 Commits.
 
 ### SQLite-Memory-Blob-Typen-fail-closed-behandeln
 
+### Nichtleere-schemalose-SQLite-DB-wird-diagnostiziert
+
+- 2026-07-17: SQLite-Reads akzeptierten eine vorhandene, nichtleere Datenbank
+  ohne Memory-Schema als leeres Memory, solange kein Fallback existierte.
+  Dadurch konnten echte oder beschaedigte Datenbanken im Status unsichtbar
+  bleiben.
+- Eine 0-Byte-Erststartdatei bleibt kompatibel und liefert weiterhin leere
+  Ergebnisse. Bei vorhandener Dateisubstanz wird fehlendes
+  memory_entries-/Index-/Collection-Schema als Read-Diagnose gemeldet;
+  Fallback-Recovery bleibt unveraendert.
+- Regression: SQLite-Schema-Fokus -> 4 passed; kompletter
+  tests/test_account_store.py-Lauf -> 309 passed; compileall und
+  git diff --check gruen. Kein Provider/API-Aufruf.
+- Code-Commit: f5a123a7 fix: diagnose nonempty sqlite databases without schema.
+
+**Aktueller Laufstand:** Seit dem Restart 18/20 Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 2 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 - 2026-07-17: Read-/Guard-Pfade konvertierten Non-BLOB-Werte direkt mit
   `bytes(...)`. Beschaedigte TEXT-/NULL-Spalten konnten dadurch per `TypeError`
   aus dem Memorypfad ausbrechen.
