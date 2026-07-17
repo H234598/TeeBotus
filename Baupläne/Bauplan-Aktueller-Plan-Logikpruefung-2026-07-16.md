@@ -3385,21 +3385,6 @@ nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `6/20` Commits. Kein Push. Restart
 nach 14 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
-### JSON-Recovery-erkennt-dangling-Symlinks
-
-- 2026-07-17: JSON-Recovery pruefte Entries-/Index-Dateien erst nach
-  `exists()`. Dangling Symlinks wurden dadurch wie fehlende Dateien als leer
-  behandelt und konnten einen falschen leeren Recovery-Befund erzeugen.
-- `is_symlink()` wird jetzt vor `exists()` geprueft. Dangling JSON-Symlinks
-  blockieren die Recovery fail-closed und werden nicht verschoben.
-- Regression: JSON-Recovery-Symlink-Fokus -> `2 passed`; Ruff, `compileall`
-  und `git diff --check` gruen. Kein Provider/API-Aufruf.
-- Code-Commit: `de5df753 fix: reject dangling json recovery symlinks`.
-
-**Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
-zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
-erst bei 100 Commits.
-
 ### Direkter-Recovery-Report-validiert-Instanznamen
 
 - 2026-07-17: `build_instance_recovery_report()` war direkt aufrufbar und
@@ -3551,3 +3536,35 @@ nach 17 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `5/20` Commits. Kein Push. Restart
 nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### JSON-Recovery-erkennt-dangling-Symlinks
+
+- 2026-07-17: JSON-Recovery pruefte Entries-/Index-Dateien erst nach
+  `exists()`. Dangling Symlinks wurden dadurch wie fehlende Dateien als leer
+  behandelt und konnten einen falschen leeren Recovery-Befund erzeugen.
+- `is_symlink()` wird jetzt vor `exists()` geprueft. Dangling JSON-Symlinks
+  blockieren die Recovery fail-closed und werden nicht verschoben.
+- Regression: JSON-Recovery-Symlink-Fokus -> `2 passed`; Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `de5df753 fix: reject dangling json recovery symlinks`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
+### SQLite-Recovery-Delete-bleibt-auf-stabilem-FD
+
+- 2026-07-17: `_delete_sqlite_account_rows()` pruefte Source und Sidecars,
+  oeffnete danach aber erneut per Pfadnamen. Ein Pfadwechsel zwischen Guard und
+  `sqlite3.connect()` konnte Rows in einer fremden SQLite-Datei loeschen.
+- Delete oeffnet die Quelle jetzt einmal mit `O_NOFOLLOW`, prueft regulaeren
+  Datei-Inode und `st_nlink == 1` und verbindet ueber stabilen
+  `/proc/self/fd`-URI. WAL-Verhalten bleibt erhalten; Pfadwechsel blockiert.
+- Regression: gezielter Hardlink-/Race-Fokus -> `2 passed`; komplette
+  `tests/test_admin_accounts.py` -> `105 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `21e0e3c4 fix: delete sqlite recovery rows through stable fd`.
+
+**Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
