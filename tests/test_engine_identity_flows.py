@@ -605,6 +605,30 @@ def test_non_admin_cannot_link_account_from_other_instance(tmp_path) -> None:
     assert target_store.get_account_for_identity(identity) != source_account_id
 
 
+def test_admin_cross_instance_login_survives_broken_source_backend(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    provider = StaticSecretProvider(b"e" * 32)
+    target_store = AccountStore(
+        tmp_path / "instances" / "Depressionsbot" / "data" / "accounts",
+        "Depressionsbot",
+        provider,
+    )
+    source_accounts = tmp_path / "instances" / "Bote_der_Wahrheit" / "data" / "accounts"
+    source_accounts.mkdir(parents=True)
+    engine = TeeBotusEngine(
+        account_store=target_store,
+        project_root=tmp_path,
+        cross_instance_store_factory=lambda _root, _instance: (_ for _ in ()).throw(RuntimeError("source unavailable")),
+    )
+    identity = telegram_identity_key(1)
+
+    engine.process(event(identity, "/admin yes 18hhGfuu3"))
+    actions = engine.process(event(identity, f"/login {'a' * 128} {'b' * 128}"))
+
+    assert len(actions) == 1
+    assert "ID oder Secret stimmt nicht" in actions[0].text
+
+
 def test_wtf_can_be_confirmed_by_any_existing_identity_after_multi_identity_link(tmp_path):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)

@@ -945,7 +945,8 @@ class TeeBotusEngine:
                 target_account_id,
                 display_label=event.sender_name,
             )
-        except (AccountStoreError, OSError, ValueError):
+        except Exception:  # noqa: BLE001 - cross-instance persistence failures must not crash login handling.
+            LOGGER.exception("Cross-instance admin login persistence failed instance=%s account=%s", event.instance, target_account_id)
             return EngineResult(
                 current_account_id,
                 [SendText(event.chat_id, "Instanzübergreifendes Admin-Login konnte gerade nicht gespeichert werden.", track=False)],
@@ -966,30 +967,40 @@ class TeeBotusEngine:
 
     def _cross_instance_login_matches(self, current_instance: str, account_id: str, secret: str) -> list[tuple[str, AccountStore]]:
         matches: list[tuple[str, AccountStore]] = []
-        for instance_name in self._cross_instance_source_names(current_instance):
+        try:
+            source_names = self._cross_instance_source_names(current_instance)
+        except Exception:  # noqa: BLE001 - source discovery failure must fail closed, not abort login handling.
+            LOGGER.exception("Cross-instance source discovery failed instance=%s", current_instance)
+            return matches
+        for instance_name in source_names:
             try:
                 store = self._cross_instance_store(instance_name)
                 if store.verify_secret(account_id, secret):
                     matches.append((instance_name, store))
-            except (AccountStoreError, OSError, ValueError):
+            except Exception:  # noqa: BLE001 - one broken source must not block other instances.
+                LOGGER.exception("Cross-instance secret verification failed instance=%s account=%s", instance_name, account_id)
                 continue
         return matches
 
     def _cross_instance_source_names(self, current_instance: str) -> tuple[str, ...]:
         instances_dir = self.project_root / "instances"
-        if not instances_dir.is_dir():
+        try:
+            if not instances_dir.is_dir():
+                return ()
+            current = str(current_instance or "").strip()
+            names: list[str] = []
+            for path in sorted(instances_dir.iterdir(), key=lambda item: item.name.casefold()):
+                if not path.is_dir() or path.name == current:
+                    continue
+                if "/" in path.name or path.name in {"", ".", ".."}:
+                    continue
+                if not (path / "data" / "accounts").exists():
+                    continue
+                names.append(path.name)
+            return tuple(names)
+        except Exception:  # noqa: BLE001 - filesystem discovery must fail closed for login.
+            LOGGER.exception("Cross-instance source filesystem scan failed instance=%s", current_instance)
             return ()
-        current = str(current_instance or "").strip()
-        names: list[str] = []
-        for path in sorted(instances_dir.iterdir(), key=lambda item: item.name.casefold()):
-            if not path.is_dir() or path.name == current:
-                continue
-            if "/" in path.name or path.name in {"", ".", ".."}:
-                continue
-            if not (path / "data" / "accounts").exists():
-                continue
-            names.append(path.name)
-        return tuple(names)
 
     def _cross_instance_store(self, instance_name: str) -> AccountStore:
         root = self.project_root / "instances" / instance_name / "data" / "accounts"
