@@ -121,6 +121,21 @@ def test_proactive_review_does_not_hide_store_account_discovery_errors(tmp_path:
     assert report["errors"] == ["Depressionsbot: AccountStoreError: account index unavailable"]
 
 
+def test_proactive_review_reports_corrupt_outbox_shape(tmp_path: Path, monkeypatch) -> None:
+    _instance_dir, store, account_id, _item_id = _review_fixture(tmp_path)
+    monkeypatch.setattr(store, "read_proactive_outbox", lambda _account_id: {"broken": True})
+
+    report = list_proactive_review_items(
+        instances_dir=tmp_path / "instances",
+        selected_instances=("Depressionsbot",),
+        store_factory=lambda _root, _instance: store,
+    )
+
+    assert report["ok"] is False
+    assert report["review_pending_count"] == 0
+    assert report["errors"] == [f"Depressionsbot/{account_id}: proactive_outbox is not a list"]
+
+
 def test_proactive_review_rejects_unsafe_single_instance_without_store_access(tmp_path: Path) -> None:
     called = False
 

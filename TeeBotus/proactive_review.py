@@ -102,8 +102,12 @@ def list_proactive_review_items(
             except Exception as exc:  # noqa: BLE001
                 errors.append(f"{instance_dir.name}/{account_id}: {type(exc).__name__}: {exc}")
                 continue
-            for item in rows:
+            if not isinstance(rows, list):
+                errors.append(f"{instance_dir.name}/{account_id}: proactive_outbox is not a list")
+                continue
+            for index, item in enumerate(rows):
                 if not isinstance(item, dict):
+                    errors.append(f"{instance_dir.name}/{account_id}: proactive_outbox item {index} is not an object")
                     continue
                 if str(item.get("status") or "").strip().casefold() != "review_pending":
                     continue
