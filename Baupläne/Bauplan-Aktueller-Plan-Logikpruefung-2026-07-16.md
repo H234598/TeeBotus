@@ -5216,6 +5216,22 @@ bleibt erst bei 100 Commits.
 `14/20` Commits. Kein Push. Restart nach 6 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Claim gegen stale Snapshots abgesichert
+
+- 2026-07-17: Zwischen Due-Snapshot und Worker-Claim konnten `due_at`, Route
+  oder Nachricht geaendert werden. Der Worker haette dann den alten Payload
+  senden koennen, obwohl Item bereits snoozed oder inhaltlich ersetzt war.
+- Claim liest unter Outbox-Lock frischen Due-Zustand und vergleicht send- und
+  policy-relevante Felder. Abweichung bleibt `queued` und ergibt
+  `skipped/stale_outbox_item`; kein alter Payload wird gesendet.
+- Test: `tests/test_proactive_agent.py` `142 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9d012afe fix: reject stale proactive claim snapshots`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`16/20` Commits. Kein Push. Restart nach 4 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Wiederholungsregel-validiert
 
 - 2026-07-17: Nicht parsebare Wiederholungen wie `every fortnight` wurden
