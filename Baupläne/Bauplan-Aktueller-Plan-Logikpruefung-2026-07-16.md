@@ -5168,3 +5168,19 @@ bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `2/20` Commits. Kein Push. Restart nach 18 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Account-Discovery-isoliert
+
+- 2026-07-17: `_account_ids(store)` lief ebenfalls ausserhalb des
+  Instanz-Guards. Fehler beim Lesen von `accounts/` konnten den Proactive-Lauf
+  trotz erfolgreicher Store-Erzeugung abbrechen.
+- Account-Discovery-Fehler werden jetzt pro Instanz als `instance_report`-
+  Fehler ausgegeben; folgende Instanzen bleiben erreichbar. `_cycle_ok` bleibt
+  `False`.
+- Test: `tests/test_proactive_cli.py` `51 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `547f68e7 fix: isolate proactive account discovery errors`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`4/20` Commits. Kein Push. Restart nach 16 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
