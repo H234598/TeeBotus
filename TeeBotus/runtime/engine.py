@@ -266,6 +266,8 @@ class TeeBotusEngine:
                 handled=True,
             )
         result = self.process_identity_flows(event)
+        if result.account_id and result.account_id != event.account_id:
+            event = event.with_account(result.account_id)
         proactive_enabled = False
         try:
             proactive_enabled = bool(result.account_id and proactive_agent_instance_enabled(event.instance))

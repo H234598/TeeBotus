@@ -2813,6 +2813,9 @@ def test_engine_uses_llm_client_for_free_text_when_enabled(tmp_path):
     assert isinstance(actions[0], SendTyping)
     assert actions[1].text == "Antwort."
     assert "Telegram-Kontext:" in client.calls[0][0]
+    account_id = engine.account_store.get_account_for_identity(telegram_identity_key(1))
+    assert account_id
+    assert f"- account_id: {account_id}" in client.calls[0][0]
     assert "Nachricht:\nHallo" in client.calls[0][0]
     assert client.calls[0][1] is None
 
