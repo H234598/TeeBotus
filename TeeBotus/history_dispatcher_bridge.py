@@ -205,7 +205,16 @@ class HistoryDispatcherBridge:
         event_data = dict(event)
         try:
             response = await self.client.request_async("delivery.record", event_data)
-            return response.get("data", response)
+            data = response.get("data", response)
+            if response.get("ok") is True and isinstance(data, Mapping) and data.get("ok") is True:
+                return dict(data)
+            spool_path = self.spool.enqueue(event_data)
+            return {
+                "ok": False,
+                "spooled": True,
+                "event_id": str(event_data.get("event_id") or spool_path.stem),
+                "error": response.get("error") or (data.get("error") if isinstance(data, Mapping) else "dispatcher rejected event"),
+            }
         except HistoryDispatcherError:
             spool_path = self.spool.enqueue(event_data)
             return {"ok": False, "spooled": True, "event_id": str(event_data.get("event_id") or spool_path.stem)}

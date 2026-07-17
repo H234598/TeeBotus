@@ -94,6 +94,27 @@ def test_bridge_spools_when_dispatcher_is_unavailable(tmp_path: Path) -> None:
     assert len(spool.events()) == 1
 
 
+def test_bridge_spools_application_level_dispatcher_rejection(tmp_path: Path) -> None:
+    spool = CallbackSpool(tmp_path / "spool")
+
+    class RejectingClient:
+        async def request_async(self, _operation: str, _body: object) -> dict[str, object]:
+            return {"ok": False, "error": "temporarily unavailable"}
+
+    bridge = HistoryDispatcherBridge(RejectingClient(), spool)  # type: ignore[arg-type]
+    result = asyncio.run(
+        bridge.record_delivery({"event_id": "event-rejected", "item_id": "item", "event_type": "sent"})
+    )
+
+    assert result == {
+        "ok": False,
+        "spooled": True,
+        "event_id": "event-rejected",
+        "error": "temporarily unavailable",
+    }
+    assert len(spool.events()) == 1
+
+
 def test_callback_spool_persists_generated_event_id(tmp_path: Path) -> None:
     spool = CallbackSpool(tmp_path / "spool")
 
