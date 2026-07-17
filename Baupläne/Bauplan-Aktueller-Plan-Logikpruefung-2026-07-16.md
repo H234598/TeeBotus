@@ -2730,6 +2730,21 @@ Restart nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Codex-History-Scan-Limit-im-Eventpfad
+
+- 2026-07-17: Der Watchdog-/Eventpfad importierte bei einem Event-Burst alle
+  veraenderten JSONL-Dateien und umging damit `limit` (obwohl die Option als
+  maximale Dateien pro Scan dokumentiert ist).
+- Event-Batches werden jetzt bei `limit > 0` nach neuestem `mtime` begrenzt und
+  anschliessend chronologisch verarbeitet; `limit=0` bleibt unbegrenzt.
+- Regression: Codex-History-Fokus `183 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2951da9d fix: enforce codex scan limit for event batches`.
+
+**Aktueller Laufstand:** Seit dem Restart `6/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 14 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Codex-Dispatch-Receipt-darf-Multi-Admin-Retry-nicht-blockieren
 
 - 2026-07-17: Der Dispatcher hatte in der oeffentlichen Python-Funktion und im
