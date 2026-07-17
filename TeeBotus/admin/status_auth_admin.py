@@ -113,7 +113,14 @@ def _safe_output_path(output: str, *, base_dir: str | Path = ".") -> Path:
         raise ValueError(f"output path must be a safe relative path: {output}")
     root = Path(base_dir).resolve()
     output_path = Path(*parts)
-    target = (root / output_path).resolve()
+    lexical_target = root / output_path
+    symlink_component = _first_symlinked_path_component(lexical_target)
+    if symlink_component is not None:
+        raise ValueError(f"output path must not use symlinked components: {symlink_component}")
+    try:
+        target = lexical_target.resolve()
+    except (OSError, RuntimeError) as exc:
+        raise ValueError(f"output path could not be resolved: {output}") from exc
     try:
         target.relative_to(root)
     except ValueError as exc:
@@ -127,7 +134,9 @@ def _write_status_auth_report(output_path: Path, report: dict[str, Any], *, as_j
     output = _build_status_auth_report_output(report, as_json=as_json)
     safe_output = redact_status_text(output)
     data = safe_output.encode("utf-8")
-    with output_path.open("wb") as handle:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
+    descriptor = os.open(output_path, flags, 0o600)
+    with os.fdopen(descriptor, "wb") as handle:
         os.write(handle.fileno(), data)
 
 
@@ -143,6 +152,17 @@ def _build_status_auth_report_output(report: dict[str, Any], *, as_json: bool) -
 
 def _sanitize_status_auth_output(output: str) -> str:
     return redact_status_text(str(output or ""))
+
+
+def _first_symlinked_path_component(path: Path) -> Path | None:
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    for candidate in (absolute, *absolute.parents):
+        try:
+            if candidate.is_symlink():
+                return candidate
+        except OSError:
+            return candidate
+    return None
 
 
 def _emit_status_auth_report(output: str) -> None:

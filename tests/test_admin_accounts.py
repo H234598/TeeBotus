@@ -798,6 +798,31 @@ def test_status_auth_report_cli_rejects_missing_parent_directory(tmp_path: Path,
     assert not output_path.exists()
 
 
+def test_status_auth_report_cli_rejects_symlink_output_path(tmp_path: Path, capsys) -> None:
+    make_instance(tmp_path)
+    target = tmp_path / "target.json"
+    target.write_text("keep\n", encoding="utf-8")
+    output_link = tmp_path / "status-auth.json"
+    output_link.symlink_to(target)
+
+    result = status_auth_admin_main(
+        [
+            "report",
+            "--instances-dir",
+            str(tmp_path),
+            "--format",
+            "json",
+            "--output",
+            output_link.name,
+        ],
+        provider=provider(),
+    )
+
+    assert result == 2
+    assert "symlinked components" in capsys.readouterr().err
+    assert target.read_text(encoding="utf-8") == "keep\n"
+
+
 def test_memory_recovery_report_finds_readable_fallback_when_primary_key_drifted(tmp_path: Path, caplog) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"
