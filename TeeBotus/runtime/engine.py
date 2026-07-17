@@ -512,12 +512,16 @@ class TeeBotusEngine:
         if _has_youtube_transcript_intent(text):
             return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, instructions), handled=True)
         include_admin_help = is_admin_help_request(text) and self._account_is_help_admin(event.instance, result.account_id)
-        reply = build_reply(
-            _event_to_handler_message(event),
-            instructions,
-            include_fallback=not self._text_llm_enabled(instructions),
-            include_admin_help=include_admin_help,
-        )
+        try:
+            reply = build_reply(
+                _event_to_handler_message(event),
+                instructions,
+                include_fallback=not self._text_llm_enabled(instructions),
+                include_admin_help=include_admin_help,
+            )
+        except Exception:  # noqa: BLE001 - one broken built-in handler must not suppress the LLM fallback.
+            LOGGER.exception("Built-in reply handler failed instance=%s account=%s", event.instance, result.account_id)
+            reply = None
         if reply is None:
             llm_actions = self._llm_actions(event, result.account_id, instructions)
             if llm_actions:

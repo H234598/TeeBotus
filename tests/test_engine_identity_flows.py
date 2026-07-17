@@ -2804,6 +2804,26 @@ def test_engine_uses_llm_client_for_free_text_when_enabled(tmp_path):
     assert client.calls[0][1] is None
 
 
+def test_engine_uses_llm_fallback_when_builtin_reply_handler_fails(tmp_path, monkeypatch):
+    class FakeLLMClient:
+        def create_reply(self, *_args, **_kwargs):
+            return OpenAIResponse("LLM-Fallback trotz Handlerfehler.", None, None)
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine.build_reply",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("reply handler unavailable")),
+    )
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True),
+        llm_client=FakeLLMClient(),
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "Hallo"))
+
+    assert actions[1].text == "LLM-Fallback trotz Handlerfehler."
+
+
 def test_engine_prefers_llm_client_for_free_text_when_configured(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:
