@@ -208,6 +208,18 @@ def test_status_account_directory_failure_is_diagnosed(tmp_path) -> None:
     assert _account_memory_dir_from_store(BrokenStatusStore(), "a" * 128) is None  # type: ignore[arg-type]
 
 
+def test_engine_status_rendering_failure_is_user_visible(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine.build_status_reply",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("status renderer unavailable")),
+    )
+    engine = TeeBotusEngine(account_store=store(tmp_path))
+
+    actions = engine.process(event(telegram_identity_key(1), "/status"))
+
+    assert actions[0].text == "Status konnte gerade nicht geladen werden. Bitte spaeter erneut versuchen."
+
+
 def test_status_proactive_health_failure_is_diagnosed() -> None:
     class BrokenStatusStore:
         def read_agent_state(self, _account_id):

@@ -448,21 +448,30 @@ class TeeBotusEngine:
         if command in EXPORT_COMMANDS:
             return EngineResult(result.account_id, self._export_actions(event, result.account_id), handled=True)
         if command in STATUS_COMMAND_ALIASES:
-            status_text = build_status_reply(
-                account_id=result.account_id,
-                instance_name=event.instance,
-                project_root=self.project_root,
-                account_store=self.account_store,
-                proactive_model_planner=instructions.proactive_model_planner,
-                llm_enabled=self._text_llm_enabled(instructions),
-                llm_provider=instructions.llm_provider,
-                llm_model=instructions.llm_model or instructions.openai_model,
-                llm_fallback_models=instructions.llm_fallback_models,
-                llm_client=self.llm_client,
-                structured_decision_runner=self.structured_decision_runner,
-                bibliothekar_enabled=instructions.bibliothekar_enabled,
-                mcp_tools=instructions.mcp_tools,
-            )
+            try:
+                status_text = build_status_reply(
+                    account_id=result.account_id,
+                    instance_name=event.instance,
+                    project_root=self.project_root,
+                    account_store=self.account_store,
+                    proactive_model_planner=instructions.proactive_model_planner,
+                    llm_enabled=self._text_llm_enabled(instructions),
+                    llm_provider=instructions.llm_provider,
+                    llm_model=instructions.llm_model or instructions.openai_model,
+                    llm_fallback_models=instructions.llm_fallback_models,
+                    llm_client=self.llm_client,
+                    structured_decision_runner=self.structured_decision_runner,
+                    bibliothekar_enabled=instructions.bibliothekar_enabled,
+                    mcp_tools=instructions.mcp_tools,
+                )
+                formatted_status = build_status_reply_html(status_text, project_root=self.project_root)
+            except Exception:  # noqa: BLE001 - status diagnostics must remain user-visible on one broken check.
+                LOGGER.exception("Status rendering failed instance=%s account=%s", event.instance, result.account_id)
+                return EngineResult(
+                    result.account_id,
+                    [SendText(event.chat_id, "Status konnte gerade nicht geladen werden. Bitte spaeter erneut versuchen.", track=False)],
+                    handled=True,
+                )
             return EngineResult(
                 result.account_id,
                 [
@@ -470,7 +479,7 @@ class TeeBotusEngine:
                         event.chat_id,
                         status_text,
                         text_mode="html",
-                        formatted_text=build_status_reply_html(status_text, project_root=self.project_root),
+                        formatted_text=formatted_status,
                     )
                 ],
                 handled=True,
