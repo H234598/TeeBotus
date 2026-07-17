@@ -6821,6 +6821,25 @@ Commits. Kein Push. Restart nach 18 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `3/20` sichtbar.
 
+### Login kapselt Rückgabe- und Notificationfehler
+
+- 2026-07-17: Primäres Login vertraute blind auf `result["account_id"]` und
+  liess Fehler aus `record_link_notification()` nach erfolgreicher
+  Verknüpfung eskalieren. Ein malformed Backendresultat oder kaputter
+  Runtime-State konnte den Login-Flow abbrechen.
+- Ungültige Backendresultate melden kontrollierten Loginfehler. Optionale
+  Link-Benachrichtigungen werden einzeln protokolliert und übersprungen;
+  erfolgreiche Account-Verknüpfung bleibt erfolgreich. Cross-Instance-Resultate
+  sind ebenfalls abgesichert.
+- Test: fokussierter Loginpfad `4 passed`; Ruff und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `82bbb004 fix: contain login result and notification failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `4/20`
+Commits. Kein Push. Restart nach 16 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `5/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
