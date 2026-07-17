@@ -68,6 +68,56 @@ def test_proactive_cycle_marks_planner_errors_unhealthy() -> None:
     assert _cycle_ok([{"accounts": [{"llm_planning": {"skipped_reason": "llm_planner_unavailable"}}]}]) is True
 
 
+def test_proactive_cycle_contains_llm_planner_exception_and_continues_dispatch(tmp_path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="after_planner_error",
+        message_text="Trotz Plannerfehler senden",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+
+    class FailingClient:
+        provider = "test"
+        model = "test-model"
+
+        def create_reply(self, *_args):
+            raise RuntimeError("provider unavailable")
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={
+                "TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot",
+                "TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES": "Depressionsbot",
+            },
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            dispatch=True,
+            plan=True,
+            llm_plan=True,
+            sender_factory=lambda _instance, _store: {"signal": lambda _route, _action, _item: "sent-ref"},
+            llm_planner_factory=lambda _instance, _store, _account_id: (FailingClient(), "instructions"),
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert report["ok"] is False
+    assert account["llm_planning"]["errors"] == ["planner_error:RuntimeError"]
+    assert account["dispatch_results"][0]["status"] == "sent"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "sent"
+    assert queued.reason.startswith("queued:")
+
+
 def test_proactive_dry_run_reports_due_items_for_enabled_instance(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)

@@ -642,52 +642,60 @@ async def run_proactive_agent_cycle(
                     elif not model_planner_allowed:
                         account_report["llm_planning"] = {"skipped_reason": f"model_planner_idle:{model_planner_skip_reason}"}
                     else:
-                        planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
-                        if planner_context is None:
-                            account_report["llm_planning"] = {**_proactive_llm_role_report(None, role="plan"), "skipped_reason": "llm_planner_unavailable"}
-                        else:
-                            openai_client, instructions = planner_context
-                            llm_planning = run_proactive_llm_planner(
-                                store,
-                                account_id,
-                                openai_client=openai_client,
-                                instructions=instructions,
-                                now=resolved_now,
-                            )
-                            account_report["llm_planning"] = {
-                                "account_id": llm_planning.account_id,
-                                **_proactive_llm_role_report(openai_client, role="plan"),
-                                "created_memory_ids": list(llm_planning.created_memory_ids),
-                                "queued_item_ids": list(llm_planning.queued_item_ids),
-                                "errors": list(llm_planning.errors),
-                                "audit_event_ids": list(llm_planning.audit_event_ids),
-                            }
+                        planner_client = None
+                        try:
+                            planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
+                            if planner_context is None:
+                                account_report["llm_planning"] = {**_proactive_llm_role_report(None, role="plan"), "skipped_reason": "llm_planner_unavailable"}
+                            else:
+                                planner_client, instructions = planner_context
+                                llm_planning = run_proactive_llm_planner(
+                                    store,
+                                    account_id,
+                                    openai_client=planner_client,
+                                    instructions=instructions,
+                                    now=resolved_now,
+                                )
+                                account_report["llm_planning"] = {
+                                    "account_id": llm_planning.account_id,
+                                    **_proactive_llm_role_report(planner_client, role="plan"),
+                                    "created_memory_ids": list(llm_planning.created_memory_ids),
+                                    "queued_item_ids": list(llm_planning.queued_item_ids),
+                                    "errors": list(llm_planning.errors),
+                                    "audit_event_ids": list(llm_planning.audit_event_ids),
+                                }
+                        except Exception as exc:  # pragma: no cover - concrete provider exceptions vary by backend.
+                            account_report["llm_planning"] = _proactive_planner_error_report(planner_client, role="plan", exc=exc)
                 if effective_tool_plan:
                     if not proactive_llm_planner_instance_enabled(instance_dir.name, env=env):
                         account_report["tool_planning"] = {"skipped_reason": "tool_planner_instance_not_enabled"}
                     elif not model_planner_allowed:
                         account_report["tool_planning"] = {"skipped_reason": f"model_planner_idle:{model_planner_skip_reason}"}
                     else:
-                        planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
-                        if planner_context is None:
-                            account_report["tool_planning"] = {**_proactive_llm_role_report(None, role="plan"), "skipped_reason": "tool_planner_unavailable"}
-                        else:
-                            openai_client, instructions = planner_context
-                            tool_planning = run_proactive_tool_agent(
-                                store,
-                                account_id,
-                                openai_client=openai_client,
-                                instructions=instructions,
-                                now=resolved_now,
-                            )
-                            account_report["tool_planning"] = {
-                                "account_id": tool_planning.account_id,
-                                **_proactive_llm_role_report(openai_client, role="plan"),
-                                "created_memory_ids": list(tool_planning.created_memory_ids),
-                                "queued_item_ids": list(tool_planning.queued_item_ids),
-                                "errors": list(tool_planning.errors),
-                                "audit_event_ids": list(tool_planning.audit_event_ids),
-                            }
+                        planner_client = None
+                        try:
+                            planner_context = (llm_planner_factory or _missing_llm_planner_factory)(instance_dir.name, store, account_id)
+                            if planner_context is None:
+                                account_report["tool_planning"] = {**_proactive_llm_role_report(None, role="plan"), "skipped_reason": "tool_planner_unavailable"}
+                            else:
+                                planner_client, instructions = planner_context
+                                tool_planning = run_proactive_tool_agent(
+                                    store,
+                                    account_id,
+                                    openai_client=planner_client,
+                                    instructions=instructions,
+                                    now=resolved_now,
+                                )
+                                account_report["tool_planning"] = {
+                                    "account_id": tool_planning.account_id,
+                                    **_proactive_llm_role_report(planner_client, role="plan"),
+                                    "created_memory_ids": list(tool_planning.created_memory_ids),
+                                    "queued_item_ids": list(tool_planning.queued_item_ids),
+                                    "errors": list(tool_planning.errors),
+                                    "audit_event_ids": list(tool_planning.audit_event_ids),
+                                }
+                        except Exception as exc:  # pragma: no cover - concrete provider exceptions vary by backend.
+                            account_report["tool_planning"] = _proactive_planner_error_report(planner_client, role="plan", exc=exc)
                 if dispatch:
                     recovered_item_ids = recover_stale_proactive_dispatching_items(store, account_id, now=resolved_now)
                     if recovered_item_ids:
@@ -893,6 +901,14 @@ def _proactive_llm_role_report(client: Any | None, *, role: str) -> dict[str, st
     if model:
         report["llm_model"] = model
     return report
+
+
+def _proactive_planner_error_report(client: Any | None, *, role: str, exc: Exception) -> dict[str, Any]:
+    LOGGER.exception("Proactive %s planner failed: %s", role, type(exc).__name__)
+    return {
+        **_proactive_llm_role_report(client, role=role),
+        "errors": [f"planner_error:{type(exc).__name__}"],
+    }
 
 
 def _print_dry_run_report(report: dict[str, Any]) -> None:
