@@ -2730,6 +2730,26 @@ Restart nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### PostgreSQL-Memory-Schema-vor-Initialisierung-validieren
+
+- 2026-07-17: `_ensure_schema_locked()` markierte PostgreSQL als initialisiert,
+  sobald `CREATE TABLE IF NOT EXISTS` und Index-DDL ohne Fehler liefen. Eine
+  bereits vorhandene, unvollstaendige Tabelle wurde dadurch nicht erkannt;
+  fehlende Spalten wie `last_accessed_at` schlugen erst spaeter mit PostgreSQL-
+  Fehler `42703` fehl.
+- Der Backend-Guard prueft jetzt nach der DDL alle Pflichtspalten in
+  `information_schema.columns`. Fehlende Tabellen/Spalten werden als
+  `AccountStoreError` gemeldet; `_initialized` bleibt `False`, damit kein
+  falsches Health-Signal entsteht und kein spaeterer Schreibpfad blind laeuft.
+- Regression: PostgreSQL-Fokus -> `16 passed`; AccountStore plus
+  Memory-Benchmark -> `327 passed`; `compileall` und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `c3fd0b9f fix: validate postgres memory schema columns`.
+
+**Aktueller Laufstand:** Seit dem Restart `20/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart jetzt. Naechster Push bleibt erst bei 100
+Commits.
+
 ### Status-meldet-uninitialisiertes-SQL-Memory
 
 - 2026-07-17: /status deaktivierte das konfigurierte SQLite-Backend, wenn
