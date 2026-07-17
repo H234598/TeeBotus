@@ -85,7 +85,11 @@ from TeeBotus.runtime.tts_dialect import (
     voice_instructions_for_account,
 )
 from TeeBotus.runtime.weather_context import update_city_and_weather_context, weather_context_text
-from TeeBotus.runtime.working_memory import _rebuild_working_memory_data, _working_memory_index_is_invalid
+from TeeBotus.runtime.working_memory import (
+    _rebuild_working_memory_data,
+    _working_memory_index_is_invalid,
+    _working_memory_index_matches_entries,
+)
 
 LOGGER = logging.getLogger("TeeBotus")
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -956,6 +960,16 @@ class WorkingMemoryStore:
             )
             payload = _new_working_memory_data(self.instance_name)
             repaired = True
+        if not repaired:
+            index_consistency = _working_memory_index_matches_entries(payload, entries_path, self.instance_name)
+            if index_consistency is False:
+                backup_path = _move_corrupt_json_file(path)
+                LOGGER.warning(
+                    "Rebuilding inconsistent instance working memory index at %s. Corrupt file preserved at %s.",
+                    path,
+                    backup_path,
+                )
+                repaired = True
         if repaired:
             payload = _rebuild_working_memory_data(entries_path, self.instance_name)
         before_normalization = json.dumps(payload, ensure_ascii=False, sort_keys=True)

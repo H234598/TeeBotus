@@ -57,6 +57,32 @@ def test_working_memory_repairs_stale_instance_name(tmp_path, store_class):
 
 
 @pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
+def test_working_memory_rebuilds_valid_shape_with_missing_or_stale_index(tmp_path, store_class):
+    instances_dir = tmp_path / "instances"
+    index_path = instances_dir / "Depressionsbot" / "data" / "Working_Memorys.json"
+    index_path.parent.mkdir(parents=True)
+    entry = {
+        "id": "wm_recovered",
+        "created_at": "2026-07-17T10:00:00+00:00",
+        "updated_at": "2026-07-17T10:00:00+00:00",
+        "kind": "manual",
+        "text": "Neue Arbeitsnotiz wiederherstellen.",
+    }
+    line = (json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n").encode("utf-8")
+    entries_path = index_path.parent / "Working_Memorys.entries.jsonl"
+    entries_path.write_bytes(line)
+    index_path.write_text(json.dumps({"scope": "instance"}), encoding="utf-8")
+
+    store = store_class("Depressionsbot", instances_dir)
+
+    record = store.prepare("Arbeitsnotiz wiederherstellen")
+
+    assert record.selected_ids == (entry["id"],)
+    assert "Arbeitsnotiz" in record.prompt_text
+    assert len(list(index_path.parent.glob("Working_Memorys.json.corrupt.*"))) == 1
+
+
+@pytest.mark.parametrize("store_class", (WorkingMemoryStore, TelegramWorkingMemoryStore))
 def test_working_memory_ignores_invalid_utf8_entry(tmp_path, store_class):
     instances_dir = tmp_path / "instances"
     store = store_class("Depressionsbot", instances_dir)

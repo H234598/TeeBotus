@@ -9,7 +9,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 LOGGER = logging.getLogger("TeeBotus")
 
@@ -205,6 +205,16 @@ class WorkingMemoryStore:
             )
             payload = _new_working_memory_data(self.instance_name)
             repaired = True
+        if not repaired:
+            index_consistency = _working_memory_index_matches_entries(payload, entries_path, self.instance_name)
+            if index_consistency is False:
+                backup_path = _move_corrupt_json_file(path)
+                LOGGER.warning(
+                    "Rebuilding inconsistent instance working memory index at %s. Corrupt file preserved at %s.",
+                    path,
+                    backup_path,
+                )
+                repaired = True
         if repaired:
             payload = _rebuild_working_memory_data(entries_path, self.instance_name)
         before_normalization = json.dumps(payload, ensure_ascii=False, sort_keys=True)
@@ -337,7 +347,12 @@ def _working_memory_prompt_payload(
     }
 
 
-def _rebuild_working_memory_data(entries_path: Path, instance_name: str) -> dict[str, Any]:
+def _rebuild_working_memory_data(
+    entries_path: Path,
+    instance_name: str,
+    *,
+    raise_on_os_error: bool = False,
+) -> dict[str, Any]:
     data = _new_working_memory_data(instance_name)
     index = data["index"]
     entry_index = index["entries"]
@@ -384,10 +399,31 @@ def _rebuild_working_memory_data(entries_path: Path, instance_name: str) -> dict
                 recent_ids.append(memory_id)
                 del recent_ids[:-MEMORY_RECENT_LIMIT]
     except OSError as exc:
+        if raise_on_os_error:
+            raise
         LOGGER.warning("Unable to rebuild instance working memory from %s: %s", entries_path, exc)
     if skipped:
         LOGGER.warning("Skipped %d invalid instance working memory JSONL entries in %s.", skipped, entries_path)
     return data
+
+
+def _working_memory_index_matches_entries(
+    data: Mapping[str, Any],
+    entries_path: Path,
+    instance_name: str,
+) -> bool | None:
+    """Return index consistency; None means JSONL could not be read safely."""
+    try:
+        rebuilt = _rebuild_working_memory_data(entries_path, instance_name, raise_on_os_error=True)
+    except FileNotFoundError:
+        current_index = data.get("index")
+        if not isinstance(current_index, Mapping):
+            return None
+        return not any(current_index.get(key) for key in ("keywords", "recent_ids", "entries"))
+    except OSError:
+        return None
+    current_index = data.get("index")
+    return isinstance(current_index, Mapping) and dict(current_index) == rebuilt["index"]
 
 
 def _working_memory_index_is_invalid(index: Any) -> bool:
