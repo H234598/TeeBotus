@@ -3796,6 +3796,7 @@ def test_malformed_risk_memory_time_bounds_fail_closed() -> None:
     assert _risk_memory_is_active({"kind": "risk_signal", "valid_from": "not-a-date"}, now) is True
     assert _risk_memory_is_active({"kind": "risk_signal", "valid_to": "not-a-date", "updated_at": "2020-01-01T00:00:00+00:00"}, now) is True
     assert _risk_memory_is_active({"kind": "risk_signal", "valid_from": "2026-06-16T00:00:00+00:00", "valid_to": "not-a-date"}, now) is True
+    assert _risk_memory_is_active({"kind": "risk_signal", "valid_from": "2026-06-16T00:00:00+00:00", "valid_to": "2026-06-14T00:00:00+00:00"}, now) is True
 
 
 def test_dispatch_reschedules_month_interval_recurring_reminder(tmp_path) -> None:

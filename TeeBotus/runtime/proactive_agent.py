@@ -3310,6 +3310,8 @@ def _risk_memory_is_active(entry: Mapping[str, Any], now: datetime) -> bool:
     valid_to = _parse_proactive_datetime(valid_to_raw)
     if valid_to_raw and valid_to is None:
         return True
+    if valid_from is not None and valid_to is not None and valid_to < valid_from:
+        return True
     if valid_from is not None and valid_from > now:
         return False
     if valid_to is not None:
