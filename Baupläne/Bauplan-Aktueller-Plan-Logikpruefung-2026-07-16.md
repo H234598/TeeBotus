@@ -4624,3 +4624,21 @@ Commits.
 **Aktueller Laufstand:** Seit dem letzten Restart `4/20` Code-Commits. Kein
 Push. Restart nach 16 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
+
+### Account-Lock-Symlink-Fehler-unter-Python-3-14
+
+- 2026-07-17: Der sichere Account-Pfad oeffnete bei Symlink-Komponenten unter
+  Python 3.14/Linux nicht nur `ELOOP`, sondern auch `ENOTDIR`. Dadurch konnten
+  unsichere Lock-Pfade als rohe `NotADirectoryError` nach aussen gelangen.
+- `ELOOP` und `ENOTDIR` werden jetzt einheitlich als `AccountStoreError`
+  gemeldet. Der bereits geoeffnete Descriptor wird vor jeder Weitergabe
+  geschlossen. Die Migration alter Artefakte bewahrt ihren kontextreichen
+  Fehlertext.
+- Tests: Symlink-/Hardlink-Fokus `3 passed`, kompletter
+  `tests/test_account_store.py`-Lauf `315 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9abdb440 fix: normalize unsafe account lock path errors`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `6/20` Code-Commits. Kein
+Push. Restart nach 14 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
