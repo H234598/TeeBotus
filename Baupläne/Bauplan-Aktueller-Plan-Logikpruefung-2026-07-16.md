@@ -5376,6 +5376,22 @@ bleibt erst bei 100 Commits.
 `8/20` Commits. Kein Push. Restart nach 12 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Tool-Agent akzeptiert nur Objekt-Argumente
+
+- 2026-07-17: Neben kaputtem JSON wurden auch Listen und Zahlen bei
+  `arguments` zu `{}` normalisiert. `proactive_noop` konnte dadurch erneut
+  malformed Providerdaten als gueltigen No-op behandeln.
+- Explizite Argumente muessen jetzt Mapping/Objekt, parsebares JSON-Objekt oder
+  kompatibles `None` sein. Andere Typen werden als
+  `tool_0_invalid_tool_call` auditiert.
+- Test: `tests/test_proactive_agent.py` `156 passed`; Parser-Fokus `2 passed`;
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `44133ce5 fix: reject non-object proactive tool arguments`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`10/20` Commits. Kein Push. Restart nach 10 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
