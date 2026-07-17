@@ -1058,6 +1058,37 @@ def test_memory_recovery_delete_uses_stable_sqlite_descriptor(monkeypatch, tmp_p
         assert connection.execute("SELECT count(*) FROM memory_entries").fetchone()[0] == 1
 
 
+def test_memory_recovery_delete_rejects_parent_directory_swap(monkeypatch, tmp_path: Path) -> None:
+    root = tmp_path / "accounts"
+    outside_root = tmp_path / "outside"
+    root.mkdir()
+    outside_root.mkdir()
+    source = root / "Account_Memory.sqlite3"
+    outside = outside_root / source.name
+    account_id = "f" * 128
+
+    for path in (source, outside):
+        with sqlite3.connect(path) as connection:
+            connection.execute("CREATE TABLE memory_entries (instance_name TEXT, account_id TEXT)")
+            connection.execute("INSERT INTO memory_entries VALUES (?, ?)", ("Depressionsbot", account_id))
+
+    original_guard = account_memory_recovery_module._reject_unsafe_sqlite_link
+
+    def race_after_guard(path: Path, *, label: str) -> None:
+        original_guard(path, label=label)
+        if path == source and label == "source":
+            root.rename(tmp_path / "accounts-old")
+            root.symlink_to(outside_root, target_is_directory=True)
+
+    monkeypatch.setattr(account_memory_recovery_module, "_reject_unsafe_sqlite_link", race_after_guard)
+
+    with pytest.raises(OSError, match="Not a directory|symlink|SQLite recovery"):
+        account_memory_recovery_module._delete_sqlite_account_rows(source, "Depressionsbot", [account_id])
+
+    with sqlite3.connect(outside) as connection:
+        assert connection.execute("SELECT count(*) FROM memory_entries").fetchone()[0] == 1
+
+
 def test_memory_recovery_rejects_symlinked_sqlite_parent_before_probe(tmp_path: Path) -> None:
     real_root = tmp_path / "real"
     real_root.mkdir()

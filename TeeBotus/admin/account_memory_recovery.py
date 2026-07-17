@@ -1551,8 +1551,7 @@ def _connect_sqlite_writable_stable(path: Path):
     no_follow = getattr(os, "O_NOFOLLOW", 0)
     if not no_follow:
         raise OSError("stable SQLite recovery delete requires O_NOFOLLOW")
-    flags = os.O_RDWR | no_follow | getattr(os, "O_CLOEXEC", 0)
-    descriptor = os.open(os.fspath(path), flags)
+    descriptor = _open_stable_sqlite_descriptor(path, no_follow=no_follow)
     try:
         opened_stat = os.fstat(descriptor)
         if not stat.S_ISREG(opened_stat.st_mode):
@@ -1569,6 +1568,23 @@ def _connect_sqlite_writable_stable(path: Path):
             connection.close()
     finally:
         os.close(descriptor)
+
+
+def _open_stable_sqlite_descriptor(path: Path, *, no_follow: int) -> int:
+    directory_flag = getattr(os, "O_DIRECTORY", 0)
+    if not directory_flag:
+        raise OSError("stable SQLite recovery delete requires O_DIRECTORY")
+    directory_flags = os.O_RDONLY | directory_flag | no_follow | getattr(os, "O_CLOEXEC", 0)
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    parent_descriptor = os.open(os.sep, directory_flags)
+    try:
+        for component in absolute.parts[1:-1]:
+            next_descriptor = os.open(component, directory_flags, dir_fd=parent_descriptor)
+            os.close(parent_descriptor)
+            parent_descriptor = next_descriptor
+        return os.open(absolute.name, os.O_RDWR | no_follow | getattr(os, "O_CLOEXEC", 0), dir_fd=parent_descriptor)
+    finally:
+        os.close(parent_descriptor)
 
 
 def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instances_dir: Path, instance_name: str) -> dict[str, Any]:
