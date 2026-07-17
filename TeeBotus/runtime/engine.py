@@ -1346,15 +1346,18 @@ class TeeBotusEngine:
         response_id = _persistable_previous_response_id(response)
         if response_id:
             provider, model, key_fingerprint = _llm_state_scope(response, client=llm_client, instructions=instructions)
-            self.state.set_previous_response_id(
-                event.instance,
-                account_id,
-                response_id,
-                conversation_scope=conversation_scope,
-                provider=provider,
-                model=model,
-                key_fingerprint=key_fingerprint,
-            )
+            try:
+                self.state.set_previous_response_id(
+                    event.instance,
+                    account_id,
+                    response_id,
+                    conversation_scope=conversation_scope,
+                    provider=provider,
+                    model=model,
+                    key_fingerprint=key_fingerprint,
+                )
+            except Exception:  # noqa: BLE001 - state persistence must not discard a valid LLM reply.
+                LOGGER.exception("LLM response state persistence failed instance=%s account=%s", event.instance, account_id)
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
             LOGGER.warning("LLM action response empty instance=%s event_id=%s.", event.instance, event.event_id)
@@ -3378,14 +3381,18 @@ def _previous_response_id_for_client(
     if not _client_supports_previous_response_id(client):
         return None
     provider, model, key_fingerprint = _llm_state_scope(client, instructions=instructions)
-    return state.get_previous_response_id(
-        instance_name,
-        account_id,
-        conversation_scope=conversation_scope,
-        provider=provider,
-        model=model,
-        key_fingerprint=key_fingerprint,
-    )
+    try:
+        return state.get_previous_response_id(
+            instance_name,
+            account_id,
+            conversation_scope=conversation_scope,
+            provider=provider,
+            model=model,
+            key_fingerprint=key_fingerprint,
+        )
+    except Exception:  # noqa: BLE001 - unreadable local state must not discard a new LLM request.
+        LOGGER.exception("LLM previous response state lookup failed instance=%s account=%s", instance_name, account_id)
+        return None
 
 
 def _llm_conversation_scope(event: IncomingEvent) -> str:

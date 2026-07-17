@@ -227,6 +227,30 @@ def test_process_result_auth_gate_failure_fails_closed_without_reply(tmp_path, m
     assert engine.process_result(event(identity, "/help")).actions == []
 
 
+@pytest.mark.parametrize("state_method", ["get_previous_response_id", "set_previous_response_id"])
+def test_llm_reply_survives_unexpected_local_response_state_failure(tmp_path, monkeypatch, state_method):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("Antwort trotz Statefehler.", "resp-1", None)
+
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True),
+        openai_client=client,
+        llm_client=client,
+    )
+
+    def fail_state(*_args, **_kwargs):
+        raise RuntimeError("local response state unavailable")
+
+    monkeypatch.setattr(engine.state, state_method, fail_state)
+
+    actions = engine.process(event(telegram_identity_key(1), "Hallo"))
+
+    assert any(getattr(action, "text", "") == "Antwort trotz Statefehler." for action in actions)
+
+
 def test_observation_backend_failures_do_not_block_ping(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
