@@ -133,6 +133,30 @@ def test_proactive_review_rejects_unsupported_action_before_store_access(tmp_pat
     assert called is False
 
 
+def test_proactive_review_store_error_keeps_target_metadata(tmp_path: Path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    (instance_dir / "data" / "accounts").mkdir(parents=True)
+
+    report = review_proactive_item(
+        instances_dir=tmp_path / "instances",
+        instance_name="Depressionsbot",
+        account_id="a" * 128,
+        item_id="pro_bad",
+        action="approve",
+        store_factory=lambda *_args: (_ for _ in ()).throw(AccountStoreError("store unavailable")),
+    )
+
+    assert report == {
+        "ok": False,
+        "action": "approve",
+        "instance": "Depressionsbot",
+        "account_id": "a" * 128,
+        "item_id": "pro_bad",
+        "reason": "store_error:AccountStoreError: store unavailable",
+        "route": {},
+    }
+
+
 def test_proactive_review_approve_queues_item(tmp_path: Path) -> None:
     _instance_dir, store, account_id, item_id = _review_fixture(tmp_path)
 

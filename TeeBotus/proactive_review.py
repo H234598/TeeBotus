@@ -158,7 +158,15 @@ def review_proactive_item(
     try:
         store = resolved_factory(instance_dir / "data" / "accounts", normalized_instance_name)
     except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "action": normalized_action, "instance": normalized_instance_name, "reason": f"store_error:{type(exc).__name__}: {exc}"}
+        return {
+            "ok": False,
+            "action": normalized_action,
+            "instance": normalized_instance_name,
+            "account_id": account_id,
+            "item_id": item_id,
+            "reason": f"store_error:{type(exc).__name__}: {exc}",
+            "route": {},
+        }
     try:
         if normalized_action == "approve":
             decision = approve_proactive_review_item(store, account_id, item_id, reviewer=reviewer, reason=reason, now=timestamp)
