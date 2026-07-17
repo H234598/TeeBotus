@@ -7811,7 +7811,7 @@ Push. Restart erst bei `20/20`.
   koennen aktuelle Nutzerkorrekturen damit nicht mehr ueberschreiben.
 - Test: YouTube-Optionsparser `10 passed` (14 Subtests); Ruff, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
-- Code-Commit: folgt direkt.
+- Code-Commit: `38a2795d fix: prioritize explicit youtube options`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `11/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
