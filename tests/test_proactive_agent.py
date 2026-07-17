@@ -3232,6 +3232,37 @@ def test_tool_agent_runner_accepts_valid_json_text_fallback(tmp_path) -> None:
     assert account_store.read_proactive_audit(account_id) == []
 
 
+def test_tool_agent_runner_returns_partial_json_fallback_result(tmp_path) -> None:
+    class Client:
+        def create_tool_calls(self, _prompt, _instructions, _tools):
+            return {
+                "output": [
+                    {
+                        "type": "message",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": '{"schema_version":1,"decisions":[{"action":"queue","category":"reminder","intent":"fallback_follow_up","message_text":"Magst du kurz berichten?","reason_memory_ids":["mem_goal"]},{"action":"send_now","message_text":"Verboten"}]}',
+                            }
+                        ],
+                    }
+                ]
+            }
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.append_structured_memory_entry(account_id, {"id": "mem_goal", "kind": "therapy_goal", "user_text": "Spazieren gehen."})
+
+    result = run_proactive_tool_agent(account_store, account_id, openai_client=Client(), instructions=object(), now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))
+
+    assert result.errors == ("decision_1_unsupported_action:send_now",)
+    assert len(result.queued_item_ids) == 1
+    assert account_store.read_proactive_outbox(account_id)[0]["id"] == result.queued_item_ids[0]
+
+
 def test_dispatch_due_proactive_items_sends_with_mocked_channel_and_tracks_ref(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

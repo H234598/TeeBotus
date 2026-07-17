@@ -783,9 +783,7 @@ def run_proactive_tool_agent(
     if not tool_calls:
         plan_text = _response_output_text(response)
         if plan_text:
-            result = apply_proactive_llm_plan_text(account_store, account_id, plan_text, now=resolved_now)
-            if not result.errors:
-                return result
+            return apply_proactive_llm_plan_text(account_store, account_id, plan_text, now=resolved_now)
         audit_id = _append_proactive_llm_audit_event(
             account_store,
             account_id,
