@@ -2961,6 +2961,25 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 6 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Account-Merge-Cleanup-ueber-stabile-FDs
+
+- 2026-07-17: `_delete_dir_contents_except()` nutzte `iterdir()`,
+  `shutil.rmtree()` und `Path.unlink()` auf dem Account-Verzeichnis. Ein
+  Parent-/Child-Swap konnte dadurch fremde Dateien oder Verzeichnisse
+  loeschen.
+- Cleanup laeuft jetzt rekursiv relativ zu stabilen
+  `O_NOFOLLOW|O_DIRECTORY`-Deskriptoren. Symlink-Children werden nur als Link
+  entfernt; externe Zielverzeichnisse werden nicht verfolgt. Keep-Liste bleibt
+  erhalten, Race-Fehler blockieren fail-closed.
+- Regression: Cleanup-/Merge-Fokus -> `11 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `305 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `273d222b fix: clean merged account directories through stable fds`.
+
+**Aktueller Laufstand:** Seit dem Restart `16/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 4 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
