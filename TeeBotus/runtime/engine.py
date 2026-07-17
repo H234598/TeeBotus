@@ -857,6 +857,9 @@ class TeeBotusEngine:
             if "already has an active secret" not in str(exc):
                 return "Account konnte wegen eines Store-/Crypto-Fehlers nicht registriert werden. Bitte spaeter erneut versuchen."
             return "Für diesen Account existiert bereits ein Secret. Ich zeige es nicht erneut. Sende /rotate_secret, wenn du ein neues Secret erzeugen willst."
+        except Exception:  # noqa: BLE001 - registration backend failures must not abort command handling.
+            LOGGER.exception("Account registration failed account=%s", account_id)
+            return "Account konnte wegen eines Store-/Crypto-Fehlers nicht registriert werden. Bitte spaeter erneut versuchen."
         return self._secret_text(account_id, secret, rotated=False)
 
     def _secret_text(self, account_id: str, secret: str, *, rotated: bool) -> str:

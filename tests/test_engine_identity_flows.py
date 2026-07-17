@@ -643,6 +643,20 @@ def test_login_survives_unexpected_primary_backend_failure(tmp_path, monkeypatch
     assert account_store.get_account_for_identity(identity) != "a" * 128
 
 
+def test_register_survives_unexpected_backend_failure_without_secret(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    monkeypatch.setattr(account_store, "register_account", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("secret backend unavailable")))
+
+    actions = engine.process(event(identity, "/register"))
+
+    assert len(actions) == 1
+    assert "Store-/Crypto-Fehlers" in actions[0].text
+    assert "Secret:" not in actions[0].text
+
+
 def test_wtf_can_be_confirmed_by_any_existing_identity_after_multi_identity_link(tmp_path):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
