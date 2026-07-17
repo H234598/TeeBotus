@@ -39,7 +39,8 @@ def benchmark_proactive_tool_plan_due_dispatch_gates(*, iterations: int) -> Benc
                 "updated_at": "2026-06-16T07:30:00+00:00",
             },
         )
-        now = datetime(2026, 6, 16, 10, 30, tzinfo=timezone.utc)
+        planning_now = datetime(2026, 6, 16, 9, 30, tzinfo=timezone.utc)
+        dispatch_now = datetime(2026, 6, 16, 10, 30, tzinfo=timezone.utc)
         safe_tool = {
             "name": "proactive_queue_message",
             "arguments": {
@@ -69,12 +70,12 @@ def benchmark_proactive_tool_plan_due_dispatch_gates(*, iterations: int) -> Benc
         planning_results = []
         planning_ms = _timed_ms(
             lambda: planning_results.append(
-                apply_proactive_agent_tool_calls(store, account_id, (safe_tool, review_tool), now=now)
+                apply_proactive_agent_tool_calls(store, account_id, (safe_tool, review_tool), now=planning_now)
             )
         )
-        timings = [_timed_ms(lambda: due_proactive_outbox_items(store, account_id, now=now)) for _ in range(iterations)]
+        timings = [_timed_ms(lambda: due_proactive_outbox_items(store, account_id, now=dispatch_now)) for _ in range(iterations)]
         policy_results = []
-        policy_ms = _timed_ms(lambda: policy_results.append(proactive_policy_decision(store, account_id, category="reminder", now=now)))
+        policy_ms = _timed_ms(lambda: policy_results.append(proactive_policy_decision(store, account_id, category="reminder", now=dispatch_now)))
         sent_actions: list[str] = []
 
         def fake_sender(_route: dict[str, Any], action: Any, _item: dict[str, Any]) -> str:
@@ -89,13 +90,13 @@ def benchmark_proactive_tool_plan_due_dispatch_gates(*, iterations: int) -> Benc
                         store,
                         account_id,
                         senders={"signal": fake_sender},
-                        now=now,
+                        now=dispatch_now,
                         instance_name="Bench",
                     )
                 )
             )
         )
-        health = check_proactive_agent_account(store, account_id)
+        health = check_proactive_agent_account(store, account_id, now=dispatch_now)
         planning_result = planning_results[0] if planning_results else None
         queued_items = store.read_proactive_outbox(account_id)
         sent_count = sum(1 for item in queued_items if str(item.get("status") or "") == "sent")
@@ -126,7 +127,7 @@ def benchmark_proactive_tool_plan_due_dispatch_gates(*, iterations: int) -> Benc
                 "queued": len(queued_items),
                 "sent": sent_count,
                 "review_pending": review_pending_count,
-                "due_after_review_gate": len(due_proactive_outbox_items(store, account_id, now=now)),
+                "due_after_review_gate": len(due_proactive_outbox_items(store, account_id, now=dispatch_now)),
                 "dispatch_simulated": len(dispatch_results),
                 "dispatch_statuses": [dispatch_result.status for dispatch_result in dispatch_results],
                 "policy_allowed": policy_results[0].allowed if policy_results else False,

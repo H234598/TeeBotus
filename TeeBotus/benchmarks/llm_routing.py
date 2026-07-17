@@ -766,7 +766,7 @@ def _benchmark_matrix_event(identity_key: str, index: int) -> IncomingEvent:
         chat_type="private",
         sender_id=identity_key,
         sender_name="Benchmark User",
-        text=f"Wie kann ich Schlaf und Tagesstruktur stabilisieren? Runde {index}",
+        text=f"Bitte behalte Schlaf und Tagesstruktur auf dem Schirm. Runde {index}",
         message_ref=f"matrix-{index}",
     )
 
