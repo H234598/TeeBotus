@@ -6731,6 +6731,23 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `12/20` voll.
 
+### Start-Flow kapselt Privacy-Button-Lesefehler
+
+- 2026-07-17: `/start` las den Privacy-State fuer Legal-Buttons nur mit
+  bekanntem Fehlerfang. Unerwartete SQL-, Secret- oder Wrapper-Ausnahmen
+  konnten die normale Startantwort abbrechen.
+- Der optionale Button-Check fail-closed jetzt auf keine Buttons und loggt
+  den Fehler. Startantwort bleibt erreichbar; es wird keine Zustimmung
+  behauptet oder gespeichert.
+- Test: `tests/test_engine_identity_flows.py` `202 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `86459ca7 fix: isolate start privacy button lookup`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`13/20` Commits. Kein Push. Restart nach 7 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `14/20` voll.
+
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
