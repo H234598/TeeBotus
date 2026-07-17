@@ -7540,3 +7540,21 @@ Commits. Kein Push. Restart nach 16 weiteren Commits.
 Commits. Kein Push. Restart nach 14 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `7/20` sichtbar.
+
+### Account-Edit verlangt validierten Pending-State
+
+- 2026-07-17: `/account_edit` behandelte `get_pending_flow()`-Fehler als
+  allgemeinen Loopfehler. Cancel und unbekannte Schritte konnten bei
+  `pop_pending_flow() == None` trotzdem Erfolg melden; Rotation und Unlink
+  erkannten verschwundenen Cleanup-State nicht.
+- Lookup, Cancel und Reset sind jetzt fail-closed. Rotation und Unlink
+  bleiben nach erfolgreicher Account-Aktion sichtbar, melden fehlenden
+  Cleanup-State aber ausdrücklich. Kein falscher State-Erfolg.
+- Test: `tests/test_engine_identity_flows.py -k 'account_edit or channel_unlink'`
+  `14 passed`; Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4d606fb8 fix: validate account edit state transitions`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `8/20`
+Commits. Kein Push. Restart nach 12 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `9/20` sichtbar.
