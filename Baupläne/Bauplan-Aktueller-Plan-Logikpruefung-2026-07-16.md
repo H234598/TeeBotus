@@ -5232,6 +5232,21 @@ bleibt erst bei 100 Commits.
 `16/20` Commits. Kein Push. Restart nach 4 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Route unmittelbar vor Versand erneut geprueft
+
+- 2026-07-17: Route konnte nach Claim, aber vor Sender-Aufruf wechseln. Der
+  Worker haette dann an den alten privaten Chat senden koennen.
+- Vor Versand wird die geclaimte Route nochmals gegen aktuelle Account-
+  Identitaeten geprueft. Bei Abweichung kein Sender-Aufruf; Item wird mit
+  `cancelled/stale_route_after_claim` sichtbar beendet.
+- Test: `tests/test_proactive_agent.py` `143 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `cdc40f72 fix: recheck proactive route before send`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`18/20` Commits. Kein Push. Restart nach 2 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Wiederholungsregel-validiert
 
 - 2026-07-17: Nicht parsebare Wiederholungen wie `every fortnight` wurden
