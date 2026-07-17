@@ -2150,6 +2150,28 @@ def test_engine_turns_openai_image_block_into_generated_attachment(tmp_path):
     assert "Regen am Fenster" in client.prompt
 
 
+def test_engine_image_provider_failure_keeps_text_response(tmp_path):
+    class BrokenImageClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse(
+                'Textantwort.\n[[TEE_IMAGE filename="bild.png" caption="Bild"]]\nEin Bild.\n[[/TEE_IMAGE]]',
+                "resp-image-error",
+                None,
+            )
+
+        def generate_image(self, _prompt, _instructions, *, filename="bild.png"):
+            raise RuntimeError("image provider unavailable")
+
+    instructions = BotInstructions(openai_enabled=True, openai_image_enabled=True)
+    client = BrokenImageClient()
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client, llm_client=client)
+
+    actions = engine.process(event(telegram_identity_key(1), "Mach ein Bild."))
+
+    assert len(actions) == 2
+    assert actions[1].text == "Textantwort.\n" + instructions.openai_image_error
+
+
 def test_engine_rate_limits_repeated_openai_image_generation(tmp_path):
     class FakeImage:
         data = b"png-bytes"

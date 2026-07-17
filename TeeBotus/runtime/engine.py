@@ -1228,6 +1228,9 @@ class TeeBotusEngine:
                         generated_images.append((image_request, generate_image(image_request.prompt, instructions, filename=image_request.filename)))
                     except OpenAIAPIError:
                         image_errors += 1
+                    except Exception:  # noqa: BLE001 - image provider failures must not discard text response.
+                        LOGGER.exception("Image generation failed instance=%s account=%s", event.instance, account_id)
+                        image_errors += 1
             else:
                 image_errors = len(image_requests)
         memory_response_text = visible_text
@@ -2144,6 +2147,9 @@ def _mark_teladi_emergency_used(account_store: AccountStore, account_id: str) ->
     try:
         state = account_store.read_agent_state(account_id)
     except (AccountStoreError, OSError, ValueError):
+        return False
+    except Exception:  # noqa: BLE001 - image quota state failure must fail closed.
+        LOGGER.exception("Image quota state read failed account=%s", account_id)
         return False
     if not isinstance(state, dict):
         state = {}
@@ -3100,6 +3106,9 @@ def _write_agent_state_best_effort(account_store: AccountStore, account_id: str,
     try:
         account_store.write_agent_state(account_id, state)
     except (AccountStoreError, OSError, ValueError):
+        return False
+    except Exception:  # noqa: BLE001 - image quota state failure must fail closed.
+        LOGGER.exception("Image quota state write failed account=%s", account_id)
         return False
     return True
 
