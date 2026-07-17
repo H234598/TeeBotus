@@ -1078,6 +1078,15 @@ def test_memory_recovery_metadata_value_error_stays_reportable(monkeypatch, tmp_
     ]
 
 
+def test_memory_recovery_direct_instance_report_rejects_path_escape(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="invalid instance name"):
+        account_memory_recovery_module.build_instance_recovery_report(
+            instances_dir=tmp_path,
+            instance_name="../outside",
+            provider=provider(),
+        )
+
+
 def test_memory_recovery_quarantine_blocks_missing_report_accounts_root(tmp_path: Path) -> None:
     account_id = "e" * 128
     report = {

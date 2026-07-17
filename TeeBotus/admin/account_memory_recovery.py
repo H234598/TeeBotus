@@ -150,6 +150,10 @@ def build_instance_recovery_report(
     legacy_instances_dir: Path | None = None,
     provider: InstanceSecretProvider,
 ) -> dict[str, Any]:
+    normalized_name = str(instance_name or "").strip()
+    if not normalized_name or discover_instances(instances_dir, (normalized_name,)) != (normalized_name,):
+        raise ValueError(f"invalid instance name: {instance_name}")
+    instance_name = normalized_name
     accounts_root = instances_dir / instance_name / "data" / "accounts"
     account_ids = _discover_account_ids(accounts_root)
     sources = _discover_recovery_sources(accounts_root)
