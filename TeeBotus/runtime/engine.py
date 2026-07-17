@@ -667,7 +667,9 @@ class TeeBotusEngine:
             return EngineResult(account_id, [SendText(event.chat_id, self._secret_text(account_id, secret, rotated=True), track=False)], handled=True)
         if intent.action == RegistrationAction.UNLINK_THIS_CHANNEL:
             try:
-                unlinked_account = self.account_store.unlink_identity(event.identity_key) or account_id
+                unlinked_account = self.account_store.unlink_identity(event.identity_key)
+                if unlinked_account is None:
+                    raise AccountStoreError("communication path is no longer linked")
             except Exception:  # noqa: BLE001 - unlink failures must not abort identity handling.
                 LOGGER.exception("Account channel unlink failed instance=%s account=%s", event.instance, account_id)
                 return EngineResult(
@@ -873,7 +875,9 @@ class TeeBotusEngine:
         if step == "confirm_unlink":
             if text in yes_words:
                 try:
-                    unlinked_account = self.account_store.unlink_identity(event.identity_key) or account_id
+                    unlinked_account = self.account_store.unlink_identity(event.identity_key)
+                    if unlinked_account is None:
+                        raise AccountStoreError("communication path is no longer linked")
                 except Exception:  # noqa: BLE001 - unlink failures must not abort account editing.
                     LOGGER.exception("Account edit channel unlink failed instance=%s account=%s", event.instance, account_id)
                     return EngineResult(

@@ -583,6 +583,36 @@ def test_confirmed_channel_unlink_backend_failure_keeps_pending_flow(tmp_path, m
     assert account_store.get_account_for_identity(identity) == account_id
 
 
+def test_direct_channel_unlink_none_result_does_not_claim_success(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+
+    monkeypatch.setattr(account_store, "unlink_identity", lambda _identity: None)
+
+    result = engine.process_identity_flows(event(identity, "/unlink_this_channel"))
+
+    assert result.account_id == account_id
+    assert result.actions[0].text == "Kommunikationsweg konnte gerade nicht getrennt werden. Bitte spaeter erneut versuchen."
+    assert account_store.get_account_for_identity(identity) == account_id
+
+
+def test_confirmed_channel_unlink_none_result_keeps_pending_flow(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    engine.process_identity_flows(event(identity, "/account_edit"))
+    engine.process_identity_flows(event(identity, "unlink"))
+    monkeypatch.setattr(account_store, "unlink_identity", lambda _identity: None)
+
+    result = engine.process_identity_flows(event(identity, "ja"))
+
+    assert result.actions[0].text == "Kommunikationsweg konnte gerade nicht getrennt werden. Bitte spaeter erneut versuchen."
+    assert engine.state.get_pending_flow("Depressionsbot", account_id, "account_edit")["step"] == "confirm_unlink"
+
+
 def test_help_admin_lookup_failure_fails_closed(tmp_path, monkeypatch):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
