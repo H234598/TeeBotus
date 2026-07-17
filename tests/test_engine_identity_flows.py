@@ -3266,6 +3266,30 @@ def test_engine_can_transcribe_audio_attachment_with_local_backend(tmp_path, mon
     assert "Transkript: Lokales Whisper Transkript." in client.user_text
 
 
+def test_engine_continues_when_audio_attachment_transcription_raises_unexpected_error(tmp_path, monkeypatch):
+    class FakeOpenAIClient:
+        def __init__(self) -> None:
+            self.user_text = ""
+
+        def create_reply(self, user_text, _instructions, previous_response_id=None):
+            self.user_text = user_text
+            return OpenAIResponse("Antwort trotz Transkriptfehler.", "resp-audio-failure", None)
+
+    def broken_local_transcribe(*_args, **_kwargs):
+        raise RuntimeError("local transcription wrapper failed")
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_local_audio", broken_local_transcribe)
+    client = FakeOpenAIClient()
+    instructions = BotInstructions(openai_enabled=True, openai_transcription_backend="local")
+    attachment = IncomingAttachment(data=b"audio", filename="voice.ogg", content_type="audio/ogg")
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=client, llm_client=client)
+
+    actions = engine.process(event(telegram_identity_key(1), "Trotzdem antworten.", attachments=(attachment,)))
+
+    assert actions[1].text == "Antwort trotz Transkriptfehler."
+    assert "Transkript: <Transkription fehlgeschlagen>" in client.user_text
+
+
 def test_engine_respects_disabled_transcription_for_audio_attachment(tmp_path, monkeypatch):
     class FakeOpenAIClient:
         def __init__(self) -> None:

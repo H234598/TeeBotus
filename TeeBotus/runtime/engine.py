@@ -3133,11 +3133,17 @@ def _build_attachment_context(
             except (OpenAIAPIError, LocalTranscriptionError):
                 lines.append("  Transkript: <Transkription fehlgeschlagen>")
                 continue
+            except Exception:  # noqa: BLE001 - one attachment transcription must not block the main reply.
+                LOGGER.exception("Runtime audio attachment transcription failed filename=%s.", filename)
+                lines.append("  Transkript: <Transkription fehlgeschlagen>")
+                continue
             if transcript:
                 try:
                     record_tts_voice_style_observation(account_store, account_id, transcript)
                 except (AccountStoreError, OSError, ValueError):
                     pass
+                except Exception:  # noqa: BLE001 - optional voice-style observation must not block the reply.
+                    LOGGER.exception("TTS voice-style observation failed account=%s.", account_id)
             lines.append(f"  Transkript: {transcript or '<leer>'}")
         elif _is_audio_attachment(filename, content_type):
             lines.append("  Transkript: <keine Audiodaten verfuegbar>")
