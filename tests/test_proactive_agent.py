@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from datetime import datetime, timedelta, timezone
 import threading
 import time
@@ -3955,6 +3956,9 @@ def test_tool_agent_rejects_secret_like_generated_file_without_mutating(tmp_path
     assert account_store.read_proactive_outbox(account_id) == []
     audit = account_store.read_proactive_audit(account_id)
     assert audit[0]["event_type"] == "llm_decision_rejected"
+    serialized_audit = json.dumps(audit, ensure_ascii=False)
+    assert secret not in serialized_audit
+    assert "<REDACTED>" in serialized_audit
 
 
 def test_tool_agent_runner_uses_client_tool_calls(tmp_path) -> None:

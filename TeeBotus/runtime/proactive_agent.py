@@ -19,6 +19,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from pydantic import ValidationError
 
 from TeeBotus.decisions.proactive import parse_proactive_tool_call_decision
+from TeeBotus.core.registration import redact_registration_secrets
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, utc_now
 from TeeBotus.runtime.action_buttons import NOTIFICATION_LOUDNESS_BUTTONS
 from TeeBotus.runtime.actions import OutgoingAction, SendAttachment, SendText
@@ -131,6 +132,44 @@ PROACTIVE_PLANNER_MEMORY_KINDS = frozenset(
         "next_step",
         "treatment_plan",
     }
+)
+PROACTIVE_AUDIT_SECRET_KEY_RE = re.compile(
+    r"(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer|password|secret|private[_-]?key|client[_-]?secret|authorization)",
+    re.IGNORECASE,
+)
+PROACTIVE_AUDIT_SECRET_ASSIGNMENT_RE = re.compile(
+    r"(?P<key>[A-Za-z0-9_.-]*(?:api[_-]?key|access[_-]?token|auth[_-]?token|bearer|password|secret|private[_-]?key|client[_-]?secret|authorization)[A-Za-z0-9_.-]*)"
+    r"(?P<separator>\s*[:=]\s*)(?P<value>[^\s,;)\]}]+)",
+    re.IGNORECASE,
+)
+PROACTIVE_AUDIT_URL_CREDENTIAL_RE = re.compile(
+    r"(?P<prefix>[a-z][a-z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@",
+    re.IGNORECASE,
+)
+PROACTIVE_AUDIT_BEARER_RE = re.compile(
+    r"\b(?P<scheme>Bearer|Basic|ApiKey|Token)\s+[A-Za-z0-9._~+/=-]+",
+    re.IGNORECASE,
+)
+PROACTIVE_AUDIT_TELEGRAM_TOKEN_RE = re.compile(
+    r"(?<![A-Za-z0-9_])(?:bot)?\d{8,12}:[A-Za-z0-9_-]{30,}(?![A-Za-z0-9_-])",
+    re.IGNORECASE,
+)
+PROACTIVE_AUDIT_PRIVATE_KEY_RE = re.compile(
+    r"-----BEGIN [A-Z0-9 ]*PRIVATE KEY-----.*?(?:-----END [A-Z0-9 ]*PRIVATE KEY-----|\Z)",
+    re.DOTALL,
+)
+PROACTIVE_AUDIT_SECRET_TOKEN_PATTERNS = (
+    (re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b"), "sk-<REDACTED>"),
+    (re.compile(r"\bxox[baprs]-[A-Za-z0-9_-]{8,}\b"), "xox-<REDACTED>"),
+    (re.compile(r"\bsyt_[A-Za-z0-9_=-]{8,}\b"), "syt_<REDACTED>"),
+    (re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{8,}\b"), "gh_<REDACTED>"),
+    (re.compile(r"\bgithub_pat_[A-Za-z0-9_]{12,}\b"), "github_pat_<REDACTED>"),
+    (re.compile(r"\bglpat-[A-Za-z0-9_-]{8,}\b"), "glpat-<REDACTED>"),
+    (re.compile(r"\bhf_[A-Za-z0-9]{8,}\b"), "hf_<REDACTED>"),
+    (re.compile(r"\bgsk_[A-Za-z0-9]{8,}\b"), "gsk_<REDACTED>"),
+    (re.compile(r"\bAIza[0-9A-Za-z_-]{16,}\b"), "AIza<REDACTED>"),
+    (re.compile(r"\bya29\.[A-Za-z0-9._-]{16,}\b"), "ya29.<REDACTED>"),
+    (re.compile(r"\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{6,}\.[A-Za-z0-9_-]{20,}\b"), "<JWT_REDACTED>"),
 )
 
 
@@ -3442,7 +3481,12 @@ def _compact_audit_value(value: Any, *, max_string_chars: int = 400, max_items: 
     if isinstance(value, Mapping):
         compact: dict[str, Any] = {}
         for key, item in list(value.items())[:max_items]:
-            compact[str(key)[:80]] = _compact_audit_value(item, max_string_chars=max_string_chars, max_items=max_items)
+            key_text = str(key)[:80]
+            compact[key_text] = (
+                "<REDACTED>"
+                if PROACTIVE_AUDIT_SECRET_KEY_RE.search(key_text)
+                else _compact_audit_value(item, max_string_chars=max_string_chars, max_items=max_items)
+            )
         if len(value) > max_items:
             compact["_truncated_keys"] = len(value) - max_items
         return compact
@@ -3453,9 +3497,24 @@ def _compact_audit_value(value: Any, *, max_string_chars: int = 400, max_items: 
         return compact_list
     if isinstance(value, (str, int, float, bool)) or value is None:
         if isinstance(value, str):
-            return _safe_llm_text(value, max_chars=max_string_chars)
+            return _redact_proactive_audit_text(_safe_llm_text(value, max_chars=max_string_chars))
         return value
-    return _safe_llm_text(repr(value), max_chars=max_string_chars)
+    return _redact_proactive_audit_text(_safe_llm_text(repr(value), max_chars=max_string_chars))
+
+
+def _redact_proactive_audit_text(value: str) -> str:
+    text = redact_registration_secrets(value)
+    text = PROACTIVE_AUDIT_PRIVATE_KEY_RE.sub("<PRIVATE_KEY_REDACTED>", text)
+    text = PROACTIVE_AUDIT_TELEGRAM_TOKEN_RE.sub("<TELEGRAM_TOKEN_REDACTED>", text)
+    text = PROACTIVE_AUDIT_URL_CREDENTIAL_RE.sub(r"\g<prefix><REDACTED>@", text)
+    text = PROACTIVE_AUDIT_BEARER_RE.sub(lambda match: f"{match.group('scheme')} <REDACTED>", text)
+    text = PROACTIVE_AUDIT_SECRET_ASSIGNMENT_RE.sub(
+        lambda match: f"{match.group('key')}{match.group('separator')}<REDACTED>",
+        text,
+    )
+    for pattern, replacement in PROACTIVE_AUDIT_SECRET_TOKEN_PATTERNS:
+        text = pattern.sub(replacement, text)
+    return text
 
 
 def _handle_proactive_category_command(account_store: AccountStore, account_id: str, args: list[str]) -> str:
