@@ -3680,6 +3680,26 @@ def test_cinnamon_applet_runtime_parser_does_not_hide_unknown_decision_route_beh
     assert parsed["summary"]["informational_problem_statuses"] == ""
 
 
+def test_cinnamon_applet_runtime_parser_requires_effective_status_for_decision_fallback() -> None:
+    unverified = parse_runtime_status(
+        """
+        [LLM-Routen und Backends]
+        structured_decision=unverified status=enabled route_status=unavailable fallback=local
+        """
+    )
+    verified = parse_runtime_status(
+        """
+        [LLM-Routen und Backends]
+        structured_decision=verified status=enabled route_status=unavailable fallback=local effective_status=configured
+        """
+    )
+
+    assert unverified["summary"]["actionable_problem_statuses"] == "unavailable:1"
+    assert unverified["summary"]["informational_problem_statuses"] == ""
+    assert verified["summary"]["actionable_problem_statuses"] == ""
+    assert verified["summary"]["informational_problem_statuses"] == "unavailable:1"
+
+
 def test_cinnamon_applet_runtime_parser_does_not_hide_unknown_secondary_status_behind_fallback() -> None:
     parsed = parse_runtime_status(
         """
