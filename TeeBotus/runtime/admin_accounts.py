@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 from TeeBotus import __version__
 
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, TOKEN_HEX_RE, runtime_secret_provider
+from TeeBotus.runtime.accounts import AccountStore, TOKEN_HEX_RE, runtime_secret_provider
 from TeeBotus.runtime.actions import SendAttachment
 from TeeBotus.runtime.proactive_agent import ProactiveSender, select_proactive_route
 from TeeBotus.runtime.status_auth import status_auth_recipient_account_ids, status_auth_state_admin_opted_out
@@ -151,7 +151,7 @@ def admin_account_group_status_lines(
                 summary_instance_name=instance_name,
                 store_factory=resolved_store_factory,
             )
-        except (AccountStoreError, OSError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - status must report route backend failures.
             warning_count += 1
             account_lines.append(
                 f"admin_account={instance_name}/{account_id} status=warning reason=route_lookup_failed "
@@ -256,7 +256,7 @@ async def notify_runtime_status_admin_accounts(
                 summary_instance_name=instance_name,
                 store_factory=resolved_store_factory,
             )
-        except (AccountStoreError, OSError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - admin notifications must survive route backend failures.
             results.append(AdminNotificationResult(instance_name, account_id, "failed", f"route:{type(exc).__name__}"))
             continue
         if route_resolution.status == "not_local":
@@ -376,7 +376,7 @@ async def notify_benchmark_admin_accounts(
                 summary_instance_name=instance_name,
                 store_factory=resolved_store_factory,
             )
-        except (AccountStoreError, OSError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - benchmark notifications must survive route backend failures.
             results.append(AdminNotificationResult(instance_name, account_id, "failed", f"route:{type(exc).__name__}"))
             continue
         if route_resolution.status == "not_local":
@@ -507,7 +507,7 @@ def _resolve_admin_notification_route(
     if local_account_exists:
         try:
             route = select_proactive_route(store, account_id)
-        except (AccountStoreError, OSError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - status route lookup must fail closed.
             local_route_error = f"{summary_instance_name}:{type(exc).__name__}"
         else:
             if route is None:
@@ -526,7 +526,7 @@ def _resolve_admin_notification_route(
         found_source_account = True
         try:
             route = select_proactive_route(source_store, account_id)
-        except (AccountStoreError, OSError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - cross-instance route lookup must fail closed.
             route_errors.append(f"{source_instance_name}:{type(exc).__name__}")
             continue
         if route is None:

@@ -124,7 +124,7 @@ def test_admin_account_status_reports_malformed_route_state(tmp_path, monkeypatc
     account_id = account_store.resolve_or_create_account(identity)
 
     def broken_route(*_args, **_kwargs):
-        raise ValueError("malformed route state")
+        raise RuntimeError("malformed route state")
 
     monkeypatch.setattr(admin_accounts_module, "select_proactive_route", broken_route)
 
@@ -138,7 +138,7 @@ def test_admin_account_status_reports_malformed_route_state(tmp_path, monkeypatc
     assert lines[0].endswith("warnings=1 invalid=0")
     assert lines[1] == (
         f"admin_account=Depressionsbot/{account_id} status=warning "
-        "reason=route:Depressionsbot:ValueError"
+        "reason=route:Depressionsbot:RuntimeError"
     )
 
 
