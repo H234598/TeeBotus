@@ -4992,7 +4992,7 @@ def test_account_memory_fallback_blocks_collection_names_when_secondary_is_missi
     assert account_id not in backend._failed_collection_name_reads
 
 
-def test_account_memory_fallback_does_not_treat_empty_secondary_collection_names_as_recovered() -> None:
+def test_account_memory_fallback_accepts_empty_secondary_collection_names() -> None:
     class Backend:
         def __init__(self, *, fail_read: bool = False) -> None:
             self.fail_read = fail_read
@@ -5009,10 +5009,10 @@ def test_account_memory_fallback_does_not_treat_empty_secondary_collection_names
         label="Demo:sqlite",
     )
 
-    with pytest.raises(AccountStoreError, match="fallback has no recoverable data"):
-        backend.read_collection_names(account_id)
+    assert backend.read_collection_names(account_id) == ()
 
-    assert account_id in backend._failed_collection_name_reads
+    assert account_id not in backend._failed_collection_name_reads
+    assert backend.fallback_sync_error_for_account(account_id) == ""
 
 
 def test_account_memory_fallback_repairs_fallback_only_collection_after_name_read_recovery() -> None:

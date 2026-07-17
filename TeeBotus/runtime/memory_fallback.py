@@ -254,23 +254,8 @@ class WarningFallbackAccountMemoryBackend:
             try:
                 names = tuple(getattr(self.fallback, "read_collection_names")(account_id))
                 self._copy_diagnostics(self.fallback)
-                if not names:
-                    self._failed_collection_name_reads.add(account_id)
-                    self._set_fallback_sync_error(
-                        "read_collection_names",
-                        account_id,
-                        "read_collection_names: fallback has no recoverable data",
-                    )
-                    LOGGER.critical(
-                        "ACCOUNT MEMORY FALLBACK COLLECTION NAMES ARE EMPTY AFTER PRIMARY FAILURE. "
-                        "FAILOVER IS BLOCKED UNTIL A VERIFIED COLLECTION LIST IS AVAILABLE. "
-                        "label=%s account_id=%s.",
-                        self.label,
-                        account_id,
-                    )
-                    raise _FallbackReadFailure(
-                        self.fallback_sync_error_for_account(account_id) or self.last_fallback_sync_error
-                    )
+                if not names and not name_read_repair_pending and not dirty_collection_names:
+                    return names
                 can_repair_collections = callable(getattr(self.fallback, "read_collection", None)) and (
                     callable(getattr(self.primary, "_repair_collection_from_verified_fallback", None))
                     or callable(getattr(self.primary, "write_collection", None))
