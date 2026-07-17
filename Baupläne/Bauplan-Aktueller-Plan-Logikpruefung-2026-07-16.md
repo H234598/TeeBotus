@@ -6336,6 +6336,23 @@ erfolgt. Seit diesem Plan-Commit neuer Zyklus `1/20` Commits. Kein Push.
 Naechster Restart nach 19 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
 
+### Proactive-Safety-Hold ueberlebt Audit-Persistenzfehler
+
+- 2026-07-17: Der Safety-Dispatch setzte riskante Items korrekt auf `skipped`,
+  liess danach aber einen Audit-Schreibfehler ungefangen. Dadurch konnte ein
+  bereits sicher blockierter Dispatch-Cycle trotzdem abbrechen.
+- Safety-Audit ist jetzt best-effort mit Exception-Logging. Item bleibt
+  `skipped`, Versand bleibt unterdrueckt; fehlendes Audit wird nicht als
+  erfolgreicher Audit-Write behauptet.
+- Test: `tests/test_proactive_agent.py` `187 passed`; Regression fuer
+  Auditfehler bei `risk_gate=crisis`; Ruff und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `f992185f fix: keep proactive safety holds on audit failure`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`3/20` Commits. Kein Push. Restart nach 17 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Admin-Status kapselt Route-Backendfehler
 
 - 2026-07-17: Admin-Statuszeilen sowie Runtime- und Benchmark-Summary-
