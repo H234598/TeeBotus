@@ -3653,3 +3653,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `20/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart jetzt. Naechster Push bleibt erst bei 100
 Commits.
+
+### Status-Auth-Export-schreibt-ueber-stabile-Parent-FDs
+
+- 2026-07-17: `_write_status_auth_report()` pruefte Output-Basis und Ziel,
+  oeffnete danach aber wieder per absolutem Pfad. Ein Parent-Swap konnte den
+  Status-Report auf ein fremdes Ziel umlenken.
+- Output-Parent-Komponenten werden jetzt einzeln mit `O_NOFOLLOW|O_DIRECTORY`
+  geoeffnet; die Zieldatei wird relativ zum stabilen Parent-FD mit
+  `O_NOFOLLOW` geschrieben. Systeme ohne diese Schutzflags blockieren.
+- Regression: Status-Auth-Report-Fokus -> `13 passed`; komplette
+  `tests/test_admin_accounts.py` -> `109 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e43b05d6 fix: write status auth reports through stable parent fds`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
