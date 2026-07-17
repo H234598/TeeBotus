@@ -218,6 +218,7 @@ class WarningFallbackAccountMemoryBackend:
                 collection for item_account_id, collection in self._dirty_collections if item_account_id == account_id
             }
             name_read_repair_pending = account_id in self._failed_collection_name_reads
+            name_repair_failed = False
             if dirty_collection_names or name_read_repair_pending:
                 primary_names = set(getattr(self.primary, "read_collection_names")(account_id))
                 fallback_names = set(getattr(self.fallback, "read_collection_names")(account_id))
@@ -226,9 +227,12 @@ class WarningFallbackAccountMemoryBackend:
                     collections_to_sync.update(fallback_names - primary_names)
                 for collection in sorted(collections_to_sync):
                     self._sync_collection_from_fallback(account_id, collection, force=True)
+                for collection in sorted((primary_names - fallback_names) | dirty_collection_names):
+                    if not self._sync_collection_to_fallback_from_primary(account_id, collection):
+                        name_repair_failed = True
             names = tuple(getattr(self.primary, "read_collection_names")(account_id))
             self._copy_diagnostics(self.primary)
-            if name_read_repair_pending:
+            if name_read_repair_pending and not name_repair_failed:
                 self._failed_collection_name_reads.discard(account_id)
             self._warn_if_fallback_repair_pending("read_collection:*", account_id)
             self._clear_recovered_if_clean("read_collection_names", account_id)
@@ -254,12 +258,19 @@ class WarningFallbackAccountMemoryBackend:
             try:
                 names = tuple(getattr(self.fallback, "read_collection_names")(account_id))
                 self._copy_diagnostics(self.fallback)
-                if not names and not name_read_repair_pending and not dirty_collection_names:
-                    return names
                 can_repair_collections = callable(getattr(self.fallback, "read_collection", None)) and (
                     callable(getattr(self.primary, "_repair_collection_from_verified_fallback", None))
                     or callable(getattr(self.primary, "write_collection", None))
                 )
+                if not names and not name_read_repair_pending and not dirty_collection_names:
+                    if can_repair_collections:
+                        self._failed_collection_name_reads.add(account_id)
+                        self._set_fallback_sync_error(
+                            "read_collection_names",
+                            account_id,
+                            "read_collection_names: empty fallback collection list requires repair",
+                        )
+                    return names
                 if can_repair_collections:
                     self._failed_collection_name_reads.add(account_id)
                     self._set_fallback_sync_error(
@@ -584,6 +595,37 @@ class WarningFallbackAccountMemoryBackend:
         self._ensure_clean_fallback_read(f"read_collection:{collection}", account_id)
         self._repair_primary_from_verified_fallback(f"read_collection:{collection}", account_id, rows, collection=collection)
         self._dirty_collections.discard(key)
+
+    def _sync_collection_to_fallback_from_primary(self, account_id: str, collection: str) -> bool:
+        stale_key = (account_id, collection)
+        try:
+            rows = self._read_clean_collection_for_mirror(self.primary, account_id, collection)
+            self.fallback.write_collection(account_id, collection, rows)
+        except Exception as exc:  # noqa: BLE001 - keep primary result usable while repair remains pending.
+            self._copy_diagnostics(self.fallback)
+            self._stale_fallback_collections.add(stale_key)
+            self._fallback_sync_failed_collections.add(stale_key)
+            self._set_fallback_sync_error(
+                "read_collection_names",
+                account_id,
+                f"read_collection_names: fallback collection repair failed: {exc}",
+            )
+            LOGGER.critical(
+                "ACCOUNT MEMORY FALLBACK COLLECTION REPAIR FROM PRIMARY FAILED. "
+                "FALLBACK REMAINS STALE UNTIL A CLEAN PRIMARY COLLECTION READ AND WRITE SUCCEEDS. "
+                "label=%s account_id=%s collection=%s error=%s.",
+                self.label,
+                account_id,
+                collection,
+                exc,
+            )
+            return False
+        self._copy_diagnostics(self.fallback)
+        self._dirty_collections.discard(stale_key)
+        self._stale_fallback_collections.discard(stale_key)
+        self._fallback_sync_failed_collections.discard(stale_key)
+        self._unrecoverable_fallback_collections.discard(stale_key)
+        return True
 
     def _repair_primary_from_verified_fallback(
         self,

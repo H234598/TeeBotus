@@ -5015,6 +5015,42 @@ def test_account_memory_fallback_accepts_empty_secondary_collection_names() -> N
     assert backend.fallback_sync_error_for_account(account_id) == ""
 
 
+def test_account_memory_fallback_repairs_empty_secondary_collection_names_after_primary_recovers() -> None:
+    class Backend:
+        def __init__(self, *, fail_names: bool = False) -> None:
+            self.fail_names = fail_names
+            self.collections: dict[tuple[str, str], list[dict[str, str]]] = {}
+
+        def read_collection_names(self, account_id: str) -> tuple[str, ...]:
+            if self.fail_names:
+                raise OSError("primary unavailable")
+            return tuple(sorted(collection for item_account, collection in self.collections if item_account == account_id))
+
+        def read_collection(self, account_id: str, collection: str) -> list[dict[str, str]]:
+            return [dict(row) for row in self.collections.get((account_id, collection), [])]
+
+        def write_collection(self, account_id: str, collection: str, rows: list[dict[str, str]]) -> None:
+            self.collections[(account_id, collection)] = [dict(row) for row in rows]
+
+    account_id = "a" * 128
+    collection = "proactive_outbox"
+    primary = Backend(fail_names=True)
+    fallback = Backend()
+    primary.collections[(account_id, collection)] = [{"id": "row_1"}]
+    backend = WarningFallbackAccountMemoryBackend(primary, fallback, label="Demo:sqlite")
+
+    assert backend.read_collection_names(account_id) == ()
+    assert account_id in backend._failed_collection_name_reads
+    primary.fail_names = False
+
+    assert backend.read_collection_names(account_id) == (collection,)
+    assert fallback.read_collection_names(account_id) == (collection,)
+    assert account_id not in backend._failed_collection_name_reads
+
+    primary.fail_names = True
+    assert backend.read_collection_names(account_id) == (collection,)
+
+
 def test_account_memory_fallback_repairs_fallback_only_collection_after_name_read_recovery() -> None:
     class Backend:
         def __init__(self, *, fail_names: bool = False) -> None:
