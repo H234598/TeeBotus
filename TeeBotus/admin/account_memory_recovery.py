@@ -568,7 +568,7 @@ def _quarantine_instance_unreadable_metadata(
                 if target.exists():
                     target = instance_quarantine_dir / "accounts" / f"{account_id}.account_dir"
                 _prepare_private_dir(target.parent)
-                shutil.move(str(account_dir), str(target))
+                _move_quarantine_source(account_dir, target)
                 moved_account_dirs.append(
                     {
                         "path": str(account_dir),
@@ -589,7 +589,7 @@ def _quarantine_instance_unreadable_metadata(
         if target.exists():
             target = instance_quarantine_dir / f"{path.name}.{safe_artifact_name(item['kind'], default='item')}"
         _prepare_private_dir(target.parent)
-        shutil.move(str(path), str(target))
+        _move_quarantine_source(path, target)
         moved_items.append(
             {
                 "kind": item["kind"],
@@ -841,7 +841,7 @@ def _quarantine_instance_unrecoverable(
     for path in json_files:
         target = instance_quarantine_dir / "json_files" / path.parent.name / path.name
         _prepare_private_dir(target.parent)
-        shutil.move(str(path), str(target))
+        _move_quarantine_source(path, target)
         moved_files.append({"path": str(path), "quarantine_path": str(target)})
     result["json_files"] = moved_files
     result["totals"]["json_files_quarantined"] = len(moved_files)
@@ -971,17 +971,16 @@ def _safe_json_accounts_dir(accounts_root: Path) -> Path | None:
 def _snapshot_sqlite_database(source: Path, target: Path) -> None:
     _prepare_private_dir(target.parent)
     try:
-        descriptor = os.open(os.fspath(target), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        descriptor = _open_exclusive_file(target, flags=os.O_CREAT | os.O_WRONLY, mode=0o600)
     except FileExistsError as exc:
         raise AccountStoreError(f"refusing existing SQLite snapshot destination: {target}") from exc
-    else:
-        os.close(descriptor)
-    with _connect_sqlite_readonly(source) as source_connection, sqlite3.connect(target) as target_connection:
-        source_connection.backup(target_connection)
     try:
-        os.chmod(target, 0o600)
-    except OSError:
-        pass
+        with _connect_sqlite_readonly(source) as source_connection, sqlite3.connect(
+            f"file:/proc/self/fd/{descriptor}?mode=rw", uri=True
+        ) as target_connection:
+            source_connection.backup(target_connection)
+    finally:
+        os.close(descriptor)
 
 
 def _delete_sqlite_account_rows(path: Path, instance_name: str, account_ids: Sequence[str]) -> int:
@@ -1026,26 +1025,81 @@ def _delete_row_count(cursor: sqlite3.Cursor) -> int:
 
 def _prepare_private_dir(path: Path) -> None:
     absolute = Path(os.path.abspath(os.fspath(path)))
-    symlink_component = _first_symlinked_path_component(absolute)
-    if symlink_component is not None:
-        raise AccountStoreError(f"refusing symlinked quarantine directory: {symlink_component}")
-    path.mkdir(parents=True, exist_ok=True)
-    if path.is_symlink() or not path.is_dir():
-        raise AccountStoreError(f"refusing unsafe quarantine directory: {path}")
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    directory_flag = getattr(os, "O_DIRECTORY", 0)
+    if not no_follow or not directory_flag:
+        raise AccountStoreError("private quarantine directories require O_NOFOLLOW and O_DIRECTORY")
+    if absolute == Path(os.sep):
+        raise AccountStoreError("refusing root as quarantine directory")
+    directory_flags = os.O_RDONLY | directory_flag | no_follow | getattr(os, "O_CLOEXEC", 0)
+    parent_descriptor = os.open(os.sep, directory_flags)
     try:
-        os.chmod(path, 0o700)
-    except OSError:
-        pass
+        for component in absolute.parts[1:]:
+            try:
+                os.mkdir(component, 0o700, dir_fd=parent_descriptor)
+            except FileExistsError:
+                pass
+            next_descriptor = os.open(component, directory_flags, dir_fd=parent_descriptor)
+            os.close(parent_descriptor)
+            parent_descriptor = next_descriptor
+        os.fchmod(parent_descriptor, 0o700)
+    except OSError as exc:
+        symlink_component = _first_symlinked_path_component(absolute)
+        if symlink_component is not None:
+            raise AccountStoreError(f"refusing symlinked quarantine directory: {symlink_component}") from exc
+        raise AccountStoreError(f"refusing unsafe quarantine directory: {path}") from exc
+    finally:
+        os.close(parent_descriptor)
+
+
+def _move_quarantine_source(source: Path, target: Path) -> None:
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    if not no_follow:
+        raise AccountStoreError("quarantine moves require O_NOFOLLOW")
+    if _first_symlinked_path_component(source) is not None:
+        raise AccountStoreError(f"refusing symlinked quarantine source: {source}")
+    source_parent = _open_stable_directory_descriptor(source.parent, no_follow=no_follow)
+    target_parent = _open_stable_directory_descriptor(target.parent, no_follow=no_follow)
+    try:
+        source_stat = os.lstat(source.name, dir_fd=source_parent)
+        if stat.S_ISLNK(source_stat.st_mode):
+            raise AccountStoreError(f"refusing symlinked quarantine source: {source}")
+        if not stat.S_ISDIR(source_stat.st_mode) and source_stat.st_nlink != 1:
+            raise AccountStoreError(f"refusing hardlinked quarantine source: {source}")
+        os.rename(source.name, target.name, src_dir_fd=source_parent, dst_dir_fd=target_parent)
+    except OSError as exc:
+        if isinstance(exc, AccountStoreError):
+            raise
+        raise AccountStoreError(f"unable to move quarantine source: {source}") from exc
+    finally:
+        os.close(source_parent)
+        os.close(target_parent)
 
 
 def _write_quarantine_manifest(path: Path, payload: Mapping[str, Any]) -> None:
     serialized = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     try:
-        descriptor = os.open(os.fspath(path), os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        descriptor = _open_exclusive_file(path, flags=os.O_CREAT | os.O_WRONLY, mode=0o600)
     except FileExistsError as exc:
         raise AccountStoreError(f"refusing existing quarantine manifest: {path}") from exc
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
         stream.write(serialized)
+
+
+def _open_exclusive_file(path: Path, *, flags: int, mode: int) -> int:
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    if not no_follow:
+        raise AccountStoreError("exclusive quarantine files require O_NOFOLLOW")
+    parent_descriptor = _open_stable_directory_descriptor(path.parent, no_follow=no_follow)
+    try:
+        return os.open(
+            path.name,
+            flags | os.O_EXCL | no_follow | getattr(os, "O_CLOEXEC", 0),
+            mode,
+            dir_fd=parent_descriptor,
+        )
+    finally:
+        os.close(parent_descriptor)
 
 
 def _first_symlinked_path_component(path: Path) -> Path | None:
@@ -1571,20 +1625,30 @@ def _connect_sqlite_writable_stable(path: Path):
 
 
 def _open_stable_sqlite_descriptor(path: Path, *, no_follow: int) -> int:
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    parent_descriptor = _open_stable_directory_descriptor(absolute.parent, no_follow=no_follow)
+    try:
+        return os.open(absolute.name, os.O_RDWR | no_follow | getattr(os, "O_CLOEXEC", 0), dir_fd=parent_descriptor)
+    finally:
+        os.close(parent_descriptor)
+
+
+def _open_stable_directory_descriptor(path: Path, *, no_follow: int) -> int:
     directory_flag = getattr(os, "O_DIRECTORY", 0)
     if not directory_flag:
-        raise OSError("stable SQLite recovery delete requires O_DIRECTORY")
+        raise OSError("stable directory access requires O_DIRECTORY")
     directory_flags = os.O_RDONLY | directory_flag | no_follow | getattr(os, "O_CLOEXEC", 0)
     absolute = Path(os.path.abspath(os.fspath(path)))
     parent_descriptor = os.open(os.sep, directory_flags)
     try:
-        for component in absolute.parts[1:-1]:
+        for component in absolute.parts[1:]:
             next_descriptor = os.open(component, directory_flags, dir_fd=parent_descriptor)
             os.close(parent_descriptor)
             parent_descriptor = next_descriptor
-        return os.open(absolute.name, os.O_RDWR | no_follow | getattr(os, "O_CLOEXEC", 0), dir_fd=parent_descriptor)
-    finally:
+        return parent_descriptor
+    except BaseException:
         os.close(parent_descriptor)
+        raise
 
 
 def _legacy_plaintext_import_report(*, legacy_instances_dir: Path, target_instances_dir: Path, instance_name: str) -> dict[str, Any]:
