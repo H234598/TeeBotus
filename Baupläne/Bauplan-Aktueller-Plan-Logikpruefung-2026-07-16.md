@@ -7922,3 +7922,19 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `18/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### History-Dispatcher-Callback-Spool: parallele Flushes serialisieren
+
+- 2026-07-17: Mehrere Watcher/Threads konnten denselben Spool gleichzeitig
+  lesen und dasselbe Delivery-Event parallel an den Dispatcher senden.
+  Dadurch waren doppelte Zustellversuche trotz identischer Event-ID moeglich.
+- `flush_spool()` verwendet jetzt einen Thread- und POSIX-Dateilock pro Spool.
+  Bei Prozessabbruch bleibt das Event erhalten; der naechste Lauf kann es
+  erneut senden.
+- Test: `tests/test_history_dispatcher_bridge.py` -> `8 passed`, inklusive
+  parallelem Flush-Test; Ruff, `py_compile` und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `79d5bcb7 fix: serialize dispatcher spool flushes`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `19/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
