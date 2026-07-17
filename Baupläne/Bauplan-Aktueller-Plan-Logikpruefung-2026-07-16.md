@@ -3400,3 +3400,18 @@ nach 13 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `9/20` Commits. Kein Push. Restart
 nach 11 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Recovery-Quarantaene-blockt-unsicheren-Instances-Root
+
+- 2026-07-17: `quarantine_unreadable_account_metadata()` behandelte
+  symlinked/ungueltige Instances-Roots als leere Discovery und meldete danach
+  `no-op`. Das konnte einen falschen Erfolg signalisieren.
+- Symlinked oder vorhandene Nicht-Verzeichnis-Roots blockieren jetzt den
+  Quarantaene-Scan explizit; kein Zielpfad wird angelegt.
+- Regression: symlinked Root plus Metadata-Quarantaene-Fokus -> `10 passed`;
+  komplette `tests/test_admin_accounts.py` -> `96 passed`. Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a73526e7 fix: block quarantine on unsafe instances roots`.
+
+**Aktueller Laufstand:** Seit dem Restart `11/20` Commits. Kein Push. Restart
+nach 9 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
