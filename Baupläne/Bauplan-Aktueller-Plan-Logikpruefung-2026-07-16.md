@@ -5282,3 +5282,18 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `16/20` Commits. Kein Push. Restart nach 4 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Review-Storefehler mit Zielmetadaten
+
+- 2026-07-17: Der Store-Factory-Fehlerpfad von `review_proactive_item` lieferte
+  nur Aktion und Grund. Betroffene Instanz, Account und Outbox-Item fehlten
+  fuer CLI-/JSON-Consumer.
+- Fehlerreports enthalten jetzt dasselbe Zielschema wie Review-Fehler nach
+  Store-Erzeugung: `instance`, `account_id`, `item_id`, `route` und `reason`.
+- Test: `tests/test_proactive_review.py` `12 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `65be5024 fix: preserve proactive review error targets`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`18/20` Commits. Kein Push. Restart nach 2 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
