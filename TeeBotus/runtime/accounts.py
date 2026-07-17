@@ -2499,21 +2499,6 @@ class AccountStore:
             (CODEX_HISTORY_DISPATCH_RESULTS_COLLECTION, self.read_codex_history_dispatch_results, self.write_codex_history_dispatch_results),
             (CODEX_HISTORY_PROJECTS_COLLECTION, self.read_codex_history_projects, self.write_codex_history_projects),
         )
-        for collection, reader, writer in jsonl_collections:
-            source_rows = reader(source_account_id)
-            self._raise_if_account_memory_collection_unreadable(
-                collection,
-                "cannot merge source account memory",
-            )
-            target_rows = reader(target_account_id)
-            self._raise_if_account_memory_collection_unreadable(
-                collection,
-                "cannot merge target account memory",
-            )
-            merged_rows = _merge_account_jsonl_rows(target_rows, source_rows)
-            if merged_rows != target_rows:
-                writer(target_account_id, merged_rows)
-
         document_collections: tuple[
             tuple[str, Callable[[str], dict[str, Any]], Callable[[str, dict[str, Any]], None]], ...
         ] = (
@@ -2521,27 +2506,67 @@ class AccountStore:
             (AGENT_STATE_COLLECTION, self.read_agent_state, self.write_agent_state),
             (STATUS_AUTH_STATE_COLLECTION, self.read_status_auth_state, self.write_status_auth_state),
         )
-        for collection, reader, writer in document_collections:
-            source_data = reader(source_account_id)
+        target_rows_snapshots: dict[str, list[dict[str, Any]]] = {}
+        target_document_snapshots: dict[str, dict[str, Any]] = {}
+        for collection, reader, _writer in jsonl_collections:
+            target_rows = reader(target_account_id)
             self._raise_if_account_memory_collection_unreadable(
                 collection,
-                "cannot merge source account memory",
+                "cannot merge target account memory",
             )
+            target_rows_snapshots[collection] = [dict(row) for row in target_rows]
+        for collection, reader, _writer in document_collections:
             target_data = reader(target_account_id)
             self._raise_if_account_memory_collection_unreadable(
                 collection,
                 "cannot merge target account memory",
             )
-            if collection == LLM_STATE_COLLECTION:
-                merged_data = _choose_newer_state(source_data, target_data)
-            else:
-                merged_data = _merge_nested_json_documents(source_data, target_data)
-                if collection == STATUS_AUTH_STATE_COLLECTION:
-                    merged_data["authorized"] = bool(
-                        source_data.get("authorized") or target_data.get("authorized")
-                    )
-            if merged_data != target_data:
-                writer(target_account_id, merged_data)
+            target_document_snapshots[collection] = dict(target_data)
+
+        written_collections: list[tuple[str, Callable[[str, Any], None], Any]] = []
+        try:
+            for collection, reader, writer in jsonl_collections:
+                source_rows = reader(source_account_id)
+                self._raise_if_account_memory_collection_unreadable(
+                    collection,
+                    "cannot merge source account memory",
+                )
+                target_rows = target_rows_snapshots[collection]
+                merged_rows = _merge_account_jsonl_rows(target_rows, source_rows)
+                if merged_rows != target_rows:
+                    written_collections.append((collection, writer, target_rows))
+                    writer(target_account_id, merged_rows)
+
+            for collection, reader, writer in document_collections:
+                source_data = reader(source_account_id)
+                self._raise_if_account_memory_collection_unreadable(
+                    collection,
+                    "cannot merge source account memory",
+                )
+                target_data = target_document_snapshots[collection]
+                if collection == LLM_STATE_COLLECTION:
+                    merged_data = _choose_newer_state(source_data, target_data)
+                else:
+                    merged_data = _merge_nested_json_documents(source_data, target_data)
+                    if collection == STATUS_AUTH_STATE_COLLECTION:
+                        merged_data["authorized"] = bool(
+                            source_data.get("authorized") or target_data.get("authorized")
+                        )
+                if merged_data != target_data:
+                    written_collections.append((collection, writer, target_data))
+                    writer(target_account_id, merged_data)
+        except Exception:
+            rollback_errors: list[Exception] = []
+            for _collection, writer, snapshot in reversed(written_collections):
+                try:
+                    writer(target_account_id, snapshot)
+                except Exception as rollback_exc:  # noqa: BLE001 - surface partial SQL merge rollback explicitly.
+                    rollback_errors.append(rollback_exc)
+            if rollback_errors:
+                raise AccountStoreError(
+                    "account memory collection merge rollback failed; target collections may be inconsistent"
+                ) from rollback_errors[0]
+            raise
 
     @_serialize_identity_map
     def account_summary(self, account_id: str) -> dict[str, Any]:

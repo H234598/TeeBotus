@@ -19,6 +19,8 @@ from TeeBotus.runtime.accounts import (
     ACCOUNT_MEMORY_KEY_PURPOSE,
     CODEX_HISTORY_OUTBOX_FILENAME,
     PROACTIVE_OUTBOX_FILENAME,
+    STATUS_OUTBOX_COLLECTION,
+    STATUS_AUTH_STATE_COLLECTION,
     STATUS_AUTH_STATE_FILENAME,
     STATUS_OUTBOX_FILENAME,
     USER_MEMORY_ENTRIES_FILENAME,
@@ -3818,6 +3820,57 @@ def test_sql_account_collection_merge_refuses_partial_rows(tmp_path):
         with pytest.raises(AccountStoreError, match="collection.*unreadable"):
             store._merge_sql_account_memory_collections(backend, source_account_id, target_account_id)
         assert backend.write_calls == 0
+
+
+def test_sql_account_collection_merge_rolls_back_target_after_late_write_failure(tmp_path):
+    class Backend:
+        last_collection_read_error = ""
+        last_collection_skipped = 0
+
+        def __init__(self) -> None:
+            self.rows: dict[str, dict[str, list[dict[str, object]]]] = {}
+            self.failed = False
+
+        def read_collection(self, account_id: str, collection: str) -> list[dict[str, object]]:
+            account_rows = self.rows.setdefault(account_id, {})
+            return [
+                dict(row)
+                for row in account_rows.setdefault(collection, [{"id": f"{account_id[0]}-{collection}"}])
+            ]
+
+        def write_collection(self, account_id: str, collection: str, rows: list[dict[str, object]]) -> None:
+            if collection == STATUS_OUTBOX_COLLECTION and not self.failed:
+                self.failed = True
+                raise AccountStoreError("injected late collection write failure")
+            self.rows.setdefault(account_id, {})[collection] = [dict(row) for row in rows]
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    backend = Backend()
+    store._account_memory_backend = backend
+    source_account_id = "a" * 128
+    target_account_id = "b" * 128
+    collection_names = (
+        "proactive_outbox",
+        "proactive_audit",
+        "proactive_dispatch_results",
+        STATUS_OUTBOX_COLLECTION,
+        "status_dispatch_results",
+        "codex_history_outbox",
+        "codex_history_dispatch_results",
+        "codex_history_projects",
+        "llm_state",
+        "agent_state",
+        STATUS_AUTH_STATE_COLLECTION,
+    )
+    initial_target = {
+        collection: backend.read_collection(target_account_id, collection)
+        for collection in collection_names
+    }
+
+    with pytest.raises(AccountStoreError, match="late collection write failure"):
+        store._merge_sql_account_memory_collections(backend, source_account_id, target_account_id)
+
+    assert backend.rows[target_account_id] == initial_target
 
 
 def test_sql_account_document_merge_refuses_partial_source_rows(tmp_path):
