@@ -5134,3 +5134,20 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `17/20` Commits. Kein Push. Restart nach 3 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Account-Metadaten-Shape-validiert
+
+- 2026-07-17: Der Metadata-Healthcheck pruefte nur JSON-Lesbarkeit. Listen
+  oder ein `Account_Index.accounts`-Array konnten syntaktisch lesbar, aber
+  strukturell unbrauchbar bleiben.
+- Account-Metadaten muessen jetzt Objekte sein; `Account_Index.accounts` muss
+  zusaetzlich ein Objekt/Mapping sein. Fehler erscheinen als strukturierte
+  `account_memory_metadata=... status=broken`-Zeile.
+- Tests: fokussierter Metadata-Health-Fokus `3 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commits: `ac3f9b85 fix: validate account metadata document shapes`,
+  `1888d082 fix: validate account index container shape`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
+bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
