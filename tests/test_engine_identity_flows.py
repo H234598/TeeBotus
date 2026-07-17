@@ -1022,6 +1022,7 @@ def test_wtf_security_mutation_failure_does_not_claim_success(tmp_path, monkeypa
 
     assert len(result.actions) == 1
     assert "nicht abgeschlossen" in result.actions[0].text
+    assert "Neues Secret:" in result.actions[0].text
     assert account_store.get_account_for_identity(new_signal) == account_id
     assert engine.state.list_link_notifications(instance_name="Depressionsbot", account_id=account_id)
 
@@ -1039,7 +1040,7 @@ def test_wtf_does_not_claim_success_when_unlink_races_away(tmp_path, monkeypatch
     result = engine.process_identity_flows(event(telegram_identity_key(1), "WTF?"))
 
     assert "nicht abgeschlossen" in result.actions[0].text
-    assert "Secret wurde rotiert" not in result.actions[0].text
+    assert "Neues Secret:" in result.actions[0].text
     assert account_store.get_account_for_identity(new_signal) == account_id
 
 
