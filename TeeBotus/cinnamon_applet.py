@@ -26,6 +26,7 @@ DEFAULT_CHANNELS = "telegram,signal"
 DEFAULT_UNIT_NAME = "teebotus.service"
 DEFAULT_QDRANT_UNIT_NAME = "teebotus-qdrant.service"
 DEFAULT_QDRANT_URL = "http://127.0.0.1:6333"
+LOCAL_QDRANT_HOST_ALIASES = frozenset({"127.0.0.1", "localhost", "::1"})
 DEFAULT_STATUS_TIMEOUT_SECONDS = 30
 MAX_STATUS_TIMEOUT_SECONDS = 300
 CODEX_USAGE_STALE_WARNING_HOURS = 24
@@ -1182,7 +1183,7 @@ def _safe_local_qdrant_url(value: str) -> str:
         return ""
     if parsed.scheme not in {"http", "https"}:
         return ""
-    if (parsed.hostname or "").casefold() not in {"127.0.0.1", "localhost", "::1"}:
+    if (parsed.hostname or "").casefold() not in LOCAL_QDRANT_HOST_ALIASES:
         return ""
     try:
         if parsed.port is None:
@@ -1206,9 +1207,12 @@ def _qdrant_response_has_same_local_origin(base_url: str, response_url: Any) -> 
         final_port = final.port
     except ValueError:
         return False
+    base_host = (base.hostname or "").casefold()
+    final_host = (final.hostname or "").casefold()
     return (
         base.scheme.casefold() == final.scheme.casefold()
-        and (base.hostname or "").casefold() == (final.hostname or "").casefold()
+        and base_host in LOCAL_QDRANT_HOST_ALIASES
+        and final_host in LOCAL_QDRANT_HOST_ALIASES
         and base_port is not None
         and final_port == base_port
         and final.username is None
