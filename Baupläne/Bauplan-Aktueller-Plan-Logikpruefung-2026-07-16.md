@@ -5494,6 +5494,23 @@ bleibt erst bei 100 Commits.
 `1/20` Commits. Kein Push. Restart nach 19 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-LLM-Plan blockiert Outbox-Mutationen bei deaktiviertem Agent
+
+- 2026-07-17: `apply_proactive_llm_plan` blockierte Memory/Queue bereits
+  indirekt, aber Cancel/Snooze konnten bei deaktiviertem Proactive-Agent noch
+  bestehende Outbox-Items mutieren.
+- Cancel/Snooze pruefen den Enable-Zustand jetzt vor Store-Mutation und liefern
+  `decision_<n>_proactive_disabled`. Schema-, Tool- und Payloadfehler werden
+  weiterhin zuerst normal validiert und auditiert.
+- Test: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `218 passed`; Disabled-Gate-Fokus `13 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f4bcb1e3 fix: block proactive mutations when disabled`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`4/20` Commits. Kein Push. Restart nach 16 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
