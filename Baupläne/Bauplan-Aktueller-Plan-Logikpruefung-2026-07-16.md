@@ -5529,6 +5529,22 @@ bleibt erst bei 100 Commits.
 `6/20` Commits. Kein Push. Restart nach 14 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Response-Parser faellt bei leerem Output auf Text zurueck
+
+- 2026-07-17: Provider-Wrapper konnten `output=[]` und gleichzeitig ein
+  gueltiges `.text`/`{"text": ...}` liefern. Der Parser gab dann leeren Text
+  zurueck; LLM- und Tool-Fallback meldeten faelschlich kein bzw. kaputtes JSON.
+- Strukturierter Output-Text hat weiterhin Vorrang. Nur wenn daraus kein Text
+  entsteht, wird das direkte Textfeld verwendet.
+- Test: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `220 passed`; Empty-Output-Fokus `2 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b890544e fix: preserve proactive response text on empty output`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`8/20` Commits. Kein Push. Restart nach 12 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
