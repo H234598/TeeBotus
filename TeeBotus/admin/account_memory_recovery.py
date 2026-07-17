@@ -450,14 +450,25 @@ def quarantine_unreadable_account_metadata(
     if blocked:
         return result
     for instance_name in discover_instances(resolved_instances_dir, instances):
-        instance_result = _quarantine_instance_unreadable_metadata(
-            instances_dir=resolved_instances_dir,
-            instance_name=instance_name,
-            provider=provider,
-            apply=apply,
-            quarantine_dir=quarantine_dir,
-            timestamp=timestamp,
-        )
+        try:
+            instance_result = _quarantine_instance_unreadable_metadata(
+                instances_dir=resolved_instances_dir,
+                instance_name=instance_name,
+                provider=provider,
+                apply=apply,
+                quarantine_dir=quarantine_dir,
+                timestamp=timestamp,
+            )
+        except (AccountStoreError, OSError, ValueError, RuntimeError) as exc:
+            instance_result = {
+                "instance": instance_name,
+                "status": "blocked",
+                "error": f"quarantine: {exc}",
+                "totals": {
+                    "items_quarantined": 0,
+                    "account_dirs_quarantined": 0,
+                },
+            }
         if instance_result.get("status") == "blocked":
             result["status"] = "blocked"
             result["instances"].append(instance_result)

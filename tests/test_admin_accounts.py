@@ -1198,6 +1198,26 @@ def test_memory_recovery_unrecoverable_quarantine_turns_instance_error_into_bloc
     assert result["instances"][0]["error"] == "quarantine: snapshot destination disappeared"
 
 
+def test_memory_recovery_metadata_quarantine_turns_instance_error_into_blocked(monkeypatch, tmp_path: Path) -> None:
+    make_instance(tmp_path)
+
+    def fail_quarantine(*_args: Any, **_kwargs: Any):
+        raise OSError("metadata destination disappeared")
+
+    monkeypatch.setattr(account_memory_recovery_module, "_quarantine_instance_unreadable_metadata", fail_quarantine)
+
+    result = quarantine_unreadable_account_metadata(
+        instances_dir=tmp_path,
+        provider=provider(),
+        apply=True,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[],
+    )
+
+    assert result["status"] == "blocked"
+    assert result["instances"][0]["error"] == "quarantine: metadata destination disappeared"
+
+
 def test_memory_recovery_quarantine_blocks_missing_report_accounts_root(tmp_path: Path) -> None:
     account_id = "e" * 128
     report = {
@@ -1929,15 +1949,16 @@ def test_memory_recovery_quarantine_rejects_symlinked_destination(tmp_path: Path
     quarantine = tmp_path / "quarantine"
     quarantine.symlink_to(outside, target_is_directory=True)
 
-    with pytest.raises(AccountStoreError, match="symlinked quarantine directory"):
-        quarantine_unreadable_account_metadata(
-            instances_dir=tmp_path,
-            provider=provider(),
-            apply=True,
-            quarantine_dir=quarantine,
-            running_processes=[],
-        )
+    result = quarantine_unreadable_account_metadata(
+        instances_dir=tmp_path,
+        provider=provider(),
+        apply=True,
+        quarantine_dir=quarantine,
+        running_processes=[],
+    )
 
+    assert result["status"] == "blocked"
+    assert "symlinked quarantine directory" in result["instances"][0]["error"]
     assert index_path.exists()
     assert not any(outside.iterdir())
 
