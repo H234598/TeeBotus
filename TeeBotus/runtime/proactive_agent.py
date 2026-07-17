@@ -741,7 +741,7 @@ def run_proactive_llm_planner(
         )
     prompt = build_proactive_llm_planner_prompt(account_store, account_id, max_memory_chars=max_memory_chars)
     response = openai_client.create_reply(prompt, instructions)
-    return apply_proactive_llm_plan_text(account_store, account_id, str(getattr(response, "text", response) or ""), now=resolved_now)
+    return apply_proactive_llm_plan_text(account_store, account_id, _response_output_text(response), now=resolved_now)
 
 
 def run_proactive_tool_agent(
@@ -2617,6 +2617,8 @@ def _looks_like_proactive_tool_call(raw_call: Any) -> bool:
 
 
 def _response_output_text(response: Any) -> str:
+    if isinstance(response, str):
+        return response.strip()
     output = getattr(response, "output", None)
     if output is None and isinstance(response, Mapping):
         output = response.get("output")

@@ -2861,6 +2861,31 @@ def test_llm_planner_runner_uses_client_text_and_validates_before_applying(tmp_p
     assert account_store.read_proactive_outbox(account_id)[0]["planner"]["source"] == "llm"
 
 
+def test_llm_planner_runner_reads_mapping_text_response(tmp_path) -> None:
+    class Client:
+        def create_reply(self, _prompt, _instructions):
+            return {
+                "text": '{"schema_version":1,"decisions":[{"action":"none"}]}'
+            }
+
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+
+    result = run_proactive_llm_planner(
+        account_store,
+        account_id,
+        openai_client=Client(),
+        instructions=object(),
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ()
+    assert result.created_memory_ids == ()
+    assert result.queued_item_ids == ()
+    assert account_store.read_proactive_audit(account_id) == []
+
+
 def test_disabled_proactive_account_skips_model_planner_before_provider_call(tmp_path) -> None:
     class Client:
         def create_reply(self, *_args):
