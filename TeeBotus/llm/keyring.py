@@ -6,12 +6,12 @@ from collections.abc import Mapping, Sequence
 
 
 class RotatingAPIKeyRing:
-    """Process-local API key ring that advances only when a key is exhausted."""
+    """Named process-local API key ring that advances only on exhaustion."""
 
     def __init__(self, keys: Sequence[str], *, name: str = "") -> None:
         self.keys = _dedupe_nonempty(keys)
         self.name = str(name or "").strip()
-        self._state = _state_for(self.keys)
+        self._state = _state_for(self.keys, self.name)
 
     def __bool__(self) -> bool:
         return bool(self.keys)
@@ -50,15 +50,16 @@ class _RingState:
 
 
 _REGISTRY_LOCK = threading.Lock()
-_REGISTRY: dict[tuple[str, ...], _RingState] = {}
+_REGISTRY: dict[tuple[str, tuple[str, ...]], _RingState] = {}
 
 
-def _state_for(keys: tuple[str, ...]) -> _RingState:
+def _state_for(keys: tuple[str, ...], name: str) -> _RingState:
+    registry_key = (str(name or "").strip(), keys)
     with _REGISTRY_LOCK:
-        state = _REGISTRY.get(keys)
+        state = _REGISTRY.get(registry_key)
         if state is None:
             state = _RingState()
-            _REGISTRY[keys] = state
+            _REGISTRY[registry_key] = state
         return state
 
 

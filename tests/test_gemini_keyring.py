@@ -119,6 +119,16 @@ def test_rotating_key_ring_ignores_late_results_from_previous_key() -> None:
     assert ring.ordered_keys()[0] == "late-k3"
 
 
+def test_rotating_key_ring_scopes_cursor_by_name() -> None:
+    first = RotatingAPIKeyRing(("scoped-k1", "scoped-k2"), name="route-a")
+    second = RotatingAPIKeyRing(("scoped-k1", "scoped-k2"), name="route-b")
+
+    first.mark_limited("scoped-k1")
+
+    assert first.ordered_keys()[0] == "scoped-k2"
+    assert second.ordered_keys()[0] == "scoped-k1"
+
+
 def test_resolve_gemini_free_tier_limits_uses_instance_override() -> None:
     env = {
         "TEEBOTUS_GEMINI_FREE_TIER_DEMO_RPM": "7",
