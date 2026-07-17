@@ -3297,10 +3297,16 @@ def _normalize_risk_gate(value: Any) -> str:
 
 
 def _risk_memory_is_active(entry: Mapping[str, Any], now: datetime) -> bool:
-    valid_from = _parse_proactive_datetime(str(entry.get("valid_from") or ""))
+    valid_from_raw = str(entry.get("valid_from") or "").strip()
+    valid_from = _parse_proactive_datetime(valid_from_raw)
+    if valid_from_raw and valid_from is None:
+        return True
     if valid_from is not None and valid_from > now:
         return False
-    valid_to = _parse_proactive_datetime(str(entry.get("valid_to") or ""))
+    valid_to_raw = str(entry.get("valid_to") or "").strip()
+    valid_to = _parse_proactive_datetime(valid_to_raw)
+    if valid_to_raw and valid_to is None:
+        return True
     if valid_to is not None:
         return valid_to >= now
     timestamp = _parse_proactive_datetime(str(entry.get("updated_at") or entry.get("created_at") or ""))

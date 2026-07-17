@@ -3745,6 +3745,13 @@ def test_future_risk_memory_window_is_not_active_before_valid_from() -> None:
     ) is True
 
 
+def test_malformed_risk_memory_time_bounds_fail_closed() -> None:
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+
+    assert _risk_memory_is_active({"kind": "risk_signal", "valid_from": "not-a-date"}, now) is True
+    assert _risk_memory_is_active({"kind": "risk_signal", "valid_to": "not-a-date", "updated_at": "2020-01-01T00:00:00+00:00"}, now) is True
+
+
 def test_dispatch_reschedules_month_interval_recurring_reminder(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
