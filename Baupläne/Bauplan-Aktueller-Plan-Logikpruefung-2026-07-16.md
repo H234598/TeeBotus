@@ -3050,6 +3050,23 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Leere-Account-Verzeichnisse-im-Rollback-ueber-stabile-FDs
+
+- 2026-07-17: `_restore_new_account_metadata()` pruefte leeres Verzeichnis
+  per `exists()+iterdir()` und entfernte es danach per `rmdir()` ueber den
+  Pfad. Ein Redirect-Race konnte fremde leere Verzeichnisse betreffen.
+- Rollback oeffnet Parent und Child jetzt stabil mit
+  `O_NOFOLLOW|O_DIRECTORY`, prueft Leere ueber Child-FD und entfernt relativ
+  zum Parent-FD. Unsichere Ziele werden als Rollback-Fehler gemeldet.
+- Regression: Rollback-/Merge-Fokus -> `13 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `307 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6b2389b8 fix: remove empty account directories through stable fds`.
+
+**Aktueller Laufstand:** Seit dem Restart `6/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 14 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
