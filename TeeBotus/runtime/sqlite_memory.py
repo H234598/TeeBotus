@@ -70,14 +70,20 @@ def validate_distinct_sqlite_paths(
     primary_label: str = SQLITE_PATH_ENV,
     fallback_label: str = SQLITE_FALLBACK_PATH_ENV,
 ) -> None:
-    if fallback_path is None:
-        return
-    for candidate, label in ((path, primary_label), (fallback_path, fallback_label)):
+    candidates = [(path, primary_label)]
+    if fallback_path is not None:
+        candidates.append((fallback_path, fallback_label))
+    for candidate, label in candidates:
         symlink_component = _first_symlinked_path_component(candidate)
         if symlink_component is not None:
             raise AccountStoreError(f"{label} must not use symlinked path components: {symlink_component}")
     try:
         resolved_path = path.resolve()
+    except (OSError, RuntimeError) as exc:
+        raise AccountStoreError("SQLite memory paths could not be resolved safely") from exc
+    if fallback_path is None:
+        return
+    try:
         resolved_fallback_path = fallback_path.resolve()
     except (OSError, RuntimeError) as exc:
         raise AccountStoreError("SQLite memory paths could not be resolved safely") from exc

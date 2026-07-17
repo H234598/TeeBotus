@@ -4354,6 +4354,21 @@ def test_sqlite_memory_config_rejects_symlinked_paths(tmp_path):
         )
 
 
+def test_sqlite_memory_backend_rejects_symlinked_primary_without_fallback(tmp_path):
+    primary_path = tmp_path / "primary.sqlite3"
+    outside = tmp_path / "outside.sqlite3"
+    outside.write_bytes(b"not a database")
+    primary_path.symlink_to(outside)
+
+    with pytest.raises(AccountStoreError, match="must not use symlinked path components"):
+        SQLiteAccountMemoryBackend(
+            instance_name="Depressionsbot",
+            provider=provider(),
+            purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+            config=SQLiteMemoryConfig(path=primary_path, fallback_path=None),
+        )
+
+
 def test_account_memory_fallback_warning_rate_limit_is_scoped_per_account(caplog) -> None:
     backend = WarningFallbackAccountMemoryBackend(object(), object(), label="Demo:sqlite")
     account_a = "a" * 128
