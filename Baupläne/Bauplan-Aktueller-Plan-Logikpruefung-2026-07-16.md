@@ -6643,6 +6643,24 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `2/20` voll.
 
+### Engine isoliert Beobachtungs-Hook-Fehler
+
+- 2026-07-17: Activity-Profil, Wetterkontext und TTS-Dialektbeobachtung
+  fingen nur erwartete Store-/I/O-/Value-Fehler. Unerwartete SQL-, Secret-
+  oder Wrapper-Ausnahmen konnten normale Nachrichten vor ihrer Antwort
+  abbrechen.
+- Alle drei Beobachtungs-Hooks loggen unerwartete Fehler jetzt und laufen
+  fail-open weiter. Beobachtungsdaten koennen fehlen; Nutzerantwort,
+  Reminder- und LLM-Pfad bleiben erreichbar.
+- Test: `tests/test_engine_identity_flows.py` `198 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5c73902a fix: isolate observation hook failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`3/20` Commits. Kein Push. Restart nach 17 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `4/20` voll.
+
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
