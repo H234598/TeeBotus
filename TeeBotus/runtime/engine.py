@@ -324,7 +324,15 @@ class TeeBotusEngine:
                     handled=True,
                 )
         if command in PROACTIVE_COMMANDS:
-            actions = handle_proactive_command(event.with_account(result.account_id), self.account_store, result.account_id)
+            try:
+                actions = handle_proactive_command(event.with_account(result.account_id), self.account_store, result.account_id)
+            except Exception:  # noqa: BLE001 - command storage failures must become user-visible handled replies.
+                LOGGER.exception("Proactive command persistence failed instance=%s account=%s", event.instance, result.account_id)
+                return EngineResult(
+                    result.account_id,
+                    [SendText(event.chat_id, "Proaktive Einstellung konnte gerade nicht gelesen oder gespeichert werden.", track=False)],
+                    handled=True,
+                )
             if actions is not None:
                 return EngineResult(result.account_id, list(actions), handled=True)
         if _is_privacy_confirmation(event.text):

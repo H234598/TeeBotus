@@ -1649,6 +1649,21 @@ def test_engine_proactive_command_enables_private_account_agent_when_instance_en
     assert account_store.read_agent_state(account_id)["proactive"]["enabled"] is True
 
 
+def test_engine_proactive_command_reports_storage_failure(tmp_path, monkeypatch):
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+
+    def fail_write(*_args, **_kwargs):
+        raise OSError("agent state unavailable")
+
+    monkeypatch.setattr(account_store, "write_agent_state", fail_write)
+    actions = engine.process(event(telegram_identity_key(1), "/proactive on"))
+
+    assert len(actions) == 1
+    assert "nicht gelesen oder gespeichert" in actions[0].text
+
+
 def test_engine_proactive_policy_commands_update_account_state(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
     account_store = store(tmp_path)
