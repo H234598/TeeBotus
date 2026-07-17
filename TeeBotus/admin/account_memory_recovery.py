@@ -1282,7 +1282,24 @@ def _read_sqlite_snapshot_payloads(
 
 
 def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_id: str, provider: InstanceSecretProvider) -> dict[str, Any]:
-    store = _JsonProbeStore(source.path.parent, instance_name, secret_provider=provider, create_dirs=False)
+    try:
+        store = _JsonProbeStore(source.path.parent, instance_name, secret_provider=provider, create_dirs=False)
+    except (AccountStoreError, OSError, ValueError) as exc:
+        return {
+            "name": source.name,
+            "kind": source.kind,
+            "payload_kind": "encrypted_account_memory",
+            "path": str(source.path),
+            "active": source.active,
+            "readable": False,
+            "entries": 0,
+            "raw_entries": 0,
+            "index_present": False,
+            "raw_index_present": False,
+            "collections": 0,
+            "raw_collections": 0,
+            "error": f"store: {exc}",
+        }
     entries_path = source.path / account_id / USER_MEMORY_ENTRIES_FILENAME
     index_path = source.path / account_id / USER_MEMORY_INDEX_FILENAME
     errors = []
@@ -1313,7 +1330,7 @@ def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_
         else:
             try:
                 entries = store.account_memory_vault.read_jsonl(entries_path)
-            except AccountStoreError as exc:
+            except (AccountStoreError, OSError, ValueError) as exc:
                 errors.append(f"entries: {exc}")
     if index_path.exists():
         if index_path.is_symlink():
@@ -1321,7 +1338,7 @@ def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_
         else:
             try:
                 index = store.account_memory_vault.read_json(index_path, {})
-            except AccountStoreError as exc:
+            except (AccountStoreError, OSError, ValueError) as exc:
                 errors.append(f"index: {exc}")
     for filename in JSON_ACCOUNT_STATE_FILES:
         path = source.path / account_id / filename
@@ -1334,13 +1351,13 @@ def _inspect_json_source(source: RecoverySource, *, instance_name: str, account_
             raw_collections += _count_lines(path)
             try:
                 collections += len(store.account_memory_vault.read_jsonl(path))
-            except AccountStoreError as exc:
+            except (AccountStoreError, OSError, ValueError) as exc:
                 errors.append(f"{filename}: {exc}")
         else:
             raw_collections += 1
             try:
                 data = store.account_memory_vault.read_json(path, {})
-            except AccountStoreError as exc:
+            except (AccountStoreError, OSError, ValueError) as exc:
                 errors.append(f"{filename}: {exc}")
             else:
                 if data:
@@ -1366,7 +1383,13 @@ class _JsonProbeStore:
     def __init__(self, root: Path, instance_name: str, *, secret_provider: InstanceSecretProvider, create_dirs: bool = False) -> None:
         from TeeBotus.runtime.accounts import AccountStore
 
-        self._store = AccountStore(root, instance_name, secret_provider=secret_provider, create_dirs=create_dirs)
+        self._store = AccountStore(
+            root,
+            instance_name,
+            secret_provider=secret_provider,
+            create_dirs=create_dirs,
+            memory_backend_enabled=False,
+        )
 
     @property
     def account_memory_vault(self):

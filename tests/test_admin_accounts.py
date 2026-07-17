@@ -1087,6 +1087,28 @@ def test_memory_recovery_direct_instance_report_rejects_path_escape(tmp_path: Pa
         )
 
 
+def test_memory_recovery_json_source_reports_store_initialization_error(monkeypatch, tmp_path: Path) -> None:
+    def fail_store(*_args: Any, **_kwargs: Any):
+        raise AccountStoreError("json probe secret missing")
+
+    monkeypatch.setattr("TeeBotus.runtime.accounts.AccountStore", fail_store)
+    source = account_memory_recovery_module.RecoverySource(
+        "json_files",
+        "json",
+        tmp_path / "accounts",
+    )
+
+    report = account_memory_recovery_module._inspect_json_source(
+        source,
+        instance_name="Depressionsbot",
+        account_id="a" * 128,
+        provider=provider(),
+    )
+
+    assert report["readable"] is False
+    assert report["error"] == "store: json probe secret missing"
+
+
 def test_memory_recovery_quarantine_blocks_missing_report_accounts_root(tmp_path: Path) -> None:
     account_id = "e" * 128
     report = {
