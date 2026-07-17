@@ -646,6 +646,25 @@ def test_wtf_can_be_confirmed_by_any_existing_identity_after_multi_identity_link
     assert account_store.get_account_for_identity(old_signal) == account_id
 
 
+def test_wtf_security_mutation_failure_does_not_claim_success(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    first = engine.process_identity_flows(event(telegram_identity_key(1), "/register"))
+    account_id, secret = _tokens(first.actions[0].text)
+    old_signal = signal_identity_key(source_uuid="old-security-error")
+    new_signal = signal_identity_key(source_uuid="new-security-error")
+
+    engine.process_identity_flows(event(old_signal, f"/login {account_id} {secret}", channel="signal"))
+    engine.process_identity_flows(event(new_signal, f"/login {account_id} {secret}", channel="signal"))
+    monkeypatch.setattr(account_store, "unlink_identity_if_linked_to", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("unlink unavailable")))
+
+    result = engine.process_identity_flows(event(telegram_identity_key(1), "WTF?"))
+
+    assert len(result.actions) == 1
+    assert "nicht abgeschlossen" in result.actions[0].text
+    assert account_store.get_account_for_identity(new_signal) == account_id
+
+
 def test_new_identity_cannot_use_wtf_notification_for_itself(tmp_path):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
