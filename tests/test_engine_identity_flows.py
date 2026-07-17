@@ -206,6 +206,27 @@ def test_admin_flow_state_failure_is_user_visible_without_aborting_message_proce
     assert result.actions[0].text == "Adminzugang konnte gerade nicht gelesen werden. Bitte spaeter erneut versuchen."
 
 
+def test_process_result_dispatch_failure_is_user_visible_without_aborting_loop(tmp_path, monkeypatch) -> None:
+    engine = TeeBotusEngine(account_store=store(tmp_path))
+    identity = telegram_identity_key(1)
+
+    monkeypatch.setattr(engine, "_process_result_inner", lambda _event: (_ for _ in ()).throw(RuntimeError("dispatcher unavailable")))
+
+    result = engine.process_result(event(identity, "/ping"))
+
+    assert result.handled is True
+    assert result.actions[0].text == "Nachricht konnte gerade nicht verarbeitet werden. Bitte spaeter erneut versuchen."
+
+
+def test_process_result_auth_gate_failure_fails_closed_without_reply(tmp_path, monkeypatch) -> None:
+    engine = TeeBotusEngine(account_store=store(tmp_path))
+    identity = telegram_identity_key(1)
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.evaluate_status_auth_gate", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("auth gate unavailable")))
+
+    assert engine.process_result(event(identity, "/help")).actions == []
+
+
 def test_observation_backend_failures_do_not_block_ping(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)

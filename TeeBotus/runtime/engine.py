@@ -216,7 +216,11 @@ class TeeBotusEngine:
     def process_result(self, event: IncomingEvent) -> EngineResult:
         from TeeBotus.runtime.actions import SendText
 
-        status_auth = evaluate_status_auth_gate(self.account_store, event)
+        try:
+            status_auth = evaluate_status_auth_gate(self.account_store, event)
+        except Exception:  # noqa: BLE001 - auth gate failures must fail closed for every adapter.
+            LOGGER.exception("Status auth gate failed instance=%s identity=%s", event.instance, event.identity_key)
+            return EngineResult(event.account_id, [], handled=True)
         if not status_auth.allowed:
             actions: list[OutgoingAction] = []
             if status_auth.action_text:
@@ -224,8 +228,16 @@ class TeeBotusEngine:
             return EngineResult(status_auth.account_id or event.account_id, actions, handled=True)
         if status_auth.account_id and status_auth.account_id != event.account_id:
             event = event.with_account(status_auth.account_id)
-        result = self._with_notification_loudness_prompt(event, self._process_result_inner(event))
-        return self._with_debug_observation_warning(event, result)
+        try:
+            result = self._with_notification_loudness_prompt(event, self._process_result_inner(event))
+            return self._with_debug_observation_warning(event, result)
+        except Exception:  # noqa: BLE001 - one malformed runtime path must not stop the message loop.
+            LOGGER.exception("Incoming message processing failed instance=%s identity=%s", event.instance, event.identity_key)
+            return EngineResult(
+                event.account_id,
+                [SendText(event.chat_id, "Nachricht konnte gerade nicht verarbeitet werden. Bitte spaeter erneut versuchen.", track=False)],
+                handled=True,
+            )
 
     def _process_result_inner(self, event: IncomingEvent) -> EngineResult:
         from TeeBotus.runtime.actions import DeleteTrackedMessages, SendText
