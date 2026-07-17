@@ -27,6 +27,7 @@ from TeeBotus.runtime.accounts import (
     EncryptedJsonVault,
     AccountStore,
     AccountStoreError,
+    _KeyringManifestSecretProvider,
     LLM_STATE_FILENAME,
     OPENAI_STATE_FILENAME,
     _SecretServiceUnavailableError,
@@ -3125,6 +3126,41 @@ def test_account_text_read_keeps_stable_parent_when_path_is_swapped(tmp_path, mo
     assert store.read_account_text(account_id, filename) == "original"
     assert (moved_account_dir / filename).read_text(encoding="utf-8") == "original"
     assert outside_target.read_text(encoding="utf-8") == "external"
+
+
+def test_keyring_manifest_read_keeps_stable_parent_when_path_is_swapped(tmp_path, monkeypatch):
+    root = tmp_path / "keyring-root"
+    root.mkdir()
+    outside = tmp_path / "outside-keyring"
+    outside.mkdir()
+    manifest_path = root / "Account_Keyring.json"
+    outside_manifest_path = outside / manifest_path.name
+    manifest_path.write_text(
+        json.dumps({"schema_version": 1, "instance": "Demo", "purposes": {}}),
+        encoding="utf-8",
+    )
+    outside_manifest_path.write_text(
+        json.dumps({"schema_version": 1, "instance": "External", "purposes": {}}),
+        encoding="utf-8",
+    )
+    moved_root = tmp_path / "keyring-root-moved"
+    manifest_provider = _KeyringManifestSecretProvider(
+        instance_name="Demo",
+        root=root,
+        delegate=provider(),
+    )
+    real_open = os.open
+
+    def swap_root_before_manifest_open(file, flags, mode=0o777, *, dir_fd=None):
+        if file == manifest_path.name and dir_fd is not None and root.exists():
+            root.rename(moved_root)
+            root.symlink_to(outside, target_is_directory=True)
+        return real_open(file, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "open", swap_root_before_manifest_open)
+
+    assert manifest_provider._load_manifest()["instance"] == "Demo"
+    assert json.loads(outside_manifest_path.read_text(encoding="utf-8"))["instance"] == "External"
 
 
 def test_account_json_document_falls_back_on_sql_diagnostics(tmp_path):

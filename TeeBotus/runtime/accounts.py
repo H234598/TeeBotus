@@ -835,14 +835,14 @@ class _KeyringManifestSecretProvider:
 
     def _load_manifest(self) -> dict[str, Any]:
         try:
-            data = json.loads(self.manifest_path.read_text(encoding="utf-8"))
+            data = json.loads(_read_stable_account_file(self.manifest_path, label="account key manifest").decode("utf-8"))
         except FileNotFoundError:
             return {
                 "schema_version": 1,
                 "instance": self.instance_name,
                 "purposes": {},
             }
-        except (OSError, json.JSONDecodeError) as exc:
+        except (AccountStoreError, UnicodeDecodeError, json.JSONDecodeError) as exc:
             raise AccountStoreError(f"account key manifest is invalid: {self.manifest_path}") from exc
         if not isinstance(data, dict):
             raise AccountStoreError(f"account key manifest must contain an object: {self.manifest_path}")
