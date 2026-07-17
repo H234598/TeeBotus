@@ -629,6 +629,20 @@ def test_admin_cross_instance_login_survives_broken_source_backend(tmp_path, mon
     assert "ID oder Secret stimmt nicht" in actions[0].text
 
 
+def test_login_survives_unexpected_primary_backend_failure(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    monkeypatch.setattr(account_store, "link_identity", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("login backend unavailable")))
+
+    actions = engine.process(event(identity, f"/login {'a' * 128} {'b' * 128}"))
+
+    assert len(actions) == 1
+    assert "Login konnte gerade nicht verarbeitet werden" in actions[0].text
+    assert account_store.get_account_for_identity(identity) != "a" * 128
+
+
 def test_wtf_can_be_confirmed_by_any_existing_identity_after_multi_identity_link(tmp_path):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)

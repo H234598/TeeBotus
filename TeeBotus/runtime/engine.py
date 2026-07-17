@@ -888,6 +888,13 @@ class TeeBotusEngine:
                 ],
                 handled=True,
             )
+        except Exception:  # noqa: BLE001 - primary login backend failures must not abort identity handling.
+            LOGGER.exception("Account login persistence failed instance=%s account=%s", event.instance, target_account_id)
+            return EngineResult(
+                current_account_id,
+                [SendText(event.chat_id, "Login konnte gerade nicht verarbeitet werden. Bitte spaeter erneut versuchen.", track=False)],
+                handled=True,
+            )
         linked_account_id = str(result["account_id"])
         if result.get("already_linked") is True:
             return EngineResult(
