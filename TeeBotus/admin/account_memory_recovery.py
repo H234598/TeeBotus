@@ -429,6 +429,15 @@ def quarantine_unreadable_account_metadata(
         },
         "instances": [],
     }
+    unsafe_root = _first_symlinked_path_component(resolved_instances_dir)
+    if unsafe_root is not None:
+        result["status"] = "blocked"
+        result["error"] = f"Refusing quarantine scan through symlinked instances root: {unsafe_root}"
+        return result
+    if resolved_instances_dir.exists() and not resolved_instances_dir.is_dir():
+        result["status"] = "blocked"
+        result["error"] = f"Refusing quarantine scan because instances root is not a directory: {resolved_instances_dir}"
+        return result
     if blocked:
         return result
     for instance_name in discover_instances(resolved_instances_dir, instances):

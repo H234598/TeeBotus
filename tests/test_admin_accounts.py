@@ -1109,6 +1109,25 @@ def test_memory_recovery_json_source_reports_store_initialization_error(monkeypa
     assert report["error"] == "store: json probe secret missing"
 
 
+def test_memory_recovery_metadata_quarantine_blocks_symlinked_instances_root(tmp_path: Path) -> None:
+    real_root = tmp_path / "real-instances"
+    real_root.mkdir()
+    linked_root = tmp_path / "linked-instances"
+    linked_root.symlink_to(real_root, target_is_directory=True)
+
+    result = quarantine_unreadable_account_metadata(
+        instances_dir=linked_root,
+        provider=provider(),
+        apply=True,
+        quarantine_dir=tmp_path / "quarantine",
+        running_processes=[],
+    )
+
+    assert result["status"] == "blocked"
+    assert "symlinked instances root" in result["error"]
+    assert not (tmp_path / "quarantine").exists()
+
+
 def test_memory_recovery_quarantine_blocks_missing_report_accounts_root(tmp_path: Path) -> None:
     account_id = "e" * 128
     report = {
