@@ -4642,3 +4642,20 @@ Commits.
 **Aktueller Laufstand:** Seit dem letzten Restart `6/20` Code-Commits. Kein
 Push. Restart nach 14 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
+
+### Veraltete-Reminder-Erwartung-im-Identity-Test
+
+- 2026-07-17: `test_engine_uses_structured_memory_candidate_for_safe_semantic_memory`
+  erwartete noch einen `ReminderDecision`-Aufruf fuer jede freie Nachricht.
+  Seit `5ac383e6` wird dieser teure Pfad lokal durch Erinnerungshinweise
+  gegated; die getestete Nachricht enthaelt keinen solchen Hinweis.
+- Test auf den tatsaechlichen Vertrag korrigiert: genau ein
+  `MemoryCandidate`-Aufruf. Produktionscode unveraendert.
+- Tests: `tests/test_engine_identity_flows.py` `189 passed`,
+  `tests/test_reminder_intent.py` `39 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Test-Commit: `73c5d0b7 test: align structured memory call expectation`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `9/20` Code-Commits. Kein
+Push. Restart nach 11 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
