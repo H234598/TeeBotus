@@ -1915,16 +1915,21 @@ async def dispatch_due_proactive_outbox_items(
             current_attempts = _proactive_dispatch_attempts(item)
             if current_attempts is None:
                 invalid_attempt_reason = "invalid_dispatch_attempts"
-                update_proactive_outbox_item_status(
-                    account_store,
-                    account_id,
-                    item_id,
-                    status="failed",
-                    reason=invalid_attempt_reason,
-                    now=resolved_now,
-                    expected_status="dispatching",
-                )
-                results.append(ProactiveDispatchResult(account_id, item_id, "failed", invalid_attempt_reason, channel))
+                try:
+                    failed_updated = update_proactive_outbox_item_status(
+                        account_store,
+                        account_id,
+                        item_id,
+                        status="failed",
+                        reason=invalid_attempt_reason,
+                        now=resolved_now,
+                        expected_status="dispatching",
+                    )
+                except Exception:  # pragma: no cover - concrete storage failures vary by backend.
+                    LOGGER.exception("Proactive invalid-attempt failure persistence failed account=%s item=%s", account_id, item_id)
+                    failed_updated = False
+                result_reason = invalid_attempt_reason if failed_updated else "status_update_failed"
+                results.append(ProactiveDispatchResult(account_id, item_id, "failed", result_reason, channel))
                 continue
             dispatch_attempts = current_attempts + 1
             if _proactive_dispatch_send_error_is_retryable(exc) and dispatch_attempts < PROACTIVE_DISPATCH_MAX_ATTEMPTS:
@@ -1952,16 +1957,22 @@ async def dispatch_due_proactive_outbox_items(
                     if requeued:
                         results.append(ProactiveDispatchResult(account_id, item_id, "queued", retry_reason, channel))
                         continue
-            update_proactive_outbox_item_status(
-                account_store,
-                account_id,
-                item_id,
-                status="failed",
-                reason=f"send_error:{type(exc).__name__}",
-                now=resolved_now,
-                expected_status="dispatching",
-            )
-            results.append(ProactiveDispatchResult(account_id, item_id, "failed", f"send_error:{type(exc).__name__}", channel))
+            send_error_reason = f"send_error:{type(exc).__name__}"
+            try:
+                failed_updated = update_proactive_outbox_item_status(
+                    account_store,
+                    account_id,
+                    item_id,
+                    status="failed",
+                    reason=send_error_reason,
+                    now=resolved_now,
+                    expected_status="dispatching",
+                )
+            except Exception:  # pragma: no cover - concrete storage failures vary by backend.
+                LOGGER.exception("Proactive send failure persistence failed account=%s item=%s", account_id, item_id)
+                failed_updated = False
+            result_reason = send_error_reason if failed_updated else "status_update_failed"
+            results.append(ProactiveDispatchResult(account_id, item_id, "failed", result_reason, channel))
             continue
         message_ref = _normalize_sent_ref(sent_ref)
         dispatch_meta = {"channel": channel, "chat_id": chat_id, "message_ref": message_ref}

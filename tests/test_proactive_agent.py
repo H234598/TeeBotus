@@ -3861,6 +3861,45 @@ def test_dispatch_survives_post_send_outbox_persistence_error(tmp_path, monkeypa
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "dispatching"
 
 
+def test_dispatch_send_error_reports_status_persistence_failure(tmp_path, monkeypatch) -> None:
+    import TeeBotus.runtime.proactive_agent as proactive_module
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="send-error-persistence")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="send_error_persistence",
+        message_text="Statusupdate kaputt",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+
+    monkeypatch.setattr(proactive_module, "update_proactive_outbox_item_status", lambda *_args, **_kwargs: False)
+
+    async def sender(_route: dict, _action: SendText, _item: dict) -> str:
+        raise TimeoutError("temporary sender timeout")
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now,
+        )
+    )
+
+    assert results[0].item_id == queued.reason.removeprefix("queued:")
+    assert results[0].status == "failed"
+    assert results[0].reason == "status_update_failed"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "dispatching"
+
+
 def test_dispatch_keeps_sent_result_when_message_tracking_fails(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
