@@ -2389,6 +2389,23 @@ def test_structured_account_memory_rolls_back_entries_when_index_write_fails(tmp
     assert store.read_memory_index(account_id) == previous_index
 
 
+def test_append_structured_memory_prunes_accessed_ids_after_retention_trim(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    old_id = store.append_structured_memory_entry(account_id, {"id": "mem_old", "user_text": "Alt"})
+    store.mark_structured_memory_accessed(account_id, [old_id])
+
+    new_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_new", "user_text": "Neu"},
+        max_entries=1,
+    )
+
+    assert [row["id"] for row in store.read_memory_entries(account_id)] == [new_id]
+    assert store.read_memory_index(account_id)["index"]["accessed_ids"] == []
+    assert store.check_structured_memory_index(account_id).ok
+
+
 def test_append_structured_account_memory_renames_duplicate_entry_id(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

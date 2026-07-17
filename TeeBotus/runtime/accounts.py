@@ -4636,6 +4636,18 @@ class AccountStore:
             ]
 
         live_ids = set(existing_ids)
+        accessed_ids = nested_index.setdefault("accessed_ids", [])
+        if not isinstance(accessed_ids, list):
+            accessed_ids = []
+            nested_index["accessed_ids"] = accessed_ids
+        normalized_accessed_ids: list[str] = []
+        seen_accessed_ids: set[str] = set()
+        for value in accessed_ids:
+            accessed_id = str(value or "").strip()
+            if accessed_id in live_ids and accessed_id not in seen_accessed_ids:
+                normalized_accessed_ids.append(accessed_id)
+                seen_accessed_ids.add(accessed_id)
+        accessed_ids[:] = normalized_accessed_ids
         for indexed_id in list(entry_index.keys()):
             if indexed_id not in live_ids:
                 entry_index.pop(indexed_id, None)
