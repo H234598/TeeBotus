@@ -5212,6 +5212,22 @@ bleibt erst bei 100 Commits.
 `8/20` Commits. Kein Push. Restart nach 12 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Dispatch-Lease meldet kaputten Claim-Zeitstempel
+
+- 2026-07-17: Bei `dispatching` konnte ein ungueltiges `dispatching_at` durch
+  ein gueltiges `updated_at` verdeckt werden. Health meldete den Lease dann
+  scheinbar gesund.
+- Ein nichtleeres, nicht parsebares `dispatching_at` wird jetzt explizit als
+  `invalid claim timestamp` gemeldet. Fehlende Legacy-Felder nutzen weiterhin
+  den bisherigen Fallback.
+- Test: `tests/test_proactive_agent.py` `147 passed`; Health-Fokus `21 passed`;
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `da07bfd1 fix: report malformed proactive claim timestamps`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`10/20` Commits. Kein Push. Restart nach 10 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
