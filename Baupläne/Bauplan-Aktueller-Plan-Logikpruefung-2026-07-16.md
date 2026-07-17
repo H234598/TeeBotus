@@ -7839,6 +7839,22 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `12/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### Bibliothekar-Chunk-Store: leeren Index gegen alte Chunks pruefen
+
+- 2026-07-17: `_chunk_store_is_stale()` behandelte `chunk_count=0` immer als
+  gueltig. Nach einem abgebrochenen Rebuild konnten dadurch alte, nicht zum
+  leeren Index gehoerende Chunks ueber `read_snapshot()` oder optionale
+  Backends weitergereicht werden.
+- Ein leerer Index ist nur gueltig, wenn `chunks.jsonl` fehlt oder wirklich
+  leer ist. Negative Counts erzwingen ebenfalls Rebuild.
+- Test: komplette Bibliothekar-Suite -> `99 passed`; Produktions-Ruff,
+  `py_compile` und `git diff --check` gruen. Ein bestehender Test-Rufffehler
+  `SimpleSelection` blieb unberuehrt. Kein Provider/API-Aufruf.
+- Code-Commit: `1383330c fix: detect stale empty bibliothekar chunks`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `13/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Arbeitsgedaechtnis: Index muss zur JSONL passen
 
 - 2026-07-17: `WorkingMemoryStore` und der noch vorhandene Telegram-Store
