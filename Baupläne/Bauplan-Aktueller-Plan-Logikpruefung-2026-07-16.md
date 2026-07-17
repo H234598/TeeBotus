@@ -6970,6 +6970,25 @@ Restart nach 19 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `1/20` sichtbar.
 
+### WTF-Notification bleibt bei fehlgeschlagener Mutation retryfähig
+
+- 2026-07-17: `_handle_wtf()` entfernte Link-Notifications vor Rotation und
+  Unlink. Nach einem Mutationsfehler war erneuter Sicherheitsretry unmöglich.
+  Zusätzlich wurde ein `None`-Ergebnis von `unlink_identity_if_linked_to()`
+  ignoriert.
+- Lookup nutzt jetzt nicht-destruktives Listing. Notification-Cleanup erfolgt
+  erst nach erfolgreicher Mutation; `None` gilt als fehlgeschlagene Mutation.
+  Cleanupfehler melden das neue Secret trotzdem, statt Security-Erfolg zu
+  verschlucken.
+- Test: fokussierter WTF-Pfad `7 passed`; Ruff und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `55a2afc7 fix: preserve WTF notifications across failed mutations`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `2/20`
+Commits. Kein Push. Restart nach 18 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `3/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
