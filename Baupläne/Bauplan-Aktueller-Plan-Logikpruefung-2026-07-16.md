@@ -6316,6 +6316,24 @@ bleibt erst bei 100 Commits.
 `17/20` Commits. Kein Push. Restart nach 3 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-LLM-Plan ueberlebt Audit-Persistenzfehler
+
+- 2026-07-17: Fehlerpfade und erfolgreiche Cancel-/Snooze-Entscheidungen
+  riefen den Audit-Write synchron auf. Ein kaputtes Audit-Backend konnte damit
+  den Plan nach bereits ausgefuehrter Fachaktion abbrechen; leere Rueckgaben
+  wurden ausserdem als Audit-IDs weitergereicht.
+- LLM-Audit-Persistenz ist jetzt best-effort mit Exception-Logging. Erfolgreiche
+  Fachaktionen bleiben erhalten; nicht gespeicherte Audit-IDs werden aus dem
+  Resultat entfernt, statt als gueltige IDs zu erscheinen.
+- Test: `tests/test_proactive_agent.py` `186 passed`; Regression fuer
+  Auditfehler nach Cancel und Folgeentscheidung; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `871ad94a fix: keep proactive plans alive when audit fails`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`19/20` Commits. Kein Push. Restart nach 1 weiterem Commit. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Admin-Status kapselt Route-Backendfehler
 
 - 2026-07-17: Admin-Statuszeilen sowie Runtime- und Benchmark-Summary-
