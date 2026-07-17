@@ -3162,7 +3162,7 @@ def _llm_conversation_scope(event: IncomingEvent) -> str:
 def _pending_flow_conversation_scope(event: IncomingEvent) -> str:
     return pending_flow_scope(
         channel=event.channel,
-        adapter_slot=event.adapter_slot,
+        adapter_slot=getattr(event, "adapter_slot", 1),
         chat_type=event.chat_type,
         chat_id=event.chat_id,
         identity_key=event.identity_key,
