@@ -5041,3 +5041,18 @@ Commits.
 **Aktueller Laufstand:** Seit dem letzten Restart `4/20` Code-Commits. Kein
 Push. Restart nach 16 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
+
+### Memory-Health-faengt-ValueError
+
+- 2026-07-17: Die per-Account-Pruefung las Profile und strukturierte Indizes
+  ohne `ValueError`-Guard. Malformed JSON-/Decrypt-Daten konnten dadurch den
+  gesamten `/status`-Healthblock abbrechen.
+- Profile- und Indexfehler werden jetzt als `status=broken` mit Recovery-Hinweis
+  ausgegeben; die Pruefung laeuft fuer weitere Accounts weiter.
+- Tests: Version-/Admin-Status-Fokus `256 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `365f91e0 fix: keep memory health status diagnostic on value errors`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
