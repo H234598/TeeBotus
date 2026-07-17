@@ -8202,3 +8202,23 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `7/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Stateful-LLM-Engine: Account-Kette ueber Provider-Aufruf hinweg serialisieren
+
+* 2026-07-18: SignalBot startet drei Consumer. Der Engine-State wurde nur bei
+  einzelnen Dateioperationen gesperrt; parallele Telegram-/Signal-/Matrix-
+  Threads konnten daher denselben `previous_response_id` lesen und danach
+  ihre Antworten ungeordnet speichern.
+* `TeeBotusEngine.process_result()` haelt jetzt den bestehenden Account-
+  Memory-Lock ueber Identitaetsfluss, LLM-Aufruf und State-Persistenz. Damit
+  bleibt die Stateful-Kette pro Account auch zwischen Engine-Instanzen und
+  Prozessen geordnet. Ungueltige oder noch nicht aufgeloeste Account-IDs
+  behalten den bisherigen lockfreien First-Contact-Pfad.
+* Test: zwei Engine-Instanzen mit parallelen Stateful-Anfragen -> kein
+  Overlap, zweite Anfrage erhaelt erste `response_id`; komplette
+  `tests/test_engine_identity_flows.py` -> `284 passed`; Ruff, Compile und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+* Code-Commit: `34723ccc fix: serialize stateful llm account chains`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `16/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.

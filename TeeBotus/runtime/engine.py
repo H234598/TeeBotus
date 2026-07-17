@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 import hashlib
@@ -48,7 +49,16 @@ from TeeBotus.runtime.action_buttons import (
 )
 from TeeBotus.runtime.notification_loudness import maybe_handle_notification_loudness_response, maybe_notification_loudness_prompt_action
 from TeeBotus.runtime.reminder_intent import maybe_queue_natural_reminder
-from TeeBotus.runtime.accounts import ACCOUNT_MEMORY_KINDS, ACCOUNT_MEMORY_TYPES, AccountMemorySelection, AccountStore, AccountStoreError, runtime_secret_provider, utc_now
+from TeeBotus.runtime.accounts import (
+    ACCOUNT_MEMORY_KINDS,
+    ACCOUNT_MEMORY_TYPES,
+    AccountMemorySelection,
+    AccountStore,
+    AccountStoreError,
+    runtime_secret_provider,
+    utc_now,
+    validate_sha512_token,
+)
 from TeeBotus.runtime.actions import DelaySeconds, ExportFile, MessageButton, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping, OutgoingAction
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.file_artifacts import parse_generated_file_blocks, parse_generated_image_blocks
@@ -235,7 +245,8 @@ class TeeBotusEngine:
         if status_auth.account_id and status_auth.account_id != event.account_id:
             event = event.with_account(status_auth.account_id)
         try:
-            result = self._with_notification_loudness_prompt(event, self._process_result_inner(event))
+            with self._account_processing_lock(event.account_id):
+                result = self._with_notification_loudness_prompt(event, self._process_result_inner(event))
             return self._with_debug_observation_warning(event, result)
         except Exception:  # noqa: BLE001 - one malformed runtime path must not stop the message loop.
             LOGGER.exception("Incoming message processing failed instance=%s identity=%s", event.instance, event.identity_key)
@@ -244,6 +255,21 @@ class TeeBotusEngine:
                 [SendText(event.chat_id, "Nachricht konnte gerade nicht verarbeitet werden. Bitte spaeter erneut versuchen.", track=False)],
                 handled=True,
             )
+
+    def _account_processing_lock(self, account_id: str):
+        """Keep one account's stateful LLM chain ordered across runtime threads."""
+
+        normalized_account_id = str(account_id or "").strip()
+        if not normalized_account_id:
+            return nullcontext()
+        try:
+            validate_sha512_token(normalized_account_id, field_name="account_id")
+        except AccountStoreError:
+            return nullcontext()
+        lock_factory = getattr(self.account_store, "account_memory_lock", None)
+        if not callable(lock_factory):
+            return nullcontext()
+        return lock_factory(normalized_account_id)
 
     def _process_result_inner(self, event: IncomingEvent) -> EngineResult:
         from TeeBotus.runtime.actions import DeleteTrackedMessages, SendText

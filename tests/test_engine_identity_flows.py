@@ -4,6 +4,9 @@ import json
 import os
 import re
 import subprocess
+import threading
+import time
+from concurrent.futures import ThreadPoolExecutor
 
 import pytest
 
@@ -3132,6 +3135,63 @@ def test_engine_passes_previous_openai_response_id_per_account(tmp_path):
     engine.process(event(identity, "Noch mal"))
 
     assert client.previous_ids == [None, "resp-1"]
+
+
+def test_engine_serializes_stateful_requests_per_account(tmp_path):
+    class ConcurrentGeminiClient:
+        capabilities = GEMINI_INTERACTIONS_CAPABILITIES
+
+        def __init__(self) -> None:
+            self._lock = threading.Lock()
+            self.active = 0
+            self.overlapped = False
+            self.previous_ids: list[str | None] = []
+            self.response_count = 0
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            with self._lock:
+                self.active += 1
+                self.overlapped = self.overlapped or self.active > 1
+                self.previous_ids.append(previous_response_id)
+            time.sleep(0.02)
+            with self._lock:
+                self.active -= 1
+                self.response_count += 1
+                response_id = f"response-{self.response_count}"
+            return LLMResponse(
+                "Antwort.",
+                response_id,
+                provider="litellm_gemini_stateful",
+                model="gemini/gemini-3.5-flash",
+            )
+
+    provider = StaticSecretProvider(b"e" * 32)
+    account_store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider)
+    state = RuntimeStateStore(tmp_path / "data", instance_name="Depressionsbot", secret_provider=provider)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    client = ConcurrentGeminiClient()
+    instructions = BotInstructions(
+        openai_enabled=True,
+        llm_provider="litellm_gemini_stateful",
+        llm_model="gemini/gemini-3.5-flash",
+    )
+    engines = [
+        TeeBotusEngine(account_store=account_store, state=state, instructions=instructions, llm_client=client)
+        for _ in range(2)
+    ]
+    events = [
+        event(identity, "Erste Nachricht").with_account(account_id),
+        event(identity, "Zweite Nachricht").with_account(account_id),
+    ]
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(engine.process, incoming) for engine, incoming in zip(engines, events)]
+        for future in futures:
+            future.result()
+
+    assert not client.overlapped
+    assert sorted(client.previous_ids, key=lambda value: value is not None) == [None, "response-1"]
 
 
 def test_engine_does_not_reuse_previous_response_id_after_provider_switch(tmp_path):
