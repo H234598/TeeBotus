@@ -3415,3 +3415,18 @@ nach 11 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `11/20` Commits. Kein Push. Restart
 nach 9 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Recovery-Snapshot-Scan-faengt-Glob-Fehler
+
+- 2026-07-17: `_discover_snapshot_sqlite_sources()` liess
+  `Path.glob()`-`OSError` ungefangen. Ein verschwundenes oder nicht lesbares
+  Snapshot-Verzeichnis konnte den Recovery-Report abbrechen.
+- Snapshot-Scanfehler liefern jetzt keine Snapshot-Kandidaten; aktive Quellen
+  bleiben separat auswertbar.
+- Regression: Snapshot-Glob-Fehler plus Snapshot-Fokus -> `6 passed`; komplette
+  `tests/test_admin_accounts.py` -> `97 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `268e1be8 fix: tolerate recovery snapshot scan races`.
+
+**Aktueller Laufstand:** Seit dem Restart `13/20` Commits. Kein Push. Restart
+nach 7 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
