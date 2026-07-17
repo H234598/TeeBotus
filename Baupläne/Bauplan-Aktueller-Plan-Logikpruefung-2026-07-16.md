@@ -5152,6 +5152,24 @@ bleibt erst bei 100 Commits.
 `20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
 bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 
+### Notification-Loudness-Outbox bewahrt kaputte Statushistorien
+
+- 2026-07-17: Der Loudness-Abbruch mutierte `queued`-Outbox-Items direkt zu
+  `cancelled` und ersetzte eine kaputte `status_history` durch eine leere
+  Liste. Damit umging dieser Sonderpfad die zentrale Outbox-Integritaetspruefung.
+- Der Pfad verwendet jetzt dieselbe zentrale History-Validierung wie der
+  Proactive-Dispatcher. Bei kaputter History bleibt das Item unveraendert;
+  gueltige Items werden weiter sauber storniert. Lazy-Import vermeidet den
+  bestehenden Importzyklus zwischen Loudness und Proactive-Agent.
+- Test: `tests/test_notification_loudness.py` `167 passed`; fokussierter
+  Regressionstest fuer kaputte History gruen; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `60cbfb7c fix: preserve loudness outbox history`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`2/20` Commits. Kein Push. Restart nach 18 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Consentzustand fail-closed bei korruptem enabled-State
 
 - 2026-07-17: Ein inkonsistenter Agent-State mit `enabled=true`, aber leerem
