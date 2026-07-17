@@ -4906,7 +4906,16 @@ def _iter_codex_session_text_lines(path: Path) -> Iterator[str]:
             tail_start = max(head_bytes, stat.st_size - tail_bytes)
             handle.seek(tail_start)
             if tail_start > 0:
-                handle.readline()
+                handle.seek(tail_start - 1)
+                boundary = handle.read(2)
+                handle.seek(tail_start)
+                previous_byte = boundary[:1]
+                current_byte = boundary[1:2]
+                at_record_boundary = previous_byte == b"\n" or (
+                    previous_byte == b"\r" and current_byte != b"\n"
+                )
+                if not at_record_boundary:
+                    handle.readline()
             tail = handle.read(tail_bytes)
             yield from _complete_text_lines_from_bytes(tail, keep_last_partial=True)
 

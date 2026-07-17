@@ -4103,6 +4103,23 @@ def test_import_codex_session_file_reads_large_logs_from_head_and_tail(tmp_path:
     assert item["summary"]["title"] == "Tail Summary importiert."
 
 
+def test_large_session_tail_keeps_record_at_exact_byte_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session_file = tmp_path / "sessions" / "boundary.jsonl"
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_bytes(b"123456789\nABCDEFGHI\nTAILFINAL\n")
+    monkeypatch.setattr(codex_history_module, "CODEX_SESSION_LARGE_FILE_THRESHOLD_BYTES", 1)
+    monkeypatch.setattr(codex_history_module, "CODEX_SESSION_LARGE_FILE_HEAD_BYTES", 10)
+    monkeypatch.setattr(codex_history_module, "CODEX_SESSION_LARGE_FILE_TAIL_BYTES", 20)
+
+    assert list(codex_history_module._iter_codex_session_text_lines(session_file)) == [
+        "123456789\n",
+        "ABCDEFGHI\n",
+        "TAILFINAL\n",
+    ]
+
+
 def test_import_codex_session_file_skips_commentary_only_assistant_updates(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "commentary-only-session-demo", version="1.0.1")
     store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
