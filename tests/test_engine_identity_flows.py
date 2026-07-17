@@ -5708,6 +5708,33 @@ def test_engine_youtube_local_options_uses_llm_fallback(monkeypatch, tmp_path):
     assert actions[1].text == "AI summary."
 
 
+def test_engine_youtube_local_options_fall_back_when_llm_inference_fails(monkeypatch, tmp_path):
+    from TeeBotus.core.youtube import YouTubeTranscriptError
+
+    class BrokenLLMClient:
+        def create_reply(self, *_args, **_kwargs):
+            raise RuntimeError("option inference unavailable")
+
+    def fake_transcribe(_url, **kwargs):
+        if kwargs.get("local_allowed") is False:
+            raise YouTubeTranscriptError("keine Untertitel", needs_local_transcription=True)
+        return "Local transcript.", "lokales Whisper"
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_youtube_video", fake_transcribe)
+    monkeypatch.setattr("TeeBotus.runtime.engine._parse_youtube_local_options", lambda _text, **_kwargs: (None, None))
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True, youtube_option_llm_fallback=True),
+        llm_client=BrokenLLMClient(),
+    )
+
+    actions = engine.process(
+        event(telegram_identity_key(1), "/youtube_transcript https://youtu.be/abc123 passende Variante", channel="signal")
+    )
+
+    assert actions[1].text == "YouTube-Transkript (lokales Whisper):\n\nLocal transcript."
+
+
 def test_engine_youtube_local_options_do_not_use_llm_fallback_by_default(monkeypatch, tmp_path):
     from TeeBotus.core.youtube import YouTubeTranscriptError
 

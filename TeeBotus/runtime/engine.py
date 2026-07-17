@@ -2336,6 +2336,9 @@ class TeeBotusEngine:
             response = create_reply(prompt, instructions, None)
         except (OpenAIAPIError, LLMAPIError):
             return None
+        except Exception:  # noqa: BLE001 - optional option inference must not block local transcription.
+            LOGGER.exception("YouTube option inference failed.")
+            return None
         return _parse_youtube_local_options_from_llm_response(str(getattr(response, "text", "") or ""))
 
     def _other_identities(self, account_id: str, current_identity_key: str) -> Iterable[str]:
