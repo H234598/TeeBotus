@@ -5206,6 +5206,24 @@ bleibt erst bei 100 Commits.
 `14/20` Commits. Kein Push. Restart nach 6 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Outbox bewahrt kaputte Statushistorien
+
+- 2026-07-17: Mehrere Outbox-Mutationen ersetzten nicht-listenfoermige oder
+  inhaltlich ungueltige `status_history` durch `[]`. Dadurch gingen Auditdaten
+  verloren, obwohl der Healthcheck den Datensatz bereits als defekt meldete.
+- Statuswechsel, Recovery, Ablauf-, Invalidierungs-, Review- und Snooze-Pfade
+  pruefen die Historie jetzt vor dem Write. Bei Fehler bleibt der Datensatz
+  unveraendert und der bestehende Befund fuer Diagnose/Repair erhalten.
+  Fehlende Historie bleibt als reparierbarer Altbestand zulaessig.
+- Test: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `224 passed`; Statushistorien-/Recovery-Fokus `5 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2408f28a fix: preserve corrupt proactive status history`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`16/20` Commits. Kein Push. Restart nach 4 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Runtime-Status zeigt Legacy-OpenAI-Modell
 
 - 2026-07-17: Legacy-Konfiguration aus `Bot_Verhalten.md` verwendete im
