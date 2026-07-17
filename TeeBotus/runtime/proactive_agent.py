@@ -1411,7 +1411,7 @@ def _update_proactive_outbox_item_status_locked(
         item["updated_at"] = timestamp
         if normalized_status == "dispatching":
             item["dispatching_at"] = timestamp
-            item["dispatch_attempts"] = _normalize_int(item.get("dispatch_attempts"), default=0) + 1
+            item["dispatch_attempts"] = max(0, _normalize_int(item.get("dispatch_attempts"), default=0)) + 1
         else:
             item.pop("dispatching_at", None)
         if normalized_status == "queued" and retry_at:
@@ -1761,7 +1761,7 @@ async def dispatch_due_proactive_outbox_items(
         try:
             sent_ref = await _maybe_await(sender(route, action, item))
         except Exception as exc:  # pragma: no cover - exact adapter exception types are channel specific
-            dispatch_attempts = _normalize_int(item.get("dispatch_attempts"), default=0) + 1
+            dispatch_attempts = max(0, _normalize_int(item.get("dispatch_attempts"), default=0)) + 1
             if _proactive_dispatch_send_error_is_retryable(exc) and dispatch_attempts < PROACTIVE_DISPATCH_MAX_ATTEMPTS:
                 retry_at = _proactive_dispatch_retry_at(resolved_now, dispatch_attempts)
                 retry_reason = f"retry_scheduled:send_error:{type(exc).__name__}:attempt_{dispatch_attempts}"
@@ -2092,6 +2092,15 @@ def check_proactive_agent_account(
         retry_at = str(item.get("retry_at") or "").strip()
         if retry_at and _parse_proactive_datetime(retry_at) is None:
             errors.append(f"outbox item {item_id or index} has invalid retry_at")
+        if "dispatch_attempts" in item:
+            raw_dispatch_attempts = item.get("dispatch_attempts")
+            try:
+                dispatch_attempts = int(raw_dispatch_attempts)
+            except (TypeError, ValueError):
+                errors.append(f"outbox item {item_id or index} has invalid dispatch_attempts")
+            else:
+                if dispatch_attempts < 0:
+                    errors.append(f"outbox item {item_id or index} has negative dispatch_attempts")
         recurrence = str(item.get("recurrence") or "").strip()
         if recurrence and not _normalize_recurrence_rule(recurrence):
             errors.append(f"outbox item {item_id or index} has invalid recurrence")

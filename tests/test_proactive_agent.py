@@ -4077,6 +4077,47 @@ def test_dispatch_cancels_item_when_route_changes_after_claim(tmp_path, monkeypa
     assert item["status_history"][-1]["reason"] == "stale_route_after_claim"
 
 
+def test_dispatch_clamps_negative_retry_attempts(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="negative_attempts",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    item = account_store.read_proactive_outbox(account_id)[0]
+    item["dispatch_attempts"] = -100
+    account_store.write_proactive_outbox(account_id, [item])
+
+    async def sender(_route: dict, _action: SendText, _item: dict) -> str:
+        raise TimeoutError("temporary sender timeout")
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now,
+        )
+    )
+
+    assert results[0].item_id == item_id
+    assert results[0].status == "queued"
+    assert "attempt_1" in results[0].reason
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["dispatch_attempts"] == 1
+    assert item["status"] == "queued"
+
+
 def test_dispatch_does_not_overwrite_item_cancelled_during_send(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
