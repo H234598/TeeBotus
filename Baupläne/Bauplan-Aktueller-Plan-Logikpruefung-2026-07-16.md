@@ -4367,3 +4367,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+### SQL-only-Accounts-im-Status
+
+- 2026-07-17: `account_memory_index_health_lines()` leitete zu pruefende
+  Accounts nur aus `accounts/<account_id>`-Verzeichnissen ab. Entries/Indices
+  in SQLite oder PostgreSQL ohne Profil wurden deshalb als `status=none`
+  unsichtbar.
+- Status entdeckt Account-IDs jetzt read-only aus aktiven SQL-Backends und
+  vereinigt sie mit Profil-Accounts. Fehlendes Profil bei vorhandenen
+  Datenbankdaten wird als `status=broken error=profile_missing_for_database_account`
+  gemeldet; Instance-State bleibt separat.
+- Regression: SQL-only-Account-Health plus bestehende Status-Health-Tests ->
+  `17 passed`; komplette `tests/test_version_notifications.py` -> `220 passed`.
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `97e138af fix: report database-only memory accounts`.
+
+**Aktueller Laufstand:** Seit dem Restart `1/20` Commits. Kein Push. Restart
+nach 19 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
