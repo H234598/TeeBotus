@@ -137,7 +137,7 @@ def _write_status_auth_report(output_path: Path, report: dict[str, Any], *, as_j
     flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
     descriptor = os.open(output_path, flags, 0o600)
     with os.fdopen(descriptor, "wb") as handle:
-        os.write(handle.fileno(), data)
+        handle.write(data)
 
 
 def _build_status_auth_report_output(report: dict[str, Any], *, as_json: bool) -> str:
