@@ -3460,3 +3460,19 @@ nach 5 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `17/20` Commits. Kein Push. Restart
 nach 3 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Recovery-Quarantaene-fangt-Instanzfehler
+
+- 2026-07-17: Fehler bei Snapshot, Delete oder Move konnten
+  `quarantine_unrecoverable_account_memory()` trotz Sicherheitspruefungen als
+  Exception verlassen. Ein einzelner Account-/Instanzfehler stoppte den Lauf.
+- Fehler werden jetzt pro Instanz als `blocked` mit Fehlertext gemeldet;
+  weitere Instanzen koennen separat bewertet werden. Keine Delete-Aktion nach
+  fehlgeschlagenem Snapshot.
+- Regression: Snapshot-Fehler plus Quarantaene-Fokus -> `4 passed`; komplette
+  `tests/test_admin_accounts.py` -> `100 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a227ca24 fix: report unrecoverable quarantine failures`.
+
+**Aktueller Laufstand:** Seit dem Restart `19/20` Commits. Kein Push. Restart
+nach 1 weiterem Commit. Naechster Push bleibt erst bei 100 Commits.
