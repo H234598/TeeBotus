@@ -2784,6 +2784,23 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 6 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### PostgreSQL-Memory-Blob-Typen-fail-closed-behandeln
+
+- 2026-07-17: PostgreSQL-Read-/Guard-Pfade konvertierten BYTEA-Werte direkt
+  mit `bytes(...)`. Defekte TEXT-/NULL-/andere Werte konnten dadurch als
+  ungefangener `TypeError` aus dem Memorypfad ausbrechen.
+- Payload-Coercion akzeptiert jetzt nur `bytes`, `bytearray` und `memoryview`;
+  andere Typen werden als `AccountStoreError` klassifiziert. Read, Index,
+  Collection und destruktive Write-Guards behandeln sie damit wie korrupte
+  Payloads und loeschen nichts ungeprueft.
+- Regression: PostgreSQL-Korruptionsfokus -> `3 passed`; Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c5ff9946 fix: classify malformed postgres payloads as corrupt`.
+
+**Aktueller Laufstand:** Seit dem Restart `16/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 4 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
