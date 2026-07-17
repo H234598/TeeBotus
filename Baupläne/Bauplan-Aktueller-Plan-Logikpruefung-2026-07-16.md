@@ -2785,6 +2785,22 @@ Push bleibt erst bei 100 Commits.
 zaehlt mit: `12/20`. Kein Push. Restart nach 8 weiteren Commits. Naechster
 Push bleibt erst bei 100 Commits.
 
+### Applet-Timeout-Payload-integriert-abgesichert
+
+- 2026-07-17: Neben dem niedrigen `_run()`-Test fehlte ein
+  Payload-Regressionstest fuer strukturierte Teil-Ausgabe bei Returncode 124.
+- Der Test stellt sicher, dass Health kritisch bleibt, Runtime-Sektionen und
+  Timeout-Diagnose aber im JSON-Payload sichtbar bleiben.
+- Regression: neuer Payload-Test plus Timeout-Test -> `2 passed`; bestehende
+  Applet-Suite zuvor -> `239 passed`. `ruff --ignore F541` und Diff-Check gruen;
+  zwei alte F541-Warnungen im Testfile bleiben unveraendert. Kein Provider/API-
+  Aufruf.
+- Test-Commit: `3ab87ceb test: cover partial applet status payloads`.
+
+**Aktueller Laufstand:** Seit dem Restart `13/20` Commits. Dieser Plan-Commit
+zaehlt mit: `14/20`. Kein Push. Restart nach 6 weiteren Commits. Naechster
+Push bleibt erst bei 100 Commits.
+
 ### PostgreSQL-Memory-Schema-vor-Initialisierung-validieren
 
 - 2026-07-17: `_ensure_schema_locked()` markierte PostgreSQL als initialisiert,
