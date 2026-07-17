@@ -6223,3 +6223,20 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `9/20` Commits. Kein Push. Restart nach 11 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Cycle bewahrt Dispatch-Diagnose bei Auditfehlern
+
+- 2026-07-17: Ein unerwarteter Fehler beim Persistieren von
+  `dispatch_results` fiel in den aeusseren Account-Catch. Dadurch konnte der
+  erfolgreiche Versand im Report nur noch als allgemeiner Account-Fehler
+  erscheinen.
+- Audit-Persistenzfehler werden jetzt separat als
+  `dispatch_persistence_error` gemeldet. `dispatch_results` bleiben erhalten;
+  andere Account- und Instanzzyklen laufen weiter.
+- Test: `tests/test_proactive_cli.py` `62 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `fffaa8e9 fix: preserve proactive dispatch diagnostics`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`11/20` Commits. Kein Push. Restart nach 9 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
