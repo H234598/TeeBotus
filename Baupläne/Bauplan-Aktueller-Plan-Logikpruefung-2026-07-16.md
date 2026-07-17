@@ -8058,3 +8058,19 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `6/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Gemini-Free-Tier-Cache: parallele Refresh-Writes sichern
+
+- 2026-07-17: Der gemeinsame Limitcache verwendete fuer alle Prozesse dieselbe
+  `.tmp`-Datei. Parallele Refreshes konnten sich beim Schreiben ueberschreiben;
+  ein `replace` konnte dann fehlschlagen oder falschen Zustand hinterlassen.
+- Cache-Writes laufen jetzt unter POSIX-Dateisperre, mit PID-/Thread-/UUID-
+  Tempdatei, `fsync` und atomischem `os.replace`. Nicht-POSIX bleibt ueber
+  atomischen Rename ohne flock funktionsfaehig.
+- Test: 26 Gemini-Keyring-/Refresh-Tests, eindeutige Tempdateien und keine
+  Restdateien; Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `031c8e3d fix: serialize Gemini limit cache writes`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `7/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
