@@ -5152,6 +5152,22 @@ bleibt erst bei 100 Commits.
 `20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
 bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 
+### Proactive-Outbox-`retry_at` fail-closed
+
+- 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
+  Faelligkeitsauswahl still uebersprungen, aber nicht als Fehler markiert.
+  Solcher Altbestand konnte dadurch dauerhaft `queued` bleiben.
+- Der Dispatch markiert ungueltige `retry_at`-Werte jetzt vor der Auswahl als
+  `failed/invalid_retry_at`; `due_at` und `retry_at` verwenden denselben
+  atomaren, lockgeschuetzten Fail-Closed-Pfad. Leeres `retry_at` bleibt erlaubt.
+- Test: `tests/test_proactive_agent.py` `138 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `986a103d fix: fail closed on invalid proactive retry timestamps`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`8/20` Commits. Kein Push. Restart nach 12 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Wiederholungsregel-validiert
 
 - 2026-07-17: Nicht parsebare Wiederholungen wie `every fortnight` wurden
