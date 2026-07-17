@@ -37,6 +37,7 @@ from TeeBotus.core.status import (
     _runtime_status_sequence_label,
     _sequence_status_attr,
     _status_bool,
+    _account_metadata_health_lines,
 )
 from TeeBotus.runtime.accounts import (
     ACCOUNT_KEYRING_FILENAME,
@@ -5826,6 +5827,29 @@ def test_account_memory_index_health_reports_unreadable_account_metadata(tmp_pat
     assert lines[-1] == (
         f'account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir {tmp_path / "instances"} --instances Demo"'
     )
+
+
+def test_account_metadata_health_lines_fail_closed_on_value_error(tmp_path: Path) -> None:
+    root = tmp_path / "accounts"
+    metadata_path = root / "Account_Index.json"
+    metadata_path.parent.mkdir(parents=True)
+    metadata_path.write_text("malformed", encoding="utf-8")
+    account_dir = root / "accounts" / ("a" * 128)
+    account_dir.mkdir(parents=True)
+    (account_dir / "Account_Profile.json").write_text("malformed", encoding="utf-8")
+
+    class BrokenVault:
+        def read_json(self, _path: Path, _default: object) -> object:
+            raise ValueError("metadata parser failed")
+
+    store = SimpleNamespace(root=root, vault=BrokenVault(), accounts_dir=root / "accounts")
+
+    lines = _account_metadata_health_lines(store, [account_dir], instance_name="Demo")
+
+    assert lines == [
+        f"account_memory_metadata=Demo status=broken item=account_index path={metadata_path} error=metadata parser failed",
+        f"account_memory_metadata=Demo status=broken item=accounts_dir path={root / 'accounts'} accounts={'a' * 12} error=metadata parser failed",
+    ]
 
 
 def test_account_memory_index_health_reports_recovery_when_store_open_fails(tmp_path: Path, monkeypatch) -> None:

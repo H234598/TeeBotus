@@ -2142,7 +2142,7 @@ def _account_metadata_health_lines(store: AccountStore, account_dirs: list[Path]
             continue
         try:
             vault.read_json(path, {})
-        except (AccountStoreError, OSError) as exc:
+        except (AccountStoreError, OSError, ValueError) as exc:
             lines.append(_account_metadata_broken_line(instance_name=instance_name, kind=kind, path=path, error=str(exc)))
 
     unreadable_profiles: list[str] = []
@@ -2153,7 +2153,7 @@ def _account_metadata_health_lines(store: AccountStore, account_dirs: list[Path]
             continue
         try:
             vault.read_json(profile_path, {})
-        except (AccountStoreError, OSError) as exc:
+        except (AccountStoreError, OSError, ValueError) as exc:
             unreadable_profiles.append(account_dir.name)
             profile_errors.append(str(exc))
     if unreadable_profiles:
