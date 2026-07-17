@@ -468,7 +468,7 @@ def _quarantine_instance_unreadable_metadata(
     )
     try:
         items = _unreadable_metadata_items(accounts_root, instance_name, provider)
-    except (AccountStoreError, OSError) as exc:
+    except (AccountStoreError, OSError, ValueError) as exc:
         items = [{"kind": "account_store", "path": accounts_root, "error": str(exc)}]
     result: dict[str, Any] = {
         "instance": instance_name,
@@ -701,7 +701,7 @@ def _unreadable_metadata_items(accounts_root: Path, instance_name: str, provider
 def _metadata_health_report(accounts_root: Path, instance_name: str, provider: InstanceSecretProvider) -> dict[str, Any]:
     try:
         items = _unreadable_metadata_items(accounts_root, instance_name, provider)
-    except (AccountStoreError, OSError) as exc:
+    except (AccountStoreError, OSError, ValueError) as exc:
         items = [{"kind": "account_store", "path": accounts_root, "error": str(exc)}]
     normalized_items = []
     for item in items:

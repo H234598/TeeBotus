@@ -1056,6 +1056,28 @@ def test_memory_recovery_metadata_probe_errors_block_apply(monkeypatch, tmp_path
     assert not (tmp_path / "quarantine").exists()
 
 
+def test_memory_recovery_metadata_value_error_stays_reportable(monkeypatch, tmp_path: Path) -> None:
+    make_instance(tmp_path)
+
+    def probe_error(*_args, **_kwargs):
+        raise ValueError("metadata parser failed")
+
+    monkeypatch.setattr(account_memory_recovery_module, "_unreadable_metadata_items", probe_error)
+
+    report = build_account_memory_recovery_report(instances_dir=tmp_path, provider=provider())
+
+    metadata = report["instances"][0]["metadata_health"]
+    assert metadata["readable"] is False
+    assert metadata["items"] == [
+        {
+            "kind": "account_store",
+            "path": str(tmp_path / "Depressionsbot" / "data" / "accounts"),
+            "account_ids": [],
+            "error": "metadata parser failed",
+        }
+    ]
+
+
 def test_memory_recovery_quarantine_blocks_missing_report_accounts_root(tmp_path: Path) -> None:
     account_id = "e" * 128
     report = {
