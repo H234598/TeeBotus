@@ -14,10 +14,15 @@ import tempfile
 import threading
 import time
 import urllib.parse
-from contextlib import suppress
+from contextlib import contextmanager, suppress
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - fcntl is unavailable on non-POSIX platforms.
+    fcntl = None  # type: ignore[assignment]
 
 from TeeBotus.decisions.youtube import parse_youtube_options_decision
 from TeeBotus.runtime.maintenance import runtime_dir
@@ -51,6 +56,7 @@ def _normalize_command(text: str) -> str:
     return first.split("@", maxsplit=1)[0].casefold()
 
 PROCESS_REGISTRY_FILENAME = "YouTube_Transcription_Processes.json"
+PROCESS_REGISTRY_LOCK_FILENAME = ".YouTube_Transcription_Processes.json.lock"
 _PROCESS_REGISTRY_LOCKS: dict[str, threading.Lock] = {}
 
 
@@ -68,7 +74,7 @@ class _InstanceProcessRegistry:
             return None
         owner_pid = os.getpid()
         owner_start_time = _read_process_start_time(owner_pid)
-        with self._lock:
+        with self._lock, self._file_lock():
             state = self._load_state()
             processes = state.setdefault("processes", [])
             if not any(
@@ -92,7 +98,7 @@ class _InstanceProcessRegistry:
     def unregister(self, pid: int, start_time: int | None = None) -> None:
         if not self.instance_name or pid <= 0 or start_time is None:
             return
-        with self._lock:
+        with self._lock, self._file_lock():
             state = self._load_state()
             processes = state.get("processes")
             if isinstance(processes, list):
@@ -111,7 +117,7 @@ class _InstanceProcessRegistry:
     def cleanup_orphans(self, include_current_owner: bool = False) -> None:
         if not self.instance_name:
             return
-        with self._lock:
+        with self._lock, self._file_lock():
             state = self._load_state()
             processes = [entry for entry in state.get("processes", []) if isinstance(entry, dict)]
             remaining: list[dict[str, Any]] = []
@@ -148,6 +154,21 @@ class _InstanceProcessRegistry:
 
     def _path(self) -> Path:
         return _default_instances_dir() / self.instance_name / "data" / PROCESS_REGISTRY_FILENAME
+
+    @contextmanager
+    def _file_lock(self):
+        lock_path = self._path().with_name(PROCESS_REGISTRY_LOCK_FILENAME)
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+        file_descriptor = os.open(lock_path, flags, 0o600)
+        with os.fdopen(file_descriptor, "a+b") as handle:
+            if fcntl is not None:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                if fcntl is not None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
     def _load_state(self) -> dict[str, Any]:
         path = self._path()
@@ -193,7 +214,16 @@ class _InstanceProcessRegistry:
                 path.unlink()
             return
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        temporary_path = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+        try:
+            with temporary_path.open("w", encoding="utf-8") as handle:
+                handle.write(json.dumps(state, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(temporary_path, path)
+        finally:
+            with suppress(FileNotFoundError):
+                temporary_path.unlink()
 
     @staticmethod
     def _process_record_state(pid: int, expected_start_time: int) -> str:

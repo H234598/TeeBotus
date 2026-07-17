@@ -926,6 +926,51 @@ class BotTests(unittest.TestCase):
                 [{"pid": 111, "start_time": 54321}, {"pid": 222, "start_time": 67890}],
             )
 
+    def test_process_registry_serializes_updates_across_registry_instances(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            project_root = Path(directory)
+            registry_a = _InstanceProcessRegistry("Demo")
+            registry_b = _InstanceProcessRegistry("Demo")
+            registry_a._lock = threading.Lock()
+            registry_b._lock = threading.Lock()
+            first_loaded = threading.Event()
+            release_first = threading.Event()
+            second_loaded = threading.Event()
+            original_load_a = registry_a._load_state
+            original_load_b = registry_b._load_state
+
+            def blocking_load() -> dict[str, object]:
+                first_loaded.set()
+                assert release_first.wait(timeout=2)
+                return original_load_a()
+
+            def marked_load() -> dict[str, object]:
+                second_loaded.set()
+                return original_load_b()
+
+            registry_a._load_state = blocking_load  # type: ignore[method-assign]
+            registry_b._load_state = marked_load  # type: ignore[method-assign]
+
+            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(project_root / "instances")}, clear=False), patch(
+                "TeeBotus.core.youtube._read_process_start_time",
+                side_effect=lambda pid: pid,
+            ):
+                first = threading.Thread(target=registry_a.register, args=(111,))
+                second = threading.Thread(target=registry_b.register, args=(222,))
+                first.start()
+                self.assertTrue(first_loaded.wait(timeout=2))
+                second.start()
+                self.assertFalse(second_loaded.wait(timeout=0.1))
+                release_first.set()
+                first.join(timeout=2)
+                second.join(timeout=2)
+
+            self.assertFalse(first.is_alive())
+            self.assertFalse(second.is_alive())
+            state_path = project_root / "instances" / "Demo" / "data" / "YouTube_Transcription_Processes.json"
+            payload = json.loads(state_path.read_text(encoding="utf-8"))
+            self.assertEqual({entry["pid"] for entry in payload["processes"]}, {111, 222})
+
     def test_process_registry_deletes_file_when_last_process_is_removed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             project_root = Path(directory)

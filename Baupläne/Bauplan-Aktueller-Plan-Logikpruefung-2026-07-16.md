@@ -7789,3 +7789,16 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `9/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### YouTube-Prozessregistry: parallele Updates und Abbruch sichern
+
+- 2026-07-17: `YouTube_Transcription_Processes.json` wird bei Register-,
+  Unregister- und Cleanup-Operationen mit einem Prozess-Lock geschuetzt.
+  Schreibvorgaenge laufen ueber temporaere Datei, `fsync` und atomisches
+  `os.replace`; ein Abbruch hinterlaesst dadurch keine halbe JSON-Datei.
+- Test: Prozessregistry-Suite `7 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: folgt direkt.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `10/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
