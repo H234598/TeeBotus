@@ -6660,6 +6660,23 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `4/20` voll.
 
+### Bildpfad kapselt Quota- und Providerfehler
+
+- 2026-07-17: Bild-Quota-State-Read/Write und `generate_image` fingen nur
+  bekannte Fehler. Generische Backend-/Providerfehler konnten nach
+  erfolgreicher Textantwort den gesamten LLM-Reply abbrechen.
+- Bildproviderfehler werden jetzt als Bildfehler behandelt; vorhandener Text
+  bleibt sichtbar. Quota-State-Fehler verweigern Bildgenerierung fail-closed;
+  kein unkontrollierter Bildversand.
+- Test: `tests/test_engine_identity_flows.py` `209 passed`; Ruff und
+  `git diff --check` gruen. Kein echter Provider/API-Aufruf.
+- Code-Commit: `83f1b59b fix: contain image quota and provider failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`5/20` Commits. Kein Push. Restart nach 15 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `6/20` voll.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
