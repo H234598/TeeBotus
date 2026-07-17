@@ -6856,6 +6856,22 @@ Commits. Kein Push. Restart nach 14 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `7/20` sichtbar.
 
+### Status-Auth-Identity-Lookup fail-closed
+
+- 2026-07-17: `evaluate_status_auth_gate()` las die Identity-Zuordnung
+  geschützter Instanzen ungefangen. Ein kaputter Auth-State konnte den
+  Logger-Flow vor der absichtlichen Stille abbrechen.
+- Identity-Lesefehler liefern jetzt `status_auth_store_error`: kein Account
+  wird autorisiert, keine Nachricht wird freigeschaltet, kein Bot-Loop-Abbruch.
+- Test: Status-Auth-Fokus `12 passed`; Ruff und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `71cfaa2e fix: contain status auth identity lookup failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `8/20`
+Commits. Kein Push. Restart nach 12 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `9/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
