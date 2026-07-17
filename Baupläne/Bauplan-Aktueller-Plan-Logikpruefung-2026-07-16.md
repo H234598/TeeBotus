@@ -3338,3 +3338,19 @@ nach 3 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `19/20` Commits. Kein Push. Restart
 nach 1 weiterem Commit. Naechster Push bleibt erst bei 100 Commits.
+
+### Account-Report-faengt-Read-Races
+
+- 2026-07-17: Datei-/Account-Races, Permission-Fehler und ValueErrors wurden
+  im Account-Report nur teilweise behandelt. `account_summary()` konnte den
+  Report deshalb trotz vorheriger Guards abbrechen.
+- Metadata-Leseoperationen und Account-Summary fangen jetzt
+  `AccountStoreError`, `OSError` und `ValueError`; der Store wird als
+  `readable=false` gemeldet.
+- Regression: Summary-`OSError` plus Store-Error-Fokus -> `3 passed`; komplette
+  `tests/test_admin_accounts.py` -> `92 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7687debb fix: tolerate account report read races`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Kein Push. Restart
+nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
