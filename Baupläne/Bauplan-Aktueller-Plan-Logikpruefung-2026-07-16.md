@@ -5242,6 +5242,24 @@ bleibt erst bei 100 Commits.
 `18/20` Commits. Kein Push. Restart nach 2 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Review-Discovery lehnt Symlinks ab
+
+- 2026-07-17: Human-Review-`list` sowie `approve`/`reject` folgten
+  symlinkartigen Instanzen, obwohl der normale Admin-Discoverypfad solche
+  Ordner ignoriert.
+- Review-Discovery ignoriert Symlink-Instanzen, selektierte Links melden
+  `selected_instance_symlink`, direkte Aktionen `instance_symlink`; ein
+  symlinkartiger Instances-Root wird ebenfalls abgelehnt. Store-Factory wird
+  vor diesen Fehlern nie aufgerufen.
+- Test: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py` +
+  `tests/test_proactive_review.py` `238 passed`; Review-Symlink-Fokus `3 passed`;
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `57459b84 fix: reject symlinked proactive review instances`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
+bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
+
 ### Runtime-Status zeigt Legacy-OpenAI-Modell
 
 - 2026-07-17: Legacy-Konfiguration aus `Bot_Verhalten.md` verwendete im
