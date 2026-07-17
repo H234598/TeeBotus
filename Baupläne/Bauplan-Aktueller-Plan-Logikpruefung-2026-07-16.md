@@ -6279,6 +6279,25 @@ bleibt erst bei 100 Commits.
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-LLM-Cancel/Snooze meldet Persistenzfehler
+
+- 2026-07-17: LLM-Cancel meldete ein fehlgeschlagenes Status-Update als
+  `item_not_queued`; LLM-Snooze meldete eine fehlgeschlagene Due-At-Schreibung
+  als `item_not_found`. Dadurch war ein weiterhin `queued`-Item nicht von einem
+  echten Race oder einem fehlenden/terminalen Item unterscheidbar.
+- Beide Mutationen fangen Schreibausnahmen ab und pruefen nach einem falschen
+  Rueckgabewert den real gespeicherten Outbox-Zustand. Ein weiterhin queued Item
+  liefert `status_update_failed`; ein zwischenzeitlich terminales oder fehlendes
+  Item behaelt den bisherigen Race-Fehlercode.
+- Test: `tests/test_proactive_agent.py` `183 passed`; zwei neue Regressionstests
+  fuer Cancel/Snooze-Persistenzfehler; Ruff und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `26ca1f09 fix: report proactive llm mutation persistence failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`15/20` Commits. Kein Push. Restart nach 5 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Admin-Status kapselt Route-Backendfehler
 
 - 2026-07-17: Admin-Statuszeilen sowie Runtime- und Benchmark-Summary-
