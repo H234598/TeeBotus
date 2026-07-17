@@ -5343,6 +5343,24 @@ bleibt erst bei 100 Commits.
 `4/20` Commits. Kein Push. Restart nach 16 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Outbox validiert Zeitfelder vor Ablaufmarkierung
+
+- 2026-07-17: `dispatch_due_proactive_outbox_items` liess alte Items zuerst
+  ablaufen. Ein altes Item mit kaputtem `due_at` wurde dadurch `expired`, bevor
+  `invalid_due_at` greifen konnte; fehlerhafte Daten verschwanden aus dem
+  reparierbaren Queue-Pfad.
+- Dispatch validiert `due_at`, `retry_at`, `recurrence` und `risk_gate` jetzt
+  vor der Ablaufmarkierung. Der direkte Expirer ueberspringt kaputte, nichtleere
+  `due_at`-Werte ebenfalls; Health-/Fail-Closed-Pfade behalten die Zeile sichtbar.
+- Test: `tests/test_proactive_agent.py` `154 passed`; Ablauf-/Invalidierungs-
+  Fokus `6 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `c8b9f870 fix: validate proactive timestamps before expiry`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`6/20` Commits. Kein Push. Restart nach 14 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
