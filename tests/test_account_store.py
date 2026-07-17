@@ -7334,6 +7334,31 @@ def test_sqlite_write_refuses_schema_repair_when_secondary_exists(tmp_path):
     assert secondary.read_entries(account_id) == [{"id": "from-secondary", "user_text": "Backup"}]
 
 
+def test_sqlite_schema_probe_classifies_stable_open_oserror_as_unreadable(tmp_path, monkeypatch):
+    import sqlite3
+
+    primary_path = tmp_path / "primary.sqlite3"
+    secondary_path = tmp_path / "secondary.sqlite3"
+    sqlite3.connect(primary_path).close()
+    sqlite3.connect(secondary_path).close()
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary_path, fallback_path=secondary_path),
+    )
+
+    @contextmanager
+    def unreadable_connection():
+        raise OSError("database target changed during connection")
+        yield
+
+    monkeypatch.setattr(backend, "_connect_readonly", unreadable_connection)
+
+    with pytest.raises(AccountStoreError, match="schema is unreadable; refusing automatic repair"):
+        backend.write_entries("a" * 128, [{"id": "new"}])
+
+
 def test_sqlite_write_refuses_primary_creation_when_secondary_exists(tmp_path):
     primary_path = tmp_path / "primary.sqlite3"
     secondary_path = tmp_path / "secondary.sqlite3"

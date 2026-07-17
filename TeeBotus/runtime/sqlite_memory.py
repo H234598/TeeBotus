@@ -851,7 +851,7 @@ class SQLiteAccountMemoryBackend:
                     for column in SQLITE_REQUIRED_COLUMNS[table]:
                         if column not in columns:
                             return f"{table}.{column}"
-        except sqlite3.Error:
+        except (sqlite3.Error, OSError):
             return "<unreadable>"
         return None
 
