@@ -7839,7 +7839,7 @@ Push. Restart erst bei `20/20`.
   angefragte IDs landen zuletzt in `accessed_ids`.
 - Tests: fokussiert `4 passed`, komplette AccountStore-Suite `323 passed`;
   Ruff, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
-- Code-Commit: folgt direkt.
+- Code-Commit: `50ca27f4 fix: rebuild memory projections on access`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `13/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
