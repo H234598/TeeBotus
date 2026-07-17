@@ -4717,3 +4717,24 @@ Commits.
 **Aktueller Laufstand:** Seit dem letzten Restart `15/20` Code-Commits. Kein
 Push. Restart nach 5 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
+
+### Offline-Benchmarks-respektieren-Produktions-Gates
+
+- 2026-07-17: Der Decision/Qdrant-Benchmark erzeugte normalen Schlaf-/Struktur-
+  Text ohne Reminder-Cue. Die Produktion ueberspringt damit absichtlich den
+  strukturierten Reminder-Providerpfad; der Benchmark erwartete trotzdem
+  `ReminderDecision` und meldete alle Decision-Pfade als fehlerhaft.
+- Benchmark-Text nutzt jetzt einen lokalen Cue (`auf dem Schirm`) ohne faellige
+  Erinnerung. Der Fake-Runner prueft dadurch den strukturierten Decision-Pfad
+  weiter, ohne Provider/API-Aufruf oder Netzsendung.
+- Proactive-Benchmark plante bei `10:30` zwei Nachrichten fuer `10:00` und
+  konnte wegen der echten `due_at`-Validierung nichts queuen. Fixture trennt
+  jetzt Planzeit `09:30` und Dispatchzeit `10:30`; `10:00` bleibt faellig.
+- Tests: fokussierte Benchmark-Regression `3 passed`; Decision-Matrix und
+  Proactive-Plan/Dispatch jeweils `ok=True`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `65ff4a26 fix: align offline benchmarks with runtime gates`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `17/20` Code-Commits. Kein
+Push. Restart nach 3 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
