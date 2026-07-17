@@ -98,6 +98,7 @@ YOUTUBE_PENDING_STATE_ERROR = "YouTube-Transkript konnte gerade nicht fortgesetz
 YOUTUBE_JOB_START_ERROR = "Lokale YouTube-Transkription konnte nicht gestartet werden."
 ROUTE_TO_STATE_ERROR = "RouteTo konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
 ADMIN_AUTH_FLOW = "admin_auth"
+ADMIN_AUTH_STATE_ERROR = "Adminzugang konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
 ADMIN_AUTH_USAGE = "Nutzung: /admin yes <secret> oder /admin no."
 ADMIN_AUTH_PROMPT = "Admin-Secret bitte senden. /cancel bricht ab."
 ADMIN_AUTH_CANCELLED = "Admin-Anmeldung abgebrochen."
@@ -546,6 +547,19 @@ class TeeBotusEngine:
     def _admin_membership_actions(self, event: IncomingEvent, account_id: str) -> list[OutgoingAction] | None:
         text = str(event.text or "").strip()
         command = _command_name(text)
+
+        def pop_pending_admin_auth() -> tuple[bool, dict[str, Any] | None]:
+            try:
+                return True, self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    ADMIN_AUTH_FLOW,
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
+            except Exception:  # noqa: BLE001 - admin auth state failures must fail closed.
+                LOGGER.exception("Admin auth pending-state removal failed instance=%s account=%s", event.instance, account_id)
+                return False, None
+
         pending = self.state.get_pending_flow(
             event.instance,
             account_id,
@@ -554,35 +568,23 @@ class TeeBotusEngine:
         )
         if pending is not None and _pending_flow_matches_event(pending, event):
             if command == "/cancel":
-                self.state.pop_pending_flow(
-                    event.instance,
-                    account_id,
-                    ADMIN_AUTH_FLOW,
-                    conversation_scope=_pending_flow_conversation_scope(event),
-                )
+                popped, removed = pop_pending_admin_auth()
+                if not popped or removed is None:
+                    return [SendText(event.chat_id, ADMIN_AUTH_STATE_ERROR, track=False)]
                 return [SendText(event.chat_id, ADMIN_AUTH_CANCELLED, track=False)]
             if command == "/admin":
-                self.state.pop_pending_flow(
-                    event.instance,
-                    account_id,
-                    ADMIN_AUTH_FLOW,
-                    conversation_scope=_pending_flow_conversation_scope(event),
-                )
+                popped, removed = pop_pending_admin_auth()
+                if not popped or removed is None:
+                    return [SendText(event.chat_id, ADMIN_AUTH_STATE_ERROR, track=False)]
             elif command:
-                self.state.pop_pending_flow(
-                    event.instance,
-                    account_id,
-                    ADMIN_AUTH_FLOW,
-                    conversation_scope=_pending_flow_conversation_scope(event),
-                )
+                popped, removed = pop_pending_admin_auth()
+                if not popped or removed is None:
+                    return [SendText(event.chat_id, ADMIN_AUTH_STATE_ERROR, track=False)]
                 return [SendText(event.chat_id, ADMIN_AUTH_CANCELLED, track=False)]
             elif text:
-                self.state.pop_pending_flow(
-                    event.instance,
-                    account_id,
-                    ADMIN_AUTH_FLOW,
-                    conversation_scope=_pending_flow_conversation_scope(event),
-                )
+                popped, removed = pop_pending_admin_auth()
+                if not popped or removed is None:
+                    return [SendText(event.chat_id, ADMIN_AUTH_STATE_ERROR, track=False)]
                 return self._admin_authorize_actions(event, account_id, text)
         if command != "/admin":
             return None
@@ -594,13 +596,17 @@ class TeeBotusEngine:
                 return [SendText(event.chat_id, ADMIN_AUTH_NO_SECRET_CONFIGURED, track=False)]
             if secret_text:
                 return self._admin_authorize_actions(event, account_id, secret_text)
-            self.state.set_pending_flow(
-                event.instance,
-                account_id,
-                ADMIN_AUTH_FLOW,
-                {"chat_id": event.chat_id, "channel": event.channel, "identity_key": event.identity_key},
-                conversation_scope=_pending_flow_conversation_scope(event),
-            )
+            try:
+                self.state.set_pending_flow(
+                    event.instance,
+                    account_id,
+                    ADMIN_AUTH_FLOW,
+                    {"chat_id": event.chat_id, "channel": event.channel, "identity_key": event.identity_key},
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
+            except Exception:  # noqa: BLE001 - admin auth state failures must stay user-visible.
+                LOGGER.exception("Admin auth pending-state setup failed instance=%s account=%s", event.instance, account_id)
+                return [SendText(event.chat_id, ADMIN_AUTH_STATE_ERROR, track=False)]
             return [SendText(event.chat_id, ADMIN_AUTH_PROMPT, track=False)]
         if _admin_mode_is_no(mode):
             try:

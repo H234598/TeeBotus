@@ -890,6 +890,58 @@ def test_admin_command_yes_waits_for_secret_and_accepts_next_private_message(tmp
     assert status_auth_state_authorized(account_store, account_id) is True
 
 
+def test_admin_command_reports_pending_state_setup_failure(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    monkeypatch.setattr(
+        engine.state,
+        "set_pending_flow",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("pending state unavailable")),
+    )
+
+    actions = engine.process(event(identity, "/admin yes"))
+
+    assert actions[0].text == "Adminzugang konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
+
+
+def test_admin_command_does_not_authorize_when_pending_state_disappears(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    engine.process(event(identity, "/admin yes"))
+
+    monkeypatch.setattr(engine.state, "pop_pending_flow", lambda *_args, **_kwargs: None)
+
+    actions = engine.process(event(identity, "18hhGfuu3"))
+    account_id = account_store.get_account_for_identity(identity)
+
+    assert account_id is not None
+    assert actions[0].text == "Adminzugang konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
+    assert status_auth_state_authorized(account_store, account_id) is False
+
+
+def test_admin_command_reports_pending_state_removal_failure_on_cancel(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    engine.process(event(identity, "/admin yes"))
+
+    monkeypatch.setattr(
+        engine.state,
+        "pop_pending_flow",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("pending state unavailable")),
+    )
+
+    actions = engine.process(event(identity, "/cancel"))
+
+    assert actions[0].text == "Adminzugang konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
+
+
 def test_admin_command_wrong_secret_does_not_authorize(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
     account_store = store(tmp_path)
