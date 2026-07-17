@@ -2735,7 +2735,7 @@ class AccountStore:
         rows.append(normalized_entry)
         if max_entries > 0:
             del rows[:-max_entries]
-        index = self._normalized_memory_index(account_id, previous_index)
+        index = self._normalized_memory_index(account_id, deepcopy(previous_index))
         self._update_structured_memory_index(index, rows, normalized_entry, profile_updates or {})
         try:
             self.write_memory_entries(account_id, rows)
@@ -2936,7 +2936,7 @@ class AccountStore:
         else:
             entries_to_write = None
 
-        existing_index = self._normalized_memory_index(account_id, previous_index)
+        existing_index = self._normalized_memory_index(account_id, deepcopy(previous_index))
         existing_nested_index = existing_index.get("index") if isinstance(existing_index.get("index"), dict) else {}
         existing_semantic_cache = (
             existing_nested_index.get("semantic_cache") if isinstance(existing_nested_index.get("semantic_cache"), dict) else {}
@@ -3497,7 +3497,7 @@ class AccountStore:
             changed = True
         if not changed:
             return
-        index = self._normalized_memory_index(account_id, previous_index)
+        index = self._normalized_memory_index(account_id, deepcopy(previous_index))
         nested_index = index.setdefault("index", {})
         access_ids = nested_index.setdefault("accessed_ids", [])
         if not isinstance(access_ids, list):
@@ -4450,7 +4450,7 @@ class AccountStore:
 
     def _normalized_memory_index(self, account_id: str, data: dict[str, Any]) -> dict[str, Any]:
         timestamp = utc_now()
-        index_doc = deepcopy(data) if isinstance(data, dict) else {}
+        index_doc = dict(data) if isinstance(data, dict) else {}
         index_doc["schema_version"] = ACCOUNT_MEMORY_SCHEMA_VERSION
         index_doc["scope"] = "account"
         index_doc["account_id"] = account_id
