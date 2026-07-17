@@ -719,11 +719,12 @@ def _record_runtime_status_dispatch(
                     item["sent_at"] = timestamp
                 if normalized_reason:
                     item["last_reason"] = normalized_reason
-                history = item.setdefault("status_history", [])
-                if not isinstance(history, list):
+                history = item.get("status_history")
+                if history is None:
                     history = []
                     item["status_history"] = history
-                history.append({"at": timestamp, "status": normalized_status, "reason": normalized_reason})
+                if isinstance(history, list):
+                    history.append({"at": timestamp, "status": normalized_status, "reason": normalized_reason})
                 break
             store.write_status_outbox(account_id, rows)
     except Exception:  # noqa: BLE001 - one broken status outbox must not block other admins.

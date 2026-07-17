@@ -379,6 +379,33 @@ def test_runtime_status_dispatch_audit_failure_does_not_hide_delivery(tmp_path, 
     assert "Runtime status dispatch result persistence failed" in caplog.text
 
 
+def test_runtime_status_dispatch_preserves_invalid_status_history(tmp_path) -> None:
+    account_store = status_summary_store_for(tmp_path / "instances")
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.append_status_outbox_item(
+        account_id,
+        {
+            "id": "status-1",
+            "kind": "runtime_status_summary",
+            "status": "queued",
+            "status_history": {"broken": True},
+        },
+    )
+
+    admin_accounts_module._record_runtime_status_dispatch(
+        account_store,
+        account_id,
+        "status-1",
+        status="sent",
+        now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+    )
+
+    persisted = account_store.read_status_outbox(account_id)[0]
+    assert persisted["status"] == "sent"
+    assert persisted["status_history"] == {"broken": True}
+
+
 def test_benchmark_admin_notify_sends_markdown_attachment_to_routable_admin_account(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
     account_store = status_summary_store_for(instances_dir)
