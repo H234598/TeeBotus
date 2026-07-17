@@ -5152,6 +5152,20 @@ bleibt erst bei 100 Commits.
 `20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
 bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 
+### Proactive-Wiederholungsregel-validiert
+
+- 2026-07-17: Nicht parsebare Wiederholungen wie `every fortnight` wurden
+  still verworfen; Nutzer-/LLM-Absicht wurde als Einmal-Reminder gespeichert.
+- Nichtleere, unbekannte Regeln werden jetzt als `invalid_recurrence`
+  abgelehnt. Leerer Wert bedeutet weiterhin bewusst keine Wiederholung.
+- Test: `tests/test_proactive_agent.py` `135 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bc04b6c9 fix: reject invalid proactive recurrence rules`.
+
+**Aktueller Laufstand:** Nach dem Restart seit dem letzten Plan-Commit
+`2/20` Commits. Kein Push. Restart nach 18 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Instanzen isolieren-AccountStore-Fehler
 
 - 2026-07-17: Der Proactive-Zyklus erzeugte den `AccountStore` vor dem
