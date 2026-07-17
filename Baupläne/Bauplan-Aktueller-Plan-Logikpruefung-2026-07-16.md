@@ -4679,3 +4679,20 @@ Commits.
 **Aktueller Laufstand:** Seit dem letzten Restart `11/20` Code-Commits. Kein
 Push. Restart nach 9 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
+
+### Memory-Reset-Flow-verschluckt-keine-Fremd-Chats-mehr
+
+- 2026-07-17: Ein offener `/reset_memorys`-Flow in Chat A lieferte bei einem
+  Event aus Chat/Kanal B `[]`. Der aufrufende Engine-Pfad wertete diese leere
+  Liste als `handled=True`; normale Nachrichten im fremden Scope wurden
+  dadurch lautlos verworfen.
+- Scope-Mismatch liefert jetzt `None`. Dadurch laeuft fremdes Event normal
+  weiter; bestaetigen oder loeschen kann weiterhin nur Original-Scope.
+- Regression erweitert: fremder Chat sendet `/ping`, erhaelt zehn `Pong`s,
+  Memory bleibt unveraendert. Identity-Suite `189 passed`; Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `80c7dadf fix: let foreign memory reset chats continue`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `13/20` Code-Commits. Kein
+Push. Restart nach 7 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
