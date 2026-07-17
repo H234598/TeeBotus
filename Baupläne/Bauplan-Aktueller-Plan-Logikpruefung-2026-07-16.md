@@ -5152,6 +5152,22 @@ bleibt erst bei 100 Commits.
 `20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
 bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 
+### Proactive-Risikofenster fail-closed bei kaputten Zeitgrenzen
+
+- 2026-07-17: `_risk_memory_is_active` behandelte nicht parsebare, nichtleere
+  `valid_from`-/`valid_to`-Werte wie fehlende Grenzen. Bei altem `updated_at`
+  konnte ein Risiko-Memory dadurch aus dem Schutzfenster fallen.
+- Kaputte Zeitgrenzen gelten jetzt als aktiv. Der Proactive-Risikopfad bleibt
+  damit sicher blockierend, bis Daten repariert oder bewusst entfernt wurden.
+- Test: `tests/test_proactive_agent.py` `146 passed`; fokussierter Risiketest
+  `5 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `862713b3 fix: fail closed on malformed proactive risk windows`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`5/20` Commits; nach diesem Plan-Commit `6/20`. Kein Push. Restart nach
+14 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
 ### Runtime-Status zeigt Legacy-OpenAI-Modell
 
 - 2026-07-17: Legacy-Konfiguration aus `Bot_Verhalten.md` verwendete im
