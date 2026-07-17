@@ -2914,21 +2914,6 @@ bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Kein Push. Restart
 nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
-### Recovery-Metadata-ValueErrors-fail-closed
-
-- 2026-07-17: Metadata-Probe-`ValueError` wurde im Recovery-Health-Report
-  und im Quarantaenepfad nicht abgefangen. Eine Parser-/Schemaabweichung
-  konnte die taegliche Recovery abbrechen.
-- Health- und Quarantaenepfad erfassen jetzt `ValueError` wie andere Probe-
-  Fehler. Der Eintrag bleibt unlesbar; Apply wird nicht automatisch erlaubt.
-- Regression: Metadata-`ValueError` plus Block-Fokus -> `2 passed`; komplette
-  `tests/test_admin_accounts.py` -> `93 passed`. Ruff, `compileall` und
-  `git diff --check` gruen. Kein Provider/API-Aufruf.
-- Code-Commit: `bcc39275 fix: keep recovery metadata value errors reportable`.
-
-**Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Kein Push. Restart
-nach 16 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
-
 ### Metadata-Quarantaene-Unsupported-Envelope
 
 - 2026-07-17: `version/algorithm/kind unsupported` war als sichere Korruption
@@ -3369,3 +3354,18 @@ nach 1 weiterem Commit. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Kein Push. Restart
 nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Recovery-Metadata-ValueErrors-fail-closed
+
+- 2026-07-17: Metadata-Probe-`ValueError` wurde im Recovery-Health-Report
+  und im Quarantaenepfad nicht abgefangen. Eine Parser-/Schemaabweichung
+  konnte die taegliche Recovery abbrechen.
+- Health- und Quarantaenepfad erfassen jetzt `ValueError` wie andere Probe-
+  Fehler. Der Eintrag bleibt unlesbar; Apply wird nicht automatisch erlaubt.
+- Regression: Metadata-`ValueError` plus Block-Fokus -> `2 passed`; komplette
+  `tests/test_admin_accounts.py` -> `93 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bcc39275 fix: keep recovery metadata value errors reportable`.
+
+**Aktueller Laufstand:** Seit dem Restart `5/20` Commits. Kein Push. Restart
+nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
