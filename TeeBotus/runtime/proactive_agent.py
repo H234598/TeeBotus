@@ -509,6 +509,8 @@ def approve_proactive_review_item(
             return ProactiveDecision(False, "item_not_found")
         if str(target.get("status") or "queued").strip().casefold() != "review_pending":
             return ProactiveDecision(False, "item_not_review_pending")
+        if _proactive_outbox_status_history_errors(target, str(item_id or "").strip(), current_status="review_pending"):
+            return ProactiveDecision(False, "invalid_status_history")
         category = str(target.get("category") or "").strip().casefold()
         decision = proactive_policy_decision(account_store, account_id, category=category, now=now, exclude_item_id=str(item_id or ""), item={**target, "risk_gate": "none"})
         if not decision.allowed:

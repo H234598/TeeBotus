@@ -1923,6 +1923,32 @@ def test_human_review_approval_rejects_invalid_payload_before_write(tmp_path) ->
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "review_pending"
 
 
+def test_human_review_approval_rejects_invalid_status_history_before_write(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    decision = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="review_history",
+        message_text="Pruefen",
+        risk_gate="needs_review",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    item_id = decision.reason.removeprefix("review_pending:")
+    rows = account_store.read_proactive_outbox(account_id)
+    rows[0]["status_history"] = [{"status": "queued", "at": "broken", "reason": "old"}]
+    account_store.write_proactive_outbox(account_id, rows)
+
+    approved = approve_proactive_review_item(account_store, account_id, item_id, now=datetime(2026, 6, 15, 10, 30, tzinfo=timezone.utc))
+
+    assert approved == ProactiveDecision(False, "invalid_status_history")
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "review_pending"
+
+
 def test_human_review_rejection_cancels_review_item(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
