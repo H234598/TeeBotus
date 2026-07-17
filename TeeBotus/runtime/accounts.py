@@ -4988,12 +4988,16 @@ class AccountStore:
         return selected
 
     def _merge_text(self, source: Path, target: Path, *, heading: str) -> None:
-        if not source.exists():
+        try:
+            source_text = _read_stable_account_file(source, label="account text merge source").decode("utf-8").strip()
+        except FileNotFoundError:
             return
-        source_text = source.read_text(encoding="utf-8").strip()
         if not source_text:
             return
-        target_text = target.read_text(encoding="utf-8") if target.exists() else ""
+        try:
+            target_text = _read_stable_account_file(target, label="account text merge target").decode("utf-8")
+        except FileNotFoundError:
+            target_text = ""
         addition = f"\n\n## {heading}\n\n{source_text}\n"
         if addition.strip() in target_text:
             return
