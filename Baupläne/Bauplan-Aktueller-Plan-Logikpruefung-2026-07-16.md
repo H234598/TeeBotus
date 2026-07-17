@@ -4151,6 +4151,23 @@ nach 19 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `3/20` Commits. Kein Push. Restart
 nach 17 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### Signal-Reply-Text-aus-Raw-Envelope
+
+- 2026-07-17: Der Signal-Adapter setzte `reply_to_text` nur aus dem geparsten
+  `.quote`-Objekt. Signalbot kann dieses Objekt leer lassen, obwohl das
+  Raw-Envelope die Quote unter `dataMessage.quote.text` liefert; Replys kamen
+  dann ohne Bezugstext im Engine-Kontext an.
+- Die Normalisierung liest jetzt als Fallback das Raw-Envelope. Ein vorhandenes
+  geparstes Quote-Objekt bleibt bevorzugt; ungueltiges JSON oder fehlende Quote
+  bleibt ohne Replytext.
+- Regression: kompletter Adapter-/Signal-Runner-Lauf -> `245 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `938f5885 fix: preserve signal raw reply quotes`.
+
+**Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Plan-Commit
+zaehlt als naechster Commit. Kein Push. Restart nach 15 weiteren Commits.
+Naechster Push bleibt erst bei 100 Commits.
+
 ### Status-Auth-Export-vermeidet-Short-Write
 
 - 2026-07-17: `_write_status_auth_report()` nutzte einen einzelnen
