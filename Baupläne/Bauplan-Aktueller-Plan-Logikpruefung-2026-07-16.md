@@ -5297,3 +5297,18 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `18/20` Commits. Kein Push. Restart nach 2 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Outbox-Pflichtfelder vor Write validiert
+
+- 2026-07-17: `queue_proactive_message` konnte leeren `intent` oder leeren
+  Nachrichtentext als `queued` speichern. Dispatch scheiterte erst spaeter,
+  Outbox-/Health-Zustand wurde unnoetig defekt.
+- Nach erfolgreichem Policy-Gate werden Pflichtfelder jetzt vor jedem Outbox-
+  Write validiert. Fehler: `missing_intent` bzw. `missing_message_text`.
+- Test: `tests/test_proactive_agent.py` `134 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `937e56ef fix: reject empty proactive message content`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
+bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
