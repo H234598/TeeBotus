@@ -96,6 +96,7 @@ YOUTUBE_LINK_FLOW = "youtube_link"
 YOUTUBE_OPTIONS_FLOW = "youtube_options"
 YOUTUBE_PENDING_STATE_ERROR = "YouTube-Transkript konnte gerade nicht fortgesetzt werden."
 YOUTUBE_JOB_START_ERROR = "Lokale YouTube-Transkription konnte nicht gestartet werden."
+INSTRUCTIONS_STATE_ERROR = "Bot-Einstellungen konnten gerade nicht geladen werden. Bitte spaeter erneut versuchen."
 ROUTE_TO_STATE_ERROR = "RouteTo konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
 ADMIN_AUTH_FLOW = "admin_auth"
 ADMIN_AUTH_STATE_ERROR = "Adminzugang konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
@@ -311,7 +312,15 @@ class TeeBotusEngine:
                 )
         if result.handled or result.actions:
             return result
-        instructions = self._current_instructions()
+        try:
+            instructions = self._current_instructions()
+        except Exception:  # noqa: BLE001 - one config read must not escape the message loop.
+            LOGGER.exception("Bot instructions lookup failed instance=%s account=%s", event.instance, result.account_id)
+            return EngineResult(
+                result.account_id,
+                [SendText(event.chat_id, INSTRUCTIONS_STATE_ERROR, track=False)],
+                handled=True,
+            )
         teladi_pending_actions = self._pending_teladi_emergency_actions(event, result.account_id, instructions)
         if teladi_pending_actions is not None:
             return EngineResult(result.account_id, teladi_pending_actions, handled=True)
@@ -424,7 +433,7 @@ class TeeBotusEngine:
                 [SendText(event.chat_id, "Datenschutz ist bestätigt. Ich frage dich nicht erneut, solange diese Einstellung nicht durch /reset_memorys entfernt wird.", track=False)],
                 handled=True,
             )
-        memory_reset_actions = self._memory_reset_actions(event, result.account_id, self._current_instructions())
+        memory_reset_actions = self._memory_reset_actions(event, result.account_id, instructions)
         if memory_reset_actions is not None:
             return EngineResult(result.account_id, memory_reset_actions, handled=True)
         notification_response = maybe_handle_notification_loudness_response(event.with_account(result.account_id), self.account_store, result.account_id)
@@ -480,15 +489,15 @@ class TeeBotusEngine:
                     [SendText(event.chat_id, "LLM-Kontext konnte gerade nicht zurückgesetzt werden. Bitte spaeter erneut versuchen.", track=False)],
                     handled=True,
                 )
-            return EngineResult(result.account_id, [SendText(event.chat_id, self._current_instructions().llm_reset)], handled=True)
+            return EngineResult(result.account_id, [SendText(event.chat_id, instructions.llm_reset)], handled=True)
         if command == "/voice":
-            return EngineResult(result.account_id, self._voice_actions(event, result.account_id, self._current_instructions()), handled=True)
+            return EngineResult(result.account_id, self._voice_actions(event, result.account_id, instructions), handled=True)
         if command == "/voicemodel":
-            return EngineResult(result.account_id, self._voice_model_actions(event, result.account_id, self._current_instructions()), handled=True)
+            return EngineResult(result.account_id, self._voice_model_actions(event, result.account_id, instructions), handled=True)
         if command == "/mimic_voice":
-            return EngineResult(result.account_id, self._mimic_voice_actions(event, result.account_id, self._current_instructions()), handled=True)
+            return EngineResult(result.account_id, self._mimic_voice_actions(event, result.account_id, instructions), handled=True)
         if command in YOUTUBE_TRANSCRIPT_COMMANDS:
-            return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, self._current_instructions()), handled=True)
+            return EngineResult(result.account_id, self._youtube_transcript_actions(event, result.account_id, instructions), handled=True)
         if not _event_is_addressed_to_bot(event.with_account(result.account_id), command, self._bot_address_names_for_event(event.with_account(result.account_id))):
             return EngineResult(result.account_id, [], handled=False)
         if _has_youtube_transcript_intent(text):

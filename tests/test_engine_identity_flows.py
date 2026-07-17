@@ -325,6 +325,17 @@ def test_process_result_auth_gate_failure_fails_closed_without_reply(tmp_path, m
     assert engine.process_result(event(identity, "/help")).actions == []
 
 
+def test_engine_reports_dynamic_instruction_lookup_failure(tmp_path):
+    def broken_instructions():
+        raise RuntimeError("instructions unavailable")
+
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=broken_instructions)
+
+    actions = engine.process(event(telegram_identity_key(1), "/ping"))
+
+    assert actions[0].text == "Bot-Einstellungen konnten gerade nicht geladen werden. Bitte spaeter erneut versuchen."
+
+
 @pytest.mark.parametrize("state_method", ["get_previous_response_id", "set_previous_response_id"])
 def test_llm_reply_survives_unexpected_local_response_state_failure(tmp_path, monkeypatch, state_method):
     class FakeOpenAIClient:
