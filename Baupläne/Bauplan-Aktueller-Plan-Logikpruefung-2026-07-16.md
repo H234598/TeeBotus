@@ -2730,6 +2730,29 @@ Restart nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Status-meldet-uninitialisiertes-SQL-Memory
+
+- 2026-07-17: /status deaktivierte das konfigurierte SQLite-Backend, wenn
+  Primary und Fallback noch nicht existierten. Dadurch blieb ein absichtlich
+  leeres Konto zwar korrekt pruefbar, aber die fehlende SQL-Initialisierung
+  unsichtbar; der Status meldete schlicht status=ok.
+- Die Legacy-JSON-Auswahl bleibt erhalten, damit vorhandene JSON-Artefakte
+  weiterhin diagnostiziert werden und der Status keine Datenbank anlegt.
+  Zusaetzlich meldet er jetzt warning=memory_database_uninitialized, wenn
+  ein SQLite-Backend konfiguriert, aber noch keine Primary-/Fallback-Datei
+  vorhanden ist. Bereits aktiver Fallback-Sync und Backend-Diagnosen bleiben
+  getrennt sichtbar; kombinierte Warnungen werden nicht verschluckt.
+- Regression: Status-Fokus -> 4 passed; kompletter
+  tests/test_version_notifications.py-Lauf -> 218 passed; kompletter
+  tests/test_account_store.py-Lauf -> 308 passed; zusaetzlicher
+  Engine-Status-Fokus -> 3 passed; compileall und git diff --check
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: 5f85a9c4 fix: surface uninitialized memory backend in status.
+
+**Aktueller Laufstand:** Seit dem Restart `16/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 4 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### SQLite-Memory-Connect-gegen-Path-TOCTOU-haerten
 
 - 2026-07-17: Nach der statischen Symlink-Pruefung oeffneten `_connect()` und
