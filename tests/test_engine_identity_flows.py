@@ -447,6 +447,23 @@ def test_help_admin_lookup_failure_fails_closed(tmp_path, monkeypatch):
     assert engine._account_is_help_admin("Depressionsbot", account_id) is False
 
 
+def test_account_identity_resolution_failure_is_user_visible_without_aborting_flow(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    def fail_resolution(*_args, **_kwargs):
+        raise RuntimeError("identity backend unavailable")
+
+    monkeypatch.setattr(account_store, "resolve_or_create_account", fail_resolution)
+
+    result = engine.process_identity_flows(event(identity, "/help"))
+
+    assert result.account_id == ""
+    assert result.handled is True
+    assert result.actions[0].text == "Accountdaten konnten gerade nicht geladen werden. Bitte spaeter erneut versuchen."
+
+
 def test_status_auth_gate_is_case_insensitive_for_chat_type(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
     account_store = store(tmp_path, "TeeBotus_Logger")

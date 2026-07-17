@@ -583,7 +583,15 @@ class TeeBotusEngine:
         return [SendText(event.chat_id, ADMIN_AUTH_ENABLED, track=False)]
 
     def process_identity_flows(self, event: IncomingEvent) -> EngineResult:
-        account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
+        try:
+            account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
+        except Exception:  # noqa: BLE001 - identity backend failures must not abort the message loop.
+            LOGGER.exception("Account identity resolution failed instance=%s identity=%s", event.instance, event.identity_key)
+            return EngineResult(
+                "",
+                [SendText(event.chat_id, "Accountdaten konnten gerade nicht geladen werden. Bitte spaeter erneut versuchen.", track=False)],
+                handled=True,
+            )
         intent = parse_registration_intent(event.text)
         if intent.action in {
             RegistrationAction.ACCOUNT,
