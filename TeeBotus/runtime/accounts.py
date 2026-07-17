@@ -4709,7 +4709,7 @@ class AccountStore:
             previous_files: dict[Path, bytes | None] = {}
             for path in tracked_paths:
                 try:
-                    previous_files[path] = path.read_bytes()
+                    previous_files[path] = _read_stable_account_file(path, label="identity alias repair snapshot")
                 except FileNotFoundError:
                     previous_files[path] = None
             try:
@@ -4728,7 +4728,7 @@ class AccountStore:
                 for path, previous_bytes in previous_files.items():
                     try:
                         if previous_bytes is None:
-                            path.unlink(missing_ok=True)
+                            self._unlink_migrated_account_file(path)
                         else:
                             _atomic_write_bytes(path, previous_bytes)
                     except Exception as rollback_exc:  # noqa: BLE001 - report inconsistent identity repair explicitly.
@@ -4781,7 +4781,7 @@ class AccountStore:
         snapshot: dict[Path, bytes | None] = {}
         for path in paths:
             try:
-                snapshot[path] = path.read_bytes()
+                snapshot[path] = _read_stable_account_file(path, label="identity metadata snapshot")
             except FileNotFoundError:
                 snapshot[path] = None
         return snapshot
@@ -4791,7 +4791,7 @@ class AccountStore:
         for path, previous_bytes in snapshot.items():
             try:
                 if previous_bytes is None:
-                    path.unlink(missing_ok=True)
+                    self._unlink_migrated_account_file(path)
                 else:
                     _atomic_write_bytes(path, previous_bytes)
             except Exception as rollback_exc:  # noqa: BLE001 - surface metadata rollback failures explicitly.
