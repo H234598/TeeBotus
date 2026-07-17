@@ -6905,6 +6905,23 @@ Commits. Kein Push. Restart nach 8 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `13/20` sichtbar.
 
+### Stateful-LLM-Antwort bleibt bei lokalem Statefehler erhalten
+
+- 2026-07-17: `_previous_response_id_for_client()` und die persistente
+  Speicherung neuer Response-IDs konnten bei Runtime-Statefehlern die gültige
+  Providerantwort bis zum globalen Safety-Rand verschlucken.
+- Unlesbarer State startet Anfrage ohne Vor-ID. Schreiben der neuen Vor-ID ist
+  best-effort und wird geloggt; Antwort bleibt sichtbar. Stateful-Kontext kann
+  dadurch einmalig verloren gehen, Bot bleibt aber nutzbar.
+- Test: fokussierter LLM-Statepfad `3 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9bb1e8e3 fix: preserve replies when local llm state fails`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `14/20`
+Commits. Kein Push. Restart nach 6 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `15/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
