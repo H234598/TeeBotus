@@ -1711,6 +1711,18 @@ async def dispatch_due_proactive_outbox_items(
         if not claimed:
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "worker_claim_failed", channel))
             continue
+        if not _account_has_matching_proactive_route(account_store, account_id, route):
+            update_proactive_outbox_item_status(
+                account_store,
+                account_id,
+                item_id,
+                status="cancelled",
+                reason="stale_route_after_claim",
+                now=resolved_now,
+                expected_status="dispatching",
+            )
+            results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "stale_route", channel))
+            continue
         if is_notification_loudness_outbox_item(item):
             try:
                 loudness_active = notification_loudness_outbox_item_is_active(account_store, account_id, item)

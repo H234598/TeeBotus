@@ -4030,6 +4030,53 @@ def test_dispatch_claim_rejects_item_snoozed_between_snapshot_and_claim(tmp_path
     assert item["due_at"] == "2026-06-15T14:00:00+00:00"
 
 
+def test_dispatch_cancels_item_when_route_changes_after_claim(tmp_path, monkeypatch) -> None:
+    import TeeBotus.runtime.proactive_agent as proactive_module
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="route_race",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    original_claim = proactive_module._claim_proactive_worker_job_if_allowed
+
+    def claim_then_change_route(*args, **kwargs):
+        result = original_claim(*args, **kwargs)
+        account_store.update_identity_route(identity, channel="signal", chat_id="+492", chat_type="private", adapter_slot=1)
+        return result
+
+    monkeypatch.setattr(proactive_module, "_claim_proactive_worker_job_if_allowed", claim_then_change_route)
+    sent = []
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda *_args: sent.append(True) or "must-not-send"},
+            now=now,
+        )
+    )
+
+    assert len(results) == 1
+    assert results[0].item_id == item_id
+    assert results[0].status == "skipped"
+    assert results[0].reason == "stale_route"
+    assert sent == []
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "cancelled"
+    assert item["status_history"][-1]["reason"] == "stale_route_after_claim"
+
+
 def test_dispatch_does_not_overwrite_item_cancelled_during_send(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
