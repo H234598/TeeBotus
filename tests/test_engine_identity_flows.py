@@ -3602,6 +3602,22 @@ def test_engine_privacy_confirmation_storage_failure_is_explicit(tmp_path, monke
     assert account_store.has_privacy_confirmation(account_id) is False
 
 
+def test_engine_memory_reset_backend_failure_is_explicit(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="memory-reset-storage-error")
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+
+    armed = engine.process(event(identity, "/reset_memorys", channel="signal"))
+    assert armed
+
+    monkeypatch.setattr(account_store, "reset_structured_memory", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("memory backend unavailable")))
+
+    actions = engine.process(event(identity, "ja", channel="signal"))
+
+    assert len(actions) == 1
+    assert actions[0].text == BotInstructions().user_memory_reset_error
+
+
 def test_engine_start_adds_legal_consent_buttons_until_privacy_is_confirmed(tmp_path):
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="legal-buttons")

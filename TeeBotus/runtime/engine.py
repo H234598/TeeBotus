@@ -1428,7 +1428,8 @@ class TeeBotusEngine:
                 try:
                     _delete_semantic_memory_index(self.account_store, account_id, instructions)
                     self.account_store.reset_structured_memory(account_id)
-                except (AccountStoreError, OSError, QdrantError, ValueError):
+                except Exception:  # noqa: BLE001 - memory reset failures must not abort the message loop.
+                    LOGGER.exception("Memory reset persistence failed instance=%s account=%s", event.instance, account_id)
                     return [SendText(event.chat_id, instructions.user_memory_reset_error)]
                 return [SendText(event.chat_id, instructions.user_memory_reset_success)]
             if _is_memory_reset_cancellation(event.text):
