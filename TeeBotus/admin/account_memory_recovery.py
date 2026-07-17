@@ -1356,16 +1356,21 @@ def _read_sqlite_snapshot_payloads(
     account_id: str,
     provider: InstanceSecretProvider,
 ) -> tuple[list[dict[str, Any]], dict[str, Any], list[dict[str, Any]], list[str]]:
-    backend = SQLiteAccountMemoryBackend(
-        instance_name=instance_name,
-        provider=provider,
-        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
-        config=SQLiteMemoryConfig(path=path, fallback_path=None),
-    )
     entries: list[dict[str, Any]] = []
     index: dict[str, Any] = {}
     collections: list[dict[str, Any]] = []
     errors: list[str] = []
+    try:
+        _reject_unsafe_sqlite_link(path, label="source")
+        backend = SQLiteAccountMemoryBackend(
+            instance_name=instance_name,
+            provider=provider,
+            purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+            config=SQLiteMemoryConfig(path=path, fallback_path=None),
+        )
+    except (AccountStoreError, OSError, ValueError, RuntimeError) as exc:
+        errors.append(f"sqlite: {exc}")
+        return entries, index, collections, errors
     try:
         with _connect_sqlite_readonly(path) as connection:
             if _sqlite_table_exists(connection, "memory_entries"):
