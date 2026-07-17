@@ -69,15 +69,31 @@ def list_proactive_review_items(
     store_factory: StoreFactory | None = None,
 ) -> dict[str, Any]:
     resolved_factory = store_factory or AccountStore
+    selected = tuple(
+        dict.fromkeys(str(name or "").strip() for name in selected_instances if str(name or "").strip())
+    )
     items: list[dict[str, Any]] = []
-    errors: list[str] = []
-    for instance_dir in _instance_dirs(instances_dir, tuple(selected_instances)):
+    errors = [f"{name}: invalid_instance_name" for name in selected if not _is_safe_instance_name(name)]
+    try:
+        instance_dirs = _instance_dirs(instances_dir, selected)
+    except (OSError, ValueError) as exc:
+        errors.append(f"instance_discovery_failed: {type(exc).__name__}: {exc}")
+        instance_dirs = []
+    for instance_dir in instance_dirs:
+        if selected and (not instance_dir.is_dir() or not (instance_dir / "data" / "accounts").is_dir()):
+            errors.append(f"{instance_dir.name}: selected_instance_not_found")
+            continue
         try:
             store = resolved_factory(instance_dir / "data" / "accounts", instance_dir.name)
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{instance_dir.name}: {type(exc).__name__}: {exc}")
             continue
-        for account_id in _account_ids(store):
+        try:
+            account_ids = _account_ids(store)
+        except Exception as exc:  # noqa: BLE001
+            errors.append(f"{instance_dir.name}: {type(exc).__name__}: {exc}")
+            continue
+        for account_id in account_ids:
             try:
                 rows = store.read_proactive_outbox(account_id)
             except Exception as exc:  # noqa: BLE001
@@ -106,8 +122,30 @@ def review_proactive_item(
 ) -> dict[str, Any]:
     resolved_factory = store_factory or AccountStore
     timestamp = now or datetime.now(timezone.utc)
+    normalized_instance_name = str(instance_name or "").strip()
+    if not _is_safe_instance_name(normalized_instance_name):
+        return {
+            "ok": False,
+            "action": action,
+            "instance": normalized_instance_name,
+            "account_id": account_id,
+            "item_id": item_id,
+            "reason": "invalid_instance_name",
+            "route": {},
+        }
+    instance_dir = instances_dir / normalized_instance_name
+    if not instance_dir.is_dir() or not (instance_dir / "data" / "accounts").is_dir():
+        return {
+            "ok": False,
+            "action": action,
+            "instance": normalized_instance_name,
+            "account_id": account_id,
+            "item_id": item_id,
+            "reason": "instance_not_found",
+            "route": {},
+        }
     try:
-        store = resolved_factory(instances_dir / instance_name / "data" / "accounts", instance_name)
+        store = resolved_factory(instance_dir / "data" / "accounts", normalized_instance_name)
     except Exception as exc:  # noqa: BLE001
         return {"ok": False, "action": action, "reason": f"store_error:{type(exc).__name__}: {exc}"}
     try:
@@ -193,10 +231,22 @@ def _print_or_json(report: dict[str, Any], *, json_output: bool) -> None:
 
 def _instance_dirs(instances_dir: Path, selected: tuple[str, ...]) -> list[Path]:
     if selected:
-        return [instances_dir / name for name in selected]
+        return [instances_dir / name for name in selected if _is_safe_instance_name(name)]
     if not instances_dir.exists():
         return []
     return sorted(path for path in instances_dir.iterdir() if path.is_dir() and (path / "data" / "accounts").exists())
+
+
+def _is_safe_instance_name(value: str) -> bool:
+    path = Path(value)
+    return (
+        value not in {".", ".."}
+        and not path.is_absolute()
+        and path.name == value
+        and "/" not in value
+        and "\\" not in value
+        and "\0" not in value
+    )
 
 
 def _account_dirs(accounts_dir: Path) -> list[Path]:
@@ -213,10 +263,7 @@ def _account_ids(store: AccountStore) -> tuple[str, ...]:
     }
     list_account_ids = getattr(store, "list_account_ids", None)
     if callable(list_account_ids):
-        try:
-            listed_ids = list_account_ids(include_unresolvable=False)
-        except (AccountStoreError, OSError, ValueError):
-            listed_ids = ()
+        listed_ids = list_account_ids(include_unresolvable=False)
         ids.update(
             account_id
             for account_id in (str(value or "").strip().casefold() for value in listed_ids)

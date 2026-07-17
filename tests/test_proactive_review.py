@@ -41,6 +41,75 @@ def test_proactive_review_uses_store_account_ids_when_directory_scan_is_empty(tm
     assert report["items"][0]["item_id"] == item_id
 
 
+def test_proactive_review_rejects_unsafe_and_missing_selected_instances(tmp_path: Path) -> None:
+    instances_dir = tmp_path / "instances"
+    (instances_dir / "Healthy" / "data" / "accounts").mkdir(parents=True)
+    calls = []
+
+    def factory(_root, instance_name):
+        calls.append(instance_name)
+        raise AssertionError("review must not open stores for invalid or missing instances")
+
+    report = list_proactive_review_items(
+        instances_dir=instances_dir,
+        selected_instances=("../outside", "Missing"),
+        store_factory=factory,
+    )
+
+    assert report["ok"] is False
+    assert report["items"] == []
+    assert report["errors"] == [
+        "../outside: invalid_instance_name",
+        "Missing: selected_instance_not_found",
+    ]
+    assert calls == []
+    assert not (tmp_path / "outside").exists()
+
+
+def test_proactive_review_does_not_hide_store_account_discovery_errors(tmp_path: Path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    (instance_dir / "data" / "accounts").mkdir(parents=True)
+
+    class BrokenStore:
+        accounts_dir = instance_dir / "data" / "accounts" / "accounts"
+
+        def list_account_ids(self, *, include_unresolvable=False):
+            assert include_unresolvable is False
+            raise AccountStoreError("account index unavailable")
+
+    report = list_proactive_review_items(
+        instances_dir=tmp_path / "instances",
+        selected_instances=("Depressionsbot",),
+        store_factory=lambda _root, _instance: BrokenStore(),
+    )
+
+    assert report["ok"] is False
+    assert report["review_pending_count"] == 0
+    assert report["errors"] == ["Depressionsbot: AccountStoreError: account index unavailable"]
+
+
+def test_proactive_review_rejects_unsafe_single_instance_without_store_access(tmp_path: Path) -> None:
+    called = False
+
+    def factory(*_args):
+        nonlocal called
+        called = True
+        raise AssertionError("unsafe review target must not open a store")
+
+    report = review_proactive_item(
+        instances_dir=tmp_path / "instances",
+        instance_name="../outside",
+        account_id="a" * 128,
+        item_id="pro_bad",
+        action="approve",
+        store_factory=factory,
+    )
+
+    assert report["ok"] is False
+    assert report["reason"] == "invalid_instance_name"
+    assert called is False
+
+
 def test_proactive_review_approve_queues_item(tmp_path: Path) -> None:
     _instance_dir, store, account_id, item_id = _review_fixture(tmp_path)
 
@@ -89,6 +158,8 @@ def test_proactive_review_reject_cancels_item(tmp_path: Path) -> None:
 
 
 def test_proactive_review_approve_reports_store_errors(tmp_path: Path) -> None:
+    (tmp_path / "instances" / "Depressionsbot" / "data" / "accounts").mkdir(parents=True)
+
     class BrokenStore:
         def read_proactive_outbox(self, _account_id: str) -> list:
             raise AccountStoreError("encrypted envelope authentication failed")
