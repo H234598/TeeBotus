@@ -6759,6 +6759,23 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `16/20` voll.
 
+### Account-Anzeige kapselt Backendfehler
+
+- 2026-07-17: `/account` und `/linked_accounts` liessen unerwartete
+  SQL-/Crypto-/Dateifehler aus `account_summary()` bis in den Identity-Flow
+  laufen. Ein defektes Account-Backend konnte dadurch die Befehlsverarbeitung
+  abbrechen.
+- Beide Ausgaben melden jetzt kontrolliert, dass Accountdaten gerade nicht
+  gelesen werden konnten. Kein falscher Accountstatus und kein Bot-Loop-Abbruch.
+- Test: fokussierter Account-Fehlerpfad `3 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b5b3ff48 fix: contain account summary failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`17/20` Commits. Kein Push. Restart nach 3 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `18/20` voll.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
