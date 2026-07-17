@@ -5152,6 +5152,21 @@ bleibt erst bei 100 Commits.
 `20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
 bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 
+### Runtime-Status zeigt Legacy-OpenAI-Modell
+
+- 2026-07-17: Legacy-Konfiguration aus `Bot_Verhalten.md` verwendete im
+  Runtime-Status den Platzhalter `<Bot_Verhalten/OpenAI>`, obwohl die Runtime-
+  Factory bereits `openai_model` als effektives Modell nutzte.
+- Direkte Legacy-OpenAI-Routen zeigen jetzt das konfigurierte
+  `instructions.openai_model`; Profile- und Purpose-Routen bleiben unveraendert.
+- Regressionstest: `tests/test_entrypoint_compatibility.py` fokussiert `8 passed`;
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e9c6ebce fix: show legacy OpenAI model in runtime status`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`2/20` Commits. Kein Push. Restart nach 18 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
