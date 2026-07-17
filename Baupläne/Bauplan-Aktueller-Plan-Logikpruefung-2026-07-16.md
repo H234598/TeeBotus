@@ -3491,3 +3491,18 @@ nach 1 weiterem Commit. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `1/20` Commits. Kein Push. Restart
 nach 19 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Status-Auth-Export-verweigert-Symlink-Ziele
+
+- 2026-07-17: `_safe_output_path()` loeste bestehende Symlinks innerhalb des
+  erlaubten Roots auf. Export konnte dadurch ein anderes Ziel ueberschreiben;
+  `Path.open()` bot keinen finalen No-Follow-Schutz.
+- Symlink-Komponenten werden jetzt abgelehnt; der Export oeffnet Dateien mit
+  `O_NOFOLLOW`.
+- Regression: Symlink-Output-Fokus plus Status-Auth-Fokus -> `11 passed`;
+  komplette `tests/test_admin_accounts.py` -> `102 passed`. Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `26e44590 fix: refuse symlinked status auth output paths`.
+
+**Aktueller Laufstand:** Seit dem Restart `3/20` Commits. Kein Push. Restart
+nach 17 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
