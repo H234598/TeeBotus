@@ -7993,3 +7993,20 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `2/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Versionsbenachrichtigungen: Gesamten Versandlauf serialisieren
+
+- 2026-07-17: Der Versand las den gemeinsamen Versions-State und schrieb ihn
+  zwar pro Einzeloperation gelockt, hielt den Lock aber nicht ueber den ganzen
+  Versandlauf. Zwei parallele Jobs konnten denselben Empfaenger vor der ersten
+  Zustandsaktualisierung sehen und doppelt benachrichtigen.
+- `notify_recent_telegram_users_for_version()` nutzt jetzt den bestehenden
+  `INSTANCE_STATE_ACCOUNT_ID`-Account-Memory-Lock fuer den gesamten Lauf. Damit
+  bleiben SQL- und Legacy-State sowie Versandentscheidung zusammenhaengend.
+- Test: parallele Versandlaeufe -> `results == [0, 1]`, kein doppelter Versand;
+  fokussierte Version-Notification-Tests `3 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e02e9a05 fix: serialize version notification runs`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `3/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
