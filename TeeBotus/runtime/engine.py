@@ -1972,12 +1972,19 @@ class TeeBotusEngine:
         if pending_options is not None and _pending_flow_matches_event(pending_options, event):
             url = str(pending_options.get("url") or "").strip()
             if not url:
-                self.state.pop_pending_flow(
-                    event.instance,
-                    account_id,
-                    YOUTUBE_OPTIONS_FLOW,
-                    conversation_scope=_pending_flow_conversation_scope(event),
-                )
+                try:
+                    popped = self.state.pop_pending_flow(
+                        event.instance,
+                        account_id,
+                        YOUTUBE_OPTIONS_FLOW,
+                        conversation_scope=_pending_flow_conversation_scope(event),
+                    )
+                except Exception:  # noqa: BLE001 - malformed follow-up state must not claim cleanup.
+                    LOGGER.exception("YouTube options cleanup failed for missing URL instance=%s account=%s", event.instance, account_id)
+                    return [SendText(event.chat_id, YOUTUBE_PENDING_STATE_ERROR, track=False)]
+                if popped is None:
+                    LOGGER.error("YouTube options pending state disappeared with missing URL instance=%s account=%s", event.instance, account_id)
+                    return [SendText(event.chat_id, YOUTUBE_PENDING_STATE_ERROR, track=False)]
                 reply = "YouTube-Transkript fehlgeschlagen: gespeicherte URL fehlt."
                 self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
                 return [SendText(event.chat_id, reply)]

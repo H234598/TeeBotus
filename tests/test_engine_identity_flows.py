@@ -5361,6 +5361,28 @@ def test_engine_youtube_transcript_uses_pending_local_options_followup(monkeypat
     assert engine.state.get_pending_flow("Depressionsbot", account_id, "youtube_options") is None
 
 
+@pytest.mark.parametrize("pop_result", [None, RuntimeError("pending state unavailable")])
+def test_engine_youtube_transcript_reports_missing_url_state_cleanup_failure(monkeypatch, tmp_path, pop_result):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions())
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    engine.state.set_pending_flow(
+        "Depressionsbot",
+        account_id,
+        "youtube_options",
+        {"chat_id": "chat-1", "channel": "telegram", "original_text": "YouTube"},
+    )
+    if isinstance(pop_result, Exception):
+        monkeypatch.setattr(engine.state, "pop_pending_flow", lambda *_args, **_kwargs: (_ for _ in ()).throw(pop_result))
+    else:
+        monkeypatch.setattr(engine.state, "pop_pending_flow", lambda *_args, **_kwargs: pop_result)
+
+    actions = engine.process(event(identity, "live nein, llm nein"))
+
+    assert actions[0].text == "YouTube-Transkript konnte gerade nicht fortgesetzt werden."
+
+
 def test_engine_youtube_transcript_runs_local_when_options_are_explicit(monkeypatch, tmp_path):
     from TeeBotus.core.youtube import YouTubeTranscriptError
 
