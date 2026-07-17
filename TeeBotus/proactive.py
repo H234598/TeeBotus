@@ -11,7 +11,7 @@ from inspect import isawaitable
 from pathlib import Path
 from typing import Any, Callable, Iterable, Mapping
 
-from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, TOKEN_HEX_RE
+from TeeBotus.runtime.accounts import AccountStore, TOKEN_HEX_RE
 from TeeBotus.adapters.telegram_runtime import TelegramAPI
 from TeeBotus.instructions import load_instructions
 from TeeBotus.openai_client import OpenAIClient
@@ -760,7 +760,7 @@ async def run_proactive_agent_cycle(
                         ]
                         try:
                             account_report["dispatch_result_ids"] = list(append_dispatch_results(account_id, persisted_rows))
-                        except (AccountStoreError, OSError, ValueError) as exc:
+                        except Exception as exc:  # noqa: BLE001 - dispatch delivery must remain reportable when audit storage fails.
                             account_report["dispatch_persistence_error"] = f"{type(exc).__name__}: {exc}"
             except Exception as exc:  # noqa: BLE001 - one account must not abort the scheduler report.
                 account_report["error"] = f"{type(exc).__name__}: {exc}"

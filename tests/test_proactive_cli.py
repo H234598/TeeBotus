@@ -741,6 +741,45 @@ def test_proactive_cycle_dispatches_due_items_with_injected_sender(tmp_path) -> 
     assert persisted_results[0]["instance"] == "Depressionsbot"
 
 
+def test_proactive_cycle_reports_unexpected_dispatch_persistence_error(tmp_path, monkeypatch) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    identity = signal_identity_key(source_uuid="dispatch-persistence-runtime-error")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="dispatch_persistence_error",
+        message_text="Audit darf nicht Dispatch verschlucken",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+
+    def fail_dispatch_result_write(*_args, **_kwargs):
+        raise RuntimeError("audit backend unavailable")
+
+    monkeypatch.setattr(account_store, "append_proactive_dispatch_results", fail_dispatch_result_write)
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            dispatch=True,
+            sender_factory=lambda _instance, _store: {"signal": lambda _route, _action, _item: "sent-ref"},
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert account["dispatch_results"][0]["status"] == "sent"
+    assert account["dispatch_persistence_error"] == "RuntimeError: audit backend unavailable"
+    assert "error" not in account
+
+
 def test_proactive_dispatch_report_includes_recovered_claim_in_due_items(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)
