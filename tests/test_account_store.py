@@ -2659,6 +2659,38 @@ def test_rebuild_structured_memory_refuses_unreadable_index(tmp_path):
     assert backend.write_index_calls == 0
 
 
+def test_reset_structured_memory_refuses_partial_entries(tmp_path):
+    class PartiallyUnreadableEntriesBackend:
+        last_entry_read_error = "corrupt row"
+        last_entry_skipped = 1
+        last_index_read_error = ""
+        write_entries_calls = 0
+        write_index_calls = 0
+
+        def read_entries(self, _account_id):
+            return [{"id": "mem_live", "user_text": "Mond"}]
+
+        def read_index(self, _account_id):
+            return {}
+
+        def write_entries(self, _account_id, _rows):
+            self.write_entries_calls += 1
+
+        def write_index(self, _account_id, _data):
+            self.write_index_calls += 1
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    backend = PartiallyUnreadableEntriesBackend()
+    store._account_memory_backend = backend
+
+    with pytest.raises(AccountStoreError, match="entries are unreadable"):
+        store.reset_structured_memory(account_id)
+
+    assert backend.write_entries_calls == 0
+    assert backend.write_index_calls == 0
+
+
 def test_structured_memory_mutations_refuse_unreadable_index(tmp_path):
     class PartiallyUnreadableIndexBackend:
         last_entry_read_error = ""
