@@ -580,7 +580,7 @@ async def run_proactive_agent_cycle(
     instance_discovery_error = ""
     try:
         instance_dirs = _instance_dirs(instances_dir, selected)
-    except (OSError, ValueError) as exc:
+    except Exception as exc:  # noqa: BLE001 - discovery must always return a structured cycle report.
         instance_dirs = []
         instance_discovery_error = f"{type(exc).__name__}: {exc}"
     for instance_dir in instance_dirs:

@@ -1188,6 +1188,24 @@ def test_proactive_cycle_reports_instances_directory_errors(tmp_path) -> None:
     assert report["error"].startswith("instance_discovery_failed: NotADirectoryError:")
 
 
+def test_proactive_cycle_reports_unexpected_instance_discovery_error(tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "TeeBotus.proactive._instance_dirs",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("filesystem wrapper unavailable")),
+    )
+
+    report = run_proactive_agent_dry_run(
+        instances_dir=tmp_path / "instances",
+        env={},
+        store_factory=lambda *_args: (_ for _ in ()).throw(AssertionError("store must not open")),
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert report["ok"] is False
+    assert report["instances"] == []
+    assert report["error"] == "instance_discovery_failed: RuntimeError: filesystem wrapper unavailable"
+
+
 def test_proactive_cycle_can_run_local_planner_before_due_selection(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)
