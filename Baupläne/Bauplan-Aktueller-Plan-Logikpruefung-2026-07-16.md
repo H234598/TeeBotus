@@ -3686,3 +3686,19 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### SQLite-Memory-Guard-prueft-auch-Primary-ohne-Fallback
+
+- 2026-07-17: Der neue Symlink-Guard kehrte bei `fallback_path=None` zu frueh
+  zurueck. Primary-only SQLite konnte deshalb weiterhin ueber einen Symlink
+  geoeffnet und beschrieben werden.
+- Primary wird jetzt immer auf Symlink-Komponenten und sichere Aufloesbarkeit
+  geprueft; Fallback-Distanzpruefung bleibt optional danach.
+- Regression: SQLite-Config-Fokus inklusive Primary-only -> `6 passed`; komplette
+  `tests/test_account_store.py` -> `293 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0aca51a6 fix: guard primary-only sqlite memory paths`.
+
+**Aktueller Laufstand:** Seit dem Restart `6/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 14 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
