@@ -6339,3 +6339,22 @@ Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `2/20` Commits. Kein Push. Restart nach 18 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Worker meldet fehlgeschlagene Loudness-Persistenz
+
+- 2026-07-17: Nach dem Worker-Claim behandelte der Loudness-Dispatch sowohl
+  `notification_loudness_state_unavailable` als auch
+  `notification_loudness_decided` ohne das Persistenzresultat zu pruefen.
+  Ein fehlgeschlagener Statuswechsel liess das Item `dispatching` und konnte
+  spaeter erneut aufgegriffen werden.
+- Beide post-claim Uebergaenge pruefen jetzt Rueckgabewert und Ausnahme. Bei
+  fehlender Persistenz wird `failed/status_update_failed` reportiert; Versand
+  bleibt unterdrueckt.
+- Test: `tests/test_notification_loudness.py` `168 passed`; gezielter
+  Loudness-Persistenztest gruen; Ruff und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `c2348a5f fix: report loudness dispatch persistence failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
