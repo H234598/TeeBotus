@@ -7071,6 +7071,22 @@ Commits. Kein Push. Restart nach 8 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `13/20` sichtbar.
 
+### Account-Trennung prüft erfolgreiche Mutation
+
+- 2026-07-17: Direkte und bestätigte Kanaltrennung behandelten
+  `unlink_identity() == None` als Erfolg. Race-/Backendzustand konnte dadurch
+  falsche Trennbestätigung liefern.
+- Beide Pfade verlangen jetzt echte Mutation. Fehlendes Ergebnis meldet
+  kontrollierten Fehler; bestätigter Account-Edit bleibt retryfähig.
+- Test: fokussierter Kanaltrennpfad `4 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `aea978b0 fix: reject unsuccessful account unlink mutations`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `14/20`
+Commits. Kein Push. Restart nach 6 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `15/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
