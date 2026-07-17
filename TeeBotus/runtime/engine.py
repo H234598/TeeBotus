@@ -273,7 +273,15 @@ class TeeBotusEngine:
             if dialect_update is not None and dialect_update.reply_text:
                 return EngineResult(result.account_id, [SendText(event.chat_id, dialect_update.reply_text, track=False)], handled=True)
         if result.account_id:
-            admin_actions = self._admin_membership_actions(event, result.account_id)
+            try:
+                admin_actions = self._admin_membership_actions(event, result.account_id)
+            except Exception:  # noqa: BLE001 - admin flow state failures must not abort message processing.
+                LOGGER.exception("Admin flow state handling failed instance=%s account=%s", event.instance, result.account_id)
+                return EngineResult(
+                    result.account_id,
+                    [SendText(event.chat_id, "Adminzugang konnte gerade nicht gelesen werden. Bitte spaeter erneut versuchen.", track=False)],
+                    handled=True,
+                )
             if admin_actions is not None:
                 return EngineResult(result.account_id, admin_actions, handled=True)
             admin_text_auth_actions = self._free_text_admin_auth_actions(event, result.account_id, command)

@@ -185,6 +185,27 @@ def test_status_auth_identity_lookup_failure_fails_closed_in_engine(tmp_path, mo
     assert engine.process(event(identity, "/help", instance="TeeBotus_Logger")) == []
 
 
+def test_admin_flow_state_failure_is_user_visible_without_aborting_message_processing(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    calls = 0
+
+    def fail_during_admin_flow(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return None
+        raise RuntimeError("admin flow state unavailable")
+
+    monkeypatch.setattr(engine.state, "get_pending_flow", fail_during_admin_flow)
+
+    result = engine.process_result(event(identity, "/ping"))
+
+    assert result.handled is True
+    assert result.actions[0].text == "Adminzugang konnte gerade nicht gelesen werden. Bitte spaeter erneut versuchen."
+
+
 def test_observation_backend_failures_do_not_block_ping(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
