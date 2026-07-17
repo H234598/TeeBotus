@@ -95,6 +95,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 YOUTUBE_LINK_FLOW = "youtube_link"
 YOUTUBE_OPTIONS_FLOW = "youtube_options"
 YOUTUBE_PENDING_STATE_ERROR = "YouTube-Transkript konnte gerade nicht fortgesetzt werden."
+YOUTUBE_JOB_START_ERROR = "Lokale YouTube-Transkription konnte nicht gestartet werden."
 ADMIN_AUTH_FLOW = "admin_auth"
 ADMIN_AUTH_USAGE = "Nutzung: /admin yes <secret> oder /admin no."
 ADMIN_AUTH_PROMPT = "Admin-Secret bitte senden. /cancel bricht ab."
@@ -1996,17 +1997,21 @@ class TeeBotusEngine:
     ) -> list[OutgoingAction]:
         if self.youtube_job_runner is not None and self.background_action_dispatcher is not None:
             job_event = event.with_account(account_id)
-            self.youtube_job_runner.submit(
-                lambda: self._run_youtube_local_transcript_job(
-                    job_event,
-                    account_id,
-                    instructions,
-                    url,
-                    live_enabled=live_enabled,
-                    llm_enabled=llm_enabled,
-                    user_text=user_text,
+            try:
+                self.youtube_job_runner.submit(
+                    lambda: self._run_youtube_local_transcript_job(
+                        job_event,
+                        account_id,
+                        instructions,
+                        url,
+                        live_enabled=live_enabled,
+                        llm_enabled=llm_enabled,
+                        user_text=user_text,
+                    )
                 )
-            )
+            except Exception:  # noqa: BLE001 - do not claim a background job started when submission failed.
+                LOGGER.exception("YouTube transcription job submission failed instance=%s account=%s", event.instance, account_id)
+                return [SendText(event.chat_id, YOUTUBE_JOB_START_ERROR, track=False)]
             reply = "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist."
             if live_enabled:
                 reply += " Live-Ausgabe ist aktiviert."

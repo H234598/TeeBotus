@@ -5213,6 +5213,31 @@ def test_engine_youtube_local_transcription_can_run_as_background_job(monkeypatc
     assert background == [["eins zwei drei"], ["YouTube-Transkript (lokales Whisper):\n\nLocal transcript."]]
 
 
+def test_engine_youtube_reports_background_submission_failure(monkeypatch, tmp_path):
+    from TeeBotus.core.youtube import YouTubeTranscriptError
+
+    class FailingRunner:
+        def submit(self, _callback):
+            raise RuntimeError("executor stopped")
+
+    def fake_transcribe(_url, **kwargs):
+        if kwargs.get("local_allowed") is False:
+            raise YouTubeTranscriptError("keine YouTube-Untertitel gefunden.", needs_local_transcription=True)
+        raise AssertionError("local transcription must not run before job submission")
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.transcribe_youtube_video", fake_transcribe)
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(),
+        youtube_job_runner=FailingRunner(),
+        background_action_dispatcher=lambda _event, _actions: None,
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "/youtube_transcript https://youtu.be/abc123 live ja, llm nein"))
+
+    assert actions[0].text == "Lokale YouTube-Transkription konnte nicht gestartet werden."
+
+
 def test_engine_youtube_background_off_off_dispatches_finished_transcript(monkeypatch, tmp_path):
     from TeeBotus.core.youtube import YouTubeTranscriptError
 
