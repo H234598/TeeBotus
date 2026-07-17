@@ -5978,6 +5978,29 @@ def test_account_metadata_health_lines_fail_closed_on_value_error(tmp_path: Path
     ]
 
 
+def test_account_metadata_health_lines_fail_closed_on_unexpected_error(tmp_path: Path) -> None:
+    root = tmp_path / "accounts"
+    metadata_path = root / "Account_Index.json"
+    metadata_path.parent.mkdir(parents=True)
+    metadata_path.write_text("{}", encoding="utf-8")
+    account_dir = root / "accounts" / ("a" * 128)
+    account_dir.mkdir(parents=True)
+    (account_dir / "Account_Profile.json").write_text("{}", encoding="utf-8")
+
+    class BrokenVault:
+        def read_json(self, _path: Path, _default: object) -> object:
+            raise RuntimeError("unexpected vault failure")
+
+    store = SimpleNamespace(root=root, vault=BrokenVault(), accounts_dir=root / "accounts")
+
+    lines = _account_metadata_health_lines(store, [account_dir], instance_name="Demo")
+
+    assert lines == [
+        f"account_memory_metadata=Demo status=broken item=account_index path={metadata_path} error=unexpected vault failure",
+        f"account_memory_metadata=Demo status=broken item=accounts_dir path={root / 'accounts'} accounts={'a' * 12} error=unexpected vault failure",
+    ]
+
+
 def test_account_metadata_health_lines_rejects_non_object_documents(tmp_path: Path) -> None:
     root = tmp_path / "accounts"
     metadata_path = root / "Account_Index.json"

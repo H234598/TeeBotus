@@ -2183,6 +2183,9 @@ def _account_metadata_health_lines(store: AccountStore, account_dirs: list[Path]
                 raise ValueError("account index accounts is not an object")
         except (AccountStoreError, OSError, ValueError) as exc:
             lines.append(_account_metadata_broken_line(instance_name=instance_name, kind=kind, path=path, error=str(exc)))
+        except Exception as exc:  # noqa: BLE001 - one broken metadata item must not abort /status.
+            LOGGER.exception("Failed to inspect account metadata item %s.", kind)
+            lines.append(_account_metadata_broken_line(instance_name=instance_name, kind=kind, path=path, error=str(exc)))
 
     unreadable_profiles: list[str] = []
     profile_errors: list[str] = []
@@ -2195,6 +2198,10 @@ def _account_metadata_health_lines(store: AccountStore, account_dirs: list[Path]
             if not isinstance(document, Mapping):
                 raise ValueError("account profile is not an object")
         except (AccountStoreError, OSError, ValueError) as exc:
+            unreadable_profiles.append(account_dir.name)
+            profile_errors.append(str(exc))
+        except Exception as exc:  # noqa: BLE001 - one broken profile must not abort /status.
+            LOGGER.exception("Failed to inspect account profile %s.", profile_path)
             unreadable_profiles.append(account_dir.name)
             profile_errors.append(str(exc))
     if unreadable_profiles:
