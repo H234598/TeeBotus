@@ -2751,6 +2751,22 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Legacy-Memory-Loeschung-ueber-stabilen-Parent-FD
+
+- 2026-07-17: `_unlink_migrated_account_file()` loeschte nach einer
+  vorherigen Root-Pruefung wieder per `path.unlink()`. Ein Parent-Swap konnte
+  dadurch beim JSONL-Import eine fremde Datei loeschen.
+- Migration loescht jetzt relativ zu einem komponentenweise mit
+  `O_NOFOLLOW|O_DIRECTORY` geoeffneten Parent-FD. Finales Ziel muss regulaer,
+  nicht symlinked und Single-Link sein; Parent-/Final-Swap blockiert fail-closed.
+- Regression: Parent-Swap waehrend der Legacy-Loeschung -> `2 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `90aef583 fix: remove migrated files through stable parents`.
+
+**Aktueller Laufstand:** Seit dem Restart `12/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 8 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
