@@ -149,7 +149,14 @@ class PostgresAccountMemoryBackend:
         for row in rows:
             memory_id = str(row[0])
             try:
-                entries.append(self._decrypt_json(account_id, memory_id, bytes(row[1]), bytes(row[2])))
+                entries.append(
+                    self._decrypt_json(
+                        account_id,
+                        memory_id,
+                        _coerce_binary_payload(row[1], "payload_nonce"),
+                        _coerce_binary_payload(row[2], "payload_ciphertext"),
+                    )
+                )
             except AccountStoreError as exc:
                 skipped += 1
                 if not first_skipped_id:
@@ -215,7 +222,14 @@ class PostgresAccountMemoryBackend:
         for row in rows:
             memory_id = str(row[0])
             try:
-                entries.append(self._decrypt_json(account_id, memory_id, bytes(row[1]), bytes(row[2])))
+                entries.append(
+                    self._decrypt_json(
+                        account_id,
+                        memory_id,
+                        _coerce_binary_payload(row[1], "payload_nonce"),
+                        _coerce_binary_payload(row[2], "payload_ciphertext"),
+                    )
+                )
             except AccountStoreError as exc:
                 skipped += 1
                 if not first_skipped_id:
@@ -274,7 +288,12 @@ class PostgresAccountMemoryBackend:
         if row is None:
             return {}
         try:
-            return self._decrypt_json(account_id, "index", bytes(row[0]), bytes(row[1]))
+            return self._decrypt_json(
+                account_id,
+                "index",
+                _coerce_binary_payload(row[0], "payload_nonce"),
+                _coerce_binary_payload(row[1], "payload_ciphertext"),
+            )
         except AccountStoreError as exc:
             self.last_index_read_error = str(exc)
             LOGGER.critical(
@@ -329,7 +348,14 @@ class PostgresAccountMemoryBackend:
         for row in rows:
             item_key = str(row[0])
             try:
-                items.append(self._decrypt_json(account_id, _collection_payload_id(collection_name, item_key), bytes(row[1]), bytes(row[2])))
+                items.append(
+                    self._decrypt_json(
+                        account_id,
+                        _collection_payload_id(collection_name, item_key),
+                        _coerce_binary_payload(row[1], "payload_nonce"),
+                        _coerce_binary_payload(row[2], "payload_ciphertext"),
+                    )
+                )
             except AccountStoreError as exc:
                 skipped += 1
                 if not first_skipped_id:
@@ -641,7 +667,12 @@ class PostgresAccountMemoryBackend:
         for row in entry_rows:
             memory_id = str(row[0])
             try:
-                self._decrypt_json(account_id, memory_id, bytes(row[1]), bytes(row[2]))
+                self._decrypt_json(
+                    account_id,
+                    memory_id,
+                    _coerce_binary_payload(row[1], "payload_nonce"),
+                    _coerce_binary_payload(row[2], "payload_ciphertext"),
+                )
             except AccountStoreError as exc:
                 raise AccountStoreError(
                     "existing PostgreSQL account memory entries are not decryptable with the current key; refusing destructive write"
@@ -656,7 +687,12 @@ class PostgresAccountMemoryBackend:
         ).fetchone()
         if index_row is not None:
             try:
-                self._decrypt_json(account_id, "index", bytes(index_row[0]), bytes(index_row[1]))
+                self._decrypt_json(
+                    account_id,
+                    "index",
+                    _coerce_binary_payload(index_row[0], "payload_nonce"),
+                    _coerce_binary_payload(index_row[1], "payload_ciphertext"),
+                )
             except AccountStoreError as exc:
                 raise AccountStoreError(
                     "existing PostgreSQL account memory index is not decryptable with the current key; refusing destructive write"
@@ -673,7 +709,12 @@ class PostgresAccountMemoryBackend:
             collection = str(row[0])
             item_key = str(row[1])
             try:
-                self._decrypt_json(account_id, _collection_payload_id(collection, item_key), bytes(row[2]), bytes(row[3]))
+                self._decrypt_json(
+                    account_id,
+                    _collection_payload_id(collection, item_key),
+                    _coerce_binary_payload(row[2], "payload_nonce"),
+                    _coerce_binary_payload(row[3], "payload_ciphertext"),
+                )
             except AccountStoreError as exc:
                 raise AccountStoreError(
                     "existing PostgreSQL account memory collection rows are not decryptable with the current key; refusing destructive write"
@@ -692,7 +733,12 @@ class PostgresAccountMemoryBackend:
         ).fetchone()
         if entry_row is not None:
             try:
-                self._decrypt_json(account_id, str(entry_row[0]), bytes(entry_row[1]), bytes(entry_row[2]))
+                self._decrypt_json(
+                    account_id,
+                    str(entry_row[0]),
+                    _coerce_binary_payload(entry_row[1], "payload_nonce"),
+                    _coerce_binary_payload(entry_row[2], "payload_ciphertext"),
+                )
             except AccountStoreError as exc:
                 raise AccountStoreError("existing PostgreSQL account memory entries are not decryptable with the current key") from exc
             return
@@ -707,7 +753,12 @@ class PostgresAccountMemoryBackend:
         ).fetchone()
         if index_row is not None:
             try:
-                self._decrypt_json(account_id, "index", bytes(index_row[0]), bytes(index_row[1]))
+                self._decrypt_json(
+                    account_id,
+                    "index",
+                    _coerce_binary_payload(index_row[0], "payload_nonce"),
+                    _coerce_binary_payload(index_row[1], "payload_ciphertext"),
+                )
             except AccountStoreError as exc:
                 raise AccountStoreError("existing PostgreSQL account memory index is not decryptable with the current key") from exc
             return
@@ -727,8 +778,8 @@ class PostgresAccountMemoryBackend:
             self._decrypt_json(
                 account_id,
                 _collection_payload_id(str(collection_row[0]), str(collection_row[1])),
-                bytes(collection_row[2]),
-                bytes(collection_row[3]),
+                _coerce_binary_payload(collection_row[2], "payload_nonce"),
+                _coerce_binary_payload(collection_row[3], "payload_ciphertext"),
             )
         except AccountStoreError as exc:
             raise AccountStoreError("existing PostgreSQL account memory collection rows are not decryptable with the current key") from exc
@@ -755,6 +806,14 @@ class PostgresAccountMemoryBackend:
 
     def _aad(self, account_id: str, memory_id: str) -> bytes:
         return f"TeeBotus:{self.instance_name}:{self.purpose}:{account_id}:{memory_id}:postgres:v1".encode("utf-8")
+
+
+def _coerce_binary_payload(value: Any, field_name: str) -> bytes:
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, (bytearray, memoryview)):
+        return bytes(value)
+    raise AccountStoreError(f"PostgreSQL account memory {field_name} has invalid binary type")
 
 
 def _int_value(value: Any, default: int) -> int:

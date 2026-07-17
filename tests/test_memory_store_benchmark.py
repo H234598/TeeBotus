@@ -343,6 +343,38 @@ def test_postgres_backend_skips_corrupt_rows_like_sqlite(monkeypatch, caplog) ->
     assert "first_memory_id=mem_bad" in caplog.text
 
 
+def test_postgres_backend_reports_invalid_binary_fields_as_corrupt(monkeypatch, caplog) -> None:
+    class FakeResult:
+        def fetchall(self):
+            return [("mem_bad", "not-bytes", b"cipher")]
+
+    class FakeConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def execute(self, _sql: str, _params: tuple) -> FakeResult:
+            return FakeResult()
+
+    backend = PostgresAccountMemoryBackend(
+        instance_name="Bench",
+        provider=StaticSecretProvider(b"p" * 32),
+        purpose="account-structured-memory-key",
+        config=PostgresMemoryConfig(dsn="postgresql://unused"),
+    )
+    monkeypatch.setattr(backend, "_ensure_schema", lambda: None)
+    monkeypatch.setattr(backend, "_connect", lambda: FakeConnection())
+
+    with caplog.at_level("CRITICAL", logger="TeeBotus"):
+        assert backend.read_entries("a" * 128) == []
+
+    assert backend.last_entry_read_error == "PostgreSQL account memory payload_nonce has invalid binary type"
+    assert backend.last_entry_skipped == 1
+    assert "skipped corrupt rows" in caplog.text
+
+
 def test_postgres_backend_rebuilds_schema_after_missing_relation(monkeypatch) -> None:
     class MissingRelationError(Exception):
         sqlstate = "42P01"
