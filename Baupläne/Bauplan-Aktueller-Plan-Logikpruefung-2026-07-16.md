@@ -2891,6 +2891,23 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 14 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Legacy-JSON-und-JSONL-Reads-ueber-stabile-FDs
+
+- 2026-07-17: `_read_json_object()` und `_read_jsonl_plain()` lasen die
+  plaintext Legacy-Fallbacks direkt per Pfad. Ein Parent-Swap konnte damit
+  externe Fallback-Daten in Account-/State-Migration einbringen.
+- Beide Reader nutzen jetzt stabilen Parent-/Datei-FD mit `O_NOFOLLOW`;
+  fehlende Dateien bleiben leere Defaults, Decode-/Schemafehler bleiben
+  fail-closed. Der bestehende Legacy-Fallback bleibt unveraendert aktiv.
+- Regression: JSON-/JSONL-Parent-Swap -> `8 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `304 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `79f7748a fix: read legacy account files through stable descriptors`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
