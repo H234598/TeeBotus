@@ -16,6 +16,7 @@ from TeeBotus.adapters.telegram import (
     telegram_message_to_event,
     telegram_update_message,
 )
+from TeeBotus.adapters.telegram_runtime import BotIdentity, _is_reply_to_bot
 from TeeBotus.runtime.actions import (
     DelaySeconds,
     ExportFile,
@@ -1755,6 +1756,27 @@ def test_telegram_callback_query_maps_button_data_to_event_text():
     assert event is not None
     assert event.text == "ja"
     assert event.sender_id == "456"
+
+
+def test_telegram_callback_query_preserves_bot_origin_for_group_routing():
+    update = {
+        "callback_query": {
+            "id": "cb-group-1",
+            "from": {"id": 456, "first_name": "Ada"},
+            "data": "ja",
+            "message": {
+                "message_id": 99,
+                "chat": {"id": -100, "type": "group"},
+                "from": {"id": 99, "is_bot": True, "first_name": "Mondbot"},
+                "text": "Bitte waehlen",
+            },
+        }
+    }
+
+    message = telegram_update_message(update)
+
+    assert message is not None
+    assert _is_reply_to_bot(message, BotIdentity(id=99, first_name="Mondbot")) is True
 
 
 def test_telegram_send_edit_uses_optional_edit_message_text():

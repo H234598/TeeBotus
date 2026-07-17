@@ -90,6 +90,8 @@ def telegram_update_message(update: dict[str, Any]) -> dict[str, Any] | None:
         return None
     synthetic = dict(message)
     synthetic["from"] = sender
+    if isinstance(message.get("from"), dict):
+        synthetic["_callback_query_message_from"] = message["from"]
     synthetic["text"] = data
     synthetic["caption"] = ""
     synthetic["callback_query_id"] = str(callback_query.get("id") or "").strip()

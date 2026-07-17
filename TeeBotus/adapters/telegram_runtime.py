@@ -3452,10 +3452,12 @@ def _is_private_chat(message: dict[str, Any]) -> bool:
 def _is_reply_to_bot(message: dict[str, Any], bot_identity: BotIdentity) -> bool:
     if bot_identity.id is None:
         return False
-    reply = message.get("reply_to_message")
-    if not isinstance(reply, dict):
-        return False
-    sender = reply.get("from")
+    sender = message.get("_callback_query_message_from")
+    if not isinstance(sender, dict):
+        reply = message.get("reply_to_message")
+        if not isinstance(reply, dict):
+            return False
+        sender = reply.get("from")
     if not isinstance(sender, dict):
         return False
     sender_id = str(sender.get("id") or "").strip()
