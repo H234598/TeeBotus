@@ -7775,6 +7775,20 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `8/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### YouTube-Transcript-Cache: parallele Cache-Writes sichern
+
+- 2026-07-17: Gleichzeitige Transkriptionsjobs im selben Prozess verwendeten
+  dieselbe PID-Tempdatei fuer eine URL. Ein Thread konnte die Datei eines
+  anderen ueberschreiben oder dessen `replace` stoeren.
+- Cache-Writes verwenden jetzt URL-bezogenen Thread-/POSIX-Lock, eindeutige
+  PID-/Thread-/UUID-Tempdatei, `fsync` und atomisches `os.replace`.
+- Test: lokale Transkriptionssuite -> `6 passed`, inklusive Cache-Write;
+  Ruff, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f60fa7ff fix: serialize YouTube transcript cache writes`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `9/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Arbeitsgedaechtnis: Index muss zur JSONL passen
 
 - 2026-07-17: `WorkingMemoryStore` und der noch vorhandene Telegram-Store
