@@ -6728,6 +6728,21 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `12/20` voll.
 
+### Account-Registrierung kapselt Secret-Backendfehler
+
+- 2026-07-17: `/register` fing nur `AccountStoreError`. Generische Secret-,
+  SQL- oder Crypto-Wrapperfehler konnten Command-Handling abbrechen.
+- Registrierung meldet unerwartete Fehler jetzt kontrolliert und gibt nie
+  Secret-Ausgabe aus. Kein falscher Erfolg; erneuter Versuch bleibt moeglich.
+- Test: Register-Fokus `2 passed`; Engine+Route `222 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9d61d06e fix: contain account registration failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`13/20` Commits. Kein Push. Restart nach 7 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `14/20` voll.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
