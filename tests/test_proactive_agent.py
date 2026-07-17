@@ -1069,6 +1069,42 @@ def test_proactive_agent_health_reports_dispatching_claim_without_timestamp(tmp_
     assert "missing claim timestamp" in "\n".join(health.errors)
 
 
+def test_recovery_requeues_dispatching_claim_without_timestamp(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="recover_missing_claim",
+        message_text="Nicht verlieren",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    assert claim_proactive_worker_job(account_store, account_id, item_id, now=datetime(2026, 6, 15, 11, tzinfo=timezone.utc))
+    rows = account_store.read_proactive_outbox(account_id)
+    rows[0].pop("dispatching_at", None)
+    rows[0].pop("updated_at", None)
+    rows[0].pop("status_history", None)
+    account_store.write_proactive_outbox(account_id, rows)
+
+    recovered = recover_stale_proactive_dispatching_items(
+        account_store,
+        account_id,
+        now=datetime(2026, 6, 15, 11, 1, tzinfo=timezone.utc),
+    )
+
+    assert recovered == (item_id,)
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "queued"
+    assert "dispatching_at" not in item
+    assert item["status_history"][-1]["reason"] == "stale_dispatch_reclaimed_after_30_minutes_missing_claim_timestamp"
+
+
 def test_proactive_agent_health_reports_queued_item_without_provenance(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

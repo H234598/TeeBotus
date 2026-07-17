@@ -1215,7 +1215,7 @@ def recover_stale_proactive_dispatching_items(
             if not isinstance(item, dict) or _proactive_item_status(item) != "dispatching":
                 continue
             claimed_at = _proactive_dispatch_claimed_at(item)
-            if claimed_at is None or claimed_at > cutoff:
+            if claimed_at is not None and claimed_at > cutoff:
                 continue
             item_id = str(item.get("id") or "").strip()
             if not item_id:
@@ -1227,11 +1227,14 @@ def recover_stale_proactive_dispatching_items(
             if not isinstance(history, list):
                 history = []
                 item["status_history"] = history
+            reclaim_reason = f"stale_dispatch_reclaimed_after_{timeout_minutes}_minutes"
+            if claimed_at is None:
+                reclaim_reason += "_missing_claim_timestamp"
             history.append(
                 {
                     "at": timestamp,
                     "status": "queued",
-                    "reason": f"stale_dispatch_reclaimed_after_{timeout_minutes}_minutes",
+                    "reason": reclaim_reason,
                 }
             )
             recovered_ids.append(item_id)
