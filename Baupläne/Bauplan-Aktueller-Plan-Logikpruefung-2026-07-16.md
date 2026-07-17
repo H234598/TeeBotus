@@ -6712,6 +6712,22 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `10/20` voll.
 
+### Primaerer Login kapselt Backendfehler
+
+- 2026-07-17: Lokales `link_identity` fing nur `AccountStoreError`. Ein
+  generischer SQL-, Secret- oder Wrapperfehler konnte `/login` abbrechen.
+- Login-Backendfehler werden jetzt geloggt und als kontrollierte Antwort
+  behandelt. Kein Account-Link und kein falscher Erfolg; erneuter Versuch
+  bleibt moeglich.
+- Test: Login-Fokus `2 passed`; Engine+Route `221 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b4f1ac55 fix: contain primary login failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`11/20` Commits. Kein Push. Restart nach 9 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `12/20` voll.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
