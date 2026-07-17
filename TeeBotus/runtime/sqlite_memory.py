@@ -72,7 +72,16 @@ def validate_distinct_sqlite_paths(
 ) -> None:
     if fallback_path is None:
         return
-    if path.resolve() == fallback_path.resolve():
+    for candidate, label in ((path, primary_label), (fallback_path, fallback_label)):
+        symlink_component = _first_symlinked_path_component(candidate)
+        if symlink_component is not None:
+            raise AccountStoreError(f"{label} must not use symlinked path components: {symlink_component}")
+    try:
+        resolved_path = path.resolve()
+        resolved_fallback_path = fallback_path.resolve()
+    except (OSError, RuntimeError) as exc:
+        raise AccountStoreError("SQLite memory paths could not be resolved safely") from exc
+    if resolved_path == resolved_fallback_path:
         raise AccountStoreError(
             f"{primary_label} and {fallback_label} must point to different files"
         )
@@ -1007,3 +1016,14 @@ def _collection_item_key(row: dict[str, Any], ordinal: int) -> str:
 
 def _collection_payload_id(collection: str, item_key: str) -> str:
     return f"jsonl:{collection}:{item_key}"
+
+
+def _first_symlinked_path_component(path: Path) -> Path | None:
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    for candidate in (absolute, *absolute.parents):
+        try:
+            if candidate.is_symlink():
+                return candidate
+        except OSError:
+            return candidate
+    return None
