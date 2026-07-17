@@ -2060,15 +2060,18 @@ class TeeBotusEngine:
         response_id = _persistable_previous_response_id(response)
         if response_id:
             provider, model, key_fingerprint = _llm_state_scope(response, client=self.llm_client, instructions=instructions)
-            self.state.set_previous_response_id(
-                event.instance,
-                account_id,
-                response_id,
-                conversation_scope=conversation_scope,
-                provider=provider,
-                model=model,
-                key_fingerprint=key_fingerprint,
-            )
+            try:
+                self.state.set_previous_response_id(
+                    event.instance,
+                    account_id,
+                    response_id,
+                    conversation_scope=conversation_scope,
+                    provider=provider,
+                    model=model,
+                    key_fingerprint=key_fingerprint,
+                )
+            except Exception:  # noqa: BLE001 - state persistence must not discard a valid YouTube LLM reply.
+                LOGGER.exception("YouTube LLM response state persistence failed instance=%s account=%s", event.instance, account_id)
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)

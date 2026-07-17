@@ -2668,6 +2668,31 @@ def test_engine_retries_stale_response_without_state_cleanup(tmp_path, monkeypat
     assert any(getattr(action, "text", "") == "Wiederhergestellt ohne Cleanup." for action in actions)
 
 
+def test_youtube_llm_reply_survives_response_state_failure(tmp_path, monkeypatch):
+    class FakeOpenAIClient:
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("YouTube-Antwort trotz Statefehler.", "youtube-response", None)
+
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    client = FakeOpenAIClient()
+    instructions = BotInstructions(openai_enabled=True, llm_provider="openai", openai_model="gpt-5.5")
+    engine = TeeBotusEngine(account_store=account_store, instructions=instructions, llm_client=client, openai_client=client)
+    monkeypatch.setattr(engine.state, "set_previous_response_id", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("state unavailable")))
+
+    actions = engine._youtube_transcript_reply_actions(
+        event(identity, "transkribiere"),
+        account_id,
+        instructions,
+        "https://youtu.be/abc123",
+        "Lokales Transkript",
+        "local",
+    )
+
+    assert any(getattr(action, "text", "") == "YouTube-Antwort trotz Statefehler." for action in actions)
+
+
 def test_engine_keeps_state_on_non_stale_llm_error(tmp_path):
     provider = StaticSecretProvider(b"e" * 32)
     data_dir = tmp_path / "Depressionsbot" / "data"
