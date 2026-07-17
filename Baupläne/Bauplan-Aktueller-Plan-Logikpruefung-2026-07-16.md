@@ -5411,6 +5411,23 @@ bleibt erst bei 100 Commits.
 `12/20` Commits. Kein Push. Restart nach 8 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Tool-Agent akzeptiert Singleton-Tool-Call-Responses
+
+- 2026-07-17: Adapter, die `tool_calls` als einzelnes Call-Objekt statt Liste
+  lieferten, wurden vom Extraktor als nicht iterierbar verworfen und fuehrten
+  zu falschem `no_tool_calls`.
+- Ein erkennbares einzelnes Tool-Call-Objekt wird jetzt als Eintrag verarbeitet.
+  Nicht-Tool-Mappings und Strings bleiben verworfen; Listen/Tupel behalten ihre
+  bisherige Verarbeitung.
+- Tests: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `213 passed`; Tool-Extraktionsfokus `3 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7fe8580e fix: accept singleton proactive tool call responses`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`14/20` Commits. Kein Push. Restart nach 6 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
