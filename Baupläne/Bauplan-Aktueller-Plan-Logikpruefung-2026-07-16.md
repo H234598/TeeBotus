@@ -5511,6 +5511,24 @@ bleibt erst bei 100 Commits.
 `4/20` Commits. Kein Push. Restart nach 16 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Cycle isoliert Planner-Providerfehler pro Account
+
+- 2026-07-17: Eine Exception aus LLM-/Tool-Planner oder Planner-Factory
+  verliess den Account-Cycle. Ein einzelner Providerfehler konnte dadurch
+  Dispatch fuer denselben und folgende Accounts verhindern.
+- Plannerfehler werden jetzt pro Account als
+  `planner_error:<ExceptionType>` im jeweiligen Report markiert; `_cycle_ok`
+  bleibt bewusst `False`. Nach Fehler laeuft Outbox-Recovery, Due-Report und
+  Dispatch weiter. Fehlermeldungen werden nicht in den Reporttext kopiert.
+- Test: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `219 passed`; Exception-/Continue-Fokus `2 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a716b03e fix: isolate proactive planner exceptions`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`6/20` Commits. Kein Push. Restart nach 14 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
