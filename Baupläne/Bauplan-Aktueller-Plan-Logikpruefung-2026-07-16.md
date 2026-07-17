@@ -6781,6 +6781,25 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `18/20` voll.
 
+### Account-Export kapselt unerwartete Backendfehler
+
+- 2026-07-17: `/export` fing nur bekannte Export-/Store-/I/O-Fehler. Ein
+  unerwarteter SQL-, Secret- oder Wrapperfehler konnte Command-Verarbeitung
+  und Bot-Loop abbrechen.
+- Export-Backendfehler werden jetzt geloggt und als klare Exportfehlerantwort
+  behandelt. Kein falscher Dateiversand und kein Prozessabbruch.
+- Test: `tests/test_engine_identity_flows.py` `205 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `525a62ef fix: contain account export backend failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`19/20` Commits. Kein Push. Restart nach einem weiteren Plan-Commit.
+
+### Zyklusabschluss
+
+Dieser Plan-Commit macht Zyklus `20/20` voll. Kein Push. Dienst-Neustart jetzt;
+danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
+
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
