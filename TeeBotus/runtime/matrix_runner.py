@@ -139,6 +139,7 @@ class MatrixRuntimeBridge:
         )
         if event is None:
             return
+        event = await _fetch_matrix_reply_text(self.client, event, matrix_user_id=self.run_config.matrix_user_id)
         should_ignore = getattr(self.engine, "should_ignore_without_account", None)
         try:
             if callable(should_ignore):
@@ -156,7 +157,6 @@ class MatrixRuntimeBridge:
             return
         if ignored:
             return
-        event = await _fetch_matrix_reply_text(self.client, event)
         event = await _download_matrix_event_attachments(self.client, event)
         try:
             account_id = self.account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
@@ -669,8 +669,8 @@ def _process_engine_result(engine: Any, event: IncomingEvent) -> EngineResult:
     return EngineResult(event.account_id, list(actions or []), handled=bool(actions))
 
 
-async def _fetch_matrix_reply_text(client: Any, event: IncomingEvent) -> IncomingEvent:
-    if event.reply_to_text:
+async def _fetch_matrix_reply_text(client: Any, event: IncomingEvent, *, matrix_user_id: str = "") -> IncomingEvent:
+    if event.reply_to_text and not event.is_group:
         return event
     reply_event_id = _matrix_reply_event_id(event.raw)
     if not reply_event_id:
@@ -681,9 +681,9 @@ async def _fetch_matrix_reply_text(client: Any, event: IncomingEvent) -> Incomin
             response = await fetch_message(event.chat_id, reply_event_id)
         except Exception:
             response = None
-        reply_text = _matrix_reply_text_from_response(response)
-        if reply_text:
-            return event.with_reply_to_text(reply_text)
+        event = _matrix_reply_context_from_response(event, response, matrix_user_id)
+        if event.reply_to_text or event.reply_to_bot:
+            return event
     room_get_event = getattr(client, "room_get_event", None)
     if not callable(room_get_event):
         return event
@@ -691,10 +691,7 @@ async def _fetch_matrix_reply_text(client: Any, event: IncomingEvent) -> Incomin
         response = await room_get_event(event.chat_id, reply_event_id)
     except Exception:
         return event
-    reply_text = _matrix_reply_text_from_response(response)
-    if not reply_text:
-        return event
-    return event.with_reply_to_text(reply_text)
+    return _matrix_reply_context_from_response(event, response, matrix_user_id)
 
 
 def _matrix_reply_event_id(message: Any) -> str:
@@ -709,19 +706,41 @@ def _matrix_reply_event_id(message: Any) -> str:
 
 
 def _matrix_reply_text_from_response(response: Any) -> str:
-    if isinstance(response, tuple):
-        for item in response:
-            text = _matrix_event_body(item)
-            if text:
-                return text
-    for candidate in (
-        getattr(response, "event", None),
-        response,
-    ):
+    for candidate in _matrix_response_candidates(response):
         text = _matrix_event_body(candidate)
         if text:
             return text
     return ""
+
+
+def _matrix_response_candidates(response: Any) -> tuple[Any, ...]:
+    candidates: list[Any] = []
+    if isinstance(response, tuple):
+        candidates.extend(response)
+    event = getattr(response, "event", None)
+    if event is not None:
+        candidates.append(event)
+    candidates.append(response)
+    return tuple(candidate for candidate in candidates if candidate is not None)
+
+
+def _matrix_event_sender(event: Any) -> str:
+    sender = str(getattr(event, "sender", "") or "").strip()
+    if sender:
+        return sender
+    source = getattr(event, "source", {})
+    if not isinstance(source, dict):
+        return ""
+    return str(source.get("sender") or "").strip()
+
+
+def _matrix_reply_context_from_response(event: IncomingEvent, response: Any, matrix_user_id: str) -> IncomingEvent:
+    reply_text = _matrix_reply_text_from_response(response)
+    enriched = event.with_reply_to_text(reply_text) if reply_text and not event.reply_to_text else event
+    own_user_id = str(matrix_user_id or "").strip()
+    if own_user_id and any(_matrix_event_sender(candidate) == own_user_id for candidate in _matrix_response_candidates(response)):
+        enriched = enriched.with_reply_to_bot(True)
+    return enriched
 
 
 def _matrix_event_body(event: Any) -> str:

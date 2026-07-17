@@ -691,6 +691,46 @@ def test_matrix_bridge_fetches_reply_text_without_body_fallback(tmp_path) -> Non
     assert seen[0].reply_to_text == "Originaltext"
 
 
+def test_matrix_bridge_marks_group_reply_to_bot_from_referenced_sender(tmp_path) -> None:
+    client = FakeMatrixClient()
+    client.events[("!group:example", "$old")] = type(
+        "RoomGetEventResponse",
+        (),
+        {
+            "event": type(
+                "MatrixEvent",
+                (),
+                {"sender": "@bot:example", "source": {"content": {"body": "Botantwort"}}},
+            )()
+        },
+    )()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    seen = []
+    bridge.engine = type("FakeEngine", (), {"process": lambda self, event: seen.append(event) or []})()
+
+    class ReplyMessage(FakeMatrixMessage):
+        body = "Antwort"
+        source = {"content": {"msgtype": "m.text", "body": "Antwort", "m.relates_to": {"m.in_reply_to": {"event_id": "$old"}}}}
+
+    asyncio.run(bridge.handle_message(FakeMatrixGroupRoom(), ReplyMessage()))
+
+    assert seen[0].reply_to_bot is True
+
+
 def test_matrix_bridge_marks_codex_history_reply_acknowledged(tmp_path) -> None:
     client = FakeMatrixClient()
     bridge = MatrixRuntimeBridge(
