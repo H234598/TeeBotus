@@ -589,6 +589,48 @@ def test_runtime_status_admin_notify_isolates_sender_failures_by_channel(tmp_pat
     assert f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=failed account_id={signal_account_id} channel=signal reason=sender_factory:RuntimeError" in lines
 
 
+def test_runtime_status_admin_notify_isolates_status_outbox_update_failure(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    account_store = status_summary_store_for(instances_dir)
+    first_identity = telegram_identity_key(123)
+    first_account_id = account_store.resolve_or_create_account(first_identity)
+    account_store.update_identity_route(first_identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    second_identity = telegram_identity_key(456)
+    second_account_id = account_store.resolve_or_create_account(second_identity)
+    account_store.update_identity_route(second_identity, channel="telegram", chat_id="456", chat_type="private", adapter_slot=1)
+    original_write_status_outbox = account_store.write_status_outbox
+    write_calls = 0
+    sent: list[str] = []
+
+    def flaky_write_status_outbox(account_id: str, rows: list[dict[str, object]]) -> None:
+        nonlocal write_calls
+        write_calls += 1
+        if write_calls > 2:
+            raise OSError("status outbox unavailable")
+        original_write_status_outbox(account_id, rows)
+
+    monkeypatch.setattr(account_store, "write_status_outbox", flaky_write_status_outbox)
+
+    async def run_notify() -> tuple[str, ...]:
+        results = await notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: f"{first_account_id},{second_account_id}"},
+            store_factory=lambda _root, _instance: account_store,
+            sender_factory=lambda _instance, _store: {
+                "telegram": lambda route, _action, _metadata: sent.append(str(route["chat_id"])) or "ok"
+            },
+        )
+        return format_admin_notification_result_lines(results)
+
+    lines = asyncio.run(run_notify())
+
+    assert sent == ["123", "456"]
+    assert f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={first_account_id} channel=telegram" in lines
+    assert f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=sent account_id={second_account_id} channel=telegram" in lines
+
+
 def test_runtime_status_admin_notify_handles_broken_sender_factory_return_value(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
     account_store = status_summary_store_for(instances_dir)

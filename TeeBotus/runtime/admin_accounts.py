@@ -695,29 +695,37 @@ def _record_runtime_status_dispatch(
     normalized_reason = str(reason or "").strip()
     summary_prefix = ""
     summary_number: int | None = None
-    with store.status_outbox_lock(account_id):
-        rows = store.read_status_outbox(account_id)
-        for item in rows:
-            if not isinstance(item, dict) or str(item.get("id") or "") != str(item_id or ""):
-                continue
-            summary_prefix = str(item.get("summary_prefix") or "")
-            try:
-                summary_number = int(item.get("summary_number") or 0) or None
-            except (TypeError, ValueError):
-                summary_number = None
-            item["status"] = normalized_status
-            item["updated_at"] = timestamp
-            if normalized_status == "sent":
-                item["sent_at"] = timestamp
-            if normalized_reason:
-                item["last_reason"] = normalized_reason
-            history = item.setdefault("status_history", [])
-            if not isinstance(history, list):
-                history = []
-                item["status_history"] = history
-            history.append({"at": timestamp, "status": normalized_status, "reason": normalized_reason})
-            break
-        store.write_status_outbox(account_id, rows)
+    try:
+        with store.status_outbox_lock(account_id):
+            rows = store.read_status_outbox(account_id)
+            for item in rows:
+                if not isinstance(item, dict) or str(item.get("id") or "") != str(item_id or ""):
+                    continue
+                summary_prefix = str(item.get("summary_prefix") or "")
+                try:
+                    summary_number = int(item.get("summary_number") or 0) or None
+                except (TypeError, ValueError):
+                    summary_number = None
+                item["status"] = normalized_status
+                item["updated_at"] = timestamp
+                if normalized_status == "sent":
+                    item["sent_at"] = timestamp
+                if normalized_reason:
+                    item["last_reason"] = normalized_reason
+                history = item.setdefault("status_history", [])
+                if not isinstance(history, list):
+                    history = []
+                    item["status_history"] = history
+                history.append({"at": timestamp, "status": normalized_status, "reason": normalized_reason})
+                break
+            store.write_status_outbox(account_id, rows)
+    except Exception:  # noqa: BLE001 - one broken status outbox must not block other admins.
+        LOGGER.exception(
+            "Runtime status outbox state persistence failed account_id=%s item_id=%s status=%s",
+            account_id,
+            item_id,
+            normalized_status,
+        )
     try:
         store.append_status_dispatch_result(
             account_id,
