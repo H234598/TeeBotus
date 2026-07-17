@@ -2788,6 +2788,25 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### PostgreSQL-Schema-Invalidierung-bei-fehlender-Spalte-retrybar
+
+- 2026-07-17: Der PostgreSQL-Retry erkannte bisher nur SQLSTATE `42P01`
+  (fehlende Relation). Wurde eine Pflichtspalte nach bereits gesetztem
+  `_initialized=True` entfernt, lief der Read/Write-Pfad mit `42703` direkt
+  in den Fehler.
+- SQLSTATE `42703` wird jetzt wie `42P01` als Schema-Invalidierung behandelt:
+  `_initialized` wird einmal verworfen, der Schema-Guard erneut ausgefuehrt;
+  die Pflichtspaltenpruefung meldet anschliessend sauber `AccountStoreError`,
+  statt einen falschen gesunden Zustand zu behalten.
+- Regression: PostgreSQL-Fokus -> `17 passed`; AccountStore plus
+  Memory-Benchmark -> `330 passed`; `compileall` und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `1cb09991 fix: retry postgres missing schema columns`.
+
+**Aktueller Laufstand:** Seit dem Restart `6/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 14 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Status-meldet-uninitialisiertes-SQL-Memory
 
 - 2026-07-17: /status deaktivierte das konfigurierte SQLite-Backend, wenn
