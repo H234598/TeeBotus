@@ -6696,6 +6696,23 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `8/20` voll.
 
+### Cross-Instance-Login isoliert kaputte Quellen
+
+- 2026-07-17: Quellinstanz-Discovery und Secret-Verifikation fingen nur
+  bekannte Store-/I/O-/Value-Fehler. Ein defektes SQL-, Secret- oder Wrapper-
+  Backend konnte `/login` fuer alle weiteren Quellen abbrechen.
+- Discoveryfehler werden jetzt fail-closed behandelt; einzelne kaputte
+  Quellinstanzen werden geloggt und uebersprungen. Zielinstanz antwortet
+  kontrolliert mit Loginfehler statt Prozessabbruch oder falschem Link.
+- Test: `tests/test_engine_identity_flows.py` `201 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6239525b fix: isolate cross instance login failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`9/20` Commits. Kein Push. Restart nach 11 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `10/20` voll.
+
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
