@@ -174,6 +174,35 @@ def test_status_auth_persistence_failure_fails_closed_in_engine(tmp_path, monkey
     assert status_auth_state_authorized(account_store, account_id) is False
 
 
+def test_observation_backend_failures_do_not_block_ping(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.record_account_activity", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("activity unavailable")))
+    monkeypatch.setattr("TeeBotus.runtime.engine.update_city_and_weather_context", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("weather unavailable")))
+    monkeypatch.setattr("TeeBotus.runtime.engine.proactive_agent_instance_enabled", lambda _instance: True)
+
+    actions = engine.process(event(identity, "/ping"))
+
+    assert actions
+    assert actions[0].text == "Pong"
+
+
+def test_dialect_observation_backend_failure_does_not_block_addressed_message(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store, bot_address_names={"mondbot"})
+    identity = telegram_identity_key(1)
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.maybe_update_tts_dialect_preference", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("dialect unavailable")))
+
+    result = engine.process_result(event(identity, "Mondbot hallo"))
+
+    assert len(result.actions) == 1
+    assert result.actions[0].text == "Echo: Mondbot hallo"
+    assert result.handled is True
+
+
 def test_debug_level_warns_each_active_account_and_channel_once(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_LOG_LEVEL", "2")
     account_store = store(tmp_path)

@@ -253,15 +253,22 @@ class TeeBotusEngine:
                 record_account_activity(self.account_store, result.account_id, event)
             except (AccountStoreError, OSError, ValueError):
                 pass
+            except Exception:  # noqa: BLE001 - activity observation must not block the user message.
+                LOGGER.exception("Account activity update failed instance=%s account=%s", event.instance, result.account_id)
         if result.account_id:
             try:
                 update_city_and_weather_context(self.account_store, result.account_id, event.text)
             except (AccountStoreError, OSError, ValueError):
                 pass
+            except Exception:  # noqa: BLE001 - weather observation must not block the user message.
+                LOGGER.exception("Weather context update failed instance=%s account=%s", event.instance, result.account_id)
         if result.account_id and text and not command:
             try:
                 dialect_update = maybe_update_tts_dialect_preference(self.account_store, result.account_id, event.text)
             except (AccountStoreError, OSError, ValueError):
+                dialect_update = None
+            except Exception:  # noqa: BLE001 - dialect observation must not block the user message.
+                LOGGER.exception("TTS dialect update failed instance=%s account=%s", event.instance, result.account_id)
                 dialect_update = None
             if dialect_update is not None and dialect_update.reply_text:
                 return EngineResult(result.account_id, [SendText(event.chat_id, dialect_update.reply_text, track=False)], handled=True)
