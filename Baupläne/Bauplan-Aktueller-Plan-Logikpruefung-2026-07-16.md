@@ -5228,6 +5228,21 @@ bleibt erst bei 100 Commits.
 `10/20` Commits. Kein Push. Restart nach 10 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Dispatch-Lease meldet zukuenftigen Claim-Zeitstempel
+
+- 2026-07-17: Ein `dispatching_at` in der Zukunft wurde als frischer Lease
+  behandelt und blieb ohne Health-Befund potenziell haengen.
+- Health meldet zukuenftige Claim-Zeitstempel jetzt explizit. Recovery bleibt
+  konservativ und reclaimt sie nicht automatisch, um keine laufende Sendung
+  zu duplizieren.
+- Test: `tests/test_proactive_agent.py` `148 passed`; Health-Fokus `22 passed`;
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `67b4cb06 fix: report future proactive claim timestamps`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`12/20` Commits. Kein Push. Restart nach 8 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
