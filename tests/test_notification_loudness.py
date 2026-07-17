@@ -160,6 +160,26 @@ def test_loudness_cancellation_preserves_invalid_status_history(tmp_path) -> Non
     assert preserved["status_history"] == {"broken": True}
 
 
+def test_loudness_response_replies_after_outbox_cleanup_failure(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=now - timedelta(hours=7)) is not None
+    set_identity_last_seen(account_store, identity, now - timedelta(minutes=2))
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=now)
+
+    def fail_outbox_write(*_args, **_kwargs):
+        raise OSError("outbox unavailable")
+
+    monkeypatch.setattr(account_store, "write_proactive_outbox", fail_outbox_write)
+    response = maybe_handle_notification_loudness_response(event(identity, "ja, laut"), account_store, account_id, now=now)
+
+    assert response == (SendText("chat-1", "Danke, ich frage deswegen nicht weiter nach.", track=False),)
+    assert account_store.read_agent_state(account_id)["notification_loudness"]["routes"]["telegram:1:chat-1"]["status"] == "confirmed"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "queued"
+
+
 def test_scheduler_stops_online_check_after_notification_loudness_confirmation(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

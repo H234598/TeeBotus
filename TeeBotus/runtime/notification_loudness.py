@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
+import logging
 from typing import Any, Mapping
 
 from TeeBotus.runtime.accounts import AccountStore, utc_now
@@ -1699,6 +1700,7 @@ NOTIFICATION_LOUDNESS_PROMPT = (
 )
 NOTIFICATION_LOUDNESS_CONFIRMED_REPLY = "Danke, ich frage deswegen nicht weiter nach."
 NOTIFICATION_LOUDNESS_DECLINED_REPLY = "Okay, ich frage deswegen nicht weiter nach."
+LOGGER = logging.getLogger("TeeBotus.runtime.notification_loudness")
 
 
 def maybe_handle_notification_loudness_response(
@@ -1735,7 +1737,10 @@ def maybe_handle_notification_loudness_response(
             if decision is None:
                 return None
             _set_notification_loudness_status(account_store, account_id, event, decision, now=now)
-            _cancel_pending_notification_loudness_items(account_store, account_id, event)
+            try:
+                _cancel_pending_notification_loudness_items(account_store, account_id, event)
+            except Exception:  # noqa: BLE001 - confirmed state already prevents future loudness dispatch.
+                LOGGER.exception("Notification loudness outbox cleanup failed account=%s route=%s", account_id, _route_key(event))
             text = NOTIFICATION_LOUDNESS_CONFIRMED_REPLY if decision == "confirmed" else NOTIFICATION_LOUDNESS_DECLINED_REPLY
             return (SendText(event.chat_id, text, track=False),)
     except Exception:  # noqa: BLE001 - message handling must fail closed on backend errors.
