@@ -5248,3 +5248,21 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `12/20` Commits. Kein Push. Restart nach 8 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Review-Instanzgrenzen gehaertet
+
+- 2026-07-17: Das Review-Modul akzeptierte Path-Traversal bei `--instance` und
+  Einzel-Review. Fehlende Instanzen konnten ausserdem durch `AccountStore`-
+  Konstruktion neue Verzeichnisse erzeugen.
+- Review-Auswahl akzeptiert nur einzelne Ordnernamen, prueft vorhandene
+  `data/accounts`-Struktur und meldet `invalid_instance_name` bzw.
+  `selected_instance_not_found`. Store wird in diesen Faellen nicht geoeffnet.
+- `list_proactive_review_items` verschluckt `list_account_ids`-Fehler nicht
+  mehr; Report bleibt `ok=False`.
+- Tests: `tests/test_proactive_review.py` `10 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2048842e fix: harden proactive review instance boundaries`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`14/20` Commits. Kein Push. Restart nach 6 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
