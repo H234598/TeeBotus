@@ -5258,6 +5258,22 @@ bleibt erst bei 100 Commits.
 `14/20` Commits. Kein Push. Restart nach 6 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Human-Review validiert Outbox-Payload vor Approval
+
+- 2026-07-17: `approve_proactive_review_item` konnte beschaedigte
+  `review_pending`-Zeilen direkt zu `queued` machen. Pflichtfelder wurden erst
+  beim Dispatch erkannt.
+- Approval prueft jetzt `intent`, `message_text`, `due_at`, `recurrence` und
+  `file` vor jeder Mutation. Ungueltige Items bleiben `review_pending`.
+- Test: `tests/test_proactive_agent.py` `149 passed`; Human-Review-Fokus
+  `5 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `4e50f568 fix: validate approved proactive review payloads`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`16/20` Commits. Kein Push. Restart nach 4 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
