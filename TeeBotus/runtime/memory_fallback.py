@@ -508,8 +508,10 @@ class WarningFallbackAccountMemoryBackend:
         account_id: str,
         callback: Callable[[Any], Any],
     ) -> Any:
+        primary_result: Any = None
         try:
             result = callback(self.primary)
+            primary_result = result
             self._copy_diagnostics(self.primary)
             if not self._read_diagnostic_failed(operation):
                 return result
@@ -528,10 +530,18 @@ class WarningFallbackAccountMemoryBackend:
             self._set_fallback_sync_error(operation, account_id, f"{operation}: fallback read failed: {fallback_exc}")
             raise AccountStoreError(self.fallback_sync_error_for_account(account_id)) from fallback_exc
         self._copy_diagnostics(self.fallback)
+        if self._backend_database_missing(self.fallback):
+            self._copy_primary_readonly_diagnostics(operation, primary_error)
+            self._fallback_stale_set(operation).add(account_id)
+            self._set_fallback_sync_error(
+                operation,
+                account_id,
+                f"{operation}: primary read failed; fallback database is missing; repair deferred: {primary_error}",
+            )
+            return primary_result if primary_result is not None else result
         if self._read_diagnostic_failed(operation):
             raise self._fallback_diagnostics_error(operation, account_id)
-        self._copy_diagnostics(self.primary)
-        self._set_readonly_primary_failure(operation, AccountStoreError(primary_error))
+        self._copy_primary_readonly_diagnostics(operation, primary_error)
         self._fallback_stale_set(operation).add(account_id)
         self._set_fallback_sync_error(
             operation,
@@ -539,6 +549,11 @@ class WarningFallbackAccountMemoryBackend:
             f"{operation}: primary read failed; read-only fallback used; repair deferred: {primary_error}",
         )
         return result
+
+    def _copy_primary_readonly_diagnostics(self, operation: str, primary_error: str) -> None:
+        self._copy_diagnostics(self.primary)
+        if not self._read_diagnostic_failed(operation):
+            self._set_readonly_primary_failure(operation, AccountStoreError(primary_error))
 
     def _set_readonly_primary_failure(self, operation: str, exc: Exception) -> None:
         detail = f"{type(exc).__name__}: {exc}"
