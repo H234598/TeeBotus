@@ -3585,3 +3585,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `12/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 8 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Quarantaene-Dateien-ueber-stabile-Parent-FDs-reservieren
+
+- 2026-07-17: Snapshot- und Manifest-Ziele wurden nach sicherer
+  Verzeichnispruefung wieder per absolutem Pfad mit `os.open()` angelegt. Ein
+  Parent-Swap konnte dadurch die Zielerstellung umleiten.
+- Snapshot und Manifest reservieren Dateien jetzt exklusiv relativ zu einem
+  stabil geoeffneten Parent-FD mit `O_NOFOLLOW`; Snapshot-SQLite nutzt den
+  stabilen Descriptor direkt. Kein unsicherer Cross-Filesystem-Fallback.
+- Regression: Snapshot-/Manifest-/Quarantaene-Fokus -> `28 passed`; komplette
+  `tests/test_admin_accounts.py` -> `106 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d71e22f7 fix: reserve quarantine files through stable parent fds`.
+
+**Aktueller Laufstand:** Seit dem Restart `14/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 6 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
