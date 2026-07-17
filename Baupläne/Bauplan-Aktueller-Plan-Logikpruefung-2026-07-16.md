@@ -6605,6 +6605,27 @@ bleibt erst bei 100 Commits.
   Provider/API-Aufruf.
 - Code-Commit: `c2348a5f fix: report loudness dispatch persistence failures`.
 
+### Status-Auth-Gate faengt Persistenzfehler adapteruebergreifend ab
+
+- 2026-07-17: Der gemeinsame `TeeBotusEngine`-Pfad liess Fehler beim
+  Anlegen/Route-Speichern/Autorisieren eines Status-Auth-Accounts aus dem
+  Gate laufen. Telegram hatte dafuer bereits einen Schutz; Signal, Matrix
+  und direkte Engine-Aufrufe konnten den Secret-Versuch dadurch abbrechen.
+- Das Gate behandelt unerwartete Persistenzfehler jetzt fail-closed. Es gibt
+  keine falsche Bestaetigung und keinen Status-/Adminzugriff; der Account
+  bleibt unauthorisiert. Ein spaeterer Versuch bleibt moeglich.
+- Test: `pytest -q tests/test_engine_identity_flows.py -k 'status_auth'` `11
+  passed`; Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4e2797dd fix: fail closed on status auth persistence errors`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`19/20` Commits. Kein Push. Restart nach einem weiteren Plan-Commit.
+
+### Zyklusabschluss
+
+Dieser Plan-Commit macht Zyklus `20/20` voll. Kein Push. Dienst-Neustart jetzt;
+danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
+
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
