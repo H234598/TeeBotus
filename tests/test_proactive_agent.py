@@ -3040,6 +3040,19 @@ def test_tool_agent_rejects_unknown_tools_without_mutating(tmp_path) -> None:
     assert audit[0]["event_type"] == "tool_call_rejected"
 
 
+def test_tool_agent_reports_truncated_tool_calls(tmp_path) -> None:
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+    tool_calls = [{"name": "proactive_noop", "arguments": {}} for _ in range(6)]
+
+    result = apply_proactive_agent_tool_calls(account_store, account_id, tool_calls, now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))
+
+    assert result.errors == ("too_many_tool_calls_truncated",)
+    audit = account_store.read_proactive_audit(account_id)
+    assert audit[-1]["event_type"] == "tool_agent_truncated"
+    assert audit[-1]["payload"]["tool_call_count"] == 6
+
+
 def test_tool_agent_rejects_known_tool_with_invalid_arguments_without_mutating(tmp_path) -> None:
     account_store = store(tmp_path)
     account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))

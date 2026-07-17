@@ -942,7 +942,8 @@ def apply_proactive_agent_tool_calls(
     errors: list[str] = []
     audit_event_ids: list[str] = []
     resolved_now = _resolve_proactive_now(now)
-    for index, raw_call in enumerate(list(tool_calls)[:PROACTIVE_LLM_MAX_DECISIONS]):
+    raw_calls = list(tool_calls)
+    for index, raw_call in enumerate(raw_calls[:PROACTIVE_LLM_MAX_DECISIONS]):
         call = raw_call if isinstance(raw_call, ProactiveAgentToolCall) else _normalize_proactive_agent_tool_call(raw_call)
         if call is None:
             error = f"tool_{index}_invalid_tool_call"
@@ -955,6 +956,19 @@ def apply_proactive_agent_tool_calls(
             audit_event_ids.append(_append_proactive_llm_audit_event(account_store, account_id, event_type="tool_call_rejected", reason=error, decision_index=index, decision=_tool_call_audit_payload(call), now=resolved_now))
             continue
         decisions.append(_tool_call_to_llm_decision(call))
+    if len(raw_calls) > PROACTIVE_LLM_MAX_DECISIONS:
+        error = "too_many_tool_calls_truncated"
+        errors.append(error)
+        audit_event_ids.append(
+            _append_proactive_llm_audit_event(
+                account_store,
+                account_id,
+                event_type="tool_agent_truncated",
+                reason=error,
+                payload={"tool_call_count": len(raw_calls)},
+                now=resolved_now,
+            )
+        )
     result = apply_proactive_llm_plan(account_store, account_id, {"schema_version": PROACTIVE_LLM_PLAN_SCHEMA_VERSION, "decisions": decisions}, now=resolved_now)
     if errors:
         return ProactiveLLMPlanningResult(
