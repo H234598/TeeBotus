@@ -2730,6 +2730,24 @@ Restart nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Applet-Health-bei-Runtime-Timeouts-nicht-leer-werfen
+
+- 2026-07-17: `TeeBotus.cinnamon_applet._run()` verwarf bei einem Timeout alle
+  bereits gelesenen stdout-Diagnosen. Der Applet-Header bekam dadurch nur ein
+  leeres/defektes Health-Payload, obwohl Runtime-Sektionen schon ausgegeben
+  waren.
+- Timeout-Ausgaben werden jetzt weiterhin redigiert und begrenzt erhalten.
+  Returncode 124 bleibt bewusst kritisch; nur Diagnoseverlust ist behoben.
+- Regression: fokussierter Timeout-/Payload-Check -> `3 passed`; kompletter
+  `tests/test_cinnamon_applet.py`-Lauf -> `239 passed`; echter 7-Sekunden-
+  Timeout behielt Runtime-Sektionen und redigierte Secrets. Kein Provider/API-
+  Aufruf.
+- Code-Commit: `279ed74c fix: preserve partial applet diagnostics on timeout`.
+
+**Aktueller Laufstand:** Seit dem Restart `7/20` Commits. Dieser Plan-Commit
+zaehlt mit: `8/20`. Kein Push. Restart nach 12 weiteren Commits. Naechster
+Push bleibt erst bei 100 Commits.
+
 ### PostgreSQL-Memory-Schema-vor-Initialisierung-validieren
 
 - 2026-07-17: `_ensure_schema_locked()` markierte PostgreSQL als initialisiert,
