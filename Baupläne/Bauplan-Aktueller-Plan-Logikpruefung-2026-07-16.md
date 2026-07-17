@@ -2838,6 +2838,23 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart jetzt. Naechster Push bleibt erst bei 100
 Commits.
 
+### Unverschluesselte-Account-Text-Reads-ueber-stabile-Datei-FDs
+
+- 2026-07-17: `read_account_text()` las Account-Notizen nach Account-/Datei-
+  Validierung wieder per `Path.read_text()`. Ein Parent-Swap konnte dadurch
+  fremde Notizen in Profil-, Versions- oder Botkontext bringen.
+- Der Read nutzt jetzt denselben stabilen Parent-/Datei-FD wie verschluesselte
+  Vault-Reads; regulaere Single-Link-Datei und UTF-8-Dekodierung bleiben
+  erhalten. Fehlende Notiz bleibt leerer Default.
+- Regression: Account-Text-Parent-Swap -> `4 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `300 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `47c89419 fix: read account text through stable descriptors`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
