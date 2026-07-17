@@ -7907,3 +7907,18 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `17/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### History-Dispatcher-Callback-Spool: Event-IDs nicht ueberschreiben
+
+- 2026-07-17: `CallbackSpool.enqueue()` ersetzte vorhandene JSON-Dateien mit
+  derselben Event-ID. Ein Retry oder ein fehlerhaft wiederverwendeter
+  Event-Key konnte dadurch den urspruenglichen Payload verlieren.
+- Spool-Enqueue ist jetzt atomar und nicht-ueberschreibend: identischer
+  Payload ist idempotent, ein widerspruechlicher Payload wird mit Fehler
+  abgelehnt. Temporardateien bleiben bei einem Abbruch unschaedlich.
+- Test: `tests/test_history_dispatcher_bridge.py` -> `7 passed`; Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0274c374 fix: preserve conflicting dispatcher spool events`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `18/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
