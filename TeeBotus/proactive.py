@@ -562,7 +562,9 @@ async def run_proactive_agent_cycle(
     if llm_plan and tool_plan:
         raise ValueError("llm_plan and tool_plan are mutually exclusive")
     resolved_now = now or datetime.now(timezone.utc)
-    selected = tuple(str(name or "").strip() for name in selected_instances if str(name or "").strip())
+    selected = tuple(
+        dict.fromkeys(str(name or "").strip() for name in selected_instances if str(name or "").strip())
+    )
     resolved_store_factory = store_factory or AccountStore
     instances: list[dict[str, Any]] = []
     for instance_dir in _instance_dirs(instances_dir, selected):

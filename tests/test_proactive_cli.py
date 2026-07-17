@@ -905,6 +905,35 @@ def test_proactive_cycle_does_not_hide_store_account_discovery_errors(tmp_path) 
     assert report["instances"][1]["accounts"] == []
 
 
+def test_proactive_cycle_deduplicates_selected_instances(tmp_path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    accounts_dir = instance_dir / "data" / "accounts"
+    accounts_dir.mkdir(parents=True)
+    calls = []
+
+    class EmptyStore:
+        def __init__(self):
+            self.accounts_dir = accounts_dir / "accounts"
+
+    def factory(_root, instance_name):
+        calls.append(instance_name)
+        return EmptyStore()
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot", "Depressionsbot"),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+            store_factory=factory,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert report["ok"] is True
+    assert [instance["instance"] for instance in report["instances"]] == ["Depressionsbot"]
+    assert calls == ["Depressionsbot"]
+
+
 def test_proactive_cycle_can_run_local_planner_before_due_selection(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)
