@@ -1184,6 +1184,35 @@ def fail_invalid_retry_at_proactive_outbox_items(account_store: AccountStore, ac
     return _fail_invalid_proactive_outbox_datetime_items(account_store, account_id, field_name="retry_at", now=now)
 
 
+def fail_invalid_recurrence_proactive_outbox_items(account_store: AccountStore, account_id: str, *, now: datetime | None = None) -> tuple[str, ...]:
+    with _account_proactive_outbox_lock(account_store, account_id):
+        rows = account_store.read_proactive_outbox(account_id)
+        failed_ids: list[str] = []
+        timestamp = _resolve_proactive_now(now).isoformat(timespec="seconds")
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("status") or "queued").strip().casefold() != "queued":
+                continue
+            recurrence = str(item.get("recurrence") or "").strip()
+            if not recurrence or _normalize_recurrence_rule(recurrence):
+                continue
+            item_id = str(item.get("id") or "").strip()
+            if not item_id:
+                continue
+            item["status"] = "failed"
+            item["updated_at"] = timestamp
+            history = item.setdefault("status_history", [])
+            if not isinstance(history, list):
+                history = []
+                item["status_history"] = history
+            history.append({"at": timestamp, "status": "failed", "reason": "invalid_recurrence"})
+            failed_ids.append(item_id)
+        if failed_ids:
+            account_store.write_proactive_outbox(account_id, rows)
+        return tuple(failed_ids)
+
+
 def _fail_invalid_proactive_outbox_datetime_items(
     account_store: AccountStore,
     account_id: str,
@@ -1488,11 +1517,14 @@ async def dispatch_due_proactive_outbox_items(
     expire_stale_proactive_outbox_items(account_store, account_id, now=resolved_now)
     invalid_due_item_ids = fail_invalid_due_proactive_outbox_items(account_store, account_id, now=resolved_now)
     invalid_retry_item_ids = fail_invalid_retry_at_proactive_outbox_items(account_store, account_id, now=resolved_now)
+    invalid_recurrence_item_ids = fail_invalid_recurrence_proactive_outbox_items(account_store, account_id, now=resolved_now)
     results: list[ProactiveDispatchResult] = []
     for item_id in invalid_due_item_ids:
         results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_due_at"))
     for item_id in invalid_retry_item_ids:
         results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_retry_at"))
+    for item_id in invalid_recurrence_item_ids:
+        results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_recurrence"))
     for item in due_proactive_outbox_items(account_store, account_id, now=resolved_now):
         item_id = str(item.get("id") or "").strip()
         if not item_id:
@@ -2001,6 +2033,9 @@ def check_proactive_agent_account(
         retry_at = str(item.get("retry_at") or "").strip()
         if retry_at and _parse_proactive_datetime(retry_at) is None:
             errors.append(f"outbox item {item_id or index} has invalid retry_at")
+        recurrence = str(item.get("recurrence") or "").strip()
+        if recurrence and not _normalize_recurrence_rule(recurrence):
+            errors.append(f"outbox item {item_id or index} has invalid recurrence")
         route = item.get("route")
         if status in {"queued", "review_pending"}:
             if not isinstance(route, dict):
