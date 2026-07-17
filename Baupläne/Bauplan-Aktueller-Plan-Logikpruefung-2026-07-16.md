@@ -6371,6 +6371,24 @@ bleibt erst bei 100 Commits.
 `5/20` Commits. Kein Push. Restart nach 15 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Human-Review meldet Persistenzfehler
+
+- 2026-07-17: Approve/Reject mutierten Review-Items im Speicher und liessen
+  `write_proactive_outbox`-Ausnahmen ungefangen. Ein Fehler konnte damit den
+  Aufrufer werfen lassen, obwohl keine Review-Entscheidung bestaetigt werden
+  durfte.
+- Beide Pfade liefern bei fehlender Persistenz jetzt
+  `status_update_failed`; das gespeicherte Item bleibt `review_pending` und
+  wird nicht als approved oder rejected gemeldet.
+- Test: `tests/test_proactive_agent.py` `190 passed`; Regressionen fuer
+  Approve und Reject bei Write-Ausfall; Ruff und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `80c98283 fix: report proactive review persistence failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Admin-Status kapselt Route-Backendfehler
 
 - 2026-07-17: Admin-Statuszeilen sowie Runtime- und Benchmark-Summary-
