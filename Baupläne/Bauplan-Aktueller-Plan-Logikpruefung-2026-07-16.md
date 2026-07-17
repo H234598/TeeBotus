@@ -3702,3 +3702,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `6/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 14 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### SQLite-Memory-Blob-Typen-fail-closed-behandeln
+
+- 2026-07-17: Read-/Guard-Pfade konvertierten Non-BLOB-Werte direkt mit
+  `bytes(...)`. Beschaedigte TEXT-/NULL-Spalten konnten dadurch per `TypeError`
+  aus dem Memorypfad ausbrechen.
+- Payload-Coercion laeuft jetzt zentral ueber `AccountStoreError`; Read, Index,
+  Collection und destruktive Write-Guards behandeln falsche BLOB-Typen als
+  korrupt und schuetzen vor ungeprueftem Weiterarbeiten.
+- Regression: Blob-Korruptionsfokus -> `2 passed`; komplette
+  `tests/test_account_store.py` -> `294 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `01ef5c49 fix: classify malformed sqlite blobs as corrupt`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
