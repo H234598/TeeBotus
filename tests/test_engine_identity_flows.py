@@ -613,6 +613,35 @@ def test_confirmed_channel_unlink_none_result_keeps_pending_flow(tmp_path, monke
     assert engine.state.get_pending_flow("Depressionsbot", account_id, "account_edit")["step"] == "confirm_unlink"
 
 
+def test_account_edit_rotation_survives_pending_cleanup_failure(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    engine.process_identity_flows(event(identity, "/account_edit"))
+    monkeypatch.setattr(engine.state, "pop_pending_flow", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("flow cleanup unavailable")))
+
+    result = engine.process_identity_flows(event(identity, "rotate"))
+
+    assert "Secret:" in result.actions[0].text
+    assert "interne Account-Bearbeitungsstatus" in result.actions[0].text
+
+
+def test_account_edit_unlink_survives_pending_cleanup_failure(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    engine.process_identity_flows(event(identity, "/account_edit"))
+    engine.process_identity_flows(event(identity, "unlink"))
+    monkeypatch.setattr(engine.state, "pop_pending_flow", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("flow cleanup unavailable")))
+
+    result = engine.process_identity_flows(event(identity, "ja"))
+
+    assert "wurde vom Account getrennt" in result.actions[0].text
+    assert account_store.get_account_for_identity(identity) is None
+    assert result.account_id == account_id
+
+
 def test_help_admin_lookup_failure_fails_closed(tmp_path, monkeypatch):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)

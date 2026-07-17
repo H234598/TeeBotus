@@ -860,13 +860,18 @@ class TeeBotusEngine:
                         [SendText(event.chat_id, "Secret konnte gerade nicht rotiert werden. Bitte spaeter erneut versuchen.", track=False)],
                         handled=True,
                     )
-                self.state.pop_pending_flow(
-                    event.instance,
-                    account_id,
-                    "account_edit",
-                    conversation_scope=_pending_flow_conversation_scope(event),
-                )
-                return EngineResult(account_id, [SendText(event.chat_id, self._secret_text(account_id, secret, rotated=True), track=False)], handled=True)
+                secret_text = self._secret_text(account_id, secret, rotated=True)
+                try:
+                    self.state.pop_pending_flow(
+                        event.instance,
+                        account_id,
+                        "account_edit",
+                        conversation_scope=_pending_flow_conversation_scope(event),
+                    )
+                except Exception:  # noqa: BLE001 - post-rotation state cleanup must not hide the new secret.
+                    LOGGER.exception("Account edit rotation flow cleanup failed instance=%s account=%s", event.instance, account_id)
+                    secret_text += "\n\nHinweis: Der interne Account-Bearbeitungsstatus konnte noch nicht zurückgesetzt werden."
+                return EngineResult(account_id, [SendText(event.chat_id, secret_text, track=False)], handled=True)
             return EngineResult(
                 account_id,
                 [SendText(event.chat_id, "Bitte waehle eine Account-Aktion.", track=False, buttons=ACCOUNT_EDIT_BUTTONS)],
@@ -885,12 +890,20 @@ class TeeBotusEngine:
                         [SendText(event.chat_id, "Kommunikationsweg konnte gerade nicht getrennt werden. Bitte spaeter erneut versuchen.", track=False)],
                         handled=True,
                     )
-                self.state.pop_pending_flow(
-                    event.instance,
-                    account_id,
-                    "account_edit",
-                    conversation_scope=_pending_flow_conversation_scope(event),
-                )
+                try:
+                    self.state.pop_pending_flow(
+                        event.instance,
+                        account_id,
+                        "account_edit",
+                        conversation_scope=_pending_flow_conversation_scope(event),
+                    )
+                except Exception:  # noqa: BLE001 - post-unlink state cleanup must not hide completed unlink.
+                    LOGGER.exception("Account edit unlink flow cleanup failed instance=%s account=%s", event.instance, account_id)
+                    return EngineResult(
+                        unlinked_account,
+                        [SendText(event.chat_id, "Dieser Kommunikationsweg wurde vom Account getrennt. Hinweis: Der interne Bearbeitungsstatus konnte noch nicht zurückgesetzt werden.", track=False)],
+                        handled=True,
+                    )
                 return EngineResult(unlinked_account, [SendText(event.chat_id, "Dieser Kommunikationsweg wurde vom Account getrennt.", track=False)], handled=True)
             return EngineResult(
                 account_id,
