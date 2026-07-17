@@ -7839,6 +7839,32 @@ def test_rebuild_structured_account_memory_restores_access_recency(tmp_path):
     assert store.check_structured_memory_index(account_id).ok
 
 
+def test_rebuild_structured_account_memory_orders_access_by_timestamp_instant(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_memory_entries(
+        account_id,
+        [
+            {
+                "id": "mem_early",
+                "user_text": "Frueh",
+                "last_accessed_at": "2026-07-17T10:00:00+02:00",
+                "access_count": 1,
+            },
+            {
+                "id": "mem_late",
+                "user_text": "Spaet",
+                "last_accessed_at": "2026-07-17T09:30:00+00:00",
+                "access_count": 1,
+            },
+        ],
+    )
+
+    store.rebuild_structured_memory_index(account_id)
+
+    assert store.read_memory_index(account_id)["index"]["accessed_ids"] == ["mem_early", "mem_late"]
+
+
 def test_mark_structured_account_memory_accessed_deduplicates_requested_ids(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

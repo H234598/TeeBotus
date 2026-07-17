@@ -7843,3 +7843,16 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `13/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Access-Recency: Zeitzonen korrekt vergleichen
+
+- 2026-07-17: `_rebuild_account_memory_accessed_ids()` vergleicht
+  `last_accessed_at` jetzt als UTC-normalisierte Datetimes. ISO-Strings mit
+  unterschiedlichen Offsets werden dadurch nach ihrem tatsaechlichen
+  Zeitpunkt sortiert, nicht nach lokaler Textdarstellung.
+- Test: Access-Recency-Suite `3 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: folgt direkt.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `14/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.

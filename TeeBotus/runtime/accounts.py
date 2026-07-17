@@ -5993,7 +5993,7 @@ def _rebuild_account_memory_accessed_ids(rows: list[dict[str, Any]], existing_ac
         for index, memory_id in enumerate(existing_accessed_ids)
         if str(memory_id or "").strip()
     }
-    candidates: list[tuple[str, int, int, str]] = []
+    candidates: list[tuple[datetime, int, int, str]] = []
     seen: set[str] = set()
     for row_index, row in enumerate(rows):
         if not isinstance(row, dict):
@@ -6009,7 +6009,8 @@ def _rebuild_account_memory_accessed_ids(rows: list[dict[str, Any]], existing_ac
             continue
         seen.add(memory_id)
         tie_breaker = existing_order.get(memory_id, len(existing_order) + row_index)
-        candidates.append((last_accessed_at, access_count, tie_breaker, memory_id))
+        parsed_timestamp = _parse_state_timestamp(last_accessed_at) or datetime.min.replace(tzinfo=timezone.utc)
+        candidates.append((parsed_timestamp, access_count, tie_breaker, memory_id))
     candidates.sort(key=lambda item: (item[0], item[1], item[2]))
     return [memory_id for *_unused, memory_id in candidates[-ACCOUNT_MEMORY_RECENT_LIMIT:]]
 
