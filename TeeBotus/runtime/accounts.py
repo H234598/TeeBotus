@@ -1044,6 +1044,32 @@ def _read_stable_account_file(path: Path, *, label: str) -> bytes:
             os.close(parent_descriptor)
 
 
+def _remove_stable_directory_tree(parent_descriptor: int, name: str, *, label: str) -> None:
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0)
+    child_descriptor = os.open(name, flags, dir_fd=parent_descriptor)
+    try:
+        with os.scandir(child_descriptor) as entries:
+            for entry in entries:
+                child_name = entry.name
+                try:
+                    child_stat = entry.stat(follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+                if stat.S_ISDIR(child_stat.st_mode):
+                    _remove_stable_directory_tree(child_descriptor, child_name, label=label)
+                    try:
+                        os.rmdir(child_name, dir_fd=child_descriptor)
+                    except FileNotFoundError:
+                        pass
+                else:
+                    try:
+                        os.unlink(child_name, dir_fd=child_descriptor)
+                    except FileNotFoundError:
+                        pass
+    finally:
+        os.close(child_descriptor)
+
+
 def _safe_rooted_path(path: Path, *, allowed_roots: Iterable[Path], operation: str = "file access") -> Path:
     if not path:
         raise AccountStoreError(f"{operation} path is not safe: {path}")
@@ -5004,15 +5030,42 @@ class AccountStore:
         _atomic_write_text(target, target_text.rstrip() + addition)
 
     def _delete_dir_contents_except(self, path: Path, keep: set[str]) -> None:
-        if not path.exists():
+        path = _safe_rooted_path(
+            path,
+            allowed_roots=(self.root, self.root.parent),
+            operation="account directory cleanup",
+        )
+        directory_descriptor: int | None = None
+        try:
+            directory_descriptor = _open_stable_directory_descriptor(path, label="account directory cleanup")
+            with os.scandir(directory_descriptor) as entries:
+                for entry in entries:
+                    if entry.name in keep:
+                        continue
+                    try:
+                        child_stat = entry.stat(follow_symlinks=False)
+                    except FileNotFoundError:
+                        continue
+                    if stat.S_ISDIR(child_stat.st_mode):
+                        _remove_stable_directory_tree(directory_descriptor, entry.name, label="account directory cleanup")
+                        try:
+                            os.rmdir(entry.name, dir_fd=directory_descriptor)
+                        except FileNotFoundError:
+                            pass
+                    else:
+                        try:
+                            os.unlink(entry.name, dir_fd=directory_descriptor)
+                        except FileNotFoundError:
+                            pass
+        except FileNotFoundError:
             return
-        for child in path.iterdir():
-            if child.name in keep:
-                continue
-            if child.is_dir():
-                shutil.rmtree(child)
-            else:
-                child.unlink(missing_ok=True)
+        except AccountStoreError:
+            raise
+        except OSError as exc:
+            raise AccountStoreError(f"could not clean account directory: {path}") from exc
+        finally:
+            if directory_descriptor is not None:
+                os.close(directory_descriptor)
 
 
 def _looks_like_teebotus_encrypted_payload(

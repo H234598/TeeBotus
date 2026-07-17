@@ -3248,6 +3248,42 @@ def test_plain_legacy_reads_keep_stable_parent_when_path_is_swapped(
         assert reader(target) == expected
 
 
+def test_account_directory_cleanup_keeps_stable_parent_when_path_is_swapped(tmp_path, monkeypatch):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    account_dir = store.account_dir(account_id)
+    payload = account_dir / "stale.json"
+    payload.write_text("stale", encoding="utf-8")
+    outside = tmp_path / "outside-account-cleanup"
+    outside.mkdir()
+    outside_payload = outside / payload.name
+    outside_payload.write_text("must survive", encoding="utf-8")
+    moved_account_dir = tmp_path / "account-cleanup-moved"
+
+    real_os_unlink = os.unlink
+    real_path_unlink = Path.unlink
+
+    def swap_parent_on_stable_unlink(name, *args, dir_fd=None, **kwargs):
+        if name == payload.name and dir_fd is not None and account_dir.exists():
+            account_dir.rename(moved_account_dir)
+            account_dir.symlink_to(outside, target_is_directory=True)
+        return real_os_unlink(name, *args, dir_fd=dir_fd, **kwargs)
+
+    def swap_parent_on_path_unlink(candidate, *args, **kwargs):
+        if candidate == payload and account_dir.exists():
+            account_dir.rename(moved_account_dir)
+            account_dir.symlink_to(outside, target_is_directory=True)
+        return real_path_unlink(candidate, *args, **kwargs)
+
+    monkeypatch.setattr(os, "unlink", swap_parent_on_stable_unlink)
+    monkeypatch.setattr(Path, "unlink", swap_parent_on_path_unlink)
+
+    store._delete_dir_contents_except(account_dir, set())
+
+    assert not (moved_account_dir / payload.name).exists()
+    assert outside_payload.read_text(encoding="utf-8") == "must survive"
+
+
 def test_account_json_document_falls_back_on_sql_diagnostics(tmp_path):
     class CorruptReadCollectionBackend:
         last_collection_read_error = "payload could not be decrypted"
