@@ -7087,6 +7087,23 @@ Commits. Kein Push. Restart nach 6 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `15/20` sichtbar.
 
+### WTF-Teilmutation gibt rotiertes Secret aus
+
+- 2026-07-17: WTF rotierte Secret vor Unlink. Bei anschließendem Unlinkfehler
+  wurde nur ein generischer Fehler gemeldet; vertrauenswürdiger Absender konnte
+  neues Secret nicht erhalten.
+- Rotation und Unlink werden getrennt behandelt. Nach erfolgter Rotation wird
+  neues Secret kontrolliert ausgegeben, Verknüpfungsstatus als unklar markiert;
+  Notification bleibt für Retry erhalten. Kein falscher Vollzug.
+- Test: fokussierter WTF-Pfad `8 passed`; Ruff und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `f02d3548 fix: expose rotated secret after WTF partial failure`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `16/20`
+Commits. Kein Push. Restart nach 4 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `17/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
