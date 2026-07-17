@@ -2730,6 +2730,20 @@ Restart nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Applet-Fallback-Positiv-und-Negativfall-fixiert
+
+- 2026-07-17: Der Applet-Fallback-Fix bekam einen expliziten Paar-Test fuer
+  beide Richtungen: blosses `fallback=local` bleibt handlungsrelevant;
+  `effective_status=configured` wird als bestaetigte Ersatzroute informativ.
+- Regression: Positiv-/Negativfall -> `2 passed`; komplette Applet-Suite nach
+  dem eigentlichen Fix -> `240 passed`. Ruff mit bekannten alten `F541`-Warnungen
+  ausgenommen und Diff-Check gruen. Kein Provider/API-Aufruf.
+- Test-Commit: `0673f76e test: pin verified decision fallback classification`.
+
+**Aktueller Laufstand:** Seit dem Restart `19/20` Commits. Dieser Plan-Commit
+zaehlt mit: `20/20`. Kein Push. Restart jetzt. Naechster Push bleibt erst bei
+100 Commits.
+
 ### SQLite-Schema-Probe-behandelt-IO-Fehler
 
 - 2026-07-17: Der stabile SQLite-Open-/FD-Guard kann beim Schema-Probeweg
