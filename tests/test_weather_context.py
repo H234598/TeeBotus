@@ -143,7 +143,7 @@ def test_city_memory_append_is_retried_after_transient_failure(tmp_path) -> None
     assert len(memories) == 1
 
 
-def test_city_change_is_persisted_even_when_weather_check_is_rate_limited(tmp_path) -> None:
+def test_city_change_invalidates_weather_cache_and_checks_new_city(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
     calls: list[str] = []
@@ -155,11 +155,12 @@ def test_city_change_is_persisted_even_when_weather_check_is_rate_limited(tmp_pa
     update_city_and_weather_context(account_store, account_id, "Ich wohne in Berlin.", now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc), provider=provider)
     result = update_city_and_weather_context(account_store, account_id, "Ich wohne in Potsdam.", now=datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc), provider=provider)
 
-    assert result.skipped_reason == "rate_limited"
-    assert result.weather_text == ""
+    assert result.checked is True
+    assert result.skipped_reason == ""
+    assert result.weather_text == "Potsdam: 9 C"
     assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "Potsdam"
-    assert weather_context_text(account_store, account_id) == ""
-    assert calls == ["Berlin"]
+    assert "Potsdam: 9 C" in weather_context_text(account_store, account_id)
+    assert calls == ["Berlin", "Potsdam"]
 
 
 def test_city_memory_is_not_duplicated_when_state_write_fails_after_append(tmp_path) -> None:
