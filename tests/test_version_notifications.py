@@ -603,6 +603,56 @@ def test_account_memory_health_redacts_backend_errors(tmp_path: Path, monkeypatc
     assert "sk-<redacted>" in joined or "postgres://" in joined
 
 
+@pytest.mark.parametrize(
+    ("failure", "expected_error"),
+    [
+        ("profile", "profile_unreadable:malformed profile"),
+        ("index", "malformed memory index"),
+    ],
+)
+def test_account_memory_index_health_survives_malformed_account_state(
+    tmp_path: Path,
+    monkeypatch,
+    failure: str,
+    expected_error: str,
+) -> None:
+    account_id = "a" * 128
+    account_dir = tmp_path / "instances" / "Demo" / "data" / "accounts" / "accounts" / account_id
+    account_dir.mkdir(parents=True)
+
+    class FakeStore:
+        account_memory_backend = None
+
+        def __init__(self, *_args, **_kwargs) -> None:
+            pass
+
+        def _read_account_profile(self, _account_id: str) -> dict[str, object]:
+            if failure == "profile":
+                raise ValueError("malformed profile")
+            return {"status": "active"}
+
+        def check_structured_memory_index(
+            self,
+            _account_id: str,
+            *,
+            require_resolvable: bool = True,
+            read_only: bool = False,
+        ) -> object:
+            if failure == "index":
+                raise ValueError("malformed memory index")
+            return SimpleNamespace(ok=True, errors=())
+
+    monkeypatch.delenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", raising=False)
+    monkeypatch.setattr("TeeBotus.core.status.AccountStore", FakeStore)
+
+    lines = account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert lines == [
+        f"account_memory=Demo/{account_id} status=broken error={expected_error}",
+        f'account_memory_recovery=Demo status=needed command="python3 -m TeeBotus.admin memory-recovery --instances-dir {tmp_path / "instances"} --instances Demo"',
+    ]
+
+
 def test_account_secret_health_reports_missing_required_memory_secret(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
     store = _store(tmp_path)

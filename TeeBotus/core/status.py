@@ -1899,7 +1899,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
     memory_backend_initialization_warning = _status_memory_backend_initialization_warning(root)
     try:
         account_dirs = _account_memory_account_dirs(root / ACCOUNTS_DIRNAME)
-    except (AccountStoreError, OSError) as exc:
+    except (AccountStoreError, OSError, ValueError) as exc:
         error = redact_status_text(f"{type(exc).__name__}: {exc}")
         return [
             f"account_memory={safe_instance_name} status=broken error=account_directories_unreadable:{error}",
@@ -1955,10 +1955,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
         require_resolvable = not profile_error
         try:
             store._read_account_profile(account_id)
-        except AccountStoreError as exc:
-            profile_error = f"profile_unreadable:{redact_status_text(exc)}"
-            has_broken_metadata = True
-        except OSError as exc:
+        except (AccountStoreError, OSError, ValueError) as exc:
             profile_error = f"profile_unreadable:{redact_status_text(exc)}"
             has_broken_metadata = True
         try:
@@ -1968,14 +1965,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
                     require_resolvable=require_resolvable and not profile_error,
                     read_only=True,
                 )
-        except AccountStoreError as exc:
-            lines.append(
-                f"account_memory={safe_instance_name}/{account_id} status=broken "
-                f"error={redact_status_text(exc)}"
-            )
-            has_broken_memory = True
-            continue
-        except OSError as exc:
+        except (AccountStoreError, OSError, ValueError) as exc:
             lines.append(
                 f"account_memory={safe_instance_name}/{account_id} status=broken "
                 f"error={redact_status_text(exc)}"
