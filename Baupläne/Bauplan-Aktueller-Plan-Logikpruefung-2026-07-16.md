@@ -2730,6 +2730,21 @@ Restart nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### History-Dispatcher-Spool-Invaliddateien-duerfen-Batch-nicht-blockieren
+
+- 2026-07-17: `CallbackSpool.events()` begrenzte vor dem Parsen auf die ersten
+  100 Dateinamen. 100 defekte oder uebergrosse JSON-Dateien konnten dadurch
+  gueltige Events hinter ihnen dauerhaft aus dem aktuellen Flush ausschliessen.
+- Das Limit gilt jetzt nur fuer erfolgreich gelesene Dict-Events; ungueltige,
+  Symlink- oder Nicht-Datei-Eintraege verbrauchen keinen Batchplatz.
+- Regression: `tests/test_history_dispatcher_bridge.py` `6 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `21ed2d25 fix: prevent invalid dispatcher spool starvation`.
+
+**Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Codex-History-Scan-Limit-im-Eventpfad
 
 - 2026-07-17: Der Watchdog-/Eventpfad importierte bei einem Event-Burst alle
