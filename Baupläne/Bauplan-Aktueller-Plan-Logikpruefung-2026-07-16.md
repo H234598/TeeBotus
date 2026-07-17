@@ -5269,6 +5269,23 @@ bleibt erst bei 100 Commits.
 `14/20` Commits. Kein Push. Restart nach 6 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Sendefehler reportieren fehlgeschlagene Statuspersistenz
+
+- 2026-07-17: Nach einem Senderfehler wurden Retry-/Fail-Statusupdates nicht
+  ausgewertet. Bei fehlgeschlagener Persistenz meldete der Dispatcher trotzdem
+  `send_error`, obwohl das Item real weiter `dispatching` blieb.
+- Beide Fehlerzweige pruefen jetzt das Ergebnis und fangen Persistenzfehler
+  strukturiert ab. Ergebnisgrund ist dann `status_update_failed`; Lease-Recovery
+  kann den realen Outbox-Zustand spaeter uebernehmen.
+- Test: `tests/test_proactive_agent.py` `169 passed`; Persistenz-Fokus `3
+  passed`; Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-
+  Aufruf.
+- Code-Commit: `eddecdef fix: report proactive status persistence failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`16/20` Commits. Kein Push. Restart nach 4 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Consentzustand fail-closed bei korruptem enabled-State
 
 - 2026-07-17: Ein inkonsistenter Agent-State mit `enabled=true`, aber leerem
