@@ -7890,3 +7890,20 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `16/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Working-Memory: Prozessuebergreifende Schreibzugriffe serialisieren
+
+- 2026-07-17: `WorkingMemoryStore` nutzte nur einen prozesslokalen
+  `threading.RLock`. Telegram, Signal und Matrix konnten denselben
+  JSONL-/Indexbestand aus getrennten Prozessen gleichzeitig schreiben; dabei
+  waren doppelte Offsets, verlorene Indexzeilen und stale Projektionen moeglich.
+- Jede `ensure`, `prepare` und `append_manual`-Operation haelt jetzt neben dem
+  Thread-Lock eine POSIX-Dateisperre. Der alte Telegram-Kompatibilitaetspfad
+  nutzt dieselbe Sperrlogik.
+- Test: `tests/test_working_memory.py` -> `44 passed`, inklusive echtem
+  separatem Prozess mit nachgewiesenem Writer-Block; Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a8d20df2 fix: serialize working memory across processes`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `17/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
