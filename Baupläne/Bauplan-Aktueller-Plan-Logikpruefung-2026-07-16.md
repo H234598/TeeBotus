@@ -5070,3 +5070,18 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `9/20` Commits. Kein Push. Restart nach 11 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-und-Fallback-Status-faengt-ValueError
+
+- 2026-07-17: Proactive-State und Memory-Fallback-Backend konnten bei
+  malformed Daten/Konfigurationen `ValueError` bis aus dem `/status`-Collector
+  laufen lassen.
+- Beide Stellen melden jetzt den bestehenden strukturierten Lesefehler und
+  lassen den restlichen Status weiterlaufen.
+- Tests: fokussierter Proactive-/Fallback-Status `5 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7e2153b2 fix: keep proactive status diagnostic on value errors`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`11/20` Commits. Kein Push. Restart nach 9 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
