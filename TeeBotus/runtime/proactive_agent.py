@@ -917,8 +917,10 @@ def extract_proactive_agent_tool_calls(response: Any) -> tuple[ProactiveAgentToo
     raw_calls = getattr(response, "tool_calls", None)
     if raw_calls is None and isinstance(response, Mapping):
         raw_calls = response.get("tool_calls")
-    if raw_calls is None:
-        raw_calls = _response_output_tool_calls(response)
+    if raw_calls is None or (isinstance(raw_calls, (list, tuple)) and not raw_calls):
+        output_calls = _response_output_tool_calls(response)
+        if output_calls is not None:
+            raw_calls = output_calls
     calls: list[ProactiveAgentToolCall | Mapping[str, Any]] = []
     if not isinstance(raw_calls, IterableABC) or isinstance(raw_calls, (str, bytes, Mapping)):
         return ()
