@@ -4763,6 +4763,88 @@ def test_dispatch_cancels_item_when_route_changes_after_claim(tmp_path, monkeypa
     assert item["status_history"][-1]["reason"] == "stale_route_after_claim"
 
 
+def test_dispatch_defers_when_route_check_fails_before_claim(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="route-check-before-claim")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="route_check_before_claim",
+        message_text="Nicht senden",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    monkeypatch.setattr(
+        "TeeBotus.runtime.proactive_agent._account_has_matching_proactive_route",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("backend unavailable")),
+    )
+    sent: list[bool] = []
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda *_args: sent.append(True) or "must-not-send"},
+            now=now,
+        )
+    )
+
+    assert results[0].item_id == queued.reason.removeprefix("queued:")
+    assert results[0].status == "queued"
+    assert results[0].reason == "route_check_unavailable"
+    assert sent == []
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "queued"
+
+
+def test_dispatch_fails_item_when_route_check_fails_after_claim(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="route-check-after-claim")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="route_check_after_claim",
+        message_text="Nicht senden",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    calls = 0
+
+    def route_check(*_args):
+        nonlocal calls
+        calls += 1
+        if calls >= 3:
+            raise RuntimeError("backend unavailable")
+        return True
+
+    monkeypatch.setattr("TeeBotus.runtime.proactive_agent._account_has_matching_proactive_route", route_check)
+    sent: list[bool] = []
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda *_args: sent.append(True) or "must-not-send"},
+            now=now,
+        )
+    )
+
+    assert results[0].item_id == queued.reason.removeprefix("queued:")
+    assert results[0].status == "failed"
+    assert results[0].reason == "route_check_unavailable"
+    assert sent == []
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "failed"
+
+
 def test_dispatch_uses_fresh_implicit_route_returned_by_claim(tmp_path, monkeypatch) -> None:
     import TeeBotus.runtime.proactive_agent as proactive_module
 

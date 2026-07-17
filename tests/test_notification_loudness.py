@@ -807,7 +807,7 @@ def test_dispatch_fails_loudness_item_when_post_claim_state_is_unavailable(tmp_p
         nonlocal calls
         calls += 1
         if calls >= 3:
-            raise AccountStoreError("notification loudness state unavailable")
+            raise RuntimeError("notification loudness state unavailable")
         return True
 
     monkeypatch.setattr(proactive_agent, "notification_loudness_outbox_item_is_active", flaky_loudness_state)

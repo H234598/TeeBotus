@@ -74,6 +74,7 @@ PROACTIVE_TRANSIENT_POLICY_REASONS = frozenset(
         "outside_adaptive_contact_window",
         "activity_profile_insufficient",
         "no_private_route",
+        "route_check_unavailable",
         "notification_loudness_state_unavailable",
     }
 )
@@ -1127,12 +1128,16 @@ def proactive_policy_decision(
         route = _normalize_proactive_route(_item_route(item or {}))
         if route is None:
             return ProactiveDecision(False, "invalid_route")
-        if not _account_has_matching_proactive_route(account_store, account_id, route):
+        try:
+            route_matches = _account_has_matching_proactive_route(account_store, account_id, route)
+        except Exception:  # noqa: BLE001 - route backend failures must defer dispatch.
+            return ProactiveDecision(False, "route_check_unavailable", route)
+        if not route_matches:
             return ProactiveDecision(False, "stale_route")
         try:
             if not notification_loudness_outbox_item_is_active(account_store, account_id, item or {}):
                 return ProactiveDecision(False, "notification_loudness_decided", route)
-        except (AccountStoreError, OSError, ValueError):
+        except Exception:  # noqa: BLE001 - state backend failures must defer dispatch.
             return ProactiveDecision(False, "notification_loudness_state_unavailable", route)
         return ProactiveDecision(True, "system_allowed", route)
     state = _normalized_agent_state(account_store.read_agent_state(account_id))
@@ -1153,7 +1158,11 @@ def proactive_policy_decision(
         route = _normalize_proactive_route(item.get("route"))
         if route is None:
             return ProactiveDecision(False, "invalid_route")
-        if not _account_has_matching_proactive_route(account_store, account_id, route):
+        try:
+            route_matches = _account_has_matching_proactive_route(account_store, account_id, route)
+        except Exception:  # noqa: BLE001 - route backend failures must defer dispatch.
+            return ProactiveDecision(False, "route_check_unavailable", route)
+        if not route_matches:
             return ProactiveDecision(False, "stale_route")
     else:
         route = select_proactive_route(account_store, account_id)
@@ -1869,7 +1878,27 @@ async def dispatch_due_proactive_outbox_items(
                 )
                 results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_file", channel))
                 continue
-        if not _account_has_matching_proactive_route(account_store, account_id, route):
+        try:
+            route_matches = _account_has_matching_proactive_route(account_store, account_id, route)
+        except Exception:  # noqa: BLE001 - route backend failures must not abort dispatch.
+            LOGGER.exception("Proactive route check failed after claim account=%s item=%s", account_id, item_id)
+            try:
+                failed_updated = update_proactive_outbox_item_status(
+                    account_store,
+                    account_id,
+                    item_id,
+                    status="failed",
+                    reason="route_check_unavailable",
+                    now=resolved_now,
+                    expected_status="dispatching",
+                )
+            except Exception:  # pragma: no cover - concrete storage failures vary by backend.
+                LOGGER.exception("Proactive route-check failure persistence failed account=%s item=%s", account_id, item_id)
+                failed_updated = False
+            result_reason = "route_check_unavailable" if failed_updated else "status_update_failed"
+            results.append(ProactiveDispatchResult(account_id, item_id, "failed", result_reason, channel))
+            continue
+        if not route_matches:
             update_proactive_outbox_item_status(
                 account_store,
                 account_id,
@@ -1884,7 +1913,7 @@ async def dispatch_due_proactive_outbox_items(
         if is_notification_loudness_outbox_item(item):
             try:
                 loudness_active = notification_loudness_outbox_item_is_active(account_store, account_id, item)
-            except (AccountStoreError, OSError, ValueError):
+            except Exception:  # noqa: BLE001 - state backend failures must fail closed.
                 update_proactive_outbox_item_status(
                     account_store,
                     account_id,
