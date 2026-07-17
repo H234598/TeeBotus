@@ -38,6 +38,7 @@ from TeeBotus.core.status import (
     _sequence_status_attr,
     _status_bool,
     _account_metadata_health_lines,
+    _account_memory_fallback_warning,
 )
 from TeeBotus.runtime.accounts import (
     ACCOUNT_KEYRING_FILENAME,
@@ -486,6 +487,35 @@ def test_proactive_status_parses_string_booleans_safely() -> None:
     assert "- Agent enabled: nein" in lines
     assert "- Agent paused: ja" in lines
     assert _status_bool("0", default=True) is False
+
+
+def test_proactive_status_survives_malformed_state() -> None:
+    class Store:
+        def read_agent_state(self, _account_id: str) -> dict[str, object]:
+            raise ValueError("malformed proactive state")
+
+    lines = _proactive_agent_status_lines(
+        account_store=Store(),
+        account_id="account",
+        instance_name="Demo",
+        proactive_model_planner="",
+        env={},
+    )
+
+    assert "- Agent enabled: Fehler beim Lesen" in lines
+    assert "- Outbox queued: Fehler beim Lesen" in lines
+
+
+@pytest.mark.parametrize("error", [AccountStoreError("backend unavailable"), ValueError("malformed backend")])
+def test_memory_fallback_status_survives_backend_value_errors(error: Exception) -> None:
+    class FailingStore:
+        @property
+        def account_memory_backend(self):
+            raise error
+
+    warning = _account_memory_fallback_warning(FailingStore(), "account")
+
+    assert warning == f" warning=memory_backend_unavailable:{error}"
 
 
 def test_account_secret_health_uses_normalized_instance_name(tmp_path: Path) -> None:

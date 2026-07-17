@@ -1694,7 +1694,7 @@ def _proactive_agent_status_lines(
     try:
         state = account_store.read_agent_state(account_id)
         outbox = account_store.read_proactive_outbox(account_id)
-    except (AccountStoreError, OSError):
+    except (AccountStoreError, OSError, ValueError):
         LOGGER.exception("Failed to read proactive agent status.")
         return [
             "Proactive Agent",
@@ -2173,7 +2173,7 @@ def _account_metadata_broken_line(*, instance_name: str, kind: str, path: Path, 
 def _account_memory_fallback_warning(store: AccountStore, account_id: str) -> str:
     try:
         backend = store.account_memory_backend
-    except (AccountStoreError, OSError) as exc:
+    except (AccountStoreError, OSError, ValueError) as exc:
         LOGGER.exception("Failed to resolve account memory backend fallback status.")
         detail = redact_status_text(exc)
         suffix = f":{detail}" if detail else ""
