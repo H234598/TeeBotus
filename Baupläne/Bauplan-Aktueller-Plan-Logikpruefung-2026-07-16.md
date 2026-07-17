@@ -2855,6 +2855,24 @@ Commits.
 zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Keyring-Manifest-Read-ueber-stabile-Datei-FDs
+
+- 2026-07-17: `_KeyringManifestSecretProvider._load_manifest()` las das
+  Secret-Verifier-Manifest nach keiner stabilen Parent-Pruefung per Pfad.
+  Ein Verzeichnis-Swap konnte dadurch fremde Instance-/Purpose-Daten in
+  Secret-Service-Guards einbringen.
+- Manifest-Parent und regulare Single-Link-Zieldatei werden jetzt ueber
+  `O_NOFOLLOW`-FD geoeffnet; JSON-/UTF-8-Fehler bleiben als invalides Manifest
+  fail-closed klassifiziert.
+- Regression: Keyring-Manifest-Parent-Swap -> `5 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `301 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a0065220 fix: read keyring manifests through stable descriptors`.
+
+**Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
