@@ -1410,6 +1410,22 @@ def test_proactive_role_llm_client_uses_text_reply_as_tool_plan_fallback() -> No
     assert response["output"][0]["content"][0]["text"] == '{"schema_version":1,"decisions":[]}'
 
 
+def test_proactive_role_llm_client_reads_mapping_text_reply_as_tool_plan_fallback() -> None:
+    class MappingTextClient:
+        provider = "litellm"
+        model = "groq/test"
+
+        def create_reply(self, _user_text, _instructions, _previous_response_id=None):
+            return {"text": '{"schema_version":1,"decisions":[]}'}
+
+    client = ProactiveRoleLLMClient(MappingTextClient(), role="worker", channel="proactive_worker")
+
+    response = client.create_tool_calls("Prompt", "instructions", [{"name": "proactive_noop"}])
+
+    assert response["text"] == '{"schema_version":1,"decisions":[]}'
+    assert response["output"][0]["content"][0]["text"] == '{"schema_version":1,"decisions":[]}'
+
+
 def test_runtime_llm_planner_factory_uses_proactive_plan_key_and_instance_instructions(tmp_path, monkeypatch) -> None:
     instances_dir = tmp_path / "instances"
     instance_dir = instances_dir / "Depressionsbot"

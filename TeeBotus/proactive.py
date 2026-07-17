@@ -35,6 +35,7 @@ from TeeBotus.runtime.proactive_agent import (
     run_proactive_tool_agent,
     recover_stale_proactive_dispatching_items,
     should_run_proactive_model_planner,
+    _response_output_text,
 )
 
 PROACTIVE_LLM_INSTANCE_LIST_ENV = "TEEBOTUS_PROACTIVE_LLM_PLANNER_INSTANCES"
@@ -303,7 +304,7 @@ class ProactiveRoleLLMClient:
             ]
         )
         response = self.create_reply(prompt, instructions, previous_response_id)
-        text = str(getattr(response, "text", response) or "").strip()
+        text = _response_output_text(response)
         return {"text": text, "output": [{"type": "message", "content": [{"type": "output_text", "text": text}]}]}
 
 
