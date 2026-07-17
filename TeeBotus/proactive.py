@@ -580,7 +580,12 @@ async def run_proactive_agent_cycle(
             instance_report["skipped_reason"] = "instance_not_enabled"
             instances.append(instance_report)
             continue
-        store = resolved_store_factory(instance_dir / "data" / "accounts", instance_dir.name)
+        try:
+            store = resolved_store_factory(instance_dir / "data" / "accounts", instance_dir.name)
+        except (AccountStoreError, OSError, ValueError) as exc:
+            instance_report["error"] = f"{type(exc).__name__}: {exc}"
+            instances.append(instance_report)
+            continue
         for account_id in _account_ids(store):
             account_report: dict[str, Any] = {"account_id": account_id, "due_items": []}
             try:

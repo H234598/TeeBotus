@@ -807,6 +807,36 @@ def test_proactive_cycle_reports_account_store_errors_without_crashing(tmp_path)
     assert "AccountStoreError: boom" in account["error"]
 
 
+def test_proactive_cycle_isolates_account_store_errors_per_instance(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    broken_dir = instances_dir / "BrokenInstance" / "data" / "accounts"
+    healthy_dir = instances_dir / "HealthyInstance" / "data" / "accounts"
+    broken_dir.mkdir(parents=True)
+    healthy_dir.mkdir(parents=True)
+
+    class EmptyStore:
+        accounts_dir = healthy_dir / "accounts"
+
+    def factory(_root, instance_name):
+        if instance_name == "BrokenInstance":
+            raise AccountStoreError("secret service unavailable")
+        return EmptyStore()
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=instances_dir,
+            selected_instances=("BrokenInstance", "HealthyInstance"),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "BrokenInstance,HealthyInstance"},
+            store_factory=factory,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert report["ok"] is False
+    assert report["instances"][0]["error"] == "AccountStoreError: secret service unavailable"
+    assert report["instances"][1]["accounts"] == []
+
+
 def test_proactive_cycle_can_run_local_planner_before_due_selection(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)
