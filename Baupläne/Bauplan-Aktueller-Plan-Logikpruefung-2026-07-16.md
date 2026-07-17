@@ -3369,3 +3369,18 @@ nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `5/20` Commits. Kein Push. Restart
 nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Direkter-Recovery-Report-validiert-Instanznamen
+
+- 2026-07-17: `build_instance_recovery_report()` war direkt aufrufbar und
+  baute `accounts_root` ohne Discovery-Validierung. Ein Pfad-Escape konnte
+  externe Recovery-Quellen scannen.
+- Der Helfer validiert den normalisierten Instanznamen jetzt ueber
+  `discover_instances()`, bevor Recovery-Pfade entstehen.
+- Regression: direkter Recovery-Path-Escape plus Metadata-Fokus -> `2 passed`;
+  komplette `tests/test_admin_accounts.py` -> `94 passed`. Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e8429193 fix: validate direct recovery instance paths`.
+
+**Aktueller Laufstand:** Seit dem Restart `7/20` Commits. Kein Push. Restart
+nach 13 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
