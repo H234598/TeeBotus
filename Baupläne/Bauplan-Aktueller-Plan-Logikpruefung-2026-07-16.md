@@ -5100,3 +5100,18 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `13/20` Commits. Kein Push. Restart nach 7 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Status-Discovery-validiert-DB-Account-IDs
+
+- 2026-07-17: Die SQL-Discovery uebernahm beliebige nichtleere
+  `account_id`-Werte. Malformed Werte konnten in Profilpfade und Statuszeilen
+  gelangen; Proactive-Discovery filterte bereits korrekt.
+- Status-Discovery akzeptiert jetzt nur lowercase 128-Zeichen-SHA-512-IDs.
+  Ungueltige DB-Werte werden verworfen, ohne andere Accounts zu verlieren.
+- Test: Memory-Health-/DB-Discovery-Fokus `22 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `87638b52 fix: validate database memory account ids`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`15/20` Commits. Kein Push. Restart nach 5 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
