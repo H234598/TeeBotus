@@ -5252,6 +5252,23 @@ bleibt erst bei 100 Commits.
 `12/20` Commits. Kein Push. Restart nach 8 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Accountloop reportiert Fabrikfehler strukturiert
+
+- 2026-07-17: Der Account-Loop fing nur bekannte Store-/Value-Fehler. Ein
+  `RuntimeError` aus Sender- oder Tracker-Fabrik konnte den ganzen Scheduler
+  ohne Report abbrechen.
+- Der aeussere Account-Guard faengt jetzt sonstige `Exception`-Fehler ab und
+  schreibt sie als `account.error`. Andere Accounts und der Top-Level-Report
+  bleiben auswertbar; `ok` wird korrekt `false`.
+- Test: `tests/test_proactive_cli.py` `60 passed`; Fabrikfehler-Fokus `3
+  passed`; Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-
+  Aufruf.
+- Code-Commit: `7839244a fix: report proactive factory failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`14/20` Commits. Kein Push. Restart nach 6 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Consentzustand fail-closed bei korruptem enabled-State
 
 - 2026-07-17: Ein inkonsistenter Agent-State mit `enabled=true`, aber leerem
