@@ -6854,6 +6854,24 @@ Commits. Kein Push. Restart nach 14 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `7/20` sichtbar.
 
+### Optionale Kontext-Backends blockieren keine Antwort
+
+- 2026-07-17: Working Memory und Bibliothekar-Kontext fingen nur `OSError`;
+  semantische Account-Memory-Suche fing kein beliebiges Provider-/Adapter-
+  Ergebnis. Unerwartete Backendfehler konnten den Hauptantwortpfad abbrechen.
+- Alle drei optionalen Kontextquellen loggen unerwartete Fehler und fallen auf
+  keinen Zusatzkontext bzw. lokale Memory-Suche zurück. Hauptantwort bleibt
+  erreichbar; Qdrant-/Bibliothekar-Caches bleiben optional.
+- Test: `tests/test_engine_memory_search.py` `5 passed`; Bibliothekar-
+  Kontexttests `6 passed`; Ruff und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `c2735bc5 fix: fail open for optional context backends`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `8/20`
+Commits. Kein Push. Restart nach 12 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `9/20` sichtbar.
+
 ### Login kapselt Rückgabe- und Notificationfehler
 
 - 2026-07-17: Primäres Login vertraute blind auf `result["account_id"]` und
