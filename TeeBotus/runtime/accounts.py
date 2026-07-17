@@ -1026,6 +1026,11 @@ def _open_stable_directory_descriptor(path: Path, *, label: str, create_missing:
             os.close(descriptor)
             descriptor = next_descriptor
         return descriptor
+    except OSError as exc:
+        os.close(descriptor)
+        if exc.errno in {errno.ELOOP, errno.ENOTDIR}:
+            raise AccountStoreError(f"refusing unsafe account memory {label}: {path}") from exc
+        raise
     except BaseException:
         os.close(descriptor)
         raise
@@ -3992,6 +3997,11 @@ class AccountStore:
         parent_descriptor: int | None = None
         try:
             parent_descriptor = _open_stable_directory_descriptor(path.parent, label="migration removal")
+        except FileNotFoundError:
+            return
+        except (AccountStoreError, OSError) as exc:
+            raise AccountStoreError(f"could not remove migrated account file: {path}") from exc
+        try:
             file_stat = os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
             if stat.S_ISLNK(file_stat.st_mode) or not stat.S_ISREG(file_stat.st_mode) or file_stat.st_nlink != 1:
                 raise AccountStoreError(f"refusing unsafe migrated account file removal: {path}")
