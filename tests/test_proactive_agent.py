@@ -2912,6 +2912,31 @@ def test_llm_planner_runner_reads_mapping_text_response(tmp_path) -> None:
     assert account_store.read_proactive_audit(account_id) == []
 
 
+def test_llm_planner_runner_reads_text_when_response_output_is_empty(tmp_path) -> None:
+    class Response:
+        output = []
+        text = '{"schema_version":1,"decisions":[{"action":"none"}]}'
+
+    class Client:
+        def create_reply(self, _prompt, _instructions):
+            return Response()
+
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+
+    result = run_proactive_llm_planner(
+        account_store,
+        account_id,
+        openai_client=Client(),
+        instructions=object(),
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ()
+    assert account_store.read_proactive_audit(account_id) == []
+
+
 def test_disabled_proactive_account_skips_model_planner_before_provider_call(tmp_path) -> None:
     class Client:
         def create_reply(self, *_args):

@@ -2638,7 +2638,12 @@ def _response_output_text(response: Any) -> str:
             text = part.get("text") if isinstance(part, Mapping) else getattr(part, "text", None)
             if isinstance(text, str) and text.strip():
                 parts.append(text.strip())
-    return "\n".join(parts).strip()
+    if parts:
+        return "\n".join(parts).strip()
+    text = getattr(response, "text", None)
+    if text is None and isinstance(response, Mapping):
+        text = response.get("text")
+    return str(text or "").strip()
 
 
 def _normalize_proactive_agent_tool_call(raw_call: Any) -> ProactiveAgentToolCall | None:
