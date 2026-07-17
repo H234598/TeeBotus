@@ -3335,6 +3335,27 @@ class BotTests(unittest.TestCase):
                     (None, True),
                 )
 
+    def test_youtube_learned_options_do_not_override_explicit_values(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            miss_path = Path(directory) / "instances" / "Demo" / "data" / "YouTube_Parser_Misses.jsonl"
+            miss_path.parent.mkdir(parents=True)
+            miss_path.write_text(
+                json.dumps(
+                    {
+                        "formulation": "poste live ja llm nein",
+                        "llm_live_output": True,
+                        "llm_send_to_llm": False,
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {"TELEGRAM_BOT_INSTANCES_DIR": str(Path(directory) / "instances")}, clear=False):
+                self.assertEqual(
+                    _parse_youtube_local_options("poste live nein llm ja", instance_name="Demo"),
+                    (False, True),
+                )
+
     def test_handle_update_youtube_transcript_uses_llm_option_fallback_from_initial_request(self) -> None:
         from TeeBotus.bot import YouTubeTranscriptError
         from TeeBotus.instructions import BotInstructions

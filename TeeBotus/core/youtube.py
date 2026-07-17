@@ -261,8 +261,6 @@ class _InstanceProcessRegistry:
 
 def _parse_youtube_local_options(text: str, instance_name: str = "", instances_dir: Path | None = None) -> tuple[bool | None, bool | None]:
     learned_options = _parse_learned_youtube_local_options(text, instance_name, instances_dir=instances_dir)
-    if learned_options is not None:
-        return learned_options
     normalized = re.sub(r"[_-]+", " ", text.casefold())
     normalized = re.sub(r"\s+", " ", normalized).strip()
     yes_words = r"ja|yes|jup|ok|okay|y|true|wahr|an|ein|on|1"
@@ -270,15 +268,20 @@ def _parse_youtube_local_options(text: str, instance_name: str = "", instances_d
     live_match = re.search(rf"\blive(?:\s+(?:output|ausgabe))?\s*(?:=|:)?\s*({yes_words}|{no_words})\b", normalized)
     llm_match = re.search(rf"\b(?:llm|send\s*to\s*llm)\s*(?:=|:)?\s*({yes_words}|{no_words})\b", normalized)
     if live_match and llm_match:
-        return _yes_no_value(live_match.group(1)), _yes_no_value(llm_match.group(1))
-    live_option = _parse_youtube_live_option(normalized)
-    llm_option = _parse_youtube_llm_option(normalized)
-    if live_option is not None or llm_option is not None:
-        return live_option, llm_option
-    terse_pair = _parse_youtube_terse_bool_pair(normalized)
-    if terse_pair is not None:
-        return terse_pair
-    return None, None
+        parsed_options = _yes_no_value(live_match.group(1)), _yes_no_value(llm_match.group(1))
+    else:
+        live_option = _parse_youtube_live_option(normalized)
+        llm_option = _parse_youtube_llm_option(normalized)
+        if live_option is not None or llm_option is not None:
+            parsed_options = live_option, llm_option
+        else:
+            parsed_options = _parse_youtube_terse_bool_pair(normalized) or (None, None)
+    if learned_options is None:
+        return parsed_options
+    return tuple(
+        parsed_value if parsed_value is not None else learned_value
+        for parsed_value, learned_value in zip(parsed_options, learned_options)
+    )
 
 
 def _parse_youtube_terse_bool_pair(normalized_text: str) -> tuple[bool, bool] | None:

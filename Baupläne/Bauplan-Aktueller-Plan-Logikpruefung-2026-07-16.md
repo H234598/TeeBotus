@@ -7802,3 +7802,16 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `10/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### YouTube-Optionsparser: explizite Werte vor gelernten Defaults
+
+- 2026-07-17: Deterministische `live`-/`llm`-Angaben werden vor gelernten
+  Parser-Miss-Formulierungen ausgewertet. Gelernte Werte fuellen nur noch
+  Felder, die der aktuelle Parser nicht bestimmen konnte; alte Antworten
+  koennen aktuelle Nutzerkorrekturen damit nicht mehr ueberschreiben.
+- Test: YouTube-Optionsparser `10 passed` (14 Subtests); Ruff, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: folgt direkt.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `11/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
