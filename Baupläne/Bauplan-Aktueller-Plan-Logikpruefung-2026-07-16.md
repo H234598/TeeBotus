@@ -5461,6 +5461,22 @@ bleibt erst bei 100 Commits.
 `18/20` Commits. Kein Push. Restart nach 2 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Tool-Fallback liest Mapping-Text korrekt
+
+- 2026-07-17: Der text-only Fallback in `TeeBotus/proactive.py` benutzte
+  ebenfalls `getattr(response, "text", response)`. Provider-Responses als
+  `{"text": "..."}` wurden dadurch als gesamtes Mapping weitergereicht.
+- Fallback nutzt jetzt denselben zentralen Response-Text-Parser wie der
+  Proactive-LLM-Planner. String- und Objekt-Responses bleiben kompatibel.
+- Test: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `216 passed`; Tool-Fallback-Fokus `2 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a3f436d8 fix: parse mapping text in tool planner fallback`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`20/20` Commits. Kein Push. Restart jetzt. Naechster Push bleibt erst bei
+100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
