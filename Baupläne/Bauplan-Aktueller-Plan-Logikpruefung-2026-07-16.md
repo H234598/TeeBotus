@@ -5200,6 +5200,22 @@ bleibt erst bei 100 Commits.
 `12/20` Commits. Kein Push. Restart nach 8 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Reattempts pro Wiederholung zurueckgesetzt
+
+- 2026-07-17: `dispatch_attempts` blieb bei recurring Items ueber erfolgreiche
+  Sendungen erhalten. Nach drei historischen Fehlversuchen wurde die naechste
+  Wiederholung ohne Retry direkt `failed`.
+- Bei erfolgreichem Recurrence-Requeue wird der Versuchzaehler jetzt auf null
+  gesetzt. Jede Wiederholung erhaelt wieder ihr eigenes Retry-Budget; Einmal-
+  Items behalten ihren bisherigen Zaehler.
+- Test: `tests/test_proactive_agent.py` `141 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `14f9d798 fix: reset proactive retry attempts per recurrence`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`14/20` Commits. Kein Push. Restart nach 6 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Wiederholungsregel-validiert
 
 - 2026-07-17: Nicht parsebare Wiederholungen wie `every fortnight` wurden
