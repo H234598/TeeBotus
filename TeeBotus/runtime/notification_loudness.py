@@ -3206,7 +3206,7 @@ def _cancel_pending_notification_loudness_items(account_store: AccountStore, acc
         rows = account_store.read_proactive_outbox(account_id)
         changed = False
         timestamp = utc_now()
-        for item in rows:
+        for index, item in enumerate(rows):
             if not isinstance(item, dict) or not is_notification_loudness_outbox_item(item):
                 continue
             if _outbox_route_key(item) != _normalize_route_key(route_key):
@@ -3214,6 +3214,9 @@ def _cancel_pending_notification_loudness_items(account_store: AccountStore, acc
             # A dispatching item was already claimed. Let its worker finish; the
             # active re-check linearizes cancellation before or after sending.
             if _notification_loudness_outbox_status(item) != "queued":
+                continue
+            item_id = str(item.get("id") or "").strip() or str(index)
+            if not _outbox_status_history_allows_mutation(item, item_id, current_status="queued"):
                 continue
             item["status"] = "cancelled"
             item["updated_at"] = timestamp
@@ -3268,6 +3271,15 @@ def _account_proactive_outbox_lock(account_store: AccountStore, account_id: str)
     if callable(lock):
         return lock(account_id)
     return nullcontext()
+
+
+def _outbox_status_history_allows_mutation(
+    item: Mapping[str, Any], item_label: str, *, current_status: str
+) -> bool:
+    # Keep shared validation lazy to avoid the proactive_agent import cycle.
+    from TeeBotus.runtime.proactive_agent import _proactive_status_history_allows_mutation
+
+    return _proactive_status_history_allows_mutation(item, item_label, current_status=current_status)
 
 
 def _notification_loudness_outbox_status(item: Mapping[str, Any]) -> str | None:
