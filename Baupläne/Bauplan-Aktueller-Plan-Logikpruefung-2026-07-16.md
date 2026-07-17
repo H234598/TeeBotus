@@ -7523,3 +7523,20 @@ Commits. Kein Push. Restart nach 18 weiteren Commits.
 Commits. Kein Push. Restart nach 16 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `5/20` sichtbar.
+
+### Admin-Authentifizierung verlangt intakten Pending-State
+
+- 2026-07-17: `/admin yes` meldete den Secret-Prompt auch bei fehlgeschlagenem
+  State-Setup. Bei verschwundenem oder nicht entfernbarem Pending-State konnte
+  ein Secret zudem noch autorisieren oder `/cancel` einen falschen Erfolg melden.
+- Admin-Pending-State wird beim Setzen, Abbrechen und einmaligen Verbrauch
+  geprüft. Bei Fehler oder fehlendem Datensatz: keine Autorisierung, kein
+  falscher Cancel-/Deaktiviert-Erfolg.
+- Test: `tests/test_engine_identity_flows.py -k 'admin'` `22 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e9bf6e98 fix: fail closed on admin auth state failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `6/20`
+Commits. Kein Push. Restart nach 14 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `7/20` sichtbar.
