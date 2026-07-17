@@ -6677,6 +6677,24 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `6/20` voll.
 
+### RouteTo kapselt Admin- und Factoryfehler
+
+- 2026-07-17: RouteTo-Admin-Check und Client-Factory fingen nur bekannte
+  Fehler. Kaputtes Admin-Memory oder LiteLLM-/Backend-Setup konnte den
+  direkten Routing-Command abbrechen.
+- Admin-Lookup fail-closed; Factoryfehler werden geloggt und als kontrollierte
+  Route-Initialisierungsantwort zurueckgegeben. Kein unautorisierter Route-
+  Zugriff und kein Runtime-Abbruch.
+- Test: `tests/test_route_to_llm_command.py` `10 passed`; zusammen mit
+  Engine-Regressionen `219 passed`; Ruff und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `6fa1594d fix: contain route initialization failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`7/20` Commits. Kein Push. Restart nach 13 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `8/20` voll.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
