@@ -1521,6 +1521,57 @@ def test_engine_call_a_teladi_does_not_dispatch_when_pending_cleanup_fails(tmp_p
     assert all(action.chat_id != TELADI_EMERGENCY_CHAT_ID for action in actions)
 
 
+def test_engine_call_a_teladi_reports_pending_lookup_failure(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    instructions = BotInstructions()
+    engine = TeeBotusEngine(account_store=account_store, instructions=instructions)
+    identity = telegram_identity_key(1)
+    original_get = engine.state.get_pending_flow
+
+    def broken_get(instance, account_id, flow_type, **kwargs):
+        if flow_type == "teladi_emergency":
+            raise RuntimeError("pending state unavailable")
+        return original_get(instance, account_id, flow_type, **kwargs)
+
+    monkeypatch.setattr(engine.state, "get_pending_flow", broken_get)
+
+    actions = engine.process(event(identity, "normale Nachricht"))
+
+    assert actions[0].text == instructions.teladi_call_error
+
+
+def test_engine_call_a_teladi_cancel_does_not_claim_success_when_pending_disappears(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    engine.process(event(identity, "/Call_a_Teladi"))
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    monkeypatch.setattr(engine.state, "pop_pending_flow", lambda *_args, **_kwargs: None)
+
+    actions = engine.process(event(identity, "/cancel"))
+
+    assert actions[0].text == BotInstructions().teladi_call_error
+    assert account_store.read_agent_state(account_id)["teladi_emergency"]["used_at"]
+
+
+def test_engine_call_a_teladi_cancel_reports_cooldown_backend_exception(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    engine.process(event(identity, "/Call_a_Teladi"))
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine._clear_teladi_emergency_cooldown",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("cooldown unavailable")),
+    )
+
+    actions = engine.process(event(identity, "/cancel"))
+
+    assert actions[0].text == BotInstructions().teladi_call_error
+
+
 def test_engine_call_a_teladi_repeated_command_uses_cooldown_without_forwarding(tmp_path):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)

@@ -800,12 +800,16 @@ class TeeBotusEngine:
         account_id: str,
         instructions: BotInstructions,
     ) -> list[OutgoingAction] | None:
-        pending = self.state.get_pending_flow(
-            event.instance,
-            account_id,
-            TELADI_EMERGENCY_FLOW,
-            conversation_scope=_pending_flow_conversation_scope(event),
-        )
+        try:
+            pending = self.state.get_pending_flow(
+                event.instance,
+                account_id,
+                TELADI_EMERGENCY_FLOW,
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
+        except Exception:  # noqa: BLE001 - emergency state failures must not abort message processing.
+            LOGGER.exception("Teladi emergency pending-state lookup failed instance=%s account=%s", event.instance, account_id)
+            return [SendText(event.chat_id, instructions.teladi_call_error, track=False)]
         if pending is None:
             return None
         if not _pending_flow_matches_event(pending, event):
@@ -813,7 +817,7 @@ class TeeBotusEngine:
         command = _command_name(event.text)
         if command == "/cancel":
             try:
-                self.state.pop_pending_flow(
+                popped = self.state.pop_pending_flow(
                     event.instance,
                     account_id,
                     TELADI_EMERGENCY_FLOW,
@@ -822,7 +826,15 @@ class TeeBotusEngine:
             except Exception:  # noqa: BLE001 - cancellation must not claim state cleanup on failure.
                 LOGGER.exception("Teladi emergency cancellation cleanup failed instance=%s account=%s", event.instance, account_id)
                 return [SendText(event.chat_id, instructions.teladi_call_error, track=False)]
-            if not _clear_teladi_emergency_cooldown(self.account_store, account_id):
+            if popped is None:
+                LOGGER.error("Teladi emergency pending state disappeared during cancellation instance=%s account=%s", event.instance, account_id)
+                return [SendText(event.chat_id, instructions.teladi_call_error, track=False)]
+            try:
+                cooldown_cleared = _clear_teladi_emergency_cooldown(self.account_store, account_id)
+            except Exception:  # noqa: BLE001 - cooldown state failures must not claim cancellation success.
+                LOGGER.exception("Teladi emergency cooldown cancellation failed instance=%s account=%s", event.instance, account_id)
+                return [SendText(event.chat_id, instructions.teladi_call_error, track=False)]
+            if not cooldown_cleared:
                 LOGGER.error("Teladi emergency cooldown cancellation failed instance=%s account=%s", event.instance, account_id)
                 return [SendText(event.chat_id, "Call_a_Teladi abgebrochen. Der Cooldown konnte nicht zurückgesetzt werden.", track=False)]
             return [SendText(event.chat_id, "Call_a_Teladi abgebrochen.", track=False)]
