@@ -6288,3 +6288,19 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `17/20` Commits. Kein Push. Restart nach 3 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Discovery reportiert unerwartete Filesystemfehler
+
+- 2026-07-17: Die Instanz-Discovery fing nur erwartete `OSError`-/`ValueError`-
+  Fehler. Eine unerwartete Filesystem- oder Wrapper-Ausnahme konnte den
+  gesamten Proactive-Cycle vor dem strukturierten Report abbrechen.
+- Discovery faengt jetzt jede normale `Exception` und liefert weiterhin
+  `instance_discovery_failed` mit leerer Instanzliste. Store-Zugriff erfolgt
+  nicht.
+- Test: `tests/test_proactive_cli.py` `63 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3fa026c4 fix: report unexpected proactive discovery errors`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`19/20` Commits. Kein Push. Restart nach 1 weiterem Commit. Naechster Push
+bleibt erst bei 100 Commits.
