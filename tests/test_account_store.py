@@ -6694,6 +6694,34 @@ def test_account_store_sqlite_backend_skips_corrupt_rows(tmp_path, monkeypatch, 
     assert "skipped corrupt rows" in caplog.text
 
 
+def test_account_store_sqlite_backend_reports_invalid_blob_types_as_corrupt(tmp_path, monkeypatch, caplog):
+    import sqlite3
+
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_memory_entries(account_id, [{"id": "mem_bad", "user_text": "bad"}])
+
+    with sqlite3.connect(sqlite_path) as connection:
+        connection.execute(
+            "UPDATE memory_entries SET payload_nonce = ?, payload_ciphertext = ? WHERE memory_id = ?",
+            ("not-bytes", "also-not-bytes", "mem_bad"),
+        )
+    fallback_path = tmp_path / "accounts" / "Account_Memory.backup.sqlite3"
+    with sqlite3.connect(fallback_path) as connection:
+        connection.execute(
+            "UPDATE memory_entries SET payload_nonce = ?, payload_ciphertext = ? WHERE memory_id = ?",
+            ("not-bytes", "also-not-bytes", "mem_bad"),
+        )
+
+    with caplog.at_level(logging.CRITICAL, logger="TeeBotus"):
+        assert store.read_memory_entries(account_id) == []
+
+    assert "skipped corrupt rows" in caplog.text
+
+
 def test_sqlite_missing_primary_schema_is_diagnostic_only_with_secondary(tmp_path, caplog):
     import sqlite3
 

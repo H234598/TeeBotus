@@ -240,7 +240,7 @@ class SQLiteAccountMemoryBackend:
         for row in rows:
             memory_id = str(row[0])
             try:
-                entries.append(self._decrypt_json(account_id, memory_id, bytes(row[1]), bytes(row[2])))
+                entries.append(self._decrypt_db_payload(account_id, memory_id, row[1], row[2]))
             except AccountStoreError as exc:
                 skipped += 1
                 if not first_skipped_id:
@@ -313,7 +313,7 @@ class SQLiteAccountMemoryBackend:
         for row in rows:
             memory_id = str(row[0])
             try:
-                entries.append(self._decrypt_json(account_id, memory_id, bytes(row[1]), bytes(row[2])))
+                entries.append(self._decrypt_db_payload(account_id, memory_id, row[1], row[2]))
             except AccountStoreError as exc:
                 skipped += 1
                 if not first_skipped_id:
@@ -395,7 +395,7 @@ class SQLiteAccountMemoryBackend:
         if row is None:
             return {}
         try:
-            return self._decrypt_json(account_id, "index", bytes(row[0]), bytes(row[1]))
+            return self._decrypt_db_payload(account_id, "index", row[0], row[1])
         except AccountStoreError as exc:
             self.last_index_read_error = str(exc)
             LOGGER.critical(
@@ -472,7 +472,7 @@ class SQLiteAccountMemoryBackend:
         for row in rows:
             item_key = str(row[0])
             try:
-                items.append(self._decrypt_json(account_id, _collection_payload_id(collection_name, item_key), bytes(row[1]), bytes(row[2])))
+                items.append(self._decrypt_db_payload(account_id, _collection_payload_id(collection_name, item_key), row[1], row[2]))
             except AccountStoreError as exc:
                 skipped += 1
                 if not first_skipped_id:
@@ -581,11 +581,11 @@ class SQLiteAccountMemoryBackend:
                 if existing is None:
                     return False
                 ordinal = int(existing[0])
-                self._decrypt_json(
+                self._decrypt_db_payload(
                     account_id,
                     _collection_payload_id(collection_name, normalized_item_key),
-                    bytes(existing[1]),
-                    bytes(existing[2]),
+                    existing[1],
+                    existing[2],
                 )
                 nonce, ciphertext = self._encrypt_json(account_id, _collection_payload_id(collection_name, normalized_item_key), dict(row))
                 updated = connection.execute(
@@ -874,7 +874,7 @@ class SQLiteAccountMemoryBackend:
             for row in entry_rows:
                 memory_id = str(row[0])
                 try:
-                    self._decrypt_json(account_id, memory_id, bytes(row[1]), bytes(row[2]))
+                    self._decrypt_db_payload(account_id, memory_id, row[1], row[2])
                 except AccountStoreError as exc:
                     raise AccountStoreError(
                         "existing SQLite account memory entries are not decryptable with the current key; refusing destructive write"
@@ -890,7 +890,7 @@ class SQLiteAccountMemoryBackend:
             ).fetchone()
             if index_row is not None:
                 try:
-                    self._decrypt_json(account_id, "index", bytes(index_row[0]), bytes(index_row[1]))
+                    self._decrypt_db_payload(account_id, "index", index_row[0], index_row[1])
                 except AccountStoreError as exc:
                     raise AccountStoreError(
                         "existing SQLite account memory index is not decryptable with the current key; refusing destructive write"
@@ -911,7 +911,7 @@ class SQLiteAccountMemoryBackend:
                 continue
             item_key = str(row[1])
             try:
-                self._decrypt_json(account_id, _collection_payload_id(collection, item_key), bytes(row[2]), bytes(row[3]))
+                self._decrypt_db_payload(account_id, _collection_payload_id(collection, item_key), row[2], row[3])
             except AccountStoreError as exc:
                 raise AccountStoreError(
                     "existing SQLite account memory collection rows are not decryptable with the current key; refusing destructive write"
@@ -930,7 +930,7 @@ class SQLiteAccountMemoryBackend:
         ).fetchone()
         if entry_row is not None:
             try:
-                self._decrypt_json(account_id, str(entry_row[0]), bytes(entry_row[1]), bytes(entry_row[2]))
+                self._decrypt_db_payload(account_id, str(entry_row[0]), entry_row[1], entry_row[2])
             except AccountStoreError as exc:
                 raise AccountStoreError("existing SQLite account memory entries are not decryptable with the current key") from exc
             return
@@ -945,7 +945,7 @@ class SQLiteAccountMemoryBackend:
         ).fetchone()
         if index_row is not None:
             try:
-                self._decrypt_json(account_id, "index", bytes(index_row[0]), bytes(index_row[1]))
+                self._decrypt_db_payload(account_id, "index", index_row[0], index_row[1])
             except AccountStoreError as exc:
                 raise AccountStoreError("existing SQLite account memory index is not decryptable with the current key") from exc
             return
@@ -964,11 +964,11 @@ class SQLiteAccountMemoryBackend:
         if collection_row is None:
             return
         try:
-            self._decrypt_json(
+            self._decrypt_db_payload(
                 account_id,
                 _collection_payload_id(str(collection_row[0]), str(collection_row[1])),
-                bytes(collection_row[2]),
-                bytes(collection_row[3]),
+                collection_row[2],
+                collection_row[3],
             )
         except AccountStoreError as exc:
             raise AccountStoreError("existing SQLite account memory collection rows are not decryptable with the current key") from exc
@@ -988,6 +988,14 @@ class SQLiteAccountMemoryBackend:
         if not isinstance(data, dict):
             raise AccountStoreError("SQLite account memory payload must contain an object")
         return data
+
+    def _decrypt_db_payload(self, account_id: str, memory_id: str, nonce: Any, ciphertext: Any) -> dict[str, Any]:
+        try:
+            nonce_bytes = bytes(nonce)
+            ciphertext_bytes = bytes(ciphertext)
+        except (TypeError, ValueError) as exc:
+            raise AccountStoreError("SQLite account memory payload has invalid binary fields") from exc
+        return self._decrypt_json(account_id, memory_id, nonce_bytes, ciphertext_bytes)
 
     def _aad(self, account_id: str, memory_id: str) -> bytes:
         return f"TeeBotus:{self.instance_name}:{self.purpose}:{account_id}:{memory_id}:sqlite:v1".encode("utf-8")
