@@ -988,6 +988,25 @@ def _safe_account_lock_handle(lock_path: Path, *, label: str) -> Iterator[Any]:
         yield handle
 
 
+def _open_stable_directory_descriptor(path: Path, *, label: str) -> int:
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    directory_flag = getattr(os, "O_DIRECTORY", 0)
+    if not no_follow or not directory_flag:
+        raise AccountStoreError(f"stable account memory {label} requires O_NOFOLLOW and O_DIRECTORY")
+    absolute = _absolute_without_symlink_resolution(path)
+    flags = os.O_RDONLY | directory_flag | no_follow | getattr(os, "O_CLOEXEC", 0)
+    descriptor = os.open(os.sep, flags)
+    try:
+        for component in absolute.parts[1:]:
+            next_descriptor = os.open(component, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
+
+
 def _safe_rooted_path(path: Path, *, allowed_roots: Iterable[Path], operation: str = "file access") -> Path:
     if not path:
         raise AccountStoreError(f"{operation} path is not safe: {path}")
@@ -3799,10 +3818,27 @@ class AccountStore:
         self.account_memory_vault.write_jsonl(self.account_dir(account_id) / filename, list(rows))
 
     def _unlink_migrated_account_file(self, path: Path) -> None:
+        path = _safe_rooted_path(
+            path,
+            allowed_roots=(self.root, self.root.parent),
+            operation="migrated account file removal",
+        )
+        parent_descriptor: int | None = None
         try:
-            path.unlink()
+            parent_descriptor = _open_stable_directory_descriptor(path.parent, label="migration removal")
+            file_stat = os.stat(path.name, dir_fd=parent_descriptor, follow_symlinks=False)
+            if stat.S_ISLNK(file_stat.st_mode) or not stat.S_ISREG(file_stat.st_mode) or file_stat.st_nlink != 1:
+                raise AccountStoreError(f"refusing unsafe migrated account file removal: {path}")
+            os.unlink(path.name, dir_fd=parent_descriptor)
         except FileNotFoundError:
             return
+        except AccountStoreError:
+            raise
+        except OSError as exc:
+            raise AccountStoreError(f"could not remove migrated account file: {path}") from exc
+        finally:
+            if parent_descriptor is not None:
+                os.close(parent_descriptor)
 
     @_serialize_account_memory
     def read_proactive_outbox(self, account_id: str) -> list[dict[str, Any]]:

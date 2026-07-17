@@ -2844,6 +2844,37 @@ def test_account_store_sqlite_backend_migrates_proactive_jsonl_collections(tmp_p
     assert b"state-geheim" not in raw_db
 
 
+def test_migrated_account_file_removal_rejects_parent_swap(tmp_path, monkeypatch):
+    import TeeBotus.runtime.accounts as accounts_module
+
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    account_dir = store.account_dir(account_id)
+    outside_dir = tmp_path / "outside"
+    outside_dir.mkdir()
+    outside_file = outside_dir / "Proactive_Outbox.jsonl"
+    outside_file.write_text("must survive\n", encoding="utf-8")
+    active_account_dir = account_dir.with_name(f"{account_dir.name}.active")
+    real_open = accounts_module._open_stable_directory_descriptor
+    swapped = False
+
+    def swap_parent_before_open(path, *, label):
+        nonlocal swapped
+        if not swapped:
+            account_dir.rename(active_account_dir)
+            account_dir.symlink_to(outside_dir, target_is_directory=True)
+            swapped = True
+        return real_open(path, label=label)
+
+    monkeypatch.setattr(accounts_module, "_open_stable_directory_descriptor", swap_parent_before_open)
+
+    with pytest.raises(AccountStoreError, match="could not remove migrated account file"):
+        store._unlink_migrated_account_file(account_dir / "Proactive_Outbox.jsonl")
+
+    assert swapped is True
+    assert outside_file.read_text(encoding="utf-8") == "must survive\n"
+
+
 def test_append_proactive_audit_event_uses_outbox_lock(tmp_path, monkeypatch):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
