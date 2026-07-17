@@ -6407,6 +6407,23 @@ bleibt erst bei 100 Commits.
 `9/20` Commits. Kein Push. Restart nach 11 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Engine meldet Proactive-Kommando-Speicherfehler
+
+- 2026-07-17: Der Engine-Grenzpunkt rief `/proactive` ohne Ausnahmebehandlung
+  auf. Fehler beim Lesen/Schreiben von Agent_State konnten den Command-Pfad
+  abbrechen, statt Nutzerfeedback zu liefern.
+- Proactive-Kommandos werden jetzt am Engine-Grenzpunkt abgefangen. Nutzer
+  erhalten eine klare Speicherfehlerantwort; kein Erfolg wird behauptet und
+  kein LLM-Fallback wird gestartet.
+- Test: `tests/test_engine_identity_flows.py` plus
+  `tests/test_proactive_agent.py` `386 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1494ec44 fix: surface proactive command storage failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`11/20` Commits. Kein Push. Restart nach 9 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Admin-Status kapselt Route-Backendfehler
 
 - 2026-07-17: Admin-Statuszeilen sowie Runtime- und Benchmark-Summary-
