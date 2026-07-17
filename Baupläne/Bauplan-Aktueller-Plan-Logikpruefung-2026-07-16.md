@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart sind aktuell `17/20` Code-Commits vorhanden; naechster
-  Restart nach 3 weiteren Commits.
+  letzten Restart sind aktuell `19/20` Code-Commits vorhanden; naechster
+  Restart nach 1 weiterem Plan-Commit.
 
 ## Aktueller Plan
 
@@ -7712,3 +7712,21 @@ Plan-Commit zählt als `14/20`. Kein Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `17/20` Code-Commits. Dieser
 Plan-Commit zaehlt als `18/20`. Kein Push. Restart erst bei `20/20`.
+
+### SQL-Account-Merge: Partielle Zielschreibungen zurueckrollen
+
+- 2026-07-17: Der SQL-Merge schrieb Outbox-, Dispatch-, History- und
+  Zustands-Collections einzeln. Ein spaeter Schreibfehler liess fruehere
+  Zielschreibungen stehen. Retry war zwar meist deduplizierend, der Zustand
+  blieb bis dahin aber partiell.
+- Vor dem Merge werden Ziel-Snapshots aller SQL-Collections gelesen. Bei
+  jedem Fehler werden bereits geaenderte Collections rueckwaerts auf diesen
+  Snapshot geschrieben. Scheitert auch der Rollback, wird ein sichtbarer
+  `AccountStoreError` mit moeglicher Inkonsistenz gemeldet.
+- Test: gezielter spaeter Collection-Schreibfehler stellt alle Ziel-
+  Collections wieder her; SQL-Merge-Fokus `5 passed`; Ruff und
+  `git diff --check` gruen. Kein echter Provider/API-Aufruf.
+- Code-Commit: `d0169967 fix: rollback partial sql account merges`.
+
+**Aktueller Laufstand:** Seit dem Restart `19/20` Code-Commits. Dieser
+Plan-Commit zaehlt als `20/20`. Kein Push. Restart jetzt.
