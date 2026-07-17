@@ -13,6 +13,7 @@ from TeeBotus.runtime.actions import SendAttachment, SendText
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.proactive_agent import (
     ProactiveDecision,
+    ProactiveDispatchResult,
     active_proactive_risk_memory_ids,
     apply_proactive_agent_tool_calls,
     apply_proactive_llm_plan,
@@ -4770,6 +4771,54 @@ def test_dispatch_cancels_item_when_route_changes_after_claim(tmp_path, monkeypa
     item = account_store.read_proactive_outbox(account_id)[0]
     assert item["status"] == "cancelled"
     assert item["status_history"][-1]["reason"] == "stale_route_after_claim"
+
+
+def test_dispatch_reports_stale_route_cancellation_persistence_failure(tmp_path, monkeypatch) -> None:
+    import TeeBotus.runtime.proactive_agent as proactive_module
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="route-cancel-persistence")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="route_cancel_persistence",
+        message_text="Nicht senden",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    original_claim = proactive_module._claim_proactive_worker_job_if_allowed
+    original_update = proactive_module.update_proactive_outbox_item_status
+
+    def claim_then_change_route(*args, **kwargs):
+        result = original_claim(*args, **kwargs)
+        account_store.update_identity_route(identity, channel="signal", chat_id="+492", chat_type="private", adapter_slot=1)
+        return result
+
+    def fail_stale_route_cancellation(*args, **kwargs):
+        if kwargs.get("status") == "cancelled" and kwargs.get("reason") == "stale_route_after_claim":
+            return False
+        return original_update(*args, **kwargs)
+
+    monkeypatch.setattr(proactive_module, "_claim_proactive_worker_job_if_allowed", claim_then_change_route)
+    monkeypatch.setattr(proactive_module, "update_proactive_outbox_item_status", fail_stale_route_cancellation)
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda *_args: "must-not-send"},
+            now=now,
+        )
+    )
+
+    assert results == (ProactiveDispatchResult(account_id, item_id, "failed", "status_update_failed", "signal"),)
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "dispatching"
 
 
 def test_dispatch_defers_when_route_check_fails_before_claim(tmp_path, monkeypatch) -> None:

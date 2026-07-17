@@ -1902,16 +1902,23 @@ async def dispatch_due_proactive_outbox_items(
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", result_reason, channel))
             continue
         if not route_matches:
-            update_proactive_outbox_item_status(
-                account_store,
-                account_id,
-                item_id,
-                status="cancelled",
-                reason="stale_route_after_claim",
-                now=resolved_now,
-                expected_status="dispatching",
-            )
-            results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "stale_route", channel))
+            try:
+                cancelled = update_proactive_outbox_item_status(
+                    account_store,
+                    account_id,
+                    item_id,
+                    status="cancelled",
+                    reason="stale_route_after_claim",
+                    now=resolved_now,
+                    expected_status="dispatching",
+                )
+            except Exception:  # pragma: no cover - concrete storage failures vary by backend.
+                LOGGER.exception("Proactive stale-route cancellation persistence failed account=%s item=%s", account_id, item_id)
+                cancelled = False
+            if not cancelled:
+                results.append(ProactiveDispatchResult(account_id, item_id, "failed", "status_update_failed", channel))
+            else:
+                results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "stale_route", channel))
             continue
         if is_notification_loudness_outbox_item(item):
             try:
