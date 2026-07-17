@@ -4643,6 +4643,79 @@ Commits.
 Push. Restart nach 14 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
 
+### Residence-Memory-Schreibfehler-wiederholen
+
+- 2026-07-17: Wetterkontext speicherte eine erkannte Stadt im Runtime-State,
+  verschluckte aber einen fehlgeschlagenen Memory-Append. Bei derselben Stadt
+  wurde danach wegen des bereits gesetzten Statewerts nie erneut versucht.
+- Explizite Stadterkennung versucht den deduplizierten Memory-Append jetzt bei
+  jeder passenden Nachricht erneut; der Helper verhindert weiterhin Duplikate.
+- Tests: Weather-Fokus `11 passed`; Ruff und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `44e9ff8b fix: retry residence memory persistence`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `8/20` Code-Commits. Kein
+Push. Restart nach 12 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
+
+### Unvollstaendige-Proactive-Claims-recovern
+
+- 2026-07-17: `dispatching`-Items ohne parsebaren Claim-Zeitstempel wurden
+  dauerhaft uebersprungen. Sie blieben unsichtbar, obwohl kein aktiver Lease
+  mehr nachweisbar war.
+- Recovery nimmt solche Items jetzt ebenfalls nach Lease-Grenze zurueck nach
+  `queued` und kennzeichnet den Audit-Grund mit
+  `_missing_claim_timestamp`. Aktive, junge Claims bleiben geschuetzt.
+- Tests: Proactive-Fokus `131 passed`; Ruff und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `48179737 fix: recover incomplete proactive claims`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `9/20` Code-Commits. Kein
+Push. Restart nach 11 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
+
+### Proactive-Policy-Block-nicht-terminalisieren
+
+- 2026-07-17: Due-Items wurden bei Pause, Zeitfenster, Tageslimit,
+  Mindestabstand, adaptiver Ruhezeit oder fehlender Route terminal als
+  `skipped` markiert. Spaetere gueltige Zustellung war dadurch verloren.
+- Transiente Policy-Gruende lassen das Item jetzt unveraendert `queued`; harte
+  Sicherheits-, Einwilligungs- und Strukturfehler bleiben terminal.
+- Tests: Regression prueft ausserhalb/innerhalb Zeitfenster; Proactive-Fokus
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `370ac1f3 fix: retain proactive jobs across transient policy blocks`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `10/20` Code-Commits. Kein
+Push. Restart nach 10 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
+
+### Proactive-Senderfehler-retry
+
+- 2026-07-17: Ein transienter Timeout-/Netzwerkfehler setzte ein bereits
+  geclaimtes Item direkt terminal auf `failed`; `dispatch_attempts` wurde nicht
+  fuer Wiederholung genutzt.
+- Retryfaehige Timeout-/Netzwerk-/429-/5xx-Fehler gehen jetzt hoechstens zwei
+  Mal mit 60/120 Sekunden Backoff zurueck nach `queued`. `retry_at` wird im
+  Due-Filter und Health-Check beruecksichtigt; Versuch drei bleibt terminal
+  `failed`.
+- Tests: `tests/test_proactive_agent.py` und
+  `tests/test_notification_loudness.py`: `299 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `39d8ca91 fix: retry transient proactive send failures`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `11/20` Code-Commits. Kein
+Push. Restart nach 9 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
+
+### Fallback-Mirror-Audit-false-positive
+
+- 2026-07-17: Biene meldete, `_mirror_write()` loesche nach erfolgreicher
+  Reparatur den `unrecoverable`-Marker nicht.
+- Gegenpruefung: Der globale `_write()`-Guard blockiert jeden normalen Write vor
+  `_mirror_write()`, solange der Account unrecoverable ist. Marker-Loeschung im
+  Mirror waere daher heute unerreichbar und koennte den Fail-Closed-Schutz
+  verwischen. Kein Code-Fix.
+
 ### Vollstaendiger-Offline-Regressionslauf
 
 - 2026-07-17: Nach allen Fixes vollstaendigen Testbestand erneut ausgefuehrt.
