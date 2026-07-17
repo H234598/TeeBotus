@@ -3506,3 +3506,18 @@ nach 19 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `3/20` Commits. Kein Push. Restart
 nach 17 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Status-Auth-Export-vermeidet-Short-Write
+
+- 2026-07-17: `_write_status_auth_report()` nutzte einen einzelnen
+  `os.write()`-Aufruf und ignorierte moegliche Short Writes. Grosse JSON-/Text-
+  Reports konnten dadurch unvollstaendig auf Disk landen.
+- Export nutzt jetzt den gepufferten File-Handle-Schreibpfad bei weiterhin
+  aktivem `O_NOFOLLOW`.
+- Regression: Status-Auth-CLI-Fokus -> `7 passed`; komplette
+  `tests/test_admin_accounts.py` -> `102 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2a055e22 fix: complete status auth report writes`.
+
+**Aktueller Laufstand:** Seit dem Restart `5/20` Commits. Kein Push. Restart
+nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
