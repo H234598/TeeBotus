@@ -404,6 +404,8 @@ def queue_proactive_message(
     normalized_category = str(category or "").strip().casefold()
     normalized_intent = str(intent or "").strip()
     normalized_message_text = str(message_text or "").strip()
+    raw_recurrence = str(recurrence or "").strip()
+    normalized_recurrence = _normalize_recurrence_rule(raw_recurrence)
     normalized_risk_gate = _normalize_risk_gate(risk_gate)
     policy_item = {"risk_gate": "none"} if normalized_risk_gate in PROACTIVE_RISK_REVIEW_GATES else {"risk_gate": normalized_risk_gate}
     is_user_requested_reminder = _normalize_bool(user_requested, default=False) and normalized_intent == "user_requested_reminder"
@@ -416,6 +418,8 @@ def queue_proactive_message(
         return ProactiveDecision(False, "missing_intent")
     if not normalized_message_text:
         return ProactiveDecision(False, "missing_message_text")
+    if raw_recurrence and not normalized_recurrence:
+        return ProactiveDecision(False, "invalid_recurrence")
     status = "review_pending" if normalized_risk_gate in PROACTIVE_RISK_REVIEW_GATES else "queued"
     policy_result = "needs_review" if status == "review_pending" else "allowed"
     policy_reason = f"risk_gate_needs_review:{normalized_risk_gate}" if status == "review_pending" else decision.reason
@@ -437,7 +441,6 @@ def queue_proactive_message(
     }
     if is_user_requested_reminder:
         payload["user_requested_reminder"] = True
-    normalized_recurrence = _normalize_recurrence_rule(recurrence)
     if normalized_recurrence:
         payload["recurrence"] = normalized_recurrence
         anchor = _parse_proactive_datetime(str(due_at or "")) or resolved_now
