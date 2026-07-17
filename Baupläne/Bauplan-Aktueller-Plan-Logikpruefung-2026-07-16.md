@@ -6743,6 +6743,22 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `14/20` voll.
 
+### Secret-Rotation kapselt Backendfehler
+
+- 2026-07-17: `/rotate_secret` und Account-Edit-Secretrotation fingen
+  generische Secret-/SQL-/Crypto-Fehler nicht. Ein Fehler konnte Bot-Loop
+  abbrechen oder Rotation ohne klare Antwort lassen.
+- Beide Pfade melden Rotationfehler kontrolliert, geben kein neues Secret aus
+  und behalten bestehenden Flow/Secretzustand bei. Kein falscher Erfolg.
+- Test: Rotation-Fokus `2 passed`; Engine+Route `223 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bf8cc99e fix: contain secret rotation failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`15/20` Commits. Kein Push. Restart nach 5 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `16/20` voll.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
