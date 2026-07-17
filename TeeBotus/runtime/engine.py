@@ -619,7 +619,15 @@ class TeeBotusEngine:
         if intent.action == RegistrationAction.REGISTER:
             return EngineResult(account_id, [SendText(event.chat_id, self._register_text(account_id), track=False)], handled=True)
         if intent.action == RegistrationAction.ROTATE_SECRET:
-            _, secret = self.account_store.rotate_secret(account_id)
+            try:
+                _, secret = self.account_store.rotate_secret(account_id)
+            except Exception:  # noqa: BLE001 - secret rotation failures must not abort identity handling.
+                LOGGER.exception("Account secret rotation failed instance=%s account=%s", event.instance, account_id)
+                return EngineResult(
+                    account_id,
+                    [SendText(event.chat_id, "Secret konnte gerade nicht rotiert werden. Bitte spaeter erneut versuchen.", track=False)],
+                    handled=True,
+                )
             return EngineResult(account_id, [SendText(event.chat_id, self._secret_text(account_id, secret, rotated=True), track=False)], handled=True)
         if intent.action == RegistrationAction.UNLINK_THIS_CHANNEL:
             unlinked_account = self.account_store.unlink_identity(event.identity_key) or account_id
@@ -797,7 +805,15 @@ class TeeBotusEngine:
                     handled=True,
                 )
             if text in {"rotate", "rotate_secret", "secret", "secret rotieren"}:
-                _, secret = self.account_store.rotate_secret(account_id)
+                try:
+                    _, secret = self.account_store.rotate_secret(account_id)
+                except Exception:  # noqa: BLE001 - secret rotation failures must not abort account editing.
+                    LOGGER.exception("Account edit secret rotation failed instance=%s account=%s", event.instance, account_id)
+                    return EngineResult(
+                        account_id,
+                        [SendText(event.chat_id, "Secret konnte gerade nicht rotiert werden. Bitte spaeter erneut versuchen.", track=False)],
+                        handled=True,
+                    )
                 self.state.pop_pending_flow(
                     event.instance,
                     account_id,

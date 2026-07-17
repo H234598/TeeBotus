@@ -657,6 +657,23 @@ def test_register_survives_unexpected_backend_failure_without_secret(tmp_path, m
     assert "Secret:" not in actions[0].text
 
 
+def test_secret_rotation_commands_survive_unexpected_backend_failure(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+
+    monkeypatch.setattr(account_store, "rotate_secret", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("secret backend unavailable")))
+
+    direct = engine.process(event(identity, "/rotate_secret"))
+    engine.process(event(identity, "/account_edit"))
+    edited = engine.process(event(identity, "rotate"))
+
+    assert direct[0].text == "Secret konnte gerade nicht rotiert werden. Bitte spaeter erneut versuchen."
+    assert edited[0].text == direct[0].text
+    assert account_store.get_account_for_identity(identity) == account_id
+
+
 def test_wtf_can_be_confirmed_by_any_existing_identity_after_multi_identity_link(tmp_path):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
