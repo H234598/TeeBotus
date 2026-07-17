@@ -4222,7 +4222,7 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         path = self.account_dir(account_id) / _safe_account_text_filename(filename)
         try:
-            return path.read_text(encoding="utf-8")
+            return _read_stable_account_file(path, label="account text read").decode("utf-8")
         except FileNotFoundError:
             return ""
 
