@@ -2730,6 +2730,27 @@ Restart nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### SQLite-Memory-Connect-gegen-Path-TOCTOU-haerten
+
+- 2026-07-17: Nach der statischen Symlink-Pruefung oeffneten `_connect()` und
+  `_connect_readonly()` SQLite erneut ueber den Dateipfad. Ein Parent- oder
+  Datei-Tausch zwischen Pruefung und `sqlite3.connect()` konnte dadurch ein
+  fremdes SQLite-Ziel auswaehlen.
+- SQLite-Parent wird jetzt komponentenweise mit `O_NOFOLLOW|O_DIRECTORY`
+  geoeffnet. Die Zieldatei wird relativ dazu mit `O_NOFOLLOW` geoeffnet und
+  als regulaere Datei mit genau einem Hardlink geprueft. SQLite nutzt den
+  stabilen Parent-FD; Inode/Typ/Hardlinkzahl werden vor und nach `connect()`
+  verglichen. Symlink-WAL/SHM-Sidecars blockieren.
+- Regression: simulierter Datenbanktausch vor `connect()` wird als
+  `OSError` abgewiesen und liest keine Ersatzdaten; Fokus -> `4 passed`;
+  komplette `tests/test_account_store.py` -> `295 passed`. Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d885a901 fix: open sqlite memory through stable descriptors`.
+
+**Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
