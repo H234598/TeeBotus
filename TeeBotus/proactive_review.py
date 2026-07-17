@@ -76,7 +76,7 @@ def list_proactive_review_items(
     errors = [f"{name}: invalid_instance_name" for name in selected if not _is_safe_instance_name(name)]
     try:
         instance_dirs = _instance_dirs(instances_dir, selected)
-    except (OSError, ValueError) as exc:
+    except Exception as exc:  # noqa: BLE001 - review CLI must always return a structured report.
         errors.append(f"instance_discovery_failed: {type(exc).__name__}: {exc}")
         instance_dirs = []
     for instance_dir in instance_dirs:

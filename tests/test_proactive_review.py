@@ -66,6 +66,23 @@ def test_proactive_review_rejects_unsafe_and_missing_selected_instances(tmp_path
     assert not (tmp_path / "outside").exists()
 
 
+def test_proactive_review_reports_unexpected_instance_discovery_error(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr(
+        "TeeBotus.proactive_review._instance_dirs",
+        lambda *_args: (_ for _ in ()).throw(RuntimeError("filesystem wrapper unavailable")),
+    )
+
+    report = list_proactive_review_items(
+        instances_dir=tmp_path / "instances",
+        selected_instances=(),
+        store_factory=lambda *_args: (_ for _ in ()).throw(AssertionError("store must not open")),
+    )
+
+    assert report["ok"] is False
+    assert report["items"] == []
+    assert report["errors"] == ["instance_discovery_failed: RuntimeError: filesystem wrapper unavailable"]
+
+
 def test_proactive_review_rejects_symlinked_instances_without_store_access(tmp_path: Path) -> None:
     instances_dir = tmp_path / "instances"
     instances_dir.mkdir()
