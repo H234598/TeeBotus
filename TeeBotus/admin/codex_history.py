@@ -1759,10 +1759,12 @@ def import_codex_session_file(store: AccountStore, session_file: str | Path) -> 
         if imported:
             _refresh_codex_history_summary_context_rows(rows)
             store.write_codex_history_outbox(account_id, rows)
-    for item in imported:
-        project = item.get("project", {})
-        if isinstance(project, Mapping):
-            _upsert_project(store, account_id, project, item, str(item.get("created_at") or utc_now()))
+    if imported:
+        with store.codex_history_outbox_lock(account_id):
+            for item in imported:
+                project = item.get("project", {})
+                if isinstance(project, Mapping):
+                    _upsert_project(store, account_id, project, item, str(item.get("created_at") or utc_now()))
     return result
 
 
@@ -1807,10 +1809,12 @@ def import_codex_session_roots(
         if imported_items:
             _refresh_codex_history_summary_context_rows(rows)
             store.write_codex_history_outbox(account_id, rows)
-    for item in imported_items:
-        project = item.get("project", {})
-        if isinstance(project, Mapping):
-            _upsert_project(store, account_id, project, item, str(item.get("created_at") or utc_now()))
+    if imported_items:
+        with store.codex_history_outbox_lock(account_id):
+            for item in imported_items:
+                project = item.get("project", {})
+                if isinstance(project, Mapping):
+                    _upsert_project(store, account_id, project, item, str(item.get("created_at") or utc_now()))
     return {
         "ok": not any(result.get("status") == "error" for result in results),
         "items": results,
