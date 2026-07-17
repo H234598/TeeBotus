@@ -630,7 +630,15 @@ class TeeBotusEngine:
                 )
             return EngineResult(account_id, [SendText(event.chat_id, self._secret_text(account_id, secret, rotated=True), track=False)], handled=True)
         if intent.action == RegistrationAction.UNLINK_THIS_CHANNEL:
-            unlinked_account = self.account_store.unlink_identity(event.identity_key) or account_id
+            try:
+                unlinked_account = self.account_store.unlink_identity(event.identity_key) or account_id
+            except Exception:  # noqa: BLE001 - unlink failures must not abort identity handling.
+                LOGGER.exception("Account channel unlink failed instance=%s account=%s", event.instance, account_id)
+                return EngineResult(
+                    account_id,
+                    [SendText(event.chat_id, "Kommunikationsweg konnte gerade nicht getrennt werden. Bitte spaeter erneut versuchen.", track=False)],
+                    handled=True,
+                )
             return EngineResult(unlinked_account, [SendText(event.chat_id, "Dieser Kommunikationsweg wurde vom Account getrennt.", track=False)], handled=True)
         if intent.action == RegistrationAction.WTF_UNLINK:
             return self._handle_wtf(event, account_id)
@@ -828,7 +836,15 @@ class TeeBotusEngine:
             )
         if step == "confirm_unlink":
             if text in yes_words:
-                unlinked_account = self.account_store.unlink_identity(event.identity_key) or account_id
+                try:
+                    unlinked_account = self.account_store.unlink_identity(event.identity_key) or account_id
+                except Exception:  # noqa: BLE001 - unlink failures must not abort account editing.
+                    LOGGER.exception("Account edit channel unlink failed instance=%s account=%s", event.instance, account_id)
+                    return EngineResult(
+                        account_id,
+                        [SendText(event.chat_id, "Kommunikationsweg konnte gerade nicht getrennt werden. Bitte spaeter erneut versuchen.", track=False)],
+                        handled=True,
+                    )
                 self.state.pop_pending_flow(
                     event.instance,
                     account_id,
