@@ -29,8 +29,8 @@ Diagnose und Tests.
 - Tests bleiben providerfrei.
 - Kein Push ohne ausdrueckliche Freigabe.
 - Bot-/Service-Restart erst an der vereinbarten 20-Commit-Grenze. Nach dem
-  letzten Restart ist aktuell `1/20` Code-Commit vorhanden; naechster
-  Restart nach 19 weiteren Commits.
+  letzten Restart sind aktuell `17/20` Code-Commits vorhanden; naechster
+  Restart nach 3 weiteren Commits.
 
 ## Aktueller Plan
 
@@ -7690,3 +7690,25 @@ Plan-Commit zählt als `10/20`. Kein Push. Restart jetzt.
 
 **Aktueller Laufstand:** Seit dem Restart `13/20` Code-Commits. Dieser
 Plan-Commit zählt als `14/20`. Kein Push. Restart erst bei `20/20`.
+
+### Engine- und AccountStore-Kontext: Aufgeloester Account und Nested-Rollback
+
+- 2026-07-17: Nach Identity-Aufloesung wurde der aufgeloeste Account nicht
+  konsequent in das Engine-Event uebernommen. Dadurch konnten First-Contact-
+  LLM-Metadaten noch den vorlaeufigen Account referenzieren. Das Event wird
+  jetzt vor der Verarbeitung auf den aufgeloesten Account synchronisiert.
+- 2026-07-17: `_normalized_memory_index()` kopierte nur die oberste Ebene,
+  veraenderte aber verschachtelte Rollback-Daten. Nach einem fehlgeschlagenen
+  Indexschreiben konnte ein Rollback dadurch bereits neue `recent`, `keyword`
+  oder `entries`-Daten enthalten. Mutierende Append-, Rebuild- und
+  Access-Pfade arbeiten jetzt mit `deepcopy(previous_index)`; reine
+  Ranking-/Select-Lesepfade bleiben shallow, damit grosse Semantic-Caches
+  nicht bei jeder Abfrage kopiert werden.
+- Tests: Engine-Account-Kontext `2 passed`; Append-/Rebuild-/Access-Rollback
+  und AccountStore-Fokus gruen; komplette `tests/test_account_store.py`:
+  `315 passed in 38.63s`; Ruff und `git diff --check` gruen. Kein echter
+  Provider/API-Aufruf.
+- Code-Commits: `0d6e0e03`, `1fe4cb8a`, `d8c5bc87`.
+
+**Aktueller Laufstand:** Seit dem Restart `17/20` Code-Commits. Dieser
+Plan-Commit zaehlt als `18/20`. Kein Push. Restart erst bei `20/20`.
