@@ -4643,6 +4643,17 @@ Commits.
 Push. Restart nach 14 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
 
+### Vollstaendiger-Offline-Regressionslauf
+
+- 2026-07-17: Nach allen Fixes vollstaendigen Testbestand erneut ausgefuehrt.
+- Ergebnis: `4023 passed`, `3 skipped`, `17 subtests passed`; kein Failure.
+- Einziger Hinweis: externe LangChain/Pydantic-V1-Warnung unter Python 3.14.
+  Kein Provider-/API-Aufruf und keine Netzsendung.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `7/20` Code-Commits. Kein
+Push. Restart nach 13 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
+
 ### Veraltete-Reminder-Erwartung-im-Identity-Test
 
 - 2026-07-17: `test_engine_uses_structured_memory_candidate_for_safe_semantic_memory`
