@@ -847,6 +847,22 @@ def test_status_auth_report_cli_rejects_symlinked_output_base(tmp_path: Path, ca
     assert not (real_root / "status-auth.json").exists()
 
 
+def test_status_auth_report_writer_rejects_symlinked_parent(tmp_path: Path) -> None:
+    real_parent = tmp_path / "real-output"
+    real_parent.mkdir()
+    linked_parent = tmp_path / "linked-output"
+    linked_parent.symlink_to(real_parent, target_is_directory=True)
+
+    with pytest.raises(OSError):
+        status_auth_admin_module._write_status_auth_report(
+            linked_parent / "status-auth.json",
+            {"scope": "status_auth"},
+            as_json=True,
+        )
+
+    assert not (real_parent / "status-auth.json").exists()
+
+
 def test_memory_recovery_report_finds_readable_fallback_when_primary_key_drifted(tmp_path: Path, caplog) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts"

@@ -141,8 +141,19 @@ def _write_status_auth_report(output_path: Path, report: dict[str, Any], *, as_j
     output = _build_status_auth_report_output(report, as_json=as_json)
     safe_output = redact_status_text(output)
     data = safe_output.encode("utf-8")
-    flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, "O_NOFOLLOW", 0)
-    descriptor = os.open(output_path, flags, 0o600)
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    if not no_follow:
+        raise OSError("status-auth output requires O_NOFOLLOW")
+    parent_descriptor = _open_stable_output_directory(output_path.parent, no_follow=no_follow)
+    try:
+        descriptor = os.open(
+            output_path.name,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC | no_follow | getattr(os, "O_CLOEXEC", 0),
+            0o600,
+            dir_fd=parent_descriptor,
+        )
+    finally:
+        os.close(parent_descriptor)
     with os.fdopen(descriptor, "wb") as handle:
         handle.write(data)
 
@@ -170,6 +181,24 @@ def _first_symlinked_path_component(path: Path) -> Path | None:
         except OSError:
             return candidate
     return None
+
+
+def _open_stable_output_directory(path: Path, *, no_follow: int) -> int:
+    directory_flag = getattr(os, "O_DIRECTORY", 0)
+    if not directory_flag:
+        raise OSError("status-auth output requires O_DIRECTORY")
+    directory_flags = os.O_RDONLY | directory_flag | no_follow | getattr(os, "O_CLOEXEC", 0)
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    descriptor = os.open(os.sep, directory_flags)
+    try:
+        for component in absolute.parts[1:]:
+            next_descriptor = os.open(component, directory_flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
 
 
 def _emit_status_auth_report(output: str) -> None:
