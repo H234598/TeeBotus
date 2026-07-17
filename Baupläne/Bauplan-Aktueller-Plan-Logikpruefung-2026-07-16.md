@@ -5224,6 +5224,24 @@ bleibt erst bei 100 Commits.
 `16/20` Commits. Kein Push. Restart nach 4 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Instanz-Discovery lehnt Symlinks ab
+
+- 2026-07-17: Der Proactive-Scheduler akzeptierte symlinkartige Instanzordner
+  und konnte dadurch bei einem sicheren Einzelnamen ausserhalb des
+  Instances-Baums lesen oder schreiben. Admin-Discovery hatte diesen Schutz
+  bereits.
+- Der Instances-Root darf kein Symlink sein; automatische Discovery ignoriert
+  Symlink-Instanzen. Explizit selektierte Symlinks werden als
+  `selected_instance_symlink` gemeldet und erreichen nie die Store-Factory.
+- Test: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `225 passed`; Discovery-Fokus `4 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `93c508f3 fix: reject symlinked proactive instances`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`18/20` Commits. Kein Push. Restart nach 2 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Runtime-Status zeigt Legacy-OpenAI-Modell
 
 - 2026-07-17: Legacy-Konfiguration aus `Bot_Verhalten.md` verwendete im
