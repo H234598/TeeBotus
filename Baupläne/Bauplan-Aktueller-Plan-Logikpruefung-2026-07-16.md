@@ -6872,6 +6872,23 @@ Commits. Kein Push. Restart nach 12 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `9/20` sichtbar.
 
+### Admin-Flow-State am Dispatcher gekapselt
+
+- 2026-07-17: `_admin_membership_actions()` griff mehrfach auf persistierten
+  Runtime-State zu. Fehler bei Pending-Flows konnten nach erfolgreichem
+  Accountlookup jede Nachricht abbrechen.
+- Die Dispatcher-Grenze fängt unerwartete Admin-Statefehler, meldet sie
+  kontrolliert und autorisiert bei unklarer Lage nichts. Normale Verarbeitung
+  bricht nicht mehr aus.
+- Test: fokussierter Admin-Statepfad `14 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8e91672b fix: contain admin flow state failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `10/20`
+Commits. Kein Push. Restart nach 10 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `11/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
