@@ -209,15 +209,28 @@ def build_instance_admin_report(
     instance_dir = instances_dir / instance_name
     data_dir = instance_dir / "data"
     accounts_root = data_dir / "accounts"
-    store = AccountStore(
-        accounts_root,
-        instance_name,
-        secret_provider=provider,
-        create_dirs=False,
-        secret_guard_purposes=(INSTANCE_MAPPING_KEY_PURPOSE,),
-    )
     runtime_slots = _build_runtime_slot_report(instance_name, env=env, runtime_channels=runtime_channels)
-    account_store = _build_store_report(store)
+    try:
+        store = AccountStore(
+            accounts_root,
+            instance_name,
+            secret_provider=provider,
+            create_dirs=False,
+            secret_guard_purposes=(INSTANCE_MAPPING_KEY_PURPOSE,),
+        )
+    except (AccountStoreError, OSError, ValueError) as exc:
+        account_store = {
+            "readable": False,
+            "errors": [f"store:{type(exc).__name__}:{exc}"],
+            "warnings": [],
+            "accounts_root_exists": accounts_root.exists(),
+            "account_directories": 0,
+            "indexed_accounts": 0,
+            "linked_identities": 0,
+            "identities_by_channel": {},
+        }
+    else:
+        account_store = _build_store_report(store)
     return {
         "instance": instance_name,
         "instance_dir": str(instance_dir),
@@ -368,6 +381,20 @@ def _build_identity_health(account_store: Mapping[str, Any], runtime_slots: Mapp
     runtime_counts = _string_int_mapping(runtime_slots.get("configured_channels", {}))
     runtime_labels = _string_list_mapping(runtime_slots.get("configured_slot_labels_by_channel", {}))
     linked_identities = int(account_store.get("linked_identities", 0) or 0)
+    store_errors = tuple(str(error or "").strip() for error in account_store.get("errors", []) if str(error or "").strip())
+    if store_errors:
+        warnings.append(
+            {
+                "code": "account_store_error",
+                "configured_runtime_slots": "<none>",
+                "configured_runtime_labels": [],
+                "linked_identities": linked_identities,
+                "identity_channels": dict(sorted(identity_counts.items())),
+                "message": "Account store could not be read completely; identity checks may be incomplete.",
+                "errors": list(store_errors),
+                "recommended_action": "Repair the account store or restore its configured Secret Service key before recovery.",
+            }
+        )
     store_warnings = tuple(
         str(warning or "").strip()
         for warning in account_store.get("warnings", [])

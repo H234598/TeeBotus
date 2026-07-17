@@ -224,6 +224,23 @@ def test_admin_report_marks_store_errors(tmp_path: Path) -> None:
     store_report = report["instances"][0]["account_store"]
     assert store_report["readable"] is False
     assert store_report["errors"]
+    assert report["instances"][0]["identity_health"]["status"] == "warning"
+
+
+def test_admin_report_contains_store_initialization_error(monkeypatch, tmp_path: Path) -> None:
+    make_instance(tmp_path)
+
+    def fail_store(*_args: Any, **_kwargs: Any) -> AccountStore:
+        raise AccountStoreError("secret missing")
+
+    monkeypatch.setattr(accounts_report_module, "AccountStore", fail_store)
+
+    report = build_accounts_admin_report(instances_dir=tmp_path, provider=provider())
+
+    store_report = report["instances"][0]["account_store"]
+    assert store_report["errors"] == ["store:AccountStoreError:secret missing"]
+    assert report["totals"]["store_errors"] == 1
+    assert report["instances"][0]["identity_health"]["warnings"][0]["code"] == "account_store_error"
 
 
 def test_admin_report_warns_for_dangling_account_directory(tmp_path: Path) -> None:
