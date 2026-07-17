@@ -1861,6 +1861,49 @@ def test_codex_history_claim_preserves_invalid_status_history(tmp_path: Path) ->
     assert persisted["status_history"] == {"broken": True}
 
 
+def test_codex_history_mutations_reject_invalid_delivery_container(tmp_path: Path) -> None:
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "id": "invalid-delivery-update",
+            "kind": "codex_run_summary",
+            "status": "queued",
+            "delivery": ["lost"],
+        },
+    )
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "id": "invalid-delivery-claim",
+            "kind": "codex_run_summary",
+            "status": "queued",
+            "delivery": "lost",
+        },
+    )
+
+    codex_history_module._update_codex_history_item_status(
+        store,
+        "invalid-delivery-update",
+        "accepted",
+        reason="accepted",
+        now="2026-07-17T12:00:00+00:00",
+    )
+    claimed = codex_history_module._claim_codex_history_item_for_dispatch(
+        store,
+        "invalid-delivery-claim",
+        dispatch_now=datetime(2026, 7, 17, 12, tzinfo=timezone.utc),
+        now="2026-07-17T12:00:00+00:00",
+    )
+
+    assert claimed is None
+    persisted = {row["id"]: row for row in store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)}
+    assert persisted["invalid-delivery-update"]["status"] == "queued"
+    assert persisted["invalid-delivery-update"]["delivery"] == ["lost"]
+    assert persisted["invalid-delivery-claim"]["status"] == "queued"
+    assert persisted["invalid-delivery-claim"]["delivery"] == "lost"
+
+
 def test_codex_history_dispatch_bridge_rejects_incomplete_completion_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

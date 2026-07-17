@@ -4600,6 +4600,8 @@ def _update_codex_history_item_status(
         for item in rows:
             if not isinstance(item, dict) or str(item.get("id") or "") != str(item_id or ""):
                 continue
+            if "delivery" in item and not isinstance(item.get("delivery"), dict):
+                return
             item["status"] = normalized_status
             item["updated_at"] = now
             delivery = item.setdefault("delivery", {})
@@ -4666,6 +4668,8 @@ def _claim_codex_history_item_for_dispatch(
         for item in rows:
             if not isinstance(item, dict) or str(item.get("id") or "").strip() != normalized_item_id:
                 continue
+            if "delivery" in item and not isinstance(item.get("delivery"), dict):
+                return None
             if not _codex_history_item_dispatchable(item, now=dispatch_now):
                 return None
             item["status"] = "dispatching"
