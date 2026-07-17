@@ -5184,3 +5184,19 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `4/20` Commits. Kein Push. Restart nach 16 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Account-Discovery-fail-closed
+
+- 2026-07-17: `_account_ids` ignorierte Fehler aus `store.list_account_ids`.
+  SQL-/Index-only-Accounts konnten dadurch fehlen, waehrend der Proactive-
+  Report faelschlich gesund blieb.
+- Store-Discovery-Fehler werden jetzt an Instanz-Guard weitergereicht und als
+  `instance_report["error"]` sichtbar. Physische Account-Verzeichnisse gelten
+  nicht stillschweigend als vollstaendiger Ersatz fuer SQL-/Index-Discovery.
+- Test: `tests/test_proactive_cli.py` `52 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4aaee84f fix: surface proactive account discovery failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`6/20` Commits. Kein Push. Restart nach 14 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
