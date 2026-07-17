@@ -2102,6 +2102,8 @@ def check_proactive_agent_account(
             claimed_at = _proactive_dispatch_claimed_at(item)
             if claimed_at is None:
                 errors.append(f"dispatching outbox item {item_id or index} missing claim timestamp")
+            elif claimed_at > resolved_now:
+                errors.append(f"dispatching outbox item {item_id or index} has future claim timestamp")
             elif resolved_now - claimed_at >= timedelta(minutes=PROACTIVE_DISPATCH_LEASE_MINUTES):
                 errors.append(f"dispatching outbox item {item_id or index} has stale claim")
         if status not in PROACTIVE_OUTBOX_STATUSES:
