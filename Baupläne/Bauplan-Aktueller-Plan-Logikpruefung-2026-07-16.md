@@ -6695,6 +6695,23 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `8/20` voll.
 
+### WTF-Sicherheitsmutation behauptet keinen Teilerfolg
+
+- 2026-07-17: WTF-Flow pruefte Link, rotierte Secret, trennte Identitaet und
+  loeschte Notification ohne generischen Fehlerfang. Ein SQL-/Secret-/State-
+  Fehler konnte Loop-Abbruch oder falschen Erfolg nach Teilmutation erzeugen.
+- Kritische Schritte fail-closed: Fehler werden geloggt, kein Erfolgstext
+  gesendet; Link bleibt bei Teilfehler bestehen und erneuter WTF-Versuch ist
+  moeglich. Linkpruefung ist ebenfalls fail-closed.
+- Test: WTF-Fokus `3 passed`; Engine+Route `220 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9788b9ce fix: contain wtf security mutation failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`9/20` Commits. Kein Push. Restart nach 11 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `10/20` voll.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
