@@ -6872,6 +6872,23 @@ Commits. Kein Push. Restart nach 12 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `9/20` sichtbar.
 
+### Audio-Anhang blockiert Antwort nicht bei Transkriptfehler
+
+- 2026-07-17: `_build_attachment_context` fing Audio-Transkriptionsfehler
+  nur für bekannte API-/Local-Exceptions. Ein unerwarteter Whisper- oder
+  Wrapperfehler konnte die gesamte Nachricht vor der LLM-Antwort abbrechen.
+- Jeder einzelne Audioanhang meldet jetzt kontrolliert fehlende Transkription
+  und lässt weitere Anhänge sowie die normale Antwort weiterlaufen. Auch
+  optionale TTS-Stilbeobachtung bleibt best-effort.
+- Test: `tests/test_engine_identity_flows.py -k 'audio_attachment or transcription'`
+  `7 passed`; Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5a33c5ad fix: keep replies available on attachment transcription failure`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `10/20`
+Commits. Kein Push. Restart nach 10 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `11/20` sichtbar.
+
 ### Login kapselt Rückgabe- und Notificationfehler
 
 - 2026-07-17: Primäres Login vertraute blind auf `result["account_id"]` und
