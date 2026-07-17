@@ -74,12 +74,10 @@ def list_proactive_review_items(
     for instance_dir in _instance_dirs(instances_dir, tuple(selected_instances)):
         try:
             store = resolved_factory(instance_dir / "data" / "accounts", instance_dir.name)
-            account_dirs = _account_dirs(store.accounts_dir)
         except Exception as exc:  # noqa: BLE001
             errors.append(f"{instance_dir.name}: {type(exc).__name__}: {exc}")
             continue
-        for account_dir in account_dirs:
-            account_id = account_dir.name
+        for account_id in _account_ids(store):
             try:
                 rows = store.read_proactive_outbox(account_id)
             except Exception as exc:  # noqa: BLE001
@@ -205,6 +203,26 @@ def _account_dirs(accounts_dir: Path) -> list[Path]:
     if not accounts_dir.exists():
         return []
     return sorted(path for path in accounts_dir.iterdir() if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name))
+
+
+def _account_ids(store: AccountStore) -> tuple[str, ...]:
+    ids = {
+        path.name
+        for path in _account_dirs(store.accounts_dir)
+        if TOKEN_HEX_RE.fullmatch(path.name)
+    }
+    list_account_ids = getattr(store, "list_account_ids", None)
+    if callable(list_account_ids):
+        try:
+            listed_ids = list_account_ids(include_unresolvable=False)
+        except (AccountStoreError, OSError, ValueError):
+            listed_ids = ()
+        ids.update(
+            account_id
+            for account_id in (str(value or "").strip().casefold() for value in listed_ids)
+            if TOKEN_HEX_RE.fullmatch(account_id)
+        )
+    return tuple(sorted(ids))
 
 
 if __name__ == "__main__":

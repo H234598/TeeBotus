@@ -26,6 +26,21 @@ def test_proactive_review_lists_pending_items(tmp_path: Path) -> None:
     assert report["items"][0]["route"]["channel"] == "signal"
 
 
+def test_proactive_review_uses_store_account_ids_when_directory_scan_is_empty(tmp_path: Path, monkeypatch) -> None:
+    _instance_dir, store, account_id, item_id = _review_fixture(tmp_path)
+    monkeypatch.setattr("TeeBotus.proactive_review._account_dirs", lambda _accounts_dir: [])
+
+    report = list_proactive_review_items(
+        instances_dir=tmp_path / "instances",
+        selected_instances=("Depressionsbot",),
+        store_factory=lambda _root, _instance: store,
+    )
+
+    assert report["review_pending_count"] == 1
+    assert report["items"][0]["account_id"] == account_id
+    assert report["items"][0]["item_id"] == item_id
+
+
 def test_proactive_review_approve_queues_item(tmp_path: Path) -> None:
     _instance_dir, store, account_id, item_id = _review_fixture(tmp_path)
 
