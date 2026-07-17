@@ -509,6 +509,19 @@ def approve_proactive_review_item(
         decision = proactive_policy_decision(account_store, account_id, category=category, now=now, exclude_item_id=str(item_id or ""), item={**target, "risk_gate": "none"})
         if not decision.allowed:
             return decision
+        if not str(target.get("intent") or "").strip():
+            return ProactiveDecision(False, "missing_intent")
+        if not str(target.get("message_text") or "").strip():
+            return ProactiveDecision(False, "missing_message_text")
+        due_at = str(target.get("due_at") or "").strip()
+        if due_at and _parse_proactive_datetime(due_at) is None:
+            return ProactiveDecision(False, "invalid_due_at")
+        recurrence = str(target.get("recurrence") or "").strip()
+        if recurrence and not _normalize_recurrence_rule(recurrence):
+            return ProactiveDecision(False, "invalid_recurrence")
+        file_payload = target.get("file")
+        if file_payload is not None and (not isinstance(file_payload, Mapping) or normalize_generated_file(file_payload) is None):
+            return ProactiveDecision(False, "invalid_file")
         timestamp = _resolve_proactive_now(now).isoformat(timespec="seconds")
         target["status"] = "queued"
         target["risk_gate"] = "none"
