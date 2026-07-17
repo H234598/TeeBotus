@@ -6977,6 +6977,22 @@ Restart nach 20 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `1/20` sichtbar.
 
+### YouTube-Background-Submit behauptet keinen falschen Start
+
+- 2026-07-17: `_youtube_run_local_transcript_actions` meldete „gestartet“,
+  obwohl `youtube_job_runner.submit()` einen Executor-/Shutdown-Fehler werfen
+  konnte. Nutzer bekamen dadurch keinen klaren Fehler und keinen Job.
+- Submit ist jetzt geschützt; bei Fehler gibt es eine kontrollierte
+  Startfehlerantwort. Erfolgreiche Jobs behalten bisheriges Verhalten.
+- Test: `tests/test_engine_identity_flows.py -k 'youtube_background or background_submission'`
+  `3 passed`; Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e001dd1e fix: report youtube job submission failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `2/20`
+Commits. Kein Push. Restart nach 18 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `3/20` sichtbar.
+
 ### Login kapselt Rückgabe- und Notificationfehler
 
 - 2026-07-17: Primäres Login vertraute blind auf `result["account_id"]` und
