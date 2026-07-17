@@ -2750,6 +2750,25 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart jetzt. Naechster Push bleibt erst bei 100
 Commits.
 
+### Leere-Fallback-Collection-Namen-als-Reparaturzustand-behandeln
+
+- 2026-07-17: Nach einem Primary-Ausfall wurde eine leere, diagnostikfreie
+  Fallback-Liste als endgueltig leer akzeptiert. War der Primary nur temporaer
+  unlesbar, blieben dort vorhandene Collections unsichtbar und wurden nie in
+  den Fallback gespiegelt.
+- Bei verfuegbarer Collection-Reparatur setzt eine leere Fallback-Liste jetzt
+  einen Pending-State. Nach Primary-Recovery werden Primary-only-Collections
+  ueber einen sauberen Collection-Read in den Fallback gespiegelt. Fehlt die
+  Reparatur-API, bleibt der bisherige einfache Empty-Backend-Vertrag erhalten.
+- Regression: Fallback-Fokus -> `75 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `310 passed`; `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `20525b13 fix: retain empty fallback collection repair state`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Status-meldet-uninitialisiertes-SQL-Memory
 
 - 2026-07-17: /status deaktivierte das konfigurierte SQLite-Backend, wenn
