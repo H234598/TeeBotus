@@ -5060,6 +5060,25 @@ def test_engine_youtube_transcript_uses_pending_link_followup(monkeypatch, tmp_p
     assert engine.state.get_pending_flow("Depressionsbot", account_id, "youtube_link") is None
 
 
+def test_engine_youtube_transcript_does_not_start_when_pending_link_pop_fails(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine.transcribe_youtube_video",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("transcription must not start")),
+    )
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions())
+    identity = telegram_identity_key(1)
+    engine.process(event(identity, "/youtube_transcript", channel="signal"))
+
+    def broken_pop(*_args, **_kwargs):
+        raise RuntimeError("pending state unavailable")
+
+    monkeypatch.setattr(engine.state, "pop_pending_flow", broken_pop)
+
+    actions = engine.process(event(identity, "https://youtu.be/abc123", channel="signal"))
+
+    assert actions[0].text == "YouTube-Transkript konnte gerade nicht fortgesetzt werden."
+
+
 def test_engine_youtube_transcript_starts_local_by_default_when_no_subtitles(monkeypatch, tmp_path):
     from TeeBotus.core.youtube import YouTubeTranscriptError
 

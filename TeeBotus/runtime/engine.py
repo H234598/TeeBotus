@@ -94,6 +94,7 @@ EXPORT_COMMANDS = {"/export", "/account_export", "/export_account"}
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 YOUTUBE_LINK_FLOW = "youtube_link"
 YOUTUBE_OPTIONS_FLOW = "youtube_options"
+YOUTUBE_PENDING_STATE_ERROR = "YouTube-Transkript konnte gerade nicht fortgesetzt werden."
 ADMIN_AUTH_FLOW = "admin_auth"
 ADMIN_AUTH_USAGE = "Nutzung: /admin yes <secret> oder /admin no."
 ADMIN_AUTH_PROMPT = "Admin-Secret bitte senden. /cancel bricht ab."
@@ -1872,28 +1873,43 @@ class TeeBotusEngine:
         return self._youtube_transcript_reply_actions(event, account_id, instructions, url, transcript, source)
 
     def _pending_youtube_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction] | None:
-        pending_link = self.state.get_pending_flow(
-            event.instance,
-            account_id,
-            YOUTUBE_LINK_FLOW,
-            conversation_scope=_pending_flow_conversation_scope(event),
-        )
+        try:
+            pending_link = self.state.get_pending_flow(
+                event.instance,
+                account_id,
+                YOUTUBE_LINK_FLOW,
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
+        except Exception:  # noqa: BLE001 - follow-up state failures must not start an ambiguous job.
+            LOGGER.exception("YouTube link pending-state lookup failed instance=%s account=%s", event.instance, account_id)
+            return [SendText(event.chat_id, YOUTUBE_PENDING_STATE_ERROR, track=False)]
         if pending_link is not None and _pending_flow_matches_event(pending_link, event):
             url = _extract_youtube_url(event.text)
             if url:
-                self.state.pop_pending_flow(
-                    event.instance,
-                    account_id,
-                    YOUTUBE_LINK_FLOW,
-                    conversation_scope=_pending_flow_conversation_scope(event),
-                )
+                try:
+                    popped = self.state.pop_pending_flow(
+                        event.instance,
+                        account_id,
+                        YOUTUBE_LINK_FLOW,
+                        conversation_scope=_pending_flow_conversation_scope(event),
+                    )
+                except Exception:  # noqa: BLE001 - do not start transcription with unknown follow-up state.
+                    LOGGER.exception("YouTube link pending-state removal failed instance=%s account=%s", event.instance, account_id)
+                    return [SendText(event.chat_id, YOUTUBE_PENDING_STATE_ERROR, track=False)]
+                if popped is None:
+                    LOGGER.error("YouTube link pending state disappeared before follow-up instance=%s account=%s", event.instance, account_id)
+                    return [SendText(event.chat_id, YOUTUBE_PENDING_STATE_ERROR, track=False)]
                 return self._youtube_transcript_actions(event, account_id, instructions)
-        pending_options = self.state.get_pending_flow(
-            event.instance,
-            account_id,
-            YOUTUBE_OPTIONS_FLOW,
-            conversation_scope=_pending_flow_conversation_scope(event),
-        )
+        try:
+            pending_options = self.state.get_pending_flow(
+                event.instance,
+                account_id,
+                YOUTUBE_OPTIONS_FLOW,
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
+        except Exception:  # noqa: BLE001 - follow-up state failures must not start an ambiguous job.
+            LOGGER.exception("YouTube options pending-state lookup failed instance=%s account=%s", event.instance, account_id)
+            return [SendText(event.chat_id, YOUTUBE_PENDING_STATE_ERROR, track=False)]
         if pending_options is not None and _pending_flow_matches_event(pending_options, event):
             url = str(pending_options.get("url") or "").strip()
             if not url:
@@ -1917,12 +1933,19 @@ class TeeBotusEngine:
                 reply = "Bitte antworte z. B. mit: live ja, llm ja"
                 self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
                 return [SendText(event.chat_id, reply, buttons=YOUTUBE_LOCAL_OPTIONS_BUTTONS)]
-            self.state.pop_pending_flow(
-                event.instance,
-                account_id,
-                YOUTUBE_OPTIONS_FLOW,
-                conversation_scope=_pending_flow_conversation_scope(event),
-            )
+            try:
+                popped = self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    YOUTUBE_OPTIONS_FLOW,
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
+            except Exception:  # noqa: BLE001 - do not start transcription with unknown options state.
+                LOGGER.exception("YouTube options pending-state removal failed instance=%s account=%s", event.instance, account_id)
+                return [SendText(event.chat_id, YOUTUBE_PENDING_STATE_ERROR, track=False)]
+            if popped is None:
+                LOGGER.error("YouTube options pending state disappeared before follow-up instance=%s account=%s", event.instance, account_id)
+                return [SendText(event.chat_id, YOUTUBE_PENDING_STATE_ERROR, track=False)]
             original_text = str(pending_options.get("original_text") or event.text)
             return self._youtube_run_local_transcript_actions(
                 event,
