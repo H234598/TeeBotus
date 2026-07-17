@@ -1379,6 +1379,7 @@ def recover_stale_proactive_dispatching_items(
     cutoff = resolved_now - timedelta(minutes=timeout_minutes)
     timestamp = resolved_now.isoformat(timespec="seconds")
     recovered_ids: list[str] = []
+    changed = False
     with _account_proactive_outbox_lock(account_store, account_id):
         rows = account_store.read_proactive_outbox(account_id)
         for item in rows:
@@ -1389,6 +1390,24 @@ def recover_stale_proactive_dispatching_items(
                 continue
             item_id = str(item.get("id") or "").strip()
             if not item_id:
+                continue
+            dispatch_attempts = max(0, _normalize_int(item.get("dispatch_attempts"), default=0))
+            if dispatch_attempts >= PROACTIVE_DISPATCH_MAX_ATTEMPTS:
+                item["status"] = "failed"
+                item["updated_at"] = timestamp
+                item.pop("dispatching_at", None)
+                history = item.setdefault("status_history", [])
+                if not isinstance(history, list):
+                    history = []
+                    item["status_history"] = history
+                history.append(
+                    {
+                        "at": timestamp,
+                        "status": "failed",
+                        "reason": f"dispatch_attempt_limit_after_{timeout_minutes}_minute_recovery",
+                    }
+                )
+                changed = True
                 continue
             item["status"] = "queued"
             item["updated_at"] = timestamp
@@ -1408,7 +1427,8 @@ def recover_stale_proactive_dispatching_items(
                 }
             )
             recovered_ids.append(item_id)
-        if recovered_ids:
+            changed = True
+        if changed:
             account_store.write_proactive_outbox(account_id, rows)
     return tuple(recovered_ids)
 

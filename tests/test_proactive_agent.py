@@ -3997,6 +3997,50 @@ def test_dispatch_recovers_stale_claim_after_worker_crash(tmp_path) -> None:
     assert item["status_history"][2]["reason"] == "stale_dispatch_reclaimed_after_30_minutes"
 
 
+def test_stale_dispatch_claim_at_attempt_limit_fails_closed(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="crash_limit",
+        message_text="Nicht endlos wiederholen",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    item = account_store.read_proactive_outbox(account_id)[0]
+    item["status"] = "dispatching"
+    item["dispatching_at"] = "2026-06-15T11:00:00+00:00"
+    item["dispatch_attempts"] = 3
+    item["status_history"].append(
+        {"at": "2026-06-15T11:00:00+00:00", "status": "dispatching", "reason": "worker_claimed"}
+    )
+    account_store.write_proactive_outbox(account_id, [item])
+
+    recovered = recover_stale_proactive_dispatching_items(
+        account_store,
+        account_id,
+        now=datetime(2026, 6, 15, 11, 31, tzinfo=timezone.utc),
+    )
+
+    assert recovered == ()
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["id"] == item_id
+    assert item["status"] == "failed"
+    assert item["dispatch_attempts"] == 3
+    assert "dispatching_at" not in item
+    assert item["status_history"][-1] == {
+        "at": "2026-06-15T11:31:00+00:00",
+        "status": "failed",
+        "reason": "dispatch_attempt_limit_after_30_minute_recovery",
+    }
+
+
 def test_dispatch_reschedules_recurring_user_reminder_after_successful_send(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
