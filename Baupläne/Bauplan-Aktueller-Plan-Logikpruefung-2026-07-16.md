@@ -6937,6 +6937,22 @@ Commits. Kein Push. Restart nach 4 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `17/20` sichtbar.
 
+### YouTube-LLM-Antwort bleibt bei Statefehler erhalten
+
+- 2026-07-17: Der YouTube-LLM-Pfad speicherte neue Response-IDs ungefangen.
+  Ein lokaler Runtime-Statefehler konnte fertige Transkriptanalyse bis zum
+  globalen Safety-Rand verschlucken.
+- Response-State wird jetzt best-effort gespeichert und bei Fehler geloggt;
+  die fertige YouTube-Antwort bleibt sichtbar.
+- Test: fokussierter YouTube-Statepfad `3 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `78343c38 fix: preserve youtube replies on state failure`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `18/20`
+Commits. Kein Push. Restart nach 2 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `19/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
