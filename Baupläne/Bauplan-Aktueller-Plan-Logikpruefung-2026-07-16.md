@@ -2980,6 +2980,23 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 4 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Account-Discovery-ueber-stabile-Child-Directory-FDs
+
+- 2026-07-17: Account-Discovery und Secret-Payload-Generatoren nutzten
+  `iterdir().is_dir()`. Symlinked Account-Verzeichnisse konnten dadurch als
+  lokale Memory-/Secret-Quellen erscheinen.
+- Child-Verzeichnisse werden jetzt aus stabilem Parent-FD gelesen und mit
+  `O_NOFOLLOW|O_DIRECTORY` bestaetigt. Symlinks und Race-verlorene Eintraege
+  werden ignoriert; spaetere Datei-Reads bleiben separat FD-gebunden.
+- Regression: Discovery-/Merge-Fokus -> `11 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `306 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bf42611a fix: ignore symlinked account directories during discovery`.
+
+**Aktueller Laufstand:** Seit dem Restart `18/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 2 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
