@@ -2105,6 +2105,13 @@ def _watch_codex_session_roots_for_instances_impl(
                 else None
             )
             selected_session_files = event_session_files or snapshot_session_files
+            if selected_session_files and limit > 0:
+                selected_session_files = tuple(
+                    sorted(
+                        sorted(set(selected_session_files), key=_codex_session_file_import_sort_key)[:limit],
+                        key=_codex_session_file_processing_sort_key,
+                    )
+                )
             if pending_session_files and snapshot_session_files is not None and not event_session_files:
                 snapshot_paths = set(snapshot_session_files)
                 selected_session_files = tuple(path for path in pending_session_files if path in snapshot_paths)

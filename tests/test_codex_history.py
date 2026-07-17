@@ -5072,6 +5072,64 @@ def test_codex_session_event_filter_reuses_cached_directory_roots(
     assert selected == (session_file.resolve(),)
 
 
+def test_watch_codex_session_roots_applies_scan_limit_to_event_batch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = make_git_repo(tmp_path, "watch-event-limit", version="3.2.0")
+    sessions_root = tmp_path / "sessions"
+    first = write_codex_session(
+        sessions_root / "first.jsonl", repo=repo, session_id="sess-event-first", turn_id="turn-event-first"
+    )
+    second = write_codex_session(
+        sessions_root / "second.jsonl", repo=repo, session_id="sess-event-second", turn_id="turn-event-second"
+    )
+    os.utime(first, ns=(1_000_000_000, 1_000_000_000))
+    os.utime(second, ns=(2_000_000_000, 2_000_000_000))
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+
+    class FakeWatchdog:
+        def __init__(self) -> None:
+            self.wait_calls = 0
+
+        def start(self) -> None:
+            return None
+
+        def wait(self, _timeout_seconds: float) -> bool | tuple[Path, ...]:
+            self.wait_calls += 1
+            return (first, second) if self.wait_calls == 1 else False
+
+        def stop(self) -> None:
+            return None
+
+    watchdog = FakeWatchdog()
+    monkeypatch.setattr(codex_history_module, "_build_codex_session_watchdog", lambda _roots: watchdog)
+    import_calls: list[tuple[int, tuple[Path, ...]]] = []
+
+    def fake_import(
+        _store: AccountStore,
+        _roots: tuple[Path, ...],
+        *,
+        limit: int,
+        session_files: tuple[Path, ...] | None = None,
+    ) -> dict[str, object]:
+        import_calls.append((limit, tuple(session_files or ())))
+        return {"items": []}
+
+    monkeypatch.setattr(codex_history_module, "import_codex_session_roots", fake_import)
+
+    result = watch_codex_session_roots(
+        store,
+        (sessions_root,),
+        poll_interval_seconds=0.25,
+        max_iterations=2,
+        event_mode="auto",
+        limit=1,
+    )
+
+    assert result["status_counts"] == {}
+    assert import_calls == [(1, (second,)), (1, (second,))]
+
+
 def test_watch_codex_session_roots_snapshot_imports_only_changed_session_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
