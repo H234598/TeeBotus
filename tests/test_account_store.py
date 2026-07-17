@@ -8,6 +8,7 @@ import re
 import subprocess
 import threading
 from contextlib import contextmanager
+from copy import deepcopy
 from pathlib import Path
 from unittest.mock import patch
 
@@ -2372,7 +2373,7 @@ def test_structured_account_memory_rolls_back_entries_when_index_write_fails(tmp
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
     store.append_structured_memory_entry(account_id, {"id": "mem_old", "user_text": "Mond", "bot_text": "Tee"})
     previous_rows = store.read_memory_entries(account_id)
-    previous_index = store.read_memory_index(account_id)
+    previous_index = deepcopy(store.read_memory_index(account_id))
 
     with patch.object(
         store,
@@ -2684,7 +2685,7 @@ def test_rebuild_structured_account_memory_rolls_back_entries_when_index_write_f
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
     store.write_memory_entries(account_id, [{"id": "mem_raw", "user_text": "Mond", "bot_text": "Tee"}])
     previous_rows = store.read_memory_entries(account_id)
-    previous_index = store.read_memory_index(account_id)
+    previous_index = deepcopy(store.read_memory_index(account_id))
 
     with patch.object(
         store,
@@ -7696,7 +7697,7 @@ def test_mark_structured_account_memory_rolls_back_entries_when_index_write_fail
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
     memory_id = store.append_structured_memory_entry(account_id, {"id": "mem_first", "user_text": "Mond", "bot_text": "Tee"})
     previous_rows = store.read_memory_entries(account_id)
-    previous_index = store.read_memory_index(account_id)
+    previous_index = deepcopy(store.read_memory_index(account_id))
 
     with patch.object(
         store,

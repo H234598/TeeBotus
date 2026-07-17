@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 from contextlib import contextmanager
 from collections import Counter
+from copy import deepcopy
 import errno
 from functools import wraps
 import hashlib
@@ -4449,7 +4450,7 @@ class AccountStore:
 
     def _normalized_memory_index(self, account_id: str, data: dict[str, Any]) -> dict[str, Any]:
         timestamp = utc_now()
-        index_doc = dict(data) if isinstance(data, dict) else {}
+        index_doc = deepcopy(data) if isinstance(data, dict) else {}
         index_doc["schema_version"] = ACCOUNT_MEMORY_SCHEMA_VERSION
         index_doc["scope"] = "account"
         index_doc["account_id"] = account_id
