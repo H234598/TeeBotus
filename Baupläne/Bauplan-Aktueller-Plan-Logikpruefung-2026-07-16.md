@@ -7652,3 +7652,21 @@ Commits. Kein Push. Restart nach 4 weiteren Commits.
 
 **Aktueller Laufstand:** Nach den beiden Code-Commits seit dem Restart `19/20`
 Commits. Dieser Plan-Commit macht `20/20` sichtbar. Kein Push. Restart jetzt.
+
+### Engine-Lauf: optionale Fehler dürfen Hauptpfade nicht brechen
+
+- 2026-07-17: Neun weitere Guards geschlossen: Admin-Pending-State,
+  Emergency-Cooldown-Lesen, YouTube-Optionsklassifizierung, dynamische
+  Instructions, `/codex`, `/status`, unerwartete LLM-Adapterfehler,
+  Response-Metadaten und Built-in-Reply-Matcher.
+- Prinzip: Sicherheitsaktionen fail-closed; optionale Kontext-, Diagnose- und
+  Adapterpfade liefern kontrollierte Antworten oder erlauben sicheren Fallback.
+  Ein kaputter Nebenpfad darf keine fertige LLM-/Transkriptantwort verwerfen.
+- Tests: Admin `22`, Emergency `11`, YouTube-Optionen `3`, Codex `4`, Status
+  `7`, LLM-/State-Guards `5`, Handler-/Fallback-Guards `3` jeweils gruen;
+  Ruff und `git diff --check` gruen. Kein echter Provider/API-Aufruf.
+- Code-Commits: `7a78c9f9`, `1d672b2d`, `3d821625`, `23e3f903`, `45c1d0df`,
+  `fe1756ce`, `61e9840e`, `6826762d`, `d83ace28`.
+
+**Aktueller Laufstand:** Seit dem Restart `9/20` Code-Commits. Dieser
+Plan-Commit zählt als `10/20`. Kein Push. Restart jetzt.
