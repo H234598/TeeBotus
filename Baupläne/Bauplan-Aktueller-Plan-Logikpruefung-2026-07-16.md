@@ -6953,6 +6953,23 @@ Commits. Kein Push. Restart nach 2 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `19/20` sichtbar.
 
+### LLM-Reset behauptet keinen falschen Erfolg
+
+- 2026-07-17: `/reset` meldete `llm_reset` auch dann, wenn
+  `reset_previous_response_id()` im lokalen Runtime-State fehlschlug.
+- Resetfehler werden jetzt geloggt und kontrolliert gemeldet. Kein falscher
+  „Kontext gelöscht“-Erfolg; der Bot-Loop bleibt aktiv.
+- Test: fokussierter Resetpfad `3 passed`; Ruff und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `42f1c849 fix: report llm reset state failures`.
+- Restart nach `20/20`: Service `active`, MainPID `248383`,
+  `ExecMainStatus=0`; keine neuen Startfehler.
+
+**Aktueller Laufstand:** Nach dem Restart `1/20` Commits. Kein Push.
+Restart nach 19 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `1/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
