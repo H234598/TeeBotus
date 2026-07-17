@@ -5342,6 +5342,52 @@ def test_dispatch_due_proactive_items_fails_when_sender_is_missing(tmp_path) -> 
     assert item["status_history"][-1]["reason"] == "missing_sender:signal"
 
 
+def test_dispatch_reports_missing_sender_persistence_failure_after_route_refresh(tmp_path, monkeypatch) -> None:
+    import TeeBotus.runtime.proactive_agent as proactive_module
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="missing-sender-persistence")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="missing_sender_persistence",
+        message_text="Nicht senden",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    rows = account_store.read_proactive_outbox(account_id)
+    rows[0].pop("route", None)
+    account_store.write_proactive_outbox(account_id, rows)
+    original_claim = proactive_module._claim_proactive_worker_job_if_allowed
+
+    def change_route_before_claim(*args, **kwargs):
+        account_store.update_identity_route(identity, channel="matrix", chat_id="!room:example", chat_type="private", adapter_slot=1)
+        return original_claim(*args, **kwargs)
+
+    monkeypatch.setattr(proactive_module, "_claim_proactive_worker_job_if_allowed", change_route_before_claim)
+    monkeypatch.setattr(proactive_module, "update_proactive_outbox_item_status", lambda *_args, **_kwargs: False)
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda *_args: "must-not-send"},
+            now=now,
+        )
+    )
+
+    assert results[0].item_id == item_id
+    assert results[0].status == "failed"
+    assert results[0].reason == "status_update_failed"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "dispatching"
+
+
 def test_dispatch_due_proactive_items_finds_sender_case_insensitive(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

@@ -1845,41 +1845,38 @@ async def dispatch_due_proactive_outbox_items(
             chat_id = str(route.get("chat_id") or "").strip()
             sender = _sender_for_channel(senders, channel)
             if sender is _SENDER_NOT_FOUND:
-                update_proactive_outbox_item_status(
+                result_reason = _persist_claimed_item_failure(
                     account_store,
                     account_id,
                     item_id,
-                    status="failed",
                     reason=f"missing_sender:{channel}",
+                    result_reason="missing_sender",
                     now=resolved_now,
-                    expected_status="dispatching",
                 )
-                results.append(ProactiveDispatchResult(account_id, item_id, "failed", "missing_sender", channel))
+                results.append(ProactiveDispatchResult(account_id, item_id, "failed", result_reason, channel))
                 continue
             if not callable(sender):
-                update_proactive_outbox_item_status(
+                result_reason = _persist_claimed_item_failure(
                     account_store,
                     account_id,
                     item_id,
-                    status="failed",
                     reason="invalid_sender",
+                    result_reason="invalid_sender",
                     now=resolved_now,
-                    expected_status="dispatching",
                 )
-                results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_sender", channel))
+                results.append(ProactiveDispatchResult(account_id, item_id, "failed", result_reason, channel))
                 continue
             action = _proactive_item_action(chat_id, message_text, item)
             if action is None:
-                update_proactive_outbox_item_status(
+                result_reason = _persist_claimed_item_failure(
                     account_store,
                     account_id,
                     item_id,
-                    status="failed",
                     reason="invalid_file",
+                    result_reason="invalid_file",
                     now=resolved_now,
-                    expected_status="dispatching",
                 )
-                results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_file", channel))
+                results.append(ProactiveDispatchResult(account_id, item_id, "failed", result_reason, channel))
                 continue
         try:
             route_matches = _account_has_matching_proactive_route(account_store, account_id, route)
@@ -2081,6 +2078,31 @@ async def dispatch_due_proactive_outbox_items(
 
 
 _SENDER_NOT_FOUND = object()
+
+
+def _persist_claimed_item_failure(
+    account_store: AccountStore,
+    account_id: str,
+    item_id: str,
+    *,
+    reason: str,
+    result_reason: str,
+    now: datetime,
+) -> str:
+    try:
+        updated = update_proactive_outbox_item_status(
+            account_store,
+            account_id,
+            item_id,
+            status="failed",
+            reason=reason,
+            now=now,
+            expected_status="dispatching",
+        )
+    except Exception:  # pragma: no cover - concrete storage failures vary by backend.
+        LOGGER.exception("Proactive claimed-item failure persistence failed account=%s item=%s reason=%s", account_id, item_id, reason)
+        updated = False
+    return result_reason if updated else "status_update_failed"
 
 
 def _proactive_dispatch_send_error_is_retryable(exc: Exception) -> bool:
