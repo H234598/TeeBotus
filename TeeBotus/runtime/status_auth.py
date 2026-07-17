@@ -133,16 +133,19 @@ def evaluate_status_auth_gate(
         return StatusAuthGateResult(False, account_id, reason="unauthorized")
     if not _is_private_chat_type(event.chat_type):
         return StatusAuthGateResult(False, account_id, reason="non_private_auth_attempt")
-    account_id = account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
-    if event.chat_id:
-        account_store.update_identity_route(
-            event.identity_key,
-            channel=event.channel,
-            chat_id=event.chat_id,
-            chat_type=_normalize_chat_type(event.chat_type),
-            adapter_slot=event.adapter_slot,
-        )
-    authorize_status_recipient(account_store, account_id, event, now=now)
+    try:
+        account_id = account_store.resolve_or_create_account(event.identity_key, display_label=event.sender_name)
+        if event.chat_id:
+            account_store.update_identity_route(
+                event.identity_key,
+                channel=event.channel,
+                chat_id=event.chat_id,
+                chat_type=_normalize_chat_type(event.chat_type),
+                adapter_slot=event.adapter_slot,
+            )
+        authorize_status_recipient(account_store, account_id, event, now=now)
+    except Exception:  # noqa: BLE001 - auth persistence must fail closed for every runtime adapter.
+        return StatusAuthGateResult(False, event.account_id, reason="status_auth_store_error")
     return StatusAuthGateResult(False, account_id, action_text=STATUS_AUTH_CONFIRMATION_TEXT, reason="authorized")
 
 

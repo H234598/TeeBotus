@@ -155,6 +155,25 @@ def test_status_auth_gate_silences_logger_user_until_code_seen(tmp_path, monkeyp
     assert "Befehle" in help_actions[0].text
 
 
+def test_status_auth_persistence_failure_fails_closed_in_engine(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
+    account_store = store(tmp_path, "TeeBotus_Logger")
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    def broken_authorize(*_args, **_kwargs):
+        raise RuntimeError("auth state unavailable")
+
+    monkeypatch.setattr("TeeBotus.runtime.status_auth.authorize_status_recipient", broken_authorize)
+
+    actions = engine.process(event(identity, "18hhGfuu3", instance="TeeBotus_Logger"))
+
+    assert actions == []
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    assert status_auth_state_authorized(account_store, account_id) is False
+
+
 def test_debug_level_warns_each_active_account_and_channel_once(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_LOG_LEVEL", "2")
     account_store = store(tmp_path)
