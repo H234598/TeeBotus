@@ -6889,6 +6889,22 @@ Commits. Kein Push. Restart nach 10 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `11/20` sichtbar.
 
+### Globaler Message-Safety-Rand
+
+- 2026-07-17: `process_result()` liess unerwartete Dispatcher-, Observation-
+  und Auth-Gatefehler aus dem obersten Runtime-Eintrittspunkt laufen.
+- Auth-Gatefehler bleiben stumm und fail-closed. Unerwartete Fehler in normaler
+  Nachrichtenverarbeitung werden geloggt und als kontrollierte Antwort
+  zurückgegeben; der Bot-Loop läuft weiter.
+- Test: fokussierter Safety-Rand `15 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `004963e1 fix: add runtime message safety boundary`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `12/20`
+Commits. Kein Push. Restart nach 8 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `13/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
