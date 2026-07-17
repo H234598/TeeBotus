@@ -6306,3 +6306,18 @@ bleibt erst bei 100 Commits.
 erreicht. Kein Push. Restart ist erfolgt; neuer Zyklus steht nach dieser
 Korrektur bei `1/20`.
 Naechster Push bleibt erst bei 100 Commits.
+
+### Proactive-Review-Discovery reportiert unerwartete Filesystemfehler
+
+- 2026-07-17: Die Review-CLI fing bei Instanz-Discovery nur erwartete
+  `OSError`-/`ValueError`-Fehler. Unerwartete Filesystem-/Wrapper-Fehler
+  konnten den Review-Scan ohne JSON-Report abbrechen.
+- Review-Discovery liefert jetzt ebenfalls `instance_discovery_failed` mit
+  `ok=false` und leerer Itemliste; Store-Zugriff erfolgt nicht.
+- Test: `tests/test_proactive_review.py` `16 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8bf07b5e fix: report unexpected review discovery errors`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`2/20` Commits. Kein Push. Restart nach 18 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
