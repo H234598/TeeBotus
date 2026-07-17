@@ -2096,6 +2096,9 @@ def check_proactive_agent_account(
             review_pending_count += 1
         elif status == "dispatching":
             dispatching_count += 1
+            dispatching_at_raw = str(item.get("dispatching_at") or "").strip()
+            if dispatching_at_raw and _parse_proactive_datetime(dispatching_at_raw) is None:
+                errors.append(f"dispatching outbox item {item_id or index} has invalid claim timestamp")
             claimed_at = _proactive_dispatch_claimed_at(item)
             if claimed_at is None:
                 errors.append(f"dispatching outbox item {item_id or index} missing claim timestamp")

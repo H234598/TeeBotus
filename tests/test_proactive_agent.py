@@ -1273,6 +1273,29 @@ def test_proactive_agent_health_reports_malformed_agent_state_shape(tmp_path) ->
     assert "agent_state policy.allowed_hours is not a two-item list" in joined
 
 
+def test_proactive_agent_health_does_not_hide_invalid_dispatching_timestamp(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.write_proactive_outbox(
+        account_id,
+        [
+            {
+                "id": "pro_invalid_claim_timestamp",
+                "status": "dispatching",
+                "dispatching_at": "not-a-date",
+                "updated_at": "2026-06-15T12:00:00+00:00",
+                "status_history": [{"at": "2026-06-15T12:00:00+00:00", "status": "dispatching", "reason": "worker_claimed"}],
+            }
+        ],
+    )
+
+    health = check_proactive_agent_account(account_store, account_id, now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))
+
+    assert health.ok is False
+    assert "dispatching outbox item pro_invalid_claim_timestamp has invalid claim timestamp" in health.errors
+
+
 def test_proactive_agent_health_reports_agent_state_read_error() -> None:
     class BrokenStore:
         def read_agent_state(self, _account_id: str) -> dict:
