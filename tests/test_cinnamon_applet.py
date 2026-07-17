@@ -3676,8 +3676,8 @@ def test_cinnamon_applet_runtime_parser_does_not_hide_unknown_decision_route_beh
         """
     )
 
-    assert parsed["summary"]["actionable_problem_statuses"] == "unknown:1"
-    assert parsed["summary"]["informational_problem_statuses"] == "unavailable:1"
+    assert parsed["summary"]["actionable_problem_statuses"] == "unavailable:1,unknown:1"
+    assert parsed["summary"]["informational_problem_statuses"] == ""
 
 
 def test_cinnamon_applet_runtime_parser_does_not_hide_unknown_secondary_status_behind_fallback() -> None:
@@ -3752,8 +3752,8 @@ def test_cinnamon_applet_runtime_parser_does_not_treat_fallback_sentinels_as_con
         """
     )
 
-    assert parsed["summary"]["actionable_problem_statuses"] == "unavailable:3"
-    assert parsed["summary"]["informational_problem_statuses"] == "unavailable:1"
+    assert parsed["summary"]["actionable_problem_statuses"] == "unavailable:4"
+    assert parsed["summary"]["informational_problem_statuses"] == ""
 
 
 def test_cinnamon_applet_runtime_parser_prioritizes_explicit_fallback_sentinel() -> None:
@@ -3767,8 +3767,8 @@ def test_cinnamon_applet_runtime_parser_prioritizes_explicit_fallback_sentinel()
         """
     )
 
-    assert parsed["summary"]["actionable_problem_statuses"] == "unavailable:3"
-    assert parsed["summary"]["informational_problem_statuses"] == "unavailable:1"
+    assert parsed["summary"]["actionable_problem_statuses"] == "unavailable:4"
+    assert parsed["summary"]["informational_problem_statuses"] == ""
 
 
 def test_cinnamon_applet_runtime_parser_normalizes_quoted_fallback_sentinels() -> None:
@@ -3782,8 +3782,8 @@ def test_cinnamon_applet_runtime_parser_normalizes_quoted_fallback_sentinels() -
         """
     )
 
-    assert parsed["summary"]["actionable_problem_statuses"] == "unavailable:3"
-    assert parsed["summary"]["informational_problem_statuses"] == "unavailable:1"
+    assert parsed["summary"]["actionable_problem_statuses"] == "unavailable:4"
+    assert parsed["summary"]["informational_problem_statuses"] == ""
 
 
 def test_cinnamon_applet_runtime_parser_normalizes_quoted_status_values() -> None:
@@ -4114,16 +4114,16 @@ account_identity_warning=Demo code=runtime_channel_without_identity channel=sign
     )
 
     assert parsed["summary"]["problem_status_count"] == 12
-    assert parsed["summary"]["actionable_problem_status_count"] == 5
-    assert parsed["summary"]["actionable_problem_statuses"] == "missing_key:1,warning:4"
-    assert parsed["summary"]["informational_problem_status_count"] == 7
+    assert parsed["summary"]["actionable_problem_status_count"] == 6
+    assert parsed["summary"]["actionable_problem_statuses"] == "missing_key:1,unavailable:1,warning:4"
+    assert parsed["summary"]["informational_problem_status_count"] == 6
     assert parsed["summary"]["informational_problem_statuses"] == (
-        "fallback_defaults:1,missing_key:1,partial:1,unavailable:2,warning:2"
+        "fallback_defaults:1,missing_key:1,partial:1,unavailable:1,warning:2"
     )
     assert parsed["summary"]["llm_actionable_problem_status_count"] == 1
     assert parsed["summary"]["llm_informational_status_count"] == 1
-    assert parsed["summary"]["api_actionable_problem_status_count"] == 0
-    assert parsed["summary"]["api_informational_status_count"] == 4
+    assert parsed["summary"]["api_actionable_problem_status_count"] == 1
+    assert parsed["summary"]["api_informational_status_count"] == 3
     assert parsed["summary"]["codex_history_actionable_problem_status_count"] == 2
     assert parsed["summary"]["codex_history_informational_status_count"] == 1
     assert parsed["summary"]["memory_actionable_problem_status_count"] == 2

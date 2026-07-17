@@ -972,7 +972,7 @@ def _line_health_statuses(
             )
             or (
                 prefix == "structured_decision"
-                and _fallback_reference_is_set(fields)
+                and fallback_covered
                 and (not line_has_error or fallback_error_covered)
             )
             or fallback_informational
