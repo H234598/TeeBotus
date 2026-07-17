@@ -4168,6 +4168,24 @@ nach 17 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 zaehlt als naechster Commit. Kein Push. Restart nach 15 weiteren Commits.
 Naechster Push bleibt erst bei 100 Commits.
 
+### Codex-Worker-Pools-vollstaendig-scannen
+
+- 2026-07-17: Der normale `codex-history`-Defaultscan akzeptierte unter
+  `.codex-agents` nur exakt zweistellige Namen wie `a1`, `b1`, `c1`. Alle
+  weiteren nummerierten Arbeiterbienen (`a2..a100`, `bX`, `cX`) fehlten dort;
+  der Rootscan des Systemdienstes war davon nicht betroffen.
+- Der Defaultfilter erlaubt jetzt nur bekannte Pools `a`, `b`, `c` mit einer
+  positiven Nummer. Nicht-Pool-Verzeichnisse wie `templates` und `a0` bleiben
+  ausgeschlossen.
+- Regression: Codex-History-Fokus `13 passed`; komplette
+  `tests/test_codex_history.py` -> `179 passed`; Ruff mit bestehender E402-
+  Ausnahme, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `20aef92d fix: scan all codex worker pools`.
+
+**Aktueller Laufstand:** Seit dem Restart `7/20` Code-Commits. Plan-Commit
+zaehlt als naechster Commit. Kein Push. Restart nach 13 weiteren Commits.
+Naechster Push bleibt erst bei 100 Commits.
+
 ### Status-Auth-Export-vermeidet-Short-Write
 
 - 2026-07-17: `_write_status_auth_report()` nutzte einen einzelnen
