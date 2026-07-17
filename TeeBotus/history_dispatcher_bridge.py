@@ -6,16 +6,24 @@ import logging
 import os
 import socket
 import struct
+import threading
 import uuid
 from collections.abc import Mapping, Sequence
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - fcntl is unavailable on non-POSIX platforms.
+    fcntl = None  # type: ignore[assignment]
 
 LOGGER = logging.getLogger("TeeBotus.history_dispatcher_bridge")
 PROTOCOL_VERSION = 1
 DEFAULT_FRAME_LIMIT = 8 * 1024 * 1024
 MAX_SPOOL_EVENT_BYTES = 128 * 1024
 MAX_SPOOL_EVENTS_PER_FLUSH = 100
+CALLBACK_SPOOL_LOCK_FILENAME = ".CallbackSpool.lock"
 
 
 class HistoryDispatcherError(RuntimeError):
@@ -94,6 +102,23 @@ class CallbackSpool:
         self.root = Path(root).expanduser()
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(self.root, 0o700)
+        self._flush_thread_lock = threading.RLock()
+
+    @contextmanager
+    def flush_lock(self):
+        with self._flush_thread_lock:
+            lock_path = self.root / CALLBACK_SPOOL_LOCK_FILENAME
+            with lock_path.open("a+") as handle:
+                locked = False
+                try:
+                    os.chmod(lock_path, 0o600)
+                    if fcntl is not None:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                        locked = True
+                    yield
+                finally:
+                    if locked:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
     def enqueue(self, event: Mapping[str, Any]) -> Path:
         event_data = dict(event)
@@ -186,18 +211,19 @@ class HistoryDispatcherBridge:
             return {"ok": False, "spooled": True, "event_id": str(event_data.get("event_id") or spool_path.stem)}
 
     async def flush_spool(self) -> dict[str, int]:
-        delivered = failed = 0
-        for path, event in self.spool.events():
-            try:
-                response = await self.client.request_async("delivery.record", event)
-                data = response.get("data", response)
-                succeeded = response.get("ok") is True and isinstance(data, Mapping) and data.get("ok") is True
-                if succeeded:
-                    self.spool.discard(path)
-                    delivered += 1
-                else:
+        with self.spool.flush_lock():
+            delivered = failed = 0
+            for path, event in self.spool.events():
+                try:
+                    response = await self.client.request_async("delivery.record", event)
+                    data = response.get("data", response)
+                    succeeded = response.get("ok") is True and isinstance(data, Mapping) and data.get("ok") is True
+                    if succeeded:
+                        self.spool.discard(path)
+                        delivered += 1
+                    else:
+                        failed += 1
+                except HistoryDispatcherError:
                     failed += 1
-            except HistoryDispatcherError:
-                failed += 1
-                break
-        return {"delivered": delivered, "failed": failed}
+                    break
+            return {"delivered": delivered, "failed": failed}

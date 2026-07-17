@@ -156,3 +156,39 @@ def test_bridge_keeps_spooled_event_when_dispatcher_response_has_no_data(tmp_pat
 
     assert result == {"delivered": 0, "failed": 1}
     assert len(spool.events()) == 1
+
+
+def test_bridge_serializes_concurrent_spool_flushes(tmp_path: Path) -> None:
+    spool = CallbackSpool(tmp_path / "spool")
+    spool.enqueue({"event_id": "event-concurrent", "item_id": "item", "event_type": "sent"})
+
+    class SlowClient:
+        def __init__(self) -> None:
+            self.calls = 0
+            self.started = threading.Event()
+            self.release = threading.Event()
+
+        async def request_async(self, _operation: str, _body: object) -> dict[str, object]:
+            self.calls += 1
+            self.started.set()
+            await asyncio.to_thread(self.release.wait, 5)
+            return {"ok": True, "data": {"ok": True}}
+
+    client = SlowClient()
+    bridge = HistoryDispatcherBridge(client, spool)  # type: ignore[arg-type]
+    results: list[dict[str, int]] = []
+    threads = [threading.Thread(target=lambda: results.append(asyncio.run(bridge.flush_spool()))) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    assert client.started.wait(5)
+    time.sleep(0.1)
+    assert client.calls == 1
+    client.release.set()
+    for thread in threads:
+        thread.join(5)
+
+    assert all(not thread.is_alive() for thread in threads)
+    assert sorted(results, key=lambda result: result["delivered"]) == [
+        {"delivered": 0, "failed": 0},
+        {"delivered": 1, "failed": 0},
+    ]
