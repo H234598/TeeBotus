@@ -3033,6 +3033,23 @@ Commits.
 zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Initialisierungs-und-Merge-Verzeichnisse-ueber-stabile-FDs
+
+- 2026-07-17: `AccountStore.__post_init__()`, `merge_accounts()` und
+  `_merge_jsonl()` legten `accounts/` oder Zielverzeichnisse noch per
+  `Path.mkdir()` nach Pfadpruefung an.
+- Alle drei Pfade nutzen jetzt komponentenweise
+  `O_NOFOLLOW|O_DIRECTORY`-FD-Erstellung. Redirects koennen keine externen
+  Merge-/Memory-Ziele anlegen.
+- Regression: Init-/Merge-Fokus und kompletter
+  `tests/test_account_store.py`-Lauf -> jeweils `307 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f9befc33 fix: create merge and store directories through stable fds`.
+
+**Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
