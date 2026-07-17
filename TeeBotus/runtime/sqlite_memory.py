@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
 import sqlite3
+import stat
 import threading
 import uuid
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Mapping
+from urllib.parse import quote
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -656,18 +660,62 @@ class SQLiteAccountMemoryBackend:
                     (self.instance_name, account_id),
                 )
 
-    def _connect(self) -> sqlite3.Connection:
+    @contextlib.contextmanager
+    def _connect(self) -> Iterator[sqlite3.Connection]:
         self.config.path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.config.path)
-        connection.execute("PRAGMA journal_mode=WAL")
-        connection.execute("PRAGMA synchronous=NORMAL")
-        connection.execute("PRAGMA foreign_keys=ON")
-        return connection
+        parent_descriptor, target_descriptor, target_identity = _open_stable_sqlite_target(
+            self.config.path,
+            access_flags=os.O_RDWR,
+            create=True,
+        )
+        connection: sqlite3.Connection | None = None
+        try:
+            connection = sqlite3.connect(
+                _sqlite_parent_uri(parent_descriptor, self.config.path.name, mode="rwc"),
+                uri=True,
+            )
+            _verify_stable_sqlite_target(
+                parent_descriptor,
+                self.config.path.name,
+                target_identity,
+                self.config.path,
+            )
+            connection.execute("PRAGMA journal_mode=WAL")
+            connection.execute("PRAGMA synchronous=NORMAL")
+            connection.execute("PRAGMA foreign_keys=ON")
+            yield connection
+        finally:
+            if connection is not None:
+                connection.close()
+            os.close(target_descriptor)
+            os.close(parent_descriptor)
 
-    def _connect_readonly(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(f"{self.config.path.resolve().as_uri()}?mode=ro", uri=True)
-        connection.execute("PRAGMA foreign_keys=ON")
-        return connection
+    @contextlib.contextmanager
+    def _connect_readonly(self) -> Iterator[sqlite3.Connection]:
+        parent_descriptor, target_descriptor, target_identity = _open_stable_sqlite_target(
+            self.config.path,
+            access_flags=os.O_RDONLY,
+            create=False,
+        )
+        connection: sqlite3.Connection | None = None
+        try:
+            connection = sqlite3.connect(
+                _sqlite_parent_uri(parent_descriptor, self.config.path.name, mode="ro"),
+                uri=True,
+            )
+            _verify_stable_sqlite_target(
+                parent_descriptor,
+                self.config.path.name,
+                target_identity,
+                self.config.path,
+            )
+            connection.execute("PRAGMA foreign_keys=ON")
+            yield connection
+        finally:
+            if connection is not None:
+                connection.close()
+            os.close(target_descriptor)
+            os.close(parent_descriptor)
 
     def _missing_database_error(self) -> AccountStoreError:
         error = AccountStoreError(f"SQLite account-memory database is missing: {self.config.path}")
@@ -1030,6 +1078,97 @@ def _collection_item_key(row: dict[str, Any], ordinal: int) -> str:
 
 def _collection_payload_id(collection: str, item_key: str) -> str:
     return f"jsonl:{collection}:{item_key}"
+
+
+def _sqlite_parent_uri(parent_descriptor: int, filename: str, *, mode: str) -> str:
+    return f"file:/proc/self/fd/{parent_descriptor}/{quote(filename, safe='')}?mode={mode}"
+
+
+def _open_stable_sqlite_target(
+    path: Path,
+    *,
+    access_flags: int,
+    create: bool,
+) -> tuple[int, int, tuple[int, int]]:
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    directory_flag = getattr(os, "O_DIRECTORY", 0)
+    if not no_follow or not directory_flag:
+        raise OSError("stable SQLite access requires O_NOFOLLOW and O_DIRECTORY")
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    parent_descriptor = _open_stable_sqlite_directory_descriptor(absolute.parent, no_follow=no_follow)
+    descriptor: int | None = None
+    try:
+        try:
+            expected_stat = os.stat(absolute.name, dir_fd=parent_descriptor, follow_symlinks=False)
+        except FileNotFoundError:
+            expected_stat = None
+        if expected_stat is not None and (
+            not stat.S_ISREG(expected_stat.st_mode) or expected_stat.st_nlink != 1
+        ):
+            raise OSError(f"refusing unsafe SQLite database file: {path}")
+        flags = access_flags | no_follow | getattr(os, "O_CLOEXEC", 0)
+        if create:
+            flags |= os.O_CREAT
+        descriptor = os.open(absolute.name, flags, 0o600, dir_fd=parent_descriptor)
+        opened_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(opened_stat.st_mode) or opened_stat.st_nlink != 1:
+            raise OSError(f"refusing unsafe SQLite database file: {path}")
+        if expected_stat is not None and (
+            (opened_stat.st_dev, opened_stat.st_ino) != (expected_stat.st_dev, expected_stat.st_ino)
+        ):
+            raise OSError(f"SQLite database file changed during open: {path}")
+        current_stat = os.stat(absolute.name, dir_fd=parent_descriptor, follow_symlinks=False)
+        if (opened_stat.st_dev, opened_stat.st_ino) != (current_stat.st_dev, current_stat.st_ino):
+            raise OSError(f"SQLite database file changed during open: {path}")
+        for suffix in ("-wal", "-shm"):
+            try:
+                sidecar_stat = os.stat(f"{absolute.name}{suffix}", dir_fd=parent_descriptor, follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            if stat.S_ISLNK(sidecar_stat.st_mode):
+                raise OSError(f"refusing symlinked SQLite sidecar: {path}{suffix}")
+        return parent_descriptor, descriptor, (int(opened_stat.st_dev), int(opened_stat.st_ino))
+    except BaseException:
+        if descriptor is not None:
+            os.close(descriptor)
+        os.close(parent_descriptor)
+        raise
+
+
+def _verify_stable_sqlite_target(
+    parent_descriptor: int,
+    filename: str,
+    target_identity: tuple[int, int],
+    path: Path,
+) -> None:
+    try:
+        current_stat = os.stat(filename, dir_fd=parent_descriptor, follow_symlinks=False)
+    except OSError as exc:
+        raise OSError(f"SQLite database file changed during connection: {path}") from exc
+    if (
+        not stat.S_ISREG(current_stat.st_mode)
+        or current_stat.st_nlink != 1
+        or (int(current_stat.st_dev), int(current_stat.st_ino)) != target_identity
+    ):
+        raise OSError(f"SQLite database file changed during connection: {path}")
+
+
+def _open_stable_sqlite_directory_descriptor(path: Path, *, no_follow: int) -> int:
+    directory_flag = getattr(os, "O_DIRECTORY", 0)
+    if not directory_flag:
+        raise OSError("stable SQLite directory access requires O_DIRECTORY")
+    flags = os.O_RDONLY | directory_flag | no_follow | getattr(os, "O_CLOEXEC", 0)
+    absolute = Path(os.path.abspath(os.fspath(path)))
+    descriptor = os.open(os.sep, flags)
+    try:
+        for component in absolute.parts[1:]:
+            next_descriptor = os.open(component, flags, dir_fd=descriptor)
+            os.close(descriptor)
+            descriptor = next_descriptor
+        return descriptor
+    except BaseException:
+        os.close(descriptor)
+        raise
 
 
 def _first_symlinked_path_component(path: Path) -> Path | None:

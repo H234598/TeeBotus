@@ -4014,6 +4014,44 @@ def test_account_store_sqlite_backend_falls_back_to_secondary_with_warning(tmp_p
     assert "ACCOUNT MEMORY PRIMARY DATABASE FAILED" in caplog.text
 
 
+def test_sqlite_read_uses_stable_open_file_when_database_path_is_swapped(tmp_path, monkeypatch):
+    import os
+    import sqlite3
+
+    import TeeBotus.runtime.sqlite_memory as sqlite_memory
+
+    sqlite_path = tmp_path / "memory.sqlite3"
+    replacement_path = tmp_path / "replacement.sqlite3"
+    account_id = "a" * 128
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=sqlite_path, fallback_path=None),
+    )
+    backend.write_entries(account_id, [{"id": "stable", "user_text": "Original"}])
+    with sqlite3.connect(replacement_path) as connection:
+        connection.execute("CREATE TABLE marker (value TEXT NOT NULL)")
+        connection.execute("INSERT INTO marker(value) VALUES ('wrong')")
+    real_connect = sqlite_memory.sqlite3.connect
+    swapped = False
+
+    def swap_path_before_connect(database, *args, **kwargs):
+        nonlocal swapped
+        if not swapped and str(database).startswith("file:/proc/self/fd/"):
+            os.replace(replacement_path, sqlite_path)
+            swapped = True
+        return real_connect(database, *args, **kwargs)
+
+    monkeypatch.setattr(sqlite_memory.sqlite3, "connect", swap_path_before_connect)
+
+    with pytest.raises(OSError, match="changed during connection"):
+        backend.read_entries(account_id)
+    assert swapped is True
+    with sqlite3.connect(sqlite_path) as connection:
+        assert connection.execute("SELECT value FROM marker").fetchone() == ("wrong",)
+
+
 def test_sqlite_memory_recreates_schema_after_database_file_is_deleted(tmp_path):
     sqlite_path = tmp_path / "memory.sqlite3"
     backend = SQLiteAccountMemoryBackend(
