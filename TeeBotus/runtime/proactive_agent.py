@@ -1912,7 +1912,21 @@ async def dispatch_due_proactive_outbox_items(
         try:
             sent_ref = await _maybe_await(sender(route, action, item))
         except Exception as exc:  # pragma: no cover - exact adapter exception types are channel specific
-            dispatch_attempts = max(0, _normalize_int(item.get("dispatch_attempts"), default=0)) + 1
+            current_attempts = _proactive_dispatch_attempts(item)
+            if current_attempts is None:
+                invalid_attempt_reason = "invalid_dispatch_attempts"
+                update_proactive_outbox_item_status(
+                    account_store,
+                    account_id,
+                    item_id,
+                    status="failed",
+                    reason=invalid_attempt_reason,
+                    now=resolved_now,
+                    expected_status="dispatching",
+                )
+                results.append(ProactiveDispatchResult(account_id, item_id, "failed", invalid_attempt_reason, channel))
+                continue
+            dispatch_attempts = current_attempts + 1
             if _proactive_dispatch_send_error_is_retryable(exc) and dispatch_attempts < PROACTIVE_DISPATCH_MAX_ATTEMPTS:
                 retry_at = _proactive_dispatch_retry_at(resolved_now, dispatch_attempts)
                 retry_reason = f"retry_scheduled:send_error:{type(exc).__name__}:attempt_{dispatch_attempts}"
