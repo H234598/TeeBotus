@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import json
 import os
 import subprocess
@@ -1902,7 +1903,7 @@ def test_codex_history_dispatch_bridge_dry_run_requests_payload(
     )
 
     assert result["ok"] is True
-    assert calls == [("history.query", {"status": "queued", "limit": 100, "include_payload": True})]
+    assert calls == [("history.query", {"status": "queued", "limit": 0, "include_payload": True})]
     assert seen_items[0]["summary_prefix"] == "v1.9.380 #0001"
     assert result["items"] == [{"status": "would_skip", "summary_prefix": "v1.9.380 #0001"}]
 
@@ -3647,6 +3648,12 @@ def test_codex_history_dispatch_cli_defaults_to_unlimited(
     assert payload["ok"] is True
 
 
+def test_codex_history_dispatch_function_defaults_to_unlimited() -> None:
+    default_limit = inspect.signature(dispatch_codex_history_outbox).parameters["limit"].default
+
+    assert default_limit == 0
+
+
 def test_codex_history_dispatch_marks_missing_sender_failed_without_deleting_item(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "missing-sender-demo", version="1.0.2")
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
@@ -3764,6 +3771,66 @@ def test_codex_history_dispatch_retries_failed_admin_without_duplicate_success(t
     assert persisted["id"] == item["id"]
     assert persisted["status"] == "accepted"
     assert persisted["delivery"]["attempts"] == 2
+
+
+def test_codex_history_receipt_does_not_block_retry_for_other_admin(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "receipt-mixed-admin-demo", version="1.0.36")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    first_admin = store.resolve_or_create_account(telegram_identity_key(93), display_label="Admin 1")
+    second_admin = store.resolve_or_create_account(telegram_identity_key(94), display_label="Admin 2")
+    store.update_identity_route(telegram_identity_key(93), channel="telegram", chat_id="93", chat_type="private", adapter_slot=1)
+    store.update_identity_route(telegram_identity_key(94), channel="telegram", chat_id="94", chat_type="private", adapter_slot=1)
+    authorize_codex_admin(store, first_admin)
+    authorize_codex_admin(store, second_admin)
+    item = append_codex_history_summary(store, repo_root=repo, title="Receipt Retry", bullets=["Receipt eines Admins darf anderen Retry nicht blockieren."])
+
+    def mixed_sender(route: dict[str, object], _action: SendAttachment, _metadata: dict[str, object]) -> str:
+        if str(route.get("chat_id") or "") == "94":
+            raise RuntimeError("temporary network issue")
+        return "msg-93"
+
+    first_result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="TeeBotus_Logger",
+            account_ids=(first_admin, second_admin),
+            senders={"telegram": mixed_sender},
+            now=datetime(2026, 6, 19, 12, tzinfo=timezone.utc),
+        )
+    )
+    assert first_result["status_counts"] == {"accepted": 1, "failed": 1}
+
+    receipt = record_codex_history_delivery_receipt(
+        store,
+        instance_name="TeeBotus_Logger",
+        channel="telegram",
+        chat_id="93",
+        account_id=first_admin,
+        message_ref="msg-93",
+        now=datetime(2026, 6, 19, 12, 0, 30, tzinfo=timezone.utc),
+    )
+    assert receipt["status"] == "delivered"
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["status"] == "queued"
+
+    resent_chat_ids: list[str] = []
+
+    def retry_sender(route: dict[str, object], _action: SendAttachment, _metadata: dict[str, object]) -> str:
+        resent_chat_ids.append(str(route.get("chat_id") or ""))
+        return "msg-94"
+
+    second_result = asyncio.run(
+        dispatch_codex_history_outbox(
+            store,
+            instance_name="TeeBotus_Logger",
+            account_ids=(first_admin, second_admin),
+            senders={"telegram": retry_sender},
+            now=datetime(2026, 6, 19, 12, 1, tzinfo=timezone.utc),
+        )
+    )
+
+    assert second_result["status_counts"] == {"accepted": 2}
+    assert resent_chat_ids == ["94"]
+    assert store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]["id"] == item["id"]
 
 
 def test_codex_history_dispatch_ignores_fresh_in_flight_item(tmp_path: Path) -> None:
