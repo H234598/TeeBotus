@@ -1665,10 +1665,13 @@ def _resolve_status_account_id(*, sender_id: str, account_id: str, account_store
 def _account_memory_dir_from_store(account_store: AccountStore, account_id: str) -> Path | None:
     try:
         account_dir = account_store.account_dir(account_id)
+        return account_dir if account_dir.is_dir() else None
     except (AccountStoreError, OSError):
         LOGGER.exception("Failed to resolve account memory directory from store.")
         return None
-    return account_dir if account_dir.is_dir() else None
+    except Exception:  # noqa: BLE001 - status memory path lookup must not abort /status.
+        LOGGER.exception("Unexpected failure while resolving account memory directory from store.")
+        return None
 
 
 def _proactive_agent_status_lines(
@@ -1699,6 +1702,17 @@ def _proactive_agent_status_lines(
         outbox = account_store.read_proactive_outbox(account_id)
     except (AccountStoreError, OSError, ValueError):
         LOGGER.exception("Failed to read proactive agent status.")
+        return [
+            "Proactive Agent",
+            "- Agent enabled: Fehler beim Lesen",
+            "- Outbox queued: Fehler beim Lesen",
+            "- Review pending: Fehler beim Lesen",
+            "- Outbox dispatching: Fehler beim Lesen",
+            f"- Scheduler enabled: {'ja' if scheduler_enabled else 'nein'}",
+            f"- Model planner: {planner}",
+        ]
+    except Exception:  # noqa: BLE001 - unexpected health backend failures must not abort /status.
+        LOGGER.exception("Unexpected failure while reading proactive agent status.")
         return [
             "Proactive Agent",
             "- Agent enabled: Fehler beim Lesen",

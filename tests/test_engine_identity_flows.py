@@ -9,7 +9,7 @@ import pytest
 
 from TeeBotus import __version__
 from TeeBotus.core import status as status_core
-from TeeBotus.core.status import build_status_reply
+from TeeBotus.core.status import _account_memory_dir_from_store, _proactive_agent_status_lines, build_status_reply
 from TeeBotus.core.youtube import _has_youtube_transcript_intent
 from TeeBotus.instructions import BotInstructions
 from TeeBotus.llm.base import LLMResponse
@@ -198,6 +198,30 @@ def test_status_account_lookup_failure_keeps_status_available(tmp_path) -> None:
     )
 
     assert "- Nutzermemory: Account nicht zugeordnet" in text
+
+
+def test_status_account_directory_failure_is_diagnosed(tmp_path) -> None:
+    class BrokenStatusStore:
+        def account_dir(self, _account_id):
+            raise RuntimeError("status account directory unavailable")
+
+    assert _account_memory_dir_from_store(BrokenStatusStore(), "a" * 128) is None  # type: ignore[arg-type]
+
+
+def test_status_proactive_health_failure_is_diagnosed() -> None:
+    class BrokenStatusStore:
+        def read_agent_state(self, _account_id):
+            raise RuntimeError("proactive health unavailable")
+
+    lines = _proactive_agent_status_lines(
+        account_store=BrokenStatusStore(),  # type: ignore[arg-type]
+        account_id="a" * 128,
+        instance_name="Depressionsbot",
+        proactive_model_planner="tool",
+        env={},
+    )
+
+    assert "- Agent enabled: Fehler beim Lesen" in lines
 
 
 def test_admin_flow_state_failure_is_user_visible_without_aborting_message_processing(tmp_path, monkeypatch) -> None:
