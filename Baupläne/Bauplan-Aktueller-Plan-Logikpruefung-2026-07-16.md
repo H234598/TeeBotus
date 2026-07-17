@@ -8027,3 +8027,19 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `4/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Gemini-Keyring: Veraltete parallele Ergebnisse duerfen Rotation nicht zuruecksetzen
+
+- 2026-07-17: Gemeinsamer Keyring wird von parallelen LiteLLM-Requests genutzt.
+  Ein Request konnte nach einer Rotation noch mit einem alten Schluessel
+  erfolgreich sein oder ein Limit melden und den Cursor dadurch auf einen
+  erschoepften Schluessel zuruecksetzen.
+- `mark_success()` und `mark_limited()` bewegen den Cursor jetzt nur noch,
+  wenn gemeldeter Schluessel aktuell aktiv ist. Spaete Ergebnisse werden
+  ignoriert; die Rotation bleibt monoton bis zum naechsten Limit.
+- Test: 29 relevante Gemini-Keyring-/LiteLLM-Tests, Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7895f30a fix: ignore stale Gemini key results`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `5/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
