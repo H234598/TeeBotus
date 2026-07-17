@@ -3979,6 +3979,57 @@ def test_dispatch_skips_item_that_was_snoozed_after_due_snapshot(tmp_path, monke
     assert account_store.read_proactive_outbox(account_id)[0]["due_at"] == "2026-06-15T14:00:00+00:00"
 
 
+def test_dispatch_claim_rejects_item_snoozed_between_snapshot_and_claim(tmp_path, monkeypatch) -> None:
+    import TeeBotus.runtime.proactive_agent as proactive_module
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="claim_race",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    original_claim = proactive_module._claim_proactive_worker_job_if_allowed
+
+    def snooze_before_claim(*args, **kwargs):
+        _update_proactive_outbox_item_due_at(
+            account_store,
+            account_id,
+            item_id,
+            due_at="2026-06-15T14:00:00+00:00",
+            reason="test_snooze_race",
+            now=now,
+        )
+        return original_claim(*args, **kwargs)
+
+    monkeypatch.setattr(proactive_module, "_claim_proactive_worker_job_if_allowed", snooze_before_claim)
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda *_args: "must-not-send"},
+            now=now,
+        )
+    )
+
+    assert len(results) == 1
+    assert results[0].item_id == item_id
+    assert results[0].status == "skipped"
+    assert results[0].reason == "stale_outbox_item"
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "queued"
+    assert item["due_at"] == "2026-06-15T14:00:00+00:00"
+
+
 def test_dispatch_does_not_overwrite_item_cancelled_during_send(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

@@ -1512,13 +1512,20 @@ def _claim_proactive_worker_job_if_allowed(
     now: datetime,
 ) -> tuple[ProactiveDecision, bool]:
     with _account_proactive_outbox_lock(account_store, account_id):
+        current_item = _current_due_proactive_outbox_item(account_store, account_id, item_id, now=now)
+        if current_item is None:
+            return ProactiveDecision(False, "stale_outbox_item"), False
+        for field_name in ("category", "intent", "message_text", "due_at", "retry_at", "risk_gate", "route", "file", "system_item", "user_requested_reminder"):
+            if item.get(field_name) != current_item.get(field_name):
+                return ProactiveDecision(False, "stale_outbox_item"), False
+        category = str(current_item.get("category") or category).strip().casefold()
         decision = proactive_policy_decision(
             account_store,
             account_id,
             category=category,
             now=now,
             exclude_item_id=item_id,
-            item=item,
+            item=current_item,
         )
         if not decision.allowed:
             return decision, False
@@ -1675,6 +1682,9 @@ async def dispatch_due_proactive_outbox_items(
             item=item,
             now=resolved_now,
         )
+        if claim_decision.reason == "stale_outbox_item":
+            results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "stale_outbox_item", channel))
+            continue
         if not claim_decision.allowed:
             if _proactive_policy_reason_is_transient(claim_decision.reason):
                 results.append(ProactiveDispatchResult(account_id, item_id, "queued", claim_decision.reason, channel))
