@@ -7873,6 +7873,22 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `14/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### Proactive-Dispatch-Results: `dispatch_id` idempotent speichern
+
+- 2026-07-18: Parallele Recovery-/Dispatch-Laeufe konnten denselben Versand
+  mehrfach auditieren. Die Recovery sah nur nach `id`; bei bereits belegter
+  Ergebnis-ID wurde fuer dieselbe `dispatch_id` eine neue ID erzeugt.
+- `append_proactive_dispatch_results()` fuehrt jetzt vorhandene
+  `dispatch_id`-Werte als Idempotenzschluessel. Wiederholte Ergebnisse werden
+  nicht erneut gespeichert und liefern die bestehende Ergebnis-ID zurueck.
+- Tests: `tests/test_account_store.py tests/test_proactive_cli.py` -> `389
+  passed`; fokussierter Idempotenztest enthalten. Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c59f76df fix: deduplicate proactive dispatch results`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `15/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Arbeitsgedaechtnis: Index muss zur JSONL passen
 
 - 2026-07-17: `WorkingMemoryStore` und der noch vorhandene Telegram-Store
