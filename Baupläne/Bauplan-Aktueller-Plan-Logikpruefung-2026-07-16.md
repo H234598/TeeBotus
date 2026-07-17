@@ -3067,6 +3067,22 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 14 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Account-Store-Root-ohne-unsichere-Aufloesung
+
+- 2026-07-17: `AccountStore.__post_init__()` pruefte `raw_root`, rief danach
+  aber `raw_root.resolve()` auf. Ein zwischenzeitlich gesetzter Symlink konnte
+  den Store-Root vor der FD-Sicherung umbiegen.
+- Root wird jetzt nur lexikalisch absolut normalisiert; komponentenweise
+  `O_NOFOLLOW|O_DIRECTORY`-Erstellung/Oeffnung entscheidet ueber den echten
+  Zielpfad und blockiert Redirects.
+- Regression: kompletter `tests/test_account_store.py`-Lauf -> `307 passed`;
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `95b929ee fix: keep account store roots lexically stable`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
