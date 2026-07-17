@@ -3666,6 +3666,21 @@ def test_bot_alias_lookup_survives_unexpected_memory_backend_failure(tmp_path, m
     assert account_bot_address_names(account_store, account_id) == frozenset()
 
 
+def test_voice_preference_commands_survive_unexpected_backend_failures(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = signal_identity_key(source_uuid="voice-settings-error")
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.handle_tts_voice_model_command", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("voice state unavailable")))
+    monkeypatch.setattr("TeeBotus.runtime.engine.handle_tts_mimic_voice_command", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("mimic state unavailable")))
+
+    voice_actions = engine.process(event(identity, "/voicemodel", channel="signal"))
+    mimic_actions = engine.process(event(identity, "/mimic_voice", channel="signal"))
+
+    assert voice_actions[0].text == "Ich konnte deine Voice-Einstellung gerade nicht speichern."
+    assert mimic_actions[0].text == "Ich konnte deine Sprechweisen-Einstellung gerade nicht speichern."
+
+
 def test_engine_start_adds_legal_consent_buttons_until_privacy_is_confirmed(tmp_path):
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="legal-buttons")

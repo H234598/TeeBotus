@@ -1542,12 +1542,18 @@ class TeeBotusEngine:
             result = handle_tts_voice_model_command(self.account_store, account_id, event.text, instructions)
         except (AccountStoreError, OSError, ValueError):
             return [SendText(event.chat_id, "Ich konnte deine Voice-Einstellung gerade nicht speichern.")]
+        except Exception:  # noqa: BLE001 - voice preference persistence must not abort command handling.
+            LOGGER.exception("Voice model preference persistence failed account=%s", account_id)
+            return [SendText(event.chat_id, "Ich konnte deine Voice-Einstellung gerade nicht speichern.")]
         return [SendText(event.chat_id, result.reply_text, track=False)]
 
     def _mimic_voice_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         try:
             result = handle_tts_mimic_voice_command(self.account_store, account_id, event.text, instructions)
         except (AccountStoreError, OSError, ValueError):
+            return [SendText(event.chat_id, "Ich konnte deine Sprechweisen-Einstellung gerade nicht speichern.")]
+        except Exception:  # noqa: BLE001 - mimic preference persistence must not abort command handling.
+            LOGGER.exception("Mimic voice preference persistence failed account=%s", account_id)
             return [SendText(event.chat_id, "Ich konnte deine Sprechweisen-Einstellung gerade nicht speichern.")]
         return [SendText(event.chat_id, result.reply_text, track=False)]
 
