@@ -1213,15 +1213,12 @@ class TeeBotusEngine:
                     handled=True,
                 )
         else:
-            try:
-                _, new_secret = self.account_store.rotate_secret(account_id)
-            except Exception:  # noqa: BLE001 - security mutation must not abort the message loop.
-                LOGGER.exception("WTF secret rotation failed instance=%s account=%s", event.instance, account_id)
-                return EngineResult(
-                    account_id,
-                    [SendText(event.chat_id, "Die Sicherheitsaktion konnte gerade nicht abgeschlossen werden. Bitte spaeter erneut versuchen.", track=False)],
-                    handled=True,
-                )
+            LOGGER.error("WTF notification is missing new identity instance=%s account=%s", event.instance, account_id)
+            return EngineResult(
+                account_id,
+                [SendText(event.chat_id, "Die Sicherheitsaktion konnte gerade nicht abgeschlossen werden. Bitte spaeter erneut versuchen.", track=False)],
+                handled=True,
+            )
         return EngineResult(
             account_id,
             [SendText(event.chat_id, f"Die neue Verknüpfung wurde getrennt und dein Secret wurde rotiert.\n\nNeues Secret:\n{new_secret}", track=False)],

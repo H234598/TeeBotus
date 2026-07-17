@@ -1029,6 +1029,24 @@ def test_wtf_reports_secret_when_notification_cleanup_fails_after_mutation(tmp_p
     assert account_store.get_account_for_identity(new_signal) is None
 
 
+def test_wtf_malformed_notification_does_not_rotate_secret(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    engine.state.record_link_notification(
+        instance_name="Depressionsbot",
+        account_id=account_id,
+        new_identity_key="",
+        old_identity_key=identity,
+    )
+    monkeypatch.setattr(account_store, "rotate_secret", lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("malformed notification must not rotate")))
+
+    result = engine.process_identity_flows(event(identity, "WTF?"))
+
+    assert result.actions[0].text == "Die Sicherheitsaktion konnte gerade nicht abgeschlossen werden. Bitte spaeter erneut versuchen."
+
+
 def test_new_identity_cannot_use_wtf_notification_for_itself(tmp_path):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
