@@ -931,7 +931,11 @@ def _codex_history_chat_status_lines(*, account_store: AccountStore | None, inst
 
 def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
     try:
-        rows = account_store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
+        readonly_reader = getattr(account_store, "read_codex_history_outbox_readonly", None)
+        if callable(readonly_reader):
+            rows = readonly_reader(INSTANCE_STATE_ACCOUNT_ID)
+        else:
+            rows = account_store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
     except Exception as exc:  # noqa: BLE001 - status should diagnose unreadable history without crashing.
         return {"error": redact_status_text(f"{type(exc).__name__}: {exc}")}
     valid_rows = _codex_history_rows_in_creation_order([row for row in rows if isinstance(row, Mapping)])

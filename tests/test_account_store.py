@@ -3442,6 +3442,28 @@ def test_account_store_sqlite_backend_keeps_newer_legacy_jsonl_row_for_same_id(t
     assert store.read_proactive_outbox(account_id) == rows
 
 
+def test_account_store_sqlite_codex_history_readonly_does_not_migrate_legacy_jsonl(tmp_path, monkeypatch):
+    sqlite_path = tmp_path / "memory.sqlite3"
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")
+    monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_SQLITE_PATH", str(sqlite_path))
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.write_codex_history_outbox(
+        account_id,
+        [{"id": "history_sql", "status": "accepted", "summary": {"title": "SQL"}}],
+    )
+    legacy_path = store.account_dir(account_id) / "Codex_History_Outbox.jsonl"
+    store.account_memory_vault.write_jsonl(
+        legacy_path,
+        [{"id": "history_legacy", "status": "accepted", "summary": {"title": "Legacy"}}],
+    )
+
+    rows = store.read_codex_history_outbox_readonly(account_id)
+
+    assert [row["id"] for row in rows] == ["history_sql"]
+    assert legacy_path.exists()
+
+
 def test_account_store_sqlite_backend_compacts_duplicate_jsonl_ids(tmp_path, monkeypatch):
     sqlite_path = tmp_path / "memory.sqlite3"
     monkeypatch.setenv("TEEBOTUS_ACCOUNT_MEMORY_BACKEND", "sqlite")

@@ -5608,6 +5608,20 @@ def test_codex_history_status_warns_for_malformed_backend_row() -> None:
     ]
 
 
+def test_codex_history_status_prefers_readonly_store_reader() -> None:
+    class ReadOnlyHistoryStore:
+        def read_codex_history_outbox_readonly(self, _account_id: str):
+            return [{"id": "history", "status": "accepted", "project": {"repo_name": "TeeBotus"}}]
+
+        def read_codex_history_outbox(self, _account_id: str):
+            raise AssertionError("status must not use migrating Codex-History reader")
+
+    lines = codex_history_status_lines(instance_name="Demo", account_store=ReadOnlyHistoryStore())
+
+    assert lines[0].startswith("codex_history=Demo status=ok")
+    assert lines[1].startswith("codex_history_repo=Demo repo=TeeBotus status=ok")
+
+
 def test_codex_history_status_normalizes_unknown_status_token(tmp_path: Path) -> None:
     store = _store(tmp_path)
     store.append_codex_history_item(

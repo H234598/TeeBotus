@@ -3907,7 +3907,14 @@ class AccountStore:
             return
         self.account_memory_vault.write_json(self.account_dir(account_id) / filename, dict(data))
 
-    def _read_account_jsonl_collection(self, account_id: str, filename: str, collection: str) -> list[dict[str, Any]]:
+    def _read_account_jsonl_collection(
+        self,
+        account_id: str,
+        filename: str,
+        collection: str,
+        *,
+        merge_legacy_file: bool = True,
+    ) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         backend = self.account_memory_backend
         path = self.account_dir(account_id) / filename
@@ -3930,7 +3937,7 @@ class AccountStore:
                     legacy_rows = self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
                     return _merge_account_jsonl_rows(rows, legacy_rows)
                 return rows
-            if path.exists():
+            if path.exists() and merge_legacy_file:
                 legacy_rows = self._read_jsonl_with_fallback(path, vault=self.account_memory_vault)
                 merged_rows = _merge_account_jsonl_rows(rows, legacy_rows)
                 if merged_rows != rows:
@@ -4201,6 +4208,16 @@ class AccountStore:
     def read_codex_history_outbox(self, account_id: str) -> list[dict[str, Any]]:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         return self._read_account_jsonl_collection(account_id, CODEX_HISTORY_OUTBOX_FILENAME, CODEX_HISTORY_OUTBOX_COLLECTION)
+
+    @_serialize_account_memory
+    def read_codex_history_outbox_readonly(self, account_id: str) -> list[dict[str, Any]]:
+        account_id = validate_sha512_token(account_id, field_name="account_id")
+        return self._read_account_jsonl_collection(
+            account_id,
+            CODEX_HISTORY_OUTBOX_FILENAME,
+            CODEX_HISTORY_OUTBOX_COLLECTION,
+            merge_legacy_file=False,
+        )
 
     @_serialize_account_memory
     def write_codex_history_outbox(self, account_id: str, rows: list[dict[str, Any]]) -> None:
