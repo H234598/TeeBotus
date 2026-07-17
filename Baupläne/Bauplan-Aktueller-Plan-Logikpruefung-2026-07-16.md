@@ -7670,3 +7670,23 @@ Commits. Dieser Plan-Commit macht `20/20` sichtbar. Kein Push. Restart jetzt.
 
 **Aktueller Laufstand:** Seit dem Restart `9/20` Code-Commits. Dieser
 Plan-Commit zählt als `10/20`. Kein Push. Restart jetzt.
+
+### Reply-Routing: Gruppen-Replies müssen Bot-Ziel erkennen
+
+- 2026-07-17: Matrix- und Signal-Gruppen-Replies wurden vor der
+  Adressierungsprüfung nicht als Bot-Replies markiert. Matrix lud zwar den
+  Quote-Text, wertete den Zielsender aber nicht aus; Signal ignorierte Quote-
+  Autoren vollständig. Solche Antworten wurden trotz Reply auf Bot-Nachricht
+  verworfen.
+- Matrix prüft den referenzierten Event-Sender gegen `matrix_user_id` und lädt
+  Reply-Metadaten vor dem Gruppen-Ignore. Signal prüft Quote-Autor,
+  Telefonnummer und UUID gegen konfigurierte Bot-Identitäten. Fremde Quotes
+  bleiben unbeantwortet.
+- Tests: Matrix Reply-Lookup `3 passed`; Signal Gruppenrouting `3 passed` plus
+  Adapter-Quote-Test `1 passed`; Ruff und `git diff --check` gruen. Kein echter
+  Provider/API-Aufruf.
+- Code-Commits: `41d9a1e7 fix: recognize matrix replies to bot`,
+  `52cdd1ad fix: recognize signal replies to bot`.
+
+**Aktueller Laufstand:** Seit dem Restart `13/20` Code-Commits. Dieser
+Plan-Commit zählt als `14/20`. Kein Push. Restart erst bei `20/20`.
