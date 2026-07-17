@@ -1128,6 +1128,21 @@ def test_memory_recovery_metadata_quarantine_blocks_symlinked_instances_root(tmp
     assert not (tmp_path / "quarantine").exists()
 
 
+def test_memory_recovery_snapshot_discovery_tolerates_glob_error(monkeypatch, tmp_path: Path) -> None:
+    accounts_root = tmp_path / "accounts"
+    accounts_root.mkdir()
+    original_glob = Path.glob
+
+    def fail_snapshot_glob(path: Path, pattern: str):
+        if path == accounts_root:
+            raise OSError("snapshot directory disappeared")
+        return original_glob(path, pattern)
+
+    monkeypatch.setattr(Path, "glob", fail_snapshot_glob)
+
+    assert account_memory_recovery_module._discover_snapshot_sqlite_sources(accounts_root, existing_paths=set()) == []
+
+
 def test_memory_recovery_quarantine_blocks_missing_report_accounts_root(tmp_path: Path) -> None:
     account_id = "e" * 128
     report = {

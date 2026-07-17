@@ -1127,10 +1127,13 @@ def _discover_recovery_sources(accounts_root: Path) -> list[RecoverySource]:
 
 
 def _discover_snapshot_sqlite_sources(accounts_root: Path, *, existing_paths: set[Path]) -> list[RecoverySource]:
-    candidates = [
-        *accounts_root.glob(".pre-*/Account_Memory*.sqlite3"),
-        *accounts_root.glob("Account_Memory_Quarantine/*/sqlite_snapshots/Account_Memory*.sqlite3"),
-    ]
+    try:
+        candidates = [
+            *accounts_root.glob(".pre-*/Account_Memory*.sqlite3"),
+            *accounts_root.glob("Account_Memory_Quarantine/*/sqlite_snapshots/Account_Memory*.sqlite3"),
+        ]
+    except OSError:
+        return []
     sources: list[RecoverySource] = []
     seen_names: set[str] = set()
     for path in sorted(candidates):
