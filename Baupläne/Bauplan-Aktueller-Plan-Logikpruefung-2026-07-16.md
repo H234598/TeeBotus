@@ -5215,3 +5215,19 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `8/20` Commits. Kein Push. Restart nach 12 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Instanzpfad-validiert
+
+- 2026-07-17: Ausgewaehlte Instanznamen wurden direkt an `instances_dir`
+  angehaengt. Path-like Werte wie `../outside` konnten dadurch ausserhalb des
+  erwarteten Instances-Baums landen.
+- Ausgewaehlte Namen muessen jetzt einzelne Ordnernamen sein; ungueltige Werte
+  werden als `invalid_instance_name` gemeldet und nie an `store_factory`
+  weitergereicht. Gueltige Instanzen laufen weiter.
+- Test: `tests/test_proactive_cli.py` `54 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7170fb5c fix: reject unsafe proactive instance names`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`10/20` Commits. Kein Push. Restart nach 10 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
