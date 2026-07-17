@@ -7805,6 +7805,23 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `10/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### Codex-History-Import: Project-Upserts unter Outbox-Lock
+
+- 2026-07-17: Session-Import schrieb neue Summarys unter
+  `codex_history_outbox_lock`, aktualisierte `codex_history_projects` danach
+  aber ausserhalb. Parallele Collector-/Importlaeufe konnten dadurch
+  `summary_count` und letzte Summarydaten verlieren.
+- Project-Upserts importierter Batches laufen jetzt nochmals unter demselben
+  Outbox-Lock. Einzelne Append-/Graph-/Strategiepfade behalten ihre bestehende
+  Lock-Reihenfolge.
+- Test: komplette `tests/test_codex_history.py` -> `188 passed`; Compile und
+  `git diff --check` gruen. Ruff meldet nur neun bestehende E402-Warnungen im
+  fcntl-Importblock. Kein Provider/API-Aufruf.
+- Code-Commit: `ec5702b2 fix: serialize Codex project imports`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `11/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Arbeitsgedaechtnis: Index muss zur JSONL passen
 
 - 2026-07-17: `WorkingMemoryStore` und der noch vorhandene Telegram-Store
