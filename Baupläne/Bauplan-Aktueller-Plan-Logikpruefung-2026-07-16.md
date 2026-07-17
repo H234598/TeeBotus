@@ -6765,6 +6765,22 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `16/20` voll.
 
+### Voice-Einstellungsbefehle kapseln Backendfehler
+
+- 2026-07-17: `/voicemodel` und `/mimic_voice` fingen nur bekannte
+  Store-/I/O-/Value-Fehler. Unerwartete SQL-, Secret- oder Wrapper-
+  Ausnahmen konnten Command-Verarbeitung und Bot-Loop abbrechen.
+- Beide Commands loggen unerwartete Fehler jetzt und liefern die jeweilige
+  Speicherfehlerantwort. Keine falsche Einstellung und kein Voice-API-Aufruf.
+- Test: `tests/test_engine_identity_flows.py` `204 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `cb6a6f09 fix: contain voice preference backend failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`17/20` Commits. Kein Push. Restart nach 3 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `18/20` voll.
+
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
