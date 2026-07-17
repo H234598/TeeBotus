@@ -5392,6 +5392,25 @@ bleibt erst bei 100 Commits.
 `10/20` Commits. Kein Push. Restart nach 10 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Scheduler versteckt ungueltige Items nicht vor Fail-Closed
+
+- 2026-07-17: Der uebergeordnete Cycle rief den Expirer vor dem Dispatcher
+  auf. Kaputte `recurrence`, `retry_at` oder `risk_gate`-Werte konnten dadurch
+  als alte Items `expired` werden, bevor die strukturierten Invalidierungs-
+  pfade liefen.
+- Der gemeinsame Expirer ueberspringt jetzt alle bekannten ungueltigen,
+  nichtleeren Zeit-/Regel-/Risk-Felder. Dispatch- und Scheduler-Reihenfolge
+  validiert diese Felder vor Ablaufmarkierung; Fehler bleiben sichtbar und
+  reparierbar.
+- Tests: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `212 passed`; Cycle-Regression `2 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f6efd20a fix: keep invalid proactive items visible before expiry`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`12/20` Commits. Kein Push. Restart nach 8 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
