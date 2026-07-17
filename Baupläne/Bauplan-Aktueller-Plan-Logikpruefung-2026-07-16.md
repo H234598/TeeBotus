@@ -6805,6 +6805,22 @@ Restart nach 19 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `1/20` sichtbar.
 
+### Account-Identitätslookup kapselt Backendfehler
+
+- 2026-07-17: `process_identity_flows()` liess Fehler aus
+  `resolve_or_create_account()` ungefangen. Ein Ausfall beim Identity-Store
+  konnte jede eingehende Nachricht vor einer Antwort abbrechen.
+- Der Eintrittspunkt meldet Account-Backendfehler kontrolliert und bleibt ohne
+  Account-ID. Kein falscher Accountkontext und kein Bot-Loop-Abbruch.
+- Test: fokussierter Identity-Fehlerpfad `4 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `20521bab fix: contain account identity lookup failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `2/20`
+Commits. Kein Push. Restart nach 18 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `3/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
