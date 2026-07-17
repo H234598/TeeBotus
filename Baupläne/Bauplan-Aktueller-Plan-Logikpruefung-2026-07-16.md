@@ -3370,6 +3370,21 @@ nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `5/20` Commits. Kein Push. Restart
 nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### Status-Auth-Export-verweigert-Symlink-Basis
+
+- 2026-07-17: `_safe_output_path()` pruefte den `base_dir` erst nach
+  `resolve()`. Ein symlinked Instances-Root konnte dadurch als gueltige
+  Exportbasis erscheinen, obwohl Discovery ihn ablehnte.
+- Die Basis wird jetzt vor Aufloesung auf Symlink-Komponenten geprueft und bei
+  unsicherem Root abgelehnt.
+- Regression: Output-Symlink-Basis plus Status-Auth-Fokus -> `8 passed`;
+  komplette `tests/test_admin_accounts.py` -> `103 passed`. Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `972876bc fix: reject symlinked status auth output bases`.
+
+**Aktueller Laufstand:** Seit dem Restart `6/20` Commits. Kein Push. Restart
+nach 14 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
 ### Direkter-Recovery-Report-validiert-Instanznamen
 
 - 2026-07-17: `build_instance_recovery_report()` war direkt aufrufbar und
