@@ -4636,11 +4636,12 @@ def _update_codex_history_item_status(
                 item.pop("last_reason", None)
             if dispatch_results:
                 item["last_dispatch_results"] = [dict(row) for row in dispatch_results]
-            history = item.setdefault("status_history", [])
-            if not isinstance(history, list):
+            history = item.get("status_history")
+            if history is None:
                 history = []
                 item["status_history"] = history
-            history.append({"at": now, "status": normalized_status, "reason": normalized_reason})
+            if isinstance(history, list):
+                history.append({"at": now, "status": normalized_status, "reason": normalized_reason})
             replace_item = getattr(store, "replace_codex_history_outbox_item", None)
             if callable(replace_item) and replace_item(INSTANCE_STATE_ACCOUNT_ID, item):
                 return
@@ -4680,11 +4681,12 @@ def _claim_codex_history_item_for_dispatch(
             delivery["last_attempt_at"] = now
             delivery["sent_at"] = now
             item["last_reason"] = "worker_claimed"
-            history = item.setdefault("status_history", [])
-            if not isinstance(history, list):
+            history = item.get("status_history")
+            if history is None:
                 history = []
                 item["status_history"] = history
-            history.append({"at": now, "status": "dispatching", "reason": "worker_claimed"})
+            if isinstance(history, list):
+                history.append({"at": now, "status": "dispatching", "reason": "worker_claimed"})
             replace_item = getattr(store, "replace_codex_history_outbox_item", None)
             if callable(replace_item) and replace_item(INSTANCE_STATE_ACCOUNT_ID, item):
                 return dict(item)

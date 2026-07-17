@@ -1810,6 +1810,57 @@ def test_codex_history_success_plus_skip_clears_stale_item_reason(tmp_path: Path
     assert "last_reason" not in persisted
 
 
+def test_codex_history_status_update_preserves_invalid_status_history(tmp_path: Path) -> None:
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "id": "invalid-history-update",
+            "kind": "codex_run_summary",
+            "status": "queued",
+            "status_history": {"broken": True},
+        },
+    )
+
+    codex_history_module._update_codex_history_item_status(
+        store,
+        "invalid-history-update",
+        "accepted",
+        reason="accepted",
+        now="2026-07-17T12:00:00+00:00",
+    )
+
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "accepted"
+    assert persisted["status_history"] == {"broken": True}
+
+
+def test_codex_history_claim_preserves_invalid_status_history(tmp_path: Path) -> None:
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    store.append_codex_history_item(
+        INSTANCE_STATE_ACCOUNT_ID,
+        {
+            "id": "invalid-history-claim",
+            "kind": "codex_run_summary",
+            "status": "queued",
+            "status_history": {"broken": True},
+            "delivery": {},
+        },
+    )
+
+    claimed = codex_history_module._claim_codex_history_item_for_dispatch(
+        store,
+        "invalid-history-claim",
+        dispatch_now=datetime(2026, 7, 17, 12, tzinfo=timezone.utc),
+        now="2026-07-17T12:00:00+00:00",
+    )
+
+    assert claimed is not None
+    persisted = store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)[0]
+    assert persisted["status"] == "dispatching"
+    assert persisted["status_history"] == {"broken": True}
+
+
 def test_codex_history_dispatch_bridge_rejects_incomplete_completion_data(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
