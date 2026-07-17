@@ -30,6 +30,7 @@ from TeeBotus.runtime.engine import (
     MEMORY_PAGE_LIMIT_NOTE,
     TELADI_EMERGENCY_CHAT_ID,
     TeeBotusEngine,
+    _llm_conversation_scope,
     _pending_flow_matches_event,
     should_ignore_event_without_account,
 )
@@ -81,6 +82,15 @@ def test_pending_flow_match_requires_original_identity() -> None:
 
     assert _pending_flow_matches_event(pending, event("telegram:user:original", "ja"))
     assert not _pending_flow_matches_event(pending, event("telegram:user:other", "ja"))
+
+
+def test_llm_conversation_scope_separates_channels_and_chat_routes() -> None:
+    telegram_private = event("telegram:user:1", "Hallo", channel="telegram")
+    signal_private = event("signal:uuid:1", "Hallo", channel="signal")
+    telegram_group = event("telegram:user:1", "Hallo", channel="telegram", chat_type="group")
+
+    assert _llm_conversation_scope(telegram_private) != _llm_conversation_scope(signal_private)
+    assert _llm_conversation_scope(telegram_private) != _llm_conversation_scope(telegram_group)
 
 
 def matrix_group_event(text: str, raw: object) -> IncomingEvent:
@@ -2062,6 +2072,46 @@ def test_engine_does_not_reuse_previous_response_id_after_provider_switch(tmp_pa
     second_engine.process(event(identity, "Gemini"))
 
     assert gemini.previous_ids == [None]
+
+
+def test_engine_scopes_stateful_response_ids_to_linked_chat_routes(tmp_path):
+    class FakeGeminiClient:
+        capabilities = GEMINI_INTERACTIONS_CAPABILITIES
+
+        def __init__(self) -> None:
+            self.previous_ids: list[str | None] = []
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            self.previous_ids.append(previous_response_id)
+            return LLMResponse(
+                "Antwort.",
+                f"gemini-{len(self.previous_ids)}",
+                provider="litellm_gemini_stateful",
+                model="gemini/gemini-3.5-flash",
+            )
+
+    provider = StaticSecretProvider(b"e" * 32)
+    account_store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider)
+    telegram_identity = telegram_identity_key(1)
+    signal_identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(telegram_identity)
+    account_store.link_identity_to_account(signal_identity, account_id)
+    account_store.update_identity_route(telegram_identity, channel="telegram", chat_id="chat-1", chat_type="private", adapter_slot=1)
+    account_store.update_identity_route(signal_identity, channel="signal", chat_id="chat-1", chat_type="private", adapter_slot=1)
+    client = FakeGeminiClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        state=RuntimeStateStore(tmp_path / "data", instance_name="Depressionsbot", secret_provider=provider),
+        instructions=BotInstructions(openai_enabled=True, llm_provider="litellm_gemini_stateful", llm_model="gemini/gemini-3.5-flash"),
+        llm_client=client,
+    )
+
+    engine.process(event(telegram_identity, "Telegram eins", channel="telegram"))
+    engine.process(event(signal_identity, "Signal eins", channel="signal"))
+    engine.process(event(signal_identity, "/reset", channel="signal"))
+    engine.process(event(telegram_identity, "Telegram zwei", channel="telegram"))
+
+    assert client.previous_ids == [None, None, "gemini-1"]
 
 
 def test_engine_recovers_once_from_stale_previous_openai_response_id(tmp_path):

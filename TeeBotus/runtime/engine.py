@@ -371,7 +371,11 @@ class TeeBotusEngine:
                 handled=True,
             )
         if command == "/reset":
-            self.state.reset_previous_response_id(event.instance, result.account_id)
+            self.state.reset_previous_response_id(
+                event.instance,
+                result.account_id,
+                conversation_scope=_llm_conversation_scope(event),
+            )
             return EngineResult(result.account_id, [SendText(event.chat_id, self._current_instructions().llm_reset)], handled=True)
         if command == "/voice":
             return EngineResult(result.account_id, self._voice_actions(event, result.account_id, self._current_instructions()), handled=True)
@@ -968,6 +972,7 @@ class TeeBotusEngine:
         if not callable(create_reply):
             return [SendText(event.chat_id, instructions.llm_error)]
         try:
+            conversation_scope = _llm_conversation_scope(event)
             LOGGER.info(
                 "LLM action pipeline started instance=%s channel=%s event_id=%s account_id=%s client=%s text_chars=%s attachments=%s",
                 event.instance,
@@ -989,6 +994,7 @@ class TeeBotusEngine:
                 self.state,
                 event.instance,
                 account_id,
+                conversation_scope=conversation_scope,
                 instructions=instructions,
             )
             LOGGER.log(
@@ -1019,7 +1025,11 @@ class TeeBotusEngine:
                 llm_input,
                 instructions,
                 previous_response_id,
-                reset_state=lambda: self.state.reset_previous_response_id(event.instance, account_id),
+                reset_state=lambda: self.state.reset_previous_response_id(
+                    event.instance,
+                    account_id,
+                    conversation_scope=conversation_scope,
+                ),
             )
             response_text = str(getattr(response, "text", "") or "").strip()
             LOGGER.info(
@@ -1048,7 +1058,11 @@ class TeeBotusEngine:
                     page_input,
                     instructions,
                     first_response_id or previous_response_id,
-                    reset_state=lambda: self.state.reset_previous_response_id(event.instance, account_id),
+                    reset_state=lambda: self.state.reset_previous_response_id(
+                        event.instance,
+                        account_id,
+                        conversation_scope=conversation_scope,
+                    ),
                 )
         except (OpenAIAPIError, LLMAPIError) as exc:
             LOGGER.warning(
@@ -1066,6 +1080,7 @@ class TeeBotusEngine:
                 event.instance,
                 account_id,
                 response_id,
+                conversation_scope=conversation_scope,
                 provider=provider,
                 model=model,
                 key_fingerprint=key_fingerprint,
@@ -1610,6 +1625,7 @@ class TeeBotusEngine:
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
         try:
+            conversation_scope = _llm_conversation_scope(event)
             pipeline_text = _build_youtube_pipeline_text(user_text or event.text, transcript, source, url)
             account_memory_selection = _select_account_memory(self.account_store, account_id, instructions, pipeline_text)
             weather_context = weather_context_text(self.account_store, account_id)
@@ -1635,6 +1651,7 @@ class TeeBotusEngine:
                 self.state,
                 event.instance,
                 account_id,
+                conversation_scope=conversation_scope,
                 instructions=instructions,
             )
             response = _create_reply_with_state_recovery(
@@ -1642,7 +1659,11 @@ class TeeBotusEngine:
                 llm_input,
                 instructions,
                 previous_response_id,
-                reset_state=lambda: self.state.reset_previous_response_id(event.instance, account_id),
+                reset_state=lambda: self.state.reset_previous_response_id(
+                    event.instance,
+                    account_id,
+                    conversation_scope=conversation_scope,
+                ),
             )
             response_text = str(getattr(response, "text", "") or "").strip()
             page_request = _parse_memory_page_request(response_text)
@@ -1669,7 +1690,11 @@ class TeeBotusEngine:
                     instructions,
                     first_response_id
                     or previous_response_id,
-                    reset_state=lambda: self.state.reset_previous_response_id(event.instance, account_id),
+                    reset_state=lambda: self.state.reset_previous_response_id(
+                        event.instance,
+                        account_id,
+                        conversation_scope=conversation_scope,
+                    ),
                 )
         except (OpenAIAPIError, LLMAPIError):
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)
@@ -1681,6 +1706,7 @@ class TeeBotusEngine:
                 event.instance,
                 account_id,
                 response_id,
+                conversation_scope=conversation_scope,
                 provider=provider,
                 model=model,
                 key_fingerprint=key_fingerprint,
@@ -2966,6 +2992,7 @@ def _previous_response_id_for_client(
     instance_name: str,
     account_id: str,
     *,
+    conversation_scope: str = "",
     instructions: BotInstructions | None = None,
 ) -> str | None:
     if not _client_supports_previous_response_id(client):
@@ -2974,9 +3001,24 @@ def _previous_response_id_for_client(
     return state.get_previous_response_id(
         instance_name,
         account_id,
+        conversation_scope=conversation_scope,
         provider=provider,
         model=model,
         key_fingerprint=key_fingerprint,
+    )
+
+
+def _llm_conversation_scope(event: IncomingEvent) -> str:
+    """Keep stateful provider threads isolated per concrete chat route."""
+    return json.dumps(
+        [
+            str(event.channel or "").strip().casefold(),
+            str(event.adapter_slot or "").strip(),
+            str(event.chat_type or "").strip().casefold(),
+            str(event.chat_id or "").strip(),
+        ],
+        ensure_ascii=False,
+        separators=(",", ":"),
     )
 
 

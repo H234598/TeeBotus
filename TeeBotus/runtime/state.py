@@ -9,7 +9,7 @@ from copy import deepcopy
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Iterator, Literal
+from typing import Any, Iterator, Literal, Mapping
 
 try:
     import fcntl
@@ -45,6 +45,7 @@ SECURITY_EVENTS_LOCK_FILENAME = ".Security_Events.jsonl.lock"
 PREVIOUS_RESPONSE_PROVIDER_FIELD = "previous_response_provider"
 PREVIOUS_RESPONSE_MODEL_FIELD = "previous_response_model"
 PREVIOUS_RESPONSE_KEY_FIELD = "previous_response_key_fingerprint"
+PREVIOUS_RESPONSE_CONVERSATIONS_FIELD = "previous_response_conversations"
 LINK_NOTIFICATIONS_LOCK_FILENAME = ".Link_Notifications.json.lock"
 
 _RUNTIME_FILE_THREAD_LOCK = threading.RLock()
@@ -76,6 +77,68 @@ class PendingFlow:
 class _PendingPreviousResponseReset:
     response_id: str | None
     scope: tuple[str, str, str] | None
+    conversation_entries: dict[str, tuple[str | None, tuple[str, str, str] | None]] = field(default_factory=dict)
+
+
+PreviousResponseStateKey = tuple[str, str] | tuple[str, str, str]
+
+
+def _clean_conversation_scope(conversation_scope: str = "") -> str:
+    return str(conversation_scope or "").strip()
+
+
+def _previous_response_entry_from_mapping(
+    payload: Mapping[str, Any],
+    *,
+    error_prefix: str,
+) -> tuple[str | None, tuple[str, str, str] | None, str]:
+    value = str(payload.get("previous_response_id") or "").strip()
+    provider = str(payload.get(PREVIOUS_RESPONSE_PROVIDER_FIELD) or "").strip().casefold()
+    model = str(payload.get(PREVIOUS_RESPONSE_MODEL_FIELD) or "").strip()
+    key_fingerprint = str(payload.get(PREVIOUS_RESPONSE_KEY_FIELD) or "").strip().casefold()
+    scope_fields_present = any(
+        field_name in payload
+        for field_name in (PREVIOUS_RESPONSE_PROVIDER_FIELD, PREVIOUS_RESPONSE_MODEL_FIELD, PREVIOUS_RESPONSE_KEY_FIELD)
+    )
+    if value and scope_fields_present and (not provider or not model):
+        return None, None, f"{error_prefix} scope is incomplete"
+    scope = (provider, model, key_fingerprint) if provider and model else None
+    return value or None, scope, ""
+
+
+def _set_persisted_previous_response_fields(
+    payload: dict[str, Any],
+    response_id: str,
+    *,
+    provider: str = "",
+    model: str = "",
+    key_fingerprint: str = "",
+) -> None:
+    payload["previous_response_id"] = str(response_id or "").strip()
+    clean_provider = str(provider or "").strip().casefold()
+    clean_model = str(model or "").strip()
+    clean_key_fingerprint = str(key_fingerprint or "").strip().casefold()
+    if clean_provider and clean_model:
+        payload[PREVIOUS_RESPONSE_PROVIDER_FIELD] = clean_provider
+        payload[PREVIOUS_RESPONSE_MODEL_FIELD] = clean_model
+        if clean_key_fingerprint:
+            payload[PREVIOUS_RESPONSE_KEY_FIELD] = clean_key_fingerprint
+        else:
+            payload.pop(PREVIOUS_RESPONSE_KEY_FIELD, None)
+    else:
+        payload.pop(PREVIOUS_RESPONSE_PROVIDER_FIELD, None)
+        payload.pop(PREVIOUS_RESPONSE_MODEL_FIELD, None)
+        payload.pop(PREVIOUS_RESPONSE_KEY_FIELD, None)
+
+
+def _clear_persisted_previous_response_fields(payload: dict[str, Any]) -> None:
+    for field_name in (
+        "previous_response_id",
+        PREVIOUS_RESPONSE_PROVIDER_FIELD,
+        PREVIOUS_RESPONSE_MODEL_FIELD,
+        PREVIOUS_RESPONSE_KEY_FIELD,
+    ):
+        payload.pop(field_name, None)
 
 
 @dataclass
@@ -85,9 +148,9 @@ class RuntimeState:
     pending_flows: dict[tuple[str, str, str], dict[str, Any]] = field(default_factory=dict)
     pending_flow_created_at: dict[tuple[str, str, str], float] = field(default_factory=dict)
     link_notifications: dict[tuple[str, str, str], dict[str, str]] = field(default_factory=dict)
-    previous_response_ids: dict[tuple[str, str], str] = field(default_factory=dict)
-    previous_response_scopes: dict[tuple[str, str], tuple[str, str, str]] = field(default_factory=dict)
-    pending_previous_response_resets: dict[tuple[str, str], _PendingPreviousResponseReset] = field(default_factory=dict)
+    previous_response_ids: dict[PreviousResponseStateKey, str] = field(default_factory=dict)
+    previous_response_scopes: dict[PreviousResponseStateKey, tuple[str, str, str]] = field(default_factory=dict)
+    pending_previous_response_resets: dict[PreviousResponseStateKey, _PendingPreviousResponseReset] = field(default_factory=dict)
     security_events: list[dict[str, Any]] = field(default_factory=list)
     security_events_persistence_error: str = ""
 
@@ -115,6 +178,61 @@ class RuntimeState:
                 self.pending_flow_created_at.pop(key, None)
                 self.pending_flows.pop(key, None)
 
+    def _previous_response_key(
+        self,
+        instance_name: str,
+        account_id: str,
+        conversation_scope: str = "",
+    ) -> PreviousResponseStateKey:
+        clean_scope = _clean_conversation_scope(conversation_scope)
+        if clean_scope:
+            return (instance_name, account_id, clean_scope)
+        return (instance_name, account_id)
+
+    def _current_previous_response_state(
+        self,
+        instance_name: str,
+        account_id: str,
+        conversation_scope: str = "",
+    ) -> tuple[str | None, tuple[str, str, str] | None]:
+        key = self._previous_response_key(instance_name, account_id, conversation_scope)
+        return self.previous_response_ids.get(key), self.previous_response_scopes.get(key)
+
+    def _iter_previous_response_states_for_account(
+        self,
+        instance_name: str,
+        account_id: str,
+    ) -> list[tuple[str, str, tuple[str, str, str] | None]]:
+        prefix = (instance_name, account_id)
+        result: list[tuple[str, str, tuple[str, str, str] | None]] = []
+        for key, response_id in self.previous_response_ids.items():
+            if key[:2] != prefix:
+                continue
+            conversation_scope = key[2] if len(key) == 3 else ""
+            result.append((conversation_scope, response_id, self.previous_response_scopes.get(key)))
+        result.sort(key=lambda item: (item[0] != "", item[0]))
+        return result
+
+    def _clear_previous_response_state(
+        self,
+        instance_name: str,
+        account_id: str,
+        conversation_scope: str = "",
+    ) -> None:
+        clean_scope = _clean_conversation_scope(conversation_scope)
+        if clean_scope:
+            key = (instance_name, account_id, clean_scope)
+            self.previous_response_ids.pop(key, None)
+            self.previous_response_scopes.pop(key, None)
+            return
+        prefix = (instance_name, account_id)
+        for key in list(self.previous_response_ids):
+            if key[:2] == prefix:
+                self.previous_response_ids.pop(key, None)
+        for key in list(self.previous_response_scopes):
+            if key[:2] == prefix:
+                self.previous_response_scopes.pop(key, None)
+
     def set_previous_response_id(
         self,
         instance_name: str,
@@ -124,8 +242,9 @@ class RuntimeState:
         provider: str = "",
         model: str = "",
         key_fingerprint: str = "",
+        conversation_scope: str = "",
     ) -> None:
-        key = (instance_name, account_id)
+        key = self._previous_response_key(instance_name, account_id, conversation_scope)
         clean_response_id = str(response_id or "").strip()
         if clean_response_id:
             self.previous_response_ids[key] = clean_response_id
@@ -150,8 +269,9 @@ class RuntimeState:
         provider: str = "",
         model: str = "",
         key_fingerprint: str = "",
+        conversation_scope: str = "",
     ) -> str | None:
-        key = (instance_name, account_id)
+        key = self._previous_response_key(instance_name, account_id, conversation_scope)
         response_id = self.previous_response_ids.get(key)
         if not response_id:
             return None
@@ -170,10 +290,8 @@ class RuntimeState:
                 return None
         return response_id
 
-    def reset_previous_response_id(self, instance_name: str, account_id: str) -> None:
-        key = (instance_name, account_id)
-        self.previous_response_ids.pop(key, None)
-        self.previous_response_scopes.pop(key, None)
+    def reset_previous_response_id(self, instance_name: str, account_id: str, *, conversation_scope: str = "") -> None:
+        self._clear_previous_response_state(instance_name, account_id, conversation_scope)
 
     def record_link_notification(self, *, instance_name: str, account_id: str, new_identity_key: str, old_identity_key: str) -> None:
         self.link_notifications[(instance_name, account_id, old_identity_key)] = {
@@ -398,12 +516,16 @@ class RuntimeStateStore(RuntimeState):
         provider: str = "",
         model: str = "",
         key_fingerprint: str = "",
+        conversation_scope: str = "",
     ) -> None:
         self._ensure_instance_scope(instance_name)
         with self._llm_state_lock(account_id):
-            key = (instance_name, account_id)
-            previous_response_id = self.previous_response_ids.get(key)
-            previous_response_scope = self.previous_response_scopes.get(key)
+            key = self._previous_response_key(instance_name, account_id, conversation_scope)
+            previous_response_id, previous_response_scope = self._current_previous_response_state(
+                instance_name,
+                account_id,
+                conversation_scope,
+            )
             super().set_previous_response_id(
                 instance_name,
                 account_id,
@@ -411,6 +533,7 @@ class RuntimeStateStore(RuntimeState):
                 provider=provider,
                 model=model,
                 key_fingerprint=key_fingerprint,
+                conversation_scope=conversation_scope,
             )
             if str(response_id or "").strip():
                 persisted = self._write_llm_previous_response_id(
@@ -419,6 +542,7 @@ class RuntimeStateStore(RuntimeState):
                     provider=provider,
                     model=model,
                     key_fingerprint=key_fingerprint,
+                    conversation_scope=conversation_scope,
                 )
                 if persisted:
                     self.pending_previous_response_resets.pop(key, None)
@@ -428,11 +552,16 @@ class RuntimeStateStore(RuntimeState):
                         _PendingPreviousResponseReset(previous_response_id, previous_response_scope),
                     )
             else:
+                previous_conversation_entries = (
+                    dict(self._previous_response_snapshot_for_account(instance_name, account_id)[2])
+                    if not _clean_conversation_scope(conversation_scope)
+                    else {}
+                )
                 self.pending_previous_response_resets.setdefault(
                     key,
-                    _PendingPreviousResponseReset(previous_response_id, previous_response_scope),
+                    _PendingPreviousResponseReset(previous_response_id, previous_response_scope, previous_conversation_entries),
                 )
-                if self._clear_llm_previous_response_id(account_id):
+                if self._clear_llm_previous_response_id(account_id, conversation_scope=conversation_scope):
                     self.pending_previous_response_resets.pop(key, None)
 
     def get_previous_response_id(
@@ -443,15 +572,27 @@ class RuntimeStateStore(RuntimeState):
         provider: str = "",
         model: str = "",
         key_fingerprint: str = "",
+        conversation_scope: str = "",
     ) -> str | None:
         self._ensure_instance_scope(instance_name)
-        key = (instance_name, account_id)
+        key = self._previous_response_key(instance_name, account_id, conversation_scope)
+        account_reset_key = self._previous_response_key(instance_name, account_id)
         with self._llm_state_lock(account_id):
-            persisted, persisted_scope, persistence_error = self._read_llm_previous_response(account_id)
+            persisted, persisted_scope, _legacy_fallback_used, persistence_error = self._read_llm_previous_response(
+                account_id,
+                conversation_scope=conversation_scope,
+            )
             if persistence_error:
-                if key in self.pending_previous_response_resets and self._clear_llm_previous_response_id(account_id):
-                    self.pending_previous_response_resets.pop(key, None)
+                if account_reset_key in self.pending_previous_response_resets and self._clear_llm_previous_response_id(account_id):
+                    self._clear_pending_previous_response_resets(instance_name, account_id)
                     super().reset_previous_response_id(instance_name, account_id)
+                    return None
+                if key in self.pending_previous_response_resets and self._clear_llm_previous_response_id(
+                    account_id,
+                    conversation_scope=conversation_scope,
+                ):
+                    self.pending_previous_response_resets.pop(key, None)
+                    super().reset_previous_response_id(instance_name, account_id, conversation_scope=conversation_scope)
                     return None
                 return super().get_previous_response_id(
                     instance_name,
@@ -459,13 +600,37 @@ class RuntimeStateStore(RuntimeState):
                     provider=provider,
                     model=model,
                     key_fingerprint=key_fingerprint,
+                    conversation_scope=conversation_scope,
                 )
+            if account_reset_key in self.pending_previous_response_resets:
+                account_pending_reset = self.pending_previous_response_resets[account_reset_key]
+                persisted_snapshot = self._read_llm_previous_response_snapshot(account_id)
+                if not persisted_snapshot[3] and self._recover_account_previous_response_after_reset(
+                    instance_name,
+                    account_id,
+                    pending_reset=account_pending_reset,
+                    persisted_snapshot=persisted_snapshot,
+                ):
+                    self._clear_pending_previous_response_resets(instance_name, account_id)
+                    return super().get_previous_response_id(
+                        instance_name,
+                        account_id,
+                        provider=provider,
+                        model=model,
+                        key_fingerprint=key_fingerprint,
+                        conversation_scope=conversation_scope,
+                    )
+                if not persisted_snapshot[3]:
+                    self.pending_previous_response_resets.pop(account_reset_key, None)
             if key in self.pending_previous_response_resets:
                 pending_reset = self.pending_previous_response_resets[key]
                 stale_response_id = pending_reset.response_id
                 stale_scope = pending_reset.scope
-                current_response_id = self.previous_response_ids.get(key)
-                current_scope = self.previous_response_scopes.get(key)
+                current_response_id, current_scope = self._current_previous_response_state(
+                    instance_name,
+                    account_id,
+                    conversation_scope,
+                )
                 persisted_matches_stale = (
                     (persisted is None and stale_response_id is None)
                     or (persisted == stale_response_id and persisted_scope == stale_scope)
@@ -481,6 +646,7 @@ class RuntimeStateStore(RuntimeState):
                         provider=current_scope[0] if current_scope else "",
                         model=current_scope[1] if current_scope else "",
                         key_fingerprint=current_scope[2] if current_scope else "",
+                        conversation_scope=conversation_scope,
                     )
                     if persisted_current:
                         self.pending_previous_response_resets.pop(key, None)
@@ -490,14 +656,14 @@ class RuntimeStateStore(RuntimeState):
                         provider=provider,
                         model=model,
                         key_fingerprint=key_fingerprint,
+                        conversation_scope=conversation_scope,
                     )
                 if current_response_id and current_response_id == stale_response_id and persisted_matches_stale:
                     self.pending_previous_response_resets.pop(key, None)
                 elif persisted_matches_stale:
-                    if self._clear_llm_previous_response_id(account_id):
+                    if self._clear_llm_previous_response_id(account_id, conversation_scope=conversation_scope):
                         self.pending_previous_response_resets.pop(key, None)
-                        self.previous_response_ids.pop(key, None)
-                        self.previous_response_scopes.pop(key, None)
+                        self._clear_previous_response_state(instance_name, account_id, conversation_scope)
                         return None
                 else:
                     self.pending_previous_response_resets.pop(key, None)
@@ -513,27 +679,140 @@ class RuntimeStateStore(RuntimeState):
                     provider=provider,
                     model=model,
                     key_fingerprint=key_fingerprint,
+                    conversation_scope=conversation_scope,
                 )
-            self.previous_response_ids.pop(key, None)
-            self.previous_response_scopes.pop(key, None)
+            self._clear_previous_response_state(instance_name, account_id, conversation_scope)
             return None
 
-    def reset_previous_response_id(self, instance_name: str, account_id: str) -> None:
+    def reset_previous_response_id(self, instance_name: str, account_id: str, *, conversation_scope: str = "") -> None:
         self._ensure_instance_scope(instance_name)
         with self._llm_state_lock(account_id):
-            key = (instance_name, account_id)
+            key = self._previous_response_key(instance_name, account_id, conversation_scope)
             if key not in self.pending_previous_response_resets:
-                persisted, persisted_scope, persistence_error = self._read_llm_previous_response(account_id)
+                persisted, persisted_scope, _legacy_fallback_used, persistence_error = self._read_llm_previous_response(
+                    account_id,
+                    conversation_scope=conversation_scope,
+                )
                 if persistence_error:
-                    persisted = self.previous_response_ids.get(key)
-                    persisted_scope = self.previous_response_scopes.get(key)
+                    persisted, persisted_scope = self._current_previous_response_state(
+                        instance_name,
+                        account_id,
+                        conversation_scope,
+                    )
+                    persisted_conversation_entries = (
+                        dict(self._previous_response_snapshot_for_account(instance_name, account_id)[2])
+                        if not _clean_conversation_scope(conversation_scope)
+                        else {}
+                    )
+                else:
+                    persisted_conversation_entries = (
+                        self._read_llm_previous_response_snapshot(account_id)[2]
+                        if not _clean_conversation_scope(conversation_scope)
+                        else {}
+                    )
                 self.pending_previous_response_resets[key] = _PendingPreviousResponseReset(
                     persisted,
                     persisted_scope,
+                    persisted_conversation_entries,
                 )
-            super().reset_previous_response_id(instance_name, account_id)
-            if self._clear_llm_previous_response_id(account_id):
+            super().reset_previous_response_id(instance_name, account_id, conversation_scope=conversation_scope)
+            if self._clear_llm_previous_response_id(account_id, conversation_scope=conversation_scope):
                 self.pending_previous_response_resets.pop(key, None)
+
+    def _clear_pending_previous_response_resets(
+        self,
+        instance_name: str,
+        account_id: str,
+        conversation_scope: str = "",
+    ) -> None:
+        clean_scope = _clean_conversation_scope(conversation_scope)
+        if clean_scope:
+            self.pending_previous_response_resets.pop((instance_name, account_id, clean_scope), None)
+            return
+        prefix = (instance_name, account_id)
+        for key in list(self.pending_previous_response_resets):
+            if key[:2] == prefix:
+                self.pending_previous_response_resets.pop(key, None)
+
+    def _previous_response_snapshot_for_account(
+        self,
+        instance_name: str,
+        account_id: str,
+    ) -> tuple[str | None, tuple[str, str, str] | None, dict[str, tuple[str | None, tuple[str, str, str] | None]]]:
+        top_response_id, top_scope = self._current_previous_response_state(instance_name, account_id)
+        conversation_entries = {
+            conversation_scope: (response_id, response_scope)
+            for conversation_scope, response_id, response_scope in self._iter_previous_response_states_for_account(instance_name, account_id)
+            if conversation_scope
+        }
+        return top_response_id, top_scope, conversation_entries
+
+    def _recover_account_previous_response_after_reset(
+        self,
+        instance_name: str,
+        account_id: str,
+        *,
+        pending_reset: _PendingPreviousResponseReset,
+        persisted_snapshot: tuple[
+            str | None,
+            tuple[str, str, str] | None,
+            dict[str, tuple[str | None, tuple[str, str, str] | None]],
+            str,
+        ],
+    ) -> bool:
+        current_top_response_id, current_top_scope, current_conversation_entries = self._previous_response_snapshot_for_account(
+            instance_name,
+            account_id,
+        )
+        persisted_response_id, persisted_scope, persisted_conversation_entries, _persistence_error = persisted_snapshot
+        persisted_matches_stale = (
+            persisted_response_id == pending_reset.response_id
+            and persisted_scope == pending_reset.scope
+            and persisted_conversation_entries == pending_reset.conversation_entries
+        )
+        persisted_has_data = self._previous_response_snapshot_has_data(
+            persisted_response_id,
+            persisted_scope,
+            persisted_conversation_entries,
+        )
+        current_has_local_data = self._previous_response_snapshot_has_data(
+            current_top_response_id,
+            current_top_scope,
+            current_conversation_entries,
+        )
+        if not current_has_local_data:
+            if persisted_has_data and not persisted_matches_stale:
+                return False
+            return self._clear_llm_previous_response_id(account_id)
+        if persisted_has_data and not persisted_matches_stale:
+            return False
+        if not self._clear_llm_previous_response_id(account_id):
+            return False
+        current_entries = self._iter_previous_response_states_for_account(instance_name, account_id)
+        for conversation_scope, response_id, response_scope in current_entries:
+            if not self._write_llm_previous_response_id(
+                account_id,
+                response_id,
+                provider=response_scope[0] if response_scope else "",
+                model=response_scope[1] if response_scope else "",
+                key_fingerprint=response_scope[2] if response_scope else "",
+                conversation_scope=conversation_scope,
+            ):
+                return False
+        return True
+
+    def _previous_response_snapshot_has_data(
+        self,
+        response_id: str | None,
+        response_scope: tuple[str, str, str] | None,
+        conversation_entries: Mapping[str, tuple[str | None, tuple[str, str, str] | None]],
+    ) -> bool:
+        # Provider metadata without response ID is orphaned state, not a live
+        # conversation. Reset must be able to remove it after persistence
+        # recovers.
+        if response_id:
+            return True
+        return bool(conversation_entries)
 
     def _ensure_instance_scope(self, instance_name: str) -> None:
         expected = str(self.instance_name or "").strip()
@@ -728,26 +1007,105 @@ class RuntimeStateStore(RuntimeState):
                 self._set_llm_state_persistence_error(str(exc), account_id=account_id)
                 return False
 
-    def _read_llm_previous_response(self, account_id: str) -> tuple[str | None, tuple[str, str, str] | None, str]:
+    def _read_llm_previous_response(
+        self,
+        account_id: str,
+        *,
+        conversation_scope: str = "",
+    ) -> tuple[str | None, tuple[str, str, str] | None, bool, str]:
         payload, persistence_error = self._read_llm_state(account_id)
-        value = str(payload.get("previous_response_id") or "").strip()
-        provider = str(payload.get(PREVIOUS_RESPONSE_PROVIDER_FIELD) or "").strip().casefold()
-        model = str(payload.get(PREVIOUS_RESPONSE_MODEL_FIELD) or "").strip()
-        key_fingerprint = str(payload.get(PREVIOUS_RESPONSE_KEY_FIELD) or "").strip().casefold()
-        scope_fields_present = any(
-            field_name in payload
-            for field_name in (PREVIOUS_RESPONSE_PROVIDER_FIELD, PREVIOUS_RESPONSE_MODEL_FIELD, PREVIOUS_RESPONSE_KEY_FIELD)
+        clean_scope = _clean_conversation_scope(conversation_scope)
+        if clean_scope:
+            conversations_present = PREVIOUS_RESPONSE_CONVERSATIONS_FIELD in payload
+            if conversations_present:
+                conversations = payload.get(PREVIOUS_RESPONSE_CONVERSATIONS_FIELD)
+                if not isinstance(conversations, dict):
+                    error = "LLM state previous response conversations are invalid"
+                    self._set_llm_state_persistence_error(error, account_id=account_id)
+                    return None, None, True, error
+                entry = conversations.get(clean_scope)
+                if entry is None:
+                    return None, None, True, persistence_error
+                if not isinstance(entry, Mapping):
+                    error = "LLM state previous response conversation entry is invalid"
+                    self._set_llm_state_persistence_error(error, account_id=account_id)
+                    return None, None, True, error
+                value, scope, error = _previous_response_entry_from_mapping(
+                    entry,
+                    error_prefix="LLM state previous response conversation",
+                )
+                if error:
+                    self._set_llm_state_persistence_error(error, account_id=account_id)
+                    return None, None, True, error
+                return value, scope, True, persistence_error
+            value, scope, error = _previous_response_entry_from_mapping(
+                payload,
+                error_prefix="LLM state previous response",
+            )
+            if error:
+                self._set_llm_state_persistence_error(error, account_id=account_id)
+                return None, None, False, error
+            return value, scope, False, persistence_error
+        value, scope, error = _previous_response_entry_from_mapping(
+            payload,
+            error_prefix="LLM state previous response",
         )
-        if value and scope_fields_present and (not provider or not model):
-            error = "LLM state previous response scope is incomplete"
+        if error:
             self._set_llm_state_persistence_error(error, account_id=account_id)
-            return None, None, error
-        scope = (provider, model, key_fingerprint) if provider and model else None
-        return value or None, scope, persistence_error
+            return None, None, False, error
+        return value, scope, PREVIOUS_RESPONSE_CONVERSATIONS_FIELD in payload, persistence_error
 
-    def _read_llm_previous_response_id(self, account_id: str) -> str | None:
-        response_id, _scope, _persistence_error = self._read_llm_previous_response(account_id)
+    def _read_llm_previous_response_id(self, account_id: str, *, conversation_scope: str = "") -> str | None:
+        response_id, _scope, _legacy_fallback_used, _persistence_error = self._read_llm_previous_response(
+            account_id,
+            conversation_scope=conversation_scope,
+        )
         return response_id
+
+    def _read_llm_previous_response_snapshot(
+        self,
+        account_id: str,
+    ) -> tuple[
+        str | None,
+        tuple[str, str, str] | None,
+        dict[str, tuple[str | None, tuple[str, str, str] | None]],
+        str,
+    ]:
+        payload, persistence_error = self._read_llm_state(account_id)
+        top_response_id, top_scope, error = _previous_response_entry_from_mapping(
+            payload,
+            error_prefix="LLM state previous response",
+        )
+        if error:
+            self._set_llm_state_persistence_error(error, account_id=account_id)
+            return None, None, {}, error
+        conversation_entries: dict[str, tuple[str | None, tuple[str, str, str] | None]] = {}
+        conversations = payload.get(PREVIOUS_RESPONSE_CONVERSATIONS_FIELD)
+        if conversations is not None:
+            if not isinstance(conversations, dict):
+                error = "LLM state previous response conversations are invalid"
+                self._set_llm_state_persistence_error(error, account_id=account_id)
+                return None, None, {}, error
+            for raw_scope, raw_entry in conversations.items():
+                conversation_scope = _clean_conversation_scope(raw_scope)
+                if not conversation_scope:
+                    error = "LLM state previous response conversation key is invalid"
+                    self._set_llm_state_persistence_error(error, account_id=account_id)
+                    return None, None, {}, error
+                if not isinstance(raw_entry, Mapping):
+                    error = "LLM state previous response conversation entry is invalid"
+                    self._set_llm_state_persistence_error(error, account_id=account_id)
+                    return None, None, {}, error
+                response_id, response_scope, error = _previous_response_entry_from_mapping(
+                    raw_entry,
+                    error_prefix="LLM state previous response conversation",
+                )
+                if error:
+                    self._set_llm_state_persistence_error(error, account_id=account_id)
+                    return None, None, {}, error
+                if response_id or response_scope is not None or raw_entry:
+                    conversation_entries[conversation_scope] = (response_id, response_scope)
+        return top_response_id, top_scope, conversation_entries, persistence_error
 
     def _write_llm_previous_response_id(
         self,
@@ -757,42 +1115,118 @@ class RuntimeStateStore(RuntimeState):
         provider: str = "",
         model: str = "",
         key_fingerprint: str = "",
+        conversation_scope: str = "",
     ) -> bool:
         clean_response_id = str(response_id or "").strip()
         if not clean_response_id:
             return False
+        clean_conversation_scope = _clean_conversation_scope(conversation_scope)
         with self._llm_state_lock(account_id):
             payload, persistence_error = self._read_llm_state(account_id)
             if persistence_error:
                 return False
-            payload["previous_response_id"] = clean_response_id
             clean_provider = str(provider or "").strip().casefold()
             clean_model = str(model or "").strip()
             clean_key_fingerprint = str(key_fingerprint or "").strip().casefold()
-            if clean_provider and clean_model:
-                payload[PREVIOUS_RESPONSE_PROVIDER_FIELD] = clean_provider
-                payload[PREVIOUS_RESPONSE_MODEL_FIELD] = clean_model
-                if clean_key_fingerprint:
-                    payload[PREVIOUS_RESPONSE_KEY_FIELD] = clean_key_fingerprint
+            if clean_conversation_scope:
+                conversations = payload.get(PREVIOUS_RESPONSE_CONVERSATIONS_FIELD, {})
+                if conversations is None:
+                    conversations = {}
+                if not isinstance(conversations, dict):
+                    error = "LLM state previous response conversations are invalid"
+                    self._set_llm_state_persistence_error(error, account_id=account_id)
+                    return False
+                entry: dict[str, Any] = {"previous_response_id": clean_response_id}
+                if clean_provider and clean_model:
+                    entry[PREVIOUS_RESPONSE_PROVIDER_FIELD] = clean_provider
+                    entry[PREVIOUS_RESPONSE_MODEL_FIELD] = clean_model
+                    if clean_key_fingerprint:
+                        entry[PREVIOUS_RESPONSE_KEY_FIELD] = clean_key_fingerprint
                 else:
-                    payload.pop(PREVIOUS_RESPONSE_KEY_FIELD, None)
+                    entry.pop(PREVIOUS_RESPONSE_PROVIDER_FIELD, None)
+                    entry.pop(PREVIOUS_RESPONSE_MODEL_FIELD, None)
+                    entry.pop(PREVIOUS_RESPONSE_KEY_FIELD, None)
+                payload[PREVIOUS_RESPONSE_CONVERSATIONS_FIELD] = {
+                    **conversations,
+                    clean_conversation_scope: entry,
+                }
+                # Keep old unscoped readers useful without letting Engine use
+                # this account-wide mirror for scoped lookups.
+                _set_persisted_previous_response_fields(
+                    payload,
+                    clean_response_id,
+                    provider=clean_provider,
+                    model=clean_model,
+                    key_fingerprint=clean_key_fingerprint,
+                )
             else:
-                payload.pop(PREVIOUS_RESPONSE_PROVIDER_FIELD, None)
-                payload.pop(PREVIOUS_RESPONSE_MODEL_FIELD, None)
-                payload.pop(PREVIOUS_RESPONSE_KEY_FIELD, None)
+                _set_persisted_previous_response_fields(
+                    payload,
+                    clean_response_id,
+                    provider=clean_provider,
+                    model=clean_model,
+                    key_fingerprint=clean_key_fingerprint,
+                )
             payload["updated_at"] = utc_now()
             return self._write_llm_state(account_id, payload)
 
-    def _clear_llm_previous_response_id(self, account_id: str) -> bool:
+    def _clear_llm_previous_response_id(self, account_id: str, *, conversation_scope: str = "") -> bool:
         with self._llm_state_lock(account_id):
             payload, persistence_error = self._read_llm_state(account_id)
             if persistence_error:
                 return False
+            clean_conversation_scope = _clean_conversation_scope(conversation_scope)
+            if clean_conversation_scope:
+                conversations = payload.get(PREVIOUS_RESPONSE_CONVERSATIONS_FIELD)
+                if conversations is None:
+                    return True
+                if not isinstance(conversations, dict):
+                    error = "LLM state previous response conversations are invalid"
+                    self._set_llm_state_persistence_error(error, account_id=account_id)
+                    return False
+                if clean_conversation_scope not in conversations:
+                    return True
+                updated_conversations = dict(conversations)
+                removed_entry = updated_conversations.pop(clean_conversation_scope, None)
+                payload[PREVIOUS_RESPONSE_CONVERSATIONS_FIELD] = updated_conversations
+                if (
+                    isinstance(removed_entry, Mapping)
+                    and str(payload.get("previous_response_id") or "").strip()
+                    == str(removed_entry.get("previous_response_id") or "").strip()
+                ):
+                    mirrored = False
+                    for candidate in reversed(list(updated_conversations.values())):
+                        if not isinstance(candidate, Mapping):
+                            continue
+                        candidate_id, candidate_scope, candidate_error = _previous_response_entry_from_mapping(
+                            candidate,
+                            error_prefix="LLM state previous response conversation",
+                        )
+                        if candidate_error:
+                            error = candidate_error
+                            self._set_llm_state_persistence_error(error, account_id=account_id)
+                            return False
+                        if not candidate_id:
+                            continue
+                        _set_persisted_previous_response_fields(
+                            payload,
+                            candidate_id,
+                            provider=candidate_scope[0] if candidate_scope else "",
+                            model=candidate_scope[1] if candidate_scope else "",
+                            key_fingerprint=candidate_scope[2] if candidate_scope else "",
+                        )
+                        mirrored = True
+                        break
+                    if not mirrored:
+                        _clear_persisted_previous_response_fields(payload)
+                payload["updated_at"] = utc_now()
+                return self._write_llm_state(account_id, payload)
             state_fields = {
                 "previous_response_id",
                 PREVIOUS_RESPONSE_PROVIDER_FIELD,
                 PREVIOUS_RESPONSE_MODEL_FIELD,
                 PREVIOUS_RESPONSE_KEY_FIELD,
+                PREVIOUS_RESPONSE_CONVERSATIONS_FIELD,
             }
             if not payload or not state_fields.intersection(payload):
                 return True

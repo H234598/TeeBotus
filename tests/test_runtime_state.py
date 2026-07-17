@@ -20,7 +20,12 @@ from TeeBotus.runtime.accounts import (
 )
 from TeeBotus.runtime.events import IncomingEvent, IncomingLinkPreview
 from TeeBotus.runtime.sqlite_memory import SQLiteAccountMemoryBackend, SQLiteMemoryConfig
-from TeeBotus.runtime.state import PENDING_FLOW_TTL_SECONDS, RuntimeState, RuntimeStateStore
+from TeeBotus.runtime.state import (
+    PENDING_FLOW_TTL_SECONDS,
+    PREVIOUS_RESPONSE_CONVERSATIONS_FIELD,
+    RuntimeState,
+    RuntimeStateStore,
+)
 
 
 class BrokenProvider:
@@ -956,6 +961,176 @@ def test_runtime_state_store_does_not_use_legacy_unscoped_id_for_scoped_lookup(t
 
     assert state.get_previous_response_id("Bot", ACCOUNT_ID, provider="openai", model="gpt-5.5") is None
     assert state.get_previous_response_id("Bot", ACCOUNT_ID) == "resp-legacy"
+
+
+def test_runtime_state_store_persists_scoped_previous_response_ids_per_conversation(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    state.set_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        "resp-a",
+        provider="openai",
+        model="gpt-5.5",
+        conversation_scope="telegram:chat:1",
+    )
+    state.set_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        "resp-b",
+        provider="openai",
+        model="gpt-5.5",
+        conversation_scope="signal:chat:2",
+    )
+    reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert reloaded.get_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        provider="openai",
+        model="gpt-5.5",
+        conversation_scope="telegram:chat:1",
+    ) == "resp-a"
+    assert reloaded.get_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        provider="openai",
+        model="gpt-5.5",
+        conversation_scope="signal:chat:2",
+    ) == "resp-b"
+    assert reloaded.get_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        provider="openai",
+        model="gpt-5.5",
+        conversation_scope="matrix:room:3",
+    ) is None
+    persisted = account_store.read_llm_state(ACCOUNT_ID)
+    assert persisted[PREVIOUS_RESPONSE_CONVERSATIONS_FIELD] == {
+        "signal:chat:2": {
+            "previous_response_id": "resp-b",
+            "previous_response_model": "gpt-5.5",
+            "previous_response_provider": "openai",
+        },
+        "telegram:chat:1": {
+            "previous_response_id": "resp-a",
+            "previous_response_model": "gpt-5.5",
+            "previous_response_provider": "openai",
+        },
+    }
+
+
+def test_runtime_state_store_scoped_reset_clears_only_target_conversation(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    state.set_previous_response_id("Bot", ACCOUNT_ID, "resp-legacy", provider="openai", model="gpt-5.5")
+    state.set_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        "resp-a",
+        provider="openai",
+        model="gpt-5.5",
+        conversation_scope="scope-a",
+    )
+    state.set_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        "resp-b",
+        provider="openai",
+        model="gpt-5.5",
+        conversation_scope="scope-b",
+    )
+
+    state.reset_previous_response_id("Bot", ACCOUNT_ID, conversation_scope="scope-a")
+    reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert reloaded.get_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        provider="openai",
+        model="gpt-5.5",
+        conversation_scope="scope-a",
+    ) is None
+    assert reloaded.get_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        provider="openai",
+        model="gpt-5.5",
+        conversation_scope="scope-b",
+    ) == "resp-b"
+    assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID, provider="openai", model="gpt-5.5") == "resp-b"
+    persisted = account_store.read_llm_state(ACCOUNT_ID)
+    assert persisted["previous_response_id"] == "resp-b"
+    assert persisted[PREVIOUS_RESPONSE_CONVERSATIONS_FIELD] == {
+        "scope-b": {
+            "previous_response_id": "resp-b",
+            "previous_response_model": "gpt-5.5",
+            "previous_response_provider": "openai",
+        }
+    }
+
+
+def test_runtime_state_store_scoped_lookup_uses_legacy_fallback_until_mapping_exists(tmp_path):
+    provider = StaticSecretProvider(b"s" * 32)
+    data_dir = tmp_path / "Bot" / "data"
+    account_store = AccountStore(data_dir / "accounts", "Bot", secret_provider=provider)
+    account_store.write_llm_state(
+        ACCOUNT_ID,
+        {
+            "previous_response_id": "resp-legacy",
+            "previous_response_provider": "openai",
+            "previous_response_model": "gpt-5.5",
+        },
+    )
+    state = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert state.get_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        provider="openai",
+        model="gpt-5.5",
+        conversation_scope="scope-a",
+    ) == "resp-legacy"
+
+    state.set_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        "resp-scoped",
+        provider="openai",
+        model="gpt-5.5",
+        conversation_scope="scope-b",
+    )
+    reloaded = RuntimeStateStore(data_dir, instance_name="Bot", secret_provider=provider)
+
+    assert reloaded.get_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        provider="openai",
+        model="gpt-5.5",
+        conversation_scope="scope-a",
+    ) is None
+    assert reloaded.get_previous_response_id(
+        "Bot",
+        ACCOUNT_ID,
+        provider="openai",
+        model="gpt-5.5",
+        conversation_scope="scope-b",
+    ) == "resp-scoped"
+    assert reloaded.get_previous_response_id("Bot", ACCOUNT_ID, provider="openai", model="gpt-5.5") == "resp-scoped"
+    persisted = account_store.read_llm_state(ACCOUNT_ID)
+    assert persisted[PREVIOUS_RESPONSE_CONVERSATIONS_FIELD] == {
+        "scope-b": {
+            "previous_response_id": "resp-scoped",
+            "previous_response_model": "gpt-5.5",
+            "previous_response_provider": "openai",
+        }
+    }
 
 
 def test_runtime_state_store_rejects_incomplete_persisted_response_scope(tmp_path):
