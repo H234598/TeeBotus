@@ -3536,12 +3536,14 @@ class AccountStore:
             if isinstance(row, dict)
             if (memory_id := str(row.get("id") or "").strip())
         }
-        access_ids[:] = [
-            normalized_id
-            for value in access_ids
-            if (normalized_id := str(value or "").strip()) in live_ids
-            and normalized_id not in requested
-        ]
+        normalized_access_ids: list[str] = []
+        seen_access_ids: set[str] = set()
+        for value in access_ids:
+            normalized_id = str(value or "").strip()
+            if normalized_id in live_ids and normalized_id not in requested and normalized_id not in seen_access_ids:
+                normalized_access_ids.append(normalized_id)
+                seen_access_ids.add(normalized_id)
+        access_ids[:] = normalized_access_ids
         access_ids.extend(memory_id for memory_id in requested_ids if memory_id in live_ids)
         del access_ids[:-ACCOUNT_MEMORY_RECENT_LIMIT]
         for row in rows:

@@ -7853,6 +7853,21 @@ def test_mark_structured_account_memory_accessed_deduplicates_requested_ids(tmp_
     assert store.check_structured_memory_index(account_id).ok
 
 
+def test_mark_structured_account_memory_accessed_repairs_existing_duplicates(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    old_id = store.append_structured_memory_entry(account_id, {"id": "mem_old", "user_text": "Alt"})
+    new_id = store.append_structured_memory_entry(account_id, {"id": "mem_new", "user_text": "Neu"})
+    index = store.read_memory_index(account_id)
+    index["index"]["accessed_ids"] = [old_id, old_id]
+    store.write_memory_index(account_id, index)
+
+    store.mark_structured_memory_accessed(account_id, [new_id])
+
+    assert store.read_memory_index(account_id)["index"]["accessed_ids"] == [old_id, new_id]
+    assert store.check_structured_memory_index(account_id).ok
+
+
 def test_mark_structured_account_memory_rolls_back_entries_when_index_write_fails(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
