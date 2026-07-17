@@ -6207,3 +6207,19 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Admin-Status kapselt Route-Backendfehler
+
+- 2026-07-17: Admin-Statuszeilen sowie Runtime- und Benchmark-Summary-
+  Benachrichtigungen fingen Route-Fehler nur typbezogen. Unerwartete SQL-,
+  Secret- oder Wrapper-Ausnahmen konnten Statusdiagnose und Versand abbrechen.
+- Lokale und instanzuebergreifende Route-Aufloesung meldet jetzt auch
+  unerwartete `Exception`-Fehler strukturiert. Betroffene Admins erhalten
+  `warning`/`failed`; andere Accounts und Statusausgaben laufen weiter.
+- Test: `tests/test_runtime_admin_accounts.py` `33 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2abd6e67 fix: contain admin route backend failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`9/20` Commits. Kein Push. Restart nach 11 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
