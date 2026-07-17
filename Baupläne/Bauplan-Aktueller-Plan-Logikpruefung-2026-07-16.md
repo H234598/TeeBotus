@@ -3015,6 +3015,24 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart jetzt. Naechster Push bleibt erst bei 100
 Commits.
 
+### Account-Locks-ueber-stabile-Parent-FDs
+
+- 2026-07-17: `_safe_account_lock_handle()` pruefte den Lock und oeffnete ihn
+  danach absolut per Pfad. Auch `account_memory_lock_for_root()` und
+  `account_identity_lock()` legten Verzeichnisse per `mkdir()` an.
+- Lock-Parent wird jetzt stabil mit `O_NOFOLLOW|O_DIRECTORY` geoeffnet; finaler
+  Lock wird relativ dazu mit `O_NOFOLLOW` erstellt/geoeffnet und auf regulaere
+  Single-Link-Datei geprueft. Lock-Verzeichnisse werden komponentenweise FD-
+  gebunden angelegt.
+- Regression: Lock-/Parent-Swap-Fokus -> `28 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `307 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9773a7cd fix: anchor account locks to stable parent fds`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
