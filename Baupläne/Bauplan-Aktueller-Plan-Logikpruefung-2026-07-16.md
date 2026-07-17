@@ -7789,6 +7789,22 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `9/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### Gemini-Keyring: Cursor nach Route/Modell isolieren
+
+- 2026-07-17: `RotatingAPIKeyRing` nahm zwar `name` entgegen, Registry-State
+  war aber nur nach Keyliste indiziert. Stateful/Stateless oder verschiedene
+  Gemini-Modelle mit gleichen Keys konnten dadurch gegenseitig Rotation
+  ausloesen.
+- Registry-State ist jetzt nach `(name, keys)` getrennt. Spaete Ergebnisse
+  bleiben weiterhin geschuetzt; gleiche Route teilt ihren Cursor, andere
+  Route nicht.
+- Test: 31 fokussierte und 27 komplette Gemini-Keyring-Tests, Ruff,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `49e5a349 fix: scope Gemini key rings by route`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `10/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Arbeitsgedaechtnis: Index muss zur JSONL passen
 
 - 2026-07-17: `WorkingMemoryStore` und der noch vorhandene Telegram-Store
