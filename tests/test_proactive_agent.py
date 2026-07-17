@@ -4764,6 +4764,33 @@ def test_dispatch_clamps_negative_retry_attempts(tmp_path) -> None:
     assert item["status"] == "queued"
 
 
+def test_dispatch_rejects_invalid_retry_attempts_before_claim(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="invalid_attempts_claim",
+        message_text="Nicht claimen",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    item = account_store.read_proactive_outbox(account_id)[0]
+    item["dispatch_attempts"] = "kaputt"
+    account_store.write_proactive_outbox(account_id, [item])
+
+    assert claim_proactive_worker_job(account_store, account_id, item_id, now=now) is False
+    persisted = account_store.read_proactive_outbox(account_id)[0]
+    assert persisted["status"] == "queued"
+    assert persisted["dispatch_attempts"] == "kaputt"
+
+
 def test_dispatch_does_not_overwrite_item_cancelled_during_send(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

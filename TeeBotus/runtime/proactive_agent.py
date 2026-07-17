@@ -1513,11 +1513,14 @@ def _update_proactive_outbox_item_status_locked(
             return False
         if not _proactive_status_history_allows_mutation(item, normalized_item_id, current_status=current_status):
             return False
+        dispatch_attempts = _proactive_dispatch_attempts(item) if normalized_status == "dispatching" else None
+        if normalized_status == "dispatching" and dispatch_attempts is None:
+            return False
         item["status"] = normalized_status
         item["updated_at"] = timestamp
         if normalized_status == "dispatching":
             item["dispatching_at"] = timestamp
-            item["dispatch_attempts"] = max(0, _normalize_int(item.get("dispatch_attempts"), default=0)) + 1
+            item["dispatch_attempts"] = dispatch_attempts + 1
         else:
             item.pop("dispatching_at", None)
         if normalized_status == "queued" and retry_at:
