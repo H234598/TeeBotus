@@ -8010,3 +8010,20 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `3/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Account-Memory-Read-only-Health: Primary-Diagnostik bei fehlendem Fallback erhalten
+
+- 2026-07-17: Der read-only Fallbackpfad ueberschrieb einen Primary-
+  Entschluesselungsfehler durch die Diagnose des fehlenden Backup-Datensatzes
+  und meldete nur `fallback data has read diagnostics`. Der Healthcheck verlor
+  dadurch die konkreten Entry-/Index-Fehler.
+- Der Pfad bewahrt jetzt Primary-Ergebnis und Primary-Diagnostik, behandelt eine
+  fehlende Secondary als separaten Reparaturhinweis und bleibt weiterhin
+  schreibfrei. Kein Fallback wird als gesund oder promotierbar markiert.
+- Tests: `tests/test_account_store.py` -> `324 passed`; kompletter
+  `tests/test_version_notifications.py` -> `234 passed`; Ruff, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4cf0bdf5 fix: preserve primary readonly memory diagnostics`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `4/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
