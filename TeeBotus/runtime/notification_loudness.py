@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 from typing import Any, Mapping
 
-from TeeBotus.runtime.accounts import AccountStore, utc_now
+from TeeBotus.runtime.accounts import AccountStore
 from TeeBotus.runtime.action_buttons import NOTIFICATION_LOUDNESS_BUTTONS
 from TeeBotus.runtime.actions import SendText
 from TeeBotus.runtime.activity_profile import contact_timing_decision
@@ -1738,7 +1738,7 @@ def maybe_handle_notification_loudness_response(
                 return None
             _set_notification_loudness_status(account_store, account_id, event, decision, now=now)
             try:
-                _cancel_pending_notification_loudness_items(account_store, account_id, event)
+                _cancel_pending_notification_loudness_items(account_store, account_id, event, now=now)
             except Exception:  # noqa: BLE001 - confirmed state already prevents future loudness dispatch.
                 LOGGER.exception("Notification loudness outbox cleanup failed account=%s route=%s", account_id, _route_key(event))
             text = NOTIFICATION_LOUDNESS_CONFIRMED_REPLY if decision == "confirmed" else NOTIFICATION_LOUDNESS_DECLINED_REPLY
@@ -1828,7 +1828,7 @@ def _queue_due_notification_loudness_prompts_unlocked(
             continue
         status = str(route_state.get("status") or "unknown").strip().casefold()
         if status in NOTIFICATION_LOUDNESS_TERMINAL_STATUSES:
-            state_changed = _mark_notification_loudness_checks_stopped(route_state, status) or state_changed
+            state_changed = _mark_notification_loudness_checks_stopped(route_state, status, now=resolved_now) or state_changed
             continue
         if _normalize_route_key(route_key) in terminal_route_keys:
             continue
@@ -3205,12 +3205,18 @@ def _mark_route_state_prompted(route_state: dict[str, Any], now: datetime) -> No
     _trim_prompted_window_dates(prompts_by_date)
 
 
-def _cancel_pending_notification_loudness_items(account_store: AccountStore, account_id: str, event: IncomingEvent) -> None:
+def _cancel_pending_notification_loudness_items(
+    account_store: AccountStore,
+    account_id: str,
+    event: IncomingEvent,
+    *,
+    now: datetime | None = None,
+) -> None:
     route_key = _route_key(event)
     with _account_proactive_outbox_lock(account_store, account_id):
         rows = account_store.read_proactive_outbox(account_id)
         changed = False
-        timestamp = utc_now()
+        timestamp = _resolve_loudness_now(now).isoformat(timespec="seconds")
         for index, item in enumerate(rows):
             if not isinstance(item, dict) or not is_notification_loudness_outbox_item(item):
                 continue
@@ -3296,7 +3302,9 @@ def _notification_loudness_outbox_status(item: Mapping[str, Any]) -> str | None:
     return value.strip().casefold()
 
 
-def _mark_notification_loudness_checks_stopped(route_state: dict[str, Any], reason: str) -> bool:
+def _mark_notification_loudness_checks_stopped(
+    route_state: dict[str, Any], reason: str, *, now: datetime | None = None
+) -> bool:
     stopped_at = route_state.get("checks_stopped_at")
     if (
         route_state.get("checks_active") is False
@@ -3306,7 +3314,7 @@ def _mark_notification_loudness_checks_stopped(route_state: dict[str, Any], reas
     ):
         return False
     route_state["checks_active"] = False
-    route_state["checks_stopped_at"] = utc_now()
+    route_state["checks_stopped_at"] = _resolve_loudness_now(now).isoformat(timespec="seconds")
     route_state["checks_stop_reason"] = reason
     return True
 

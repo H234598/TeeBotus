@@ -204,6 +204,48 @@ def test_scheduler_stops_online_check_after_notification_loudness_confirmation(t
     assert route_state["checks_stop_reason"] == "confirmed"
 
 
+def test_scheduler_repairs_terminal_loudness_timestamp_from_supplied_now(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    supplied_now = datetime(2026, 6, 15, 15, 0, tzinfo=timezone.utc)
+    state = account_store.read_agent_state(account_id)
+    state["notification_loudness"] = {
+        "schema_version": 1,
+        "routes": {
+            "telegram:1:chat-1": {
+                "status": "confirmed",
+                "checks_active": True,
+            }
+        },
+    }
+    account_store.write_agent_state(account_id, state)
+
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=supplied_now) == ()
+
+    repaired = account_store.read_agent_state(account_id)["notification_loudness"]["routes"]["telegram:1:chat-1"]
+    assert repaired["checks_stopped_at"] == supplied_now.isoformat(timespec="seconds")
+
+
+def test_loudness_response_uses_supplied_now_for_cancelled_outbox_history(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    supplied_now = datetime(2026, 6, 15, 15, 0, tzinfo=timezone.utc)
+    assert maybe_notification_loudness_prompt_action(
+        event(identity), account_store, account_id, now=supplied_now - timedelta(hours=7)
+    ) is not None
+    set_identity_last_seen(account_store, identity, supplied_now)
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=supplied_now)
+
+    assert maybe_handle_notification_loudness_response(
+        event(identity, "ja, laut"), account_store, account_id, now=supplied_now
+    ) is not None
+
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status_history"][-1]["at"] == supplied_now.isoformat(timespec="seconds")
+
+
 def test_scheduler_refreshes_route_state_for_legacy_channel_case(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)
