@@ -3012,6 +3012,43 @@ def test_disabled_proactive_account_blocks_safe_llm_memory_write(tmp_path) -> No
     assert account_store.read_memory_entries(account_id) == []
 
 
+def test_disabled_proactive_account_blocks_llm_cancel_and_snooze(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="protected_item",
+        message_text="Nicht mutieren",
+        due_at="2026-06-16T09:30:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    disable_proactive_agent(account_store, account_id)
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {
+            "schema_version": 1,
+            "decisions": [
+                {"action": "cancel", "item_id": item_id},
+                {"action": "snooze", "item_id": item_id, "due_at": "2026-06-17T09:30:00+00:00"},
+            ],
+        },
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ("decision_0_proactive_disabled", "decision_1_proactive_disabled")
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "queued"
+    assert item["due_at"] == "2026-06-16T09:30:00+00:00"
+
+
 def test_llm_planner_prompt_has_schema_and_memory_context(tmp_path) -> None:
     account_store = store(tmp_path)
     account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))

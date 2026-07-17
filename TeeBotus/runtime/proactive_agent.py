@@ -2737,6 +2737,8 @@ def _apply_proactive_llm_cancel_decision(
     decision: Mapping[str, Any],
     now: datetime,
 ) -> str:
+    if not _normalized_agent_state(account_store.read_agent_state(account_id))["proactive"]["enabled"]:
+        return "error:proactive_disabled"
     item_id = str(decision.get("item_id") or "").strip()
     if not item_id:
         return "error:missing_item_id"
@@ -2762,6 +2764,8 @@ def _apply_proactive_llm_snooze_decision(
     decision: Mapping[str, Any],
     now: datetime,
 ) -> str:
+    if not _normalized_agent_state(account_store.read_agent_state(account_id))["proactive"]["enabled"]:
+        return "error:proactive_disabled"
     item_id = str(decision.get("item_id") or "").strip()
     if not item_id:
         return "error:missing_item_id"
