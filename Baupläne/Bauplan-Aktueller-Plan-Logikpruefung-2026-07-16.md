@@ -3568,3 +3568,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### SQLite-Recovery-Delete-verweigert-Parent-Symlink-Race
+
+- 2026-07-17: `O_NOFOLLOW` am finalen SQLite-Dateinamen schuetzte nicht vor
+  einem gleichzeitig umgebogenen Parent-Verzeichnis. Ein Pfadwechsel konnte
+  dadurch weiterhin eine externe Datei oeffnen.
+- Parent-Komponenten werden jetzt einzeln relativ zu Directory-FDs mit
+  `O_NOFOLLOW|O_DIRECTORY` geoeffnet. Der finale Descriptor bleibt stabil;
+  Parent-Symlink-Races blockieren fail-closed.
+- Regression: finaler Source-Race plus Parent-Directory-Swap -> `3 passed`;
+  komplette `tests/test_admin_accounts.py` -> `106 passed`. Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `cd887156 fix: open sqlite recovery parents without symlink traversal`.
+
+**Aktueller Laufstand:** Seit dem Restart `12/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 8 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
