@@ -7856,3 +7856,20 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `14/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Proactive-Dispatch-Results: Audit-Luecke nach Outbox-Versand schliessen
+
+- 2026-07-17: Nach externem Versand wurde zuerst der Outbox-Status `sent` und
+  erst danach das separate Dispatch-Result geschrieben. Ein Prozessabbruch
+  dazwischen liess den Versand dauerhaft ohne Audit-Result; der naechste Lauf
+  sah kein faelliges Item mehr und konnte nichts rekonstruieren.
+- Erfolgreiche Sendungen erhalten jetzt eine `dispatch_id`, die in Outbox-
+  Dispatchmetadaten und Dispatch-Result identisch bleibt. Jeder Dispatch-Lauf
+  sucht vor neuem Versand nach solchen fehlenden Result-Zeilen und stellt sie
+  aus dem Outbox wieder her. Vorhandene Resultate werden ueber ID dedupliziert.
+- Test: Proactive-Suite `256 passed`; fokussierter Recovery-Test gruen; Ruff,
+  `py_compile` und `git diff --check` gruen. Kein echter Provider/API-Aufruf.
+- Code-Commit: `8776193a fix: recover proactive dispatch audit results`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `15/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
