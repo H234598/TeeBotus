@@ -1137,7 +1137,10 @@ def _discover_snapshot_sqlite_sources(accounts_root: Path, *, existing_paths: se
     sources: list[RecoverySource] = []
     seen_names: set[str] = set()
     for path in sorted(candidates):
-        resolved = path.resolve()
+        try:
+            resolved = path.resolve()
+        except (OSError, RuntimeError):
+            continue
         if resolved in existing_paths or path.is_symlink() or not path.is_file():
             continue
         name = _snapshot_source_name(accounts_root, path, seen_names=seen_names)

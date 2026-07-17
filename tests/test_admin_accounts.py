@@ -1143,6 +1143,16 @@ def test_memory_recovery_snapshot_discovery_tolerates_glob_error(monkeypatch, tm
     assert account_memory_recovery_module._discover_snapshot_sqlite_sources(accounts_root, existing_paths=set()) == []
 
 
+def test_memory_recovery_snapshot_discovery_skips_symlink_loop(tmp_path: Path) -> None:
+    accounts_root = tmp_path / "accounts"
+    snapshot_dir = accounts_root / ".pre-loop"
+    snapshot_dir.mkdir(parents=True)
+    loop = snapshot_dir / "Account_Memory.sqlite3"
+    loop.symlink_to(loop.name)
+
+    assert account_memory_recovery_module._discover_snapshot_sqlite_sources(accounts_root, existing_paths=set()) == []
+
+
 def test_memory_recovery_quarantine_blocks_missing_report_accounts_root(tmp_path: Path) -> None:
     account_id = "e" * 128
     report = {
