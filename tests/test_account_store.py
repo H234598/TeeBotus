@@ -2577,6 +2577,36 @@ def test_account_memory_append_initializes_missing_sqlite_database(tmp_path):
     assert backend.last_database_missing is False
 
 
+def test_sqlite_collection_read_snapshots_secret_key_once(tmp_path):
+    class CountingSecretProvider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def get_secret(self, _instance_name: str, _purpose: str) -> bytes:
+            self.calls += 1
+            return b"a" * 32
+
+    secret_provider = CountingSecretProvider()
+    backend = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=secret_provider,
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=tmp_path / "memory.sqlite3", fallback_path=None),
+    )
+    account_id = "a" * 128
+    backend.write_collection(
+        account_id,
+        "codex_history_outbox",
+        [{"id": f"row-{index}", "status": "accepted"} for index in range(3)],
+    )
+    secret_provider.calls = 0
+
+    rows = backend.read_collection(account_id, "codex_history_outbox")
+
+    assert [row["id"] for row in rows] == ["row-0", "row-1", "row-2"]
+    assert secret_provider.calls == 1
+
+
 def test_rebuild_structured_memory_refuses_unreadable_index(tmp_path):
     class PartiallyUnreadableIndexBackend:
         last_entry_read_error = ""
