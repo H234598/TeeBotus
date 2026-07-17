@@ -5056,3 +5056,17 @@ Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Memory-Health-Datenbankfehler
+
+- 2026-07-17: Die Ermittlung von Account-IDs aus dem Memory-Backend konnte bei
+  malformed Konfigurationen `ValueError` bis in den `/status`-Collector werfen.
+- Der Datenbankfehler wird jetzt als `database_account_discovery_failed`
+  ausgegeben; Verzeichnis-Accounts werden trotzdem weiter geprueft.
+- Test: fokussierter Memory-Health-Fokus `21 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `64cf5409 fix: keep database health diagnostics on value errors`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`9/20` Commits. Kein Push. Restart nach 11 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
