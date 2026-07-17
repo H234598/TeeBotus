@@ -4557,3 +4557,25 @@ nach 17 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Kein Push. Restart
 nach 18 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### SQL-Artefakt-Accounts-blockieren-keinen-Startup-mehr
+
+- 2026-07-17: `_sqlite_memory_account_ids()` und das PostgreSQL-Gegenstück
+  nahmen alle `account_jsonl_collections` als Memory-Accounts. Status-, Codex-
+  und andere Outbox-Zeilen ohne Account-Profil wurden dadurch als
+  `profile_missing_for_database_account` markiert; Preflight blockierte den
+  gesamten Service, obwohl strukturierte Memorytabellen gesund waren.
+- Account-ID-Ermittlung für Memory-Health beschränkt sich jetzt auf
+  `memory_entries`, `memory_indexes` und `memory_keywords`. Die separate
+  Payload-Existenzprüfung für Secret-Schutz behält Collections ausdrücklich.
+- Regression: SQLite-Artifact-only-Health plus bestehender Test -> `2 passed`;
+  kompletter Status-/Account-Store-Lauf `536 passed`; Runtime-Status Exit `0`
+  ohne falsche `profile_missing`-Zeilen; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3376b89c fix: ignore artifact-only accounts in memory health`.
+- Service danach ohne Emergency-Override neu gestartet: `active/running`,
+  Exit `0`, PID `3221260`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `0/20` Code-Commits. Kein
+Push. Plan-Commit zaehlt als naechster Commit. Restart nach 20 weiteren
+Commits. Naechster Push bleibt erst bei 100 Commits.
