@@ -7120,6 +7120,24 @@ Commits. Kein Push. Restart nach 2 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `19/20` sichtbar.
 
+### Account-Edit-Setup kapselt Statefehler
+
+- 2026-07-17: `/account_edit` und Start der Unlink-Bestätigung setzten
+  Pending-State ungefangen. Runtime-Statefehler konnten dadurch nur globalen
+  Fehlertext liefern oder den Flowzustand unklar lassen.
+- Beide Setup-Punkte melden kontrolliert und bewahren bestehenden Flow. Kein
+  falscher Start und keine unklare Bestätigung.
+- Test: fokussierter Account-Edit-Setup-Pfad `5 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `56360b99 fix: contain account edit flow setup failures`.
+- Restart nach `20/20`: Service `active`, MainPID `399677`,
+  `ExecMainStatus=0`; keine neuen Startfehler.
+
+**Aktueller Laufstand:** Nach dem Restart `1/20` Commits. Kein Push.
+Restart nach 19 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `1/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
