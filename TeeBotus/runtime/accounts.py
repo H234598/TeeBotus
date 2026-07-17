@@ -4609,11 +4609,14 @@ class AccountStore:
             if isinstance(row, dict)
             if (row_id := str(row.get("id") or "").strip())
         ]
-        recent_ids[:] = [
-            normalized_id
-            for value in recent_ids
-            if (normalized_id := str(value or "").strip()) in existing_ids
-        ]
+        normalized_recent_ids: list[str] = []
+        seen_recent_ids: set[str] = set()
+        for value in recent_ids:
+            normalized_id = str(value or "").strip()
+            if normalized_id in existing_ids and normalized_id not in seen_recent_ids:
+                normalized_recent_ids.append(normalized_id)
+                seen_recent_ids.add(normalized_id)
+        recent_ids[:] = normalized_recent_ids
         if memory_id:
             if memory_id in recent_ids:
                 recent_ids.remove(memory_id)
@@ -4659,11 +4662,14 @@ class AccountStore:
             if not isinstance(values, list):
                 keyword_index.pop(keyword, None)
                 continue
-            keyword_index[keyword] = [
-                value_id
-                for value in values
-                if (value_id := str(value or "").strip()) in live_ids
-            ]
+            normalized_keyword_ids: list[str] = []
+            seen_keyword_ids: set[str] = set()
+            for value in values:
+                value_id = str(value or "").strip()
+                if value_id in live_ids and value_id not in seen_keyword_ids:
+                    normalized_keyword_ids.append(value_id)
+                    seen_keyword_ids.add(value_id)
+            keyword_index[keyword] = normalized_keyword_ids
             if not keyword_index[keyword]:
                 keyword_index.pop(keyword, None)
 

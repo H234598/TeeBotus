@@ -2406,6 +2406,23 @@ def test_append_structured_memory_prunes_accessed_ids_after_retention_trim(tmp_p
     assert store.check_structured_memory_index(account_id).ok
 
 
+def test_append_structured_memory_repairs_duplicate_recent_and_keyword_ids(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    store.append_structured_memory_entry(account_id, {"id": "mem_old", "user_text": "Mond"})
+    index = store.read_memory_index(account_id)
+    index["index"]["recent_ids"] = ["mem_old", "mem_old"]
+    index["index"]["keywords"]["mond"] = ["mem_old", "mem_old"]
+    store.write_memory_index(account_id, index)
+
+    store.append_structured_memory_entry(account_id, {"id": "mem_new", "user_text": "Neu"})
+
+    repaired_index = store.read_memory_index(account_id)["index"]
+    assert repaired_index["recent_ids"] == ["mem_old", "mem_new"]
+    assert repaired_index["keywords"]["mond"] == ["mem_old"]
+    assert store.check_structured_memory_index(account_id).ok
+
+
 def test_append_structured_account_memory_renames_duplicate_entry_id(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))
