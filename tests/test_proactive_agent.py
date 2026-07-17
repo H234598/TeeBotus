@@ -2987,6 +2987,35 @@ def test_tool_agent_runner_audits_malformed_responses_api_tool_call(tmp_path) ->
     assert audit[0]["reason"] == "tool_0_invalid_tool_call"
 
 
+def test_tool_agent_runner_rejects_malformed_noop_arguments(tmp_path) -> None:
+    class Client:
+        def create_tool_calls(self, _prompt, _instructions, _tools):
+            return {
+                "output": [
+                    {
+                        "type": "function_call",
+                        "name": "proactive_noop",
+                        "arguments": "not-json",
+                    }
+                ]
+            }
+
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(signal_identity_key(source_uuid="signal-user"))
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+
+    result = run_proactive_tool_agent(
+        account_store,
+        account_id,
+        openai_client=Client(),
+        instructions=object(),
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ("tool_0_invalid_tool_call",)
+    assert account_store.read_proactive_audit(account_id)[0]["event_type"] == "tool_call_rejected"
+
+
 def test_tool_agent_applies_memory_queue_and_snooze_tools_through_validator(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

@@ -2625,6 +2625,8 @@ def _normalize_proactive_agent_tool_call(raw_call: Any) -> ProactiveAgentToolCal
         if not name:
             return None
         arguments = _tool_call_arguments(raw_call)
+        if arguments is None:
+            return None
         call_id = ""
         if isinstance(raw_call, Mapping):
             call_id = str(raw_call.get("call_id") or raw_call.get("id") or "").strip()
@@ -2652,7 +2654,7 @@ def _tool_call_name(raw_call: Any) -> str:
     return str(getattr(raw_call, "name", "") or "").strip()
 
 
-def _tool_call_arguments(raw_call: Any) -> Mapping[str, Any]:
+def _tool_call_arguments(raw_call: Any) -> Mapping[str, Any] | None:
     raw_arguments: Any
     if isinstance(raw_call, Mapping):
         function = raw_call.get("function")
@@ -2672,8 +2674,8 @@ def _tool_call_arguments(raw_call: Any) -> Mapping[str, Any]:
         try:
             decoded = json.loads(raw_arguments)
         except json.JSONDecodeError:
-            return {}
-        return decoded if isinstance(decoded, Mapping) else {}
+            return None
+        return decoded if isinstance(decoded, Mapping) else None
     return {}
 
 
