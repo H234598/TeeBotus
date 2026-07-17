@@ -14,6 +14,7 @@ import tempfile
 import threading
 import time
 import urllib.parse
+import uuid
 from contextlib import contextmanager, suppress
 from functools import lru_cache
 from pathlib import Path
@@ -39,6 +40,7 @@ YOUTUBE_FASTER_WHISPER_CPU_THREADS = 2
 YOUTUBE_TRANSCRIPT_NICE_LEVEL = 19
 YOUTUBE_PARSER_MISSES_FILENAME = "YouTube_Parser_Misses.jsonl"
 YOUTUBE_PARSER_MISSES_LOCK_FILENAME = ".YouTube_Parser_Misses.jsonl.lock"
+YOUTUBE_TRANSCRIPT_CACHE_LOCK_FILENAME = ".YouTube_Transcript_Cache.lock"
 YOUTUBE_TRANSCRIPT_CACHE_DIRNAME = "youtube_transcripts"
 
 
@@ -61,6 +63,8 @@ PROCESS_REGISTRY_LOCK_FILENAME = ".YouTube_Transcription_Processes.json.lock"
 _PROCESS_REGISTRY_LOCKS: dict[str, threading.Lock] = {}
 _YOUTUBE_PARSER_MISSES_LOCKS: dict[str, threading.RLock] = {}
 _YOUTUBE_PARSER_MISSES_LOCKS_GUARD = threading.Lock()
+_YOUTUBE_TRANSCRIPT_CACHE_LOCKS: dict[str, threading.RLock] = {}
+_YOUTUBE_TRANSCRIPT_CACHE_LOCKS_GUARD = threading.Lock()
 
 
 class _InstanceProcessRegistry:
@@ -505,6 +509,26 @@ def _youtube_parser_misses_lock(path: Path):
                     fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
+@contextmanager
+def _youtube_transcript_cache_lock(path: Path):
+    key = os.path.realpath(os.fspath(path))
+    with _YOUTUBE_TRANSCRIPT_CACHE_LOCKS_GUARD:
+        thread_lock = _YOUTUBE_TRANSCRIPT_CACHE_LOCKS.setdefault(key, threading.RLock())
+    lock_path = path.with_name(YOUTUBE_TRANSCRIPT_CACHE_LOCK_FILENAME)
+    with thread_lock:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+b") as handle:
+            locked = False
+            try:
+                if fcntl is not None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                    locked = True
+                yield
+            finally:
+                if locked:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+
 def _redact_youtube_urls(text: str) -> str:
     return re.sub(r"https?://\S+", "<youtube-url>", text)
 
@@ -726,15 +750,19 @@ def _write_cached_youtube_transcript(url: str, transcript: str) -> None:
     if not text:
         return
     path = _youtube_transcript_cache_path(url)
-    tmp_path = path.with_name(f".{path.name}.{os.getpid()}.tmp")
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp_path.write_text(text + "\n", encoding="utf-8")
-        os.replace(tmp_path, path)
-    except OSError as exc:
-        LOGGER.warning("Could not write YouTube transcript cache at %s: %s", path, exc)
-        with suppress(OSError):
-            tmp_path.unlink()
+    with _youtube_transcript_cache_lock(path):
+        tmp_path = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.{uuid.uuid4().hex}.tmp")
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with tmp_path.open("w", encoding="utf-8") as handle:
+                handle.write(text + "\n")
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.replace(tmp_path, path)
+        except OSError as exc:
+            LOGGER.warning("Could not write YouTube transcript cache at %s: %s", path, exc)
+            with suppress(OSError):
+                tmp_path.unlink()
 
 
 def _download_youtube_subtitles(url: str, workdir: Path, instance_name: str = "") -> str:

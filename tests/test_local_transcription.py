@@ -142,3 +142,17 @@ def test_youtube_parser_miss_write_uses_process_lock(tmp_path: Path, monkeypatch
     assert json.loads(miss_path.read_text(encoding="utf-8"))["context"] == "test"
     if original_flock is not None:
         assert calls == [youtube.fcntl.LOCK_EX, youtube.fcntl.LOCK_UN]
+
+
+def test_youtube_transcript_cache_write_uses_unique_atomic_temp_files(tmp_path: Path) -> None:
+    runtime_dir = tmp_path / "runtime"
+    original_runtime_dir = youtube.runtime_dir
+    youtube.runtime_dir = lambda: runtime_dir
+    try:
+        youtube._write_cached_youtube_transcript("https://youtu.be/cache", "Cached transcript")
+    finally:
+        youtube.runtime_dir = original_runtime_dir
+
+    cache_path = runtime_dir / "youtube_transcripts" / "cache.txt"
+    assert cache_path.read_text(encoding="utf-8") == "Cached transcript\n"
+    assert not list(cache_path.parent.glob("*.tmp"))
