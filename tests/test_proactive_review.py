@@ -110,6 +110,29 @@ def test_proactive_review_rejects_unsafe_single_instance_without_store_access(tm
     assert called is False
 
 
+def test_proactive_review_rejects_unsupported_action_before_store_access(tmp_path: Path) -> None:
+    called = False
+
+    def factory(*_args):
+        nonlocal called
+        called = True
+        raise AssertionError("unsupported action must not open a store")
+
+    report = review_proactive_item(
+        instances_dir=tmp_path / "instances",
+        instance_name="../outside",
+        account_id="a" * 128,
+        item_id="pro_bad",
+        action="unknown",
+        store_factory=factory,
+    )
+
+    assert report["ok"] is False
+    assert report["action"] == "unknown"
+    assert report["reason"] == "unsupported_action"
+    assert called is False
+
+
 def test_proactive_review_approve_queues_item(tmp_path: Path) -> None:
     _instance_dir, store, account_id, item_id = _review_fixture(tmp_path)
 

@@ -122,11 +122,22 @@ def review_proactive_item(
 ) -> dict[str, Any]:
     resolved_factory = store_factory or AccountStore
     timestamp = now or datetime.now(timezone.utc)
+    normalized_action = str(action or "").strip().casefold()
+    if normalized_action not in {"approve", "reject"}:
+        return {
+            "ok": False,
+            "action": normalized_action,
+            "instance": str(instance_name or "").strip(),
+            "account_id": account_id,
+            "item_id": item_id,
+            "reason": "unsupported_action",
+            "route": {},
+        }
     normalized_instance_name = str(instance_name or "").strip()
     if not _is_safe_instance_name(normalized_instance_name):
         return {
             "ok": False,
-            "action": action,
+            "action": normalized_action,
             "instance": normalized_instance_name,
             "account_id": account_id,
             "item_id": item_id,
@@ -137,7 +148,7 @@ def review_proactive_item(
     if not instance_dir.is_dir() or not (instance_dir / "data" / "accounts").is_dir():
         return {
             "ok": False,
-            "action": action,
+            "action": normalized_action,
             "instance": normalized_instance_name,
             "account_id": account_id,
             "item_id": item_id,
@@ -147,19 +158,17 @@ def review_proactive_item(
     try:
         store = resolved_factory(instance_dir / "data" / "accounts", normalized_instance_name)
     except Exception as exc:  # noqa: BLE001
-        return {"ok": False, "action": action, "reason": f"store_error:{type(exc).__name__}: {exc}"}
+        return {"ok": False, "action": normalized_action, "instance": normalized_instance_name, "reason": f"store_error:{type(exc).__name__}: {exc}"}
     try:
-        if action == "approve":
+        if normalized_action == "approve":
             decision = approve_proactive_review_item(store, account_id, item_id, reviewer=reviewer, reason=reason, now=timestamp)
-        elif action == "reject":
-            decision = reject_proactive_review_item(store, account_id, item_id, reviewer=reviewer, reason=reason, now=timestamp)
         else:
-            return {"ok": False, "action": action, "reason": "unsupported_action"}
+            decision = reject_proactive_review_item(store, account_id, item_id, reviewer=reviewer, reason=reason, now=timestamp)
     except (AccountStoreError, OSError, ValueError) as exc:
         return {
             "ok": False,
-            "action": action,
-            "instance": instance_name,
+            "action": normalized_action,
+            "instance": normalized_instance_name,
             "account_id": account_id,
             "item_id": item_id,
             "reason": f"review_store_error:{type(exc).__name__}: {exc}",
@@ -167,8 +176,8 @@ def review_proactive_item(
         }
     return {
         "ok": decision.allowed,
-        "action": action,
-        "instance": instance_name,
+        "action": normalized_action,
+        "instance": normalized_instance_name,
         "account_id": account_id,
         "item_id": item_id,
         "reason": decision.reason,
