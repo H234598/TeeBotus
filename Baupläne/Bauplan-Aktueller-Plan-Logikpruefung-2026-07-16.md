@@ -6776,6 +6776,35 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `18/20` voll.
 
+### Kanal-Trennung kapselt Backendfehler
+
+- 2026-07-17: Direkte `/unlink_this_channel`- und bestätigte
+  `/account_edit`-Trennung liessen unerwartete Fehler aus `unlink_identity()`
+  ungefangen bis in den Identity-Flow laufen.
+- Beide Pfade melden Trennfehler kontrolliert. Der Account bleibt verknüpft;
+  der bestätigte Bearbeitungsflow bleibt für einen Retry erhalten. Kein
+  falscher Erfolg.
+- Test: fokussierter Trennfehlerpfad `4 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `65ffce7f fix: contain account unlink failures`.
+
+### Help-Admin-Prüfung fail-closed
+
+- 2026-07-17: `_account_is_help_admin()` fing nur erwartete Storefehler. Ein
+  unerwarteter Fehler in der Admin-Prüfung konnte `/help` abbrechen.
+- Unerwartete Prüfungsfehler werden jetzt protokolliert und als Nicht-Admin
+  behandelt. Keine Admin-Hilfe bei unklarer Berechtigung.
+- Test: fokussierter Adminfehlerpfad `3 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c59b4ca4 fix: fail closed on help admin lookup`.
+- Restart nach `20/20`: Service `active`, MainPID `4187238`,
+  `ExecMainStatus=0`; keine neuen Startfehler.
+
+**Aktueller Laufstand:** Nach dem Restart `1/20` Commits. Kein Push.
+Restart nach 19 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `1/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
