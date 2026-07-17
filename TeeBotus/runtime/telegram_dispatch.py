@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 import base64
+import os
 import threading
+from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
 from pathlib import Path
 from typing import Any
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - fcntl is unavailable on non-POSIX platforms.
+    fcntl = None  # type: ignore[assignment]
 
 from TeeBotus.runtime.accounts import EncryptedJsonVault, INSTANCE_MAPPING_KEY_PURPOSE, InstanceSecretProvider
 from TeeBotus.runtime.actions import (
@@ -28,6 +35,7 @@ from TeeBotus.runtime.engine import EngineResult
 from TeeBotus.runtime.events import IncomingEvent
 
 TELEGRAM_DISPATCH_JOURNAL_FILENAME = "Telegram_Dispatch_Journal.json"
+TELEGRAM_DISPATCH_JOURNAL_LOCK_FILENAME = ".Telegram_Dispatch_Journal.lock"
 TELEGRAM_DISPATCH_JOURNAL_SCHEMA_VERSION = 1
 _JOURNAL_LOCK = threading.RLock()
 
@@ -99,7 +107,7 @@ class TelegramDispatchJournal:
         clean_key = str(key or "").strip()
         if not clean_key:
             return None
-        with _JOURNAL_LOCK:
+        with self._journal_lock():
             payload = self._read_payload()
             raw_entry = payload["entries"].get(clean_key)
             if raw_entry is None:
@@ -113,7 +121,7 @@ class TelegramDispatchJournal:
         if not clean_key:
             return
         entry = _serialize_entry(event, engine_result, set())
-        with _JOURNAL_LOCK:
+        with self._journal_lock():
             payload = self._read_payload()
             payload["entries"].setdefault(clean_key, entry)
             self._write_payload(payload)
@@ -123,7 +131,7 @@ class TelegramDispatchJournal:
             return
         clean_key = str(key or "").strip()
         index = int(action_index)
-        with _JOURNAL_LOCK:
+        with self._journal_lock():
             payload = self._read_payload()
             raw_entry = payload["entries"].get(clean_key)
             if raw_entry is None:
@@ -142,7 +150,7 @@ class TelegramDispatchJournal:
         clean_key = str(key or "").strip()
         if not clean_key:
             return
-        with _JOURNAL_LOCK:
+        with self._journal_lock():
             payload = self._read_payload()
             if clean_key in payload["entries"]:
                 del payload["entries"][clean_key]
@@ -157,6 +165,32 @@ class TelegramDispatchJournal:
             purpose=INSTANCE_MAPPING_KEY_PURPOSE,
             root=self.runtime_dir,
         )
+
+    @contextmanager
+    def _journal_lock(self):
+        lock_path = self.runtime_dir / TELEGRAM_DISPATCH_JOURNAL_LOCK_FILENAME
+        with _JOURNAL_LOCK:
+            try:
+                lock_path.parent.mkdir(parents=True, exist_ok=True)
+                handle = lock_path.open("a+b")
+            except OSError as exc:
+                raise TelegramDispatchJournalError(f"could not open Telegram dispatch journal lock: {lock_path}") from exc
+            try:
+                try:
+                    os.chmod(lock_path, 0o600)
+                except OSError:
+                    pass
+                locked = False
+                try:
+                    if fcntl is not None:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                        locked = True
+                    yield
+                finally:
+                    if locked:
+                        fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+            finally:
+                handle.close()
 
     def _read_payload(self) -> dict[str, Any]:
         try:
