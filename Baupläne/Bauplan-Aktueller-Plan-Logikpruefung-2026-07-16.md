@@ -6389,6 +6389,24 @@ bleibt erst bei 100 Commits.
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Reflection rollt Teilbatches zurueck
+
+- 2026-07-17: Der deterministische Reflection-Planner schrieb neun Memories
+  einzeln. Ein Fehler in der Mitte liess Teilentries mit gleichem Fingerprint
+  liegen; der naechste Lauf uebersprang dadurch die Quelle dauerhaft.
+- Planner sichert Memory-Entries, Index und Outbox pro Quelle. Bei Memory-,
+  Queue- oder Policy-Fehlern wird der Batch zurueckgerollt; bei erfolgreicher
+  Wiederherstellung bleibt Quelle mit `memory_persistence_failed` oder
+  `queue_persistence_failed` retrybar. Rollbackfehler werden separat gemeldet.
+- Test: `tests/test_proactive_agent.py` `192 passed`; Regressionen fuer
+  Teilbatch- und Queue-Fehler; Ruff und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `b372ff55 fix: rollback partial proactive reflections`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`9/20` Commits. Kein Push. Restart nach 11 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Admin-Status kapselt Route-Backendfehler
 
 - 2026-07-17: Admin-Statuszeilen sowie Runtime- und Benchmark-Summary-
