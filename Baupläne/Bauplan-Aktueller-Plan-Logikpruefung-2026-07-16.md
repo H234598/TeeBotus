@@ -6626,6 +6626,23 @@ bleibt erst bei 100 Commits.
 Dieser Plan-Commit macht Zyklus `20/20` voll. Kein Push. Dienst-Neustart jetzt;
 danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
+### Voice-Provider kapselt unerwartete Fehler
+
+- 2026-07-17: `/voice` fing nur `OpenAIAPIError`. Generische LiteLLM-,
+  Provider- oder Wrapper-Ausnahmen konnten Sprachgenerierung und Bot-Loop
+  abbrechen.
+- Voice-Generierung behandelt unerwartete Fehler jetzt wie bekannte
+  Providerfehler: Log plus bestehender Voice-Fehlertext. Kein falscher
+  Audio-Versand.
+- Test: `tests/test_engine_identity_flows.py` `206 passed`; Ruff und
+  `git diff --check` gruen. Kein echter Provider/API-Aufruf.
+- Code-Commit: `3b7a82b5 fix: contain voice provider failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`1/20` Commits. Kein Push. Restart nach 19 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `2/20` voll.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
