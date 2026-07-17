@@ -7822,6 +7822,23 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `11/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
+
+- 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
+  waren nicht atomar zusammengefasst. Zwei Harvest-Prozesse konnten denselben
+  Inhalt gleichzeitig als neu sehen und dieselbe Zieldatei bzw. widerspruechliche
+  Manifestzeilen erzeugen. Promotion hatte dieselbe Luecke bei Zielauswahl und
+  Manifest.
+- `SourceHarvester` verwendet jetzt pro Bibliothekswurzel einen Thread- und
+  POSIX-Dateisperren-Lock. Harvest und Promotion halten ihn ueber Pruefung,
+  Zielauswahl, Kopie, Manifest-Append und optionales Quell-Loeschen.
+- Test: 41 SourceHarvester-Tests, inklusive paralleler Duplicate-Pruefung;
+  Ruff, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `03097430 fix: serialize source harvesting writes`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `12/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Arbeitsgedaechtnis: Index muss zur JSONL passen
 
 - 2026-07-17: `WorkingMemoryStore` und der noch vorhandene Telegram-Store
