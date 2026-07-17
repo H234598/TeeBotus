@@ -5477,6 +5477,23 @@ bleibt erst bei 100 Commits.
 `20/20` Commits. Kein Push. Restart jetzt. Naechster Push bleibt erst bei
 100 Commits.
 
+### Proactive-Human-Review lehnt kaputte Statushistorie ab
+
+- 2026-07-17: `approve_proactive_review_item` pruefte Payload-Felder, aber
+  keine vorhandene `status_history`. Beschaedigte Review-Zeilen konnten dadurch
+  `queued` werden; Health erkannte den Fehler erst nach der Mutation.
+- Approval validiert die vorhandene Statushistorie jetzt vor Policy-/Write-
+  Mutation. Ungueltige Historie bleibt `review_pending` mit
+  `invalid_status_history`.
+- Test: `tests/test_proactive_agent.py` + `tests/test_proactive_cli.py`
+  `217 passed`; Human-Review-Fokus `3 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e11a2ca9 fix: reject corrupt proactive review history`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`1/20` Commits. Kein Push. Restart nach 19 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
