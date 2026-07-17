@@ -2682,7 +2682,9 @@ def _tool_call_arguments(raw_call: Any) -> Mapping[str, Any] | None:
         except json.JSONDecodeError:
             return None
         return decoded if isinstance(decoded, Mapping) else None
-    return {}
+    if raw_arguments is None:
+        return {}
+    return None
 
 
 def _tool_call_to_llm_decision(call: ProactiveAgentToolCall) -> dict[str, Any]:
