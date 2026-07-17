@@ -185,6 +185,7 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 instance_name=self.run_config.instance_name,
                 adapter_slot=self.run_config.slot,
                 account_label=self.run_config.label,
+                bot_address_names=(self.run_config.signal_phone_number, self.run_config.label, self.run_config.instance_name),
             )
             if event is None:
                 return
@@ -656,6 +657,7 @@ class SharedSignalRouterCommand(_SignalBotCommand):
                 instance_name=command.run_config.instance_name,
                 adapter_slot=command.run_config.slot,
                 account_label=command.run_config.label,
+                bot_address_names=(command.run_config.signal_phone_number, command.run_config.label, command.run_config.instance_name),
             )
             if event is None:
                 continue

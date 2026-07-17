@@ -4,7 +4,7 @@ import asyncio
 import base64
 import json
 import mimetypes
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from inspect import isawaitable
 from typing import Any
 
@@ -36,6 +36,7 @@ def signal_message_to_event(
     adapter_slot: int,
     account_id: str = "",
     account_label: str = "signal:1",
+    bot_address_names: Iterable[str] = (),
 ) -> IncomingEvent | None:
     if not _signal_message_has_user_content(message):
         return None
@@ -66,7 +67,7 @@ def signal_message_to_event(
     recipient = str(recipient or "").strip()
     if not recipient:
         return None
-    return IncomingEvent(
+    event = IncomingEvent(
         event_id=f"signal:{getattr(message, 'timestamp', '')}",
         instance=instance,
         channel="signal",
@@ -86,6 +87,9 @@ def signal_message_to_event(
         link_previews=_signal_link_previews(message),
         raw=message,
     )
+    if _signal_quote_targets_bot(message, bot_address_names):
+        event = event.with_reply_to_bot(True)
+    return event
 
 
 def signal_context_to_event(
@@ -94,8 +98,16 @@ def signal_context_to_event(
     instance_name: str,
     adapter_slot: int,
     account_label: str,
+    bot_address_names: Iterable[str] = (),
 ) -> IncomingEvent | None:
-    return signal_message_to_event(context.message, instance=instance_name, adapter_slot=adapter_slot, account_id="", account_label=account_label)
+    return signal_message_to_event(
+        context.message,
+        instance=instance_name,
+        adapter_slot=adapter_slot,
+        account_id="",
+        account_label=account_label,
+        bot_address_names=bot_address_names,
+    )
 
 
 async def send_signal_actions(
@@ -743,6 +755,34 @@ def _signal_quote_text(message: Any) -> str | None:
         return None
     text = str(quote_payload.get("text") or "").strip()
     return text or None
+
+
+def _signal_quote_targets_bot(message: Any, bot_address_names: Iterable[str]) -> bool:
+    targets = {str(value or "").strip().casefold() for value in bot_address_names if str(value or "").strip()}
+    if not targets:
+        return False
+    quote = getattr(message, "quote", None)
+    authors = {
+        str(getattr(quote, attribute, "") or "").strip().casefold()
+        for attribute in ("author", "author_number", "author_uuid")
+        if quote is not None
+    }
+    raw_message = getattr(message, "raw_message", None)
+    if isinstance(raw_message, str) and raw_message.strip():
+        try:
+            payload = json.loads(raw_message)
+        except (TypeError, ValueError):
+            payload = {}
+        envelope = payload.get("envelope") if isinstance(payload, dict) else {}
+        data_message = _signal_raw_data_message(envelope) if isinstance(envelope, dict) else {}
+        quote_payload = data_message.get("quote") if isinstance(data_message, dict) else {}
+        if isinstance(quote_payload, dict):
+            authors.update(
+                str(quote_payload.get(key) or "").strip().casefold()
+                for key in ("author", "authorNumber", "authorUuid", "author_number", "author_uuid")
+            )
+    authors.discard("")
+    return bool(authors.intersection(targets))
 
 
 def _signal_link_previews(message: Any) -> tuple[IncomingLinkPreview, ...]:

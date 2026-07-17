@@ -1027,6 +1027,32 @@ def test_signal_group_free_text_must_address_bot(tmp_path) -> None:
     assert command.account_store.get_account_for_identity("signal:uuid:signal-uuid") is None
 
 
+def test_signal_group_reply_to_configured_bot_is_addressed(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    context = FakeSignalContext()
+    context.message.source = "+49999"
+    context.message.source_number = "+49999"
+    context.message.group = "group-1"
+    context.message.text = "Antwort"
+    context.message.quote = SimpleNamespace(id=123, author="+491234", text="Botantwort")
+
+    asyncio.run(command.handle(context))
+
+    assert context.sent == ["Echo: Antwort"]
+
+
 def test_signal_command_handles_account_store_resolution_errors(tmp_path) -> None:
     command = TeeBotusSignalCommand(
         run_config=AccountRunConfig(
