@@ -3306,3 +3306,19 @@ nach 7 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `15/20` Commits. Kein Push. Restart
 nach 5 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Account-Report-fangt-Store-Init-Fehler
+
+- 2026-07-17: `build_instance_admin_report()` liess
+  `AccountStore(...)`-Fehler ungefangen. Fehlende oder inkompatible Keys
+  konnten dadurch den gesamten Account-Report abbrechen.
+- Store-Initialisierungsfehler werden jetzt als `account_store.errors` mit
+  `store_errors`-Totals erfasst. Identity-Health meldet dazu eine Warnung;
+  andere Instanzen bleiben berichtbar.
+- Regression: erzwungener Init-Fehler plus Store-Error-Fokus -> `2 passed`;
+  komplette `tests/test_admin_accounts.py` -> `90 passed`. Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6670cfeb fix: report account store initialization failures`.
+
+**Aktueller Laufstand:** Seit dem Restart `17/20` Commits. Kein Push. Restart
+nach 3 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
