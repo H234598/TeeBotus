@@ -626,6 +626,17 @@ async def run_proactive_agent_cycle(
                     planner_resolver=planner_resolver,
                 )
                 if dispatch:
+                    try:
+                        recovered_dispatch_result_ids = _recover_proactive_dispatch_results(
+                            store,
+                            account_id,
+                            instance_name=instance_dir.name,
+                        )
+                    except Exception as exc:  # noqa: BLE001 - audit recovery must remain reportable without blocking dispatch.
+                        account_report["dispatch_persistence_error"] = f"{type(exc).__name__}: {exc}"
+                    else:
+                        if recovered_dispatch_result_ids:
+                            account_report["recovered_dispatch_result_ids"] = list(recovered_dispatch_result_ids)
                     notification_prompt_ids = queue_due_notification_loudness_prompts(store, account_id, now=resolved_now)
                     if notification_prompt_ids:
                         account_report["notification_loudness_prompt_ids"] = list(notification_prompt_ids)
@@ -738,12 +749,14 @@ async def run_proactive_agent_cycle(
                     )
                     dispatch_rows = [
                         {
+                            "id": result.dispatch_id,
                             "account_id": result.account_id,
                             "item_id": result.item_id,
                             "status": result.status,
                             "reason": result.reason,
                             "channel": result.channel,
                             "message_ref": result.message_ref,
+                            "dispatch_id": result.dispatch_id,
                         }
                         for result in results
                     ]
@@ -879,6 +892,54 @@ def _message_tracker_for_instance(instance_dir: Path, instance_name: str, factor
     if factory is not None:
         return factory(instance_dir, instance_name)
     return MessageTracker(instance_dir / "data" / "runtime" / "Sent_Message_Refs.json")
+
+
+def _recover_proactive_dispatch_results(
+    store: AccountStore,
+    account_id: str,
+    *,
+    instance_name: str,
+) -> tuple[str, ...]:
+    """Recreate sent-event audit rows lost between outbox and result writes."""
+
+    outbox_rows = store.read_proactive_outbox(account_id)
+    existing_rows = store.read_proactive_dispatch_results(account_id)
+    existing_keys = {
+        key
+        for row in existing_rows
+        if isinstance(row, Mapping)
+        for key in (str(row.get("id") or "").strip(), str(row.get("dispatch_id") or "").strip())
+        if key
+    }
+    missing_rows: list[dict[str, Any]] = []
+    for item in outbox_rows:
+        if not isinstance(item, Mapping):
+            continue
+        dispatch = item.get("dispatch")
+        if not isinstance(dispatch, Mapping):
+            continue
+        dispatch_id = str(dispatch.get("dispatch_id") or "").strip()
+        item_id = str(item.get("id") or "").strip()
+        if not dispatch_id or not item_id or dispatch_id in existing_keys:
+            continue
+        missing_rows.append(
+            {
+                "id": dispatch_id,
+                "account_id": account_id,
+                "item_id": item_id,
+                "status": "sent",
+                "reason": "recovered_from_outbox",
+                "channel": str(dispatch.get("channel") or "").strip(),
+                "message_ref": str(dispatch.get("message_ref") or "").strip(),
+                "dispatch_id": dispatch_id,
+                "instance": instance_name,
+                "generated_at": str(item.get("sent_at") or item.get("updated_at") or "").strip(),
+            }
+        )
+        existing_keys.add(dispatch_id)
+    if not missing_rows:
+        return ()
+    return tuple(store.append_proactive_dispatch_results(account_id, missing_rows))
 
 
 def _cycle_ok(instances: list[dict[str, Any]]) -> bool:

@@ -5,6 +5,7 @@ import logging
 import os
 import re
 import calendar
+import uuid
 from collections.abc import Iterable as IterableABC
 from contextlib import nullcontext
 from copy import deepcopy
@@ -158,6 +159,7 @@ class ProactiveDispatchResult:
     reason: str
     channel: str = ""
     message_ref: str = ""
+    dispatch_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -2227,7 +2229,13 @@ async def dispatch_due_proactive_outbox_items(
             results.append(ProactiveDispatchResult(account_id, item_id, "failed", result_reason, channel))
             continue
         message_ref = _normalize_sent_ref(sent_ref)
-        dispatch_meta = {"channel": channel, "chat_id": chat_id, "message_ref": message_ref}
+        dispatch_id = f"pdisp_{uuid.uuid4().hex}"
+        dispatch_meta = {
+            "channel": channel,
+            "chat_id": chat_id,
+            "message_ref": message_ref,
+            "dispatch_id": dispatch_id,
+        }
         try:
             status_updated = update_proactive_outbox_item_status(
                 account_store,
@@ -2271,7 +2279,7 @@ async def dispatch_due_proactive_outbox_items(
                 channel,
                 message_ref,
             )
-        results.append(ProactiveDispatchResult(account_id, item_id, "sent", "sent", channel, message_ref))
+        results.append(ProactiveDispatchResult(account_id, item_id, "sent", "sent", channel, message_ref, dispatch_id))
     return tuple(results)
 
 

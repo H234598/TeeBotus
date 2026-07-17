@@ -19,7 +19,12 @@ from TeeBotus.proactive import (
 )
 from TeeBotus.runtime.actions import SendAttachment, SendText
 from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSecretProvider, signal_identity_key
-from TeeBotus.runtime.proactive_agent import claim_proactive_worker_job, enable_proactive_agent, queue_proactive_message
+from TeeBotus.runtime.proactive_agent import (
+    claim_proactive_worker_job,
+    enable_proactive_agent,
+    queue_proactive_message,
+    update_proactive_outbox_item_status,
+)
 
 
 def store_for(instance_dir) -> AccountStore:
@@ -733,11 +738,15 @@ def test_proactive_cycle_dispatches_due_items_with_injected_sender(tmp_path) -> 
     assert report["dispatch"] is True
     assert account["dispatch_results"][0]["status"] == "sent"
     assert account["dispatch_results"][0]["message_ref"] == "sent-ref"
+    assert account["dispatch_results"][0]["dispatch_id"].startswith("pdisp_")
     assert calls[0][1] == SendText("+491", "Magst du kurz berichten?", track=True)
-    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "sent"
+    outbox_item = account_store.read_proactive_outbox(account_id)[0]
+    assert outbox_item["status"] == "sent"
+    assert outbox_item["dispatch"]["dispatch_id"] == account["dispatch_results"][0]["dispatch_id"]
     persisted_results = account_store.read_proactive_dispatch_results(account_id)
     assert persisted_results[0]["item_id"] == account["dispatch_results"][0]["item_id"]
     assert persisted_results[0]["message_ref"] == "sent-ref"
+    assert persisted_results[0]["id"] == account["dispatch_results"][0]["dispatch_id"]
     assert persisted_results[0]["instance"] == "Depressionsbot"
 
 
@@ -778,6 +787,66 @@ def test_proactive_cycle_reports_unexpected_dispatch_persistence_error(tmp_path,
     assert account["dispatch_results"][0]["status"] == "sent"
     assert account["dispatch_persistence_error"] == "RuntimeError: audit backend unavailable"
     assert "error" not in account
+
+
+def test_proactive_cycle_recovers_dispatch_result_lost_after_outbox_send(tmp_path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    identity = signal_identity_key(source_uuid="dispatch-result-recovery")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="recover_audit",
+        message_text="Audit wiederherstellen",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=datetime(2026, 6, 15, 10, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    assert claim_proactive_worker_job(
+        account_store,
+        account_id,
+        item_id,
+        now=datetime(2026, 6, 15, 11, tzinfo=timezone.utc),
+    )
+    assert update_proactive_outbox_item_status(
+        account_store,
+        account_id,
+        item_id,
+        status="sent",
+        reason="sent",
+        now=datetime(2026, 6, 15, 11, tzinfo=timezone.utc),
+        dispatch={
+            "channel": "signal",
+            "chat_id": "+491",
+            "message_ref": "sent-ref",
+            "dispatch_id": "pdisp_recovery",
+        },
+        expected_status="dispatching",
+    )
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            dispatch=True,
+            sender_factory=lambda _instance, _store: {"signal": lambda *_args: "must-not-send"},
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert report["ok"] is True
+    assert account["recovered_dispatch_result_ids"] == ["pdisp_recovery"]
+    recovered = account_store.read_proactive_dispatch_results(account_id)
+    assert recovered[0]["id"] == "pdisp_recovery"
+    assert recovered[0]["reason"] == "recovered_from_outbox"
+    assert account["dispatch_results"] == []
 
 
 def test_proactive_dispatch_report_includes_recovered_claim_in_due_items(tmp_path) -> None:
