@@ -6661,6 +6661,24 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `4/20` voll.
 
+### Datenschutz-Bestaetigung faengt Persistenzfehler ab
+
+- 2026-07-17: `confirm_privacy` fing im Engine-Pfad nur bekannte Store-/I/O-
+  Fehler. Ein unerwarteter Backendfehler konnte als unbehandelte Nachricht
+  in den LLM-Pfad fallen; Nutzer erhielt weder sichere Bestaetigung noch
+  klare Fehlermeldung.
+- Jeder Persistenzfehler wird jetzt geloggt und als explizite
+  Nicht-gespeichert-Antwort behandelt. Keine falsche Zustimmung, kein
+  LLM-Fallback; erneuter Versuch bleibt moeglich.
+- Test: `tests/test_engine_identity_flows.py` `199 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `78b364b8 fix: report privacy confirmation persistence errors`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`5/20` Commits. Kein Push. Restart nach 15 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `6/20` voll.
+
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
