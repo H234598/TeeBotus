@@ -2801,6 +2801,24 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 4 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Atomare-Memory-Schreibpfade-ueber-stabile-Parent-FDs
+
+- 2026-07-17: `_atomic_write_bytes()` pruefte das Elternverzeichnis per Pfad,
+  erzeugte Temp-Datei und `os.replace()` danach ebenfalls per Pfad. Ein
+  Parent-Swap konnte dadurch atomare Memory-/State-Schreibvorgaenge auf ein
+  fremdes Ziel umlenken.
+- Fehlende Verzeichnisse werden jetzt komponentenweise relativ zu stabilen
+  `O_NOFOLLOW|O_DIRECTORY`-Deskriptoren angelegt. Temp-Datei, Replace,
+  Aufraeumen und Directory-`fsync` bleiben an denselben Parent-FD gebunden.
+- Regression: Parent-Swap waehrend `os.replace()` -> `2 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `298 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `eef537e9 fix: anchor atomic memory writes to stable directory fds`.
+
+**Aktueller Laufstand:** Seit dem Restart `18/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 2 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
