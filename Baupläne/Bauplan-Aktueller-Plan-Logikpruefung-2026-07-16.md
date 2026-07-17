@@ -5115,3 +5115,22 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `15/20` Commits. Kein Push. Restart nach 5 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Qdrant-Redirect-akzeptiert-lokale-Aliase
+
+- 2026-07-17: Der Applet-Qdrant-Check verglich Redirect-Hosts bytegenau.
+  Lokale Redirects zwischen `127.0.0.1`, `localhost` und `::1` wurden dadurch
+  als fremde Origin verworfen.
+- Nur diese drei lokalen Alias-Hosts gelten jetzt bei gleichem Schema und Port
+  als gleiche lokale Origin; externe Hosts bleiben blockiert.
+- Biene pruefte zusaetzlich Timeout-/Qdrant-Unit-Klassifikation. Diese Logik
+  bleibt unveraendert, weil Timeout und Supervisorfehler echte Diagnosefehler
+  sind.
+- Tests: Qdrant-Applet-Fokus `19 passed`; Produktions-Ruff, `compileall` und
+  `git diff --check` gruen. Testfile hat zwei alte `F541`-Befunde, ausserhalb
+  des Patches; verifiziert mit `--ignore F541`. Kein Provider/API-Aufruf.
+- Code-Commit: `ab0328fd fix: accept local qdrant redirect aliases`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`17/20` Commits. Kein Push. Restart nach 3 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
