@@ -2010,15 +2010,20 @@ def _status_database_account_ids(store: AccountStore) -> set[str]:
         sqlite_path = getattr(config, "path", None)
         postgres_dsn = str(getattr(config, "dsn", "") or "").strip()
         if isinstance(sqlite_path, Path):
-            account_ids.update(_sqlite_memory_account_ids(sqlite_path, store.instance_name))
+            discovered_ids = _sqlite_memory_account_ids(sqlite_path, store.instance_name)
         elif postgres_dsn:
-            account_ids.update(
-                _postgres_memory_account_ids(
-                    postgres_dsn,
-                    store.instance_name,
-                    int(getattr(config, "connect_timeout", 5) or 5),
-                )
+            discovered_ids = _postgres_memory_account_ids(
+                postgres_dsn,
+                store.instance_name,
+                int(getattr(config, "connect_timeout", 5) or 5),
             )
+        else:
+            discovered_ids = ()
+        account_ids.update(
+            account_id
+            for account_id in (str(value or "").strip().casefold() for value in discovered_ids)
+            if TOKEN_HEX_RE.fullmatch(account_id)
+        )
     account_ids.discard(INSTANCE_STATE_ACCOUNT_ID)
     return account_ids
 

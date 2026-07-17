@@ -39,6 +39,7 @@ from TeeBotus.core.status import (
     _status_bool,
     _account_metadata_health_lines,
     _account_memory_fallback_warning,
+    _status_database_account_ids,
 )
 from TeeBotus.runtime.accounts import (
     ACCOUNT_KEYRING_FILENAME,
@@ -703,6 +704,28 @@ def test_account_memory_index_health_survives_malformed_database_account_discove
         "error=database_account_discovery_failed:ValueError: malformed database configuration"
     )
     assert any(line.startswith(f"account_memory=Demo/{account_id} ") for line in lines)
+
+
+def test_status_database_account_discovery_filters_malformed_ids(tmp_path: Path, monkeypatch) -> None:
+    valid_id = "a" * 128
+
+    class Config:
+        path = tmp_path / "Account_Memory.sqlite3"
+        dsn = ""
+
+    class Backend:
+        config = Config()
+
+    class Store:
+        instance_name = "Demo"
+        account_memory_backend = Backend()
+
+    monkeypatch.setattr(
+        "TeeBotus.core.status._sqlite_memory_account_ids",
+        lambda _path, _instance_name: ("../outside", "not-an-account", valid_id),
+    )
+
+    assert _status_database_account_ids(Store()) == {valid_id}
 
 
 def test_account_secret_health_reports_missing_required_memory_secret(tmp_path: Path, monkeypatch) -> None:
