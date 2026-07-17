@@ -349,6 +349,30 @@ def test_llm_reply_survives_unexpected_local_response_state_failure(tmp_path, mo
     assert any(getattr(action, "text", "") == "Antwort trotz Statefehler." for action in actions)
 
 
+def test_llm_reply_survives_unexpected_key_ring_scope_failure(tmp_path):
+    class BrokenKeyRing:
+        def ordered_keys(self):
+            raise RuntimeError("key ring unavailable")
+
+    class FakeOpenAIClient:
+        api_key_ring = BrokenKeyRing()
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            return OpenAIResponse("Antwort trotz Key-Ring-Fehler.", "resp-1", None)
+
+    client = FakeOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True, llm_provider="openai", llm_model="gpt-5.5"),
+        openai_client=client,
+        llm_client=client,
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "Hallo"))
+
+    assert any(getattr(action, "text", "") == "Antwort trotz Key-Ring-Fehler." for action in actions)
+
+
 def test_observation_backend_failures_do_not_block_ping(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)

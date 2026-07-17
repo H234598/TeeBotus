@@ -3602,15 +3602,18 @@ def _llm_state_scope(
     if not key_fingerprint and client is not None:
         key_fingerprint = str(getattr(client, "state_key_fingerprint", "") or "").strip().casefold()
     if not key_fingerprint and client is not None:
-        key_ring = getattr(client, "api_key_ring", None)
-        ordered_keys = getattr(key_ring, "ordered_keys", None)
-        candidate_keys = ordered_keys() if callable(ordered_keys) else ()
-        api_key = candidate_keys[0] if candidate_keys else getattr(client, "api_key", "")
-        if not api_key:
-            wrapped_client = getattr(client, "client", None)
-            api_key = getattr(wrapped_client, "api_key", "")
-        if api_key:
-            key_fingerprint = hashlib.sha256(str(api_key).encode("utf-8")).hexdigest()
+        try:
+            key_ring = getattr(client, "api_key_ring", None)
+            ordered_keys = getattr(key_ring, "ordered_keys", None)
+            candidate_keys = ordered_keys() if callable(ordered_keys) else ()
+            api_key = candidate_keys[0] if candidate_keys else getattr(client, "api_key", "")
+            if not api_key:
+                wrapped_client = getattr(client, "client", None)
+                api_key = getattr(wrapped_client, "api_key", "")
+            if api_key:
+                key_fingerprint = hashlib.sha256(str(api_key).encode("utf-8")).hexdigest()
+        except Exception:  # noqa: BLE001 - optional key metadata must not block an LLM reply.
+            LOGGER.exception("LLM key-ring state scope lookup failed.")
     return normalize_llm_provider(provider), model, key_fingerprint
 
 
