@@ -7957,3 +7957,20 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `20/20` Code-Commits. Kein
 Push. Restart abgeschlossen.
+
+### Telegram-Dispatch-Journal: Prozessuebergreifende Schreibzugriffe sichern
+
+- 2026-07-17: `TelegramDispatchJournal` hatte nur einen
+  prozesslokalen `threading.RLock`. Getrennte Telegram-/Runtime-Prozesse
+  konnten verschluesselte Journal-Read-Modify-Write-Zyklen ueberschreiben und
+  bereits erledigte Aktionen wieder als offen persistieren.
+- `load`, `create`, `mark_action_completed` und `complete` verwenden jetzt
+  neben dem Thread-Lock eine Journal-Dateisperre. Lock-Fehler brechen fail
+  closed mit `TelegramDispatchJournalError` ab.
+- Test: separater Prozess-Locktest plus bestehende Journal-Retry-Tests ->
+  `2 passed`; Ruff, `py_compile` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `c617e89f fix: serialize telegram dispatch journal writes`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `1/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
