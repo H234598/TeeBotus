@@ -105,13 +105,23 @@ class CallbackSpool:
         if len(raw) > MAX_SPOOL_EVENT_BYTES:
             raise ValueError("dispatcher callback event exceeds spool limit")
         target = self.root / f"{event_id}.json"
-        temporary = self.root / f".{event_id}.{os.getpid()}.tmp"
-        with temporary.open("wb") as handle:
-            handle.write(raw)
-            handle.flush()
-            os.fsync(handle.fileno())
-        os.chmod(temporary, 0o600)
-        os.replace(temporary, target)
+        temporary = self.root / f".{event_id}.{os.getpid()}.{uuid.uuid4().hex}.tmp"
+        try:
+            with temporary.open("wb") as handle:
+                handle.write(raw)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temporary, 0o600)
+            try:
+                os.link(temporary, target)
+            except FileExistsError:
+                if target.is_symlink() or target.read_bytes() != raw:
+                    raise ValueError(f"dispatcher callback event id already contains different payload: {event_id}")
+        finally:
+            try:
+                temporary.unlink()
+            except FileNotFoundError:
+                pass
         return target
 
     def events(self, *, limit: int = MAX_SPOOL_EVENTS_PER_FLUSH) -> list[tuple[Path, dict[str, Any]]]:

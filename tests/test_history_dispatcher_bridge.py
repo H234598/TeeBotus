@@ -8,6 +8,8 @@ import threading
 import time
 from pathlib import Path
 
+import pytest
+
 from TeeBotus.history_dispatcher_bridge import (
     CallbackSpool,
     HistoryDispatcherBridge,
@@ -101,6 +103,16 @@ def test_callback_spool_persists_generated_event_id(tmp_path: Path) -> None:
     assert len(events) == 1
     assert events[0][0] == path
     assert events[0][1]["event_id"] == path.stem
+
+
+def test_callback_spool_does_not_overwrite_conflicting_event_id(tmp_path: Path) -> None:
+    spool = CallbackSpool(tmp_path / "spool")
+    path = spool.enqueue({"event_id": "same-event", "event_type": "sent"})
+
+    assert spool.enqueue({"event_id": "same-event", "event_type": "sent"}) == path
+    with pytest.raises(ValueError, match="different payload"):
+        spool.enqueue({"event_id": "same-event", "event_type": "delivered"})
+    assert path.read_text(encoding="utf-8") == '{"event_id":"same-event","event_type":"sent"}'
 
 
 def test_callback_spool_skips_invalid_files_without_starving_valid_batch_entries(tmp_path: Path) -> None:
