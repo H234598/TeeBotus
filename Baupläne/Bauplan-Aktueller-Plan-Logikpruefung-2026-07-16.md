@@ -8031,7 +8031,7 @@ Push. Restart erst bei `20/20`.
   geschützt.
 * Test: komplette Engine-Suite -> `284 passed`; Account-/State-Suite -> `410
   passed`; Ruff, Compile und `git diff --check` gruen. Kein Provider/API-Aufruf.
-* Code-Commit: `bf53aeea fix: isolate stateful llm chain lock`.
+* Code-Commit: `3d270e1f fix: isolate stateful llm chain lock`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `17/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
