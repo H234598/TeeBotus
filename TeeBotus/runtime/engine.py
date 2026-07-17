@@ -2727,6 +2727,9 @@ def _build_working_memory_context(working_memory_store: WorkingMemoryStore | Non
         return working_memory_store.prepare(query_text).prompt_text
     except OSError:
         return ""
+    except Exception:  # noqa: BLE001 - optional working memory must not block the main reply.
+        LOGGER.exception("Working memory context preparation failed.")
+        return ""
 
 
 def _build_bibliothekar_context(
@@ -2769,6 +2772,9 @@ def _build_bibliothekar_context(
             max_quote_chars=instructions.bibliothekar_max_quote_chars,
         ).prompt_text
     except OSError:
+        return ""
+    except Exception:  # noqa: BLE001 - optional library context must not block the main reply.
+        LOGGER.exception("Bibliothekar context preparation failed.")
         return ""
 
 
@@ -2813,6 +2819,9 @@ def _select_account_memory(
                 )
             except (QdrantError, ValueError, RuntimeError):
                 search_result = None
+            except Exception:  # noqa: BLE001 - semantic cache failures must fall back to local memory.
+                LOGGER.exception("Semantic account-memory search failed account=%s.", account_id)
+                search_result = None
             if search_result is not None:
                 return account_store.select_structured_memory_by_ids(
                     account_id,
@@ -2830,6 +2839,9 @@ def _select_account_memory(
             exclude_ids=exclude_ids,
         )
     except (AccountStoreError, OSError):
+        return AccountMemorySelection("", ())
+    except Exception:  # noqa: BLE001 - memory context must not block the main reply.
+        LOGGER.exception("Account-memory context selection failed account=%s.", account_id)
         return AccountMemorySelection("", ())
 
 
