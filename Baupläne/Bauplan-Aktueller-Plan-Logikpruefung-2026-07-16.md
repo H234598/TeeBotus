@@ -5151,3 +5151,20 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
 bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
+
+### Proactive-Instanzen isolieren-AccountStore-Fehler
+
+- 2026-07-17: Der Proactive-Zyklus erzeugte den `AccountStore` vor dem
+  Account-Loop ohne Fehlerfang. Ein Secret-Service-, SQL- oder
+  Metadatenfehler in einer aktivierten Instanz konnte dadurch den gesamten
+  Lauf abbrechen und nachfolgende Instanzen ueberspringen.
+- Der Fehler wird jetzt als `instance_report["error"]` gemeldet; der Zyklus
+  laeuft mit naechster Instanz weiter. `_cycle_ok` bleibt dabei korrekt
+  `False`, damit Monitoring den Lauf weiterhin als fehlerhaft erkennt.
+- Test: `tests/test_proactive_cli.py` `50 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `808670d2 fix: isolate proactive store errors per instance`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`2/20` Commits. Kein Push. Restart nach 18 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
