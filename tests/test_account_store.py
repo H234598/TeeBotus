@@ -4974,6 +4974,34 @@ def test_account_memory_fallback_readonly_does_not_repair_primary() -> None:
     assert "repair deferred" in backend.fallback_sync_error_for_account(account_id)
 
 
+def test_account_memory_fallback_readonly_rejects_partial_secondary_data() -> None:
+    class Backend:
+        def __init__(self, *, fail_read: bool = False, partial: bool = False) -> None:
+            self.fail_read = fail_read
+            self.partial = partial
+            self.last_entry_read_error = ""
+            self.last_entry_skipped = 0
+
+        def read_entries(self, _account_id: str) -> list[dict[str, str]]:
+            self.last_entry_read_error = "corrupt secondary row" if self.partial else ""
+            self.last_entry_skipped = 1 if self.partial else 0
+            if self.fail_read:
+                raise OSError("primary unavailable")
+            return [{"id": "partial"}]
+
+    account_id = "a" * 128
+    backend = WarningFallbackAccountMemoryBackend(
+        Backend(fail_read=True),
+        Backend(partial=True),
+        label="Demo:sqlite",
+    )
+
+    with pytest.raises(AccountStoreError, match="fallback data has read diagnostics"):
+        backend.read_entries_readonly(account_id)
+
+    assert account_id in backend._unrecoverable_fallback_entries
+
+
 def test_account_memory_fallback_marks_both_read_failures_as_unsafe(caplog) -> None:
     class Backend:
         def __init__(self, *, fail_read: bool = False) -> None:

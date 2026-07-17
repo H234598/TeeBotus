@@ -527,6 +527,9 @@ class WarningFallbackAccountMemoryBackend:
             self._fallback_sync_failed_set(operation).add(account_id)
             self._set_fallback_sync_error(operation, account_id, f"{operation}: fallback read failed: {fallback_exc}")
             raise AccountStoreError(self.fallback_sync_error_for_account(account_id)) from fallback_exc
+        self._copy_diagnostics(self.fallback)
+        if self._read_diagnostic_failed(operation):
+            raise self._fallback_diagnostics_error(operation, account_id)
         self._copy_diagnostics(self.primary)
         self._set_readonly_primary_failure(operation, AccountStoreError(primary_error))
         self._fallback_stale_set(operation).add(account_id)
