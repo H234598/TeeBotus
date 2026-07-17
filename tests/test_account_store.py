@@ -7868,6 +7868,33 @@ def test_mark_structured_account_memory_accessed_repairs_existing_duplicates(tmp
     assert store.check_structured_memory_index(account_id).ok
 
 
+def test_mark_structured_account_memory_accessed_rebuilds_all_index_projections(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    memory_id = store.append_structured_memory_entry(
+        account_id,
+        {"id": "mem_live", "user_text": "Wetter", "bot_text": "Sonne", "keywords": ["wetter"]},
+    )
+    index = store.read_memory_index(account_id)
+    index["index"]["keywords"] = {"falsch": ["mem_missing"]}
+    index["index"]["entries"] = {"mem_missing": {"updated_at": "old"}}
+    index["index"]["types"]["episodic"] = ["mem_missing"]
+    index["index"]["graph"]["links"]["related_ids"] = {"mem_missing": [memory_id]}
+    index["index"]["semantic_cache"]["entries"] = {"mem_missing": {"embedding": []}}
+    store.write_memory_index(account_id, index)
+
+    store.mark_structured_memory_accessed(account_id, [memory_id])
+
+    health = store.check_structured_memory_index(account_id)
+    rebuilt = store.read_memory_index(account_id)["index"]
+    assert health.ok
+    assert rebuilt["keywords"] == {"wetter": [memory_id]}
+    assert list(rebuilt["entries"]) == [memory_id]
+    assert rebuilt["types"]["episodic"] == [memory_id]
+    assert rebuilt["graph"]["links"]["related_ids"] == {}
+    assert list(rebuilt["semantic_cache"]["entries"]) == [memory_id]
+
+
 def test_mark_structured_account_memory_rolls_back_entries_when_index_write_fails(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

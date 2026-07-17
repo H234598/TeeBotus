@@ -7828,3 +7828,18 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `12/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Memory-Access: kompletter Index-Rebuild beim Access-Write
+
+- 2026-07-17: `mark_structured_memory_accessed()` baut den Index jetzt aus
+  allen aktuellen Rows neu auf. Damit koennen stale Keywords, Entries,
+  Typen, Graph-Links und Semantic-Cache-Projektionen nicht durch einen
+  normalen Access-Write erhalten oder erneut gespeichert werden.
+- Zugriffsreihenfolge und `access_count`/`last_accessed_at` bleiben erhalten;
+  angefragte IDs landen zuletzt in `accessed_ids`.
+- Tests: fokussiert `4 passed`, komplette AccountStore-Suite `323 passed`;
+  Ruff, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: folgt direkt.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `13/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.

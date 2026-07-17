@@ -3524,32 +3524,42 @@ class AccountStore:
             changed = True
         if not changed:
             return
-        index = self._normalized_memory_index(account_id, deepcopy(previous_index))
-        nested_index = index.setdefault("index", {})
-        access_ids = nested_index.setdefault("accessed_ids", [])
-        if not isinstance(access_ids, list):
-            access_ids = []
-            nested_index["accessed_ids"] = access_ids
+        existing_index = self._normalized_memory_index(account_id, deepcopy(previous_index))
+        existing_nested_index = existing_index.get("index") if isinstance(existing_index.get("index"), dict) else {}
+        existing_semantic_cache = (
+            existing_nested_index.get("semantic_cache") if isinstance(existing_nested_index.get("semantic_cache"), dict) else {}
+        )
+        semantic_cache_enabled = existing_semantic_cache.get("enabled") is not False
+        existing_accessed_ids = (
+            existing_nested_index.get("accessed_ids") if isinstance(existing_nested_index.get("accessed_ids"), list) else []
+        )
+        index = self._normalized_memory_index(
+            account_id,
+            {
+                "created_at": existing_index.get("created_at", timestamp),
+                "profile": existing_index.get("profile", {}),
+            },
+        )
+        index["index"] = _new_account_memory_index()
+        index["index"]["semantic_cache"]["enabled"] = semantic_cache_enabled
+        for row in rows:
+            if isinstance(row, dict):
+                self._update_structured_memory_index(index, rows, row, {})
+        nested_index = index["index"]
         live_ids = {
             memory_id
             for row in rows
             if isinstance(row, dict)
             if (memory_id := str(row.get("id") or "").strip())
         }
-        normalized_access_ids: list[str] = []
-        seen_access_ids: set[str] = set()
-        for value in access_ids:
-            normalized_id = str(value or "").strip()
-            if normalized_id in live_ids and normalized_id not in requested and normalized_id not in seen_access_ids:
-                normalized_access_ids.append(normalized_id)
-                seen_access_ids.add(normalized_id)
-        access_ids[:] = normalized_access_ids
-        access_ids.extend(memory_id for memory_id in requested_ids if memory_id in live_ids)
-        del access_ids[:-ACCOUNT_MEMORY_RECENT_LIMIT]
-        for row in rows:
-            row_id = str(row.get("id") or "").strip() if isinstance(row, dict) else ""
-            if row_id in requested:
-                nested_index.setdefault("entries", {})[row_id] = _account_memory_index_entry(row)
+        access_ids = _rebuild_account_memory_accessed_ids(rows, existing_accessed_ids)
+        for memory_id in requested_ids:
+            if memory_id not in live_ids:
+                continue
+            if memory_id in access_ids:
+                access_ids.remove(memory_id)
+            access_ids.append(memory_id)
+        nested_index["accessed_ids"] = access_ids[-ACCOUNT_MEMORY_RECENT_LIMIT:]
         index["updated_at"] = timestamp
         try:
             self.write_memory_entries(account_id, rows)
