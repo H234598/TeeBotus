@@ -3642,6 +3642,19 @@ def test_engine_memory_reset_backend_failure_is_explicit(tmp_path, monkeypatch):
     assert actions[0].text == BotInstructions().user_memory_reset_error
 
 
+def test_engine_start_survives_privacy_button_state_failure(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="start-privacy-state-error")
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+
+    monkeypatch.setattr(account_store, "has_privacy_confirmation", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("profile unavailable")))
+
+    actions = engine.process(event(identity, "/start", channel="signal"))
+
+    assert actions
+    assert actions[0].buttons == ()
+
+
 def test_engine_start_adds_legal_consent_buttons_until_privacy_is_confirmed(tmp_path):
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="legal-buttons")

@@ -471,6 +471,9 @@ class TeeBotusEngine:
                 return ()
         except (AccountStoreError, OSError, ValueError):
             return ()
+        except Exception:  # noqa: BLE001 - optional consent buttons must not block /start.
+            LOGGER.exception("Privacy button state lookup failed account=%s", account_id)
+            return ()
         return LEGAL_CONSENT_BUTTONS
 
     def _admin_membership_actions(self, event: IncomingEvent, account_id: str) -> list[OutgoingAction] | None:
