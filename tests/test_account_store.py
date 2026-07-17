@@ -3033,6 +3033,34 @@ def test_account_identity_lock_rejects_redirected_lock_file(tmp_path):
     assert outside.read_bytes() == b"keep"
 
 
+def test_account_lock_keeps_stable_parent_when_path_is_swapped(tmp_path, monkeypatch):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account(telegram_identity_key(1))
+    account_dir = store.account_dir(account_id)
+    lock_path = account_dir / f".{STATUS_OUTBOX_FILENAME}.lock"
+    outside = tmp_path / "outside-lock-parent-race"
+    outside.mkdir()
+    moved_account_dir = tmp_path / "lock-parent-moved"
+    real_open = os.open
+
+    def swap_parent_before_lock_open(file, flags, mode=0o777, *, dir_fd=None):
+        if (
+            (file == lock_path.name and dir_fd is not None)
+            or (dir_fd is None and Path(file) == lock_path)
+        ) and account_dir.exists():
+            account_dir.rename(moved_account_dir)
+            account_dir.symlink_to(outside, target_is_directory=True)
+        return real_open(file, flags, mode, dir_fd=dir_fd)
+
+    monkeypatch.setattr(os, "open", swap_parent_before_lock_open)
+
+    with store.status_outbox_lock(account_id):
+        pass
+
+    assert (moved_account_dir / lock_path.name).exists()
+    assert not (outside / lock_path.name).exists()
+
+
 def test_atomic_write_rejects_symlinked_parent(tmp_path):
     outside = tmp_path / "outside-atomic-write"
     outside.mkdir()

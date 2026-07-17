@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 from contextlib import contextmanager
 from collections import Counter
+import errno
 from functools import wraps
 import hashlib
 import hmac
@@ -970,21 +971,36 @@ def _ensure_safe_account_memory_path(
 def _safe_account_lock_handle(lock_path: Path, *, label: str) -> Iterator[Any]:
     """Open an account lock without following the final path component."""
 
-    _ensure_safe_account_memory_path(lock_path, label=label, require_regular=True, reject_hardlink=True)
-    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    parent_descriptor: int | None = None
     try:
-        file_descriptor = os.open(lock_path, flags, 0o600)
+        parent_descriptor = _open_stable_directory_descriptor(lock_path.parent, label=f"{label} parent")
     except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise AccountStoreError(f"refusing unsafe account memory {label}: {lock_path}") from exc
         raise AccountStoreError(f"could not open account memory {label}: {lock_path}") from exc
-    with os.fdopen(file_descriptor, "a+b") as handle:
-        handle_stat = os.fstat(handle.fileno())
-        if not stat.S_ISREG(handle_stat.st_mode) or handle_stat.st_nlink > 1:
-            raise AccountStoreError(f"refusing unsafe account memory {label}: {lock_path}")
-        try:
-            os.fchmod(handle.fileno(), stat.S_IRUSR | stat.S_IWUSR)
-        except OSError:
-            pass
-        yield handle
+    flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
+    file_descriptor: int | None = None
+    try:
+        file_descriptor = os.open(lock_path.name, flags, 0o600, dir_fd=parent_descriptor)
+        with os.fdopen(file_descriptor, "a+b") as handle:
+            file_descriptor = None
+            handle_stat = os.fstat(handle.fileno())
+            if not stat.S_ISREG(handle_stat.st_mode) or handle_stat.st_nlink > 1:
+                raise AccountStoreError(f"refusing unsafe account memory {label}: {lock_path}")
+            try:
+                os.fchmod(handle.fileno(), stat.S_IRUSR | stat.S_IWUSR)
+            except OSError:
+                pass
+            yield handle
+    except OSError as exc:
+        if exc.errno == errno.ELOOP:
+            raise AccountStoreError(f"refusing unsafe account memory {label}: {lock_path}") from exc
+        raise AccountStoreError(f"could not open account memory {label}: {lock_path}") from exc
+    finally:
+        if file_descriptor is not None:
+            os.close(file_descriptor)
+        if parent_descriptor is not None:
+            os.close(parent_descriptor)
 
 
 def _open_stable_directory_descriptor(path: Path, *, label: str, create_missing: bool = False) -> int:
@@ -1325,19 +1341,16 @@ def account_memory_lock_for_root(root: Path, account_id: str) -> Iterator[None]:
 
     account_id = validate_sha512_token(account_id, field_name="account_id")
     raw_root = Path(root).expanduser()
-    _ensure_safe_account_memory_path(raw_root, label="store root", require_directory=True)
-    try:
-        root = raw_root.resolve()
-    except OSError as exc:
-        raise AccountStoreError(f"could not resolve account memory store root: {raw_root}") from exc
+    root = _absolute_without_symlink_resolution(raw_root)
     accounts_dir = root / ACCOUNTS_DIRNAME
-    _ensure_safe_account_memory_path(accounts_dir, label="accounts directory", require_directory=True)
-    accounts_dir.mkdir(parents=True, exist_ok=True)
-    _ensure_safe_account_memory_path(accounts_dir, label="accounts directory", require_directory=True)
-    account_dir = root / ACCOUNTS_DIRNAME / account_id
-    _ensure_safe_account_memory_path(account_dir, label="account directory", require_directory=True)
-    account_dir.mkdir(parents=True, exist_ok=True)
-    _ensure_safe_account_memory_path(account_dir, label="account directory", require_directory=True)
+    account_dir = accounts_dir / account_id
+    for path, label in (
+        (root, "store root"),
+        (accounts_dir, "accounts directory"),
+        (account_dir, "account directory"),
+    ):
+        descriptor = _open_stable_directory_descriptor(path, label=label, create_missing=True)
+        os.close(descriptor)
     lock_path = account_dir / ACCOUNT_MEMORY_LOCK_FILENAME
     lock_key = os.path.realpath(os.fspath(lock_path))
     with _ACCOUNT_MEMORY_LOCK:
@@ -1871,8 +1884,8 @@ class AccountStore:
         """Serialize identity-map reads that may normalize or create accounts."""
 
         with _ACCOUNT_IDENTITY_LOCK:
-            _ensure_safe_account_memory_path(self.root, label="store root", require_directory=True)
-            self.root.mkdir(parents=True, exist_ok=True)
+            descriptor = _open_stable_directory_descriptor(self.root, label="store root", create_missing=True)
+            os.close(descriptor)
             lock_path = self.root / ACCOUNT_IDENTITIES_LOCK_FILENAME
             lock_key = os.path.realpath(os.fspath(lock_path))
             held_paths = getattr(_ACCOUNT_IDENTITY_LOCK_STATE, "paths", None)
