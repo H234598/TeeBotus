@@ -5170,6 +5170,22 @@ bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 `2/20` Commits. Kein Push. Restart nach 18 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Runtime-Status-Outbox bewahrt kaputte Statushistorien
+
+- 2026-07-17: Der Runtime-/Benchmark-Statusversand setzte bei einer nicht
+  listenfoermigen `status_history` eine neue leere Liste. Vorhandene
+  Auditdaten gingen dadurch beim Versandstatus-Update verloren.
+- Status wird weiterhin auf `sent`, `failed` oder `skipped` gesetzt. Eine
+  kaputte History bleibt unveraendert; nur fehlende oder listenfoermige
+  Histories erhalten den neuen Eintrag.
+- Test: `tests/test_runtime_admin_accounts.py` `33 passed`; Regressionstest,
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7f6d2bd9 fix: preserve runtime status history`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`4/20` Commits. Kein Push. Restart nach 16 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Consentzustand fail-closed bei korruptem enabled-State
 
 - 2026-07-17: Ein inkonsistenter Agent-State mit `enabled=true`, aber leerem
