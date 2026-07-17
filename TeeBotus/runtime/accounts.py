@@ -1419,10 +1419,7 @@ class AccountStore:
     def __post_init__(self) -> None:
         raw_root = Path(self.root).expanduser()
         _ensure_safe_account_memory_path(raw_root, label="store root", require_directory=True)
-        try:
-            self.root = raw_root.resolve()
-        except OSError as exc:
-            raise AccountStoreError(f"could not resolve account store root: {raw_root}") from exc
+        self.root = _absolute_without_symlink_resolution(raw_root)
         if self.secret_guard_purposes is not None:
             normalized_purposes = tuple(
                 _normalize_secret_token(purpose, "purpose")
