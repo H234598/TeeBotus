@@ -3083,6 +3083,24 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### PostgreSQL-Collection-Replacement-validiert-Binary-Payloads
+
+- 2026-07-17: `replace_collection_item()` konvertierte vorhandene BYTEA-Werte
+  direkt mit `bytes(...)` und umging dadurch die zentrale Validierung. Defekte
+  TEXT-/NULL-/andere Werte konnten den Updatepfad mit uneinheitlichen Fehlern
+  verlassen.
+- Der bestehende Collection-Payload wird jetzt vor dem Entschluesseln ueber
+  dieselbe strikte BYTEA-Coercion wie alle anderen PostgreSQL-Lese- und
+  Guard-Pfade geprueft. Unsichere Daten blockieren den Replace fail-closed.
+- Regression: PostgreSQL-Korruptionsfokus -> `4 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `307 passed`; `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6cdf8c7e fix: validate postgres collection replacement payloads`.
+
+**Aktueller Laufstand:** Seit dem Restart `10/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 10 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
