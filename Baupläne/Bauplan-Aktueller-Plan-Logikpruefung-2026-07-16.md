@@ -5085,3 +5085,18 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `11/20` Commits. Kein Push. Restart nach 9 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Memory-Payload-Status-faengt-ValueError
+
+- 2026-07-17: Payload-Groesse und Verschluesselungsanzeige lasen das
+  Memory-Backend ohne `ValueError`-Guard. Malformed Backend-Konfigurationen
+  konnten dadurch den normalen Statusaufbau abbrechen.
+- Beide Ausleser melden jetzt `nicht verfuegbar` und lassen den restlichen
+  `/status`-Reply intakt.
+- Tests: Memory-Status-Fokus `9 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `dedaf06e fix: keep memory size status diagnostic on value errors`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`13/20` Commits. Kein Push. Restart nach 7 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
