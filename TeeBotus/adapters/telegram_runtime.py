@@ -1063,20 +1063,24 @@ def build_telegram_runtime_context(
 
 def _telegram_dispatch_retry_key(context: TelegramRuntimeContext, update: dict[str, Any], event: IncomingEvent) -> str:
     update_id = _safe_telegram_update_id(update)
+    instance_name = str(getattr(context, "instance_name", "") or "")
+    adapter_slot = getattr(context, "adapter_slot", 1)
     if update_id is not None:
-        return f"{context.instance_name}:{context.adapter_slot}:update:{update_id}"
-    return f"{context.instance_name}:{context.adapter_slot}:event:{event.event_id}:{event.chat_id}"
+        return f"{instance_name}:{adapter_slot}:update:{update_id}"
+    return f"{instance_name}:{adapter_slot}:event:{event.event_id}:{event.chat_id}"
 
 
 def _telegram_dispatch_retry_key_for_update(context: TelegramRuntimeContext, update: dict[str, Any]) -> str:
     message = telegram_update_message(update)
     if not isinstance(message, dict):
         return ""
+    instance_name = str(getattr(context, "instance_name", "") or "")
+    adapter_slot = getattr(context, "adapter_slot", 1)
     event = telegram_message_to_event(
         message,
         update=update,
-        instance=context.instance_name,
-        adapter_slot=context.adapter_slot,
+        instance=instance_name,
+        adapter_slot=adapter_slot,
     )
     if event is None:
         return ""
