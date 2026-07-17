@@ -402,22 +402,28 @@ def queue_proactive_message(
     resolved_now = _resolve_proactive_now(now)
     timestamp = resolved_now.isoformat(timespec="seconds")
     normalized_category = str(category or "").strip().casefold()
+    normalized_intent = str(intent or "").strip()
+    normalized_message_text = str(message_text or "").strip()
     normalized_risk_gate = _normalize_risk_gate(risk_gate)
     policy_item = {"risk_gate": "none"} if normalized_risk_gate in PROACTIVE_RISK_REVIEW_GATES else {"risk_gate": normalized_risk_gate}
-    is_user_requested_reminder = _normalize_bool(user_requested, default=False) and str(intent or "").strip() == "user_requested_reminder"
+    is_user_requested_reminder = _normalize_bool(user_requested, default=False) and normalized_intent == "user_requested_reminder"
     if is_user_requested_reminder:
         policy_item["user_requested_reminder"] = True
     decision = proactive_policy_decision(account_store, account_id, category=normalized_category, now=resolved_now, item=policy_item)
     if not decision.allowed:
         return decision
+    if not normalized_intent:
+        return ProactiveDecision(False, "missing_intent")
+    if not normalized_message_text:
+        return ProactiveDecision(False, "missing_message_text")
     status = "review_pending" if normalized_risk_gate in PROACTIVE_RISK_REVIEW_GATES else "queued"
     policy_result = "needs_review" if status == "review_pending" else "allowed"
     policy_reason = f"risk_gate_needs_review:{normalized_risk_gate}" if status == "review_pending" else decision.reason
     payload = {
         "status": status,
         "category": normalized_category,
-        "intent": str(intent or "").strip(),
-        "message_text": str(message_text or "").strip(),
+        "intent": normalized_intent,
+        "message_text": normalized_message_text,
         "reason_memory_ids": [str(memory_id) for memory_id in reason_memory_ids if str(memory_id or "").strip()],
         "due_at": str(due_at or "").strip(),
         "risk_gate": normalized_risk_gate,

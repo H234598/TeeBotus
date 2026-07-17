@@ -12,6 +12,7 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSec
 from TeeBotus.runtime.actions import SendAttachment, SendText
 from TeeBotus.runtime.message_tracking import MessageTracker
 from TeeBotus.runtime.proactive_agent import (
+    ProactiveDecision,
     active_proactive_risk_memory_ids,
     apply_proactive_agent_tool_calls,
     apply_proactive_llm_plan,
@@ -193,6 +194,36 @@ def test_proactive_queue_uses_supplied_now_for_initial_metadata(tmp_path) -> Non
     assert item["created_at"] == "2026-06-15T12:34:56+00:00"
     assert item["updated_at"] == "2026-06-15T12:34:56+00:00"
     assert item["status_history"][0] == {"at": "2026-06-15T12:34:56+00:00", "status": "queued", "reason": "created"}
+
+
+def test_proactive_queue_rejects_missing_required_content_before_write(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+
+    missing_intent = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent=" ",
+        message_text="Ping",
+        now=now,
+    )
+    missing_message = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text=" \n",
+        now=now,
+    )
+
+    assert missing_intent == ProactiveDecision(False, "missing_intent")
+    assert missing_message == ProactiveDecision(False, "missing_message_text")
+    assert account_store.read_proactive_outbox(account_id) == []
 
 
 def test_proactive_policy_denies_non_consented_category_and_group_route(tmp_path) -> None:
