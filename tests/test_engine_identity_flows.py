@@ -4997,6 +4997,19 @@ def test_engine_youtube_transcript_requires_link(tmp_path):
     assert actions[0].text == "Schick mir bitte den YouTube-Link, den ich transkribieren soll."
 
 
+def test_engine_youtube_transcript_reports_pending_state_failure(tmp_path, monkeypatch):
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=BotInstructions())
+
+    def broken_set(*_args, **_kwargs):
+        raise RuntimeError("pending state unavailable")
+
+    monkeypatch.setattr(engine.state, "set_pending_flow", broken_set)
+
+    actions = engine.process(event(telegram_identity_key(1), "/youtube_transcript"))
+
+    assert actions[0].text == "YouTube-Transkript konnte gerade nicht vorbereitet werden."
+
+
 @pytest.mark.parametrize(
     "text",
     [

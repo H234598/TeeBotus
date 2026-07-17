@@ -1843,13 +1843,17 @@ class TeeBotusEngine:
     def _youtube_transcript_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         url = _extract_youtube_url(event.text)
         if not url:
-            self.state.set_pending_flow(
-                event.instance,
-                account_id,
-                YOUTUBE_LINK_FLOW,
-                {"chat_id": event.chat_id, "channel": event.channel, "identity_key": event.identity_key},
-                conversation_scope=_pending_flow_conversation_scope(event),
-            )
+            try:
+                self.state.set_pending_flow(
+                    event.instance,
+                    account_id,
+                    YOUTUBE_LINK_FLOW,
+                    {"chat_id": event.chat_id, "channel": event.channel, "identity_key": event.identity_key},
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
+            except Exception:  # noqa: BLE001 - link follow-up must not be promised without persisted state.
+                LOGGER.exception("YouTube link pending-state setup failed instance=%s account=%s", event.instance, account_id)
+                return [SendText(event.chat_id, "YouTube-Transkript konnte gerade nicht vorbereitet werden.", track=False)]
             reply = "Schick mir bitte den YouTube-Link, den ich transkribieren soll."
             self._remember_youtube_interaction(event, account_id, instructions, event.text, reply)
             return [SendText(event.chat_id, reply)]
