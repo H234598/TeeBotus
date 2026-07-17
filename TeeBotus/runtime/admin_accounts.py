@@ -61,6 +61,7 @@ class _AdminRouteResolution:
     status: str
     route: dict[str, Any] | None = None
     reason: str = ""
+    source_store: AccountStore | None = None
 
 
 StoreFactory = Callable[[Path, str], AccountStore]
@@ -267,6 +268,9 @@ async def notify_runtime_status_admin_accounts(
         if route_resolution.route is None:
             results.append(AdminNotificationResult(instance_name, account_id, "skipped", route_resolution.reason or "no_private_route"))
             continue
+        if route_resolution.source_store is not None and status_auth_state_admin_opted_out(route_resolution.source_store, account_id):
+            results.append(AdminNotificationResult(instance_name, account_id, "skipped", "admin_opt_out"))
+            continue
         route = route_resolution.route
         channel = str(route.get("channel") or "").strip().casefold()
         if not channel:
@@ -383,6 +387,9 @@ async def notify_benchmark_admin_accounts(
             continue
         if route_resolution.route is None:
             results.append(AdminNotificationResult(instance_name, account_id, "skipped", route_resolution.reason or "no_private_route"))
+            continue
+        if route_resolution.source_store is not None and status_auth_state_admin_opted_out(route_resolution.source_store, account_id):
+            results.append(AdminNotificationResult(instance_name, account_id, "skipped", "admin_opt_out"))
             continue
         route = route_resolution.route
         channel = str(route.get("channel") or "").strip().casefold()
@@ -506,7 +513,7 @@ def _resolve_admin_notification_route(
             if route is None:
                 local_account_without_route = True
             else:
-                return _AdminRouteResolution("routable", route=dict(route))
+                return _AdminRouteResolution("routable", route=dict(route), source_store=store)
 
     found_source_account = False
     route_errors: list[str] = []
@@ -526,7 +533,7 @@ def _resolve_admin_notification_route(
             continue
         resolved_route = dict(route)
         resolved_route.setdefault("route_source_instance", source_instance_name)
-        return _AdminRouteResolution("routable", route=resolved_route, reason="cross_instance")
+        return _AdminRouteResolution("routable", route=resolved_route, reason="cross_instance", source_store=source_store)
     if found_source_account:
         if route_errors:
             return _AdminRouteResolution("failed", reason=f"route:{route_errors[0]}")

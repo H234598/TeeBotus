@@ -256,6 +256,44 @@ def test_runtime_status_admin_notify_sends_to_routable_admin_account(tmp_path) -
     assert account_store.read_status_dispatch_results(account_id)[0]["status"] == "sent"
 
 
+def test_runtime_status_admin_notify_honors_cross_instance_admin_opt_out(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    logger_store = status_summary_store_for(instances_dir)
+    source_store = store_for(instances_dir / "Depressionsbot" / "data", "Depressionsbot")
+    identity = telegram_identity_key(123)
+    account_id = source_store.resolve_or_create_account(identity)
+    source_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+    source_store.write_status_auth_state(
+        account_id,
+        {"schema_version": 1, "authorized": False, "admin_opt_out": True},
+    )
+    sent: list[SendAttachment] = []
+
+    def store_factory(_root: Path, instance_name: str) -> AccountStore:
+        if instance_name == STATUS_SUMMARY_INSTANCE_NAME:
+            return logger_store
+        if instance_name == "Depressionsbot":
+            return source_store
+        raise AssertionError(f"unexpected instance store: {instance_name}")
+
+    results = asyncio.run(
+        notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+            store_factory=store_factory,
+            sender_factory=lambda _instance, _store: {"telegram": lambda _route, action, _metadata: sent.append(action) or "ok"},
+        )
+    )
+
+    assert format_admin_notification_result_lines(results) == (
+        f"admin_notify={STATUS_SUMMARY_INSTANCE_NAME} status=skipped account_id={account_id} reason=admin_opt_out",
+    )
+    assert sent == []
+    assert logger_store.read_status_outbox(account_id) == []
+
+
 def test_runtime_status_dispatch_audit_failure_does_not_hide_delivery(tmp_path, monkeypatch, caplog) -> None:
     instances_dir = tmp_path / "instances"
     account_store = status_summary_store_for(instances_dir)
