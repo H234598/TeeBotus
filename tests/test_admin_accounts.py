@@ -243,6 +243,23 @@ def test_admin_report_contains_store_initialization_error(monkeypatch, tmp_path:
     assert report["instances"][0]["identity_health"]["warnings"][0]["code"] == "account_store_error"
 
 
+def test_admin_report_marks_account_summary_oserror(monkeypatch, tmp_path: Path) -> None:
+    instance_dir = make_instance(tmp_path)
+    store = AccountStore(instance_dir / "data" / "accounts", "Depressionsbot", provider())
+    account_id = store.resolve_or_create_account("telegram:user:2", display_label="Ada")
+
+    def fail_summary(*_args: Any, **_kwargs: Any) -> dict[str, Any]:
+        raise OSError("account directory disappeared")
+
+    monkeypatch.setattr(AccountStore, "account_summary", fail_summary)
+
+    report = build_accounts_admin_report(instances_dir=tmp_path, provider=provider())
+
+    store_report = report["instances"][0]["account_store"]
+    assert store_report["readable"] is False
+    assert store_report["errors"] == [f"account {account_id}: account directory disappeared"]
+
+
 def test_admin_report_warns_for_dangling_account_directory(tmp_path: Path) -> None:
     instance_dir = make_instance(tmp_path)
     accounts_root = instance_dir / "data" / "accounts" / "accounts"

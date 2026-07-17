@@ -278,7 +278,7 @@ def _build_store_report(store: AccountStore) -> dict[str, Any]:
         report["account_index_readable"] = True
         accounts = index.get("accounts") if isinstance(index, dict) else {}
         report["indexed_accounts"] = len(accounts) if isinstance(accounts, dict) else 0
-    except AccountStoreError as exc:
+    except (AccountStoreError, OSError, ValueError) as exc:
         report["readable"] = False
         report["errors"].append(f"account_index: {exc}")
 
@@ -288,7 +288,7 @@ def _build_store_report(store: AccountStore) -> dict[str, Any]:
         if isinstance(identities, dict):
             report["linked_identities"] = len(identities)
             report["identities_by_channel"] = _count_identities_by_channel(identities)
-    except AccountStoreError as exc:
+    except (AccountStoreError, OSError, ValueError) as exc:
         report["readable"] = False
         report["errors"].append(f"identity_mapping: {exc}")
 
@@ -297,7 +297,7 @@ def _build_store_report(store: AccountStore) -> dict[str, Any]:
         report["secrets_readable"] = True
         if isinstance(secrets_doc, dict):
             report["active_secrets"] = sum(1 for item in secrets_doc.values() if isinstance(item, dict) and item.get("active") is True)
-    except AccountStoreError as exc:
+    except (AccountStoreError, OSError, ValueError) as exc:
         report["readable"] = False
         report["errors"].append(f"secrets: {exc}")
 
@@ -313,7 +313,7 @@ def _build_store_report(store: AccountStore) -> dict[str, Any]:
             continue
         try:
             summary = store.account_summary(account_dir.name)
-        except AccountStoreError as exc:
+        except (AccountStoreError, OSError, ValueError) as exc:
             report["readable"] = False
             report["errors"].append(f"account {account_dir.name}: {exc}")
             continue
