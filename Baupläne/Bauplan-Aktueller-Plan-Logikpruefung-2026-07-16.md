@@ -7798,7 +7798,7 @@ Push. Restart erst bei `20/20`.
   `os.replace`; ein Abbruch hinterlaesst dadurch keine halbe JSON-Datei.
 - Test: Prozessregistry-Suite `7 passed`; Ruff, `py_compile` und
   `git diff --check` gruen. Kein Provider/API-Aufruf.
-- Code-Commit: folgt direkt.
+- Code-Commit: `c67764a3 fix: protect youtube process registry writes`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `10/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
