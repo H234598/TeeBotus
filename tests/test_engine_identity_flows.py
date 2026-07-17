@@ -638,6 +638,83 @@ def test_confirmed_channel_unlink_none_result_keeps_pending_flow(tmp_path, monke
     assert engine.state.get_pending_flow("Depressionsbot", account_id, "account_edit")["step"] == "confirm_unlink"
 
 
+def test_account_edit_pending_lookup_failure_is_user_visible(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    monkeypatch.setattr(
+        engine.state,
+        "get_pending_flow",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("flow lookup unavailable")),
+    )
+
+    result = engine.process_identity_flows(event(identity, "normale Nachricht"))
+
+    assert result.actions[0].text == "Account-Bearbeitung konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
+
+
+def test_account_edit_cancel_does_not_claim_success_when_pending_state_disappears(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    engine.process_identity_flows(event(identity, "/account_edit"))
+
+    monkeypatch.setattr(engine.state, "pop_pending_flow", lambda *_args, **_kwargs: None)
+
+    result = engine.process_identity_flows(event(identity, "nein"))
+
+    assert result.actions[0].text == "Account-Bearbeitung konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
+
+
+def test_account_edit_rotation_reports_missing_cleanup_state(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    engine.process_identity_flows(event(identity, "/account_edit"))
+
+    monkeypatch.setattr(engine.state, "pop_pending_flow", lambda *_args, **_kwargs: None)
+
+    result = engine.process_identity_flows(event(identity, "rotate"))
+
+    assert "Secret:" in result.actions[0].text
+    assert "interne Account-Bearbeitungsstatus" in result.actions[0].text
+
+
+def test_account_edit_unlink_reports_missing_cleanup_state(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    engine.process_identity_flows(event(identity, "/account_edit"))
+    engine.process_identity_flows(event(identity, "unlink"))
+
+    monkeypatch.setattr(engine.state, "pop_pending_flow", lambda *_args, **_kwargs: None)
+
+    result = engine.process_identity_flows(event(identity, "ja"))
+
+    assert "wurde vom Account getrennt" in result.actions[0].text
+    assert "interne Bearbeitungsstatus" in result.actions[0].text
+    assert account_store.get_account_for_identity(identity) is None
+
+
+def test_account_edit_unknown_step_does_not_claim_reset_when_state_disappears(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    engine.state.set_pending_flow(
+        "Depressionsbot",
+        account_id,
+        "account_edit",
+        {"step": "unexpected", "chat_id": "chat-1", "channel": "telegram", "identity_key": identity},
+    )
+    monkeypatch.setattr(engine.state, "pop_pending_flow", lambda *_args, **_kwargs: None)
+
+    result = engine.process_identity_flows(event(identity, "weiter"))
+
+    assert result.actions[0].text == "Account-Bearbeitung konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
+
+
 def test_account_edit_rotation_survives_pending_cleanup_failure(tmp_path, monkeypatch):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)

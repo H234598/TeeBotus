@@ -106,6 +106,7 @@ ADMIN_AUTH_ENABLED = "Adminzugang aktiviert."
 ADMIN_AUTH_DISABLED = "Adminzugang deaktiviert. Dieser Account bekommt keine Adminmeldungen mehr."
 ADMIN_AUTH_WRONG_SECRET = "Admin-Secret stimmt nicht."
 ADMIN_AUTH_NO_SECRET_CONFIGURED = "Kein Admin-Secret konfiguriert."
+ACCOUNT_EDIT_STATE_ERROR = "Account-Bearbeitung konnte gerade nicht gelesen oder vorbereitet werden. Bitte spaeter erneut versuchen."
 TELADI_EMERGENCY_CHAT_ID = "395935293"
 TELADI_EMERGENCY_COMMANDS = {"/call_a_teladi", "/callateladi", "/teladi", "/notfall_teladi"}
 TELADI_EMERGENCY_COOLDOWN_SECONDS = 24 * 60 * 60
@@ -678,12 +679,20 @@ class TeeBotusEngine:
         } and not event.is_private:
             return EngineResult(account_id, [SendText(event.chat_id, PRIVATE_ONLY, track=False)], handled=True)
 
-        pending_account_edit = self.state.get_pending_flow(
-            event.instance,
-            account_id,
-            "account_edit",
-            conversation_scope=_pending_flow_conversation_scope(event),
-        )
+        try:
+            pending_account_edit = self.state.get_pending_flow(
+                event.instance,
+                account_id,
+                "account_edit",
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
+        except Exception:  # noqa: BLE001 - account edit state failures must stay user-visible.
+            LOGGER.exception("Account edit pending-state lookup failed instance=%s account=%s", event.instance, account_id)
+            return EngineResult(
+                account_id,
+                [SendText(event.chat_id, ACCOUNT_EDIT_STATE_ERROR, track=False)],
+                handled=True,
+            )
         if pending_account_edit is not None and not _pending_flow_matches_event(pending_account_edit, event):
             pending_account_edit = None
         if pending_account_edit is not None and not event.is_private:
@@ -897,13 +906,27 @@ class TeeBotusEngine:
         step = str(pending.get("step") or "start")
         cancel_words = {"nein", "no", "cancel", "abbrechen", "stop"}
         yes_words = {"ja", "yes", "confirm", "bestätigen", "bestaetigen"}
+
+        def pop_account_edit() -> tuple[bool, dict[str, object] | None]:
+            try:
+                popped = self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    "account_edit",
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
+            except Exception:  # noqa: BLE001 - account edit state failures must fail closed.
+                LOGGER.exception("Account edit pending-state removal failed instance=%s account=%s", event.instance, account_id)
+                return False, None
+            if popped is None:
+                LOGGER.error("Account edit pending state disappeared instance=%s account=%s", event.instance, account_id)
+                return False, None
+            return True, popped
+
         if text in cancel_words:
-            self.state.pop_pending_flow(
-                event.instance,
-                account_id,
-                "account_edit",
-                conversation_scope=_pending_flow_conversation_scope(event),
-            )
+            popped, _removed = pop_account_edit()
+            if not popped:
+                return EngineResult(account_id, [SendText(event.chat_id, ACCOUNT_EDIT_STATE_ERROR, track=False)], handled=True)
             return EngineResult(account_id, [SendText(event.chat_id, "Okay, ich trenne nichts.", track=False)], handled=True)
         if step == "start":
             if text in {"unlink", "trennen", "kanal trennen", "diesen kanal trennen"}:
@@ -950,15 +973,8 @@ class TeeBotusEngine:
                         handled=True,
                     )
                 secret_text = self._secret_text(account_id, secret, rotated=True)
-                try:
-                    self.state.pop_pending_flow(
-                        event.instance,
-                        account_id,
-                        "account_edit",
-                        conversation_scope=_pending_flow_conversation_scope(event),
-                    )
-                except Exception:  # noqa: BLE001 - post-rotation state cleanup must not hide the new secret.
-                    LOGGER.exception("Account edit rotation flow cleanup failed instance=%s account=%s", event.instance, account_id)
+                popped, _removed = pop_account_edit()
+                if not popped:
                     secret_text += "\n\nHinweis: Der interne Account-Bearbeitungsstatus konnte noch nicht zurückgesetzt werden."
                 return EngineResult(account_id, [SendText(event.chat_id, secret_text, track=False)], handled=True)
             return EngineResult(
@@ -979,15 +995,8 @@ class TeeBotusEngine:
                         [SendText(event.chat_id, "Kommunikationsweg konnte gerade nicht getrennt werden. Bitte spaeter erneut versuchen.", track=False)],
                         handled=True,
                     )
-                try:
-                    self.state.pop_pending_flow(
-                        event.instance,
-                        account_id,
-                        "account_edit",
-                        conversation_scope=_pending_flow_conversation_scope(event),
-                    )
-                except Exception:  # noqa: BLE001 - post-unlink state cleanup must not hide completed unlink.
-                    LOGGER.exception("Account edit unlink flow cleanup failed instance=%s account=%s", event.instance, account_id)
+                popped, _removed = pop_account_edit()
+                if not popped:
                     return EngineResult(
                         unlinked_account,
                         [SendText(event.chat_id, "Dieser Kommunikationsweg wurde vom Account getrennt. Hinweis: Der interne Bearbeitungsstatus konnte noch nicht zurückgesetzt werden.", track=False)],
@@ -999,12 +1008,9 @@ class TeeBotusEngine:
                 [SendText(event.chat_id, "Bitte bestaetige oder brich ab.", track=False, buttons=ACCOUNT_UNLINK_CONFIRM_BUTTONS)],
                 handled=True,
             )
-        self.state.pop_pending_flow(
-            event.instance,
-            account_id,
-            "account_edit",
-            conversation_scope=_pending_flow_conversation_scope(event),
-        )
+        popped, _removed = pop_account_edit()
+        if not popped:
+            return EngineResult(account_id, [SendText(event.chat_id, ACCOUNT_EDIT_STATE_ERROR, track=False)], handled=True)
         return EngineResult(account_id, [SendText(event.chat_id, "Account-Bearbeitung wurde zurückgesetzt.", track=False)], handled=True)
 
     def _account_text(self, instance_name: str, account_id: str) -> str:
