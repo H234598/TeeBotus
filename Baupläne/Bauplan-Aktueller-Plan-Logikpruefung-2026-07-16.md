@@ -5166,6 +5166,21 @@ bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 `2/20` Commits. Kein Push. Restart nach 18 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Faelligkeitszeit vor Write validiert
+
+- 2026-07-17: Beliebiger nicht parsebarer `due_at`-Text wurde als Outbox-
+  Eintrag gespeichert und erst beim Dispatch als `invalid_due_at` markiert.
+- Nichtleere Zeitstempel werden jetzt nach Policy-Gate vor Outbox-Write
+  validiert. Kaputter Altbestand bleibt weiterhin im Dispatch-Fail-Closed-Pfad
+  pruefbar und wird dort als `failed/invalid_due_at` markiert.
+- Test: `tests/test_proactive_agent.py` `136 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e32f7628 fix: reject invalid proactive due timestamps`.
+
+**Aktueller Laufstand:** Nach dem Restart seit dem letzten Plan-Commit
+`4/20` Commits. Kein Push. Restart nach 16 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Instanzen isolieren-AccountStore-Fehler
 
 - 2026-07-17: Der Proactive-Zyklus erzeugte den `AccountStore` vor dem
