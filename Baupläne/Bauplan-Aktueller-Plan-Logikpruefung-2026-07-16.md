@@ -6442,6 +6442,23 @@ bleibt erst bei 100 Commits.
 `13/20` Commits. Kein Push. Restart nach 7 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Reminder-Classifier fail-open bei Backendfehler
+
+- 2026-07-17: Der optionale strukturierte Reminder-Classifier fing nur
+  Parsefehler. Provider-/Wrapper-Ausnahmen konnten bis in Engine laufen und
+  normale Chatverarbeitung abbrechen.
+- Unerwartete Classifier-Fehler werden jetzt geloggt und als kein sicher
+  erkennbarer Reminder behandelt. Keine Erinnerung wird aus unsicherem Output
+  angelegt; normaler Chatpfad bleibt verfuegbar.
+- Test: `tests/test_reminder_intent.py` plus
+  `tests/test_engine_identity_flows.py` `234 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d3a8c142 fix: fail open on reminder classifier errors`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`15/20` Commits. Kein Push. Restart nach 5 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Admin-Status kapselt Route-Backendfehler
 
 - 2026-07-17: Admin-Statuszeilen sowie Runtime- und Benchmark-Summary-
