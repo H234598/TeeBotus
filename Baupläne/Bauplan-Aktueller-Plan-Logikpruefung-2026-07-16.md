@@ -5243,6 +5243,21 @@ bleibt erst bei 100 Commits.
 `12/20` Commits. Kein Push. Restart nach 8 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Risikofenster lehnt invertierte Grenzen ab
+
+- 2026-07-17: Ein `valid_to` vor `valid_from` wurde als noch nicht aktives
+  Fenster behandelt. Bei altem `updated_at` konnte der Schutz dadurch fehlen.
+- Widerspruechliche, aber parsebare Zeitgrenzen gelten jetzt ebenfalls als
+  aktiv und blockieren den Proactive-Risikopfad bis zur Reparatur.
+- Test: `tests/test_proactive_agent.py` `148 passed`; fokussierter Risiketest
+  `5 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `6b09e8aa fix: reject inverted proactive risk windows`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`14/20` Commits. Kein Push. Restart nach 6 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
