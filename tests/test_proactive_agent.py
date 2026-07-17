@@ -2674,6 +2674,69 @@ def test_llm_cancel_does_not_overwrite_terminal_item_after_stale_precheck(tmp_pa
     assert item["status_history"][-1]["reason"] == "sent_before_cancel"
 
 
+def test_llm_cancel_reports_status_update_failure_for_queued_item(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="cancel_persistence_failure",
+        message_text="Nicht verlieren",
+        due_at="2026-06-15T13:00:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    monkeypatch.setattr("TeeBotus.runtime.proactive_agent.update_proactive_outbox_item_status", lambda *_args, **_kwargs: False)
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {"schema_version": 1, "decisions": [{"action": "cancel", "item_id": item_id}]},
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ("decision_0_status_update_failed",)
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "queued"
+
+
+def test_llm_snooze_reports_status_update_failure_for_queued_item(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="snooze_persistence_failure",
+        message_text="Nicht verlieren",
+        due_at="2026-06-15T13:00:00+00:00",
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    monkeypatch.setattr("TeeBotus.runtime.proactive_agent._update_proactive_outbox_item_due_at", lambda *_args, **_kwargs: False)
+
+    result = apply_proactive_llm_plan(
+        account_store,
+        account_id,
+        {
+            "schema_version": 1,
+            "decisions": [{"action": "snooze", "item_id": item_id, "due_at": "2026-06-16T09:30:00+00:00"}],
+        },
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert result.errors == ("decision_0_status_update_failed",)
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "queued"
+    assert item["due_at"] == "2026-06-15T13:00:00+00:00"
+
+
 def test_llm_planner_prompt_includes_queued_outbox_ids_for_cancel_snooze(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

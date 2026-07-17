@@ -3048,15 +3048,22 @@ def _apply_proactive_llm_cancel_decision(
     if not _queued_proactive_outbox_item_exists(account_store, account_id, item_id):
         return "error:item_not_queued"
     reason = _safe_llm_text(decision.get("reason"), max_chars=160) or "llm_cancel"
-    if not update_proactive_outbox_item_status(
-        account_store,
-        account_id,
-        item_id,
-        status="cancelled",
-        reason=f"llm_cancel:{reason}",
-        now=now,
-        expected_status="queued",
-    ):
+    try:
+        updated = update_proactive_outbox_item_status(
+            account_store,
+            account_id,
+            item_id,
+            status="cancelled",
+            reason=f"llm_cancel:{reason}",
+            now=now,
+            expected_status="queued",
+        )
+    except Exception:  # noqa: BLE001 - report persistence failure to planner audit.
+        LOGGER.exception("LLM proactive cancel persistence failed account=%s item=%s", account_id, item_id)
+        return "error:status_update_failed"
+    if not updated:
+        if _proactive_outbox_item_queued_state(account_store, account_id, item_id) is True:
+            return "error:status_update_failed"
         return "error:item_not_queued"
     return f"cancelled:{item_id}"
 
@@ -3084,7 +3091,21 @@ def _apply_proactive_llm_snooze_decision(
     if parsed_due_at <= now:
         return "error:due_at_not_future"
     reason = _safe_llm_text(decision.get("reason"), max_chars=160) or "llm_snooze"
-    if not _update_proactive_outbox_item_due_at(account_store, account_id, item_id, due_at=parsed_due_at.isoformat(timespec="seconds"), reason=f"llm_snooze:{reason}", now=now):
+    try:
+        updated = _update_proactive_outbox_item_due_at(
+            account_store,
+            account_id,
+            item_id,
+            due_at=parsed_due_at.isoformat(timespec="seconds"),
+            reason=f"llm_snooze:{reason}",
+            now=now,
+        )
+    except Exception:  # noqa: BLE001 - report persistence failure to planner audit.
+        LOGGER.exception("LLM proactive snooze persistence failed account=%s item=%s", account_id, item_id)
+        return "error:status_update_failed"
+    if not updated:
+        if _proactive_outbox_item_queued_state(account_store, account_id, item_id) is True:
+            return "error:status_update_failed"
         return "error:item_not_found"
     return f"snoozed:{item_id}"
 
@@ -3092,6 +3113,23 @@ def _apply_proactive_llm_snooze_decision(
 def _queued_proactive_outbox_item_exists(account_store: AccountStore, account_id: str, item_id: str) -> bool:
     normalized_item_id = str(item_id or "").strip()
     for item in account_store.read_proactive_outbox(account_id):
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("id") or "").strip() != normalized_item_id:
+            continue
+        return str(item.get("status") or "queued").strip().casefold() == "queued"
+    return False
+
+
+def _proactive_outbox_item_queued_state(account_store: AccountStore, account_id: str, item_id: str) -> bool | None:
+    """Return current queued state; None means state could not be read."""
+    normalized_item_id = str(item_id or "").strip()
+    try:
+        rows = account_store.read_proactive_outbox(account_id)
+    except Exception:  # noqa: BLE001 - failed verification is still a persistence failure.
+        LOGGER.exception("LLM proactive mutation state check failed account=%s item=%s", account_id, item_id)
+        return None
+    for item in rows:
         if not isinstance(item, dict):
             continue
         if str(item.get("id") or "").strip() != normalized_item_id:
