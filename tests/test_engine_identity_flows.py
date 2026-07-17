@@ -3681,6 +3681,19 @@ def test_voice_preference_commands_survive_unexpected_backend_failures(tmp_path,
     assert mimic_actions[0].text == "Ich konnte deine Sprechweisen-Einstellung gerade nicht speichern."
 
 
+def test_account_export_survives_unexpected_backend_failure(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = signal_identity_key(source_uuid="export-backend-error")
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.export_account_data_from_store", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("export unavailable")))
+
+    actions = engine.process(event(identity, "/export json", channel="signal"))
+
+    assert len(actions) == 1
+    assert actions[0].text == "Account-Export konnte nicht erzeugt werden."
+
+
 def test_engine_start_adds_legal_consent_buttons_until_privacy_is_confirmed(tmp_path):
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="legal-buttons")

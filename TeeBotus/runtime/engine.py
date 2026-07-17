@@ -1502,6 +1502,9 @@ class TeeBotusEngine:
             result = export_account_data_from_store(self.account_store, account_id, fmt)
         except (ExportError, AccountStoreError, OSError):
             return [SendText(event.chat_id, "Account-Export konnte nicht erzeugt werden.", track=False)]
+        except Exception:  # noqa: BLE001 - export backend failures must not abort command handling.
+            LOGGER.exception("Account export failed instance=%s account=%s format=%s", event.instance, account_id, fmt)
+            return [SendText(event.chat_id, "Account-Export konnte nicht erzeugt werden.", track=False)]
         caption = "TeeBotus Account Export"
         if result.degraded and result.note:
             caption = f"{caption}: {result.note}"
