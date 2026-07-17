@@ -6959,6 +6959,24 @@ Commits. Kein Push. Restart nach 2 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `19/20` sichtbar.
 
+### YouTube-Follow-ups validieren State-Cleanup vor dem Job
+
+- 2026-07-17: Link- und Options-Follow-ups entfernten Pending-State ohne
+  Rueckgabewert-/Ausnahmepruefung. Bei Statefehler lief Transkription oder
+  lokaler Job trotzdem an; kaputte Follow-ups blieben zudem wiederholbar.
+- Lookup und Pop beider YouTube-Follow-up-Flows sind jetzt fail-closed. Nur
+  nach bestaetigtem State-Cleanup startet Transkription bzw. Local-Job.
+- Test: `tests/test_engine_identity_flows.py -k 'youtube_transcript'`
+  `19 passed`; Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ab3f0437 fix: require youtube followup state cleanup`.
+- Restart nach `20/20`: `teebotus.service active`, MainPID `780895`,
+  `ExecMainStatus=0`, ActiveEnter `2026-07-17 19:45:50 CEST`.
+
+**Aktueller Laufstand:** Nach dem Restart `0/20` Commits. Kein Push.
+Restart nach 20 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `1/20` sichtbar.
+
 ### Login kapselt Rückgabe- und Notificationfehler
 
 - 2026-07-17: Primäres Login vertraute blind auf `result["account_id"]` und
