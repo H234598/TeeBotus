@@ -1070,6 +1070,46 @@ def _remove_stable_directory_tree(parent_descriptor: int, name: str, *, label: s
         os.close(child_descriptor)
 
 
+def _stable_child_directories(path: Path, *, label: str) -> tuple[Path, ...]:
+    parent_descriptor: int | None = None
+    children: list[Path] = []
+    try:
+        parent_descriptor = _open_stable_directory_descriptor(path, label=label)
+        with os.scandir(parent_descriptor) as entries:
+            for entry in entries:
+                try:
+                    entry_stat = entry.stat(follow_symlinks=False)
+                except FileNotFoundError:
+                    continue
+                if not stat.S_ISDIR(entry_stat.st_mode):
+                    continue
+                try:
+                    child_descriptor = os.open(
+                        entry.name,
+                        os.O_RDONLY
+                        | getattr(os, "O_DIRECTORY", 0)
+                        | getattr(os, "O_NOFOLLOW", 0)
+                        | getattr(os, "O_CLOEXEC", 0),
+                        dir_fd=parent_descriptor,
+                    )
+                except FileNotFoundError:
+                    continue
+                except OSError:
+                    continue
+                os.close(child_descriptor)
+                children.append(path / entry.name)
+    except FileNotFoundError:
+        return ()
+    except AccountStoreError:
+        raise
+    except OSError as exc:
+        raise AccountStoreError(f"could not inspect account directories: {path}") from exc
+    finally:
+        if parent_descriptor is not None:
+            os.close(parent_descriptor)
+    return tuple(children)
+
+
 def _safe_rooted_path(path: Path, *, allowed_roots: Iterable[Path], operation: str = "file access") -> Path:
     if not path:
         raise AccountStoreError(f"{operation} path is not safe: {path}")
@@ -1681,11 +1721,7 @@ class AccountStore:
                 raise
             if any(_account_secret_payload_has_verifier(payload) for payload in secrets_doc.values()):
                 return self.secrets_path
-        if not self.accounts_dir.exists():
-            return None
-        for account_dir in self.accounts_dir.iterdir():
-            if not account_dir.is_dir():
-                continue
+        for account_dir in _stable_child_directories(self.accounts_dir, label="secret verifier account directories"):
             verifier_path = account_dir / SECRET_VERIFIER_FILENAME
             if _secret_verifier_file_has_payload(verifier_path, allowed_roots=(self.root,)):
                 return verifier_path
@@ -1695,11 +1731,7 @@ class AccountStore:
         yield self.account_index_path
         yield self.identities_path
         yield self.secrets_path
-        if not self.accounts_dir.exists():
-            return
-        for account_dir in self.accounts_dir.iterdir():
-            if not account_dir.is_dir():
-                continue
+        for account_dir in _stable_child_directories(self.accounts_dir, label="mapping secret account directories"):
             yield account_dir / ACCOUNT_PROFILE_FILENAME
             yield account_dir / SECRET_VERIFIER_FILENAME
             yield account_dir / "Account_Tombstone.json"
@@ -1707,8 +1739,6 @@ class AccountStore:
     def _memory_secret_payload_paths(self) -> Iterable[Path]:
         for filename in INSTANCE_MEMORY_STATE_FILENAMES:
             yield self.root.parent / filename
-        if not self.accounts_dir.exists():
-            return
         filenames = (
             USER_MEMORY_INDEX_FILENAME,
             USER_MEMORY_ENTRIES_FILENAME,
@@ -1722,9 +1752,7 @@ class AccountStore:
             PROACTIVE_AUDIT_FILENAME,
             PROACTIVE_DISPATCH_RESULTS_FILENAME,
         )
-        for account_dir in self.accounts_dir.iterdir():
-            if not account_dir.is_dir():
-                continue
+        for account_dir in _stable_child_directories(self.accounts_dir, label="memory secret account directories"):
             for filename in filenames:
                 yield account_dir / filename
 
@@ -1892,10 +1920,9 @@ class AccountStore:
                 payload_id = str(payload.get("account_id") or "").strip().lower()
                 if TOKEN_HEX_RE.fullmatch(payload_id):
                     ids.add(payload_id)
-        if self.accounts_dir.exists():
-            for path in self.accounts_dir.iterdir():
-                if path.is_dir() and TOKEN_HEX_RE.fullmatch(path.name):
-                    ids.add(path.name)
+        for path in _stable_child_directories(self.accounts_dir, label="account directory discovery"):
+            if TOKEN_HEX_RE.fullmatch(path.name):
+                ids.add(path.name)
         if include_unresolvable:
             return tuple(sorted(ids))
         resolvable_ids: list[str] = []

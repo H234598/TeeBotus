@@ -3284,6 +3284,17 @@ def test_account_directory_cleanup_keeps_stable_parent_when_path_is_swapped(tmp_
     assert outside_payload.read_text(encoding="utf-8") == "must survive"
 
 
+def test_account_discovery_ignores_symlinked_account_directory(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    external_id = "a" * 128
+    outside = tmp_path / "outside-account-discovery"
+    outside.mkdir()
+    (outside / "Account_Profile.json").write_text("external", encoding="utf-8")
+    (store.accounts_dir / external_id).symlink_to(outside, target_is_directory=True)
+
+    assert external_id not in store.list_account_ids(include_unresolvable=True)
+
+
 def test_account_json_document_falls_back_on_sql_diagnostics(tmp_path):
     class CorruptReadCollectionBackend:
         last_collection_read_error = "payload could not be decrypted"
