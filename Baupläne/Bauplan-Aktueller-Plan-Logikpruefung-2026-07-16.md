@@ -3636,3 +3636,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `18/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 2 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### SQLite-Recovery-Read-kopiert-ueber-stabile-FDs
+
+- 2026-07-17: `_connect_sqlite_readonly()` kopierte Source und WAL/SHM per
+  `shutil.copy2(path)` nach einer vorigen Pfadpruefung. Ein Race konnte dadurch
+  fremde SQLite-Daten in den Recovery-Report einlesen.
+- SQLite-Datei und Sidecars werden jetzt aus stabilen, no-follow geoeffneten
+  FDs kopiert; Inode, Regular-File-Status und Hardlinkzahl werden erneut
+  geprueft. Source-Swap blockiert fail-closed.
+- Regression: stabiler Read-Source-Swap plus SQLite-FD-Fokus -> `3 passed`;
+  komplette `tests/test_admin_accounts.py` -> `108 passed`. Ruff, `compileall`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3527ca98 fix: copy sqlite recovery sources through stable fds`.
+
+**Aktueller Laufstand:** Seit dem Restart `20/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart jetzt. Naechster Push bleibt erst bei 100
+Commits.
