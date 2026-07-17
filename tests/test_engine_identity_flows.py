@@ -2781,6 +2781,26 @@ def test_engine_llm_reply_survives_unexpected_memory_write_failure(tmp_path, mon
     assert actions[1].text == "Antwort trotz Memory-Fehler."
 
 
+def test_engine_llm_reply_survives_unexpected_weather_context_failure(tmp_path, monkeypatch):
+    class FakeLLMClient:
+        def create_reply(self, *_args, **_kwargs):
+            return OpenAIResponse("Antwort trotz Wetterfehler.", None, None)
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine.weather_context_text",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("weather state unavailable")),
+    )
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True),
+        llm_client=FakeLLMClient(),
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "Hallo"))
+
+    assert actions[1].text == "Antwort trotz Wetterfehler."
+
+
 def test_engine_llm_reply_survives_unexpected_memory_classifier_failure(tmp_path):
     class FakeLLMClient:
         def create_reply(self, *_args, **_kwargs):
@@ -5092,6 +5112,30 @@ def test_engine_youtube_transcript_natural_request_uses_llm_pipeline(monkeypatch
     assert "Transcript text." in client.reply_inputs[0]
     assert isinstance(actions[0], SendTyping)
     assert actions[1].text == "AI summary."
+
+
+def test_engine_youtube_llm_reply_survives_unexpected_weather_context_failure(monkeypatch, tmp_path):
+    class FakeLLMClient:
+        def create_reply(self, *_args, **_kwargs):
+            return OpenAIResponse("YouTube-Antwort trotz Wetterfehler.", None, None)
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine.transcribe_youtube_video",
+        lambda _url, **_kwargs: ("Transcript text.", "YouTube-Untertitel"),
+    )
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine.weather_context_text",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("weather state unavailable")),
+    )
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True),
+        llm_client=FakeLLMClient(),
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "Transkribiere https://youtu.be/abc123", channel="matrix"))
+
+    assert actions[1].text == "YouTube-Antwort trotz Wetterfehler."
 
 
 def test_engine_youtube_transcript_llm_pipeline_reports_neutral_missing_key(monkeypatch, tmp_path):

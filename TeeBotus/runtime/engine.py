@@ -1418,7 +1418,7 @@ class TeeBotusEngine:
             attachment_context = _build_attachment_context(event, self.openai_client, instructions, self.account_store, account_id)
             account_memory_selection = _select_account_memory(self.account_store, account_id, instructions, text)
             account_memory_context = account_memory_selection.prompt_text
-            weather_context = weather_context_text(self.account_store, account_id)
+            weather_context = _build_weather_context(self.account_store, account_id)
             working_memory_context = _build_working_memory_context(self.working_memory_store, text)
             library_context = _build_bibliothekar_context(self.bibliothekar_store, instructions, text, structured_decision_runner=self.structured_decision_runner)
             previous_response_id = _previous_response_id_for_client(
@@ -2197,7 +2197,7 @@ class TeeBotusEngine:
             conversation_scope = _llm_conversation_scope(event)
             pipeline_text = _build_youtube_pipeline_text(user_text or event.text, transcript, source, url)
             account_memory_selection = _select_account_memory(self.account_store, account_id, instructions, pipeline_text)
-            weather_context = weather_context_text(self.account_store, account_id)
+            weather_context = _build_weather_context(self.account_store, account_id)
             working_memory_context = _build_working_memory_context(self.working_memory_store, pipeline_text)
             library_context = _build_bibliothekar_context(
                 self.bibliothekar_store,
@@ -2877,6 +2877,16 @@ def _build_working_memory_context(working_memory_store: WorkingMemoryStore | Non
         return ""
     except Exception:  # noqa: BLE001 - optional working memory must not block the main reply.
         LOGGER.exception("Working memory context preparation failed.")
+        return ""
+
+
+def _build_weather_context(account_store: AccountStore, account_id: str) -> str:
+    try:
+        return weather_context_text(account_store, account_id)
+    except OSError:
+        return ""
+    except Exception:  # noqa: BLE001 - optional weather context must not block the main reply.
+        LOGGER.exception("Weather context preparation failed account=%s.", account_id)
         return ""
 
 
