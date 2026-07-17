@@ -6924,6 +6924,24 @@ Commits. Kein Push. Restart nach 6 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `15/20` sichtbar.
 
+### Memory-Reset verlangt persistierte Bestaetigung
+
+- 2026-07-17: `/reset_memorys` entfernte Pending-State ungeprueft und loeste
+  danach den destruktiven Reset aus. Bei State-Race/-Fehler konnte ein
+  bestaetigender Text ohne noch vorhandenen Pending-Flow Memory loeschen;
+  Setup-/Lookupfehler konnten zudem in den allgemeinen Fehlerpfad fallen.
+- Lookup, Pending-Entfernung und Initial-Setup werden jetzt fail-closed
+  behandelt. Der destruktive Reset startet nur nach tatsaechlich entferntem
+  Bestaetigungs-State; kein falscher Erfolg.
+- Test: `tests/test_engine_identity_flows.py -k 'memory_reset'` `11 passed`;
+  Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `33636335 fix: require persisted memory reset confirmation`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `16/20`
+Commits. Kein Push. Restart nach 4 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `17/20` sichtbar.
+
 ### Login kapselt Rückgabe- und Notificationfehler
 
 - 2026-07-17: Primäres Login vertraute blind auf `result["account_id"]` und
