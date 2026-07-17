@@ -767,6 +767,34 @@ def test_expire_stale_proactive_outbox_items_marks_old_queued_items(tmp_path) ->
     assert [item["intent"] for item in due_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))] == ["fresh"]
 
 
+def test_expire_stale_proactive_outbox_items_does_not_hide_invalid_due_at(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    state = enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    state["policy"]["expire_queued_after_days"] = 7
+    account_store.write_agent_state(account_id, state)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="broken_due",
+        message_text="Ping",
+        due_at="2026-06-01T12:00:00+00:00",
+        now=datetime(2026, 6, 1, 10, tzinfo=timezone.utc),
+    )
+    item = account_store.read_proactive_outbox(account_id)[0]
+    item["due_at"] = "not-a-date"
+    account_store.write_proactive_outbox(account_id, [item])
+
+    expired = expire_stale_proactive_outbox_items(account_store, account_id, now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc))
+
+    assert expired == ()
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "queued"
+    assert queued.reason.startswith("queued:")
+
+
 def test_proactive_policy_enforces_daily_limit(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

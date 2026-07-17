@@ -1323,7 +1323,11 @@ def expire_stale_proactive_outbox_items(account_store: AccountStore, account_id:
                 continue
             if str(item.get("status") or "queued").strip().casefold() != "queued":
                 continue
-            reference = _parse_proactive_datetime(str(item.get("due_at") or item.get("created_at") or item.get("updated_at") or ""))
+            raw_due_at = str(item.get("due_at") or "").strip()
+            parsed_due_at = _parse_proactive_datetime(raw_due_at)
+            if raw_due_at and parsed_due_at is None:
+                continue
+            reference = parsed_due_at or _parse_proactive_datetime(str(item.get("created_at") or item.get("updated_at") or ""))
             if reference is None or reference > cutoff:
                 continue
             item_id = str(item.get("id") or "").strip()
@@ -1581,11 +1585,11 @@ async def dispatch_due_proactive_outbox_items(
 ) -> tuple[ProactiveDispatchResult, ...]:
     resolved_now = _resolve_proactive_now(now)
     recover_stale_proactive_dispatching_items(account_store, account_id, now=resolved_now)
-    expire_stale_proactive_outbox_items(account_store, account_id, now=resolved_now)
     invalid_due_item_ids = fail_invalid_due_proactive_outbox_items(account_store, account_id, now=resolved_now)
     invalid_retry_item_ids = fail_invalid_retry_at_proactive_outbox_items(account_store, account_id, now=resolved_now)
     invalid_recurrence_item_ids = fail_invalid_recurrence_proactive_outbox_items(account_store, account_id, now=resolved_now)
     invalid_risk_gate_item_ids = fail_invalid_risk_gate_proactive_outbox_items(account_store, account_id, now=resolved_now)
+    expire_stale_proactive_outbox_items(account_store, account_id, now=resolved_now)
     results: list[ProactiveDispatchResult] = []
     for item_id in invalid_due_item_ids:
         results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_due_at"))
