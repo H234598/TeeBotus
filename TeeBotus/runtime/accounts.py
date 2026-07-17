@@ -1086,6 +1086,36 @@ def _remove_stable_directory_tree(parent_descriptor: int, name: str, *, label: s
         os.close(child_descriptor)
 
 
+def _remove_empty_stable_directory(path: Path, *, label: str) -> None:
+    parent_descriptor: int | None = None
+    child_descriptor: int | None = None
+    try:
+        parent_descriptor = _open_stable_directory_descriptor(path.parent, label=f"{label} parent")
+        child_descriptor = os.open(
+            path.name,
+            os.O_RDONLY
+            | getattr(os, "O_DIRECTORY", 0)
+            | getattr(os, "O_NOFOLLOW", 0)
+            | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=parent_descriptor,
+        )
+        with os.scandir(child_descriptor) as entries:
+            if next(iter(entries), None) is not None:
+                return
+        os.rmdir(path.name, dir_fd=parent_descriptor)
+    except FileNotFoundError:
+        return
+    except AccountStoreError:
+        raise
+    except OSError as exc:
+        raise AccountStoreError(f"could not remove empty account directory: {path}") from exc
+    finally:
+        if child_descriptor is not None:
+            os.close(child_descriptor)
+        if parent_descriptor is not None:
+            os.close(parent_descriptor)
+
+
 def _stable_child_directories(path: Path, *, label: str) -> tuple[Path, ...]:
     parent_descriptor: int | None = None
     children: list[Path] = []
@@ -4886,9 +4916,8 @@ class AccountStore:
         except Exception as exc:  # noqa: BLE001 - surface rollback failures explicitly.
             rollback_error = exc
         try:
-            if account_dir.exists() and not any(account_dir.iterdir()):
-                account_dir.rmdir()
-        except OSError as exc:
+            _remove_empty_stable_directory(account_dir, label="new account rollback")
+        except (OSError, AccountStoreError) as exc:
             rollback_error = rollback_error or exc
         if rollback_error:
             raise AccountStoreError(
