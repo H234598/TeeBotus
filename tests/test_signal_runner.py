@@ -928,9 +928,6 @@ def test_signal_command_records_codex_history_sync_read_messages(tmp_path) -> No
     context.message.type = MessageType.READ_MESSAGE
     context.message.source = "+own"
     context.message.source_uuid = "own-uuid"
-    context.message.read_messages = [
-        {"sender": "+own", "senderNumber": "+own", "senderUuid": "own-uuid", "timestamp": 777777}
-    ]
     context.message.raw_message = json.dumps(
         {
             "envelope": {

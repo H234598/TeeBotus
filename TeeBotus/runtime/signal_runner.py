@@ -912,6 +912,16 @@ def _signal_receipt_message_refs(message: Any) -> list[str]:
                 value = str(receipt_message.get(key) or "").strip()
                 if value:
                     refs.append(value)
+        sync_message = envelope.get("syncMessage") if isinstance(envelope, Mapping) else {}
+        sync_read_messages = sync_message.get("readMessages") if isinstance(sync_message, Mapping) else []
+        if isinstance(sync_read_messages, Sequence) and not isinstance(sync_read_messages, (str, bytes, bytearray)):
+            for read_message in sync_read_messages:
+                if not isinstance(read_message, Mapping):
+                    continue
+                for key in ("timestamp", "sentTimestamp", "targetSentTimestamp"):
+                    value = str(read_message.get(key) or "").strip()
+                    if value:
+                        refs.append(value)
     return [ref for ref in refs if ref]
 
 
