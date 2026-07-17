@@ -1905,14 +1905,14 @@ async def dispatch_due_proactive_outbox_items(
             if _proactive_policy_reason_is_transient(claim_decision.reason):
                 results.append(ProactiveDispatchResult(account_id, item_id, "queued", claim_decision.reason, channel))
                 continue
-            update_proactive_outbox_item_status(
+            persisted = _persist_proactive_item_status(
                 account_store,
                 account_id,
                 item_id,
                 status="skipped",
                 reason=f"policy:{claim_decision.reason}",
-                now=resolved_now,
                 expected_status="queued",
+                now=resolved_now,
             )
             _append_proactive_safety_audit_event(
                 account_store,
@@ -1921,7 +1921,15 @@ async def dispatch_due_proactive_outbox_items(
                 reason=claim_decision.reason,
                 now=resolved_now,
             )
-            results.append(ProactiveDispatchResult(account_id, item_id, "skipped", claim_decision.reason, channel))
+            results.append(
+                ProactiveDispatchResult(
+                    account_id,
+                    item_id,
+                    "skipped" if persisted else "failed",
+                    claim_decision.reason if persisted else "status_update_failed",
+                    channel,
+                )
+            )
             continue
         decision = claim_decision
         if not claimed:

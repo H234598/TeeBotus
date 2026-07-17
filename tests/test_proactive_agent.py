@@ -4726,6 +4726,49 @@ def test_dispatch_claim_rejects_item_snoozed_between_snapshot_and_claim(tmp_path
     assert item["due_at"] == "2026-06-15T14:00:00+00:00"
 
 
+def test_dispatch_reports_policy_recheck_persistence_failure(tmp_path, monkeypatch) -> None:
+    import TeeBotus.runtime.proactive_agent as proactive_module
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="policy-recheck-persistence")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="policy_recheck_persistence",
+        message_text="Nicht senden",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    calls = 0
+
+    def route_check(*_args):
+        nonlocal calls
+        calls += 1
+        return calls == 1
+
+    monkeypatch.setattr(proactive_module, "_account_has_matching_proactive_route", route_check)
+    monkeypatch.setattr(proactive_module, "update_proactive_outbox_item_status", lambda *_args, **_kwargs: False)
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda *_args: "must-not-send"},
+            now=now,
+        )
+    )
+
+    assert results[0].item_id == queued.reason.removeprefix("queued:")
+    assert results[0].status == "failed"
+    assert results[0].reason == "status_update_failed"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "queued"
+
+
 def test_dispatch_cancels_item_when_route_changes_after_claim(tmp_path, monkeypatch) -> None:
     import TeeBotus.runtime.proactive_agent as proactive_module
 
