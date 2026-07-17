@@ -7760,3 +7760,19 @@ Plan-Commit zaehlt als `20/20`. Kein Push. Restart jetzt.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `7/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Arbeitsgedaechtnis: Index muss zur JSONL passen
+
+- 2026-07-17: `WorkingMemoryStore` und der noch vorhandene Telegram-Store
+  pruefen jetzt nicht nur die Form des Index, sondern rekonstruieren den
+  Indexvergleich aus der JSONL. Nach einem Abbruch zwischen JSONL-Append und
+  atomischem Index-Replace werden stale oder fehlende Offsets damit repariert;
+  die alte Indexdatei bleibt als `.corrupt.*` erhalten.
+- Kann die JSONL nicht gelesen werden, bleibt der vorhandene Index erhalten;
+  kein stilles Leeren bei temporaeren Berechtigungs-/I/O-Fehlern.
+- Test: `tests/test_working_memory.py` -> `43 passed`; Ruff, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7d2d95da fix: rebuild stale working memory indexes`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `8/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
