@@ -7558,3 +7558,19 @@ Commits. Kein Push. Restart nach 14 weiteren Commits.
 Commits. Kein Push. Restart nach 12 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `9/20` sichtbar.
+
+### Emergency-State verlangt sichere Cancellation
+
+- 2026-07-17: `Call_a_Teladi` fing Pending-Lesefehler nicht ab und wertete
+  `pop_pending_flow() == None` beim `/cancel` als Erfolg. Ein unerwarteter
+  Cooldown-Fehler konnte ebenfalls in den generischen Loopfehler fallen.
+- Emergency-Pending-State und Cooldown-Cleanup werden jetzt getrennt geprüft.
+  Bei unklarem Zustand kein Versand und keine falsche Abbruchmeldung.
+- Test: `tests/test_engine_identity_flows.py -k 'teladi'` `9 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8f35800a fix: fail closed on emergency state failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `10/20`
+Commits. Kein Push. Restart nach 10 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `11/20` sichtbar.
