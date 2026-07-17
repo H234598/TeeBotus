@@ -6271,3 +6271,20 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `15/20` Commits. Kein Push. Restart nach 5 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Status-Auth ueberschreibt keinen unlesbaren State
+
+- 2026-07-17: `authorize_status_recipient` und
+  `deauthorize_status_recipient` ersetzten bei Read-Fehlern den vorhandenen
+  Auth-State durch `{}` und schrieben neue Flags. Das konnte kaputte oder
+  schluesselbedingt unlesbare Admindaten zerstoeren.
+- Read-Fehler werden jetzt vor jeder Mutation weitergegeben. Autorisierungs-
+  und Opt-out-Pruefung bleiben fail-closed; Engine und Telegram-Pre-Gate
+  melden Speicherfehler statt zu crashen.
+- Test: `tests/test_engine_identity_flows.py` `193 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6edf3d47 fix: preserve unreadable status auth state`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`17/20` Commits. Kein Push. Restart nach 3 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
