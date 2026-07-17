@@ -2769,6 +2769,25 @@ Commits.
 zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### SQLite-Primary-mit-fehlender-Pflichtspalte-blockieren
+
+- 2026-07-17: Eine bestehende SQLite-Primary-DB ohne Fallback konnte nach
+  Entfernen einer Pflichtspalte durch `CREATE TABLE IF NOT EXISTS` passieren;
+  der spaetere `INSERT` endete erst mit `OperationalError`, waehrend
+  `_initialized` bereits `True` war.
+- Fehlende Spalten werden jetzt unabhaengig von Fallback-Konfiguration vor
+  jeder DDL blockiert. Fehlende Tabellen ohne Fallback bleiben bewusst im
+  vorhandenen Erzeugungspfad; fehlende Tabellen mit Fallback bleiben
+  fail-closed.
+- Regression: Schema-Fokus -> `8 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `311 passed`; `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5e84590c fix: reject incomplete sqlite memory columns`.
+
+**Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Status-meldet-uninitialisiertes-SQL-Memory
 
 - 2026-07-17: /status deaktivierte das konfigurierte SQLite-Backend, wenn
