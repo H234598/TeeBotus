@@ -1808,6 +1808,9 @@ def account_memory_dir_for_sender(sender_id: str, *, instance_name: str, project
     except (AccountStoreError, OSError):
         LOGGER.exception("Failed to resolve account memory directory for status.")
         return None
+    except Exception:  # noqa: BLE001 - status sender lookup must not abort /status.
+        LOGGER.exception("Unexpected failure while resolving account memory directory for status.")
+        return None
     if not account_id:
         return None
     return account_memory_dir_for_account(account_id, instance_name=safe_instance_name, project_root=project_root)
@@ -1843,7 +1846,11 @@ def account_memory_payload_size(*, account_store: AccountStore | None, account_i
             LOGGER.exception("Unexpected failure while resolving account memory backend for status size.")
             return None
         lock_factory = getattr(account_store, "account_memory_lock", None)
-        lock = lock_factory(account_id) if callable(lock_factory) else contextlib.nullcontext()
+        try:
+            lock = lock_factory(account_id) if callable(lock_factory) else contextlib.nullcontext()
+        except Exception:  # noqa: BLE001 - broken memory lock setup must not abort /status.
+            LOGGER.exception("Failed to create account memory status lock.")
+            return None
         with lock:
             try:
                 entries = account_store.read_memory_entries(account_id)

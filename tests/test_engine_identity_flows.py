@@ -244,6 +244,20 @@ def test_status_memory_backend_resolution_failure_is_diagnosed() -> None:
     ) == "Datenbank-Backend nicht verfuegbar"
 
 
+def test_status_memory_lock_resolution_failure_is_diagnosed() -> None:
+    class BrokenMemoryStore:
+        account_memory_backend = None
+
+        def account_memory_lock(self, _account_id):
+            raise RuntimeError("memory lock unavailable")
+
+    assert status_core.account_memory_payload_size(
+        account_store=BrokenMemoryStore(),  # type: ignore[arg-type]
+        account_id="a" * 128,
+        fallback_directory=None,
+    ) is None
+
+
 def test_admin_flow_state_failure_is_user_visible_without_aborting_message_processing(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
