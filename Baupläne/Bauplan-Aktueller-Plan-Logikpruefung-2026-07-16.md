@@ -7748,10 +7748,15 @@ Plan-Commit zaehlt als `20/20`. Kein Push. Restart jetzt.
   zuruecksetzen und dadurch unlesbare/gute Restdaten mit leerem Speicher
   ueberschreiben. Der bestehende Entry-Diagnose-Guard laeuft nun vor jedem
   Reset-Write. Tombstoned Accounts werden vor dem Reset abgewiesen.
+- 2026-07-17: Append- und Access-Pfade liessen doppelte `recent_ids`,
+  Keyword-IDs oder bestehende `accessed_ids` nach einer alten Indexkorruption
+  stehen. Das gemeinsame Indexupdate und der Access-Write deduplizieren und
+  trimmen diese Listen jetzt auf vorhandene IDs.
 - Tests: Notification-Loudness `172 passed`; AccountStore-Fokus fuer neue
-  Pfade gruen; Ruff, `py_compile` und `git diff --check` gruen. Kein echter
-  Provider/API-Aufruf.
-- Code-Commits: `62350e29`, `cd3fcfea`, `f5bf4034`, `aa695b8e`, `551dcc80`.
+  Pfade gruen; komplette AccountStore-Suite `322 passed`; Ruff,
+  `py_compile` und `git diff --check` gruen. Kein echter Provider/API-Aufruf.
+- Code-Commits: `62350e29`, `cd3fcfea`, `f5bf4034`, `aa695b8e`, `551dcc80`,
+  `a7540989`, `28876e42`.
 
-**Aktueller Laufstand:** Seit dem letzten Restart `5/20` Code-Commits. Kein
+**Aktueller Laufstand:** Seit dem letzten Restart `7/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
