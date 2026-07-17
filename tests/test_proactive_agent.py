@@ -4084,6 +4084,44 @@ def test_dispatch_fails_invalid_recurrence_without_sending(tmp_path) -> None:
     assert item["status_history"][-1]["reason"] == "invalid_recurrence"
 
 
+def test_dispatch_fails_invalid_risk_gate_without_sending(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="follow_up",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    item = account_store.read_proactive_outbox(account_id)[0]
+    item["risk_gate"] = "red-ish"
+    account_store.write_proactive_outbox(account_id, [item])
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda *_args: "must-not-send"},
+            now=now,
+        )
+    )
+
+    assert [result.item_id for result in results] == [item_id]
+    assert results[0].status == "failed"
+    assert results[0].reason == "invalid_risk_gate"
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "failed"
+    assert item["status_history"][-1]["reason"] == "invalid_risk_gate"
+
+
 def test_dispatch_due_proactive_items_fails_when_sender_is_missing(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

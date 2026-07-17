@@ -61,6 +61,7 @@ PROACTIVE_RISK_MEMORY_KINDS = frozenset(
 )
 PROACTIVE_RISK_BLOCK_GATES = frozenset({"blocked", "crisis", "red", "acute", "unsafe"})
 PROACTIVE_RISK_REVIEW_GATES = frozenset({"needs_review", "review", "human_review"})
+PROACTIVE_RISK_GATES = frozenset({"none", *PROACTIVE_RISK_BLOCK_GATES, *PROACTIVE_RISK_REVIEW_GATES})
 PROACTIVE_RISK_LOOKBACK_DAYS = 30
 # Policy blocks caused by current timing/state must leave queued work visible
 # until a later dispatch cycle can retry it.
@@ -409,6 +410,8 @@ def queue_proactive_message(
     raw_recurrence = str(recurrence or "").strip()
     normalized_recurrence = _normalize_recurrence_rule(raw_recurrence)
     normalized_risk_gate = _normalize_risk_gate(risk_gate)
+    if normalized_risk_gate not in PROACTIVE_RISK_GATES:
+        return ProactiveDecision(False, "invalid_risk_gate")
     policy_item = {"risk_gate": "none"} if normalized_risk_gate in PROACTIVE_RISK_REVIEW_GATES else {"risk_gate": normalized_risk_gate}
     is_user_requested_reminder = _normalize_bool(user_requested, default=False) and normalized_intent == "user_requested_reminder"
     if is_user_requested_reminder:
@@ -1213,6 +1216,34 @@ def fail_invalid_recurrence_proactive_outbox_items(account_store: AccountStore, 
         return tuple(failed_ids)
 
 
+def fail_invalid_risk_gate_proactive_outbox_items(account_store: AccountStore, account_id: str, *, now: datetime | None = None) -> tuple[str, ...]:
+    with _account_proactive_outbox_lock(account_store, account_id):
+        rows = account_store.read_proactive_outbox(account_id)
+        failed_ids: list[str] = []
+        timestamp = _resolve_proactive_now(now).isoformat(timespec="seconds")
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            if str(item.get("status") or "queued").strip().casefold() != "queued":
+                continue
+            if _normalize_risk_gate(item.get("risk_gate")) in PROACTIVE_RISK_GATES:
+                continue
+            item_id = str(item.get("id") or "").strip()
+            if not item_id:
+                continue
+            item["status"] = "failed"
+            item["updated_at"] = timestamp
+            history = item.setdefault("status_history", [])
+            if not isinstance(history, list):
+                history = []
+                item["status_history"] = history
+            history.append({"at": timestamp, "status": "failed", "reason": "invalid_risk_gate"})
+            failed_ids.append(item_id)
+        if failed_ids:
+            account_store.write_proactive_outbox(account_id, rows)
+        return tuple(failed_ids)
+
+
 def _fail_invalid_proactive_outbox_datetime_items(
     account_store: AccountStore,
     account_id: str,
@@ -1518,6 +1549,7 @@ async def dispatch_due_proactive_outbox_items(
     invalid_due_item_ids = fail_invalid_due_proactive_outbox_items(account_store, account_id, now=resolved_now)
     invalid_retry_item_ids = fail_invalid_retry_at_proactive_outbox_items(account_store, account_id, now=resolved_now)
     invalid_recurrence_item_ids = fail_invalid_recurrence_proactive_outbox_items(account_store, account_id, now=resolved_now)
+    invalid_risk_gate_item_ids = fail_invalid_risk_gate_proactive_outbox_items(account_store, account_id, now=resolved_now)
     results: list[ProactiveDispatchResult] = []
     for item_id in invalid_due_item_ids:
         results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_due_at"))
@@ -1525,6 +1557,8 @@ async def dispatch_due_proactive_outbox_items(
         results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_retry_at"))
     for item_id in invalid_recurrence_item_ids:
         results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_recurrence"))
+    for item_id in invalid_risk_gate_item_ids:
+        results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_risk_gate"))
     for item in due_proactive_outbox_items(account_store, account_id, now=resolved_now):
         item_id = str(item.get("id") or "").strip()
         if not item_id:
@@ -2014,6 +2048,8 @@ def check_proactive_agent_account(
         if status == "queued" and category and category not in consented_categories and not system_notification_item:
             errors.append(f"queued outbox item {item_id or index} category is not consented: {category}")
         risk_gate = _normalize_risk_gate(item.get("risk_gate"))
+        if risk_gate not in PROACTIVE_RISK_GATES:
+            errors.append(f"outbox item {item_id or index} has invalid risk_gate: {risk_gate}")
         if status == "queued" and risk_gate in PROACTIVE_RISK_BLOCK_GATES | PROACTIVE_RISK_REVIEW_GATES:
             errors.append(f"queued outbox item {item_id or index} risk_gate blocks proactive dispatch: {risk_gate}")
         if status == "review_pending" and risk_gate not in PROACTIVE_RISK_REVIEW_GATES:
@@ -2115,6 +2151,8 @@ def proactive_risk_policy_decision(
     item: Mapping[str, Any] | None = None,
 ) -> ProactiveDecision:
     risk_gate = _normalize_risk_gate((item or {}).get("risk_gate"))
+    if risk_gate not in PROACTIVE_RISK_GATES:
+        return ProactiveDecision(False, "invalid_risk_gate")
     if risk_gate in PROACTIVE_RISK_BLOCK_GATES:
         return ProactiveDecision(False, f"risk_gate_blocked:{risk_gate}")
     if risk_gate in PROACTIVE_RISK_REVIEW_GATES:
@@ -2384,6 +2422,8 @@ def _apply_proactive_llm_queue_decision(
     if _text_has_unsafe_clinical_claim(message_text):
         return "error:unsafe_message_text"
     risk_gate = _normalize_risk_gate(decision.get("risk_gate"))
+    if risk_gate not in PROACTIVE_RISK_GATES:
+        return "error:invalid_risk_gate"
     reason_memory_ids = _valid_memory_ids(decision.get("reason_memory_ids"), memory_ids)
     if not reason_memory_ids:
         return "error:missing_reason_memory_ids"
