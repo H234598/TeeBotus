@@ -586,7 +586,13 @@ async def run_proactive_agent_cycle(
             instance_report["error"] = f"{type(exc).__name__}: {exc}"
             instances.append(instance_report)
             continue
-        for account_id in _account_ids(store):
+        try:
+            account_ids = _account_ids(store)
+        except (AccountStoreError, OSError, ValueError) as exc:
+            instance_report["error"] = f"{type(exc).__name__}: {exc}"
+            instances.append(instance_report)
+            continue
+        for account_id in account_ids:
             account_report: dict[str, Any] = {"account_id": account_id, "due_items": []}
             try:
                 effective_llm_plan, effective_tool_plan = _effective_model_planners(
