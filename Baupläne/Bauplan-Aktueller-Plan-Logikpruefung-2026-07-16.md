@@ -6679,6 +6679,23 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `6/20` voll.
 
+### Memory-Reset kapselt unerwartete Backendfehler
+
+- 2026-07-17: `/reset_memorys` fing beim Entfernen von semantischem Index
+  und strukturiertem Memory nur bekannte Fehler. Unerwartete SQL-, Qdrant-,
+  Secret- oder Wrapper-Ausnahmen konnten den Engine-Loop abbrechen.
+- Der Resetpfad loggt jetzt jeden normalen Backendfehler und liefert die
+  bekannte Reset-Fehlermeldung. Kein falscher Erfolg; erneuter Versuch bleibt
+  moeglich. Ein bereits geloeschter Nebenindex bleibt rebuildbar.
+- Test: `tests/test_engine_identity_flows.py` `200 passed`; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `aded8c34 fix: contain memory reset backend failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`7/20` Commits. Kein Push. Restart nach 13 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `8/20` voll.
+
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
