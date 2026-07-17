@@ -5071,6 +5071,23 @@ bleibt erst bei 100 Commits.
   `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `bd756088 fix: surface proactive status persistence failures`.
 
+### Proactive-Worker meldet fehlgeschlagenen Policy-Recheck
+
+- 2026-07-17: Der Policy-Recheck vor dem Claim konnte nach einem ersten Allow
+  noch ablehnen. Sein `queued -> skipped`-Update ignorierte Schreibfehler;
+  dadurch wurde weiterhin ein scheinbar sauberer Skip reportiert.
+- Recheck nutzt jetzt gemeinsamen Status-Guard. Fehlende Persistenz erzeugt
+  `failed/status_update_failed`; Item bleibt `queued`, Versand findet nicht
+  statt.
+- Test: `tests/test_proactive_agent.py` `181 passed`; gezielter Recheck-
+  Persistenztest gruen; Ruff und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `bf6558a9 fix: report policy recheck persistence failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`13/20` Commits. Kein Push. Restart nach 7 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `11/20` Commits. Kein Push. Restart nach 9 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
