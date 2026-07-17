@@ -1996,8 +1996,13 @@ class AccountStore:
         account_id = validate_sha512_token(account_id, field_name="account_id")
         self._ensure_account_resolvable(account_id)
         verifier_path = self.account_dir(account_id) / SECRET_VERIFIER_FILENAME
-        previous_verifier_exists = verifier_path.exists()
-        previous_verifier = verifier_path.read_bytes() if previous_verifier_exists else b""
+        try:
+            previous_verifier = _read_stable_account_file(verifier_path, label="secret rotation verifier")
+        except FileNotFoundError:
+            previous_verifier_exists = False
+            previous_verifier = b""
+        else:
+            previous_verifier_exists = True
         previous_profile = self._read_account_profile(account_id)
         previous_index = self._load_index()
         secret = new_sha512_token()
@@ -2041,7 +2046,7 @@ class AccountStore:
             if previous_verifier_exists:
                 restores.append(lambda: _atomic_write_bytes(verifier_path, previous_verifier))
             else:
-                restores.append(lambda: verifier_path.unlink(missing_ok=True))
+                restores.append(lambda: self._unlink_migrated_account_file(verifier_path))
             for restore in restores:
                 try:
                     restore()
