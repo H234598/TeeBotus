@@ -1533,6 +1533,9 @@ class TeeBotusEngine:
             voice = create_voice(voice_text, voice_instructions)
         except OpenAIAPIError:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_voice_error)]
+        except Exception:  # noqa: BLE001 - provider/wrapper failures must not abort voice command handling.
+            LOGGER.exception("Voice generation failed instance=%s account=%s", event.instance, account_id)
+            return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_voice_error)]
         audio = getattr(voice, "audio", b"")
         if not isinstance(audio, bytes) or not audio:
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.openai_voice_error)]

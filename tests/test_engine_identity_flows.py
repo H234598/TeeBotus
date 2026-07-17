@@ -3865,6 +3865,21 @@ def test_engine_voice_command_sends_generated_attachment(tmp_path):
     assert actions[1].content_type == "audio/ogg"
 
 
+def test_engine_voice_command_survives_unexpected_provider_failure(tmp_path):
+    class BrokenVoiceClient:
+        def create_voice(self, _text, _instructions):
+            raise RuntimeError("voice provider unavailable")
+
+    instructions = BotInstructions()
+    engine = TeeBotusEngine(account_store=store(tmp_path), instructions=instructions, openai_client=BrokenVoiceClient())
+
+    actions = engine.process(event(telegram_identity_key(1), "/voice Hallo Welt", channel="signal"))
+
+    assert len(actions) == 2
+    assert isinstance(actions[0], SendTyping)
+    assert actions[1].text == instructions.openai_voice_error
+
+
 def test_engine_voice_command_uses_account_tts_dialect(tmp_path):
     class FakeOpenAIClient:
         def __init__(self) -> None:
