@@ -1981,6 +1981,28 @@ def test_runtime_status_reports_missing_key_for_direct_remote_litellm_model(monk
     assert "llm=Demo/telegram:1 provider=litellm model=openai/gpt-4.1-mini status=missing_key api_key=none" in captured.out
 
 
+def test_runtime_status_reports_legacy_openai_model_from_bot_behavior(monkeypatch, capsys, tmp_path) -> None:
+    bot = importlib.import_module("TeeBotus.bot")
+    instances_dir = tmp_path / "instances"
+    demo_dir = instances_dir / "Demo"
+    demo_dir.mkdir(parents=True)
+    (demo_dir / "Bot_Verhalten.md").write_text(
+        "## OpenAI\n- model: gpt-legacy-status\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(bot, "_load_runtime_environment", lambda: None)
+    monkeypatch.setenv("TELEGRAM_BOT_INSTANCES_DIR", str(instances_dir))
+    monkeypatch.setenv("TEEBOTUS_INSTANCE", "Demo")
+    monkeypatch.setenv("TELEGRAM_BOT_TOKEN_DEMO", "telegram-token")
+    monkeypatch.setenv("OPENAI_API_KEY", "openai-secret")
+
+    assert bot.main(["--runtime-status", "--channels", "telegram"]) == 0
+
+    captured = capsys.readouterr()
+    assert "llm=Demo/telegram:1 provider=openai model=gpt-legacy-status status=configured" in captured.out
+    assert "openai-secret" not in captured.out
+
+
 def test_runtime_status_keeps_local_litellm_base_url_configured_without_key(monkeypatch, capsys, tmp_path) -> None:
     bot = importlib.import_module("TeeBotus.bot")
     instances_dir = tmp_path / "instances"

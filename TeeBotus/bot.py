@@ -865,6 +865,8 @@ def _status_llm_route(
             )
     except Exception as exc:  # noqa: BLE001 - runtime-status should report bad routing config without crashing.
         return provider, model, base_url, 0, "", "", "", "", f"{type(exc).__name__}: {exc}", "broken"
+    if model == "<legacy>" and _normalize_status_llm_provider(provider) == "openai":
+        model = _status_value(_instruction_text(instructions, "openai_model"), default=model)
     service_tier = _effective_llm_text(account, instructions, "llm_service_tier", "llm_service_tier")
     return provider, model, base_url, 0, "", "", "", service_tier, "", "direct"
 
