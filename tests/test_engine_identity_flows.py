@@ -1374,6 +1374,24 @@ def test_engine_call_a_teladi_fails_closed_when_cooldown_state_cannot_persist(tm
     assert engine.state.get_pending_flow("Depressionsbot", account_id, "teladi_emergency") is None
 
 
+def test_engine_call_a_teladi_does_not_dispatch_when_pending_cleanup_fails(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    instructions = BotInstructions()
+    engine = TeeBotusEngine(account_store=account_store, instructions=instructions)
+    engine.process(event(identity, "/Call_a_Teladi"))
+
+    def broken_pop(*_args, **_kwargs):
+        raise RuntimeError("pending state unavailable")
+
+    monkeypatch.setattr(engine.state, "pop_pending_flow", broken_pop)
+
+    actions = engine.process(event(identity, "Das ist die Notfallnachricht."))
+
+    assert actions[0].text == instructions.teladi_call_error
+    assert all(action.chat_id != TELADI_EMERGENCY_CHAT_ID for action in actions)
+
+
 def test_engine_call_a_teladi_repeated_command_uses_cooldown_without_forwarding(tmp_path):
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)

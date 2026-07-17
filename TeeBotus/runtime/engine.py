@@ -758,13 +758,19 @@ class TeeBotusEngine:
             return None
         command = _command_name(event.text)
         if command == "/cancel":
-            self.state.pop_pending_flow(
-                event.instance,
-                account_id,
-                TELADI_EMERGENCY_FLOW,
-                conversation_scope=_pending_flow_conversation_scope(event),
-            )
-            _clear_teladi_emergency_cooldown(self.account_store, account_id)
+            try:
+                self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    TELADI_EMERGENCY_FLOW,
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
+            except Exception:  # noqa: BLE001 - cancellation must not claim state cleanup on failure.
+                LOGGER.exception("Teladi emergency cancellation cleanup failed instance=%s account=%s", event.instance, account_id)
+                return [SendText(event.chat_id, instructions.teladi_call_error, track=False)]
+            if not _clear_teladi_emergency_cooldown(self.account_store, account_id):
+                LOGGER.error("Teladi emergency cooldown cancellation failed instance=%s account=%s", event.instance, account_id)
+                return [SendText(event.chat_id, "Call_a_Teladi abgebrochen. Der Cooldown konnte nicht zurückgesetzt werden.", track=False)]
             return [SendText(event.chat_id, "Call_a_Teladi abgebrochen.", track=False)]
         if command in TELADI_EMERGENCY_COMMANDS:
             remaining = _teladi_emergency_cooldown_remaining_seconds(self.account_store, account_id)
@@ -780,12 +786,19 @@ class TeeBotusEngine:
         text = str(event.text or "").strip()
         if not text:
             return [SendText(event.chat_id, "Bitte sende die Emergency Message als Text. /cancel bricht ab.", track=False)]
-        self.state.pop_pending_flow(
-            event.instance,
-            account_id,
-            TELADI_EMERGENCY_FLOW,
-            conversation_scope=_pending_flow_conversation_scope(event),
-        )
+        try:
+            popped = self.state.pop_pending_flow(
+                event.instance,
+                account_id,
+                TELADI_EMERGENCY_FLOW,
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
+        except Exception:  # noqa: BLE001 - emergency dispatch must not proceed with unknown pending state.
+            LOGGER.exception("Teladi emergency dispatch cleanup failed instance=%s account=%s", event.instance, account_id)
+            return [SendText(event.chat_id, instructions.teladi_call_error, track=False)]
+        if popped is None:
+            LOGGER.error("Teladi emergency pending state disappeared before dispatch instance=%s account=%s", event.instance, account_id)
+            return [SendText(event.chat_id, instructions.teladi_call_error, track=False)]
         header = _build_teladi_emergency_header(event.with_account(account_id))
         return [
             SendText(TELADI_EMERGENCY_CHAT_ID, build_teladi_message(header, text), track=False),
