@@ -8,6 +8,7 @@ from TeeBotus.runtime.accounts import AccountStore, AccountStoreError, StaticSec
 from TeeBotus.runtime.postgres_memory import (
     PostgresAccountMemoryBackend,
     PostgresMemoryConfig,
+    POSTGRES_REQUIRED_COLUMNS,
     _retry_after_missing_schema,
 )
 from scripts import benchmark_memory_store as memory_bench
@@ -418,8 +419,11 @@ def test_postgres_backend_rebuilds_schema_after_missing_relation(monkeypatch) ->
         sqlstate = "42P01"
 
     class FakeResult:
+        def __init__(self, rows=()) -> None:
+            self.rows = rows
+
         def fetchall(self):
-            return [("mem_retry", b"nonce", b"cipher")]
+            return self.rows or [("mem_retry", b"nonce", b"cipher")]
 
     class FakeTransaction:
         def __enter__(self):
@@ -447,6 +451,14 @@ def test_postgres_backend_rebuilds_schema_after_missing_relation(monkeypatch) ->
             if "SELECT memory_id" in sql and self.fail_read_once:
                 self.fail_read_once = False
                 raise MissingRelationError("relation does not exist")
+            if "FROM information_schema.columns" in sql:
+                return FakeResult(
+                    [
+                        (table, column)
+                        for table, columns in POSTGRES_REQUIRED_COLUMNS.items()
+                        for column in columns
+                    ]
+                )
             return FakeResult()
 
     backend = PostgresAccountMemoryBackend(
@@ -462,6 +474,63 @@ def test_postgres_backend_rebuilds_schema_after_missing_relation(monkeypatch) ->
 
     assert backend.read_entries("a" * 128) == [{"id": "mem_retry"}]
     assert any("CREATE TABLE IF NOT EXISTS teebotus_memory_entries" in sql for sql in connection.executed)
+
+
+def test_postgres_backend_rejects_existing_incomplete_schema_before_marking_initialized(monkeypatch) -> None:
+    class FakeResult:
+        def __init__(self, rows) -> None:
+            self.rows = rows
+
+        def fetchall(self):
+            return self.rows
+
+    class FakeTransaction:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+    class FakeConnection:
+        def __init__(self) -> None:
+            self.executed: list[str] = []
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args) -> None:
+            return None
+
+        def transaction(self) -> FakeTransaction:
+            return FakeTransaction()
+
+        def execute(self, sql: str, _params=()):
+            self.executed.append(sql)
+            if "FROM information_schema.columns" in sql:
+                return FakeResult(
+                    [
+                        (table, column)
+                        for table, columns in POSTGRES_REQUIRED_COLUMNS.items()
+                        for column in columns
+                        if not (table == "teebotus_memory_entries" and column == "last_accessed_at")
+                    ]
+                )
+            return FakeResult(())
+
+    backend = PostgresAccountMemoryBackend(
+        instance_name="Bench",
+        provider=StaticSecretProvider(b"p" * 32),
+        purpose="account-structured-memory-key",
+        config=PostgresMemoryConfig(dsn="postgresql://unused"),
+    )
+    connection = FakeConnection()
+    monkeypatch.setattr(backend, "_connect", lambda: connection)
+
+    with pytest.raises(AccountStoreError, match="teebotus_memory_entries.last_accessed_at"):
+        backend._ensure_schema()
+
+    assert backend._initialized is False
+    assert any("FROM information_schema.columns" in sql for sql in connection.executed)
 
 
 def test_postgres_missing_schema_retry_is_serialized() -> None:

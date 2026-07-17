@@ -17,6 +17,37 @@ POSTGRES_DSN_ENV = "TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_DSN"
 POSTGRES_CONNECT_TIMEOUT_ENV = "TEEBOTUS_ACCOUNT_MEMORY_POSTGRES_CONNECT_TIMEOUT"
 POSTGRES_BACKEND_TOKENS = {"postgres", "postgresql", "pg"}
 POSTGRES_READ_ENTRIES_BY_IDS_CHUNK_SIZE = 500
+POSTGRES_REQUIRED_COLUMNS = {
+    "teebotus_memory_entries": (
+        "instance_name",
+        "account_id",
+        "memory_id",
+        "ordinal",
+        "kind",
+        "memory_type",
+        "importance",
+        "salience",
+        "access_count",
+        "created_at",
+        "updated_at",
+        "last_accessed_at",
+        "payload_nonce",
+        "payload_ciphertext",
+    ),
+    "teebotus_memory_keywords": ("instance_name", "account_id", "keyword", "memory_id"),
+    "teebotus_memory_indexes": ("instance_name", "account_id", "payload_nonce", "payload_ciphertext", "updated_at"),
+    "teebotus_account_jsonl_collections": (
+        "instance_name",
+        "account_id",
+        "collection",
+        "ordinal",
+        "item_key",
+        "created_at",
+        "updated_at",
+        "payload_nonce",
+        "payload_ciphertext",
+    ),
+}
 LOGGER = logging.getLogger("TeeBotus")
 _SCHEMA_INIT_LOCK = threading.RLock()
 
@@ -591,7 +622,36 @@ class PostgresAccountMemoryBackend:
                 connection.execute("CREATE INDEX IF NOT EXISTS idx_teebotus_memory_keywords_lookup ON teebotus_memory_keywords(instance_name, account_id, keyword)")
                 connection.execute("CREATE INDEX IF NOT EXISTS idx_teebotus_memory_rank ON teebotus_memory_entries(instance_name, account_id, salience, importance, access_count)")
                 connection.execute("CREATE INDEX IF NOT EXISTS idx_teebotus_account_jsonl_collections_lookup ON teebotus_account_jsonl_collections(instance_name, account_id, collection, item_key)")
+                missing_object = self._missing_schema_object(connection)
+                if missing_object is not None:
+                    if "." in missing_object:
+                        raise AccountStoreError(f"PostgreSQL account-memory schema column is missing: {missing_object}")
+                    raise AccountStoreError(f"PostgreSQL account-memory schema table is missing: {missing_object}")
         self._initialized = True
+
+    @staticmethod
+    def _missing_schema_object(connection: Any) -> str | None:
+        rows = connection.execute(
+            """
+            SELECT table_name, column_name
+            FROM information_schema.columns
+            WHERE table_schema = current_schema()
+              AND table_name = ANY(%s)
+            """,
+            (list(POSTGRES_REQUIRED_COLUMNS),),
+        ).fetchall()
+        present = {str(table): set() for table in POSTGRES_REQUIRED_COLUMNS}
+        for table, column in rows:
+            table_name = str(table)
+            if table_name in present:
+                present[table_name].add(str(column))
+        for table, columns in POSTGRES_REQUIRED_COLUMNS.items():
+            if not present[table]:
+                return table
+            for column in columns:
+                if column not in present[table]:
+                    return f"{table}.{column}"
+        return None
 
     def _insert_entry(self, connection: Any, account_id: str, row: dict[str, Any], ordinal: int) -> None:
         memory_id = str(row.get("id") or f"mem_{uuid.uuid4().hex}").strip()
