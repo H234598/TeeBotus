@@ -66,6 +66,15 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 def main(argv: list[str] | None = None) -> int:
+    original_environment = dict(os.environ)
+    try:
+        return _main_impl(argv)
+    finally:
+        os.environ.clear()
+        os.environ.update(original_environment)
+
+
+def _main_impl(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run TeeBotus Proactive Agent scheduler checks.")
     parser.add_argument("--instances-dir", default=str(PROJECT_ROOT / "instances"), help="TeeBotus instances directory.")
     parser.add_argument("--instance", action="append", default=[], help="Instance name to check. Can be repeated.")
