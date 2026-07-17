@@ -142,6 +142,28 @@ def test_signal_sync_non_command_is_ignored():
     assert event is None
 
 
+def test_signal_reply_text_falls_back_to_raw_quote_payload():
+    raw_message = json.dumps(
+        {
+            "envelope": {
+                "dataMessage": {
+                    "message": "Antwort",
+                    "quote": {"id": 321, "text": "Urspruengliche Nachricht"},
+                }
+            }
+        }
+    )
+
+    event = signal_message_to_event(
+        FakeSignalMessage(text="Antwort", raw_message=raw_message),
+        instance="Bot",
+        adapter_slot=1,
+    )
+
+    assert event is not None
+    assert event.reply_to_text == "Urspruengliche Nachricht"
+
+
 def test_signal_view_once_attachment_metadata_is_preserved():
     event = signal_message_to_event(
         FakeSignalMessage(attachments_local_filenames=["voice.ogg"], base64_attachments=["aGVsbG8="], view_once=True),

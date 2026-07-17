@@ -723,9 +723,25 @@ def _signal_attachment_data(index: int, values: list[Any]) -> str:
 
 def _signal_quote_text(message: Any) -> str | None:
     quote = getattr(message, "quote", None)
-    if quote is None:
+    if quote is not None:
+        text = str(getattr(quote, "text", "") or "").strip()
+        if text:
+            return text
+    raw_message = getattr(message, "raw_message", None)
+    if not isinstance(raw_message, str) or not raw_message.strip():
         return None
-    text = str(getattr(quote, "text", "") or "").strip()
+    try:
+        payload = json.loads(raw_message)
+    except (TypeError, ValueError):
+        return None
+    envelope = payload.get("envelope") if isinstance(payload, dict) else {}
+    if not isinstance(envelope, dict):
+        return None
+    data_message = _signal_raw_data_message(envelope)
+    quote_payload = data_message.get("quote") if isinstance(data_message, dict) else {}
+    if not isinstance(quote_payload, dict):
+        return None
+    text = str(quote_payload.get("text") or "").strip()
     return text or None
 
 
