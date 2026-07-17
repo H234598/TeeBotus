@@ -3321,7 +3321,10 @@ def _create_reply_with_state_recovery(
     except (OpenAIAPIError, LLMAPIError) as exc:
         if not previous_response_id or not _is_stale_previous_response_error(exc):
             raise
-        reset_state()
+        try:
+            reset_state()
+        except Exception:  # noqa: BLE001 - stale-state cleanup must not block retry without prior context.
+            LOGGER.exception("Stale LLM response state cleanup failed; retrying without prior response")
         LOGGER.warning(
             "Discarded stale stateful LLM context and retrying once without previous response: %s",
             exc,

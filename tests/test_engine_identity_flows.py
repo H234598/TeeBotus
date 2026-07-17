@@ -2304,7 +2304,7 @@ def test_engine_llm_reply_survives_unexpected_memory_write_failure(tmp_path, mon
     monkeypatch.setattr(account_store, "append_structured_memory_entry", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("memory unavailable")))
     engine = TeeBotusEngine(
         account_store=account_store,
-        instructions=BotInstructions(openai_enabled=True),
+        instructions=BotInstructions(openai_enabled=True, llm_provider="openai", openai_model="gpt-5.5"),
         llm_client=FakeLLMClient(),
     )
 
@@ -2629,6 +2629,43 @@ def test_engine_recovers_once_from_stale_previous_openai_response_id(tmp_path):
 
     assert client.previous_ids == ["stale-response", None]
     assert state.get_previous_response_id("Depressionsbot", account_id) == "fresh-response"
+
+
+def test_engine_retries_stale_response_without_state_cleanup(tmp_path, monkeypatch):
+    class RecoveringOpenAIClient:
+        def __init__(self) -> None:
+            self.previous_ids: list[str | None] = []
+
+        def create_reply(self, _user_text, _instructions, previous_response_id=None):
+            self.previous_ids.append(previous_response_id)
+            if previous_response_id:
+                raise OpenAIAPIError("OpenAI HTTP error 400: invalid previous_response_id: response not found")
+            return OpenAIResponse("Wiederhergestellt ohne Cleanup.", "fresh-response", None)
+
+    identity = telegram_identity_key(1)
+    account_store = store(tmp_path)
+    account_id = account_store.resolve_or_create_account(identity)
+    client = RecoveringOpenAIClient()
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True, llm_provider="openai", openai_model="gpt-5.5"),
+        openai_client=client,
+        llm_client=client,
+    )
+    engine.state.set_previous_response_id(
+        "Depressionsbot",
+        account_id,
+        "stale-response",
+        conversation_scope=_llm_conversation_scope(event(identity, "Hallo")),
+        provider="openai",
+        model="gpt-5.5",
+    )
+    monkeypatch.setattr(engine.state, "reset_previous_response_id", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("state cleanup unavailable")))
+
+    actions = engine.process(event(identity, "Hallo"))
+
+    assert client.previous_ids == ["stale-response", None]
+    assert any(getattr(action, "text", "") == "Wiederhergestellt ohne Cleanup." for action in actions)
 
 
 def test_engine_keeps_state_on_non_stale_llm_error(tmp_path):
