@@ -7950,9 +7950,10 @@ Push. Restart erst bei `20/20`.
 - Test: `tests/test_history_dispatcher_bridge.py` -> `9 passed`; Ruff,
   `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `24e7d8a4 fix: spool dispatcher application failures`.
-- Restart-Regel: Code-Laufstand `20/20` erreicht. `sudo systemctl restart
-  teebotus.service` wurde versucht; Terminal-Prompt lief nach 5 Minuten ohne
-  Passwort/Fingerprint ab. Service-Neustart bleibt offen.
+- Restart-Regel: Code-Laufstand `20/20` erreicht. Die erste System-Unit-
+  Annahme war falsch; `teebotus.service` ist eine User-Unit. Der korrekte
+  Befehl `systemctl --user restart teebotus.service` lief erfolgreich.
+  Telegram-, Signal-CLI- und Signal-REST-Prozesse wurden danach verifiziert.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `20/20` Code-Commits. Kein
-Push. Restart ausstehend wegen sudo-Authentifizierung.
+Push. Restart abgeschlossen.
