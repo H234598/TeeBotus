@@ -865,6 +865,14 @@ class TeeBotusEngine:
         if popped is None:
             LOGGER.error("Teladi emergency pending state disappeared before dispatch instance=%s account=%s", event.instance, account_id)
             return [SendText(event.chat_id, instructions.teladi_call_error, track=False)]
+        try:
+            cooldown_used_at = _teladi_emergency_used_at(self.account_store, account_id)
+        except Exception:  # noqa: BLE001 - emergency dispatch requires verifiable cooldown state.
+            LOGGER.exception("Teladi emergency cooldown verification failed instance=%s account=%s", event.instance, account_id)
+            return [SendText(event.chat_id, instructions.teladi_call_error, track=False)]
+        if cooldown_used_at is None:
+            LOGGER.error("Teladi emergency dispatch lacks persisted cooldown state instance=%s account=%s", event.instance, account_id)
+            return [SendText(event.chat_id, instructions.teladi_call_error, track=False)]
         header = _build_teladi_emergency_header(event.with_account(account_id))
         return [
             SendText(TELADI_EMERGENCY_CHAT_ID, build_teladi_message(header, text), track=False),
