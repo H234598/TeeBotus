@@ -44,11 +44,13 @@ from TeeBotus.runtime.accounts import (
     _instance_secret_fingerprint,
     _looks_like_teebotus_encrypted_payload,
     _postgres_memory_has_instance_payload_rows,
+    _postgres_memory_account_ids,
     _runtime_secret_tool_lookup_retries,
     _runtime_secret_tool_lookup_retry_delay_seconds,
     _runtime_secret_tool_timeout_seconds,
     _secret_verifier_file_has_payload,
     _sqlite_memory_has_instance_payload_rows,
+    _sqlite_memory_account_ids,
     telegram_identity_key,
 )
 from TeeBotus.runtime.artifacts import safe_artifact_name
@@ -1928,14 +1930,29 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
     instance_fallback_warning = _account_memory_fallback_warning(store, INSTANCE_STATE_ACCOUNT_ID)
     if instance_fallback_warning:
         lines.append(f"account_memory={safe_instance_name}/__instance_state status=warning{instance_fallback_warning}")
-    if not account_dirs:
+    account_dirs_by_id = {account_dir.name: account_dir for account_dir in account_dirs}
+    database_account_ids: set[str] = set()
+    try:
+        database_account_ids = _status_database_account_ids(store)
+    except (AccountStoreError, OSError) as exc:
+        error = redact_status_text(f"{type(exc).__name__}: {exc}")
+        lines.append(
+            f"account_memory={safe_instance_name} status=broken "
+            f"error=database_account_discovery_failed:{error}"
+        )
+        has_broken_memory = True
+    account_ids = sorted(set(account_dirs_by_id) | database_account_ids)
+    if not account_ids:
         if has_broken_metadata:
             lines.extend(_account_memory_recovery_lines(instance_name=safe_instance_name, project_root=project_root))
         return lines or [f"account_memory={safe_instance_name} status=none"]
-    for account_dir in account_dirs:
-        account_id = account_dir.name
+    for account_id in account_ids:
         profile_error = ""
-        require_resolvable = True
+        profile_path = root / ACCOUNTS_DIRNAME / account_id / ACCOUNT_PROFILE_FILENAME
+        if account_id in database_account_ids and not profile_path.exists():
+            profile_error = "profile_missing_for_database_account"
+            has_broken_metadata = True
+        require_resolvable = not profile_error
         try:
             store._read_account_profile(account_id)
         except AccountStoreError as exc:
@@ -1982,6 +1999,34 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
     if has_broken_memory or has_broken_metadata:
         lines.extend(_account_memory_recovery_lines(instance_name=safe_instance_name, project_root=project_root))
     return lines
+
+
+def _status_database_account_ids(store: AccountStore) -> set[str]:
+    backend = store.account_memory_backend
+    if backend is None:
+        return set()
+    candidates = [backend]
+    for attribute in ("primary", "fallback"):
+        candidate = getattr(backend, attribute, None)
+        if candidate is not None:
+            candidates.append(candidate)
+    account_ids: set[str] = set()
+    for candidate in candidates:
+        config = getattr(candidate, "config", None)
+        sqlite_path = getattr(config, "path", None)
+        postgres_dsn = str(getattr(config, "dsn", "") or "").strip()
+        if isinstance(sqlite_path, Path):
+            account_ids.update(_sqlite_memory_account_ids(sqlite_path, store.instance_name))
+        elif postgres_dsn:
+            account_ids.update(
+                _postgres_memory_account_ids(
+                    postgres_dsn,
+                    store.instance_name,
+                    int(getattr(config, "connect_timeout", 5) or 5),
+                )
+            )
+    account_ids.discard(INSTANCE_STATE_ACCOUNT_ID)
+    return account_ids
 
 
 def _status_memory_backend_enabled(root: Path) -> bool:
