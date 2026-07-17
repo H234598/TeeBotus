@@ -7022,6 +7022,23 @@ Commits. Kein Push. Restart nach 14 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `7/20` sichtbar.
 
+### Memory-Backend-Status diagnostiziert Auflösungsfehler
+
+- 2026-07-17: `account_memory_payload_size()` und
+  `memory_encryption_status()` fingen unerwartete Exceptions bei der
+  Backendauflösung nicht. Ein kaputter SQL-/Memory-Adapter konnte `/status`
+  abbrechen.
+- Backendauflösung liefert jetzt bei unbekanntem Fehler die vorhandenen
+  „nicht verfügbar“-Diagnosen. Keine falsche Memorygröße oder Verschlüsselung.
+- Test: fokussierter Statuspfad `42 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a5f67d49 fix: diagnose memory backend status failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `8/20`
+Commits. Kein Push. Restart nach 12 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `9/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
