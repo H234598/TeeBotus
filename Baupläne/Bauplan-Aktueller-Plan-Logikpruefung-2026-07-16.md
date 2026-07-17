@@ -3476,3 +3476,18 @@ nach 3 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `19/20` Commits. Kein Push. Restart
 nach 1 weiterem Commit. Naechster Push bleibt erst bei 100 Commits.
+
+### Recovery-Metadata-Quarantaene-fangt-Instanzfehler
+
+- 2026-07-17: Metadata-Quarantaene hatte noch keinen Per-Instanz-Exception-
+  Guard. Fehler bei Move, Manifest oder Zielpfad konnten den Prozess abbrechen.
+- Fehler werden jetzt pro Instanz als `blocked` gemeldet; aktive Daten bleiben
+  bei fehlgeschlagenem Quarantaene-Schritt unangetastet.
+- Regression: Metadata-Quarantaene-Fehler plus bestehende Recovery-Fokus-
+  tests -> `4 passed`; komplette `tests/test_admin_accounts.py` -> `101
+  passed`. Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-
+  Aufruf.
+- Code-Commit: `fdd3bdf8 fix: report metadata quarantine failures`.
+
+**Aktueller Laufstand:** Seit dem Restart `1/20` Commits. Kein Push. Restart
+nach 19 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
