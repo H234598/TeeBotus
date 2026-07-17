@@ -1752,6 +1752,22 @@ class TeeBotusEngine:
         return self._llm_actions(event, account_id, instructions)
 
     def _memory_reset_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction] | None:
+        def pop_memory_reset() -> bool:
+            try:
+                popped = self.state.pop_pending_flow(
+                    event.instance,
+                    account_id,
+                    "memory_reset",
+                    conversation_scope=_pending_flow_conversation_scope(event),
+                )
+            except Exception:  # noqa: BLE001 - reset state failures must fail closed.
+                LOGGER.exception("Memory reset pending-state removal failed instance=%s account=%s", event.instance, account_id)
+                return False
+            if popped is None:
+                LOGGER.error("Memory reset pending state disappeared before cleanup instance=%s account=%s", event.instance, account_id)
+                return False
+            return True
+
         try:
             pending = self.state.get_pending_flow(
                 event.instance,
@@ -1766,18 +1782,7 @@ class TeeBotusEngine:
             if not _pending_flow_matches_event(pending, event):
                 return None
             if _is_memory_reset_confirmation(event.text):
-                try:
-                    popped = self.state.pop_pending_flow(
-                        event.instance,
-                        account_id,
-                        "memory_reset",
-                        conversation_scope=_pending_flow_conversation_scope(event),
-                    )
-                except Exception:  # noqa: BLE001 - destructive reset requires confirmed state cleanup.
-                    LOGGER.exception("Memory reset pending-state removal failed instance=%s account=%s", event.instance, account_id)
-                    return [SendText(event.chat_id, instructions.user_memory_reset_error)]
-                if popped is None:
-                    LOGGER.error("Memory reset pending state disappeared before confirmation instance=%s account=%s", event.instance, account_id)
+                if not pop_memory_reset():
                     return [SendText(event.chat_id, instructions.user_memory_reset_error)]
                 try:
                     _delete_semantic_memory_index(self.account_store, account_id, instructions)
@@ -1787,29 +1792,17 @@ class TeeBotusEngine:
                     return [SendText(event.chat_id, instructions.user_memory_reset_error)]
                 return [SendText(event.chat_id, instructions.user_memory_reset_success)]
             if _is_memory_reset_cancellation(event.text):
-                self.state.pop_pending_flow(
-                    event.instance,
-                    account_id,
-                    "memory_reset",
-                    conversation_scope=_pending_flow_conversation_scope(event),
-                )
+                if not pop_memory_reset():
+                    return [SendText(event.chat_id, instructions.user_memory_reset_error)]
                 return [SendText(event.chat_id, instructions.user_memory_reset_cancelled)]
             if _is_memory_reset_intent(event.text):
                 if _memory_reset_targets_forbidden(event.text):
-                    self.state.pop_pending_flow(
-                        event.instance,
-                        account_id,
-                        "memory_reset",
-                        conversation_scope=_pending_flow_conversation_scope(event),
-                    )
+                    if not pop_memory_reset():
+                        return [SendText(event.chat_id, instructions.user_memory_reset_error)]
                     return [SendText(event.chat_id, instructions.user_memory_reset_only_own)]
                 return [SendText(event.chat_id, instructions.user_memory_reset_confirm, buttons=MEMORY_RESET_BUTTONS)]
-            self.state.pop_pending_flow(
-                event.instance,
-                account_id,
-                "memory_reset",
-                conversation_scope=_pending_flow_conversation_scope(event),
-            )
+            if not pop_memory_reset():
+                return [SendText(event.chat_id, instructions.user_memory_reset_error)]
             return None
         if not _is_memory_reset_intent(event.text):
             return None

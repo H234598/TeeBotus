@@ -4539,6 +4539,46 @@ def test_engine_memory_reset_does_not_mutate_when_confirmation_state_disappears(
     assert reset_calls == []
 
 
+def test_engine_memory_reset_cancel_does_not_claim_success_when_state_disappears(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="memory-reset-cancel-state-disappears")
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+    engine.process(event(identity, "/reset_memorys", channel="signal"))
+    monkeypatch.setattr(engine.state, "pop_pending_flow", lambda *_args, **_kwargs: None)
+
+    actions = engine.process(event(identity, "nein", channel="signal"))
+
+    assert actions[0].text == BotInstructions().user_memory_reset_error
+
+
+def test_engine_memory_reset_forbidden_target_does_not_hide_state_failure(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="memory-reset-forbidden-state-failure")
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+    engine.process(event(identity, "/reset_memorys", channel="signal"))
+    monkeypatch.setattr(engine.state, "pop_pending_flow", lambda *_args, **_kwargs: None)
+
+    actions = engine.process(event(identity, "loesche alle user memorys", channel="signal"))
+
+    assert actions[0].text == BotInstructions().user_memory_reset_error
+
+
+def test_engine_memory_reset_pending_cleanup_failure_does_not_fall_through_to_llm(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="memory-reset-fallback-state-failure")
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+    engine.process(event(identity, "/reset_memorys", channel="signal"))
+    monkeypatch.setattr(
+        engine.state,
+        "pop_pending_flow",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("pending state unavailable")),
+    )
+
+    actions = engine.process(event(identity, "etwas anderes", channel="signal"))
+
+    assert actions[0].text == BotInstructions().user_memory_reset_error
+
+
 def test_engine_start_survives_privacy_button_state_failure(tmp_path, monkeypatch):
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="start-privacy-state-error")
