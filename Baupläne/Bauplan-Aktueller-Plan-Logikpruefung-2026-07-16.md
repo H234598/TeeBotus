@@ -5167,6 +5167,23 @@ bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 `2/20` Commits. Kein Push. Restart nach 18 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Route nach Worker-Claim aktualisiert
+
+- 2026-07-17: Alte Outbox-Items ohne gespeicherte `route` liessen beim Claim
+  eine frische Identitaetsroute zu. Der Dispatcher verwendete danach trotzdem
+  die vor dem Claim gewaehlte Route und stornierte oder adressierte falsch.
+- Nach erfolgreichem Claim werden Route, Kanal, Chat-ID, Sender und Action aus
+  der tatsaechlichen Claim-Entscheidung aktualisiert. Eine explizit stale
+  gewordene Route bleibt weiterhin geschuetzt und wird nach Claim storniert.
+- Tests: `tests/test_proactive_agent.py` `145 passed`; fokussierter Race-Test
+  und bestehende Stale-Route-Tests gruen. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b3389f22 fix: refresh proactive route after claim`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`4/20` Commits. Kein Push. Restart nach 16 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
