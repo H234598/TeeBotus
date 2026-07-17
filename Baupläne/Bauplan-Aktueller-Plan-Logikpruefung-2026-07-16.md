@@ -5181,6 +5181,22 @@ bleibt erst bei 100 Commits.
 `4/20` Commits. Kein Push. Restart nach 16 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Policy-Check atomar vor Outbox-Append
+
+- 2026-07-17: Die erste Policy-Pruefung lag vor dem Outbox-Lock. Parallele
+  Queue-Aufrufe konnten beide Tageslimit/Minutenabstand passieren und danach
+  doppelt schreiben.
+- Vor `append_proactive_outbox_item` wird Policy jetzt unter demselben
+  Outbox-Lock erneut geprueft; zwischenzeitliche Sperre verhindert Append.
+  Route wird ebenfalls aus finaler Entscheidung geschrieben.
+- Test: `tests/test_proactive_agent.py` `137 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `cff1d0df fix: recheck proactive policy before append`.
+
+**Aktueller Laufstand:** Nach dem Restart seit dem letzten Plan-Commit
+`6/20` Commits. Kein Push. Restart nach 14 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Instanzen isolieren-AccountStore-Fehler
 
 - 2026-07-17: Der Proactive-Zyklus erzeugte den `AccountStore` vor dem
