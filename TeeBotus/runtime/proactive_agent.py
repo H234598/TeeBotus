@@ -922,8 +922,10 @@ def extract_proactive_agent_tool_calls(response: Any) -> tuple[ProactiveAgentToo
         if output_calls is not None:
             raw_calls = output_calls
     calls: list[ProactiveAgentToolCall | Mapping[str, Any]] = []
-    if not isinstance(raw_calls, IterableABC) or isinstance(raw_calls, (str, bytes, Mapping)):
+    if isinstance(raw_calls, (str, bytes)):
         return ()
+    if isinstance(raw_calls, Mapping) or not isinstance(raw_calls, IterableABC):
+        raw_calls = (raw_calls,) if _looks_like_proactive_tool_call(raw_calls) else ()
     for raw_call in raw_calls:
         call = _normalize_proactive_agent_tool_call(raw_call)
         if call is not None:

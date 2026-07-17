@@ -3000,6 +3000,20 @@ def test_tool_agent_extracts_responses_output_when_wrapper_tool_calls_is_empty()
     assert calls[0].name == "proactive_noop"
 
 
+def test_tool_agent_extracts_single_wrapper_tool_call_object() -> None:
+    response = {
+        "tool_calls": {
+            "name": "proactive_noop",
+            "arguments": {},
+        }
+    }
+
+    calls = extract_proactive_agent_tool_calls(response)
+
+    assert len(calls) == 1
+    assert calls[0].name == "proactive_noop"
+
+
 def test_tool_agent_runner_audits_malformed_responses_api_tool_call(tmp_path) -> None:
     class Client:
         def create_tool_calls(self, _prompt, _instructions, _tools):
