@@ -7574,3 +7574,21 @@ Commits. Kein Push. Restart nach 12 weiteren Commits.
 Commits. Kein Push. Restart nach 10 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `11/20` sichtbar.
+
+### Memory-Reset verlangt validierten Cleanup-State
+
+- 2026-07-17: `/reset_memorys` prüfte beim Bestätigen bereits den Pop, aber
+  Cancel, verbotene globale Ziele und sonstiger Text ignorierten noch
+  `pop=None` bzw. Exceptions. Dadurch waren falsche Cancel-/Schutzantworten
+  oder ein Fall-through in den LLM-Pfad möglich.
+- Jeder Pending-State-Verbrauch ist jetzt fail-closed. Bei unklarem Cleanup
+  kommt die Reset-Fehlermeldung; kein falscher Cancel-Erfolg und kein
+  Weiterreichen an LLM.
+- Test: `tests/test_engine_identity_flows.py -k 'memory_reset'` `14 passed`;
+  Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ea94dc18 fix: validate memory reset state cleanup`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `12/20`
+Commits. Kein Push. Restart nach 8 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `13/20` sichtbar.
