@@ -3586,6 +3586,22 @@ def test_engine_privacy_confirmation_is_persistent_until_memory_reset(tmp_path):
     assert account_store.has_privacy_confirmation(account_id) is False
 
 
+def test_engine_privacy_confirmation_storage_failure_is_explicit(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="privacy-storage-error")
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+
+    monkeypatch.setattr(account_store, "confirm_privacy", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("profile unavailable")))
+
+    actions = engine.process(event(identity, "Datenschutz bestätigt", channel="signal"))
+
+    assert len(actions) == 1
+    assert actions[0].text == "Datenschutz konnte gerade nicht gespeichert werden."
+    account_id = account_store.get_account_for_identity(identity)
+    assert account_id is not None
+    assert account_store.has_privacy_confirmation(account_id) is False
+
+
 def test_engine_start_adds_legal_consent_buttons_until_privacy_is_confirmed(tmp_path):
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="legal-buttons")

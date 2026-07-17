@@ -351,8 +351,13 @@ class TeeBotusEngine:
                     age_over_16=age_over_16,
                     terms_accepted=terms_accepted,
                 )
-            except (AccountStoreError, OSError):
-                return EngineResult(result.account_id, [], handled=False)
+            except Exception:  # noqa: BLE001 - consent persistence must never claim success or fall into LLM chat.
+                LOGGER.exception("Privacy confirmation persistence failed instance=%s account=%s", event.instance, result.account_id)
+                return EngineResult(
+                    result.account_id,
+                    [SendText(event.chat_id, "Datenschutz konnte gerade nicht gespeichert werden.", track=False)],
+                    handled=True,
+                )
             return EngineResult(
                 result.account_id,
                 [SendText(event.chat_id, "Datenschutz ist bestätigt. Ich frage dich nicht erneut, solange diese Einstellung nicht durch /reset_memorys entfernt wird.", track=False)],
