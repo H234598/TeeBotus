@@ -1031,6 +1031,32 @@ def test_memory_recovery_rejects_hardlinked_sqlite_sources_before_delete(tmp_pat
     assert external.read_bytes() == b"not a database"
 
 
+def test_memory_recovery_readonly_probe_uses_stable_sqlite_source(monkeypatch, tmp_path: Path) -> None:
+    source = tmp_path / "Account_Memory.sqlite3"
+    external = tmp_path / "external.sqlite3"
+    for path in (source, external):
+        with sqlite3.connect(path) as connection:
+            connection.execute("CREATE TABLE marker (value TEXT)")
+            connection.execute("INSERT INTO marker VALUES (?)", (path.name,))
+
+    original_guard = account_memory_recovery_module._reject_unsafe_sqlite_link
+
+    def race_after_guard(path: Path, *, label: str) -> None:
+        original_guard(path, label=label)
+        if path == source and label == "source":
+            source.unlink()
+            source.symlink_to(external)
+
+    monkeypatch.setattr(account_memory_recovery_module, "_reject_unsafe_sqlite_link", race_after_guard)
+
+    with pytest.raises(OSError, match="Too many levels|symlink|SQLite recovery"):
+        with account_memory_recovery_module._connect_sqlite_readonly(source):
+            pass
+
+    with sqlite3.connect(external) as connection:
+        assert connection.execute("SELECT value FROM marker").fetchone()[0] == "external.sqlite3"
+
+
 def test_memory_recovery_delete_uses_stable_sqlite_descriptor(monkeypatch, tmp_path: Path) -> None:
     source = tmp_path / "Account_Memory.sqlite3"
     external = tmp_path / "external.sqlite3"

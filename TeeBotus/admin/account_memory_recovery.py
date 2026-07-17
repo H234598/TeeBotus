@@ -4,7 +4,6 @@ import argparse
 import contextlib
 import json
 import os
-import shutil
 import shlex
 import stat
 import sqlite3
@@ -1601,12 +1600,12 @@ def _connect_sqlite_readonly(path: Path):
         raise sqlite3.OperationalError(f"database does not exist: {path}")
     with tempfile.TemporaryDirectory(prefix="teebotus-sqlite-readonly-") as temp_dir:
         copied_path = Path(temp_dir) / path.name
-        shutil.copy2(path, copied_path)
+        _copy_stable_sqlite_file(path, copied_path)
         for suffix in ("-wal", "-shm"):
             sidecar = Path(str(path) + suffix)
             if sidecar.exists() or sidecar.is_symlink():
                 _reject_unsafe_sqlite_link(sidecar, label="sidecar")
-                shutil.copy2(sidecar, Path(str(copied_path) + suffix))
+                _copy_stable_sqlite_file(sidecar, Path(str(copied_path) + suffix))
         connection = sqlite3.connect(f"{copied_path.resolve().as_uri()}?mode=ro", uri=True)
         try:
             yield connection
@@ -1666,11 +1665,32 @@ def _connect_sqlite_writable_stable(path: Path):
         os.close(descriptor)
 
 
-def _open_stable_sqlite_descriptor(path: Path, *, no_follow: int) -> int:
+def _copy_stable_sqlite_file(source: Path, target: Path) -> None:
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    if not no_follow:
+        raise OSError("stable SQLite recovery copy requires O_NOFOLLOW")
+    descriptor = _open_stable_sqlite_descriptor(source, no_follow=no_follow, access_flags=os.O_RDONLY)
+    try:
+        opened_stat = os.fstat(descriptor)
+        if not stat.S_ISREG(opened_stat.st_mode):
+            raise OSError(f"refusing non-regular SQLite recovery source: {source}")
+        if opened_stat.st_nlink != 1:
+            raise OSError(f"refusing hardlinked SQLite recovery source: {source}")
+        current_stat = os.stat(os.fspath(source), follow_symlinks=False)
+        if (opened_stat.st_dev, opened_stat.st_ino) != (current_stat.st_dev, current_stat.st_ino):
+            raise OSError(f"SQLite recovery source changed during copy: {source}")
+        with os.fdopen(os.dup(descriptor), "rb") as source_stream, target.open("wb") as target_stream:
+            while chunk := source_stream.read(1024 * 1024):
+                target_stream.write(chunk)
+    finally:
+        os.close(descriptor)
+
+
+def _open_stable_sqlite_descriptor(path: Path, *, no_follow: int, access_flags: int = os.O_RDWR) -> int:
     absolute = Path(os.path.abspath(os.fspath(path)))
     parent_descriptor = _open_stable_directory_descriptor(absolute.parent, no_follow=no_follow)
     try:
-        return os.open(absolute.name, os.O_RDWR | no_follow | getattr(os, "O_CLOEXEC", 0), dir_fd=parent_descriptor)
+        return os.open(absolute.name, access_flags | no_follow | getattr(os, "O_CLOEXEC", 0), dir_fd=parent_descriptor)
     finally:
         os.close(parent_descriptor)
 
