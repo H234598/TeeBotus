@@ -7344,6 +7344,37 @@ def test_sqlite_write_refuses_missing_required_column_when_secondary_exists(tmp_
     assert "last_accessed_at" not in columns
 
 
+def test_sqlite_write_refuses_missing_required_column_without_secondary(tmp_path):
+    import sqlite3
+
+    primary_path = tmp_path / "primary.sqlite3"
+    account_id = "a" * 128
+    initial = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary_path, fallback_path=None),
+    )
+    initial.write_entries(account_id, [{"id": "primary"}])
+    with sqlite3.connect(primary_path) as connection:
+        connection.execute("ALTER TABLE memory_entries DROP COLUMN last_accessed_at")
+
+    primary = SQLiteAccountMemoryBackend(
+        instance_name="Depressionsbot",
+        provider=provider(),
+        purpose=ACCOUNT_MEMORY_KEY_PURPOSE,
+        config=SQLiteMemoryConfig(path=primary_path, fallback_path=None),
+    )
+
+    with pytest.raises(AccountStoreError, match="schema column is missing: memory_entries.last_accessed_at"):
+        primary.write_entries(account_id, [{"id": "new"}])
+
+    assert primary._initialized is False
+    with sqlite3.connect(primary_path) as connection:
+        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(memory_entries)")}
+    assert "last_accessed_at" not in columns
+
+
 def test_structured_account_memory_semantic_cache_boosts_synced_signature(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     account_id = store.resolve_or_create_account(telegram_identity_key(1))

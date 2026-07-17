@@ -740,16 +740,20 @@ class SQLiteAccountMemoryBackend:
             self.last_database_missing = True
             raise self._missing_database_error()
         missing_table = self._missing_schema_table() if existing_database else None
-        if missing_table is not None and self._secondary_database_exists() and not allow_incomplete_schema:
+        if missing_table is not None and "." in missing_table:
+            error = AccountStoreError(
+                f"SQLite account-memory schema column is missing: {missing_table} ({self.config.path})"
+            )
+            LOGGER.critical("%s", error)
+            raise error
+        if (
+            missing_table is not None
+            and not allow_incomplete_schema
+            and self._secondary_database_exists()
+        ):
             if missing_table == "<unreadable>":
                 error = AccountStoreError(
                     f"SQLite account-memory schema is unreadable; refusing automatic repair while fallback exists ({self.config.path})"
-                )
-                LOGGER.critical("%s", error)
-                raise error
-            if "." in missing_table:
-                error = AccountStoreError(
-                    f"SQLite account-memory schema column is missing: {missing_table} ({self.config.path})"
                 )
                 LOGGER.critical("%s", error)
                 raise error
