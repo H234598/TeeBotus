@@ -7592,3 +7592,19 @@ Commits. Kein Push. Restart nach 10 weiteren Commits.
 Commits. Kein Push. Restart nach 8 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `13/20` sichtbar.
+
+### YouTube-Options-State validiert fehlende URL beim Cleanup
+
+- 2026-07-17: Der korrupte `youtube_options`-Zweig mit fehlender URL rief
+  `pop_pending_flow()` ungefangen auf und meldete danach trotzdem einen
+  Transkriptfehler. State-Fehler konnten den Engine-Loop abbrechen.
+- Cleanup wird jetzt geprüft. Bei Exception oder verschwundenem State kommt
+  der kontrollierte Pending-State-Fehler; kein falsches Ergebnis und kein Job.
+- Test: `tests/test_engine_identity_flows.py -k 'youtube_transcript'`
+  `21 passed`; Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f29c42ab fix: contain malformed youtube option state`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `14/20`
+Commits. Kein Push. Restart nach 6 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `15/20` sichtbar.
