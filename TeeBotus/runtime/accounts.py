@@ -1015,6 +1015,35 @@ def _open_stable_directory_descriptor(path: Path, *, label: str, create_missing:
         raise
 
 
+def _read_stable_account_file(path: Path, *, label: str) -> bytes:
+    parent_descriptor: int | None = None
+    file_descriptor: int | None = None
+    try:
+        parent_descriptor = _open_stable_directory_descriptor(path.parent, label=f"{label} parent")
+        file_descriptor = os.open(
+            path.name,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0),
+            dir_fd=parent_descriptor,
+        )
+        file_stat = os.fstat(file_descriptor)
+        if not stat.S_ISREG(file_stat.st_mode) or file_stat.st_nlink != 1:
+            raise AccountStoreError(f"refusing unsafe account memory {label}: {path}")
+        with os.fdopen(file_descriptor, "rb") as handle:
+            file_descriptor = None
+            return handle.read()
+    except FileNotFoundError:
+        raise
+    except AccountStoreError:
+        raise
+    except OSError as exc:
+        raise AccountStoreError(f"could not read account memory {label}: {path}") from exc
+    finally:
+        if file_descriptor is not None:
+            os.close(file_descriptor)
+        if parent_descriptor is not None:
+            os.close(parent_descriptor)
+
+
 def _safe_rooted_path(path: Path, *, allowed_roots: Iterable[Path], operation: str = "file access") -> Path:
     if not path:
         raise AccountStoreError(f"{operation} path is not safe: {path}")
@@ -1075,7 +1104,7 @@ class EncryptedJsonVault:
     def read_text(self, path: Path, default: str = "") -> str:
         path = self._safe_path(path, operation="read")
         try:
-            raw = path.read_bytes()
+            raw = _read_stable_account_file(path, label="encrypted vault read")
         except FileNotFoundError:
             return default
         if not raw.strip():
@@ -1170,7 +1199,7 @@ class EncryptedJsonVault:
     def _guard_existing_payload_decryptable(self, path: Path) -> None:
         path = self._safe_path(path, operation="existing payload check")
         try:
-            raw = path.read_bytes()
+            raw = _read_stable_account_file(path, label="encrypted vault existing payload check")
         except FileNotFoundError:
             return
         if not raw.strip() or not _is_any_teebotus_encrypted_payload(raw):

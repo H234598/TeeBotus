@@ -3063,6 +3063,43 @@ def test_atomic_write_keeps_stable_parent_when_path_is_swapped(tmp_path, monkeyp
     assert not (outside / "payload.txt").exists()
 
 
+def test_encrypted_vault_read_keeps_stable_parent_when_path_is_swapped(tmp_path, monkeypatch):
+    vault = EncryptedJsonVault("Depressionsbot", provider(), root=tmp_path)
+    parent = tmp_path / "vault-read-parent"
+    parent.mkdir()
+    outside = tmp_path / "outside-vault-read"
+    outside.mkdir()
+    moved_parent = tmp_path / "vault-read-parent-moved"
+    target = parent / "payload.txt"
+    outside_target = outside / target.name
+    vault.write_text(target, "original")
+    vault.write_text(outside_target, "external")
+    original_raw = target.read_bytes()
+    external_raw = outside_target.read_bytes()
+
+    real_open = os.open
+    real_read_bytes = Path.read_bytes
+
+    def swap_parent_on_stable_open(file, flags, mode=0o777, *, dir_fd=None):
+        if file == target.name and dir_fd is not None and parent.exists():
+            parent.rename(moved_parent)
+            parent.symlink_to(outside, target_is_directory=True)
+        return real_open(file, flags, mode, dir_fd=dir_fd)
+
+    def swap_parent_on_path_read(candidate):
+        if candidate == target and parent.exists():
+            parent.rename(moved_parent)
+            parent.symlink_to(outside, target_is_directory=True)
+        return real_read_bytes(candidate)
+
+    monkeypatch.setattr(os, "open", swap_parent_on_stable_open)
+    monkeypatch.setattr(Path, "read_bytes", swap_parent_on_path_read)
+
+    assert vault.read_text(target) == "original"
+    assert (moved_parent / target.name).read_bytes() == original_raw
+    assert outside_target.read_bytes() == external_raw
+
+
 def test_account_json_document_falls_back_on_sql_diagnostics(tmp_path):
     class CorruptReadCollectionBackend:
         last_collection_read_error = "payload could not be decrypted"
