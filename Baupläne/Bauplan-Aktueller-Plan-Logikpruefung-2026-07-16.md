@@ -5308,6 +5308,24 @@ bleibt erst bei 100 Commits.
 `20/20` Commits. Kein Push. Restart jetzt. Naechster Push bleibt erst bei
 100 Commits.
 
+### Proactive-Tool-Agent verwirft malformed Responses-Calls nicht mehr
+
+- 2026-07-17: Responses-API-Tool-Calls mit kaputten Pflichtargumenten wurden
+  beim Extrahieren still verworfen. Der Runner meldete dadurch faelschlich
+  `no_tool_calls`; Ursache und Call-ID fehlten im Audit.
+- Erkennbar als Tool-Call bleibende, aber ungueltige Provider-Payloads werden
+  jetzt bis zum bestehenden Validator durchgereicht. Der Runner liefert
+  `tool_0_invalid_tool_call` und schreibt `tool_call_rejected`; echte
+  Nicht-Tool-Ausgaben bleiben ignoriert.
+- Test: `tests/test_proactive_agent.py` `152 passed`; Regression fokussiert
+  `2 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `2fe5791e fix: audit malformed proactive tool calls`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`1/20` Commits. Kein Push. Restart nach 19 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
