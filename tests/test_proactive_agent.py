@@ -4077,6 +4077,59 @@ def test_dispatch_cancels_item_when_route_changes_after_claim(tmp_path, monkeypa
     assert item["status_history"][-1]["reason"] == "stale_route_after_claim"
 
 
+def test_dispatch_uses_fresh_implicit_route_returned_by_claim(tmp_path, monkeypatch) -> None:
+    import TeeBotus.runtime.proactive_agent as proactive_module
+
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="implicit_route_race",
+        message_text="Ping",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    rows = account_store.read_proactive_outbox(account_id)
+    rows[0].pop("route", None)
+    account_store.write_proactive_outbox(account_id, rows)
+    original_claim = proactive_module._claim_proactive_worker_job_if_allowed
+
+    def change_route_before_claim(*args, **kwargs):
+        account_store.update_identity_route(identity, channel="signal", chat_id="+492", chat_type="private", adapter_slot=1)
+        return original_claim(*args, **kwargs)
+
+    monkeypatch.setattr(proactive_module, "_claim_proactive_worker_job_if_allowed", change_route_before_claim)
+    sent_chat_ids: list[str] = []
+
+    async def sender(route: dict, _action: SendText, _item: dict) -> str:
+        sent_chat_ids.append(str(route["chat_id"]))
+        return "sent-ref"
+
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now,
+        )
+    )
+
+    assert len(results) == 1
+    assert results[0].item_id == item_id
+    assert results[0].status == "sent"
+    assert sent_chat_ids == ["+492"]
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["status"] == "sent"
+    assert item["dispatch"]["chat_id"] == "+492"
+
+
 def test_dispatch_clamps_negative_retry_attempts(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")

@@ -1711,6 +1711,48 @@ async def dispatch_due_proactive_outbox_items(
         if not claimed:
             results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "worker_claim_failed", channel))
             continue
+        if isinstance(decision.route, Mapping) and decision.route != route:
+            route = dict(decision.route)
+            channel = str(route.get("channel") or "").strip().casefold()
+            chat_id = str(route.get("chat_id") or "").strip()
+            sender = _sender_for_channel(senders, channel)
+            if sender is _SENDER_NOT_FOUND:
+                update_proactive_outbox_item_status(
+                    account_store,
+                    account_id,
+                    item_id,
+                    status="failed",
+                    reason=f"missing_sender:{channel}",
+                    now=resolved_now,
+                    expected_status="dispatching",
+                )
+                results.append(ProactiveDispatchResult(account_id, item_id, "failed", "missing_sender", channel))
+                continue
+            if not callable(sender):
+                update_proactive_outbox_item_status(
+                    account_store,
+                    account_id,
+                    item_id,
+                    status="failed",
+                    reason="invalid_sender",
+                    now=resolved_now,
+                    expected_status="dispatching",
+                )
+                results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_sender", channel))
+                continue
+            action = _proactive_item_action(chat_id, message_text, item)
+            if action is None:
+                update_proactive_outbox_item_status(
+                    account_store,
+                    account_id,
+                    item_id,
+                    status="failed",
+                    reason="invalid_file",
+                    now=resolved_now,
+                    expected_status="dispatching",
+                )
+                results.append(ProactiveDispatchResult(account_id, item_id, "failed", "invalid_file", channel))
+                continue
         if not _account_has_matching_proactive_route(account_store, account_id, route):
             update_proactive_outbox_item_status(
                 account_store,
