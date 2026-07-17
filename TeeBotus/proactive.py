@@ -566,7 +566,16 @@ async def run_proactive_agent_cycle(
         dict.fromkeys(str(name or "").strip() for name in selected_instances if str(name or "").strip())
     )
     resolved_store_factory = store_factory or AccountStore
-    instances: list[dict[str, Any]] = []
+    instances: list[dict[str, Any]] = [
+        {
+            "instance": name,
+            "enabled": False,
+            "accounts": [],
+            "error": "invalid_instance_name",
+        }
+        for name in selected
+        if not _is_safe_instance_name(name)
+    ]
     for instance_dir in _instance_dirs(instances_dir, selected):
         instance_report: dict[str, Any] = {
             "instance": instance_dir.name,
@@ -766,10 +775,22 @@ def _effective_model_planners(
 
 def _instance_dirs(instances_dir: Path, selected: tuple[str, ...]) -> list[Path]:
     if selected:
-        return [instances_dir / name for name in selected]
+        return [instances_dir / name for name in selected if _is_safe_instance_name(name)]
     if not instances_dir.exists():
         return []
     return sorted(path for path in instances_dir.iterdir() if path.is_dir() and (path / "data" / "accounts").exists())
+
+
+def _is_safe_instance_name(value: str) -> bool:
+    path = Path(value)
+    return (
+        value not in {".", ".."}
+        and not path.is_absolute()
+        and path.name == value
+        and "/" not in value
+        and "\\" not in value
+        and "\0" not in value
+    )
 
 
 def _account_dirs(accounts_dir: Path) -> list[Path]:

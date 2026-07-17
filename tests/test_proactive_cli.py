@@ -934,6 +934,42 @@ def test_proactive_cycle_deduplicates_selected_instances(tmp_path) -> None:
     assert calls == ["Depressionsbot"]
 
 
+def test_proactive_cycle_rejects_path_like_instance_selection(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    healthy_dir = instances_dir / "HealthyInstance" / "data" / "accounts"
+    healthy_dir.mkdir(parents=True)
+    calls = []
+
+    class EmptyStore:
+        def __init__(self):
+            self.accounts_dir = healthy_dir / "accounts"
+
+    def factory(_root, instance_name):
+        calls.append(instance_name)
+        return EmptyStore()
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=instances_dir,
+            selected_instances=("../outside", "HealthyInstance"),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "../outside,HealthyInstance"},
+            store_factory=factory,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert report["ok"] is False
+    assert report["instances"][0] == {
+        "instance": "../outside",
+        "enabled": False,
+        "accounts": [],
+        "error": "invalid_instance_name",
+    }
+    assert report["instances"][1]["instance"] == "HealthyInstance"
+    assert calls == ["HealthyInstance"]
+    assert not (tmp_path / "outside").exists()
+
+
 def test_proactive_cycle_can_run_local_planner_before_due_selection(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)
