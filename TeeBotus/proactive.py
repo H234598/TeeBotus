@@ -589,6 +589,11 @@ async def run_proactive_agent_cycle(
             "enabled": proactive_agent_instance_enabled(instance_dir.name, env=env),
             "accounts": [],
         }
+        if selected and instance_dir.is_symlink():
+            instance_report["enabled"] = False
+            instance_report["error"] = "selected_instance_symlink"
+            instances.append(instance_report)
+            continue
         if selected and (not instance_dir.is_dir() or not (instance_dir / "data" / "accounts").is_dir()):
             instance_report["enabled"] = False
             instance_report["error"] = "selected_instance_not_found"
@@ -792,11 +797,17 @@ def _effective_model_planners(
 
 
 def _instance_dirs(instances_dir: Path, selected: tuple[str, ...]) -> list[Path]:
+    if instances_dir.is_symlink():
+        raise ValueError("symlinked instances root")
     if selected:
         return [instances_dir / name for name in selected if _is_safe_instance_name(name)]
     if not instances_dir.exists():
         return []
-    return sorted(path for path in instances_dir.iterdir() if path.is_dir() and (path / "data" / "accounts").exists())
+    return sorted(
+        path
+        for path in instances_dir.iterdir()
+        if not path.is_symlink() and path.is_dir() and (path / "data" / "accounts").exists()
+    )
 
 
 def _is_safe_instance_name(value: str) -> bool:

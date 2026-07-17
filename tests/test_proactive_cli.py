@@ -1062,6 +1062,29 @@ def test_proactive_cycle_rejects_path_like_instance_selection(tmp_path) -> None:
     assert not (tmp_path / "outside").exists()
 
 
+def test_proactive_cycle_rejects_symlinked_selected_instance(tmp_path) -> None:
+    instances_dir = tmp_path / "instances"
+    instances_dir.mkdir()
+    external_instance = tmp_path / "external-instance"
+    (external_instance / "data" / "accounts").mkdir(parents=True)
+    (instances_dir / "LinkedInstance").symlink_to(external_instance, target_is_directory=True)
+    calls = []
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=instances_dir,
+            selected_instances=("LinkedInstance",),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "LinkedInstance"},
+            store_factory=lambda *_args: calls.append(True),
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert report["ok"] is False
+    assert report["instances"][0]["error"] == "selected_instance_symlink"
+    assert calls == []
+
+
 def test_proactive_cycle_reports_instances_directory_errors(tmp_path) -> None:
     instances_path = tmp_path / "instances-file"
     instances_path.write_text("not a directory", encoding="utf-8")
