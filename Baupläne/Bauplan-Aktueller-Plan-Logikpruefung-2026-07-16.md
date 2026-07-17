@@ -7873,3 +7873,20 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `15/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### Proactive-Audit: Secret-Payloads nicht persistieren
+
+- 2026-07-17: Abgewiesene Planner-/Tool-Payloads wurden fuer
+  `Proactive_Audit` nur gekuerzt, nicht redigiert. Secretwerte konnten dadurch
+  trotz abgewiesener Aktion in der Auditspur landen.
+- Mapping-Schluessel mit Secret-Bedeutung, Secret-Zuweisungen, Provider-Token-
+  formen, URL-Zugangsdaten, Bearer/Basic/ApiKey/Token-Header, Telegram-Tokens,
+  JWTs und PEM-Private-Keys werden vor der Auditpersistenz redigiert.
+  Vorhandene Registrierungscode-Redaktion wird wiederverwendet.
+- Test: `tests/test_proactive_agent.py` -> `192 passed`; Secret-Fokus und
+  Tool-Agent-Fokus gruen; Ruff, `py_compile` und `git diff --check` gruen.
+  Kein echter Provider/API-Aufruf.
+- Code-Commit: `24901283 fix: redact proactive planner audit secrets`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `16/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
