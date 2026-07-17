@@ -4643,6 +4643,32 @@ Commits.
 Push. Restart nach 14 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
 
+### Admin-Status-Fehler-fail-closed
+
+- 2026-07-17: Admin-Status-Routen liessen `ValueError` aus malformed/decrypteten
+  Route-Dokumenten bis in `/status` und die Benachrichtigung laufen. Dadurch
+  konnte Diagnose abbrechen statt den betroffenen Account als Warnung zu
+  markieren.
+- Route-Aufloesung faengt jetzt `ValueError` neben `AccountStoreError` und
+  `OSError` ab. Statuszeilen bleiben strukturiert; einzelne kaputte Routen
+  blockieren weder andere Admins noch den gesamten Runtime-Status.
+- Unlesbares Admin-Opt-out wird jetzt fail-closed behandelt. Ein Speicher-
+  oder Secret-Fehler darf keinen abgemeldeten Account versehentlich wieder fuer
+  Status-/Benchmark-Versand aktivieren.
+- Tests: `tests/test_runtime_admin_accounts.py` `32 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `924ec11f fix: fail closed on admin status state errors`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `19/20` Code-Commits. Kein
+Push. Restart nach 1 weiterem Commit. Naechster Push bleibt erst bei 100
+Commits.
+
+### Dokumentations-Commit-erreicht-Restartgrenze
+
+- Dieser Planstand wird mit dem Dokumentations-Commit auf `20/20` erhoeht.
+- Danach wird `teebotus.service` einmal neu gestartet und mit
+  `systemctl --user is-active` sowie `systemctl --user show` verifiziert.
+
 ### Residence-Memory-Schreibfehler-wiederholen
 
 - 2026-07-17: Wetterkontext speicherte eine erkannte Stadt im Runtime-State,
