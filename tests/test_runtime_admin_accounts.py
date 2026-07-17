@@ -118,6 +118,30 @@ def test_admin_account_status_uses_account_route(tmp_path) -> None:
     assert f"admin_account=Depressionsbot/{account_id} status=routable channel=telegram slot=1 source_instance=Depressionsbot" in lines
 
 
+def test_admin_account_status_reports_malformed_route_state(tmp_path, monkeypatch) -> None:
+    account_store = store_for(tmp_path)
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+
+    def broken_route(*_args, **_kwargs):
+        raise ValueError("malformed route state")
+
+    monkeypatch.setattr(admin_accounts_module, "select_proactive_route", broken_route)
+
+    lines = admin_account_group_status_lines(
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+        store=account_store,
+    )
+
+    assert lines[0].endswith("warnings=1 invalid=0")
+    assert lines[1] == (
+        f"admin_account=Depressionsbot/{account_id} status=warning "
+        "reason=route:Depressionsbot:ValueError"
+    )
+
+
 def test_admin_account_status_summarizes_not_local_accounts_without_ids(tmp_path) -> None:
     account_store = store_for(tmp_path)
 
@@ -292,6 +316,35 @@ def test_runtime_status_admin_notify_honors_cross_instance_admin_opt_out(tmp_pat
     )
     assert sent == []
     assert logger_store.read_status_outbox(account_id) == []
+
+
+def test_runtime_status_admin_notify_fails_closed_on_unreadable_opt_out(tmp_path, monkeypatch) -> None:
+    instances_dir = tmp_path / "instances"
+    account_store = status_summary_store_for(instances_dir)
+    identity = telegram_identity_key(123)
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="telegram", chat_id="123", chat_type="private", adapter_slot=1)
+
+    def broken_status_auth(*_args, **_kwargs):
+        raise ValueError("malformed status auth state")
+
+    monkeypatch.setattr(account_store, "read_status_auth_state", broken_status_auth)
+    sent: list[SendAttachment] = []
+
+    results = asyncio.run(
+        notify_runtime_status_admin_accounts(
+            instances_dir=instances_dir,
+            selected_instances=("Depressionsbot",),
+            status_output="telegram_slot=Depressionsbot/default status=broken error=bad",
+            env={ADMIN_ACCOUNT_IDS_ENV: account_id},
+            store_factory=lambda _root, _instance: account_store,
+            sender_factory=lambda _instance, _store: {"telegram": lambda _route, action, _metadata: sent.append(action) or "ok"},
+        )
+    )
+
+    assert results == ()
+    assert sent == []
+    assert account_store.read_status_outbox(account_id) == []
 
 
 def test_runtime_status_dispatch_audit_failure_does_not_hide_delivery(tmp_path, monkeypatch, caplog) -> None:

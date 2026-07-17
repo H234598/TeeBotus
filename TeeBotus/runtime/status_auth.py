@@ -101,7 +101,9 @@ def status_auth_state_admin_opted_out(account_store: AccountStore, account_id: s
         with _status_auth_lock(account_store, account_id):
             state = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
     except (AccountStoreError, OSError, ValueError):
-        return False
+        # An unreadable opt-out record must never silently re-enable status
+        # notifications for an account.
+        return True
     return bool(state.get("admin_opt_out") is True)
 
 
