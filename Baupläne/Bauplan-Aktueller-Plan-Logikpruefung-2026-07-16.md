@@ -5290,6 +5290,24 @@ bleibt erst bei 100 Commits.
 `18/20` Commits. Kein Push. Restart nach 2 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Tool-Agent gibt Teilresultate des JSON-Fallbacks zurueck
+
+- 2026-07-17: Bei JSON-Fallback ohne Tool-Calls wurde eine gueltige Aktion
+  angewendet, aber bei einer weiteren ungueltigen Entscheidung nur
+  `no_tool_calls` zurueckgegeben. Erzeugte IDs und Validatorfehler fehlten im
+  Schedulerreport.
+- Der Fallback gibt jetzt immer das echte `ProactiveLLMPlanningResult` zurueck,
+  auch bei Teilfehlern. Mutationen und Fehler bleiben damit sichtbar und
+  auditierbar.
+- Test: `tests/test_proactive_agent.py` `151 passed`; Tool-Agent-Fokus
+  `10 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `08180520 fix: preserve partial proactive tool plan results`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`20/20` Commits. Kein Push. Restart jetzt. Naechster Push bleibt erst bei
+100 Commits.
+
 ### Proactive-Outbox-`retry_at` fail-closed
 
 - 2026-07-17: Ein nicht parsebarer, nichtleerer `retry_at`-Wert wurde von der
