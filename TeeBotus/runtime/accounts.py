@@ -981,10 +981,22 @@ def _safe_account_lock_handle(lock_path: Path, *, label: str) -> Iterator[Any]:
     flags = os.O_RDWR | os.O_CREAT | getattr(os, "O_NOFOLLOW", 0)
     file_descriptor: int | None = None
     try:
-        file_descriptor = os.open(lock_path.name, flags, 0o600, dir_fd=parent_descriptor)
-        with os.fdopen(file_descriptor, "a+b") as handle:
-            file_descriptor = None
-            handle_stat = os.fstat(handle.fileno())
+        try:
+            file_descriptor = os.open(lock_path.name, flags, 0o600, dir_fd=parent_descriptor)
+        except OSError as exc:
+            if exc.errno == errno.ELOOP:
+                raise AccountStoreError(f"refusing unsafe account memory {label}: {lock_path}") from exc
+            raise AccountStoreError(f"could not open account memory {label}: {lock_path}") from exc
+        try:
+            handle = os.fdopen(file_descriptor, "a+b")
+        except OSError as exc:
+            raise AccountStoreError(f"could not open account memory {label}: {lock_path}") from exc
+        file_descriptor = None
+        with handle:
+            try:
+                handle_stat = os.fstat(handle.fileno())
+            except OSError as exc:
+                raise AccountStoreError(f"could not inspect account memory {label}: {lock_path}") from exc
             if not stat.S_ISREG(handle_stat.st_mode) or handle_stat.st_nlink > 1:
                 raise AccountStoreError(f"refusing unsafe account memory {label}: {lock_path}")
             try:
@@ -992,10 +1004,6 @@ def _safe_account_lock_handle(lock_path: Path, *, label: str) -> Iterator[Any]:
             except OSError:
                 pass
             yield handle
-    except OSError as exc:
-        if exc.errno == errno.ELOOP:
-            raise AccountStoreError(f"refusing unsafe account memory {label}: {lock_path}") from exc
-        raise AccountStoreError(f"could not open account memory {label}: {lock_path}") from exc
     finally:
         if file_descriptor is not None:
             os.close(file_descriptor)
