@@ -3322,3 +3322,19 @@ nach 5 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 **Aktueller Laufstand:** Seit dem Restart `17/20` Commits. Kein Push. Restart
 nach 3 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
+### Direkte-Status-Auth-Helfer-validieren-Instanznamen
+
+- 2026-07-17: `bootstrap_instance_status_auth_secrets()` und
+  `build_instance_status_auth_report()` bauten Pfade direkt aus ihrem
+  `instance_name`. Der sichere High-Level-Discovery-Guard galt bei direkten
+  Aufrufen nicht.
+- Beide Helfer validieren jetzt den Namen ueber `discover_instances()`, bevor
+  ein Store-Pfad konstruiert wird. Unsichere Escapes liefern `ValueError`.
+- Regression: beide direkten Path-Escape-Tests plus Bootstrap-/Report-Fokus ->
+  `16 passed`; komplette `tests/test_admin_accounts.py` -> `91 passed`. Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `61984917 fix: validate direct status auth instance paths`.
+
+**Aktueller Laufstand:** Seit dem Restart `19/20` Commits. Kein Push. Restart
+nach 1 weiterem Commit. Naechster Push bleibt erst bei 100 Commits.
