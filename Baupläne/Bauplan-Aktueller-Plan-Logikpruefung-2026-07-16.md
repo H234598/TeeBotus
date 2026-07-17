@@ -6989,6 +6989,23 @@ Commits. Kein Push. Restart nach 18 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `3/20` sichtbar.
 
+### `/status` bleibt bei Accountlookup-Fehler verfügbar
+
+- 2026-07-17: `_resolve_status_account_id()` fing unerwartete Fehler aus dem
+  Account-Store nicht. Ein SQL-/Vault-Fehler konnte den gesamten Statusdialog
+  abbrechen.
+- Status-Accountlookup fail-safe: Bei unbekannter Zuordnung zeigt `/status`
+  weiterhin System-/LLM-/Healthdaten und markiert Nutzermemory als
+  „Account nicht zugeordnet“.
+- Test: fokussierter Statuspfad `39 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6fc31298 fix: keep status available on account lookup failure`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `4/20`
+Commits. Kein Push. Restart nach 16 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `5/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
