@@ -5342,6 +5342,34 @@ def test_dispatch_due_proactive_items_fails_when_sender_is_missing(tmp_path) -> 
     assert item["status_history"][-1]["reason"] == "missing_sender:signal"
 
 
+def test_dispatch_reports_queued_status_persistence_failure(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="queued-status-persistence")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="queued_status_persistence",
+        message_text="Nicht senden",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    monkeypatch.setattr(
+        "TeeBotus.runtime.proactive_agent.update_proactive_outbox_item_status",
+        lambda *_args, **_kwargs: False,
+    )
+
+    results = asyncio.run(dispatch_due_proactive_outbox_items(account_store, account_id, senders={}, now=now))
+
+    assert results[0].status == "failed"
+    assert results[0].reason == "status_update_failed"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "queued"
+
+
 def test_dispatch_reports_missing_sender_persistence_failure_after_route_refresh(tmp_path, monkeypatch) -> None:
     import TeeBotus.runtime.proactive_agent as proactive_module
 
