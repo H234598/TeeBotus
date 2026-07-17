@@ -2342,29 +2342,33 @@ def _append_proactive_safety_audit_event(
     event_type = "proactive_safety_hold"
     if normalized_reason.startswith("risk_gate_needs_review:"):
         event_type = "proactive_safety_review_hold"
-    return account_store.append_proactive_audit_event(
-        account_id,
-        {
-            "event_type": event_type,
-            "source": "proactive_dispatch_policy",
-            "reason": normalized_reason,
-            "created_at": now.isoformat(timespec="seconds"),
-            "item": _compact_audit_value(
-                {
-                    "id": str(item.get("id") or "").strip(),
-                    "status": str(item.get("status") or "").strip(),
-                    "category": str(item.get("category") or "").strip(),
-                    "intent": str(item.get("intent") or "").strip(),
-                    "risk_gate": _normalize_risk_gate(item.get("risk_gate")),
-                    "reason_memory_ids": item.get("reason_memory_ids") if isinstance(item.get("reason_memory_ids"), list) else [],
-                }
-            ),
-            "safe_standard_hint": (
-                "No automatic proactive clinical content was sent. Keep the item held, prefer human review, "
-                "and if the user re-engages with acute danger, respond with crisis-safe support and human-help guidance."
-            ),
-        },
-    )
+    try:
+        return account_store.append_proactive_audit_event(
+            account_id,
+            {
+                "event_type": event_type,
+                "source": "proactive_dispatch_policy",
+                "reason": normalized_reason,
+                "created_at": now.isoformat(timespec="seconds"),
+                "item": _compact_audit_value(
+                    {
+                        "id": str(item.get("id") or "").strip(),
+                        "status": str(item.get("status") or "").strip(),
+                        "category": str(item.get("category") or "").strip(),
+                        "intent": str(item.get("intent") or "").strip(),
+                        "risk_gate": _normalize_risk_gate(item.get("risk_gate")),
+                        "reason_memory_ids": item.get("reason_memory_ids") if isinstance(item.get("reason_memory_ids"), list) else [],
+                    }
+                ),
+                "safe_standard_hint": (
+                    "No automatic proactive clinical content was sent. Keep the item held, prefer human review, "
+                    "and if the user re-engages with acute danger, respond with crisis-safe support and human-help guidance."
+                ),
+            },
+        )
+    except Exception:  # noqa: BLE001 - safety hold must survive audit backend failure.
+        LOGGER.exception("Proactive safety audit persistence failed account=%s item=%s", account_id, item.get("id"))
+        return ""
 
 
 def _proactive_agent_state_shape_errors(state: Mapping[str, Any]) -> list[str]:

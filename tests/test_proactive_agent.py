@@ -2209,6 +2209,50 @@ def test_dispatch_audits_blocked_risk_gate_without_sending(tmp_path) -> None:
     assert audit[0]["item"]["id"] == "pro_crisis"
 
 
+def test_dispatch_survives_safety_audit_persistence_failure(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    account_store.write_proactive_outbox(
+        account_id,
+        [
+            {
+                "id": "pro_crisis",
+                "status": "queued",
+                "category": "reminder",
+                "intent": "unsafe_followup",
+                "message_text": "Bitte melde dich sofort.",
+                "risk_gate": "crisis",
+                "reason_memory_ids": ["mem_risk"],
+                "due_at": "2026-06-15T11:00:00+00:00",
+                "route": {"channel": "signal", "chat_id": "+491", "chat_type": "private", "adapter_slot": 1},
+            }
+        ],
+    )
+    sent: list[str] = []
+
+    def fail_audit_write(*_args, **_kwargs):
+        raise OSError("audit backend unavailable")
+
+    monkeypatch.setattr(account_store, "append_proactive_audit_event", fail_audit_write)
+    results = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": lambda _route, _action, _item: sent.append("sent") or "sent-ref"},
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+        )
+    )
+
+    assert sent == []
+    assert results[0].status == "skipped"
+    assert results[0].reason == "risk_gate_blocked:crisis"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "skipped"
+    assert account_store.read_proactive_audit(account_id) == []
+
+
 def test_reflection_planner_creates_reflection_and_queues_safe_reminder(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
