@@ -5237,6 +5237,21 @@ bleibt erst bei 100 Commits.
 `10/20` Commits. Kein Push. Restart nach 10 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Sendefehler lehnt kaputte Snapshot-Versuchszahler ab
+
+- 2026-07-17: Der Sender-Exceptionpfad berechnete Retry-Anzahl erneut mit
+  einer Default-Normalisierung. Ein zwischen Claim und Fehler veraenderter
+  Snapshot mit kaputtem `dispatch_attempts` konnte dadurch Retry ausloesen.
+- Sendefehler mit kaputtem Snapshot-Zaehler markieren das Item jetzt direkt
+  als `failed`; kein Retry. Der zentrale Claim bleibt weiterhin fail-closed.
+- Tests: `tests/test_proactive_agent.py` `168 passed`; Attempt-Fokus `5 passed`;
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `34947856 fix: fail closed on send attempt corruption`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`12/20` Commits. Kein Push. Restart nach 8 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Consentzustand fail-closed bei korruptem enabled-State
 
 - 2026-07-17: Ein inkonsistenter Agent-State mit `enabled=true`, aber leerem
