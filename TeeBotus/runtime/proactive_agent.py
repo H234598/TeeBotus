@@ -1391,7 +1391,24 @@ def recover_stale_proactive_dispatching_items(
             item_id = str(item.get("id") or "").strip()
             if not item_id:
                 continue
-            dispatch_attempts = max(0, _normalize_int(item.get("dispatch_attempts"), default=0))
+            dispatch_attempts = _proactive_dispatch_attempts(item)
+            if dispatch_attempts is None:
+                item["status"] = "failed"
+                item["updated_at"] = timestamp
+                item.pop("dispatching_at", None)
+                history = item.setdefault("status_history", [])
+                if not isinstance(history, list):
+                    history = []
+                    item["status_history"] = history
+                history.append(
+                    {
+                        "at": timestamp,
+                        "status": "failed",
+                        "reason": f"invalid_dispatch_attempts_after_{timeout_minutes}_minute_recovery",
+                    }
+                )
+                changed = True
+                continue
             if dispatch_attempts >= PROACTIVE_DISPATCH_MAX_ATTEMPTS:
                 item["status"] = "failed"
                 item["updated_at"] = timestamp
@@ -1447,6 +1464,15 @@ def _proactive_dispatch_claimed_at(item: Mapping[str, Any]) -> datetime | None:
             if parsed is not None:
                 return parsed
     return None
+
+
+def _proactive_dispatch_attempts(item: Mapping[str, Any]) -> int | None:
+    if "dispatch_attempts" not in item:
+        return 0
+    try:
+        return max(0, int(item.get("dispatch_attempts")))
+    except (TypeError, ValueError):
+        return None
 
 
 def _update_proactive_outbox_item_status_locked(
