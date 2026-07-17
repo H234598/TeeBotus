@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
 import html
 import json
 import logging
+import os
 import re
+import tempfile
+import threading
 import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -13,12 +17,18 @@ from pathlib import Path
 from typing import Any, Iterable
 from xml.etree import ElementTree
 
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - fcntl is unavailable on non-POSIX platforms.
+    fcntl = None  # type: ignore[assignment]
+
 LOGGER = logging.getLogger("TeeBotus")
 
 LIBRARY_DIRNAME = "Bibliothek"
 LIBRARY_META_DIRNAME = ".bibliothekar"
 LIBRARY_INDEX_FILENAME = "index.json"
 LIBRARY_CHUNKS_FILENAME = "chunks.jsonl"
+LIBRARY_LOCK_FILENAME = "storage.lock"
 LIBRARY_SCHEMA_VERSION = 2
 LIBRARY_STAGING_DIRNAMES = frozenset({"inbox", "accepted", "quarantine", "rejected"})
 HARVEST_MANIFEST_FILENAME = "harvest_manifest.jsonl"
@@ -142,6 +152,7 @@ class BibliothekarStore:
     def __init__(self, instance_name: str, instances_dir: str | Path = "instances") -> None:
         self.instance_name = str(instance_name or "default")
         self.instances_dir = Path(instances_dir)
+        self._storage_thread_lock = threading.RLock()
 
     @property
     def library_dir(self) -> Path:
@@ -159,16 +170,103 @@ class BibliothekarStore:
     def chunks_path(self) -> Path:
         return self.meta_dir / LIBRARY_CHUNKS_FILENAME
 
-    def ensure(self) -> Path:
-        self.library_dir.mkdir(parents=True, exist_ok=True)
+    @property
+    def lock_path(self) -> Path:
+        return self.meta_dir / LIBRARY_LOCK_FILENAME
+
+    @contextlib.contextmanager
+    def _storage_lock(self):
         self.meta_dir.mkdir(parents=True, exist_ok=True)
-        if not self.index_path.exists():
-            self.rebuild()
+        with self._storage_thread_lock:
+            if fcntl is None:
+                yield
+                return
+            with self.lock_path.open("a+b") as handle:
+                fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+
+    def ensure(self) -> Path:
+        with self._storage_lock():
+            self.library_dir.mkdir(parents=True, exist_ok=True)
+            if not self.index_path.exists():
+                self._rebuild_unlocked()
         return self.library_dir
 
     def rebuild(self) -> dict[str, Any]:
+        with self._storage_lock():
+            return self._rebuild_unlocked()
+
+    def ensure_current(self) -> None:
+        with self._storage_lock():
+            self._ensure_current_unlocked()
+
+    def _ensure_current_unlocked(self) -> None:
+        index = _read_json(self.index_path)
+        if not isinstance(index, dict) or _index_is_stale(index, self.library_dir) or _chunk_store_is_stale(index, self.chunks_path):
+            self._rebuild_unlocked()
+
+    def read_chunks(self) -> list[dict[str, Any]]:
+        with self._storage_lock():
+            self._ensure_current_unlocked()
+            return _read_chunks(self.chunks_path)
+
+    def read_index(self) -> dict[str, Any]:
+        with self._storage_lock():
+            self._ensure_current_unlocked()
+            index = _read_json(self.index_path)
+            return index if isinstance(index, dict) else {}
+
+    def read_snapshot(self) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        with self._storage_lock():
+            self._ensure_current_unlocked()
+            index = _read_json(self.index_path)
+            chunks = _read_chunks(self.chunks_path)
+            return (index if isinstance(index, dict) else {}, chunks)
+
+    def select(
+        self,
+        query_text: str,
+        *,
+        max_prompt_chars: int = DEFAULT_MAX_PROMPT_CHARS,
+        max_chunks: int = DEFAULT_MAX_CHUNKS,
+        max_quote_chars: int = DEFAULT_MAX_QUOTE_CHARS,
+    ) -> BibliothekarSelection:
+        if max_prompt_chars < 1 or max_chunks < 1:
+            return BibliothekarSelection("", ())
+        with self._storage_lock():
+            self._ensure_current_unlocked()
+            index = _read_json(self.index_path)
+            if not isinstance(index, dict) or not int(index.get("chunk_count") or 0):
+                return BibliothekarSelection("", ())
+            chunks = [chunk for chunk in _read_chunks(self.chunks_path) if _chunk_has_required_citation_metadata(chunk)]
+            selected = _rank_chunks(chunks, query_text)[:max_chunks]
+            prompt_items: list[dict[str, Any]] = []
+            selected_ids: list[str] = []
+            for chunk in selected:
+                item = _chunk_prompt_item(chunk, max_quote_chars=max_quote_chars)
+                candidate = _prompt_payload(index, [*prompt_items, item])
+                candidate_text = json.dumps(candidate, ensure_ascii=False, indent=2)
+                if len(candidate_text) > max_prompt_chars:
+                    if prompt_items:
+                        break
+                    item["quote"] = _clip(str(item.get("quote", "")), max(200, max_prompt_chars // 3))
+                    candidate_text = json.dumps(_prompt_payload(index, [item]), ensure_ascii=False, indent=2)
+                    if len(candidate_text) > max_prompt_chars:
+                        break
+                prompt_items.append(item)
+                selected_ids.append(str(item["chunk_id"]))
+            if not prompt_items:
+                return BibliothekarSelection("", ())
+            return BibliothekarSelection(
+                prompt_text=json.dumps(_prompt_payload(index, prompt_items), ensure_ascii=False, indent=2),
+                selected_ids=tuple(selected_ids),
+            )
+
+    def _rebuild_unlocked(self) -> dict[str, Any]:
         self.library_dir.mkdir(parents=True, exist_ok=True)
-        self.meta_dir.mkdir(parents=True, exist_ok=True)
         now = _utc_timestamp()
         source_metadata = _read_harvest_source_metadata(self.library_dir)
         documents: dict[str, Any] = {}
@@ -192,57 +290,9 @@ class BibliothekarStore:
             "topics": _top_keywords(" ".join(" ".join(chunk.get("topics", [])) for chunk in chunks), limit=48),
         }
         _write_json(self.index_path, index)
-        with self.chunks_path.open("w", encoding="utf-8") as file:
-            for chunk in chunks:
-                file.write(json.dumps(chunk, ensure_ascii=False, sort_keys=True) + "\n")
+        chunk_text = "".join(json.dumps(chunk, ensure_ascii=False, sort_keys=True) + "\n" for chunk in chunks)
+        _write_text_atomically(self.chunks_path, chunk_text)
         return index
-
-    def ensure_current(self) -> None:
-        index = _read_json(self.index_path)
-        if not isinstance(index, dict) or _index_is_stale(index, self.library_dir) or _chunk_store_is_stale(index, self.chunks_path):
-            self.rebuild()
-
-    def read_chunks(self) -> list[dict[str, Any]]:
-        self.ensure_current()
-        return _read_chunks(self.chunks_path)
-
-    def select(
-        self,
-        query_text: str,
-        *,
-        max_prompt_chars: int = DEFAULT_MAX_PROMPT_CHARS,
-        max_chunks: int = DEFAULT_MAX_CHUNKS,
-        max_quote_chars: int = DEFAULT_MAX_QUOTE_CHARS,
-    ) -> BibliothekarSelection:
-        if max_prompt_chars < 1 or max_chunks < 1:
-            return BibliothekarSelection("", ())
-        self.ensure_current()
-        index = _read_json(self.index_path)
-        if not isinstance(index, dict) or not int(index.get("chunk_count") or 0):
-            return BibliothekarSelection("", ())
-        chunks = [chunk for chunk in _read_chunks(self.chunks_path) if _chunk_has_required_citation_metadata(chunk)]
-        selected = _rank_chunks(chunks, query_text)[:max_chunks]
-        prompt_items: list[dict[str, Any]] = []
-        selected_ids: list[str] = []
-        for chunk in selected:
-            item = _chunk_prompt_item(chunk, max_quote_chars=max_quote_chars)
-            candidate = _prompt_payload(index, [*prompt_items, item])
-            candidate_text = json.dumps(candidate, ensure_ascii=False, indent=2)
-            if len(candidate_text) > max_prompt_chars:
-                if prompt_items:
-                    break
-                item["quote"] = _clip(str(item.get("quote", "")), max(200, max_prompt_chars // 3))
-                candidate_text = json.dumps(_prompt_payload(index, [item]), ensure_ascii=False, indent=2)
-                if len(candidate_text) > max_prompt_chars:
-                    break
-            prompt_items.append(item)
-            selected_ids.append(str(item["chunk_id"]))
-        if not prompt_items:
-            return BibliothekarSelection("", ())
-        return BibliothekarSelection(
-            prompt_text=json.dumps(_prompt_payload(index, prompt_items), ensure_ascii=False, indent=2),
-            selected_ids=tuple(selected_ids),
-        )
 
 
 def select_bibliothekar_context(
@@ -916,8 +966,25 @@ def _read_json(path: Path) -> Any:
 
 
 def _write_json(path: Path, data: dict[str, Any]) -> None:
+    _write_text_atomically(path, json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+
+
+def _write_text_atomically(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    temporary_name = ""
+    try:
+        descriptor, temporary_name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as file:
+            file.write(text)
+            file.flush()
+            os.fsync(file.fileno())
+        os.replace(temporary_name, path)
+    finally:
+        if temporary_name:
+            try:
+                os.unlink(temporary_name)
+            except FileNotFoundError:
+                pass
 
 
 def _summarize_categories(chunks: list[dict[str, Any]]) -> dict[str, int]:

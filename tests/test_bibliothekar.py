@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import threading
+import time
 import zipfile
 from pathlib import Path
 
+import TeeBotus.runtime.bibliothekar as bibliothekar_module
 import TeeBotus.runtime.bibliothekar_service as bibliothekar_service_module
 from TeeBotus.bibliothekar.cli import main as bibliothekar_cli_main
 from TeeBotus.bibliothekar.source_harvester import SourceHarvester
@@ -122,6 +125,49 @@ def test_bibliothekar_rebuilds_legacy_schema_without_plan2_metadata(tmp_path):
 
     assert rebuilt["schema_version"] == LIBRARY_SCHEMA_VERSION
     assert payload["selected_library_chunks"][0]["source_id"].startswith("sha256:")
+
+
+def test_bibliothekar_selection_waits_for_atomic_rebuild_snapshot(tmp_path, monkeypatch):
+    library_dir = tmp_path / "instances" / "Depressionsbot" / "data" / "Bibliothek"
+    library_dir.mkdir(parents=True)
+    source = library_dir / "notes.txt"
+    source.write_text("Alpha source text.", encoding="utf-8")
+    store = BibliothekarStore("Depressionsbot", tmp_path / "instances")
+    store.rebuild()
+
+    source.write_text("Beta source text.", encoding="utf-8")
+    index_written = threading.Event()
+    release_rebuild = threading.Event()
+    original_write_json = bibliothekar_module._write_json
+
+    def block_after_index_write(path, data):
+        original_write_json(path, data)
+        index_written.set()
+        assert release_rebuild.wait(2)
+
+    monkeypatch.setattr(bibliothekar_module, "_write_json", block_after_index_write)
+    rebuild_thread = threading.Thread(target=store.rebuild)
+    rebuild_thread.start()
+    assert index_written.wait(2)
+
+    selection_result: dict[str, str] = {}
+    selection_done = threading.Event()
+
+    def select_during_rebuild():
+        selection_result["prompt"] = store.select("Beta", max_chunks=1).prompt_text
+        selection_done.set()
+
+    selection_thread = threading.Thread(target=select_during_rebuild)
+    selection_thread.start()
+    time.sleep(0.1)
+    assert not selection_done.is_set()
+
+    release_rebuild.set()
+    rebuild_thread.join(timeout=2)
+    selection_thread.join(timeout=2)
+    assert not rebuild_thread.is_alive()
+    assert not selection_thread.is_alive()
+    assert "Beta source text." in selection_result["prompt"]
 
 
 def test_bibliothekar_rebuilds_local_chunk_store_without_citation_metadata(tmp_path):

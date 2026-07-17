@@ -18,7 +18,6 @@ from TeeBotus.runtime.bibliothekar import (
     _coerce_bool,
     _prompt_payload,
     _rank_chunks,
-    _read_chunks,
 )
 from TeeBotus.runtime.qdrant import QDRANT_BIBLIOTHEKAR_COLLECTION
 
@@ -134,9 +133,8 @@ class LocalBibliothekarBackend:
         if query.max_prompt_chars < 1 or query.max_chunks < 1:
             return BibliothekarSelection("", ())
         if query.filters:
-            self.store.ensure_current()
-            index = _read_index(self.store.index_path)
-            chunks = _apply_chunk_filters(_read_chunks(self.store.chunks_path), query.filters)
+            index, all_chunks = self.store.read_snapshot()
+            chunks = _apply_chunk_filters(all_chunks, query.filters)
             return _selection_from_chunks(index, chunks, query)
         return self.store.select(
             query.text,
@@ -194,15 +192,14 @@ class HaystackBibliothekarBackend:
             if local_selection.selected_ids:
                 return local_selection
             return BibliothekarSelection("", ())
-        self.fallback_store.ensure_current()
-        index = _read_index(self.fallback_store.index_path)
+        index = self.fallback_store.read_index()
         return _selection_from_chunks(index, _apply_chunk_filters(chunks, query.filters), query)
 
     def rebuild(self) -> dict[str, Any]:
         index = self.fallback_store.rebuild()
         if not self.available:
             return index
-        chunks = _read_chunks(self.fallback_store.chunks_path)
+        chunks = self.fallback_store.read_chunks()
         documents = [self._document_from_chunk(chunk) for chunk in chunks]
         document_store = self._document_store()
         self._delete_stale_documents(document_store, current_ids={str(getattr(document, "id", "")) for document in documents if str(getattr(document, "id", ""))})
@@ -433,7 +430,7 @@ class LlamaIndexBibliothekarBackend:
             return LocalBibliothekarBackend(self.fallback_store).search(query)
         if not chunks:
             return LocalBibliothekarBackend(self.fallback_store).search(query)
-        index = _read_index(self.fallback_store.index_path)
+        index = self.fallback_store.read_index()
         return _selection_from_chunks(index, _apply_chunk_filters(chunks, query.filters), query)
 
     def rebuild(self) -> dict[str, Any]:
@@ -464,8 +461,7 @@ class LlamaIndexBibliothekarBackend:
         return (int(stat.st_size), int(stat.st_mtime_ns), int(stat.st_ino))
 
     def _build_default_query_engine(self, max_chunks: int = DEFAULT_MAX_CHUNKS) -> Any:
-        self.fallback_store.ensure_current()
-        chunks = _read_chunks(self.fallback_store.chunks_path)
+        chunks = self.fallback_store.read_chunks()
         documents = [_llamaindex_document_from_chunk(chunk) for chunk in chunks if _chunk_has_required_citation_metadata(chunk)]
         if not documents:
             return _StaticLlamaIndexRetriever([])
@@ -644,8 +640,7 @@ def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, in
                 error=f"{type(exc).__name__}: {exc}",
             )
         try:
-            haystack_backend.fallback_store.ensure_current()
-            index = _read_index(haystack_backend.fallback_store.index_path)
+            index = haystack_backend.fallback_store.read_index()
         except OSError as exc:
             return BibliothekarServiceHealth(
                 instance_name,
@@ -670,8 +665,7 @@ def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, in
     if backend == "llamaindex":
         store = BibliothekarStore(instance_name, instances_dir)
         try:
-            store.ensure_current()
-            index = _read_index(store.index_path)
+            index = store.read_index()
         except OSError as exc:
             return BibliothekarServiceHealth(instance_name, "llamaindex", "broken", error=str(exc))
         documents = index.get("documents") if isinstance(index.get("documents"), dict) else {}
@@ -712,8 +706,7 @@ def check_bibliothekar_service(instance_name: str, instances_dir: str | Path, in
         )
     store = BibliothekarStore(instance_name, instances_dir)
     try:
-        store.ensure_current()
-        index = _read_index(store.index_path)
+        index = store.read_index()
     except OSError as exc:
         return BibliothekarServiceHealth(instance_name, "local", "broken", error=str(exc))
     documents = index.get("documents") if isinstance(index.get("documents"), dict) else {}
@@ -1015,14 +1008,6 @@ def _haystack_duplicate_policy_overwrite() -> Any:
 
         _HAYSTACK_DUPLICATE_POLICY_OVERWRITE = DuplicatePolicy.OVERWRITE
     return _HAYSTACK_DUPLICATE_POLICY_OVERWRITE
-
-
-def _read_index(path: Path) -> dict[str, object]:
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
-    return payload if isinstance(payload, dict) else {}
 
 
 __all__ = [
