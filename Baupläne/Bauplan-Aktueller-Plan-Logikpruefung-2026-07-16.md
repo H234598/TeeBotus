@@ -7730,3 +7730,28 @@ Plan-Commit zaehlt als `18/20`. Kein Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `19/20` Code-Commits. Dieser
 Plan-Commit zaehlt als `20/20`. Kein Push. Restart jetzt.
+
+### Neuer Lauf: Loudness- und Account-Memory-Invarianten
+
+- 2026-07-17: Scheduler- und Antwortpfade fuer Loudness-Pruefungen nutzten
+  teilweise die echte aktuelle Zeit statt des vom Aufrufer vorgegebenen
+  Zykluszeitpunkts. Dadurch konnten Tests und Recovery-Metadaten Zeitstempel
+  verschieben. Beide Pfade verwenden jetzt den aufgeloesten `now`-Wert.
+- 2026-07-17: Wake-Window-Deduplizierung brach nach einem alten `due_at` zu
+  frueh ab und pruefte `created_at`/`updated_at` nicht mehr. Alle vorhandenen
+  Outbox-Zeitfelder werden jetzt geprueft.
+- 2026-07-17: Retention-Trim in
+  `append_structured_memory_entry(max_entries=...)` liess geloeschte IDs in
+  `index.accessed_ids`. Das Indexupdate entfernt nun verwaiste und doppelte
+  Access-IDs.
+- 2026-07-17: `reset_structured_memory()` konnte partielle Entry-Reads
+  zuruecksetzen und dadurch unlesbare/gute Restdaten mit leerem Speicher
+  ueberschreiben. Der bestehende Entry-Diagnose-Guard laeuft nun vor jedem
+  Reset-Write. Tombstoned Accounts werden vor dem Reset abgewiesen.
+- Tests: Notification-Loudness `172 passed`; AccountStore-Fokus fuer neue
+  Pfade gruen; Ruff, `py_compile` und `git diff --check` gruen. Kein echter
+  Provider/API-Aufruf.
+- Code-Commits: `62350e29`, `cd3fcfea`, `f5bf4034`, `aa695b8e`, `551dcc80`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `5/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
