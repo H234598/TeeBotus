@@ -4259,6 +4259,35 @@ def test_import_codex_session_file_imports_each_final_turn_from_explicit_file(tm
     assert "Status-Historie:" in persisted[0]["summary"]["markdown"]
 
 
+def test_import_codex_session_file_deduplicates_identical_final_turns_in_one_batch(tmp_path: Path) -> None:
+    repo = make_git_repo(tmp_path, "duplicate-final-batch-demo", version="1.0.5")
+    store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
+    session_file = tmp_path / "sessions" / "duplicate-final.jsonl"
+    final = {
+        "type": "response_item",
+        "payload": {
+            "type": "message",
+            "role": "assistant",
+            "phase": "final_answer",
+            "content": [{"type": "output_text", "text": "Identische finale Summary."}],
+        },
+    }
+    rows = [
+        {"type": "session_meta", "payload": {"id": "sess-duplicate-final", "cwd": str(repo)}},
+        {"type": "turn_context", "payload": {"turn_id": "turn-same"}},
+        final,
+        {"type": "turn_context", "payload": {"turn_id": "turn-same"}},
+        final,
+    ]
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_text("".join(json.dumps(row, ensure_ascii=False) + "\n" for row in rows), encoding="utf-8")
+
+    report = import_codex_session_file(store, session_file)
+
+    assert report["status_counts"] == {"duplicate": 1, "imported": 1}
+    assert len(store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)) == 1
+
+
 def test_codex_history_mermaid_context_varies_layout_and_shows_summary_signals(tmp_path: Path) -> None:
     repo = make_git_repo(tmp_path, "mermaid-context-demo", version="1.9.5")
     store = AccountStore(tmp_path / "accounts", "TeeBotus_Logger", provider())
