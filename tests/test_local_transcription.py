@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 from pathlib import Path
 
@@ -114,3 +115,30 @@ def test_youtube_whisper_cli_does_not_force_english(monkeypatch, tmp_path: Path)
     assert isinstance(command, list)
     assert "--language" not in command
     assert captured["instance_name"] == "Demo"
+
+
+def test_youtube_parser_miss_write_uses_process_lock(tmp_path: Path, monkeypatch) -> None:
+    calls: list[int] = []
+    original_flock = youtube.fcntl.flock if youtube.fcntl is not None else None
+
+    def observe_flock(*args):
+        calls.append(args[1])
+        assert original_flock is not None
+        return original_flock(*args)
+
+    if original_flock is not None:
+        monkeypatch.setattr(youtube.fcntl, "flock", observe_flock)
+
+    youtube._record_youtube_parser_miss(
+        "Demo",
+        "Bitte transkribiere https://youtu.be/example",
+        (None, True),
+        (False, True),
+        "test",
+        instances_dir=tmp_path / "instances",
+    )
+
+    miss_path = tmp_path / "instances" / "Demo" / "data" / youtube.YOUTUBE_PARSER_MISSES_FILENAME
+    assert json.loads(miss_path.read_text(encoding="utf-8"))["context"] == "test"
+    if original_flock is not None:
+        assert calls == [youtube.fcntl.LOCK_EX, youtube.fcntl.LOCK_UN]

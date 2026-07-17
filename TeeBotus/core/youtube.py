@@ -38,6 +38,7 @@ YOUTUBE_FASTER_WHISPER_COMPUTE_TYPE = "int8"
 YOUTUBE_FASTER_WHISPER_CPU_THREADS = 2
 YOUTUBE_TRANSCRIPT_NICE_LEVEL = 19
 YOUTUBE_PARSER_MISSES_FILENAME = "YouTube_Parser_Misses.jsonl"
+YOUTUBE_PARSER_MISSES_LOCK_FILENAME = ".YouTube_Parser_Misses.jsonl.lock"
 YOUTUBE_TRANSCRIPT_CACHE_DIRNAME = "youtube_transcripts"
 
 
@@ -58,6 +59,8 @@ def _normalize_command(text: str) -> str:
 PROCESS_REGISTRY_FILENAME = "YouTube_Transcription_Processes.json"
 PROCESS_REGISTRY_LOCK_FILENAME = ".YouTube_Transcription_Processes.json.lock"
 _PROCESS_REGISTRY_LOCKS: dict[str, threading.Lock] = {}
+_YOUTUBE_PARSER_MISSES_LOCKS: dict[str, threading.RLock] = {}
+_YOUTUBE_PARSER_MISSES_LOCKS_GUARD = threading.Lock()
 
 
 class _InstanceProcessRegistry:
@@ -470,8 +473,9 @@ def _record_youtube_parser_miss(
     }
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("a", encoding="utf-8") as file:
-            file.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
+        with _youtube_parser_misses_lock(path):
+            with path.open("a", encoding="utf-8") as file:
+                file.write(json.dumps(entry, ensure_ascii=False, sort_keys=True) + "\n")
     except OSError as exc:
         LOGGER.warning("Could not record YouTube parser miss at %s: %s", path, exc)
 
@@ -479,6 +483,26 @@ def _record_youtube_parser_miss(
 def _youtube_parser_misses_path(instance_name: str, instances_dir: Path | None = None) -> Path:
     instance = instance_name.strip() or "default"
     return (instances_dir or _default_instances_dir()) / instance / "data" / YOUTUBE_PARSER_MISSES_FILENAME
+
+
+@contextmanager
+def _youtube_parser_misses_lock(path: Path):
+    key = os.path.realpath(os.fspath(path))
+    with _YOUTUBE_PARSER_MISSES_LOCKS_GUARD:
+        thread_lock = _YOUTUBE_PARSER_MISSES_LOCKS.setdefault(key, threading.RLock())
+    lock_path = path.with_name(YOUTUBE_PARSER_MISSES_LOCK_FILENAME)
+    with thread_lock:
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with lock_path.open("a+b") as handle:
+            locked = False
+            try:
+                if fcntl is not None:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
+                    locked = True
+                yield
+            finally:
+                if locked:
+                    fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
 def _redact_youtube_urls(text: str) -> str:
