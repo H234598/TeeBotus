@@ -913,19 +913,22 @@ def proactive_agent_tool_definitions() -> list[dict[str, Any]]:
     ]
 
 
-def extract_proactive_agent_tool_calls(response: Any) -> tuple[ProactiveAgentToolCall, ...]:
+def extract_proactive_agent_tool_calls(response: Any) -> tuple[ProactiveAgentToolCall | Mapping[str, Any], ...]:
     raw_calls = getattr(response, "tool_calls", None)
     if raw_calls is None and isinstance(response, Mapping):
         raw_calls = response.get("tool_calls")
     if raw_calls is None:
         raw_calls = _response_output_tool_calls(response)
-    calls: list[ProactiveAgentToolCall] = []
+    calls: list[ProactiveAgentToolCall | Mapping[str, Any]] = []
     if not isinstance(raw_calls, IterableABC) or isinstance(raw_calls, (str, bytes, Mapping)):
         return ()
     for raw_call in raw_calls:
         call = _normalize_proactive_agent_tool_call(raw_call)
         if call is not None:
             calls.append(call)
+        elif _looks_like_proactive_tool_call(raw_call):
+            # Keep malformed provider calls visible to the validator/audit path.
+            calls.append(raw_call)
     return tuple(calls)
 
 
@@ -2574,7 +2577,23 @@ def _response_output_tool_calls(response: Any) -> Any:
         output = response.get("output")
     if not isinstance(output, list):
         return None
-    return [item for item in output if _tool_call_name(item)]
+    return [item for item in output if _looks_like_proactive_tool_call(item)]
+
+
+def _looks_like_proactive_tool_call(raw_call: Any) -> bool:
+    if isinstance(raw_call, Mapping):
+        return bool(
+            raw_call.get("type") in {"function_call", "tool_call"}
+            or raw_call.get("name")
+            or isinstance(raw_call.get("function"), Mapping)
+            or "arguments" in raw_call
+        )
+    return bool(
+        getattr(raw_call, "type", None) in {"function_call", "tool_call"}
+        or getattr(raw_call, "name", None)
+        or getattr(raw_call, "function", None) is not None
+        or hasattr(raw_call, "arguments")
+    )
 
 
 def _response_output_text(response: Any) -> str:
