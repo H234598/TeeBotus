@@ -7055,6 +7055,22 @@ Commits. Kein Push. Restart nach 10 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `11/20` sichtbar.
 
+### Malformed-WTF-Notification rotiert kein Secret
+
+- 2026-07-17: Eine vorhandene Link-Notification ohne `new_identity_key` fiel
+  in `_handle_wtf()` in den normalen Secret-Rotationszweig. Wiederholtes
+  `WTF?` konnte dadurch Secret ohne verifizierte Zielidentität rotieren.
+- Malformed Notifications werden jetzt protokolliert und fail-closed
+  abgewiesen. Keine Rotation ohne Zielidentität.
+- Test: fokussierter WTF-Pfad `8 passed`; Ruff und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `9a01b786 fix: reject malformed WTF notifications`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `12/20`
+Commits. Kein Push. Restart nach 8 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `13/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
