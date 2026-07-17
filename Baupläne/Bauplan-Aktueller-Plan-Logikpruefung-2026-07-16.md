@@ -7889,6 +7889,24 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `15/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### Account-Memory-Diagnostik: parallele Accounts nicht vermischen
+
+* 2026-07-18: SQLite- und PostgreSQL-Backends hielten Read-Diagnostik in
+  gemeinsamen `last_*`-Feldern. Parallele Account-Reads konnten dadurch die
+  Fehlerdiagnose eines anderen Accounts sehen; Healthchecks meldeten dann
+  falsche Memory-Fehler oder uebersahen echte Fehler.
+* Account-Memory-, Pair- und Instance-State-Operationen halten jetzt den
+  Backend-Operationslock ueber Backend-Read/Write und Diagnoseauswertung.
+  SQLite und PostgreSQL besitzen dafuer einen reentranten Backend-Lock.
+* Test: `tests/test_account_store.py` -> `326 passed`; zusaetzlich
+  `tests/test_sqlite_backup_sync.py tests/test_account_memory_migration.py` ->
+  `15 passed, 1 skipped`; Ruff, Compile und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+* Code-Commit: `350b7304 fix: serialize account memory diagnostics`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `18/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Arbeitsgedaechtnis: Index muss zur JSONL passen
 
 - 2026-07-17: `WorkingMemoryStore` und der noch vorhandene Telegram-Store
