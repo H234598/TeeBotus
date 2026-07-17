@@ -5734,6 +5734,18 @@ def test_codex_history_status_warns_for_malformed_backend_row() -> None:
     ]
 
 
+def test_codex_history_status_rejects_malformed_backend_container() -> None:
+    class MalformedHistoryStore:
+        def read_codex_history_outbox(self, _account_id: str):
+            return {"history": []}
+
+    lines = codex_history_status_lines(instance_name="Demo", account_store=MalformedHistoryStore())
+
+    assert lines == [
+        "codex_history=Demo status=unknown error=codex_history_outbox_has_invalid_shape_(expected_list)",
+    ]
+
+
 def test_codex_history_status_prefers_readonly_store_reader() -> None:
     class ReadOnlyHistoryStore:
         def read_codex_history_outbox_readonly(self, _account_id: str):

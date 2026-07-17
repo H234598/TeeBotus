@@ -940,6 +940,8 @@ def _codex_history_summary(account_store: AccountStore) -> dict[str, Any]:
             rows = account_store.read_codex_history_outbox(INSTANCE_STATE_ACCOUNT_ID)
     except Exception as exc:  # noqa: BLE001 - status should diagnose unreadable history without crashing.
         return {"error": redact_status_text(f"{type(exc).__name__}: {exc}")}
+    if not isinstance(rows, list):
+        return {"error": "codex history outbox has invalid shape (expected list)"}
     valid_rows = _codex_history_rows_in_creation_order([row for row in rows if isinstance(row, Mapping)])
     malformed_rows = max(0, len(rows) - len(valid_rows))
     status_counts: dict[str, int] = {}
