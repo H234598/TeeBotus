@@ -1654,8 +1654,11 @@ def _resolve_status_account_id(*, sender_id: str, account_id: str, account_store
         return ""
     try:
         return account_store.get_account_for_identity(telegram_identity_key(sender_id)) or ""
-    except (AccountStoreError, OSError):
+    except (AccountStoreError, OSError, ValueError):
         LOGGER.exception("Failed to resolve account id for status.")
+        return ""
+    except Exception:  # noqa: BLE001 - status account lookup must not abort /status.
+        LOGGER.exception("Unexpected failure while resolving account id for status.")
         return ""
 
 

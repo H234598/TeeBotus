@@ -185,6 +185,21 @@ def test_status_auth_identity_lookup_failure_fails_closed_in_engine(tmp_path, mo
     assert engine.process(event(identity, "/help", instance="TeeBotus_Logger")) == []
 
 
+def test_status_account_lookup_failure_keeps_status_available(tmp_path) -> None:
+    class BrokenStatusStore:
+        def get_account_for_identity(self, _identity):
+            raise RuntimeError("status account lookup unavailable")
+
+    text = build_status_reply(
+        sender_id="1",
+        instance_name="Depressionsbot",
+        project_root=tmp_path,
+        account_store=BrokenStatusStore(),  # type: ignore[arg-type]
+    )
+
+    assert "- Nutzermemory: Account nicht zugeordnet" in text
+
+
 def test_admin_flow_state_failure_is_user_visible_without_aborting_message_processing(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
