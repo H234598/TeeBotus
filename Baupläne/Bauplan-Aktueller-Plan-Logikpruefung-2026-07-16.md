@@ -2730,6 +2730,30 @@ Restart nach 15 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 12 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Codex-Dispatch-Receipt-darf-Multi-Admin-Retry-nicht-blockieren
+
+- 2026-07-17: Der Dispatcher hatte in der oeffentlichen Python-Funktion und im
+  Bridge-Pfad noch `limit=100`, obwohl CLI/Systemd bereits `0 = alle` nutzten.
+  Direkte Aufrufer verloren dadurch ab Summary 101 Eintraege.
+- Ein Receipt oder Reply von Admin A setzte das gesamte Item ausserdem auf
+  `delivered`/`acknowledged`, obwohl Admin B noch mit retry-faehigem
+  `send_error` fehlgeschlagen war. Das Item wurde dadurch nicht mehr
+  dispatchbar und B bekam keinen Retry.
+- Beide Dispatcher-Defaults nutzen jetzt `CODEX_HISTORY_DEFAULT_DISPATCH_LIMIT`
+  (`0`). Receipt-/Reply-Status wird aus dem neuesten Ergebnis je Empfaenger
+  aggregiert; Append-Reihenfolge ist fuer Event-Status autoritativ. Ein anderer
+  transient fehlgeschlagener Empfaenger haelt Item bei `queued`.
+- Timestamp-basierte Auswahl fuer bereits erfolgreiche Empfaenger bleibt
+  unveraendert; sie ist bestehender Vertrag fuer Retry-Deduplizierung.
+- Regression: komplette `tests/test_codex_history.py` -> `181 passed`; Ruff mit
+  bestehender `E402`-Ausnahme, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `45557634 fix: preserve codex dispatch retries after receipts`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Applet-Fallback-Positiv-und-Negativfall-fixiert
 
 - 2026-07-17: Der Applet-Fallback-Fix bekam einen expliziten Paar-Test fuer
