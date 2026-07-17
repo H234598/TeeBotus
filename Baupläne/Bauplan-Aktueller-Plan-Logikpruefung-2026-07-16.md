@@ -5170,6 +5170,24 @@ bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 `2/20` Commits. Kein Push. Restart nach 18 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Worker meldet fehlgeschlagene Stale-Route-Aufraeumung
+
+- 2026-07-17: Nach einem erfolgreichen Worker-Claim kann die private Route
+  zwischenzeitlich veralten. Wenn das anschliessende Persistieren von
+  `cancelled/stale_route_after_claim` fehlschlug, wurde trotzdem `skipped`/
+  `stale_route` gemeldet; das Item blieb `dispatching` und konnte nach Lease-
+  Recovery erneut aufgegriffen werden.
+- Der Cancel-Schritt prueft jetzt Rueckgabewert und Ausnahme. Bei fehlender
+  Persistenz wird `failed/status_update_failed` reportiert; Versand bleibt
+  unterdrueckt.
+- Test: `tests/test_proactive_agent.py` `178 passed`; gezielter Race-/Persistenz-
+  Test gruen; Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4048f798 fix: report stale route cancellation failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`5/20` Commits. Kein Push. Restart nach 15 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Notification-Loudness-Outbox bewahrt kaputte Statushistorien
 
 - 2026-07-17: Der Loudness-Abbruch mutierte `queued`-Outbox-Items direkt zu
