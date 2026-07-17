@@ -38,7 +38,7 @@ PROACTIVE_TERMINAL_STATUSES = frozenset({"sent", "skipped", "failed", "cancelled
 PROACTIVE_OUTBOX_STATUSES = frozenset({"queued", *PROACTIVE_REVIEW_STATUSES, *PROACTIVE_IN_FLIGHT_STATUSES, *PROACTIVE_TERMINAL_STATUSES})
 PROACTIVE_STATUS_TRANSITIONS = {
     "queued": frozenset({"dispatching", "sent", "skipped", "failed", "cancelled", "expired"}),
-    "dispatching": frozenset({"sent", "failed", "cancelled"}),
+    "dispatching": frozenset({"queued", "sent", "failed", "cancelled"}),
 }
 PROACTIVE_STATUS_HISTORY_TRANSITIONS = {
     "queued": frozenset({"queued", "dispatching", "sent", "skipped", "failed", "cancelled", "expired"}),
@@ -80,6 +80,8 @@ PROACTIVE_TRANSIENT_POLICY_REASONS = frozenset(
 # permanently invisible `dispatching` row.  Recovery is deliberately delayed
 # so a slow sender is not reclaimed while it is still active.
 PROACTIVE_DISPATCH_LEASE_MINUTES = 30
+PROACTIVE_DISPATCH_MAX_ATTEMPTS = 3
+PROACTIVE_DISPATCH_RETRY_BACKOFF_SECONDS = 60
 PROACTIVE_UNSAFE_TEXT_PATTERNS = (
     re.compile(r"\bdu\s+(?:hast|leidest\s+an)\s+(?:eine[rmn]?\s+)?(?:depression|angststoerung|ptbs|borderline|bipolare\s+stoerung)\b"),
     re.compile(r"\b(?:ich\s+)?diagnostiziere\b"),
@@ -1129,6 +1131,12 @@ def due_proactive_outbox_items(account_store: AccountStore, account_id: str, *, 
             continue
         if str(item.get("due_at") or "").strip() and due_at is None:
             continue
+        retry_at_raw = str(item.get("retry_at") or "").strip()
+        retry_at = _parse_proactive_datetime(retry_at_raw)
+        if retry_at_raw and retry_at is None:
+            continue
+        if retry_at is not None and retry_at > resolved_now:
+            continue
         due.append(dict(item))
     return tuple(due)
 
@@ -1287,6 +1295,7 @@ def _update_proactive_outbox_item_status_locked(
     now: datetime | None,
     dispatch: Mapping[str, Any] | None,
     expected: str,
+    retry_at: str | None = None,
 ) -> bool:
     rows = account_store.read_proactive_outbox(account_id)
     changed = False
@@ -1307,6 +1316,10 @@ def _update_proactive_outbox_item_status_locked(
             item["dispatch_attempts"] = _normalize_int(item.get("dispatch_attempts"), default=0) + 1
         else:
             item.pop("dispatching_at", None)
+        if normalized_status == "queued" and retry_at:
+            item["retry_at"] = str(retry_at).strip()
+        else:
+            item.pop("retry_at", None)
         if normalized_status == "sent":
             item["sent_at"] = timestamp
             item["last_sent_at"] = timestamp
@@ -1356,6 +1369,7 @@ def update_proactive_outbox_item_status(
     now: datetime | None = None,
     dispatch: Mapping[str, Any] | None = None,
     expected_status: str = "",
+    retry_at: str | None = None,
 ) -> bool:
     normalized_status = str(status or "").strip().casefold()
     if normalized_status not in PROACTIVE_OUTBOX_STATUSES:
@@ -1373,6 +1387,7 @@ def update_proactive_outbox_item_status(
             now=now,
             dispatch=dispatch,
             expected=expected,
+            retry_at=retry_at,
         )
 
 
@@ -1616,6 +1631,32 @@ async def dispatch_due_proactive_outbox_items(
         try:
             sent_ref = await _maybe_await(sender(route, action, item))
         except Exception as exc:  # pragma: no cover - exact adapter exception types are channel specific
+            dispatch_attempts = _normalize_int(item.get("dispatch_attempts"), default=0) + 1
+            if _proactive_dispatch_send_error_is_retryable(exc) and dispatch_attempts < PROACTIVE_DISPATCH_MAX_ATTEMPTS:
+                retry_at = _proactive_dispatch_retry_at(resolved_now, dispatch_attempts)
+                retry_reason = f"retry_scheduled:send_error:{type(exc).__name__}:attempt_{dispatch_attempts}"
+                try:
+                    requeued = update_proactive_outbox_item_status(
+                        account_store,
+                        account_id,
+                        item_id,
+                        status="queued",
+                        reason=retry_reason,
+                        now=resolved_now,
+                        expected_status="dispatching",
+                        retry_at=retry_at,
+                    )
+                except Exception:  # pragma: no cover - concrete storage failures vary by backend
+                    LOGGER.exception(
+                        "Proactive outbox retry persistence failed account=%s item=%s attempt=%s; lease recovery remains active.",
+                        account_id,
+                        item_id,
+                        dispatch_attempts,
+                    )
+                else:
+                    if requeued:
+                        results.append(ProactiveDispatchResult(account_id, item_id, "queued", retry_reason, channel))
+                        continue
             update_proactive_outbox_item_status(
                 account_store,
                 account_id,
@@ -1679,6 +1720,25 @@ async def dispatch_due_proactive_outbox_items(
 _SENDER_NOT_FOUND = object()
 
 
+def _proactive_dispatch_send_error_is_retryable(exc: Exception) -> bool:
+    if isinstance(exc, (TimeoutError, ConnectionError, OSError)):
+        return True
+    status = getattr(exc, "status_code", None)
+    if status is None:
+        status = getattr(exc, "code", None)
+    try:
+        normalized_status = int(status)
+    except (TypeError, ValueError):
+        return False
+    return normalized_status == 429 or 500 <= normalized_status <= 599
+
+
+def _proactive_dispatch_retry_at(now: datetime, dispatch_attempts: int) -> str:
+    exponent = max(0, min(4, int(dispatch_attempts) - 1))
+    delay_seconds = PROACTIVE_DISPATCH_RETRY_BACKOFF_SECONDS * (2**exponent)
+    return (now + timedelta(seconds=delay_seconds)).isoformat(timespec="seconds")
+
+
 def _sender_for_channel(senders: Mapping[str, ProactiveSender] | object, channel: str) -> Any | object:
     normalized_channel = str(channel or "").strip().casefold()
     try:
@@ -1718,6 +1778,12 @@ def _current_due_proactive_outbox_item(
         if due_raw and due_at is None:
             return None
         if due_at is not None and due_at > now:
+            return None
+        retry_at_raw = str(item.get("retry_at") or "").strip()
+        retry_at = _parse_proactive_datetime(retry_at_raw)
+        if retry_at_raw and retry_at is None:
+            return None
+        if retry_at is not None and retry_at > now:
             return None
         return dict(item)
     return None
@@ -1891,6 +1957,9 @@ def check_proactive_agent_account(
         due_at = str(item.get("due_at") or "").strip()
         if due_at and _parse_proactive_datetime(due_at) is None:
             errors.append(f"outbox item {item_id or index} has invalid due_at")
+        retry_at = str(item.get("retry_at") or "").strip()
+        if retry_at and _parse_proactive_datetime(retry_at) is None:
+            errors.append(f"outbox item {item_id or index} has invalid retry_at")
         route = item.get("route")
         if status in {"queued", "review_pending"}:
             if not isinstance(route, dict):

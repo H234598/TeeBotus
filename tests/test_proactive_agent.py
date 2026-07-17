@@ -3152,6 +3152,67 @@ def test_dispatch_defers_transient_policy_block_without_terminalizing_item(tmp_p
     assert sent == [item_id]
 
 
+def test_dispatch_requeues_retryable_sender_failure_with_backoff(tmp_path) -> None:
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    now = datetime(2026, 6, 15, 12, tzinfo=timezone.utc)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="retry_once",
+        message_text="Retry senden",
+        due_at="2026-06-15T11:00:00+00:00",
+        now=now,
+    )
+    item_id = queued.reason.removeprefix("queued:")
+    calls = 0
+
+    async def sender(_route: dict, _action: SendText, _item: dict) -> str:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise TimeoutError("temporary sender timeout")
+        return "sent-ref"
+
+    first = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now,
+        )
+    )
+
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert first[0].item_id == item_id
+    assert first[0].status == "queued"
+    assert first[0].reason.startswith("retry_scheduled:send_error:TimeoutError")
+    assert item["status"] == "queued"
+    assert item["dispatch_attempts"] == 1
+    assert item["retry_at"] == "2026-06-15T12:01:00+00:00"
+
+    second = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"signal": sender},
+            now=now + timedelta(minutes=2),
+        )
+    )
+
+    assert second[0].item_id == item_id
+    assert second[0].status == "sent"
+    item = account_store.read_proactive_outbox(account_id)[0]
+    assert item["dispatch_attempts"] == 2
+    assert "retry_at" not in item
+    assert [entry["status"] for entry in item["status_history"]] == ["queued", "dispatching", "queued", "dispatching", "sent"]
+    assert calls == 2
+
+
 def test_dispatch_survives_post_send_outbox_persistence_error(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="signal-user")
