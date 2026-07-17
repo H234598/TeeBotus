@@ -1804,14 +1804,14 @@ class AccountStore:
     def _prepare_account_memory_directory(self, account_id: str) -> Path:
         """Create and validate an account directory without following redirects."""
 
-        _ensure_safe_account_memory_path(self.root, label="store root", require_directory=True)
-        _ensure_safe_account_memory_path(self.accounts_dir, label="accounts directory", require_directory=True)
-        self.accounts_dir.mkdir(parents=True, exist_ok=True)
-        _ensure_safe_account_memory_path(self.accounts_dir, label="accounts directory", require_directory=True)
         account_dir = self.account_dir(account_id)
-        _ensure_safe_account_memory_path(account_dir, label="account directory", require_directory=True)
-        account_dir.mkdir(parents=True, exist_ok=True)
-        _ensure_safe_account_memory_path(account_dir, label="account directory", require_directory=True)
+        for path, label in (
+            (self.root, "store root"),
+            (self.accounts_dir, "accounts directory"),
+            (account_dir, "account directory"),
+        ):
+            descriptor = _open_stable_directory_descriptor(path, label=label, create_missing=True)
+            os.close(descriptor)
         return account_dir
 
     @contextmanager
