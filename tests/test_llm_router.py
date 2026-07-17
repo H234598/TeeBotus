@@ -331,7 +331,7 @@ def test_runtime_route_client_uses_gemini_key_ring_for_gemini_fallback(monkeypat
     assert client.api_key == "openai-key"
     assert client.fallback_models == ("gemini/gemini-3.5-flash",)
     assert client.api_key_ring is not None
-    assert client.api_key_ring.keys == ("demo-a1", "demo-a2")
+    assert client.api_key_ring.keys == ("demo-a1", "b1", "demo-a2")
     assert client.gemini_free_tier_limits.active
     assert client.gemini_free_tier_limits.requests_per_minute == 7
     assert client.service_tier == "flex"
