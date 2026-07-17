@@ -2873,6 +2873,24 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Verschluesselte-Payload-und-Verifier-Inspektion-ueber-stabile-FDs
+
+- 2026-07-17: `_looks_like_teebotus_encrypted_payload()`,
+  `_secret_verifier_file_has_payload()` und der Candidate-Secret-Guard lasen
+  Markerdateien nach einer Pfadpruefung per `Path.read_bytes()`. Ein Swap
+  konnte dadurch Secret-Autocreate- und Keywechsel-Entscheide beeinflussen.
+- Alle drei Pfade lesen jetzt ueber stabilen Parent-/Datei-FD mit
+  `O_NOFOLLOW`; externe Ersatzdateien werden nicht als lokale Payload
+  akzeptiert. Fehlende Dateien bleiben False, unsichere Dateien fail-closed.
+- Regression: Payload-Parent-Swap -> `6 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `302 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `62218861 fix: inspect encrypted payloads through stable descriptors`.
+
+**Aktueller Laufstand:** Seit dem Restart `6/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 14 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
