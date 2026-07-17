@@ -385,6 +385,33 @@ def test_authorize_status_recipient_overwrites_non_mapping_state(tmp_path, monke
     assert persisted_store.read_status_auth_state(account_id).get("authorized") is True
 
 
+def test_status_auth_mutations_preserve_unreadable_state(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+    writes: list[dict[str, object]] = []
+
+    def unreadable(_account_id):
+        raise RuntimeError("auth state unavailable")
+
+    monkeypatch.setattr(account_store, "read_status_auth_state", unreadable)
+    monkeypatch.setattr(account_store, "write_status_auth_state", lambda _account_id, state: writes.append(state))
+
+    from TeeBotus.runtime.status_auth import status_auth_state_admin_opted_out
+
+    assert status_auth_state_authorized(account_store, account_id) is False
+    assert status_auth_state_admin_opted_out(account_store, account_id) is True
+
+    with pytest.raises(RuntimeError, match="auth state unavailable"):
+        authorize_status_recipient(account_store, account_id, event(identity, "Statuszugang aktivieren"))
+    with pytest.raises(RuntimeError, match="auth state unavailable"):
+        from TeeBotus.runtime.status_auth import deauthorize_status_recipient
+
+        deauthorize_status_recipient(account_store, account_id, event(identity, "Adminzugang deaktivieren"))
+
+    assert writes == []
+
+
 def test_admin_command_direct_secret_authorizes_runtime_admin(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
     account_store = store(tmp_path)

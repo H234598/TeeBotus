@@ -87,7 +87,7 @@ def status_auth_state_authorized(account_store: AccountStore, account_id: str) -
     try:
         with _status_auth_lock(account_store, account_id):
             state = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
-    except (AccountStoreError, OSError, ValueError):
+    except Exception:  # noqa: BLE001 - unreadable auth state must fail closed.
         return False
     # A stale or manually merged state may contain both flags. Opt-out wins so
     # a contradictory record cannot silently restore status/admin access.
@@ -100,7 +100,7 @@ def status_auth_state_admin_opted_out(account_store: AccountStore, account_id: s
     try:
         with _status_auth_lock(account_store, account_id):
             state = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
-    except (AccountStoreError, OSError, ValueError):
+    except Exception:  # noqa: BLE001 - unreadable opt-out state must fail closed.
         # An unreadable opt-out record must never silently re-enable status
         # notifications for an account.
         return True
@@ -156,10 +156,7 @@ def authorize_status_recipient(
 ) -> dict[str, Any]:
     timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
     with _status_auth_lock(account_store, account_id):
-        try:
-            current = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
-        except (AccountStoreError, OSError, ValueError):
-            current = {}
+        current = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
         state = dict(current)
         state.update(
             {
@@ -190,10 +187,7 @@ def deauthorize_status_recipient(
 ) -> dict[str, Any]:
     timestamp = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat(timespec="seconds")
     with _status_auth_lock(account_store, account_id):
-        try:
-            current = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
-        except (AccountStoreError, OSError, ValueError):
-            current = {}
+        current = _normalize_status_auth_state(account_store.read_status_auth_state(account_id))
         state = dict(current)
         state.update(
             {

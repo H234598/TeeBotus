@@ -512,7 +512,7 @@ class TeeBotusEngine:
         if _admin_mode_is_no(mode):
             try:
                 deauthorize_status_recipient(self.account_store, account_id, event)
-            except (AccountStoreError, OSError, ValueError):
+            except Exception:  # noqa: BLE001 - auth-state persistence failures must not crash command handling.
                 return [SendText(event.chat_id, "Adminzugang konnte gerade nicht gespeichert werden.", track=False)]
             return [SendText(event.chat_id, ADMIN_AUTH_DISABLED, track=False)]
         if not mode:
@@ -552,7 +552,7 @@ class TeeBotusEngine:
                     adapter_slot=event.adapter_slot,
                 )
             authorize_status_recipient(self.account_store, account_id, event, source=source)
-        except (AccountStoreError, OSError, ValueError):
+        except Exception:  # noqa: BLE001 - auth-state persistence failures must not crash command handling.
             return [SendText(event.chat_id, "Adminzugang konnte gerade nicht gespeichert werden.", track=False)]
         return [SendText(event.chat_id, ADMIN_AUTH_ENABLED, track=False)]
 

@@ -1409,7 +1409,7 @@ def _handle_update_with_runtime_context(context: TelegramRuntimeContext, update:
 def _telegram_status_auth_pre_gate(account_store: AccountStore, event: IncomingEvent) -> StatusAuthGateResult | None:
     try:
         status_auth = evaluate_status_auth_gate(account_store, event)
-    except (AccountStoreError, OSError, ValueError, AttributeError):
+    except Exception:  # noqa: BLE001 - Telegram pre-gate must fail closed on auth backend failures.
         if not status_auth_enabled(instance_name=event.instance):
             raise
         LOGGER.exception(
