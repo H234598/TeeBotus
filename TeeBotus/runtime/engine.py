@@ -1951,6 +1951,9 @@ class TeeBotusEngine:
                 account_id = self.account_store.get_account_for_identity(event.identity_key) or ""
             except (AccountStoreError, OSError, ValueError):
                 account_id = ""
+            except Exception:  # noqa: BLE001 - alias lookup must not block message routing.
+                LOGGER.exception("Bot alias account lookup failed instance=%s", event.instance)
+                account_id = ""
         if account_id:
             names.update(account_bot_address_names(self.account_store, account_id))
         return frozenset(name for name in names if name)
@@ -1975,13 +1978,20 @@ def account_bot_address_names(account_store: AccountStore, account_id: str) -> f
         names.update(_bot_aliases_from_mapping(account_store.read_agent_state(account_id)))
     except (AccountStoreError, OSError, ValueError, AttributeError):
         pass
+    except Exception:  # noqa: BLE001 - optional alias discovery must fail open.
+        LOGGER.exception("Bot alias agent-state lookup failed account=%s", account_id)
     try:
         names.update(_bot_aliases_from_mapping(account_store.read_memory_index(account_id)))
     except (AccountStoreError, OSError, ValueError, AttributeError):
         pass
+    except Exception:  # noqa: BLE001 - optional alias discovery must fail open.
+        LOGGER.exception("Bot alias index lookup failed account=%s", account_id)
     try:
         entries = account_store.read_memory_entries(account_id)
     except (AccountStoreError, OSError, ValueError, AttributeError):
+        entries = []
+    except Exception:  # noqa: BLE001 - optional alias discovery must fail open.
+        LOGGER.exception("Bot alias memory lookup failed account=%s", account_id)
         entries = []
     for entry in entries:
         if not isinstance(entry, dict):
