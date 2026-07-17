@@ -66,6 +66,39 @@ def test_proactive_review_rejects_unsafe_and_missing_selected_instances(tmp_path
     assert not (tmp_path / "outside").exists()
 
 
+def test_proactive_review_rejects_symlinked_instances_without_store_access(tmp_path: Path) -> None:
+    instances_dir = tmp_path / "instances"
+    instances_dir.mkdir()
+    external_instance = tmp_path / "external-instance"
+    (external_instance / "data" / "accounts").mkdir(parents=True)
+    (instances_dir / "LinkedInstance").symlink_to(external_instance, target_is_directory=True)
+    calls = []
+
+    def factory(*_args):
+        calls.append(True)
+        raise AssertionError("review must not open stores through symlinked instances")
+
+    listed = list_proactive_review_items(
+        instances_dir=instances_dir,
+        selected_instances=("LinkedInstance",),
+        store_factory=factory,
+    )
+    acted = review_proactive_item(
+        instances_dir=instances_dir,
+        instance_name="LinkedInstance",
+        account_id="a" * 128,
+        item_id="pro_bad",
+        action="approve",
+        store_factory=factory,
+    )
+
+    assert listed["ok"] is False
+    assert listed["errors"] == ["LinkedInstance: selected_instance_symlink"]
+    assert acted["ok"] is False
+    assert acted["reason"] == "instance_symlink"
+    assert calls == []
+
+
 def test_proactive_review_does_not_hide_store_account_discovery_errors(tmp_path: Path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     (instance_dir / "data" / "accounts").mkdir(parents=True)

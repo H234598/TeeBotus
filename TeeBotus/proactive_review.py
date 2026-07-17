@@ -80,6 +80,9 @@ def list_proactive_review_items(
         errors.append(f"instance_discovery_failed: {type(exc).__name__}: {exc}")
         instance_dirs = []
     for instance_dir in instance_dirs:
+        if selected and instance_dir.is_symlink():
+            errors.append(f"{instance_dir.name}: selected_instance_symlink")
+            continue
         if selected and (not instance_dir.is_dir() or not (instance_dir / "data" / "accounts").is_dir()):
             errors.append(f"{instance_dir.name}: selected_instance_not_found")
             continue
@@ -145,14 +148,22 @@ def review_proactive_item(
             "route": {},
         }
     instance_dir = instances_dir / normalized_instance_name
-    if not instance_dir.is_dir() or not (instance_dir / "data" / "accounts").is_dir():
+    if instances_dir.is_symlink():
+        instance_error = "instances_root_symlink"
+    elif instance_dir.is_symlink():
+        instance_error = "instance_symlink"
+    elif not instance_dir.is_dir() or not (instance_dir / "data" / "accounts").is_dir():
+        instance_error = "instance_not_found"
+    else:
+        instance_error = ""
+    if instance_error:
         return {
             "ok": False,
             "action": normalized_action,
             "instance": normalized_instance_name,
             "account_id": account_id,
             "item_id": item_id,
-            "reason": "instance_not_found",
+            "reason": instance_error,
             "route": {},
         }
     try:
@@ -247,11 +258,17 @@ def _print_or_json(report: dict[str, Any], *, json_output: bool) -> None:
 
 
 def _instance_dirs(instances_dir: Path, selected: tuple[str, ...]) -> list[Path]:
+    if instances_dir.is_symlink():
+        raise ValueError("symlinked instances root")
     if selected:
         return [instances_dir / name for name in selected if _is_safe_instance_name(name)]
     if not instances_dir.exists():
         return []
-    return sorted(path for path in instances_dir.iterdir() if path.is_dir() and (path / "data" / "accounts").exists())
+    return sorted(
+        path
+        for path in instances_dir.iterdir()
+        if not path.is_symlink() and path.is_dir() and (path / "data" / "accounts").exists()
+    )
 
 
 def _is_safe_instance_name(value: str) -> bool:
