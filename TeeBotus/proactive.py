@@ -576,7 +576,13 @@ async def run_proactive_agent_cycle(
         for name in selected
         if not _is_safe_instance_name(name)
     ]
-    for instance_dir in _instance_dirs(instances_dir, selected):
+    instance_discovery_error = ""
+    try:
+        instance_dirs = _instance_dirs(instances_dir, selected)
+    except (OSError, ValueError) as exc:
+        instance_dirs = []
+        instance_discovery_error = f"{type(exc).__name__}: {exc}"
+    for instance_dir in instance_dirs:
         instance_report: dict[str, Any] = {
             "instance": instance_dir.name,
             "enabled": proactive_agent_instance_enabled(instance_dir.name, env=env),
@@ -746,13 +752,16 @@ async def run_proactive_agent_cycle(
                 account_report["error"] = f"{type(exc).__name__}: {exc}"
             instance_report["accounts"].append(account_report)
         instances.append(instance_report)
-    return {
-        "ok": _cycle_ok(instances),
+    report = {
+        "ok": not instance_discovery_error and _cycle_ok(instances),
         "dry_run": not dispatch,
         "dispatch": dispatch,
         "generated_at": resolved_now.isoformat(timespec="seconds"),
         "instances": instances,
     }
+    if instance_discovery_error:
+        report["error"] = f"instance_discovery_failed: {instance_discovery_error}"
+    return report
 
 
 def _effective_model_planners(
@@ -888,6 +897,8 @@ def _proactive_llm_role_report(client: Any | None, *, role: str) -> dict[str, st
 def _print_dry_run_report(report: dict[str, Any]) -> None:
     mode = "dispatch" if report.get("dispatch") else "dry_run"
     print(f"proactive_{mode} generated_at={report['generated_at']}")
+    if report.get("error"):
+        print(f"error={report['error']}")
     for instance in report["instances"]:
         enabled = "yes" if instance.get("enabled") else "no"
         print(f"instance={instance['instance']} enabled={enabled}")

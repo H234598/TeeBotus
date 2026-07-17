@@ -970,6 +970,22 @@ def test_proactive_cycle_rejects_path_like_instance_selection(tmp_path) -> None:
     assert not (tmp_path / "outside").exists()
 
 
+def test_proactive_cycle_reports_instances_directory_errors(tmp_path) -> None:
+    instances_path = tmp_path / "instances-file"
+    instances_path.write_text("not a directory", encoding="utf-8")
+
+    report = run_proactive_agent_dry_run(
+        instances_dir=instances_path,
+        env={},
+        store_factory=lambda *_args: (_ for _ in ()).throw(AssertionError("store must not open")),
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert report["ok"] is False
+    assert report["instances"] == []
+    assert report["error"].startswith("instance_discovery_failed: NotADirectoryError:")
+
+
 def test_proactive_cycle_can_run_local_planner_before_due_selection(tmp_path) -> None:
     instance_dir = tmp_path / "instances" / "Depressionsbot"
     account_store = store_for(instance_dir)
