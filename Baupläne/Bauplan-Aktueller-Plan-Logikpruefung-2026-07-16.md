@@ -4712,9 +4712,24 @@ Commits.
 - 2026-07-17: Biene meldete, `_mirror_write()` loesche nach erfolgreicher
   Reparatur den `unrecoverable`-Marker nicht.
 - Gegenpruefung: Der globale `_write()`-Guard blockiert jeden normalen Write vor
-  `_mirror_write()`, solange der Account unrecoverable ist. Marker-Loeschung im
-  Mirror waere daher heute unerreichbar und koennte den Fail-Closed-Schutz
-  verwischen. Kein Code-Fix.
+ `_mirror_write()`, solange der Account unrecoverable ist. Marker-Loeschung im
+ Mirror waere daher heute unerreichbar und koennte den Fail-Closed-Schutz
+ verwischen. Kein Code-Fix.
+
+### Telegram-Journal-Cleanup-wiederholen
+
+- 2026-07-17: Nach erfolgreichem Telegram-Offset-Write wurde ein fehlgeschlagenes
+  `TelegramDispatchJournal.complete()` nur geloggt. Der Update-Offset war schon
+  bestaetigt, aber der alte Journal-Eintrag blieb ohne weiteren Cleanup-Versuch.
+- Fehlgeschlagene Cleanup-Keys werden jetzt im Runtime-Kontext gesammelt und vor
+  jedem weiteren Poll erneut finalisiert. Der Update-Handler laeuft dabei nicht
+  erneut; nur Journal-Aufraeumung wird wiederholt.
+- Tests: Telegram-Polling-Fokus `2 passed`; Ruff und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `83cdafb6 fix: retry Telegram journal cleanup`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `14/20` Commits. Kein Push.
+Restart nach 6 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
 ### Vollstaendiger-Offline-Regressionslauf
 
