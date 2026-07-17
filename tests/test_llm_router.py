@@ -962,6 +962,17 @@ def test_runtime_text_client_profile_filters_remote_fallback_without_explicit_al
     assert allowed.fallback_models == ("groq/llama-3.3-70b-versatile", "ollama_chat/qwen2.5:7b")
 
 
+def test_runtime_text_client_profile_uses_instruction_fallback_when_runtime_is_empty() -> None:
+    client = build_runtime_text_llm_client(
+        instructions=BotInstructions(llm_fallback_models=("ollama_chat/qwen2.5:7b",)),
+        openai_client=None,
+        profile="local_ollama",
+    )
+
+    assert isinstance(client, LiteLLMTextClient)
+    assert client.fallback_models == ("ollama_chat/qwen2.5:7b",)
+
+
 def test_runtime_fallback_filter_blocks_unprefixed_gemini_for_gemini_provider_alias() -> None:
     from TeeBotus.runtime.llm_factory import filter_runtime_fallback_models
 

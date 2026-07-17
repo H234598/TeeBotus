@@ -391,28 +391,25 @@ def _build_profile_client(
     resolved_api_key = str(override_api_key or "").strip() or resolved_runtime_api_key or profile_api_key
     resolved_api_base = str(api_base or "").strip() or profile.base_url
     resolved_openai_client = openai_client
+    resolved_fallback_models = filter_runtime_fallback_models(
+        provider=profile.provider,
+        fallback_models=fallback_models or instructions.llm_fallback_models,
+        allow_remote_fallback=allow_remote_fallback,
+    )
     return build_text_llm_client(
         instructions=instructions,
         openai_client=resolved_openai_client,
         default_api_key=resolved_api_key,
         provider=profile.provider,
         model=profile.model,
-        fallback_models=filter_runtime_fallback_models(
-            provider=profile.provider,
-            fallback_models=fallback_models,
-            allow_remote_fallback=allow_remote_fallback,
-        ),
+        fallback_models=resolved_fallback_models,
         api_key=resolved_api_key,
         api_key_ring=_gemini_api_key_ring_for_route(
             source,
             instance_name=instance_name,
             provider=profile.provider,
             model=profile.model,
-            fallback_models=filter_runtime_fallback_models(
-                provider=profile.provider,
-                fallback_models=fallback_models,
-                allow_remote_fallback=allow_remote_fallback,
-            ),
+            fallback_models=resolved_fallback_models,
             explicit_api_key=override_api_key,
             scope=gemini_key_scope,
         ),
@@ -421,11 +418,7 @@ def _build_profile_client(
             instance_name=instance_name,
             provider=profile.provider,
             model=profile.model,
-            fallback_models=filter_runtime_fallback_models(
-                provider=profile.provider,
-                fallback_models=fallback_models,
-                allow_remote_fallback=allow_remote_fallback,
-            ),
+            fallback_models=resolved_fallback_models,
         ),
         api_base=resolved_api_base,
         purpose=str(purpose or "").strip() or "normal_chat",
@@ -437,11 +430,7 @@ def _build_profile_client(
             instance_name=instance_name,
             provider=profile.provider,
             model=profile.model,
-            fallback_models=filter_runtime_fallback_models(
-                provider=profile.provider,
-                fallback_models=fallback_models,
-                allow_remote_fallback=allow_remote_fallback,
-            ),
+            fallback_models=resolved_fallback_models,
             explicit_service_tier=service_tier or profile.service_tier or instructions.llm_service_tier,
         ),
         use_instruction_fallback_models=False,
