@@ -2754,6 +2754,24 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 18 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Codex-Manueller-Ack-respektiert-offene-Retries
+
+- 2026-07-17: `acknowledge_codex_history_item()` setzte Item ungeachtet
+  anderer Empfaenger direkt auf `acknowledged`. Ein manueller Ack von Admin A
+  konnte damit den retry-faehigen Fehler von Admin B verdecken und weitere
+  Zustellung verhindern.
+- Manueller Ack nutzt jetzt dieselbe per-Empfaenger-Aggregation wie Receipt und
+  Reply. Offener transienter Fehler haelt Item bei `queued`; Einzel-Ack bleibt
+  im Dispatch-Result und API-Response sichtbar.
+- Regression: kompletter `tests/test_codex_history.py`-Lauf -> `182 passed`;
+  Ruff mit bestehender `E402`-Ausnahme, `compileall` und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5501b81a fix: keep codex retries open after manual ack`.
+
+**Aktueller Laufstand:** Seit dem Restart `4/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 16 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Applet-Fallback-Positiv-und-Negativfall-fixiert
 
 - 2026-07-17: Der Applet-Fallback-Fix bekam einen expliziten Paar-Test fuer
