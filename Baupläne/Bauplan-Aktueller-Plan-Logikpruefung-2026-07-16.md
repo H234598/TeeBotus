@@ -6154,3 +6154,19 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
 bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
+
+### Proactive-Health meldet unerwartete Backend-Fehler
+
+- 2026-07-17: `check_proactive_agent_account` fing bei Agent-State, Outbox
+  und Route-Matching nur bekannte Store-/I/O-Fehler. Unerwartete SQL- oder
+  Backend-Ausnahmen konnten dadurch Healthcheck, Doctor oder Applet abbrechen.
+- Alle drei Health-Reads melden jetzt auch unerwartete `Exception`-Fehler als
+  `ok=False` mit Typ und Grund. Der Check mutiert dabei keine Daten.
+- Tests: `tests/test_proactive_agent.py` `174 passed`; Fokus fuer State-,
+  Outbox- und Route-Backendfehler `5 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6b65af5f fix: report proactive health backend failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`3/20` Commits. Kein Push. Restart nach 17 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
