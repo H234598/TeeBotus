@@ -2944,6 +2944,23 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 8 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### Account-Text-Merge-Reads-ueber-stabile-FDs
+
+- 2026-07-17: `_merge_text()` las Quell- und Zielnotizen nach
+  `exists()`-Pruefung per `Path.read_text()`. Ein Swap waehrend Legacy-/Account-
+  Merge konnte fremde Habits in den Account schreiben.
+- Source und Target werden jetzt ueber stabile Parent-/Datei-FDs gelesen;
+  fehlendes Target bleibt leer, fehlende Source bleibt Merge-Noop. Der bereits
+  atomare Ziel-Write bleibt unveraendert.
+- Regression: Merge-/Alias-Fokus -> `10 passed`; kompletter
+  `tests/test_account_store.py`-Lauf -> `304 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `acc544b3 fix: read merged account text through stable descriptors`.
+
+**Aktueller Laufstand:** Seit dem Restart `14/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 6 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
