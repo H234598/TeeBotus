@@ -762,7 +762,7 @@ async def run_proactive_agent_cycle(
                             account_report["dispatch_result_ids"] = list(append_dispatch_results(account_id, persisted_rows))
                         except (AccountStoreError, OSError, ValueError) as exc:
                             account_report["dispatch_persistence_error"] = f"{type(exc).__name__}: {exc}"
-            except (AccountStoreError, OSError, ValueError) as exc:
+            except Exception as exc:  # noqa: BLE001 - one account must not abort the scheduler report.
                 account_report["error"] = f"{type(exc).__name__}: {exc}"
             instance_report["accounts"].append(account_report)
         instances.append(instance_report)

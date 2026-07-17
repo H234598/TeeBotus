@@ -899,6 +899,35 @@ def test_proactive_cycle_reports_account_store_errors_without_crashing(tmp_path)
     assert "AccountStoreError: boom" in account["error"]
 
 
+def test_proactive_cycle_reports_sender_factory_errors_without_crashing(tmp_path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    identity = signal_identity_key(source_uuid="sender-factory-error")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    enable_proactive_agent(account_store, account_id, categories=("reminder",))
+
+    def broken_sender_factory(_instance: str, _store: AccountStore) -> dict:
+        raise RuntimeError("sender unavailable")
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            dispatch=True,
+            sender_factory=broken_sender_factory,
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert report["ok"] is False
+    assert account["account_id"] == account_id
+    assert account["error"] == "RuntimeError: sender unavailable"
+
+
 def test_proactive_cycle_isolates_account_store_errors_per_instance(tmp_path) -> None:
     instances_dir = tmp_path / "instances"
     broken_dir = instances_dir / "BrokenInstance" / "data" / "accounts"
