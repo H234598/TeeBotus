@@ -554,7 +554,11 @@ def approve_proactive_review_item(
             history = []
             target["status_history"] = history
         history.append({"at": timestamp, "status": "queued", "reason": "human_review_approved"})
-        account_store.write_proactive_outbox(account_id, rows)
+        try:
+            account_store.write_proactive_outbox(account_id, rows)
+        except Exception:  # pragma: no cover - concrete storage failures vary by backend.
+            LOGGER.exception("Proactive review approval persistence failed account=%s item=%s", account_id, item_id)
+            return ProactiveDecision(False, "status_update_failed")
         return ProactiveDecision(True, f"queued:{item_id}", decision.route)
 
 
@@ -590,7 +594,11 @@ def reject_proactive_review_item(
                 history = []
                 item["status_history"] = history
             history.append({"at": timestamp, "status": "cancelled", "reason": "human_review_rejected"})
-            account_store.write_proactive_outbox(account_id, rows)
+            try:
+                account_store.write_proactive_outbox(account_id, rows)
+            except Exception:  # pragma: no cover - concrete storage failures vary by backend.
+                LOGGER.exception("Proactive review rejection persistence failed account=%s item=%s", account_id, item_id)
+                return ProactiveDecision(False, "status_update_failed")
             return ProactiveDecision(True, f"cancelled:{item_id}")
         return ProactiveDecision(False, "item_not_found")
 
