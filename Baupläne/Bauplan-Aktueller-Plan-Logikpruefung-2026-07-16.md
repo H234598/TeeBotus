@@ -5057,6 +5057,24 @@ Commits.
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Worker meldet fehlgeschlagene Sender-Persistenz
+
+- 2026-07-17: Wenn sich die Route erst nach dem Claim aenderte, behandelten
+  drei Terminalpfade (`missing_sender`, `invalid_sender`, `invalid_file`) den
+  Rueckgabewert des `dispatching -> failed`-Updates nicht. Ein Schreibfehler
+  konnte dadurch als eigentliche Sender-/Dateifehlerursache erscheinen.
+- Gemeinsamer Post-Claim-Guard prueft jetzt Rueckgabewert und Ausnahme. Bei
+  fehlender Persistenz wird `status_update_failed` reportiert; Item bleibt
+  sichtbar und Versand bleibt unterdrueckt.
+- Test: `tests/test_proactive_agent.py` `179 passed`; gezielter
+  Route-Refresh-/Sender-Persistenztest gruen; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `934bcc7b fix: report claimed sender persistence failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`9/20` Commits. Kein Push. Restart nach 11 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Memory-Health-Datenbankfehler
 
 - 2026-07-17: Die Ermittlung von Account-IDs aus dem Memory-Backend konnte bei
