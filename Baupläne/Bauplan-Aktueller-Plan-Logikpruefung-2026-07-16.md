@@ -2767,6 +2767,23 @@ erst bei 100 Commits.
 zaehlt mit. Kein Push. Restart nach 8 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
 
+### SQLite-Secret-Inspektion-ueber-stabile-Deskriptoren
+
+- 2026-07-17: Secret-/Manifest-Guards lasen SQLite-Payload-Existenz und
+  Account-IDs ueber `path.resolve()`/`sqlite3.connect(path)`. Ein Datei-Swap
+  konnte dadurch die falsche Datenbank fuer Autocreate-/Keywechsel-Entscheide
+  liefern.
+- Beide Inspektionspfade nutzen jetzt stabilen Parent-/Target-FD mit
+  Inode-Pruefung vor und nach `connect()`; Symlink-Sidecars und unsichere
+  Targets blockieren fail-closed.
+- Regression: simulierter Pfadtausch waehrend Secret-Inspektion -> `5 passed`;
+  Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ad7a84f8 fix: inspect sqlite memory through stable descriptors`.
+
+**Aktueller Laufstand:** Seit dem Restart `14/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 6 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
+
 ### Identity-Mapping-Ownership
 
 - 2026-07-17: `_identity_payload_for_key()` pruefte `account_id` und Profil,
