@@ -5303,6 +5303,23 @@ bleibt erst bei 100 Commits.
 `18/20` Commits. Kein Push. Restart nach 2 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Proactive-Review reportiert unerwartete Aktionsfehler
+
+- 2026-07-17: `review_proactive_item` fing bei `approve`/`reject` nur
+  bekannte Store-/Value-Fehler. Unerwartete Policy-/Backend-Fehler konnten
+  den CLI-/JSON-Aufruf ohne Zielmetadaten abbrechen.
+- Aktionsfehler werden jetzt als `review_store_error:<Typ>: <Text>` mit
+  Instanz, Account und Item strukturiert ausgegeben. Erfolgs- und
+  Ablehnungslogik bleibt unveraendert.
+- Test: `tests/test_proactive_review.py` `14 passed`; Runtime-Fehler-Fokus `5
+  passed`; Ruff, `compileall` und `git diff --check` gruen. Kein Provider/API-
+  Aufruf.
+- Code-Commit: `12fde513 fix: report proactive review failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`20/20` Commits. Kein Push. Restart jetzt. Naechster Zyklus startet danach
+bei `0/20`; naechster Push bleibt erst bei 100 Commits.
+
 ### Proactive-Consentzustand fail-closed bei korruptem enabled-State
 
 - 2026-07-17: Ein inkonsistenter Agent-State mit `enabled=true`, aber leerem
