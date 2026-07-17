@@ -2814,20 +2814,24 @@ def _apply_proactive_llm_memory_decision(
         }
         for source_id in source_ids
     ]
-    return account_store.append_structured_memory_entry(
-        account_id,
-        {
-            "kind": kind,
-            "memory_type": "semantic",
-            "user_text": text,
-            "bot_text": "Validated LLM planner proposal; stored as internal hypothesis/support note, not a diagnosis.",
-            "importance": _bounded_int(decision.get("importance"), default=3, low=1, high=5),
-            "related_ids": source_ids,
-            "supports": source_ids,
-            "relations": relations,
-            "proactive_llm_plan": True,
-        },
-    )
+    try:
+        return account_store.append_structured_memory_entry(
+            account_id,
+            {
+                "kind": kind,
+                "memory_type": "semantic",
+                "user_text": text,
+                "bot_text": "Validated LLM planner proposal; stored as internal hypothesis/support note, not a diagnosis.",
+                "importance": _bounded_int(decision.get("importance"), default=3, low=1, high=5),
+                "related_ids": source_ids,
+                "supports": source_ids,
+                "relations": relations,
+                "proactive_llm_plan": True,
+            },
+        )
+    except Exception:  # noqa: BLE001 - report persistence failure to planner audit.
+        LOGGER.exception("LLM proactive memory persistence failed account=%s", account_id)
+        return "error:storage_write_failed"
 
 
 def _apply_proactive_llm_queue_decision(
@@ -2866,19 +2870,23 @@ def _apply_proactive_llm_queue_decision(
         "review_signal": str(decision.get("review_signal") or "").strip()[:240],
         "collaboration_marker": str(decision.get("collaboration_marker") or "agent_suggested").strip()[:80],
     }
-    result = queue_proactive_message(
-        account_store,
-        account_id,
-        category=category,
-        intent=str(decision.get("intent") or "llm_planner").strip()[:80] or "llm_planner",
-        message_text=message_text,
-        reason_memory_ids=reason_memory_ids,
-        due_at=due_at or _default_proactive_due_at(now),
-        now=now,
-        risk_gate=risk_gate,
-        planner=planner,
-        file=decision.get("file") if isinstance(decision.get("file"), Mapping) else None,
-    )
+    try:
+        result = queue_proactive_message(
+            account_store,
+            account_id,
+            category=category,
+            intent=str(decision.get("intent") or "llm_planner").strip()[:80] or "llm_planner",
+            message_text=message_text,
+            reason_memory_ids=reason_memory_ids,
+            due_at=due_at or _default_proactive_due_at(now),
+            now=now,
+            risk_gate=risk_gate,
+            planner=planner,
+            file=decision.get("file") if isinstance(decision.get("file"), Mapping) else None,
+        )
+    except Exception:  # noqa: BLE001 - report persistence failure to planner audit.
+        LOGGER.exception("LLM proactive queue persistence failed account=%s", account_id)
+        return "error:storage_write_failed"
     if not result.allowed:
         return f"error:policy:{result.reason}"
     if result.reason.startswith("queued:"):
