@@ -6713,6 +6713,24 @@ danach neuer Zyklus bei `0/20`. Naechster Push bleibt erst bei 100 Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `10/20` voll.
 
+### Telegram-Poller toleriert Minimal-Runtime-Contexts
+
+- 2026-07-17: Dispatch-Journal-Replay las `instance_name` und `adapter_slot`
+  direkt aus `runtime_context`. Test-/Kompatibilitaets-Contexts ohne diese
+  Felder liessen Poller nach einem Updatefehler vor Offset-/Journalpflege
+  abbrechen.
+- Retry-Key-Bildung nutzt jetzt sichere Defaults (`""`, Slot `1`). Voll
+  aufgebaute Runtime-Contexts behalten ihre Werte; fehlgeschlagene Updates
+  werden wiederholbar verarbeitet.
+- Test: `tests/test_bot.py` `202 passed`, 17 Subtests; Ruff und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ac3c43a5 fix: tolerate minimal telegram runtime contexts`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem letzten Restart
+`11/20` Commits. Kein Push. Restart nach 9 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `12/20` voll.
+
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
