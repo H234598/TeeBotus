@@ -832,6 +832,43 @@ def test_dispatch_fails_loudness_item_when_post_claim_state_is_unavailable(tmp_p
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "failed"
 
 
+def test_dispatch_reports_loudness_failure_persistence_error(tmp_path, monkeypatch) -> None:
+    account_store = store(tmp_path)
+    identity = telegram_identity_key(1)
+    account_id = prepare_account_with_route(account_store, identity)
+    now = datetime(2026, 6, 15, 15, tzinfo=timezone.utc)
+    assert maybe_notification_loudness_prompt_action(event(identity), account_store, account_id, now=now - timedelta(hours=7)) is not None
+    set_identity_last_seen(account_store, identity, now)
+    assert queue_due_notification_loudness_prompts(account_store, account_id, now=now)
+
+    import TeeBotus.runtime.proactive_agent as proactive_agent
+
+    calls = 0
+
+    def flaky_loudness_state(*_args, **_kwargs):
+        nonlocal calls
+        calls += 1
+        if calls >= 3:
+            raise RuntimeError("notification loudness state unavailable")
+        return True
+
+    monkeypatch.setattr(proactive_agent, "notification_loudness_outbox_item_is_active", flaky_loudness_state)
+    monkeypatch.setattr(proactive_agent, "update_proactive_outbox_item_status", lambda *_args, **_kwargs: False)
+
+    result = asyncio.run(
+        dispatch_due_proactive_outbox_items(
+            account_store,
+            account_id,
+            senders={"telegram": lambda *_args: "must-not-send"},
+            now=now,
+        )
+    )
+
+    assert result[0].status == "failed"
+    assert result[0].reason == "status_update_failed"
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "dispatching"
+
+
 def test_queued_loudness_item_requires_explicit_pending_route_state(tmp_path) -> None:
     account_store = store(tmp_path)
     identity = telegram_identity_key(1)

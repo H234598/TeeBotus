@@ -1924,36 +1924,47 @@ async def dispatch_due_proactive_outbox_items(
             try:
                 loudness_active = notification_loudness_outbox_item_is_active(account_store, account_id, item)
             except Exception:  # noqa: BLE001 - state backend failures must fail closed.
-                update_proactive_outbox_item_status(
-                    account_store,
-                    account_id,
-                    item_id,
-                    status="failed",
-                    reason="notification_loudness_state_unavailable",
-                    now=resolved_now,
-                    expected_status="dispatching",
-                )
+                try:
+                    failed_updated = update_proactive_outbox_item_status(
+                        account_store,
+                        account_id,
+                        item_id,
+                        status="failed",
+                        reason="notification_loudness_state_unavailable",
+                        now=resolved_now,
+                        expected_status="dispatching",
+                    )
+                except Exception:  # pragma: no cover - concrete storage failures vary by backend.
+                    LOGGER.exception("Proactive loudness failure persistence failed account=%s item=%s", account_id, item_id)
+                    failed_updated = False
                 results.append(
                     ProactiveDispatchResult(
                         account_id,
                         item_id,
                         "failed",
-                        "notification_loudness_state_unavailable",
+                        "notification_loudness_state_unavailable" if failed_updated else "status_update_failed",
                         channel,
                     )
                 )
                 continue
             if not loudness_active:
-                update_proactive_outbox_item_status(
-                    account_store,
-                    account_id,
-                    item_id,
-                    status="cancelled",
-                    reason="notification_loudness_decided",
-                    now=resolved_now,
-                    expected_status="dispatching",
-                )
-                results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "notification_loudness_decided", channel))
+                try:
+                    cancelled = update_proactive_outbox_item_status(
+                        account_store,
+                        account_id,
+                        item_id,
+                        status="cancelled",
+                        reason="notification_loudness_decided",
+                        now=resolved_now,
+                        expected_status="dispatching",
+                    )
+                except Exception:  # pragma: no cover - concrete storage failures vary by backend.
+                    LOGGER.exception("Proactive loudness cancellation persistence failed account=%s item=%s", account_id, item_id)
+                    cancelled = False
+                if not cancelled:
+                    results.append(ProactiveDispatchResult(account_id, item_id, "failed", "status_update_failed", channel))
+                else:
+                    results.append(ProactiveDispatchResult(account_id, item_id, "skipped", "notification_loudness_decided", channel))
                 continue
         try:
             sent_ref = await _maybe_await(sender(route, action, item))
