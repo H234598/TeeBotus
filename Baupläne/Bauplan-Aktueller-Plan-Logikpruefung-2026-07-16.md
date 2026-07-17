@@ -5186,6 +5186,23 @@ bleibt erst bei 100 Commits.
 `4/20` Commits. Kein Push. Restart nach 16 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
 
+### Codex-History bewahrt kaputte Statushistorien
+
+- 2026-07-17: Codex-Status-Update und Worker-Claim ersetzten eine nicht
+  listenfoermige `status_history` durch `[]`. Damit konnten Auditdaten von
+  Summarys beim normalen Versand verloren gehen.
+- Beide Mutationspfade setzen Status und Versandmetadaten weiterhin, lassen
+  eine kaputte History aber unveraendert. Fehlende bzw. listenfoermige
+  Histories erhalten den neuen Status-Eintrag.
+- Tests: `tests/test_codex_history.py` `187 passed`; zwei Regressionstests,
+  Ruff mit bestehendem `E402`-Importbefund ausgenommen, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e036e9e5 fix: preserve codex history audit`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`6/20` Commits. Kein Push. Restart nach 14 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
+
 ### Proactive-Consentzustand fail-closed bei korruptem enabled-State
 
 - 2026-07-17: Ein inkonsistenter Agent-State mit `enabled=true`, aber leerem
