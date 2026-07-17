@@ -550,57 +550,61 @@ def _quarantine_instance_unreadable_metadata(
     if not items or not apply:
         return result
     _prepare_private_dir(instance_quarantine_dir)
+    manifest_path = instance_quarantine_dir / "manifest.json"
+    manifest_descriptor = _reserve_quarantine_manifest(manifest_path, result)
     moved_items = []
-    for item in items:
-        path = item["path"]
-        if item["kind"] == "accounts_dir":
-            account_ids = [
-                str(account_id)
-                for account_id in item.get("account_ids", [])
-                if TOKEN_HEX_RE.fullmatch(str(account_id))
-            ]
-            moved_account_dirs = []
-            for account_id in account_ids:
-                account_dir = path / account_id
-                if not account_dir.is_dir() or account_dir.is_symlink():
-                    continue
-                target = instance_quarantine_dir / "accounts" / account_id
-                if target.exists():
-                    target = instance_quarantine_dir / "accounts" / f"{account_id}.account_dir"
-                _prepare_private_dir(target.parent)
-                _move_quarantine_source(account_dir, target)
-                moved_account_dirs.append(
+    try:
+        for item in items:
+            path = item["path"]
+            if item["kind"] == "accounts_dir":
+                account_ids = [
+                    str(account_id)
+                    for account_id in item.get("account_ids", [])
+                    if TOKEN_HEX_RE.fullmatch(str(account_id))
+                ]
+                moved_account_dirs = []
+                for account_id in account_ids:
+                    account_dir = path / account_id
+                    if not account_dir.is_dir() or account_dir.is_symlink():
+                        continue
+                    target = instance_quarantine_dir / "accounts" / account_id
+                    if target.exists():
+                        target = instance_quarantine_dir / "accounts" / f"{account_id}.account_dir"
+                    _prepare_private_dir(target.parent)
+                    _move_quarantine_source(account_dir, target)
+                    moved_account_dirs.append(
+                        {
+                            "path": str(account_dir),
+                            "quarantine_path": str(target),
+                        }
+                    )
+                moved_items.append(
                     {
-                        "path": str(account_dir),
-                        "quarantine_path": str(target),
+                        "kind": item["kind"],
+                        "path": str(path),
+                        "account_ids": account_ids,
+                        "quarantine_paths": [entry["quarantine_path"] for entry in moved_account_dirs],
+                        "error": item["error"],
                     }
                 )
+                continue
+            target = instance_quarantine_dir / path.name
+            if target.exists():
+                target = instance_quarantine_dir / f"{path.name}.{safe_artifact_name(item['kind'], default='item')}"
+            _prepare_private_dir(target.parent)
+            _move_quarantine_source(path, target)
             moved_items.append(
                 {
                     "kind": item["kind"],
                     "path": str(path),
-                    "account_ids": account_ids,
-                    "quarantine_paths": [entry["quarantine_path"] for entry in moved_account_dirs],
+                    "quarantine_path": str(target),
                     "error": item["error"],
                 }
             )
-            continue
-        target = instance_quarantine_dir / path.name
-        if target.exists():
-            target = instance_quarantine_dir / f"{path.name}.{safe_artifact_name(item['kind'], default='item')}"
-        _prepare_private_dir(target.parent)
-        _move_quarantine_source(path, target)
-        moved_items.append(
-            {
-                "kind": item["kind"],
-                "path": str(path),
-                "quarantine_path": str(target),
-                "error": item["error"],
-            }
-        )
-    result["items"] = moved_items
-    manifest_path = instance_quarantine_dir / "manifest.json"
-    _write_quarantine_manifest(manifest_path, result)
+        result["items"] = moved_items
+        _write_quarantine_manifest_fd(manifest_descriptor, result)
+    finally:
+        os.close(manifest_descriptor)
     return result
 
 
@@ -824,34 +828,38 @@ def _quarantine_instance_unrecoverable(
 
     _prepare_private_dir(instance_quarantine_dir)
     snapshots_dir = instance_quarantine_dir / "sqlite_snapshots"
-    snapshot_records = []
-    for sqlite_path in sqlite_sources:
-        snapshot_path = snapshots_dir / sqlite_path.name
-        _snapshot_sqlite_database(sqlite_path, snapshot_path)
-        result["totals"]["snapshots_created"] += 1
-        snapshot_record = {
-            "path": str(sqlite_path),
-            "payload_kind": "encrypted_account_memory",
-            "snapshot": str(snapshot_path),
-            "rows_deleted": 0,
-        }
-        snapshot_records.append((sqlite_path, snapshot_record))
-        result["sqlite_sources"].append(snapshot_record)
-    moved_files = []
-    for path in json_files:
-        target = instance_quarantine_dir / "json_files" / path.parent.name / path.name
-        _prepare_private_dir(target.parent)
-        _move_quarantine_source(path, target)
-        moved_files.append({"path": str(path), "quarantine_path": str(target)})
-    result["json_files"] = moved_files
-    result["totals"]["json_files_quarantined"] = len(moved_files)
-    for sqlite_path, snapshot_record in snapshot_records:
-        deleted_rows = _delete_sqlite_account_rows(sqlite_path, instance_name, account_ids)
-        result["totals"]["sqlite_rows_quarantined"] += deleted_rows
-        snapshot_record["rows_deleted"] = deleted_rows
-    result["totals"]["accounts_quarantined"] = len(account_ids)
     manifest_path = instance_quarantine_dir / "manifest.json"
-    _write_quarantine_manifest(manifest_path, result)
+    manifest_descriptor = _reserve_quarantine_manifest(manifest_path, result)
+    snapshot_records = []
+    try:
+        for sqlite_path in sqlite_sources:
+            snapshot_path = snapshots_dir / sqlite_path.name
+            _snapshot_sqlite_database(sqlite_path, snapshot_path)
+            result["totals"]["snapshots_created"] += 1
+            snapshot_record = {
+                "path": str(sqlite_path),
+                "payload_kind": "encrypted_account_memory",
+                "snapshot": str(snapshot_path),
+                "rows_deleted": 0,
+            }
+            snapshot_records.append((sqlite_path, snapshot_record))
+            result["sqlite_sources"].append(snapshot_record)
+        moved_files = []
+        for path in json_files:
+            target = instance_quarantine_dir / "json_files" / path.parent.name / path.name
+            _prepare_private_dir(target.parent)
+            _move_quarantine_source(path, target)
+            moved_files.append({"path": str(path), "quarantine_path": str(target)})
+        result["json_files"] = moved_files
+        result["totals"]["json_files_quarantined"] = len(moved_files)
+        for sqlite_path, snapshot_record in snapshot_records:
+            deleted_rows = _delete_sqlite_account_rows(sqlite_path, instance_name, account_ids)
+            result["totals"]["sqlite_rows_quarantined"] += deleted_rows
+            snapshot_record["rows_deleted"] = deleted_rows
+        result["totals"]["accounts_quarantined"] = len(account_ids)
+        _write_quarantine_manifest_fd(manifest_descriptor, result)
+    finally:
+        os.close(manifest_descriptor)
     return result
 
 
@@ -1084,6 +1092,34 @@ def _write_quarantine_manifest(path: Path, payload: Mapping[str, Any]) -> None:
         raise AccountStoreError(f"refusing existing quarantine manifest: {path}") from exc
     with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
         stream.write(serialized)
+
+
+def _reserve_quarantine_manifest(path: Path, payload: Mapping[str, Any]) -> int:
+    try:
+        descriptor = _open_exclusive_file(path, flags=os.O_CREAT | os.O_WRONLY, mode=0o600)
+    except FileExistsError as exc:
+        raise AccountStoreError(f"refusing existing quarantine manifest: {path}") from exc
+    try:
+        initial = dict(payload)
+        initial["status"] = "in_progress"
+        _write_quarantine_manifest_fd(descriptor, initial)
+    except BaseException:
+        os.close(descriptor)
+        raise
+    return descriptor
+
+
+def _write_quarantine_manifest_fd(descriptor: int, payload: Mapping[str, Any]) -> None:
+    data = (json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    os.ftruncate(descriptor, 0)
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    remaining = memoryview(data)
+    while remaining:
+        written = os.write(descriptor, remaining)
+        if written <= 0:
+            raise OSError("quarantine manifest write made no progress")
+        remaining = remaining[written:]
+    os.fsync(descriptor)
 
 
 def _open_exclusive_file(path: Path, *, flags: int, mode: int) -> int:
