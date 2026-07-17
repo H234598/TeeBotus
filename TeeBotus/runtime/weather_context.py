@@ -84,7 +84,7 @@ def _update_city_and_weather_context_unlocked(
             # presented as current weather while the global check window is active.
             weather_state["summary"] = ""
             weather_state["last_error"] = ""
-            _append_city_memory(account_store, account_id, city, resolved_now)
+        _append_city_memory(account_store, account_id, city, resolved_now)
     current_city = str(weather_state.get("city") or "").strip()
     if not current_city:
         account_store.write_agent_state(account_id, state) if city else None

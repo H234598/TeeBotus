@@ -105,6 +105,44 @@ def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> 
     assert any(entry.get("kind") == "biographical_fact" and "Berlin" in str(entry.get("user_text")) for entry in memories)
 
 
+def test_city_memory_append_is_retried_after_transient_failure(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    original_append = account_store.append_structured_memory_entry
+    attempts = 0
+
+    def append_once_fails(write_account_id: str, entry: dict[str, object]) -> object:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise OSError("memory append failed")
+        return original_append(write_account_id, entry)
+
+    with patch.object(account_store, "append_structured_memory_entry", side_effect=append_once_fails):
+        update_city_and_weather_context(
+            account_store,
+            account_id,
+            "Ich wohne in Berlin.",
+            now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+            provider=lambda city: f"{city}: 12 C",
+        )
+        update_city_and_weather_context(
+            account_store,
+            account_id,
+            "Ich wohne in Berlin.",
+            now=datetime(2026, 6, 15, 9, 1, tzinfo=timezone.utc),
+            provider=lambda city: f"{city}: 12 C",
+        )
+
+    memories = [
+        entry
+        for entry in account_store.read_memory_entries(account_id)
+        if entry.get("id") == "mem_residence_city_berlin"
+    ]
+    assert attempts == 2
+    assert len(memories) == 1
+
+
 def test_city_change_is_persisted_even_when_weather_check_is_rate_limited(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
