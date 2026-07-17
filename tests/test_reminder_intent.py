@@ -387,6 +387,29 @@ def test_structured_reminder_fallback_can_queue_natural_request(tmp_path, monkey
     assert queued[0]["due_at"] == "2026-06-16T08:30:00+00:00"
 
 
+def test_structured_reminder_classifier_failure_fails_open(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+
+    def fail_runner(*_args):
+        raise RuntimeError("classifier unavailable")
+
+    reply = maybe_queue_natural_reminder(
+        account_store=account_store,
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        text="Kannst du mich morgen frueh wegen der Unterlagen anstupsen?",
+        now=fixed_now(),
+        structured_decision_runner=fail_runner,
+    )
+
+    assert reply is None
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
 def test_classic_recurring_reminder_persists_recurrence(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
     account_store = store(tmp_path)

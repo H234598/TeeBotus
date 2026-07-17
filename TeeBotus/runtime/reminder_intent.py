@@ -3,6 +3,7 @@ from __future__ import annotations
 import calendar
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import logging
 import re
 from typing import Any, Callable, Iterable
 
@@ -19,6 +20,7 @@ from TeeBotus.runtime.proactive_agent import (
 from TeeBotus.runtime.timezone import configured_timezone, local_now
 
 StructuredReminderRunner = Callable[[str, type[Any]], Any]
+LOGGER = logging.getLogger("TeeBotus.runtime.reminder_intent")
 
 
 @dataclass(frozen=True)
@@ -264,6 +266,9 @@ def _structured_reminder_intent(
         payload = structured_decision_runner(_structured_reminder_prompt(raw, now=prompt_now), ReminderDecision)
         decision = parse_reminder_decision(payload)
     except (TypeError, ValueError, ValidationError):
+        return ReminderIntent(False)
+    except Exception:  # noqa: BLE001 - optional classifier failures must not abort normal chat.
+        LOGGER.exception("Structured reminder classifier failed")
         return ReminderIntent(False)
     if not decision.should_create or decision.confidence < 0.7:
         return ReminderIntent(False)
