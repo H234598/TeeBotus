@@ -1304,7 +1304,7 @@ class TeeBotusEngine:
         pending = self.state.get_pending_flow(event.instance, account_id, "memory_reset")
         if pending is not None:
             if not _pending_flow_matches_event(pending, event):
-                return []
+                return None
             if _is_memory_reset_confirmation(event.text):
                 self.state.pop_pending_flow(event.instance, account_id, "memory_reset")
                 try:

@@ -3534,14 +3534,14 @@ def test_engine_account_memory_reset_confirmation_is_scoped_to_chat(tmp_path):
         chat_type="private",
         sender_id=identity,
         sender_name=identity,
-        text="ja",
+        text="/ping",
         message_ref="2",
     )
 
     engine.process(first_chat)
     actions = engine.process(other_chat)
 
-    assert actions == []
+    assert [action.text for action in actions if isinstance(action, SendText)] == ["Pong"] * 10
     assert account_store.read_memory_entries(account_id) == [{"id": "mem_old", "user_text": "Mond"}]
 
 
