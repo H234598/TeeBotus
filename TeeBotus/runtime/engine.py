@@ -1685,22 +1685,33 @@ class TeeBotusEngine:
         return self._llm_actions(event, account_id, instructions)
 
     def _memory_reset_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction] | None:
-        pending = self.state.get_pending_flow(
-            event.instance,
-            account_id,
-            "memory_reset",
-            conversation_scope=_pending_flow_conversation_scope(event),
-        )
+        try:
+            pending = self.state.get_pending_flow(
+                event.instance,
+                account_id,
+                "memory_reset",
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
+        except Exception:  # noqa: BLE001 - reset state failures must not reach destructive or LLM paths.
+            LOGGER.exception("Memory reset pending-state lookup failed instance=%s account=%s", event.instance, account_id)
+            return [SendText(event.chat_id, instructions.user_memory_reset_error)]
         if pending is not None:
             if not _pending_flow_matches_event(pending, event):
                 return None
             if _is_memory_reset_confirmation(event.text):
-                self.state.pop_pending_flow(
-                    event.instance,
-                    account_id,
-                    "memory_reset",
-                    conversation_scope=_pending_flow_conversation_scope(event),
-                )
+                try:
+                    popped = self.state.pop_pending_flow(
+                        event.instance,
+                        account_id,
+                        "memory_reset",
+                        conversation_scope=_pending_flow_conversation_scope(event),
+                    )
+                except Exception:  # noqa: BLE001 - destructive reset requires confirmed state cleanup.
+                    LOGGER.exception("Memory reset pending-state removal failed instance=%s account=%s", event.instance, account_id)
+                    return [SendText(event.chat_id, instructions.user_memory_reset_error)]
+                if popped is None:
+                    LOGGER.error("Memory reset pending state disappeared before confirmation instance=%s account=%s", event.instance, account_id)
+                    return [SendText(event.chat_id, instructions.user_memory_reset_error)]
                 try:
                     _delete_semantic_memory_index(self.account_store, account_id, instructions)
                     self.account_store.reset_structured_memory(account_id)
@@ -1739,13 +1750,17 @@ class TeeBotusEngine:
             return [SendText(event.chat_id, instructions.user_memory_reset_only_own)]
         if not instructions.user_memory_enabled:
             return [SendText(event.chat_id, instructions.user_memory_reset_unavailable)]
-        self.state.set_pending_flow(
-            event.instance,
-            account_id,
-            "memory_reset",
-            {"channel": event.channel, "chat_id": event.chat_id, "identity_key": event.identity_key},
-            conversation_scope=_pending_flow_conversation_scope(event),
-        )
+        try:
+            self.state.set_pending_flow(
+                event.instance,
+                account_id,
+                "memory_reset",
+                {"channel": event.channel, "chat_id": event.chat_id, "identity_key": event.identity_key},
+                conversation_scope=_pending_flow_conversation_scope(event),
+            )
+        except Exception:  # noqa: BLE001 - reset confirmation must not be promised without persisted state.
+            LOGGER.exception("Memory reset pending-state setup failed instance=%s account=%s", event.instance, account_id)
+            return [SendText(event.chat_id, instructions.user_memory_reset_error)]
         return [SendText(event.chat_id, instructions.user_memory_reset_confirm, buttons=MEMORY_RESET_BUTTONS)]
 
     def _export_actions(self, event: IncomingEvent, account_id: str) -> list[OutgoingAction]:

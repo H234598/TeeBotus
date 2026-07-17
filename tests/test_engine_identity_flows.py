@@ -4343,6 +4343,22 @@ def test_engine_memory_reset_backend_failure_is_explicit(tmp_path, monkeypatch):
     assert actions[0].text == BotInstructions().user_memory_reset_error
 
 
+def test_engine_memory_reset_does_not_mutate_when_confirmation_state_disappears(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="memory-reset-state-disappears")
+    engine = TeeBotusEngine(account_store=account_store, instructions=BotInstructions(user_memory_enabled=True))
+
+    engine.process(event(identity, "/reset_memorys", channel="signal"))
+    monkeypatch.setattr(engine.state, "pop_pending_flow", lambda *_args, **_kwargs: None)
+    reset_calls: list[str] = []
+    monkeypatch.setattr(account_store, "reset_structured_memory", lambda account_id: reset_calls.append(account_id))
+
+    actions = engine.process(event(identity, "ja", channel="signal"))
+
+    assert actions[0].text == BotInstructions().user_memory_reset_error
+    assert reset_calls == []
+
+
 def test_engine_start_survives_privacy_button_state_failure(tmp_path, monkeypatch):
     account_store = store(tmp_path)
     identity = signal_identity_key(source_uuid="start-privacy-state-error")
