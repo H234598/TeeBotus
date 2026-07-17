@@ -768,6 +768,48 @@ def test_proactive_cycle_expires_stale_items_before_due_selection(tmp_path) -> N
     assert account_store.read_proactive_outbox(account_id)[0]["status"] == "expired"
 
 
+def test_proactive_cycle_does_not_expire_invalid_recurrence_before_dispatch(tmp_path) -> None:
+    instance_dir = tmp_path / "instances" / "Depressionsbot"
+    account_store = store_for(instance_dir)
+    identity = signal_identity_key(source_uuid="signal-user")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    state = enable_proactive_agent(account_store, account_id, categories=("reminder",))
+    state["policy"]["expire_queued_after_days"] = 7
+    account_store.write_agent_state(account_id, state)
+    queued = queue_proactive_message(
+        account_store,
+        account_id,
+        category="reminder",
+        intent="broken_recurrence",
+        message_text="Old",
+        due_at="2026-06-01T12:00:00+00:00",
+        recurrence="daily",
+        now=datetime(2026, 6, 1, 10, tzinfo=timezone.utc),
+    )
+    item = account_store.read_proactive_outbox(account_id)[0]
+    item["recurrence"] = "every fortnight"
+    account_store.write_proactive_outbox(account_id, [item])
+
+    report = asyncio.run(
+        run_proactive_agent_cycle(
+            instances_dir=tmp_path / "instances",
+            selected_instances=("Depressionsbot",),
+            env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+            store_factory=lambda _root, _instance: account_store,
+            now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+            dispatch=True,
+            sender_factory=lambda _instance, _store: {},
+        )
+    )
+
+    account = report["instances"][0]["accounts"][0]
+    assert account["dispatch_results"][0]["reason"] == "invalid_recurrence"
+    assert "expired_item_ids" not in account
+    assert account_store.read_proactive_outbox(account_id)[0]["status"] == "failed"
+    assert queued.reason.startswith("queued:")
+
+
 def test_proactive_cycle_dispatch_requires_sender_factory(tmp_path) -> None:
     try:
         asyncio.run(run_proactive_agent_cycle(instances_dir=tmp_path, dispatch=True))

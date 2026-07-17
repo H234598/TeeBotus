@@ -1329,6 +1329,14 @@ def expire_stale_proactive_outbox_items(account_store: AccountStore, account_id:
             parsed_due_at = _parse_proactive_datetime(raw_due_at)
             if raw_due_at and parsed_due_at is None:
                 continue
+            raw_retry_at = str(item.get("retry_at") or "").strip()
+            if raw_retry_at and _parse_proactive_datetime(raw_retry_at) is None:
+                continue
+            recurrence = str(item.get("recurrence") or "").strip()
+            if recurrence and not _normalize_recurrence_rule(recurrence):
+                continue
+            if _normalize_risk_gate(item.get("risk_gate")) not in PROACTIVE_RISK_GATES:
+                continue
             reference = parsed_due_at or _parse_proactive_datetime(str(item.get("created_at") or item.get("updated_at") or ""))
             if reference is None or reference > cutoff:
                 continue
