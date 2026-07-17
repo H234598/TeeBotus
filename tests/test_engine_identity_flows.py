@@ -258,6 +258,31 @@ def test_status_memory_lock_resolution_failure_is_diagnosed() -> None:
     ) is None
 
 
+def test_status_index_health_reports_unexpected_account_index_failure(tmp_path, monkeypatch) -> None:
+    original_store = status_core.AccountStore
+
+    class BrokenHealthStore:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def _read_account_profile(self, _account_id):
+            return {}
+
+        def check_structured_memory_index(self, *_args, **_kwargs):
+            raise RuntimeError("structured index unavailable")
+
+    monkeypatch.setattr(status_core, "AccountStore", BrokenHealthStore)
+    account_id = "a" * 128
+    account_dir = tmp_path / "instances" / "Demo" / "data" / "accounts" / "accounts" / account_id
+    account_dir.mkdir(parents=True)
+
+    lines = status_core.account_memory_index_health_lines(instance_name="Demo", project_root=tmp_path)
+
+    assert any(account_id in line and "status=broken" in line for line in lines)
+    assert status_core.AccountStore is BrokenHealthStore
+    assert original_store is not status_core.AccountStore
+
+
 def test_admin_flow_state_failure_is_user_visible_without_aborting_message_processing(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)

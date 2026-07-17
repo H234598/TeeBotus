@@ -1929,7 +1929,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
     memory_backend_initialization_warning = _status_memory_backend_initialization_warning(root)
     try:
         account_dirs = _account_memory_account_dirs(root / ACCOUNTS_DIRNAME)
-    except (AccountStoreError, OSError, ValueError) as exc:
+    except Exception as exc:  # noqa: BLE001 - healthcheck must report unexpected directory failures.
         error = redact_status_text(f"{type(exc).__name__}: {exc}")
         return [
             f"account_memory={safe_instance_name} status=broken error=account_directories_unreadable:{error}",
@@ -1964,7 +1964,7 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
     database_account_ids: set[str] = set()
     try:
         database_account_ids = _status_database_account_ids(store)
-    except (AccountStoreError, OSError, ValueError) as exc:
+    except Exception as exc:  # noqa: BLE001 - healthcheck must report unexpected account discovery failures.
         error = redact_status_text(f"{type(exc).__name__}: {exc}")
         lines.append(
             f"account_memory={safe_instance_name} status=broken "
@@ -1988,6 +1988,9 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
         except (AccountStoreError, OSError, ValueError) as exc:
             profile_error = f"profile_unreadable:{redact_status_text(exc)}"
             has_broken_metadata = True
+        except Exception as exc:  # noqa: BLE001 - one broken profile must not abort healthcheck.
+            profile_error = f"profile_unreadable:{redact_status_text(exc)}"
+            has_broken_metadata = True
         try:
             with _suppress_expected_account_memory_health_logs():
                 health = store.check_structured_memory_index(
@@ -1996,6 +1999,13 @@ def account_memory_index_health_lines(*, instance_name: str, project_root: Path,
                     read_only=True,
                 )
         except (AccountStoreError, OSError, ValueError) as exc:
+            lines.append(
+                f"account_memory={safe_instance_name}/{account_id} status=broken "
+                f"error={redact_status_text(exc)}"
+            )
+            has_broken_memory = True
+            continue
+        except Exception as exc:  # noqa: BLE001 - one broken memory index must not abort other accounts.
             lines.append(
                 f"account_memory={safe_instance_name}/{account_id} status=broken "
                 f"error={redact_status_text(exc)}"
@@ -2214,7 +2224,7 @@ def _account_metadata_broken_line(*, instance_name: str, kind: str, path: Path, 
 def _account_memory_fallback_warning(store: AccountStore, account_id: str) -> str:
     try:
         backend = store.account_memory_backend
-    except (AccountStoreError, OSError, ValueError) as exc:
+    except Exception as exc:  # noqa: BLE001 - broken backend access must not break /status.
         LOGGER.exception("Failed to resolve account memory backend fallback status.")
         detail = redact_status_text(exc)
         suffix = f":{detail}" if detail else ""
