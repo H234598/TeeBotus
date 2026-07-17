@@ -1260,6 +1260,20 @@ def test_memory_recovery_snapshot_discovery_skips_symlink_loop(tmp_path: Path) -
     assert account_memory_recovery_module._discover_snapshot_sqlite_sources(accounts_root, existing_paths=set()) == []
 
 
+def test_memory_recovery_source_discovery_keeps_dangling_and_looped_sqlite_sources(tmp_path: Path) -> None:
+    accounts_root = tmp_path / "accounts"
+    accounts_root.mkdir()
+    primary = accounts_root / "Account_Memory.sqlite3"
+    fallback = accounts_root / "Account_Memory.backup.sqlite3"
+    primary.symlink_to("missing-primary.sqlite3")
+    fallback.symlink_to(fallback.name)
+
+    sources = account_memory_recovery_module._discover_recovery_sources(accounts_root)
+
+    assert [source.name for source in sources] == ["sqlite_primary", "sqlite_fallback"]
+    assert all(source.path.is_symlink() for source in sources)
+
+
 def test_memory_recovery_source_probe_error_stays_account_local(monkeypatch, tmp_path: Path) -> None:
     source = account_memory_recovery_module.RecoverySource(
         "sqlite_primary",

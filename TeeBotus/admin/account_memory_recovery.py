@@ -1223,12 +1223,18 @@ def _discover_recovery_sources(accounts_root: Path) -> list[RecoverySource]:
         ("sqlite_primary", accounts_root / "Account_Memory.sqlite3"),
         ("sqlite_fallback", accounts_root / "Account_Memory.backup.sqlite3"),
     ):
-        if path.exists():
+        if path.exists() or path.is_symlink():
             sources.append(RecoverySource(name, "sqlite", path))
     accounts_dir = _safe_json_accounts_dir(accounts_root)
     if accounts_dir is not None:
         sources.append(RecoverySource("json_files", "json", accounts_dir))
-    sources.extend(_discover_snapshot_sqlite_sources(accounts_root, existing_paths={source.path.resolve() for source in sources}))
+    existing_paths: set[Path] = set()
+    for source in sources:
+        try:
+            existing_paths.add(source.path.resolve())
+        except (OSError, RuntimeError):
+            continue
+    sources.extend(_discover_snapshot_sqlite_sources(accounts_root, existing_paths=existing_paths))
     return sources
 
 
