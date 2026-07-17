@@ -2758,6 +2758,9 @@ def _append_account_memory_interaction(
         )
     except (AccountStoreError, OSError):
         return
+    except Exception:  # noqa: BLE001 - optional memory persistence must not hide an already generated reply.
+        LOGGER.exception("Account memory interaction write failed account=%s", account_id)
+        return
     _maybe_index_semantic_memory_entry(account_store, account_id, memory_id, instructions)
 
 
@@ -2783,6 +2786,9 @@ def _maybe_index_semantic_memory_entry(
         )
     except (AccountStoreError, OSError, QdrantError, ValueError, RuntimeError):
         return
+    except Exception:  # noqa: BLE001 - semantic cache is rebuildable and must not block replies.
+        LOGGER.exception("Semantic memory index update failed account=%s memory_id=%s", account_id, memory_id)
+        return
 
 
 def _memory_candidate_decision(
@@ -2799,6 +2805,9 @@ def _memory_candidate_decision(
         payload = structured_decision_runner(_memory_candidate_prompt(user_text, bot_text), MemoryCandidate)
         return parse_memory_candidate(payload)
     except (TypeError, ValueError, ValidationError, json.JSONDecodeError):
+        return None
+    except Exception:  # noqa: BLE001 - optional classifier failure must not block normal chat.
+        LOGGER.exception("Memory candidate decision failed")
         return None
 
 

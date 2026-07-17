@@ -2019,6 +2019,44 @@ def test_engine_llm_actions_are_provider_neutral_and_openai_alias_remains(tmp_pa
     assert llm_client.calls == 1
 
 
+def test_engine_llm_reply_survives_unexpected_memory_write_failure(tmp_path, monkeypatch):
+    class FakeLLMClient:
+        def create_reply(self, *_args, **_kwargs):
+            return OpenAIResponse("Antwort trotz Memory-Fehler.", None, None)
+
+    account_store = store(tmp_path)
+    monkeypatch.setattr(account_store, "append_structured_memory_entry", lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("memory unavailable")))
+    engine = TeeBotusEngine(
+        account_store=account_store,
+        instructions=BotInstructions(openai_enabled=True),
+        llm_client=FakeLLMClient(),
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "Hallo"))
+
+    assert actions[1].text == "Antwort trotz Memory-Fehler."
+
+
+def test_engine_llm_reply_survives_unexpected_memory_classifier_failure(tmp_path):
+    class FakeLLMClient:
+        def create_reply(self, *_args, **_kwargs):
+            return OpenAIResponse("Antwort trotz Classifier-Fehler.", None, None)
+
+    def broken_classifier(*_args, **_kwargs):
+        raise RuntimeError("classifier unavailable")
+
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True),
+        llm_client=FakeLLMClient(),
+        structured_decision_runner=broken_classifier,
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "Hallo"))
+
+    assert actions[1].text == "Antwort trotz Classifier-Fehler."
+
+
 def test_engine_runtime_llm_disabled_override_skips_missing_key_and_model_call(tmp_path):
     class FakeLLMClient:
         def create_reply(self, *_args, **_kwargs):
