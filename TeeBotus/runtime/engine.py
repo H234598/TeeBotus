@@ -1496,6 +1496,9 @@ class TeeBotusEngine:
             return is_runtime_admin_account(self.account_store, account_id, instance_name=instance_name)
         except (AccountStoreError, OSError, ValueError):
             return False
+        except Exception:  # noqa: BLE001 - help authorization must fail closed.
+            LOGGER.exception("Help admin lookup failed instance=%s account=%s", instance_name, account_id)
+            return False
 
     def _openai_actions(self, event: IncomingEvent, account_id: str, instructions: BotInstructions) -> list[OutgoingAction]:
         """Compatibility alias for tests and older callers.

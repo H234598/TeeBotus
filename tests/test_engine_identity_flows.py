@@ -433,6 +433,20 @@ def test_confirmed_channel_unlink_backend_failure_keeps_pending_flow(tmp_path, m
     assert account_store.get_account_for_identity(identity) == account_id
 
 
+def test_help_admin_lookup_failure_fails_closed(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+    account_id = account_store.resolve_or_create_account(identity)
+
+    def fail_admin_lookup(*_args, **_kwargs):
+        raise RuntimeError("admin backend unavailable")
+
+    monkeypatch.setattr("TeeBotus.runtime.engine.is_runtime_admin_account", fail_admin_lookup)
+
+    assert engine._account_is_help_admin("Depressionsbot", account_id) is False
+
+
 def test_status_auth_gate_is_case_insensitive_for_chat_type(tmp_path, monkeypatch):
     monkeypatch.setenv("TEEBOTUS_STATUS_AUTH_CODE", "18hhGfuu3")
     account_store = store(tmp_path, "TeeBotus_Logger")
