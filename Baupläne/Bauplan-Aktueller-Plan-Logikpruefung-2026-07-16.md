@@ -5200,3 +5200,18 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `6/20` Commits. Kein Push. Restart nach 14 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Instanz-Auswahl-dedupliziert
+
+- 2026-07-17: Wiederholte `--instance`-Argumente wurden unveraendert als
+  mehrere Durchlaeufe verarbeitet. Bei `--plan` konnte dieselbe Instanz dadurch
+  doppelte Reflection-/Outbox-Arbeit ausloesen.
+- Ausgewaehlte Instanznamen werden jetzt stabil dedupliziert; Reihenfolge bleibt
+  erhalten und einzelne Instanz wird genau einmal verarbeitet.
+- Test: `tests/test_proactive_cli.py` `53 passed`; Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `edfb0897 fix: deduplicate proactive instance selection`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`8/20` Commits. Kein Push. Restart nach 12 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
