@@ -6170,3 +6170,24 @@ bei `0/20`; Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `3/20` Commits. Kein Push. Restart nach 17 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Proactive-Dispatch kapselt Route-Backendfehler
+
+- 2026-07-17: Route-Matching konnte im Policy-Gate oder nach Worker-Claim
+  unerwartet scheitern. Vor Claim crashte Dispatch; nach Claim blieb das Item
+  ungeplant in `dispatching`.
+- Route-Fehler werden vor Claim als `queued:route_check_unavailable`
+  zurueckgestellt. Nach Claim wird das Item mit `failed` markiert; wenn auch
+  dieser Status-Write scheitert, meldet der Report `status_update_failed`.
+  Kein Senderaufruf bei unbekanntem Route-Zustand.
+- Loudness-State-Fehler verwenden im Policy- und Post-Claim-Pfad ebenfalls
+  einen fail-closed-`Exception`-Guard.
+- Tests: `tests/test_proactive_agent.py` plus
+  `tests/test_notification_loudness.py` `343 passed`; Route-/Loudness-Fokus
+  `4 passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `27f332f6 fix: contain proactive route backend failures`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`5/20` Commits. Kein Push. Restart nach 15 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
