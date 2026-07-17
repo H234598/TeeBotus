@@ -189,6 +189,7 @@ class MessageTracker:
             return
         rows = payload.get("refs") if isinstance(payload, dict) else None
         if not isinstance(rows, list):
+            self.refs = {}
             return
         loaded: dict[tuple[str, str, str], list[SentMessageRef]] = {}
         seen_by_chat: dict[tuple[str, str, str], set[tuple[str, str, str]]] = {}

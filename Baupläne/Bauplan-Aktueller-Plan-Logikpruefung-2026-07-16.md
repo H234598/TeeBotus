@@ -7815,3 +7815,16 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `11/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
+
+### MessageTracker: ungueltiges JSON-Schema darf keine alten Refs behalten
+
+- 2026-07-17: Ein valides JSON ohne `refs`-Liste setzte den geladenen
+  Trackerzustand bisher nicht zurueck. Der Tracker konnte danach veraltete
+  In-Memory-Refs wieder persistieren. Ungueltiges Schema leert den geladenen
+  Zustand jetzt wie unlesbares JSON.
+- Test: `tests/test_message_tracking.py` -> `9 passed`; Ruff, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: folgt direkt.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `12/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.

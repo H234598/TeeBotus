@@ -85,6 +85,16 @@ def test_message_tracker_drops_stale_refs_when_storage_file_becomes_invalid(tmp_
     assert tracker.list_for_chat("+491", instance_name="Demo", channel="signal") == []
 
 
+def test_message_tracker_drops_stale_refs_when_storage_schema_is_invalid(tmp_path) -> None:
+    path = tmp_path / "runtime" / "refs.json"
+    tracker = MessageTracker(path)
+    tracker.record(_ref("persisted"))
+
+    path.write_text(json.dumps({"unexpected": []}), encoding="utf-8")
+
+    assert tracker.list_for_chat("+491", instance_name="Demo", channel="signal") == []
+
+
 def test_message_tracker_drops_stale_refs_when_storage_parent_disappears(tmp_path) -> None:
     path = tmp_path / "runtime" / "refs.json"
     tracker = MessageTracker(path)
