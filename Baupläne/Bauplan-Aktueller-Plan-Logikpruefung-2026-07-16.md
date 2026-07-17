@@ -6838,6 +6838,22 @@ Commits. Kein Push. Restart nach 16 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `5/20` sichtbar.
 
+### Codex-History-Status lehnt kaputte Container ab
+
+- 2026-07-17: Die Codex-History-Statuslogik behandelte ein Backend-Ergebnis
+  wie `dict` oder `None` implizit als Iterable. Dadurch konnte eine kaputte
+  Outbox als gueltige History mit falscher `total`-Zahl erscheinen.
+- Der Read-Grenzpunkt akzeptiert jetzt nur Listen und meldet andere Formen als
+  `status=unknown`. Keine falsche Health-Zusage und kein Status-Abbruch.
+- Test: `tests/test_version_notifications.py -k 'codex_history_status'`
+  `9 passed`; Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f801cef2 fix: reject malformed codex history containers`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `6/20`
+Commits. Kein Push. Restart nach 14 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `7/20` sichtbar.
+
 ### Login kapselt Rückgabe- und Notificationfehler
 
 - 2026-07-17: Primäres Login vertraute blind auf `result["account_id"]` und
