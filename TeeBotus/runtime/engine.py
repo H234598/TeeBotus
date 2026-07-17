@@ -2523,6 +2523,9 @@ def _teladi_emergency_used_at(account_store: AccountStore, account_id: str) -> d
         state = account_store.read_agent_state(account_id)
     except (AccountStoreError, OSError, ValueError):
         return None
+    except Exception:  # noqa: BLE001 - unreadable cooldown state must fail closed.
+        LOGGER.exception("Teladi emergency cooldown state read failed account=%s", account_id)
+        return None
     teladi_state = state.get(TELADI_EMERGENCY_STATE_KEY) if isinstance(state, dict) else None
     if not isinstance(teladi_state, dict):
         return None
@@ -2534,8 +2537,8 @@ def _mark_teladi_emergency_used(account_store: AccountStore, account_id: str) ->
         state = account_store.read_agent_state(account_id)
     except (AccountStoreError, OSError, ValueError):
         return False
-    except Exception:  # noqa: BLE001 - image quota state failure must fail closed.
-        LOGGER.exception("Image quota state read failed account=%s", account_id)
+    except Exception:  # noqa: BLE001 - unreadable cooldown state must fail closed.
+        LOGGER.exception("Teladi emergency cooldown state read failed account=%s", account_id)
         return False
     if not isinstance(state, dict):
         state = {}
@@ -2554,6 +2557,9 @@ def _clear_teladi_emergency_cooldown(account_store: AccountStore, account_id: st
     try:
         state = account_store.read_agent_state(account_id)
     except (AccountStoreError, OSError, ValueError):
+        return False
+    except Exception:  # noqa: BLE001 - unreadable cooldown state must fail closed.
+        LOGGER.exception("Teladi emergency cooldown state read failed account=%s", account_id)
         return False
     if not isinstance(state, dict):
         return False
