@@ -1508,13 +1508,27 @@ def test_account_memory_health_uses_normalized_instance_name(tmp_path):
     assert not any(line.startswith(f"account_memory= Demo /{account_id} ") for line in lines)
 
 
-def test_memory_encryption_status_diagnoses_backend_resolution_failure():
+@pytest.mark.parametrize("error", [AccountStoreError("postgres DSN missing"), ValueError("malformed backend")])
+def test_memory_encryption_status_diagnoses_backend_resolution_failure(error):
     class FailingStore:
         @property
         def account_memory_backend(self):
-            raise AccountStoreError("postgres DSN missing")
+            raise error
 
     assert status_core.memory_encryption_status(None, account_store=FailingStore(), account_id="account") == "Datenbank-Backend nicht verfuegbar"
+
+
+def test_memory_payload_size_diagnoses_backend_value_error():
+    class FailingStore:
+        @property
+        def account_memory_backend(self):
+            raise ValueError("malformed backend")
+
+    assert status_core.account_memory_payload_size(
+        account_store=FailingStore(),
+        account_id="account",
+        fallback_directory=None,
+    ) is None
 
 
 def test_memory_encryption_status_diagnoses_unreadable_userfiles(tmp_path, monkeypatch):

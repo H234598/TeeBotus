@@ -1819,7 +1819,7 @@ def account_memory_payload_size(*, account_store: AccountStore | None, account_i
     if account_store is not None and account_id:
         try:
             backend = account_store.account_memory_backend
-        except (AccountStoreError, OSError):
+        except (AccountStoreError, OSError, ValueError):
             LOGGER.exception("Failed to resolve account memory backend for status size.")
             return None
         lock_factory = getattr(account_store, "account_memory_lock", None)
@@ -1828,7 +1828,7 @@ def account_memory_payload_size(*, account_store: AccountStore | None, account_i
             try:
                 entries = account_store.read_memory_entries(account_id)
                 index = account_store.read_memory_index(account_id)
-            except (AccountStoreError, OSError):
+            except (AccountStoreError, OSError, ValueError):
                 LOGGER.exception("Failed to read account memory payload size from store.")
                 return None
             if not isinstance(entries, list) or not isinstance(index, dict) or any(
@@ -1866,7 +1866,7 @@ def memory_encryption_status(directory: Path | None, *, account_store: AccountSt
     if account_store is not None and account_id:
         try:
             backend = account_store.account_memory_backend
-        except (AccountStoreError, OSError):
+        except (AccountStoreError, OSError, ValueError):
             LOGGER.exception("Failed to resolve account memory backend encryption status.")
             return "Datenbank-Backend nicht verfuegbar"
         if backend is not None:
