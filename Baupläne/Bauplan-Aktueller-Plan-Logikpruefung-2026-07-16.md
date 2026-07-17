@@ -7785,7 +7785,7 @@ Push. Restart erst bei `20/20`.
   selbst.
 - Test: `tests/test_local_transcription.py` -> `4 passed`; Ruff,
   `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
-- Code-Commit: folgt direkt.
+- Code-Commit: `562f9aa5 fix: let local whisper detect audio language`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `9/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
