@@ -3602,3 +3602,20 @@ erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem Restart `14/20` Commits. Dieser Plan-Commit
 zaehlt mit. Kein Push. Restart nach 6 weiteren Commits. Naechster Push bleibt
 erst bei 100 Commits.
+
+### Quarantaene-Manifest-vor-Move-reservieren
+
+- 2026-07-17: Quarantaene schrieb Manifest erst nach allen Moves. Scheiterte
+  der letzte Schreibschritt, konnten bereits verschobene Daten ohne belastbare
+  Dokumentation bleiben.
+- Manifest wird vor dem ersten Move exklusiv reserviert, als `in_progress`
+  geschrieben und ueber denselben stabilen FD finalisiert. Bei Zwischenfehlern
+  bleibt mindestens ein nachvollziehbarer unvollstaendiger Zustand erhalten.
+- Regression: Snapshot-/Manifest-/Quarantaene-Fokus -> `28 passed`; komplette
+  `tests/test_admin_accounts.py` -> `106 passed`. Ruff, `compileall` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `92fda508 fix: reserve quarantine manifests before moving data`.
+
+**Aktueller Laufstand:** Seit dem Restart `16/20` Commits. Dieser Plan-Commit
+zaehlt mit. Kein Push. Restart nach 4 weiteren Commits. Naechster Push bleibt
+erst bei 100 Commits.
