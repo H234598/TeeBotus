@@ -4731,6 +4731,31 @@ Commits.
 **Aktueller Laufstand:** Seit dem letzten Restart `14/20` Commits. Kein Push.
 Restart nach 6 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
 
+### Admin-Status-Outbox-Fehlerisolierung
+
+- 2026-07-17: `_record_runtime_status_dispatch()` kapselte nur das Schreiben
+  von `status_dispatch_results`. Fehler beim Status-Outbox-Read/Write brachen
+  die gesamte Admin-Schleife ab; nachfolgende Admins erhielten keinen Versand.
+- Outbox-Statusupdate und Dispatch-Result-Persistenz sind jetzt getrennt
+  best-effort gekapselt. Ein kaputtes Konto stoppt keine weiteren Empfaenger.
+- Tests: Runtime-Admin-Fokus `3 passed`; Ruff und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `63a586f4 fix: isolate status outbox persistence failures`.
+
+### Cross-Instance-Admin-Opt-out
+
+- 2026-07-17: Bei Cross-Instance-Routen wurde `admin_opt_out` nur im lokalen
+  TBL-Store geprueft. Abmeldung in Quellinstanz `Depressionsbot` konnte deshalb
+  weiterhin Status-/Benchmark-Nachrichten ausloesen.
+- Routen tragen jetzt ihren Quellstore; vor Queue und Versand wird Opt-out am
+  tatsaechlichen Quellstore geprueft. Abgemeldete Accounts werden nicht queued.
+- Tests: Runtime-Admin-Fokus `4 passed`; Ruff und `git diff --check` gruen.
+  Kein Provider/API-Aufruf.
+- Code-Commit: `875e0b93 fix: honor cross-instance admin opt-out`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `17/20` Commits. Kein Push.
+Restart nach 3 weiteren Commits. Naechster Push bleibt erst bei 100 Commits.
+
 ### Vollstaendiger-Offline-Regressionslauf
 
 - 2026-07-17: Nach allen Fixes vollstaendigen Testbestand erneut ausgefuehrt.
