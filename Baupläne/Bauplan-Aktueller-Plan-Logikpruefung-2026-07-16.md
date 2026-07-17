@@ -6191,3 +6191,19 @@ bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
 `5/20` Commits. Kein Push. Restart nach 15 weiteren Commits. Naechster Push
 bleibt erst bei 100 Commits.
+
+### Notification-Loudness faengt unerwartete Backendfehler
+
+- 2026-07-17: Antwort-, Prompt- und Scheduler-Pfade fingen nur bekannte
+  `AccountStoreError`-/I/O-/Value-Fehler. Unerwartete SQL-, Secret- oder
+  Wrapper-Ausnahmen konnten Message-Handler und Scheduler verlassen.
+- Alle drei oeffentlichen Loudness-Pfade behandeln unerwartete `Exception`-
+  Fehler jetzt fail-closed: keine Antwort, kein Prompt und keine Outbox-
+  Mutation bei unlesbarem Backend.
+- Test: `tests/test_notification_loudness.py` `167 passed`; Ruff,
+  `compileall` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e0cde3e2 fix: fail closed on loudness backend errors`.
+
+**Aktueller Laufstand:** Nach diesem Plan-Commit seit dem letzten Restart
+`7/20` Commits. Kein Push. Restart nach 13 weiteren Commits. Naechster Push
+bleibt erst bei 100 Commits.
