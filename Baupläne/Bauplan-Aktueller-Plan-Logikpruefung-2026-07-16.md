@@ -6821,6 +6821,23 @@ Commits. Kein Push. Restart nach 18 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `3/20` sichtbar.
 
+### Metadaten-Healthcheck kapselt unerwartete Vaultfehler
+
+- 2026-07-17: `_account_metadata_health_lines` fing beim Lesen von Account-
+  Index und Profil nur bekannte Store-/I/O-/Value-Fehler. Ein unerwarteter
+  Vault- oder Wrapperfehler konnte den gesamten `/status`-Healthcheck abbrechen.
+- Jeder betroffene Metadatensatz wird jetzt als `status=broken` gemeldet;
+  weitere Metadaten und Accounts werden weiter geprüft. Kein falscher
+  Gesundheitsstatus und kein Prozessabbruch.
+- Test: `tests/test_version_notifications.py -k 'account_memory_index_health or account_metadata_health_lines'`
+  `25 passed`; Ruff und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a800affa fix: contain unexpected metadata health failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `4/20`
+Commits. Kein Push. Restart nach 16 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `5/20` sichtbar.
+
 ### Login kapselt Rückgabe- und Notificationfehler
 
 - 2026-07-17: Primäres Login vertraute blind auf `result["account_id"]` und
