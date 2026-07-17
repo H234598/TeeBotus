@@ -23,7 +23,7 @@ from TeeBotus.runtime.accounts import (
     signal_identity_key,
     telegram_identity_key,
 )
-from TeeBotus.runtime.actions import DelaySeconds, DeleteTrackedMessages, ExportFile, SendAttachment, SendText, SendTyping
+from TeeBotus.runtime.actions import DelaySeconds, DeleteTrackedMessages, ExportFile, NotifyLinkedIdentity, SendAttachment, SendText, SendTyping
 from TeeBotus.runtime.admin_accounts import is_runtime_admin_account
 from TeeBotus.runtime.status_auth import authorize_status_recipient, status_auth_instance_protected, status_auth_state_authorized
 from TeeBotus.runtime.engine import (
@@ -462,6 +462,35 @@ def test_account_identity_resolution_failure_is_user_visible_without_aborting_fl
     assert result.account_id == ""
     assert result.handled is True
     assert result.actions[0].text == "Accountdaten konnten gerade nicht geladen werden. Bitte spaeter erneut versuchen."
+
+
+def test_login_malformed_backend_result_is_user_visible_without_aborting_flow(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    identity = telegram_identity_key(1)
+
+    monkeypatch.setattr(account_store, "link_identity", lambda *_args, **_kwargs: {})
+
+    result = engine.process_identity_flows(event(identity, f"/login {'a' * 128} {'b' * 128}"))
+
+    assert result.actions[0].text == "Login konnte gerade nicht verarbeitet werden. Bitte spaeter erneut versuchen."
+
+
+def test_login_notification_failure_does_not_negate_successful_link(tmp_path, monkeypatch):
+    account_store = store(tmp_path)
+    engine = TeeBotusEngine(account_store=account_store)
+    old_identity = telegram_identity_key(1)
+    new_identity = telegram_identity_key(2)
+    registered = engine.process_identity_flows(event(old_identity, "/register"))
+    account_id, secret = _tokens(registered.actions[0].text)
+
+    monkeypatch.setattr(engine.state, "record_link_notification", lambda **_kwargs: (_ for _ in ()).throw(RuntimeError("notification state unavailable")))
+
+    result = engine.process_identity_flows(event(new_identity, f"/login {account_id} {secret}"))
+
+    assert result.actions[0].text == "Dieser Kommunikationsweg wurde mit deinem TeeBotus-Account verbunden."
+    assert account_store.get_account_for_identity(new_identity) == account_id
+    assert all(not isinstance(action, NotifyLinkedIdentity) for action in result.actions)
 
 
 def test_status_auth_gate_is_case_insensitive_for_chat_type(tmp_path, monkeypatch):

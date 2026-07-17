@@ -946,8 +946,18 @@ class TeeBotusEngine:
                 [SendText(event.chat_id, "Login konnte gerade nicht verarbeitet werden. Bitte spaeter erneut versuchen.", track=False)],
                 handled=True,
             )
-        linked_account_id = str(result["account_id"])
-        if result.get("already_linked") is True:
+        try:
+            linked_account_id = str(result["account_id"])
+            already_linked = result.get("already_linked") is True
+            old_identity_keys = [str(value) for value in result.get("old_identity_keys", [])]
+        except Exception:  # noqa: BLE001 - malformed backend results must not abort login handling.
+            LOGGER.exception("Account login returned malformed result instance=%s account=%s", event.instance, target_account_id)
+            return EngineResult(
+                current_account_id,
+                [SendText(event.chat_id, "Login konnte gerade nicht verarbeitet werden. Bitte spaeter erneut versuchen.", track=False)],
+                handled=True,
+            )
+        if already_linked:
             return EngineResult(
                 linked_account_id,
                 [SendText(event.chat_id, "Dieser Kommunikationsweg ist bereits mit diesem TeeBotus-Account verbunden.", track=False)],
@@ -956,14 +966,17 @@ class TeeBotusEngine:
         actions: list[OutgoingAction] = [
             SendText(event.chat_id, "Dieser Kommunikationsweg wurde mit deinem TeeBotus-Account verbunden.", track=False)
         ]
-        old_identities = [str(value) for value in result.get("old_identity_keys", [])]
-        for identity_key in old_identities:
-            self.state.record_link_notification(
-                instance_name=event.instance,
-                account_id=linked_account_id,
-                new_identity_key=event.identity_key,
-                old_identity_key=identity_key,
-            )
+        for identity_key in old_identity_keys:
+            try:
+                self.state.record_link_notification(
+                    instance_name=event.instance,
+                    account_id=linked_account_id,
+                    new_identity_key=event.identity_key,
+                    old_identity_key=identity_key,
+                )
+            except Exception:  # noqa: BLE001 - optional link notifications must not negate a successful login.
+                LOGGER.exception("Link notification persistence failed instance=%s account=%s", event.instance, linked_account_id)
+                continue
             actions.append(
                 NotifyLinkedIdentity(
                     identity_key=identity_key,
@@ -1013,7 +1026,15 @@ class TeeBotusEngine:
                 [SendText(event.chat_id, "Instanzübergreifendes Admin-Login konnte gerade nicht gespeichert werden.", track=False)],
                 handled=True,
             )
-        linked_account_id = str(result["account_id"])
+        try:
+            linked_account_id = str(result["account_id"])
+        except Exception:  # noqa: BLE001 - malformed backend results must not abort cross-instance login handling.
+            LOGGER.exception("Cross-instance login returned malformed result instance=%s account=%s", event.instance, target_account_id)
+            return EngineResult(
+                current_account_id,
+                [SendText(event.chat_id, "Instanzübergreifendes Admin-Login konnte gerade nicht gespeichert werden.", track=False)],
+                handled=True,
+            )
         return EngineResult(
             linked_account_id,
             [
