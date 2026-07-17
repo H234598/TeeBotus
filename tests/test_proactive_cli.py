@@ -63,6 +63,25 @@ def test_proactive_selected_missing_instance_is_an_error(tmp_path) -> None:
     assert report["instances"][0]["error"] == "selected_instance_not_found"
 
 
+def test_proactive_cycle_reports_store_factory_runtime_error(tmp_path) -> None:
+    accounts_root = tmp_path / "instances" / "Depressionsbot" / "data" / "accounts"
+    accounts_root.mkdir(parents=True)
+
+    def broken_store_factory(_root, _instance):
+        raise RuntimeError("backend unavailable")
+
+    report = run_proactive_agent_dry_run(
+        instances_dir=tmp_path / "instances",
+        selected_instances=("Depressionsbot",),
+        env={"TEEBOTUS_PROACTIVE_AGENT_INSTANCES": "Depressionsbot"},
+        store_factory=broken_store_factory,
+        now=datetime(2026, 6, 15, 12, tzinfo=timezone.utc),
+    )
+
+    assert report["ok"] is False
+    assert report["instances"][0]["error"] == "RuntimeError: backend unavailable"
+
+
 def test_proactive_cycle_marks_planner_errors_unhealthy() -> None:
     assert _cycle_ok([{"accounts": [{"llm_planning": {"errors": ["invalid_json"]}}]}]) is False
     assert _cycle_ok([{"accounts": [{"llm_planning": {"skipped_reason": "llm_planner_unavailable"}}]}]) is True

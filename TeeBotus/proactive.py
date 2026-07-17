@@ -605,13 +605,13 @@ async def run_proactive_agent_cycle(
             continue
         try:
             store = resolved_store_factory(instance_dir / "data" / "accounts", instance_dir.name)
-        except (AccountStoreError, OSError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - one instance must not abort the scheduler report.
             instance_report["error"] = f"{type(exc).__name__}: {exc}"
             instances.append(instance_report)
             continue
         try:
             account_ids = _account_ids(store)
-        except (AccountStoreError, OSError, ValueError) as exc:
+        except Exception as exc:  # noqa: BLE001 - broken account discovery stays reportable.
             instance_report["error"] = f"{type(exc).__name__}: {exc}"
             instances.append(instance_report)
             continue
