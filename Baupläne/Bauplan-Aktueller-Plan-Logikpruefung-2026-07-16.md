@@ -6922,6 +6922,21 @@ Commits. Kein Push. Restart nach 6 weiteren Commits.
 
 **Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `15/20` sichtbar.
 
+### Stale-LLM-State-Recovery bleibt retryfähig
+
+- 2026-07-17: `_create_reply_with_state_recovery()` brach bei einem Fehler
+  von `reset_state()` vor dem vorgesehenen Retry ohne alte Response-ID ab.
+- Cleanup ist jetzt best-effort. Auch bei lokalem Statefehler wird der
+  Provider einmal ohne stale Vor-ID gefragt; Cleanupfehler werden geloggt.
+- Test: fokussierter Recoverypfad `3 passed`; Ruff und `git diff --check`
+  gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8acdd4c0 fix: retry stale llm state cleanup failures`.
+
+**Aktueller Laufstand:** Nach diesem Code-Commit seit dem Restart `16/20`
+Commits. Kein Push. Restart nach 4 weiteren Commits.
+
+**Plan-Commit:** Dieser Plan-Commit macht den neuen Zyklus `17/20` sichtbar.
+
 ### Admin-Status kapselt Account-Verzeichnisfehler
 
 - 2026-07-17: `_account_dir_exists` liess unerwartete Dateisystem- und
