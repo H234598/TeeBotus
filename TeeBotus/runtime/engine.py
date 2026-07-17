@@ -1530,10 +1530,10 @@ class TeeBotusEngine:
         except Exception:  # noqa: BLE001 - provider adapters must not abort the message loop.
             LOGGER.exception("LLM action pipeline failed unexpectedly instance=%s event_id=%s", event.instance, event.event_id)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
-        response_id = _persistable_previous_response_id(response)
-        if response_id:
-            provider, model, key_fingerprint = _llm_state_scope(response, client=llm_client, instructions=instructions)
-            try:
+        try:
+            response_id = _persistable_previous_response_id(response)
+            if response_id:
+                provider, model, key_fingerprint = _llm_state_scope(response, client=llm_client, instructions=instructions)
                 self.state.set_previous_response_id(
                     event.instance,
                     account_id,
@@ -1543,8 +1543,8 @@ class TeeBotusEngine:
                     model=model,
                     key_fingerprint=key_fingerprint,
                 )
-            except Exception:  # noqa: BLE001 - state persistence must not discard a valid LLM reply.
-                LOGGER.exception("LLM response state persistence failed instance=%s account=%s", event.instance, account_id)
+        except Exception:  # noqa: BLE001 - response metadata persistence must not discard a valid LLM reply.
+            LOGGER.exception("LLM response state persistence failed instance=%s account=%s", event.instance, account_id)
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
             LOGGER.warning("LLM action response empty instance=%s event_id=%s.", event.instance, event.event_id)
@@ -2301,10 +2301,10 @@ class TeeBotusEngine:
             LOGGER.exception("YouTube LLM pipeline failed unexpectedly instance=%s event=%s", event.instance, event.event_id)
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)
             return [SendTyping(event.chat_id), SendText(event.chat_id, instructions.llm_error)]
-        response_id = _persistable_previous_response_id(response)
-        if response_id:
-            provider, model, key_fingerprint = _llm_state_scope(response, client=self.llm_client, instructions=instructions)
-            try:
+        try:
+            response_id = _persistable_previous_response_id(response)
+            if response_id:
+                provider, model, key_fingerprint = _llm_state_scope(response, client=self.llm_client, instructions=instructions)
                 self.state.set_previous_response_id(
                     event.instance,
                     account_id,
@@ -2314,8 +2314,8 @@ class TeeBotusEngine:
                     model=model,
                     key_fingerprint=key_fingerprint,
                 )
-            except Exception:  # noqa: BLE001 - state persistence must not discard a valid YouTube LLM reply.
-                LOGGER.exception("YouTube LLM response state persistence failed instance=%s account=%s", event.instance, account_id)
+        except Exception:  # noqa: BLE001 - YouTube response metadata persistence must not discard a valid reply.
+            LOGGER.exception("YouTube LLM response state persistence failed instance=%s account=%s", event.instance, account_id)
         response_text = str(getattr(response, "text", "") or "").strip()
         if not response_text:
             self._remember_youtube_interaction(event, account_id, instructions, user_text or event.text, instructions.llm_error)

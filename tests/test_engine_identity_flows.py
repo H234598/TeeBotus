@@ -396,6 +396,26 @@ def test_llm_reply_survives_unexpected_key_ring_scope_failure(tmp_path):
     assert any(getattr(action, "text", "") == "Antwort trotz Key-Ring-Fehler." for action in actions)
 
 
+def test_llm_reply_survives_response_metadata_persistence_failure(tmp_path, monkeypatch):
+    class FakeLLMClient:
+        def create_reply(self, *_args, **_kwargs):
+            return OpenAIResponse("Antwort trotz Response-Metadatenfehler.", "resp-1", None)
+
+    monkeypatch.setattr(
+        "TeeBotus.runtime.engine._persistable_previous_response_id",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(RuntimeError("response metadata unavailable")),
+    )
+    engine = TeeBotusEngine(
+        account_store=store(tmp_path),
+        instructions=BotInstructions(openai_enabled=True),
+        llm_client=FakeLLMClient(),
+    )
+
+    actions = engine.process(event(telegram_identity_key(1), "Hallo"))
+
+    assert any(getattr(action, "text", "") == "Antwort trotz Response-Metadatenfehler." for action in actions)
+
+
 def test_observation_backend_failures_do_not_block_ping(tmp_path, monkeypatch) -> None:
     account_store = store(tmp_path)
     engine = TeeBotusEngine(account_store=account_store)
