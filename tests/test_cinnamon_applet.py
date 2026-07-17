@@ -5612,6 +5612,24 @@ def test_cinnamon_applet_run_terminates_timed_out_child() -> None:
     }
 
 
+def test_cinnamon_applet_run_keeps_redacted_partial_output_on_timeout() -> None:
+    secret = "sk-" + "A" * 20
+    result = cinnamon_applet._run(
+        [
+            sys.executable,
+            "-c",
+            f"import sys, time; print('[Health]\\nstatus=warning api_key={secret}', flush=True); time.sleep(5)",
+        ],
+        timeout_seconds=1,
+    )
+
+    assert result["returncode"] == 124
+    assert "[Health]" in result["stdout"]
+    assert "status=warning" in result["stdout"]
+    assert secret not in result["stdout"]
+    assert result["stderr"] == "TimeoutExpired: command timed out after 1 seconds"
+
+
 def test_cinnamon_applet_run_timeout_kills_child_process_group(tmp_path) -> None:
     child_pid_file = tmp_path / "child.pid"
     script = (

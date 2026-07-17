@@ -1377,7 +1377,14 @@ def _run(argv: list[str], *, cwd: Path | None = None, timeout_seconds: int = 10)
             return {
                 "argv": quoted_argv,
                 "returncode": 124,
-                "stdout": "",
+                # Keep already emitted diagnostics. A slow runtime-status
+                # command must not erase the useful health sections it already
+                # produced before the helper timeout.
+                "stdout": _limit_text(
+                    _redact(stdout.decode("utf-8", errors="replace")),
+                    MAX_CAPTURE_CHARS,
+                    truncated=stdout_truncated,
+                ),
                 "stderr": _limit_text(_redact(f"TimeoutExpired: command timed out after {bounded_timeout} seconds"), MAX_ERROR_CHARS),
             }
         return {
