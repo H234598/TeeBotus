@@ -3142,7 +3142,7 @@ def test_engine_uses_structured_memory_candidate_for_safe_semantic_memory(tmp_pa
 
     assert account_id is not None
     entries = account_store.read_memory_entries(account_id)
-    assert [call[1].__name__ for call in calls] == ["ReminderDecision", "MemoryCandidate"]
+    assert [call[1].__name__ for call in calls] == ["MemoryCandidate"]
     assert entries[-1]["kind"] == "preference"
     assert entries[-1]["memory_type"] == "semantic"
     assert entries[-1]["user_text"] == "User bevorzugt kurze Antworten."
