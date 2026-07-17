@@ -4599,3 +4599,28 @@ Commits. Naechster Push bleibt erst bei 100 Commits.
 **Aktueller Laufstand:** Seit dem letzten Restart `2/20` Code-Commits. Kein
 Push. Restart nach 18 weiteren Commits. Naechster Push bleibt erst bei 100
 Commits.
+
+### Stateful-LLM-State-pro-Chat-Scope
+
+- 2026-07-17: `previous_response_id` wurde nur unter
+  `(instance_name, account_id)` gehalten. Verknuepfte Telegram-/Signal-
+  Identitaeten und verschiedene Chats konnten deshalb Stateful-Kontext teilen;
+  `/reset` loeschte ausserdem accountweit.
+- Engine bildet jetzt Scope aus Kanal, Adapter-Slot, Chattyp und Chat-ID.
+  Stateful Lookup, Write, stale-Recovery und `/reset` nutzen denselben Scope.
+  Account-Memory bleibt absichtlich geteilt. Persistenz liegt verschluesselt in
+  `LLM_State.json` bzw. SQL-Collection unter
+  `previous_response_conversations`; alte top-level Felder bleiben als
+  Legacy-Spiegel erhalten.
+- Scoped State nutzt 3-Tuple-In-Memory-Keys. Scoped Reset entfernt nur Ziel-
+  Scope; unscoped Reset bleibt accountweit kompatibel. Alte top-level States
+  werden nur solange als Legacy-Fallback gelesen, bis Mapping existiert.
+- Regression: State-/Persistenzfokus `82 passed` ohne zwei bekannte,
+  themenfremde Account-Lock-Symlinkfehler; Engine-State-/Scope-Fokus `4
+  passed`; Ruff, `compileall` und `git diff --check` gruen. Kein
+  Provider/API-Aufruf.
+- Code-Commit: `7864b276 fix: scope stateful llm context per chat`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `4/20` Code-Commits. Kein
+Push. Restart nach 16 weiteren Commits. Naechster Push bleibt erst bei 100
+Commits.
