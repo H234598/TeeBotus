@@ -2019,6 +2019,9 @@ def test_extract_residence_city_handles_confidence_adverbs() -> None:
     assert extract_residence_city("Ich wohne in Berlin, denke ich.") == ""
     assert extract_residence_city("Ich wohne in Berlin, vermute ich.") == ""
     assert extract_residence_city("Ich wohne in Berlin, nehme ich an.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, wirklich.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, sicher.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, tatsächlich.") == "Berlin"
 
 
 def test_extract_residence_city_handles_additional_location_adverbs() -> None:

@@ -3890,6 +3890,13 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
     if re.search(
+        rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}},\s*"
+        r"(?:ganz\s+)?(?:sicher|wirklich|tatsächlich|tatsaechlich)\s*[.!?]?$",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+[^,.;!?]{1,80}?"
