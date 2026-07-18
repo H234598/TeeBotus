@@ -2870,7 +2870,7 @@ CITY_PATTERNS = (
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
         r"adresse|wohnadresse|wohnanschrift|anschrift)\s*"
-        r"(?:ist|liegt|lautet|befindet\s+sich|bleibt|:)\s*(?::\s*)?"
+        r"(?:ist|liegt|lautet|befindet\s+sich|bleibt|:|=)\s*(?::\s*)?"
         r"(?:(?:in|bei)\s+)?[\"'„“‚‘«(]?"
         r"(?:\d{5}\s+)?(?P<city>[^\W\d_][\wÄÖÜäöüß .()-]{1,80})"
         r"[\"'”“’»)]?(?=\s*(?:[.!?;,]|$))",

@@ -1373,6 +1373,10 @@ def test_extract_residence_city_handles_quoted_compound_and_postal_values() -> N
     assert extract_residence_city('Meine Adresse lautet "10115 Berlin".') == "Berlin"
 
 
+def test_extract_residence_city_handles_compact_equals_labels() -> None:
+    assert extract_residence_city("Mein Wohnort=„Bonn“.") == "Bonn"
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
