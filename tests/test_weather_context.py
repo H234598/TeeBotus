@@ -1450,6 +1450,11 @@ def test_extract_residence_city_handles_never_negation() -> None:
 
 def test_extract_residence_city_handles_relative_place_sentences() -> None:
     assert extract_residence_city("Berlin ist die Stadt, in der ich wohne.") == "Berlin"
+    assert extract_residence_city("Berlin ist die Stadt wo ich wohne.") == "Berlin"
+    assert extract_residence_city("Berlin ist die Stadt wo ich lebe.") == "Berlin"
+    assert extract_residence_city("Berlin ist dort, wo ich wohne.") == "Berlin"
+    assert extract_residence_city("Hamburg ist da, wo ich lebe.") == "Hamburg"
+    assert extract_residence_city("Berlin ist dort, wo ich arbeite.") == ""
     assert extract_residence_city("Berlin ist der Ort, an dem ich lebe.") == "Berlin"
     assert extract_residence_city("Der Ort, an dem ich wohne, ist Berlin.") == "Berlin"
     assert extract_residence_city("Der Ort wo ich wohne ist Berlin.") == "Berlin"
