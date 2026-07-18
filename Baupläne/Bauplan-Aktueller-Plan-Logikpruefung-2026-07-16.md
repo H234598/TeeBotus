@@ -9721,3 +9721,16 @@ Restart erst bei `20/20`.
 - Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
+
+### Folgefix 2026-07-18: Plurale Begleit-Wohnorte erkennen
+
+- `Wir wohnen zusammen mit unseren Eltern in Leipzig` und `mit unseren Kindern in München` wurden bisher nicht erkannt.
+- Ein pluraler `mit ... in Stadt`-Pfad ergänzt den bestehenden `bei ... in Stadt`-Pfad.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `eaaadeb9 fix: parse plural companion residences`.
+
+## Aktueller Ledger 2026-07-18-True-Tail-Final
+
+- Letzter Restart: steht nach diesem `20/20`-Fix an.
+- Seit letztem Restart: `20/20` Code-Fixes. Kein Push.
+- Restart jetzt ausführen; danach Zähler `0/20`.
