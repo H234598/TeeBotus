@@ -57,6 +57,9 @@ def test_extract_residence_city_from_nearby_location_phrase() -> None:
 def test_extract_residence_city_from_time_qualified_residence_phrase() -> None:
     assert extract_residence_city("Seit 2024 lebe ich in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich lebe seit 2024 in Potsdam.") == "Potsdam"
+    assert extract_residence_city("Ich wohne seit kurzem in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich lebe seit einiger Zeit in Leipzig.") == "Leipzig"
+    assert extract_residence_city("Ich wohne seit ein paar Jahren in Dresden.") == "Dresden"
 
 
 def test_extract_residence_city_from_home_phrase() -> None:
@@ -68,6 +71,7 @@ def test_extract_residence_city_from_home_phrase() -> None:
 def test_extract_residence_city_after_person_or_household_phrase() -> None:
     assert extract_residence_city("Ich wohne bei meiner Freundin in Berlin.") == "Berlin"
     assert extract_residence_city("Ich lebe bei meinen Eltern in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne aktuell bei meiner Freundin in Potsdam.") == "Potsdam"
 
 
 def test_extract_residence_city_from_plain_negated_change() -> None:
