@@ -11311,3 +11311,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Direkte Stadtrand-Relationen
+
+- `am Stadtrand München`, Genitiv und `von`-Form werden erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `106 passed`, fünf Stadtrand-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5847071d fix: parse direct stadtrand relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
