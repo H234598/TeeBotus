@@ -14236,3 +14236,16 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Unsichere Selbstvermutungen
+
+- `Ich glaube/denke/vermute ...`, `Ich nehme an ...` und `Soweit ich weiß ...` werden nicht als sichere Wohnortangabe gespeichert.
+- Breit matchende Label-Regexe können diese Präfixe nicht mehr als Scheinstadt zurückgeben.
+- Sichere Form `Ich wohne sicher in Berlin` bleibt gültig.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, sieben Unsicherheits-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e6b53748 fix: reject uncertain residence claims`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
