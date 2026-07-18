@@ -660,7 +660,7 @@ CITY_CHANGE_PATTERNS = (
 CITY_PATTERNS = (
     re.compile(
         r"\b(?:ich|i)\s+(?:wohne|wohn|lebe|leb)\s+"
-        r"(?:(?:grad|gerade|zurzeit|zur\s+zeit|jetzt|nun|aktuell|derzeit)\s+)?"
+        r"(?:(?:ab\s+sofort|grad|gerade|zurzeit|zur\s+zeit|jetzt|nun|aktuell|derzeit)\s+)?"
         r"(?:in|bei)\s+"
         r"(?!(?:[A-ZÄÖÜ][\wÄÖÜäöüß .'-]*s)\s+(?:nähe|naehe|umgebung)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
@@ -886,7 +886,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich\s+)?(?:wohne|wohnen|lebe|leben)\s+"
-        r"(?!(?:ich|wir|tue|tun|mal|teils|abwechselnd|aber|doch|jedoch|zwischen|irgendwo|mit|auf|aus|nach|für|fuer|"
+        r"(?!(?:ich|wir|tue|tun|mal|teils|abwechselnd|aber|doch|jedoch|zwischen|irgendwo|mit|auf|aus|nach|für|fuer|ab|"
         r"während|waehrend|jetzt|inzwischen|aktuell|derzeit|nun)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
