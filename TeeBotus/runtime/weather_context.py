@@ -666,6 +666,26 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:ich|i)\s+nenn(?:e|en)?\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)?\s*(?:zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+nenn(?:e|en)?\s+(?:ich|i)\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)?\s*(?:zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|i)\s+habe\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+als\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|i)\s+(?:bin|sein)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:zu\s+hause|zuhause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
         r"(?:in\s+der\s+(?:nähe|naehe|umgebung)\s+(?:von\s+)?)"
         r"(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
