@@ -9078,3 +9078,16 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `12/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Relationale Wohnortlabels erkennen
+
+- `Mein Zuhause liegt in Berlin` lieferte bisher `in Berlin`; `Wohnort
+  befindet sich in Hamburg` wurde gar nicht erkannt.
+- Wohnort-/Zuhause-Labels mit `ist`, `liegt` oder `befindet sich` plus `in/bei`
+  werden jetzt vor dem allgemeinen Labelparser ausgewertet.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bb2da1f7 fix: parse relational residence labels`.
+
+**Aktueller Laufstand:** Seit dem Restart `13/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
