@@ -12621,3 +12621,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Nachgestelltes „dahoam“
+
+- `Ich bin in Hamburg dahoam` wird als Hamburg erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, ein Dahoam-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c054fed4 fix: parse dahoam residence suffix`.
+
+## Aktueller Ledger 2026-07-18-Nach-20-Fixes
+
+- Vor Restart: Service soll nach diesem 20. Code-Fix neu geladen werden.
+- Seit letztem Restart: `20/20` Code-Fixes. Kein Push.
