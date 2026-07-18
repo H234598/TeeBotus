@@ -12442,3 +12442,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Temporales „als Wohnort“
+
+- `Ich habe jetzt/nun/aktuell Hamburg als Wohnort/Wohnsitz` entfernt den Zeitmarker aus der City und speichert Hamburg.
+- `als Arbeitsort` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Residence-as-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0f2efd5c fix: parse temporal residence-as labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
