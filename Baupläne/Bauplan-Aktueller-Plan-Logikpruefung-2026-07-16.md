@@ -12562,3 +12562,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Ortsarten mit Dativpräposition
+
+- `Ich wohne/lebe an/in dem Ort ...` wird erkannt.
+- Arbeitsform `Ich arbeite an dem Ort ...` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Locality-Type-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `47540f15 fix: parse residence locality types`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
