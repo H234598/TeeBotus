@@ -11078,3 +11078,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Gelabelte Entfernungsrelationen
+
+- Entfernungsangaben vor Richtungsrelationen werden auch bei `Wohnort ... ist/liegt` erkannt.
+- Genitiv- und `von`-Form sind abgedeckt.
+- Verifikation: `tests/test_weather_context.py` -> `90 passed`, drei Distanz-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0ae2fe17 fix: parse labeled distance relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
