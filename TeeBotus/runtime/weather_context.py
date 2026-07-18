@@ -168,7 +168,7 @@ _RESIDENCE_TIME_QUALIFIER = (
     rf"ständig|staendig|wieder|erneut|für\s+{_RESIDENCE_DURATION}|"
     r"zur\s+(?:miete|untermiete|zwischenmiete)|"
     r"bis\s+(?:auf\s+weiteres|zum\s+ende\s+(?:des\s+)?(?:monats|jahres)|"
-    r"ende\s+(?:des\s+)?(?:monats|jahres))|"
+    r"ende\s+(?:des\s+)?(?:monats|jahres)|(?:monats|jahres)ende)|"
     r"vor(?:uebergehend|übergehend))"
 )
 _RESIDENCE_LOCATION_ADVERB = (
