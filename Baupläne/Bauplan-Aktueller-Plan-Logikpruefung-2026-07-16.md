@@ -8026,6 +8026,18 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `6/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Wechsel zwischen Wohnen und Leben auswerten
+
+- `Ich wohne in Berlin, lebe aber jetzt in Hamburg` blieb bisher bei Berlin.
+- Ein Wechsel zwischen `wohnen` und `leben` nach einem Komma wird jetzt als
+  neuer Wohnort erkannt; `arbeite jetzt in Hamburg` loest keinen Wechsel aus.
+- Verifikation: `tests/test_weather_context.py` -> `21 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e09fa850 fix: parse residence wohnen leben changes`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `7/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
