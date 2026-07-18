@@ -9049,3 +9049,17 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `10/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Begründungskontext aus Wohnort entfernen
+
+- `Ich wohne in Berlin aus beruflichen Gründen`, `lebe in Hamburg wegen der
+  Arbeit` und `wohne in Berlin als Student` lieferten teils verschmutzte
+  Stadtnamen.
+- `aus`, `wegen` und `als` sind nun Trailing-Stop-Wörter nach dem Wohnort;
+  vorhandene `auf`-Behandlung deckt `aufgrund` ab.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `caddb1e0 fix: trim residence reason context`.
+
+**Aktueller Laufstand:** Seit dem Restart `11/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
