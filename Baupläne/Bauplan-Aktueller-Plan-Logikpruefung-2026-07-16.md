@@ -10534,3 +10534,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Bare-Label-Ortskonflikte
+
+- `Wohnort Berlin, Hamburg` und `Wohnort: Berlin; Hamburg` werden als widersprüchlich verworfen, obwohl kein `ist` vorhanden ist.
+- Volladressen, Länder-/Regionsangaben und `in/bei`-Präzisierungen bleiben gültig; Guard gilt nur für echte Stadt-zu-Stadt-Aufzählungen.
+- Verifikation: `tests/test_weather_context.py` -> `48 passed`, sechs Bare-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b9aa0a5b fix: guard bare residence label conflicts`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
