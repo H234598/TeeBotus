@@ -14400,3 +14400,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Kontrast-Konnektoren
+
+- `auch wenn`, `trotzdem` und Label-Kontraste zwischen Arbeitsort und Wohnort liefern Wohnstadt.
+- Gleichartige Arbeitsortangaben ohne Wohnortlabel bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Contrast-Connector-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f4237586 fix: parse contrast residence connectors`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
