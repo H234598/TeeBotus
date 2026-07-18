@@ -579,7 +579,11 @@ def _clean_city(value: str) -> str:
         return ""
     if re.match(r"(?i)^(?:der|die|das)\s+(?:stadt|nähe|naehe|umgebung|arbeit)\b", city):
         return ""
-    if re.match(r"(?i)^(?:nahe|innerhalb|außerhalb|ausserhalb|unter)\b", city):
+    if re.match(
+        r"(?i)^(?:nahe|innerhalb|außerhalb|ausserhalb|unter|aus|f(?:ür|uer)|"
+        r"wegen|als|neben|mit|w(?:ährend|aehrend)|zusammen|auf|am|im)\b",
+        city,
+    ):
         return ""
     if re.search(r"(?i)\b(?:nicht(?:\s+mehr)?|kein(?:e|er|em|en)?|mein(?:e|er|em|en)?|ein(?:e|er|em|en)?)\b", city):
         return ""

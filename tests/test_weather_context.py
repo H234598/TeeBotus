@@ -306,6 +306,13 @@ def test_extract_residence_city_removes_daypart_context() -> None:
     assert extract_residence_city("Mein Zuhause ist nahe.") == ""
     assert extract_residence_city("Mein Wohnort ist außerhalb von Berlin.") == ""
     assert extract_residence_city("Mein Wohnort ist unter Berlin.") == ""
+    assert extract_residence_city("Mein Wohnort ist aus Berlin.") == ""
+    assert extract_residence_city("Mein Wohnort ist für Berlin.") == ""
+    assert extract_residence_city("Mein Wohnort ist wegen Berlin.") == ""
+    assert extract_residence_city("Mein Wohnort ist neben Berlin.") == ""
+    assert extract_residence_city("Mein Wohnort ist während Berlin.") == ""
+    assert extract_residence_city("Mein Wohnort ist in Amberg.") == "Amberg"
+    assert extract_residence_city("Mein Wohnort ist in Aufhausen.") == "Aufhausen"
 
 
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
