@@ -9656,3 +9656,16 @@ Restart erst bei `20/20`.
 - Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
+
+### Folgefix 2026-07-18: Plurale Wohnortkorrekturen und Ansässigkeit
+
+- Getrennte Formen wie `Wir wohnen nicht mehr in Berlin. Jetzt in Hamburg` und historische Formen wie `Wir wohnten in Berlin, jetzt in Hamburg` werden erkannt.
+- `ansässig`/`ansaessig` ist jetzt auch für `wir sind ...` gültig.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5669073b fix: parse plural residence changes`.
+
+## Aktueller Ledger 2026-07-18-True-Tail-Final
+
+- Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+- Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
