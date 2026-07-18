@@ -10389,3 +10389,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wechselrhythmus und zukünftige Umzüge
+
+- `mal/teils/abwechselnd`-Angaben, Plural-`Wohnorte`, `wohnen tue ich`, frühere/aktuelle Kurzangaben und Vergangenheitsformen von `ziehen` wurden teils falsch oder gar nicht erkannt.
+- Ambige Mehrfachwohnsitze bleiben leer; `Ab morgen` wird nicht als aktueller Wohnort gespeichert; frühere/aktuelle sowie abgeschlossene Umzüge werden als aktueller Zielort erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `37 passed`, 49 lokale Korpus-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0dd74eb2 fix: handle residence change timing`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
