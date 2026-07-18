@@ -8517,6 +8517,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Aktuellen Marker `nun` zentral erkennen
+
+- `Ich wohne nun in Berlin`, `Wohnort ist nun Hamburg` und `Zuhause bleibt
+  nun Potsdam` wurden bisher leer oder mit `nun` als Stadt erkannt.
+- `nun` ist jetzt zentraler aktueller Marker; `heute` bleibt bewusst
+  temporaer und ueberschreibt Wohnort nicht.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a823e158 fix: parse current residence marker nun`.
+
+**Aktueller Laufstand:** Seit dem Restart `6/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-18: Weitere Dauerqualifizierer abdecken
 
 - `seit fast zwei Jahren`, `seit circa/ca. drei Monaten`, `seit rund vier
