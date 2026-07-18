@@ -8595,6 +8595,18 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `11/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: `den`-Besitzsatz fuer Primaerwohnanker
+
+- `Ich habe den Hauptwohnsitz/Lebensmittelpunkt ...` wurde leer erkannt,
+  waehrend `meinen` funktionierte.
+- Der bestehende Alias-Besitzpfad akzeptiert nun `meinen|den` sowie `in|bei`.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7b9cf67a fix: parse dative residence ownership phrasing`.
+
+**Aktueller Laufstand:** Seit dem Restart `12/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-18: Weitere Dauerqualifizierer abdecken
 
 - `seit fast zwei Jahren`, `seit circa/ca. drei Monaten`, `seit rund vier
