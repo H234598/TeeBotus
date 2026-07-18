@@ -320,6 +320,20 @@ def test_extract_residence_city_from_current_location_label() -> None:
     assert extract_residence_city("Ich wohne in Berlin und pendle nach Hamburg.") == "Berlin"
 
 
+def test_extract_residence_city_from_full_address_phrases() -> None:
+    assert extract_residence_city("Ich wohne in der Hauptstraße 12 in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich lebe in der Musterstraße 4a bei Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in der Bahnhofstraße 8, Potsdam.") == "Potsdam"
+    assert extract_residence_city("Meine Adresse ist Hauptstraße 12, Berlin.") == "Berlin"
+    assert extract_residence_city("Meine Wohnadresse lautet Musterweg 3 in Dresden.") == "Dresden"
+    assert extract_residence_city("Mein Wohnsitz ist Lindenallee 7, Leipzig.") == "Leipzig"
+    assert extract_residence_city("Ich habe meine Anschrift in der Bahnhofstraße 2 in Köln.") == "Köln"
+    assert extract_residence_city("Ich wohne in Berlin ohne Hausnummer.") == "Berlin"
+    assert extract_residence_city("Ich arbeite in der Hauptstraße 12 in Berlin.") == ""
+    assert extract_residence_city("Meine Geschäftsadresse ist Hauptstraße 12 in Hamburg.") == ""
+    assert extract_residence_city("Ich war in der Hauptstraße 12 in Berlin zu Besuch.") == ""
+
+
 def test_extract_residence_city_rejects_negated_or_non_city_phrases() -> None:
     for text in (
         "Ich wohne in keiner Stadt, sondern auf dem Land.",

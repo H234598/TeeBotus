@@ -533,6 +533,30 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben))\s+"
+        r"[^,.;!?]{1,100}?(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
+        r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:adresse|wohnadresse|wohnanschrift|anschrift|wohnort|wohnsitz)\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
+        r"[^,.;!?]{1,100}?(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
+        r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+(?:meine|unsere)\s+"
+        r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+"
+        r"[^,.;!?]{1,100}?(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
+        r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)|"
         r"(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
@@ -913,7 +937,7 @@ CITY_TRAILING_STOP_RE = re.compile(
     r"\s+(?:und|aber|weil|wenn|falls|seit|schon|mit|bei|in|auf|neben|nahe|"
     r"innerhalb|au(?:ßerhalb|sserhalb)|unter|aus|wegen|als|im|"
     r"am\s+(?:stadtrand|see|bahnhof|fluss|rand)|f(?:ür|uer)|"
-    r"w(?:ährend|aehrend)|zusammen|obwohl|wobei|denn|da|dort|[-–—]|"
+    r"w(?:ährend|aehrend)|zusammen|ohne|obwohl|wobei|denn|da|dort|[-–—]|"
     r"heute|morgen|gestern|gerade|aktuell|jetzt|nun|momentan|derzeit|"
     r"zurzeit|zur\s+zeit|weiterhin|inzwischen|mittlerweile|dauerhaft|"
     r"permanent|ständig|staendig|vor(?:uebergehend|übergehend)|"
@@ -1118,7 +1142,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb)"
     for pattern in (
         re.compile(
-            rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}},\s*"
+            rf"\b{residence}\s+(?:in|bei)\s+(?P<first>[^,.;!?]{{1,80}}),\s*"
             r"(?!(?:aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|zieh\w*|"
             r"besuch\w*|pendl\w*|reis\w*|genauer\b|konkret\b|nämlich\b|naemlich\b|"
             r"und\s+zwar\b|besser\s+gesagt\b|sprich\b))"
@@ -1128,7 +1152,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         re.compile(
             r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
             r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
-            r"(?:ist|liegt|befindet\s+sich|bleibt)\s+[^,.;!?]{1,80},\s*"
+            r"(?:ist|liegt|befindet\s+sich|bleibt)\s+(?P<first>[^,.;!?]{1,80}),\s*"
             r"(?!(?:aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|zieh\w*|"
             r"besuch\w*|pendl\w*|reis\w*|genauer\b|konkret\b|nämlich\b|naemlich\b|"
             r"und\s+zwar\b|besser\s+gesagt\b|sprich\b))"
@@ -1137,6 +1161,12 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         ),
     ):
         comma_match = pattern.search(source)
+        first = comma_match.groupdict().get("first", "") if comma_match else ""
+        if first and re.search(
+            r"(?i)(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+\d+[a-z]?\b",
+            first,
+        ):
+            continue
         if comma_match and comma_match.group("second").casefold() not in (
             _NON_CITY_RESIDENCE_NAMES | _NON_CITY_REGION_NAMES
         ):
