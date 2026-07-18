@@ -11391,3 +11391,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Aktueller Ort nach historischer Area
+
+- Aktuelle Sätze nach `war/früher`-Areaangaben werden wieder als Wohnort erkannt.
+- Label- und direkte Form mit Zentrum/Area sind abgedeckt.
+- Verifikation: `tests/test_weather_context.py` -> `111 passed`, vier historische-Area-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3925c878 fix: preserve current after historical area`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
