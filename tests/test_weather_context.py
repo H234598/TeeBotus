@@ -991,6 +991,14 @@ def test_extract_residence_city_handles_stadtmitte_relations() -> None:
     assert extract_residence_city("Mein Wohnort liegt in der Stadtmitte von Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_handles_genitive_center_relations() -> None:
+    assert extract_residence_city("Ich wohne im Zentrum Münchens.") == "München"
+    assert extract_residence_city("Ich wohne in der Innenstadt Münchens.") == "München"
+    assert extract_residence_city("Ich lebe in Münchens Zentrum.") == "München"
+    assert extract_residence_city("Ich wohne in Münchens Innenstadt.") == "München"
+    assert extract_residence_city("Ich lebe im Zentrum München.") == "München"
+
+
 def test_extract_residence_city_handles_outside_city_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist außerhalb der Stadt München.") == "München"
     assert extract_residence_city("Mein Wohnort ist außerhalb der Stadt Münchens.") == "München"

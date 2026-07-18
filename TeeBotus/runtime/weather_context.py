@@ -135,6 +135,36 @@ CITY_CHANGE_PATTERNS = (
     re.compile(
         r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
         r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
+        r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+"
+        r"(?:im\s+zentrum|in\s+der\s+innenstadt)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+        r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
+        r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+"
+        r"(?:im\s+zentrum|in\s+der\s+innenstadt)\s+(?:von\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+        r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
+        r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+in\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s\s+(?:zentrum|innenstadt)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+        r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
+        r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+in\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:zentrum|innenstadt)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+        r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
         r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+am\s+stadtrand\s+"
         r"(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s(?=\s*[.!?;,]|$)",
