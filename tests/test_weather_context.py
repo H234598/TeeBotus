@@ -1507,6 +1507,13 @@ def test_extract_residence_city_rejects_temporal_suffix_claims() -> None:
     assert extract_residence_city("Wohnort Berlin ab sofort.") == "Berlin"
 
 
+def test_extract_residence_city_handles_temporal_bare_labels() -> None:
+    assert extract_residence_city("Mein Wohnort seit kurzem Berlin.") == "Berlin"
+    assert extract_residence_city("Wohnort seit heute Hamburg.") == "Hamburg"
+    assert extract_residence_city("Wohnort: seit 2020 Potsdam.") == "Potsdam"
+    assert extract_residence_city("Wohnort ab morgen Berlin.") == ""
+
+
 def test_repeated_city_updates_deduplicate_duplicate_residence_memories(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

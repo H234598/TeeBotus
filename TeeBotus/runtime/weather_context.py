@@ -2337,6 +2337,7 @@ CITY_PATTERNS = (
         r"(?:(?:bitte|aktuell|derzeitig|derzeit|gegenwärtig)\s*)?"
         r"(?::|=|,)?\s*(?!(?:ist|war|w(?:äre|urde)|liegt|befindet|bleibt|nicht)\b)"
         r"(?:(?:bitte|aktuell|derzeitig|derzeit|gegenwärtig)\s*)?"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?"
         r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
