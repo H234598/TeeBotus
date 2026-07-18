@@ -12149,3 +12149,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Weitere Ortsarten
+
+- `Hafenstadt`, `Universitätsstadt`, `Kreisstadt` und `Landeshauptstadt` werden als Wohnortpräfixe erkannt.
+- Aktivitätskontext wie `Ich arbeite in der Hafenstadt Hamburg` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf City-Type-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b65000d9 fix: parse additional city type labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
