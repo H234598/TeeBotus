@@ -12861,3 +12861,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Mehrfamilienhaus-Wohnform
+
+- `Ich wohne in einem Mehrfamilienhaus in Bonn` wird erkannt.
+- Arbeitsform bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, zwei Multifamily-Building-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4599371e fix: parse multifamily residence buildings`.
+
+## Aktueller Ledger 2026-07-18-Nach-20-Fixes
+
+- Vor Restart: Service soll nach diesem 20. Code-Fix neu geladen werden.
+- Seit letztem Restart: `20/20` Code-Fixes. Kein Push.
