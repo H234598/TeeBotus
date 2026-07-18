@@ -7893,6 +7893,19 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `16/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Zeitpraeposition vor Reminder-Tagesanker bereinigen
+
+- `Erinnere mich fuer morgen an den Termin` wurde korrekt terminiert, aber
+  `fuer` blieb im Betreff.
+- `fuer/für` wird jetzt nur direkt vor einem erkannten Tagesanker entfernt;
+  ein normales `für` im eigentlichen Thema bleibt erhalten.
+- Verifikation: `tests/test_reminder_intent.py` -> `57 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2af71277 fix: clean reminder time prepositions`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `17/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
