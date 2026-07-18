@@ -69,6 +69,11 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "demnaechst",
         "bald",
         "geplant",
+        "vielleicht",
+        "vermutlich",
+        "angeblich",
+        "möglicherweise",
+        "moeglicherweise",
     }
 )
 _NON_CITY_REGION_NAMES = frozenset(
@@ -107,8 +112,9 @@ _RESIDENCE_TIME_QUALIFIER = (
     r"vor(?:uebergehend|übergehend))"
 )
 _RESIDENCE_LOCATION_ADVERB = (
-    r"(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
-    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|irgendwo|dahoam)"
+    r"(?:(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
+    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|irgendwo|dahoam)|"
+    r"(?:sicher|wirklich|definitiv|tatsächlich|tatsaechlich))"
 )
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
@@ -2281,7 +2287,8 @@ def _clean_city(value: str) -> str:
     if re.match(
         r"(?i)^(?:der|die|das|den|dem|des|dies(?:er|e|es)|jen(?:er|e|es)|"
         r"welch(?:er|e|es)|irgendein|mehrere|einige|manche|ohne|unbekannt\w*|"
-        r"unbestimmt\w*|wird|soll|geplant\w*|nimmer|werktags|wochentags|hier|dort|da)\b",
+        r"unbestimmt\w*|wird|soll|geplant\w*|nimmer|werktags|wochentags|hier|dort|da|"
+        r"vielleicht|vermutlich|angeblich|möglicherweise|moeglicherweise)\b",
         city,
     ):
         return ""
