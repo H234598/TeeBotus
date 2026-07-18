@@ -10154,3 +10154,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Ansiedlungs- und Einzugsverben
+
+- `niedergelassen`, `angesiedelt`, `eingezogen`, `sesshaft geworden` und `ließ mich nieder` wurden bisher nicht als aktueller Wohnort erkannt.
+- Abgeschlossene Ansiedlungsformen sind ergänzt; Zukunftsformen bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 8 Settlement-Verb-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e361b2ab fix: parse settlement and move verbs`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
