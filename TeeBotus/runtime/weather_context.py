@@ -65,6 +65,21 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt|stadt|ort|zu\s+hause|zuhause|daheim)\s+war\s+"
+        r"[^,.;!?]{1,80}?(?:,|;|[-–—])\s*(?:aber\s+)?"
+        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+(?:(?:in|bei)\s+)?"
+        r"(?!(?:arbeite|studiere|lerne|schlafe|besuche|reise|pendle)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich\s+)?(?:wohnte|lebte)\s+(?:(?:früher|frueher|vorher|damals)\s+)?"
+        r"(?:in|bei)\s+[^,.;!?]{1,80}(?:,|;|[-–—])\s*(?:aber\s+)?"
+        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich\s+)?(?:wohne|lebe)\s+zwar\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
         rf"aber\s+(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
