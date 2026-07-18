@@ -11299,3 +11299,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Außerhalb-Stadt-Relationen
+
+- `außerhalb der Stadt München`, Genitiv und direkte Form werden erkannt.
+- Bewusst ausgeschlossene Label-`außerhalb von`-Form und `Paris`-Genitivschutz bleiben erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `105 passed`, sechs Outside-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b69c12ad fix: parse outside city relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
