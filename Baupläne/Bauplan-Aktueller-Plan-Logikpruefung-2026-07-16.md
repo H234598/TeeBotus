@@ -8996,3 +8996,17 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `6/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Zeitqualifizierte Wohnortkorrekturen erkennen
+
+- `Ich wohne in Berlin, aber lebe seit 2020 in Dresden` und `... lebe aber
+  seit kurzem in Leipzig` wurden bisher auf Berlin gekuerzt.
+- Der zweite Wohn-/Lebensanker nutzt jetzt das gemeinsame Zeitqualifizierer-
+  Fragment. Dabei wurden `inzwischen` und `mittlerweile` zentral nachgezogen;
+  die Regression ist mitgetestet.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `49c21ea9 fix: parse timed residence corrections`.
+
+**Aktueller Laufstand:** Seit dem Restart `7/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
