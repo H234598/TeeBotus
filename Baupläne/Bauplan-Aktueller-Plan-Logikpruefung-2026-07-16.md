@@ -9708,3 +9708,16 @@ Restart erst bei `20/20`.
 - Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
+
+### Folgefix 2026-07-18: Plurale Abhängigkeit-Wohnorte erkennen
+
+- `Wir wohnen bei unseren Eltern in Köln` wurde bisher als `unseren Eltern` statt als Stadt erkannt.
+- Ein pluraler `bei ... in Stadt`-Pfad behandelt Eltern/Familie und Zeitqualifizierer korrekt.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2cf7ea37 fix: parse plural dependent residence`.
+
+## Aktueller Ledger 2026-07-18-True-Tail-Final
+
+- Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+- Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
