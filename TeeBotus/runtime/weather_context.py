@@ -91,6 +91,14 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}\s+ist\s+nicht\s+(?:mehr\s+)?mein(?:e)?\s+"
+        r"(?:(?:aktuell(?:er|e)?|jetzig(?:er|e)|derzeitig(?:er|e)?|gegenwärtig(?:er|e)?)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim|lebensmittelpunkt)\s*,?\s*"
+        r"(?:sondern|aber|jetzt|nun|aktuell|derzeit)?\s*(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+habe(?:n)?\s+mich\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:niedergelassen|angesiedelt)\b",
         re.IGNORECASE,
@@ -506,6 +514,25 @@ CITY_CHANGE_PATTERNS = (
     ),
 )
 CITY_PATTERNS = (
+    re.compile(
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:ist|bleibt)\s+"
+        r"mein(?:e)?\s+"
+        r"(?:(?:aktuell(?:er|e)?|jetzig(?:er|e)|derzeitig(?:er|e)?|gegenwärtig(?:er|e)?)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim|lebensmittelpunkt)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:wohnhaft|ansässig|ansaessig)\s+(?:bin\s+ich|sind\s+wir)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
+        r"(?:meinen|meine|mein|unseren|unsere|unser|den|die|das)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|bleibe)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)|"
         r"(?:mein(?:e)?|unser(?:e)?)?\s*"
@@ -1150,7 +1177,7 @@ def _has_historical_residence_prefix(source: str, match_start: int) -> bool:
     sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
     return bool(
         re.search(
-            r"(?i)\b(?:ehemalig\w*|frueh\w*|früh\w*|einstig\w*|vormalig\w*|damalig\w*|"
+            r"(?i)\b(?:ehemalig\w*|ehemals\b|frueh\w*|früh\w*|einstig\w*|vormalig\w*|damalig\w*|"
             r"alt\w*|vorherig\w*)\s*$",
             sentence,
         )

@@ -49,6 +49,20 @@ def test_extract_residence_city_from_common_german_phrases() -> None:
     assert extract_residence_city("Ich komme aus Hamburg, aber bin unterwegs.") == ""
 
 
+def test_extract_residence_city_from_inverted_and_colloquial_forms() -> None:
+    assert extract_residence_city("Wohnhaft bin ich in Berlin.") == "Berlin"
+    assert extract_residence_city("Ansässig sind wir bei Hamburg.") == "Hamburg"
+    assert extract_residence_city("Berlin ist mein aktueller Wohnort.") == "Berlin"
+    assert extract_residence_city("Berlin bleibt mein Wohnort.") == "Berlin"
+    assert extract_residence_city("Hamburg bleibt mein Zuhause.") == "Hamburg"
+    assert extract_residence_city("München bleibt mein Lebensmittelpunkt.") == "München"
+    assert extract_residence_city("Ich hab meinen Wohnsitz in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich hab' meinen Wohnsitz in Berlin.") == "Berlin"
+    assert extract_residence_city("Berlin ist nicht mehr mein Wohnort, sondern Hamburg.") == "Hamburg"
+    assert extract_residence_city("Berlin ist nicht mehr mein Wohnort, jetzt in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ehemals ansässig sind wir bei Hamburg.") == ""
+
+
 def test_extract_residence_city_from_nearby_location_phrase() -> None:
     assert extract_residence_city("Ich wohne in der Nähe von Berlin.") == "Berlin"
     assert extract_residence_city("Ich lebe nahe Hamburg.") == "Hamburg"
