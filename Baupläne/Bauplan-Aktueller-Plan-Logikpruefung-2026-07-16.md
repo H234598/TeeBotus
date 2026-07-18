@@ -9643,3 +9643,16 @@ Restart erst bei `20/20`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
 - Code-Fixes seit Restart: `8afef100`, `9ef3aff0`, `d10f95a1`, `7c18b6ee`, `5d08d5c4`, `a823e158`, `3c36731b`, `f84eb2e7`, `6c4eecd2`, `63c551d1`, `823d5753`, `7b9cf67a`, `706fcb48`.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
+
+### Folgefix 2026-07-18: Plurale Wohnortwechsel und Aktivitaetsorte disambiguieren
+
+- `Seit 2020 wohnen wir ...` und `Wir wohnen nicht ..., sondern ...` werden jetzt erkannt.
+- `Wir wohnen in Berlin und leben in Hamburg` bleibt bewusst unbestimmt; Arbeits- und Studienorte werden nicht mehr als zweiter Wohnort fehlklassifiziert.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bed7a733 fix: disambiguate plural residence statements`.
+
+## Aktueller Ledger 2026-07-18-True-Tail-Final
+
+- Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+- Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
