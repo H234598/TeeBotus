@@ -11598,3 +11598,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Historische Registrierungsangabe
+
+- `war in ... wohnhaft/ansässig/gemeldet/registriert, jetzt in Stadt` liefert aktuellen Ort.
+- Arbeitsübergänge bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Historical-Registration-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `429d89b3 fix: parse historical registered residences`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
