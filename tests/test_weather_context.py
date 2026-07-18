@@ -1538,6 +1538,8 @@ def test_extract_residence_city_handles_short_clarification_marker() -> None:
 def test_extract_residence_city_handles_inverse_origin_residence_labels() -> None:
     assert extract_residence_city("Berlin ist meine Heimat, Hamburg mein Wohnort.") == "Hamburg"
     assert extract_residence_city("Berlin ist mein Geburtsort, Hamburg mein Wohnort.") == "Hamburg"
+    assert extract_residence_city("Berlin ist meine Heimat und Hamburg mein Wohnort.") == "Hamburg"
+    assert extract_residence_city("Berlin ist mein Geburtsort und Hamburg ist mein Wohnort.") == "Hamburg"
 
 
 def test_repeated_city_updates_deduplicate_duplicate_residence_memories(tmp_path) -> None:
