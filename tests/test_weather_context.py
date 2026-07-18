@@ -957,6 +957,13 @@ def test_extract_residence_city_keeps_direct_residence_before_activity_context()
     assert extract_residence_city("Ich wohne in Berlin und ich lebe in Hamburg.") == ""
 
 
+def test_extract_residence_city_normalizes_unweit_and_nahe_labels() -> None:
+    assert extract_residence_city("Mein Wohnort ist unweit Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist unweit Berlins.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist nahe Berlins.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist nahe Paris.") == "Paris"
+
+
 def test_extract_residence_city_rejects_multiple_home_targets() -> None:
     assert extract_residence_city("Mein Zuhause ist in Berlin und Hamburg.") == ""
     assert extract_residence_city("Ich wohne werktags in Berlin und am Wochenende in Hamburg.") == ""
