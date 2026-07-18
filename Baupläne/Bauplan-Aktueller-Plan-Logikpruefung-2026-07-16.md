@@ -12550,3 +12550,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Relativsatz-Ortsformen
+
+- `Berlin ist die Stadt wo/in der ich wohne/lebe` sowie `Berlin ist dort/da, wo ich wohne/lebe` werden erkannt.
+- Arbeitsrelativsatz bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Relative-Locality-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4ef75054 fix: parse relative locality residence clauses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
