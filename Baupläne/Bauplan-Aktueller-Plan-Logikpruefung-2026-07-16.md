@@ -10130,3 +10130,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Regionale Wohnstatus-Formen
+
+- `Wohnstadt bleibt weiterhin im Bundesland ...`, `Heute bin ich ... wohnhaft` und `Seit ... bin ich ... wohnhaft` blieben teilweise leer.
+- Gegenwarts-`bin/sind` mit beiden Pronomenstellungen und Qualifier nach Labelverb sind ergänzt; Länder-only bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 5 Regional-Status-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1d5fb21c fix: parse regional residence status`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
