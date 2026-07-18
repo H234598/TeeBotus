@@ -523,6 +523,7 @@ def test_extract_residence_city_from_move_phrases() -> None:
     assert extract_residence_city("Mein Wohnsitz wechselte zu Hamburg.") == "Hamburg"
     assert extract_residence_city("Mein Wohnort verlegte sich nach Hamburg.") == "Hamburg"
     assert extract_residence_city("Mein Wohnort hat sich von Berlin nach Hamburg geändert.") == "Hamburg"
+    assert extract_residence_city("Mein Wohnort hat sich von Berlin zu Hamburg verändert.") == "Hamburg"
     assert extract_residence_city("Mein Wohnort hat sich nach Hamburg geändert.") == "Hamburg"
     assert extract_residence_city("Ich habe meinen Wohnort nach Hamburg verlegt.") == "Hamburg"
     assert extract_residence_city("Ich werde nach Hamburg ziehen.") == ""
