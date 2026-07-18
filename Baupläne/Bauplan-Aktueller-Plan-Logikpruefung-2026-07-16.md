@@ -11369,3 +11369,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Makroregionen als Nicht-Städte
+
+- Nord-/Süd-/West-/Ost-/Mitteldeutschland, Ruhrgebiet und Rheinland werden als Regionen verworfen.
+- Verifikation: `tests/test_weather_context.py` -> `110 passed`, zwei Makroregion-Rejection-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `92c7402a fix: reject macro regions as cities`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
