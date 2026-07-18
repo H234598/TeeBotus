@@ -810,6 +810,13 @@ def _clean_city(value: str) -> str:
     source = str(value or "")
     if re.search(r"(?i)\s+(?:oder|sowie|bzw\.?|beziehungsweise)\s+", source):
         return ""
+    first_sentence = re.split(r"(?<!\bSt)[.!?;]\s+", source, maxsplit=1, flags=re.IGNORECASE)[0]
+    if re.search(
+        r"(?i)\b(?:auf\s+besuch|zu\s+besuch|im\s+urlaub|zum\s+urlaub|"
+        r"f(?:ür|uer)\s+den\s+urlaub|als\s+(?:tourist|besucher))\b",
+        first_sentence,
+    ):
+        return ""
     city = CITY_TRAILING_STOP_RE.sub("", source).strip(" .,:;!?")
     city = re.sub(r"\s+", " ", city)
     city = re.split(r"(?<!\bSt)[.!?]\s+", city, maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,:;!?")
