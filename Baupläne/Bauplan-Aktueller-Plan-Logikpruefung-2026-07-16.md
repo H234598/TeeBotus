@@ -7875,6 +7875,21 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `14/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Deiktische und nahe Wohnorte erkennen
+
+- `Ich wohne hier in Berlin`, `Ich lebe direkt in Hamburg`, `Ich wohne in der
+  Umgebung von Potsdam`, `im Raum Leipzig` und `unweit von Dresden` wurden
+  bisher verworfen.
+- Der Parser akzeptiert nun begrenzte Ortsadverbien und klare
+  Naeheformulierungen. Die Erkennung bleibt an ein Wohn-/Lebensverb oder eine
+  Zuhause-/Haushaltsphrase gebunden.
+- Verifikation: `tests/test_weather_context.py` -> `22 passed`,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e2bc1fbf fix: parse nearby residence locations`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `15/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Gemini-Keyring: Cursor nach Route/Modell isolieren
 
 - 2026-07-17: `RotatingAPIKeyRing` nahm zwar `name` entgegen, Registry-State
