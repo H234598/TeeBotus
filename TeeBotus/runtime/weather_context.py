@@ -2917,7 +2917,8 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+ist\s+"
         r"(?:(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|noch\s+immer|immer\s+noch|weiterhin|"
-        r"nach\s+wie\s+vor)\s+)?"
+        r"nach\s+wie\s+vor|gegenwärtig|gegenwaertig|vorläufig|vorlaeufig|dauerhaft|permanent|"
+        r"temporär|temporaer|vorübergehend|voruebergehend|befristet|unbefristet|kurzfristig|langfristig)\s+)?"
         r"(?:mein(?:e)?|unser(?:e)?)\s+(?:wohnort|wohnsitz|zuhause|zu\s+hause)\b",
         re.IGNORECASE,
     ),
