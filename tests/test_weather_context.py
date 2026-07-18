@@ -158,6 +158,8 @@ def test_extract_residence_city_from_additional_change_forms() -> None:
     assert extract_residence_city("Ich komme aus Berlin und bin dort wohnhaft.") == "Berlin"
     assert extract_residence_city("Ich stamme aus Potsdam und bin dort ansässig.") == "Potsdam"
     assert extract_residence_city("Ich komme aus Berlin und arbeite dort.") == ""
+    assert extract_residence_city("Ich arbeite in Berlin, wo ich wohne.") == "Berlin"
+    assert extract_residence_city("Ich studiere in Hamburg, wo ich lebe.") == "Hamburg"
     assert extract_residence_city("Ich stamme aus Berlin, aber arbeite in Hamburg.") == ""
     assert extract_residence_city("Ich lebe nun nicht mehr in Berlin, sondern Hamburg.") == "Hamburg"
     assert extract_residence_city("Wir wohnen aktuell nicht mehr bei Berlin, sondern bei Potsdam.") == "Potsdam"
@@ -341,6 +343,7 @@ def test_extract_residence_city_from_time_and_activity_markers() -> None:
     assert extract_residence_city("Ich wohne täglich in Hamburg.") == ""
     assert extract_residence_city("Ich wohne nachts in Potsdam.") == ""
     assert extract_residence_city("Ich wohne jeden Tag in Dresden.") == ""
+    assert extract_residence_city("Ich wohne nur am Wochenende in Berlin.") == ""
     assert extract_residence_city("Früher wohnte ich in Hamburg, jetzt in Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne nunmehr in Berlin.") == "Berlin"
     assert extract_residence_city("Ich lebe seit gestern in Berlin.") == "Berlin"
@@ -1635,6 +1638,7 @@ def test_extract_residence_city_handles_direct_area_relations() -> None:
     assert extract_residence_city("Ich wohne in der Region um Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne in der Berliner Region.") == "Berlin"
     assert extract_residence_city("Ich wohne im Berliner Gebiet.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, manchmal in Hamburg.") == ""
 
 
 def test_extract_residence_city_handles_labeled_direction_relations() -> None:

@@ -186,6 +186,12 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:ich|wir)\s+(?:arbeite|arbeiten|studiere|studieren|lerne|lernen)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,?\s*wo\s+"
+        r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+(?:komm(?:e|en)|stamm(?:e|en))\s+aus\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*"
         r"(?:und\s+|,\s*(?:aber\s+)?)"
@@ -2141,6 +2147,7 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?:ich\s+)?(?:wohne|wohnen|lebe|leben)\s+"
         r"(?!(?:ich|wir|tue|tun|mal|teils|abwechselnd|aber|doch|jedoch|zwischen|irgendwo|mit|auf|aus|von|nach|für|fuer|ab|bis|seit|"
+        r"nur\s+am\s+wochenende|am\s+wochenende|"
         r"während|waehrend|montags?|dienstags?|mittwochs?|donnerstags?|freitags?|samstags?|sonntags?|"
         r"morgens|vormittags|mittags|nachmittags|abends|nachts|täglich|taeglich|wöchentlich|woechentlich|"
         r"monatlich|jährlich|jaehrlich|tagsüber|tagsueber|jeden|jede|jedes|alle|an|jetzt|inzwischen|aktuell|derzeit|nun)\b)"
@@ -2874,12 +2881,20 @@ def extract_residence_city(text: str) -> str:
 
 
 def _has_explicit_residence_multiplicity(source: str) -> bool:
+    multiplicity_source = source
+    if re.search(r"\bmanchmal\b", source, re.IGNORECASE) and re.search(
+        r"\b(?:hauptsächlich|hauptsaechlich|überwiegend|ueberwiegend|vorwiegend|meistens|mehrheitlich|"
+        r"primaer|primär|in\s+der\s+regel)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        multiplicity_source = re.sub(r"\bmanchmal\b", "", source, flags=re.IGNORECASE)
     return bool(
         re.search(
-            r"\b(?:wohne|wohnen|lebe|leben)\b[^.!?;\n]*\b(?:mal|teils|teilweise|abwechselnd|zwischen|"
+            r"\b(?:wohne|wohnen|lebe|leben)\b[^.!?;\n]*\b(?:mal|manchmal|teils|teilweise|abwechselnd|zwischen|"
             r"oder|beziehungsweise|bzw\.?)\b|"
             r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnorte|wohnsitze)\b",
-            source,
+            multiplicity_source,
             re.IGNORECASE,
         )
     )
