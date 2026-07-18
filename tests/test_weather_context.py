@@ -1498,6 +1498,15 @@ def test_extract_residence_city_handles_inverted_label_changes() -> None:
     assert extract_residence_city("Nicht länger Berlin, jetzt in Potsdam ist mein Wohnsitz.") == "Potsdam"
 
 
+def test_extract_residence_city_rejects_temporal_suffix_claims() -> None:
+    assert extract_residence_city("Wohnort Berlin ab morgen.") == ""
+    assert extract_residence_city("Wohnort Berlin künftig.") == ""
+    assert extract_residence_city("Wohnort Berlin früher.") == ""
+    assert extract_residence_city("Wohnort Berlin ehemals.") == ""
+    assert extract_residence_city("Wohnort Berlin seit heute.") == "Berlin"
+    assert extract_residence_city("Wohnort Berlin ab sofort.") == "Berlin"
+
+
 def test_repeated_city_updates_deduplicate_duplicate_residence_memories(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

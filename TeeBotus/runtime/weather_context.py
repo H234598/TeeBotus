@@ -2939,6 +2939,7 @@ CITY_TRAILING_STOP_RE = re.compile(
     r"zuhause|zu\s+hause|daheim|wohnhaft|ansässig|ansaessig|geworden|"
     r"zur\s+(?:unter|zwischen)miete|nur\s+vor(?:uebergehend|übergehend)|zur\s+miete|"
     r"laut\b.*|"
+    r"ab\s+sofort|"
     r"bis\s+(?:auf\s+weiteres|zum\s+ende\s+(?:des\s+)?(?:monats|jahres)|"
     r"ende\s+(?:des\s+)?(?:monats|jahres))|"
     r"\.|,|;|:|!|\?)(?=\s|[.!?;,]|$).*$",
@@ -3138,7 +3139,11 @@ def extract_residence_city(text: str) -> str:
                         continue
                     if _has_unresolved_location_separator(source, city_end):
                         continue
+                    if _has_future_residence_suffix(source, city_end):
+                        continue
                     if _has_historical_residence_suffix(source, city_end):
+                        continue
+                    if _has_temporal_residence_suffix_text(match.group("city")):
                         continue
                     city = _clean_city(match.group("city"))
                     if city:
@@ -3526,8 +3531,36 @@ def _has_historical_residence_suffix(source: str, city_end: int) -> bool:
     sentence = re.split(r"(?<!\bSt)[.!?;\n]", tail, maxsplit=1, flags=re.IGNORECASE)[0]
     return bool(
         re.match(
-            r"(?i)\s+(?:(?:wohnhaft|ansässig|ansaessig)\s+)?(?:gewesen|worden)\b",
+            r"(?i)\s+(?:(?:wohnhaft|ansässig|ansaessig)\s+)?(?:gewesen|worden|frueher|frühere?\b|"
+            r"ehemals|damals|vormalig\w*)\b",
             sentence,
+        )
+    )
+
+
+def _has_future_residence_suffix(source: str, city_end: int) -> bool:
+    tail = source[city_end:]
+    sentence = re.split(r"(?<!\bSt)[.!?;\n]", tail, maxsplit=1, flags=re.IGNORECASE)[0]
+    return bool(
+        re.match(
+            r"(?i)\s+(?:ab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
+            r"(?:jahr\w*|monat\w*|woche\w*)\b|ab\s+(?:morgen|uebermorgen|übermorgen|"
+            r"sommer|winter|frühling|fruehling|herbst)|ab\s+\d{4}\b|"
+            r"(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*)\b)",
+            sentence,
+        )
+    )
+
+
+def _has_temporal_residence_suffix_text(value: str) -> bool:
+    return bool(
+        re.search(
+            r"(?i)\s+(?:ab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
+            r"(?:jahr\w*|monat\w*|woche\w*)|ab\s+(?:morgen|uebermorgen|übermorgen|"
+            r"sommer|winter|frühling|fruehling|herbst)|ab\s+\d{4}|"
+            r"(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*|"
+            r"frueher|früher|ehemals|damals|vormalig\w*)\s*\.?$)",
+            str(value or "").strip(),
         )
     )
 
