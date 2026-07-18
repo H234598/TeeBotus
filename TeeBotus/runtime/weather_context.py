@@ -922,7 +922,8 @@ def _has_historical_residence_prefix(source: str, match_start: int) -> bool:
     sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
     return bool(
         re.search(
-            r"(?i)\b(?:ehemalig\w*|frueh\w*|früh\w*|einstig\w*|alt\w*|vorherig\w*)\s*$",
+            r"(?i)\b(?:ehemalig\w*|frueh\w*|früh\w*|einstig\w*|vormalig\w*|damalig\w*|"
+            r"alt\w*|vorherig\w*)\s*$",
             sentence,
         )
     )

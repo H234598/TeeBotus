@@ -456,6 +456,8 @@ def test_extract_residence_city_removes_daypart_context() -> None:
     assert extract_residence_city("Mein früherer Wohnsitz liegt in Dresden.") == ""
     assert extract_residence_city("Mein früheres Zuhause ist Hamburg.") == ""
     assert extract_residence_city("Mein alter Wohnort ist Leipzig.") == ""
+    assert extract_residence_city("Mein vormaliger Wohnsitz liegt in Hamburg.") == ""
+    assert extract_residence_city("Mein damaliger Wohnort ist Dresden.") == ""
     assert extract_residence_city("Ich residiere in Berlin.") == "Berlin"
     assert extract_residence_city("Ich bin in Leipzig gemeldet.") == "Leipzig"
     assert extract_residence_city("Ich habe meine Bleibe in Hamburg.") == "Hamburg"
