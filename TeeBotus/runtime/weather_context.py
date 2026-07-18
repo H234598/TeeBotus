@@ -2472,7 +2472,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?wir\s+(?:wohnen|leben)\s+"
-        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:zusammen\s+mit|gemeinsam\s+mit|mit)\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:zusammen\s+mit|gemeinsam\s+mit|mit|neben)\s+"
         r"(?![^,.;!?]*\b(?:arbeit\w*|job\w*|büro\w*|buero\w*|studier\w*|studium\w*|lern\w*)\b)"
         rf"[^,.;!?]{{1,80}}\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
@@ -2480,7 +2480,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich\s+)?(?:wohne|lebe)\s+"
-        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:zusammen\s+mit|gemeinsam\s+mit|mit)\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:zusammen\s+mit|gemeinsam\s+mit|mit|neben)\s+"
         r"(?![^,.;!?]*\b(?:arbeit\w*|job\w*|büro\w*|buero\w*|studier\w*|studium\w*|lern\w*)\b)"
         rf"[^,.;!?]{{1,80}}\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
