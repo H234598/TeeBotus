@@ -12088,3 +12088,16 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Mehrfachwohnorte vor Auswahl sperren
+
+- `teilweise`, `oder`, `beziehungsweise`, `abwechselnd`, `zwischen` und echte Plural-Labels wie `Wohnorte` werden vor der City-Auswahl als unaufgelöst erkannt.
+- Adress-/Wohnortkonflikte werden ebenfalls vor Change-Patterns geprüft; `Meine Adresse ist Hamburg, mein Wohnort Berlin` liefert leer.
+- Aufgelöste Wechsel wie `Ich wohne in Berlin und lebe jetzt in Hamburg` bleiben aktiv.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, Multiplicity-/Conflict-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5deb119e fix: guard residence multiplicity before selection`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
