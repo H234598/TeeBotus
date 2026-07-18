@@ -2044,6 +2044,23 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"(?:^|[.!?;,\n]\s*)(?!(?:ist|war|bleibt|wird)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*(?:\s+(?!(?:ist|war|bleibt|wird)\b)"
+        r"[\wÄÖÜäöüß'-]+){0,6})\s+als\s+"
+        r"(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[.!?;,\n]\s*)als\s+"
+        r"(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
+        r"(?:ist|lautet|:)??\s*"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*(?:\s+[\wÄÖÜäöüß'-]+){0,6})"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[.!?;,\n]\s*)(?!(?:ist|war|bleibt|wird)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*"
         r"(?:\s+(?!(?:ist|war|bleibt|wird)\b)[\wÄÖÜäöüß'-]+){0,6})"
         r"(?:\s+(?:ist|bleibt)|\s*,)?\s+"
