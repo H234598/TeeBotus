@@ -135,6 +135,27 @@ CITY_CHANGE_PATTERNS = (
     re.compile(
         r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
         r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
+        r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+"
+        r"au(?:ßerhalb|sserhalb)\s+(?:(?:der|des)\s+stadt\s+)?"
+        r"(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
+        r"(?!von\s+)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s(?=\s*(?:[.!?;,]|$|"
+        r"\b(?:und|aber|doch|jedoch)\b))",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+        r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
+        r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+"
+        r"au(?:ßerhalb|sserhalb)\s+(?:(?:der|des)\s+stadt\s+)?"
+        r"(?!von\s+)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$|"
+        r"\b(?:und|aber|doch|jedoch)\b))",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+        r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
         r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+in\s+der\s+stadtmitte\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s(?=\s*[.!?;,]|$)",
         re.IGNORECASE,

@@ -991,6 +991,13 @@ def test_extract_residence_city_handles_stadtmitte_relations() -> None:
     assert extract_residence_city("Mein Wohnort liegt in der Stadtmitte von Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_handles_outside_city_relations() -> None:
+    assert extract_residence_city("Mein Wohnort ist außerhalb der Stadt München.") == "München"
+    assert extract_residence_city("Mein Wohnort ist außerhalb der Stadt Münchens.") == "München"
+    assert extract_residence_city("Ich wohne außerhalb Münchens.") == "München"
+    assert extract_residence_city("Ich lebe außerhalb von Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_handles_stadtgebiet_relations() -> None:
     assert extract_residence_city("Ich wohne im Münchner Stadtgebiet.") == "München"
     assert extract_residence_city("Ich wohne im Stadtgebiet von München.") == "München"
