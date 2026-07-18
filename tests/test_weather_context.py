@@ -1043,6 +1043,12 @@ def test_extract_residence_city_handles_postposed_place_adverbs() -> None:
     assert extract_residence_city("Hamburg, wo ich arbeite.") == ""
 
 
+def test_extract_residence_city_handles_residence_relative_repeat() -> None:
+    assert extract_residence_city("Ich wohne in Berlin, wo ich lebe.") == "Berlin"
+    assert extract_residence_city("Wir leben in Hamburg, wo wir wohnen.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Berlin, wo ich arbeite.") == "Berlin"
+
+
 def test_extract_residence_city_handles_country_prefix_without_comma() -> None:
     assert extract_residence_city("Ich wohne in Deutschland in Berlin.") == "Berlin"
     assert extract_residence_city("Ich lebe in Österreich in Wien.") == "Wien"
