@@ -1027,6 +1027,7 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        r"(?:\d+\s*(?:km|kilometer)\s+)?"
         r"(?:nördlich|südlich|östlich|westlich|nordöstlich|nordwestlich|"
         r"südöstlich|südwestlich)\s+(?:von\s+)?"
         r"(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
@@ -1036,6 +1037,7 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        r"(?:\d+\s*(?:km|kilometer)\s+)?"
         r"(?:nördlich|südlich|östlich|westlich|nordöstlich|nordwestlich|"
         r"südöstlich|südwestlich)\s+(?:von\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
