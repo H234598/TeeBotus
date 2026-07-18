@@ -10106,3 +10106,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wohnortwechsel-Varianten
+
+- Labelwechsel mit `nun/jetzt/seitdem`, `änderte sich von`, `wechselte von/zu` und `verlegte sich` wurden bisher teilweise nicht erkannt.
+- Explizite Wohnort-/Wohnsitzwechsel sind ergänzt; generisches `Ich wechselte ...` bleibt ohne Wohnkontext leer.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 10 Residence-Change-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5a483da5 fix: parse residence change variants`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
