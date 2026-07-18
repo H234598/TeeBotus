@@ -18,7 +18,9 @@ MAX_CITY_LENGTH = 80
 _RESIDENCE_DURATION = (
     r"(?:(?:mehr\s+als|über|ueber|knapp|gut|etwa|ungefähr|ungefaehr|"
     r"fast|circa|ca\.|rund|mindestens|hoechstens|höchstens)\s+)?"
-    r"(?:\d{4}|kurzem|kurzer\s+zeit|einiger\s+zeit|"
+    r"(?:\d{4}|kurzem|kurzer\s+zeit|einiger\s+zeit|jeher|"
+    r"(?:dem\s+)?(?:letzten|letztem|vergangenen|vergangenem|aktuellen|aktuellem|diesem)\s+(?:jahr|sommer|winter)|"
+    r"(?:meiner\s+)?(?:kindheit|jugend|geburt)|dem\s+(?:studium|umzug)|"
     r"(?:(?:ein\s+paar|\w+)\s+(?:tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?)|"
     r"tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?))"
 )
