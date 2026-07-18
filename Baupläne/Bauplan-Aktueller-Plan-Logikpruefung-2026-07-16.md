@@ -10413,3 +10413,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Aktive Zeitmarker und Arbeitskontext
+
+- `Früher wohnte ich ..., jetzt ...`, `neben`, `seit gestern`, `nunmehr`, `bereits`, `schon` und `noch` wurden ergänzt.
+- `mit Arbeit/Studium` bleibt kein Wohnort; `In Zukunft` wird nicht als Stadt und nicht als aktueller Wohnort erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `39 passed`, 40 lokale Korpus-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `862b7e06 fix: distinguish active residence time markers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
