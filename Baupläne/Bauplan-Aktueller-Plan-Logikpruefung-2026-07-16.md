@@ -9932,3 +9932,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Benennungsformulierungen für Wohnorte
+
+- `Ort namens Berlin`, `Stadt genannt Hamburg` und `Mein Wohnort nennt sich Berlin` wurden bisher nicht sauber extrahiert.
+- Namenspräfixe werden vor dem City-Feld entfernt; Negationen wie `nennt sich nicht ...` bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 4 Naming-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2b6db020 fix: parse residence naming phrases`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
