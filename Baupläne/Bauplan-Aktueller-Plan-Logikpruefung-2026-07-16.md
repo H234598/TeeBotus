@@ -8944,3 +8944,15 @@ Push. Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `0/20` Code-Commits. Kein Push.
 Restart nach weiteren 20 Code-Fixes.
+
+## Aktueller Lauf nach dem letzten Restart
+
+- Service-Restart am 2026-07-18 erfolgreich; `.env`-Check, Bot und
+  Signal-CLI aktiv.
+- Seit diesem Restart `3/20` Code-Commits, kein Push.
+- `e0246899`: veraltete generierte Wohnort-Memories atomar ersetzen;
+  `2f6f3584`: vorhandene stale Geschwister bei Wiederholung bereinigen;
+  `ec0f3431`: Gedankenstrich-Kontext trimmen.
+- Verifikation: Wetterparser `25 passed`, Structured-Memory-Fokus `11
+  passed`, SQLite-Wetter-Smoke-Test gruen. Kein Provider/API-Aufruf.
+- Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Freigabe.
