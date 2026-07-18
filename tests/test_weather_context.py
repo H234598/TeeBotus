@@ -835,6 +835,12 @@ def test_extract_residence_city_from_colloquial_forms() -> None:
     assert extract_residence_city("Ich ha e meinen Wohnsitz in Berlin.") == ""
 
 
+def test_extract_residence_city_rejects_semicolon_conflicts() -> None:
+    assert extract_residence_city("Ich wohne in Berlin; Hamburg.") == ""
+    assert extract_residence_city("Mein Wohnort ist Berlin; Hamburg.") == ""
+    assert extract_residence_city("Ich wohne in Berlin; aber ich arbeite in Hamburg.") == "Berlin"
+
+
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

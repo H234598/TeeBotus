@@ -1634,21 +1634,21 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         return True
     for pattern in (
         re.compile(
-            rf"\b{residence}\s+(?:in|bei)\s+(?P<first>[^,.;!?]{{1,80}}),\s*"
+            rf"\b{residence}\s+(?:in|bei)\s+(?P<first>[^,.;!?]{{1,80}})[,;]\s*"
             r"(?!(?:aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|zieh\w*|"
             r"besuch\w*|pendl\w*|reis\w*|genauer\b|konkret\b|nämlich\b|naemlich\b|"
             r"und\s+zwar\b|besser\s+gesagt\b|sprich\b))"
-            r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*)\s*(?:[.!?;]|$)",
+            r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*)\s*(?:[.!?;,]|$)",
             re.IGNORECASE,
         ),
         re.compile(
             r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
             r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
-            r"(?:ist|liegt|befindet\s+sich|bleibt)\s+(?P<first>[^,.;!?]{1,80}),\s*"
+            r"(?:ist|liegt|befindet\s+sich|bleibt)\s+(?P<first>[^,.;!?]{1,80})[,;]\s*"
             r"(?!(?:aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|zieh\w*|"
             r"besuch\w*|pendl\w*|reis\w*|genauer\b|konkret\b|nämlich\b|naemlich\b|"
             r"und\s+zwar\b|besser\s+gesagt\b|sprich\b))"
-            r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*)\s*(?:[.!?;]|$)",
+            r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*)\s*(?:[.!?;,]|$)",
             re.IGNORECASE,
         ),
     ):
