@@ -12257,3 +12257,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Übergangs- und Zwischenwohnung
+
+- `in einer Übergangswohnung` und `in einer Zwischenwohnung` werden im bestehenden Housing-Type-Pattern erkannt.
+- Reine Besitzangabe wie `Ich habe eine Übergangswohnung ...` bleibt kein Wohnortsignal.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Housing-Type-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `27692136 fix: parse transitional housing residence`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
