@@ -193,6 +193,15 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:manchmal|gelegentlich|oft|häufig|haeufig|selten)\s+(?:in|bei)\s+"
+        r"[^,.;!?]{1,80},\s*(?:aber\s+)?"
+        r"(?:meist\w*|hauptsächlich|hauptsaechlich|überwiegend|ueberwiegend|"
+        r"vorwiegend|mehrheitlich|in\s+der\s+regel)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?!(?:ich|wir|wohne|wohnen|lebe|leben|arbeite|arbeiten|studiere|studieren|lerne|lernen)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,\s*(?:"
         r"(?:daheim|zuhause|zu\s+hause)\s+(?:bin|wohne|lebe)\s+(?:ich|wir)|"
@@ -2223,7 +2232,8 @@ CITY_PATTERNS = (
         r"nur\s+am\s+wochenende|am\s+wochenende|"
         r"während|waehrend|montags?|dienstags?|mittwochs?|donnerstags?|freitags?|samstags?|sonntags?|"
         r"morgens|vormittags|mittags|nachmittags|abends|nachts|täglich|taeglich|wöchentlich|woechentlich|"
-        r"monatlich|jährlich|jaehrlich|tagsüber|tagsueber|jeden|jede|jedes|alle|an|jetzt|inzwischen|aktuell|derzeit|nun)\b)"
+        r"monatlich|jährlich|jaehrlich|tagsüber|tagsueber|jeden|jede|jedes|alle|an|jetzt|inzwischen|aktuell|derzeit|nun|"
+        r"oft|häufig|haeufig|meist\w*|gelegentlich|regelmäßig|regelmaessig|selten|manchmal)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),

@@ -1230,6 +1230,20 @@ def test_extract_residence_city_rejects_absolute_negation_labels() -> None:
     assert extract_residence_city("Ich wohne keinesfalls in Berlin, sondern in Hamburg.") == "Hamburg"
 
 
+def test_extract_residence_city_handles_frequency_qualifiers() -> None:
+    assert extract_residence_city("Ich wohne oft in Berlin.") == ""
+    assert extract_residence_city("Ich wohne meist in Hamburg.") == ""
+    assert extract_residence_city("Ich wohne gelegentlich in Bonn.") == ""
+    assert extract_residence_city("Ich wohne regelmäßig in Berlin.") == ""
+    assert extract_residence_city("Ich lebe selten in Hamburg.") == ""
+    assert extract_residence_city("Ich wohne manchmal in Berlin.") == ""
+    assert extract_residence_city("Ich wohne meistens in Potsdam.") == "Potsdam"
+    assert extract_residence_city("Ich wohne überwiegend in Dresden.") == "Dresden"
+    assert extract_residence_city("Ich wohne hauptsächlich in Leipzig.") == "Leipzig"
+    assert extract_residence_city("Ich wohne manchmal in Berlin, meistens in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne meistens in Berlin, manchmal in Hamburg.") == "Berlin"
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
