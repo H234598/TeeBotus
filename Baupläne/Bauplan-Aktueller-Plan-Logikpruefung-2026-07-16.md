@@ -11357,3 +11357,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Regionsnamen als Nicht-Städte
+
+- Vorhandene `_NON_CITY_REGION_NAMES` werden nun auch in `_clean_city` geprüft.
+- Bayern, Brandenburg und Hessen werden nicht mehr als Städte gespeichert.
+- Verifikation: `tests/test_weather_context.py` -> `110 passed`, vier Regions-Rejection-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c0453e4e fix: reject region names as cities`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
