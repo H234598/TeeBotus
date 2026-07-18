@@ -12962,3 +12962,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Postleitzahl-Suffixe normalisieren
+
+- Fünfstellige Postleitzahl nach Stadt (`Berlin 10115`) wird entfernt, Stadt bleibt erhalten.
+- Andere Ziffernformen bleiben ungültig; bestehende Adressformen bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Postal-Suffix-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d8682f79 fix: normalize postal suffixes in residence cities`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
