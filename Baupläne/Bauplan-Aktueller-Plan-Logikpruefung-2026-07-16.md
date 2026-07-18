@@ -12209,3 +12209,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wohnzeit nach Umzug
+
+- `Ich wohne nach meinem Umzug in Dresden` und `nach dem Umzug in Bonn` nutzen nun den vorhandenen Studien-/Ausbildungszeitpfad.
+- Direkte Umzugsverben bleiben davon getrennt.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Post-Move-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2b927571 fix: parse residence after move context`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
