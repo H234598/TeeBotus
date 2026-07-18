@@ -2077,7 +2077,9 @@ CITY_PATTERNS = (
         r"(?:\s+(?!(?:ist|war|bleibt|wird)\b)[\wÄÖÜäöüß'-]+){0,6})"
         r"(?:\s+(?:ist|bleibt)|\s*,)?\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
-        r"(?:(?:aktuell\w*|derzeit\w*|momentan\w*|hauptsächlich\w*|hauptsaechlich\w*|neu\w*)\s+)?"
+        r"(?:(?:aktuell\w*|derzeit\w*|momentan\w*|hauptsächlich\w*|hauptsaechlich\w*|neu\w*|"
+        r"jetzig\w*|gegenwärtig\w*|gegenwaertig\w*|vorläufig\w*|vorlaeufig\w*|dauerhaft|permanent|"
+        r"temporär|temporaer|vorübergehend|voruebergehend|befristet|unbefristet|kurzfristig|langfristig)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
         re.IGNORECASE,
     ),
@@ -2917,7 +2919,7 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+ist\s+"
         r"(?:(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|noch\s+immer|immer\s+noch|weiterhin|"
-        r"nach\s+wie\s+vor|gegenwärtig|gegenwaertig|vorläufig|vorlaeufig|dauerhaft|permanent|"
+        r"nach\s+wie\s+vor|gegenwärtig|gegenwaertig|jetzig\w*|vorläufig|vorlaeufig|dauerhaft|permanent|"
         r"temporär|temporaer|vorübergehend|voruebergehend|befristet|unbefristet|kurzfristig|langfristig)\s+)?"
         r"(?:mein(?:e)?|unser(?:e)?)\s+(?:wohnort|wohnsitz|zuhause|zu\s+hause)\b",
         re.IGNORECASE,
