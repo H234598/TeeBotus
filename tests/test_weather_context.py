@@ -494,6 +494,7 @@ def test_extract_residence_city_after_person_or_household_phrase() -> None:
     assert extract_residence_city("Ich wohne im Herzen von Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich lebe im Herzen Berlins.") == "Berlin"
     assert extract_residence_city("Ich arbeite im Herzen von Hamburg.") == ""
+    assert extract_residence_city("Ich wohne in Berlins Gegend.") == "Berlin"
     assert extract_residence_city("Wir wohnen zusammen in Potsdam.") == "Potsdam"
     assert extract_residence_city("Wir arbeiten zusammen in Berlin.") == ""
     assert extract_residence_city("Ich wohne aktuell: Dresden.") == "Dresden"
