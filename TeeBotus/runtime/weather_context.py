@@ -1499,6 +1499,20 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich|wir)\s+(?:bin|sind)\s+(?:(?:derzeit|aktuell|gegenwärtig|gegenwaertig)\s+)?"
+        r"(?:in|bei)\s+(?![^.!?;,]*\b(?:beruflich|dienstlich|zur\s+schule|zur\s+arbeit)\b)"
+        r"(?P<city>(?![^.!?;,]*\s+(?:und|oder)\s+)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:gemeldet|registriert)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:in|bei)\s+(?![^.!?;,]*\b(?:beruflich|dienstlich|zur\s+schule|zur\s+arbeit)\b)"
+        r"(?P<city>(?![^.!?;,]*\s+(?:und|oder)\s+)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:bin|sind)\s+(?:ich|wir)\s+(?:(?:derzeit|aktuell|gegenwärtig|gegenwaertig)\s+)?"
+        r"(?:gemeldet|registriert)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER})\s+(?:ist|bleibt)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
         r"(?:mein(?:e)?|unser(?:e)?)?\s*"
