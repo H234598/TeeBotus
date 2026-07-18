@@ -10473,3 +10473,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Genitivrelationen bei `s`-Endungen
+
+- `außerhalb/südlich/am Rand/im Umland/im Norden Paris` und weitere unveränderte `s`-Endungen werden jetzt als Paris statt als gekürzter/falscher Kandidat erkannt.
+- `in der Nähe des Zentrums von Berlin` wird bis zur Zielstadt aufgelöst.
+- Verifikation: `tests/test_weather_context.py` -> `44 passed`, 12 Relations-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `79c861fe fix: preserve s-ending relation cities`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
