@@ -12113,3 +12113,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Ortslabel `Hansestadt`
+
+- `Ich wohne in der Hansestadt Hamburg` nutzt nun denselben Ortsartenpfad wie `Gemeinde`, `Metropole` und `Hauptstadt`.
+- `Ich arbeite in der Hansestadt Hamburg` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, Hansestadt-Positiv-/Negativ-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `af458edd fix: parse hansestadt residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
