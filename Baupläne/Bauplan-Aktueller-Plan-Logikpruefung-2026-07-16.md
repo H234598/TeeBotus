@@ -9854,6 +9854,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Fremde Wohnortlabels
+
+- `Der/Sein/Ihr/Deren Wohnort/Zuhause` wird nicht mehr als Nutzer-Wohnort gespeichert.
+- Präfixprüfung funktioniert auch, wenn Pattern an Leerzeichengrenzen starten; `Unser Wohnort` bleibt gültig.
+- Verifikation: `tests/test_weather_context.py` -> `145 passed`, fünf Third-Party-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9c102dca fix: reject third-party residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
