@@ -9944,3 +9944,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Verkettete Wohnort-Qualifier
+
+- Kombinationen wie `inzwischen dauerhaft`, `nur vorübergehend`, `seit 2020 dauerhaft` und `hier weiterhin` wurden bisher nicht bis zur Stadt verfolgt.
+- Wiederholbare Zeit-/Ortsqualifier sind ergänzt; Urlaubskontext bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 5 Qualifier-Chain-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0e7de60a fix: parse chained residence qualifiers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
