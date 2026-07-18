@@ -449,11 +449,28 @@ CITY_PATTERNS = (
         r"(?:(?:ich|wir)\s+)?"
         r"(?:(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+)?"
         r"(?:auf\s+dem\s+land|in\s+(?:einer|einem|der)\s+"
-        r"(?:(?:klein|groß|gross)(?:e|en|er|es|em)?)?\s*stadt|"
-        r"in\s+(?:einem|einer)\s+dorf)\s*"
+        r"(?:(?:klein|groß|gross)(?:e|en|er|es|em)?\s*)?"
+        r"(?:stadt|vorstadt|dorf|ort|vorort)|"
+        r"im\s+(?:(?:klein|groß|gross)(?:e|en|er|es|em)?\s*)?"
+        r"(?:dorf|ort|vorort|großraum|grossraum))\s*"
         r"(?:,\s*)?"
         r"(?:\s*(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s*)?"
-        r"(?:(?:bei|nahe|in)\s+)?"
+        r"(?:(?:in\s+(?:der\s+)?(?:naehe|n(?:ä|ae)he|umgebung)\s+von|"
+        r"unweit\s+von|rund\s+um|bei|nahe|in|von)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|stadt|ort)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        r"(?:(?:ein(?:e|em|er)?|der|die|das)\s+)?"
+        r"(?:(?:klein|groß|gross)(?:e|en|er|es|em)?\s*)?"
+        r"(?:stadt|vorstadt|dorf|ort|vorort)\s*"
+        r"(?:,\s*)?"
+        r"(?:\s*(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s*)?"
+        r"(?:(?:in\s+(?:der\s+)?(?:naehe|n(?:ä|ae)he|umgebung)\s+von|"
+        r"unweit\s+von|rund\s+um|bei|nahe|in|von)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
