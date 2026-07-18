@@ -10643,3 +10643,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Ortsadverb-Reihenfolge
+
+- `Wohnsitz ist direkt in Berlin`, `Wohnort liegt hier in Berlin` und `Zuhause ist dort in Berlin` liefern Berlin statt Adverb.
+- Gesprochene Kommaform sowie `hier in Berlin daheim` werden erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `57 passed`, sechs Ortsadverb-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `54ded6f2 fix: parse residence location adverb order`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
