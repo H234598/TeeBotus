@@ -11992,3 +11992,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zukunftsdatum vor Wohnlabel
+
+- `Ab Januar wohne ich in Hamburg`, `Ab dem 1. Januar ... wohnhaft` und `Ab dem Sommer ist mein Wohnort Hamburg` liefern keinen aktuellen Ort.
+- Monats-/Saisonpräfixe laufen durch Future-Guard und City-Bereinigung; `seit ...` bleibt gültig.
+- Erster Testlauf fand den Satzanfangs-Label-Kandidaten `Ab dem Sommer`; danach erneut `115 passed`, fünf Future/Current-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f1206a2f fix: reject future residence date prefixes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
