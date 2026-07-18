@@ -412,6 +412,11 @@ def test_extract_residence_city_removes_daypart_context() -> None:
     ) == "Potsdam"
     assert extract_residence_city("Wir wohnen in Berlin. Jetzt in Hamburg. Inzwischen in Leipzig.") == "Leipzig"
     assert extract_residence_city("Ich wohne in Berlin. Jetzt wohne ich wieder in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Berlin. Jetzt bei meinen Eltern in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Berlin. Jetzt mit meinen Eltern in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Berlin. Jetzt im Raum Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Berlin. Jetzt in Hamburg wohnhaft.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Berlin. Jetzt in Hamburg bin ich im Urlaub.") == "Berlin"
 
 
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:

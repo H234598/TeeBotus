@@ -319,6 +319,19 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        rf"(?:^|[.!?;]\s+)(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:bei|mit|zusammen\s+mit)\s+[^,.;!?]{{1,80}}\s+in\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:^|[.!?;]\s+)(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+"
+        r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|gegend)\s+von|in\s+der\s+stadt|"
+        r"im\s+raum|rund\s+um|nahe|unweit\s+von)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+"
         r"(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:(?:ich|wir)\s+)?"
@@ -504,7 +517,7 @@ CITY_TRAILING_STOP_RE = re.compile(
     r"zurzeit|zur\s+zeit|weiterhin|inzwischen|mittlerweile|dauerhaft|"
     r"permanent|ständig|staendig|vor(?:uebergehend|übergehend)|"
     r"frueh|früh|morgens|vormittags|mittags|nachmittags|abends|nachts|"
-    r"zuhause|zu\s+hause|daheim|\.|,|;|:|!|\?).*$",
+    r"zuhause|zu\s+hause|daheim|wohnhaft|ansässig|ansaessig|\.|,|;|:|!|\?).*$",
     re.IGNORECASE,
 )
 
@@ -811,7 +824,7 @@ def _clean_city(value: str) -> str:
     if re.search(r"(?i)\b(?:nicht(?:\s+mehr)?|kein(?:e|er|em|en)?|mein(?:e|er|em|en)?|ein(?:e|er|em|en)?)\b", city):
         return ""
     if re.search(
-        r"(?i)\b(?:arbeit\w*|studier\w*|lern\w*|schlaf\w*|mach\w*|komm\w*|"
+        r"(?i)\b(?:arbeit\w*|studier\w*|lern\w*|schlaf\w*|mach\w*|komm\w*|bin\w*|"
         r"fahr\w*|geh\w*|hab\w*|besuch\w*|verbring\w*|treff\w*|reis\w*|"
         r"pendl\w*|seh\w*|übernacht\w*|uebernacht\w*)\b",
         city,
