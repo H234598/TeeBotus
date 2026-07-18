@@ -11220,3 +11220,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Direkter adjectivaler Rand
+
+- `am Münchner Rand` wird wie `am Münchner Stadtrand` auf München normalisiert.
+- Verifikation: `tests/test_weather_context.py` -> `99 passed`, drei Rand-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `01d91ae6 fix: parse direct adjectival rand relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
