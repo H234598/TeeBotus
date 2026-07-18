@@ -135,6 +135,11 @@ _IRREGULAR_CITY_ADJECTIVE_BASES = {
     "dresdn": "Dresden",
     "münchn": "München",
 }
+_KNOWN_COMPOUND_CITY_NAMES = {
+    "frankfurt an der oder": "Frankfurt an der Oder",
+    "ludwigshafen am rhein": "Ludwigshafen am Rhein",
+    "halle (saale)": "Halle (Saale)",
+}
 _GENITIVE_CITY_REPAIRS = {
     "pari": "Paris",
     "reim": "Reims",
@@ -1566,6 +1571,13 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<city>(?:Frankfurt\s+an\s+der\s+Oder|Ludwigshafen\s+am\s+Rhein)|"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,70}\s+\([^)]{1,30}\))"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
         r"(?:(?:einen|einem|meinen|meine|mein|unseren|unsere|unser)\s+)?"
         r"(?:(?:fest\w*|dauerhaft\w*|offiziell\w*|privat\w*|"
@@ -2989,6 +3001,12 @@ def extract_residence_city(text: str) -> str:
 
 def _has_explicit_residence_multiplicity(source: str) -> bool:
     multiplicity_source = source
+    multiplicity_source = re.sub(
+        r"\ban\s+der\s+Oder\b",
+        "",
+        multiplicity_source,
+        flags=re.IGNORECASE,
+    )
     if re.search(r"\bmanchmal\b", source, re.IGNORECASE) and re.search(
         r"\b(?:hauptsächlich|hauptsaechlich|überwiegend|ueberwiegend|vorwiegend|meistens|mehrheitlich|"
         r"primaer|primär|in\s+der\s+regel)\b",
@@ -3349,6 +3367,10 @@ def _ensure_weather_state(state: dict[str, Any]) -> dict[str, Any]:
 
 def _clean_city(value: str) -> str:
     source = str(value or "")
+    normalized_source = re.sub(r"\s+", " ", source).strip(" .,:;!?")
+    known_compound_city = _KNOWN_COMPOUND_CITY_NAMES.get(normalized_source.casefold())
+    if known_compound_city:
+        return known_compound_city
     if re.search(r"(?i)\s+(?:oder|sowie|bzw\.?|beziehungsweise)\s+", source):
         return ""
     first_sentence = re.split(r"(?<!\bSt)[.!?;]\s+", source, maxsplit=1, flags=re.IGNORECASE)[0]

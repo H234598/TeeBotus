@@ -1254,6 +1254,14 @@ def test_extract_residence_city_rejects_person_targets_without_city() -> None:
     assert extract_residence_city("Ich wohne gemeinsam mit meiner Partnerin in Dresden.") == "Dresden"
 
 
+def test_extract_residence_city_preserves_compound_city_names() -> None:
+    assert extract_residence_city("Ich wohne in Frankfurt an der Oder.") == "Frankfurt an der Oder"
+    assert extract_residence_city("Ich wohne in Ludwigshafen am Rhein.") == "Ludwigshafen am Rhein"
+    assert extract_residence_city("Ich wohne in Halle (Saale).") == "Halle (Saale)"
+    assert extract_residence_city("Ich wohne in Frankfurt am Main.") == "Frankfurt am Main"
+    assert extract_residence_city("Ich wohne in Neustadt an der Weinstraße.") == "Neustadt an der Weinstraße"
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
