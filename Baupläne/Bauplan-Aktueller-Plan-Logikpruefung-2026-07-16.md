@@ -13011,3 +13011,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Registrierungs-Qualifier und Schulkontext
+
+- `offiziell/polizeilich/privat/dauerhaft/vorübergehend ... gemeldet/registriert/ansässig` wird auf die Stadt reduziert.
+- `zur Schule` und `beruflich` bleiben Aktivitätskontext und werden nicht als Wohnort gespeichert.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, neun Registration-Context-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d670b21a fix: normalize registration residence qualifiers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
