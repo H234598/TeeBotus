@@ -2070,6 +2070,25 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:ist|bleibt)\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|derzeit\w*|jetzig\w*|gegenwärtig\w*|gegenwaertig\w*|offiziell\w*)\s+)?"
+        r"(?:wohnadresse|wohnanschrift|meldeadresse|anschrift|adresse)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+als\s+"
+        r"(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
+        r"(?:wohnadresse|wohnanschrift|meldeadresse|anschrift|adresse)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[.!?;,\n]\s*)als\s+"
+        r"(?:wohnadresse|wohnanschrift|meldeadresse|anschrift|adresse)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"(?:^|[.!?;,\n]\s*)(?:(?:eigentlich|aktuell|derzeit|momentan|nun|jetzt|gerade)\s+)?"
         r"(?!(?:ist|war|bleibt|wird)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*"
