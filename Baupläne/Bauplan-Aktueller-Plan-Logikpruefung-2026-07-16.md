@@ -10897,3 +10897,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Länderpräfixe ohne Komma
+
+- `in Deutschland/Österreich/der Schweiz in/bei <Stadt>` wird als Zielstadt extrahiert.
+- Länderkontext wird nicht selbst als Stadt gespeichert.
+- Verifikation: `tests/test_weather_context.py` -> `76 passed`, vier Länder-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a2d6b5d3 fix: parse country residence prefixes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
