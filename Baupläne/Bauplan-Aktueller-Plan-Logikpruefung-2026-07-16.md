@@ -9731,6 +9731,18 @@ Restart erst bei `20/20`.
 - `teebotus.service` erfolgreich neu gestartet; `ActiveState=active`, `SubState=running`, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Herkunft ist kein zweiter Wohnort
+
+- `Wohnort Hamburg, Geburtsort Berlin` und `Wohnort Hamburg, meine Heimat Berlin` bleiben bei `Hamburg`.
+- Der Mehrfachort-Guard ignoriert bekannte Herkunftslabels als Konfliktquelle; echte `Wohnort: Berlin, Hamburg`-Konflikte bleiben abgelehnt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, drei Origin-Conflict-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `11f089db fix: ignore origin labels as residence conflicts`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
