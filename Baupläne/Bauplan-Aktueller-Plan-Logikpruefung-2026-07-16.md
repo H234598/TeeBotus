@@ -9641,6 +9641,18 @@ Restart erst bei `20/20`.
 
 - Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
+
+- `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
+- `Wohnort ist wieder Potsdam` bleibt als aktuelle Behauptung gültig.
+- Verifikation: `tests/test_weather_context.py` -> `147 passed`, fünf Future-Confidence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0265fa9d fix: reject future residence claims`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
 - Code-Fixes seit Restart: `8afef100`, `9ef3aff0`, `d10f95a1`, `7c18b6ee`, `5d08d5c4`, `a823e158`, `3c36731b`, `f84eb2e7`, `6c4eecd2`, `63c551d1`, `823d5753`, `7b9cf67a`, `706fcb48`.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
