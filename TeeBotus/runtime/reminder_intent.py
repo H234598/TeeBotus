@@ -45,7 +45,8 @@ REMINDER_REQUEST_RE = re.compile(
     r"(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+(?!irgendwann\b)"
     r"(?:(?!\berinner(?:n|en)?\b).){0,120}\berinner(?:n|en)?|"
     r"(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+(?:bitte\s+)?(?!irgendwann\b)"
-    r"(?:(?!\b(?:an|daran)\b).){0,80}\b(?:an|daran)\b\s+.{1,120}\berinner(?:n|en)?"
+    r"(?:(?!\b(?:an|daran)\b).){0,80}\b(?:an|daran)\b\s+.{1,120}\berinner(?:n|en)?|"
+    r"mach(?:e)?\s+(?:mich|uns)\s+(?:(?!\baufmerksam\b).){0,80}\baufmerksam\b"
     r")\b",
     re.IGNORECASE,
 )
@@ -888,6 +889,12 @@ def _reminder_subject(text: str) -> str:
         cleaned,
     )
     cleaned = re.sub(r"(?i)\b(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+", "", cleaned)
+    cleaned = re.sub(
+        r"(?i)\bmach(?:e)?\s+(?:mich|uns)\s+(?:(?!\bauf\b).){0,80}\bauf\s+",
+        "",
+        cleaned,
+    )
+    cleaned = re.sub(r"(?i)\baufmerksam\b", " ", cleaned)
     cleaned = RECURRENCE_MARKER_RE.sub(" ", cleaned)
     cleaned = re.sub(r"(?i)\b(bit+e|bitte|please)\b", "", cleaned)
     cleaned = RELATIVE_TEXT_RE.sub("", cleaned)
