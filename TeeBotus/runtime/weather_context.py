@@ -17,7 +17,8 @@ WEATHER_TIMEOUT_SECONDS = 2.5
 MAX_CITY_LENGTH = 80
 _RESIDENCE_DURATION = (
     r"(?:\d{4}|kurzem|kurzer\s+zeit|einiger\s+zeit|"
-    r"(?:ein\s+paar|\w+)\s+(?:tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?))"
+    r"(?:(?:ein\s+paar|\w+)\s+(?:tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?)|"
+    r"tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?))"
 )
 _RESIDENCE_TIME_QUALIFIER = (
     rf"(?:(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|seitdem|"
