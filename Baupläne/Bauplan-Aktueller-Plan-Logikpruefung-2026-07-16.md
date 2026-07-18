@@ -10849,3 +10849,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Historische Wohnhaft-Perfektformen
+
+- `wohnhaft/ansässig gewesen/worden` wird nicht als aktueller Wohnort erkannt.
+- Aktuelles `Ich bin in Berlin wohnhaft` bleibt Berlin.
+- Verifikation: `tests/test_weather_context.py` -> `72 passed`, vier historische-Perfekt-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ef9b6759 fix: reject historical residence perfect`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
