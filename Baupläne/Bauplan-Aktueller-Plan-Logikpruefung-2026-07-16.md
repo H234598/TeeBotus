@@ -12586,3 +12586,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wohnverb mit Zuhause-Adverb
+
+- `Ich wohne/lebe zu Hause/zuhause/daheim in ...` liefert den Ort statt des Adverbs.
+- Arbeitsform `Ich arbeite zu Hause in ...` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Home-Adverb-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1cad467b fix: parse home adverb residence forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
