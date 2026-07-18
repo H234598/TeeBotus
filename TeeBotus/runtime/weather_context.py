@@ -199,7 +199,8 @@ CITY_PATTERNS = (
 CITY_TRAILING_STOP_RE = re.compile(
     r"\s+(?:und|aber|weil|wenn|falls|seit|schon|mit|bei|in|auf|neben|nahe|"
     r"innerhalb|au(?:ßerhalb|sserhalb)|unter|aus|wegen|als|f(?:ür|uer)|"
-    r"w(?:ährend|aehrend)|zusammen|[-–—]|heute|morgen|gestern|gerade|aktuell|"
+    r"w(?:ährend|aehrend)|zusammen|obwohl|wobei|denn|da|dort|[-–—]|"
+    r"heute|morgen|gestern|gerade|aktuell|"
     r"frueh|früh|morgens|vormittags|mittags|nachmittags|abends|nachts|\.|,|;|:|!|\?).*$",
     re.IGNORECASE,
 )
@@ -415,7 +416,10 @@ def _ensure_weather_state(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _clean_city(value: str) -> str:
-    city = CITY_TRAILING_STOP_RE.sub("", str(value or "")).strip(" .,:;!?")
+    source = str(value or "")
+    if re.search(r"(?i)\s+(?:oder|sowie|bzw\.?|beziehungsweise)\s+", source):
+        return ""
+    city = CITY_TRAILING_STOP_RE.sub("", source).strip(" .,:;!?")
     city = re.sub(r"\s+", " ", city)
     if not city or len(city) > MAX_CITY_LENGTH:
         return ""
