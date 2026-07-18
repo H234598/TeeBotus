@@ -26,7 +26,7 @@ _RESIDENCE_DURATION = (
 )
 _RESIDENCE_TIME_QUALIFIER = (
     rf"(?:(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|seitdem|"
-    r"jetzt|aktuell|derzeit|gerade|momentan|inzwischen|mittlerweile|"
+    r"jetzt|nun|aktuell|derzeit|gerade|momentan|inzwischen|mittlerweile|"
     r"weiterhin|nach\s+wie\s+vor|noch\s+immer|immer\s+noch|"
     r"vor(?:uebergehend|übergehend))"
 )
