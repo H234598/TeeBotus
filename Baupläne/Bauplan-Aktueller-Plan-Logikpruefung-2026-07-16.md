@@ -7802,6 +7802,20 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `9/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Wohnortwechsel mit `aber jetzt` erkennen
+
+- `Ich wohne in Berlin, aber jetzt in Hamburg` und negierte Varianten mit
+  `aber jetzt` wurden vom generischen ersten Wohnortmatch auf Berlin gekuerzt.
+- Klare Wechselmarker `aber`/`jetzt` werden jetzt vor dem generischen Muster
+  ausgewertet. `Ich wohne in Berlin, aber arbeite jetzt in Hamburg` bleibt
+  bewusst Berlin, weil dort kein zweiter Wohnortanker folgt.
+- Verifikation: `tests/test_weather_context.py` -> `22 passed`,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a550c1bf fix: parse residence change wording`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `10/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Gemini-Keyring: Cursor nach Route/Modell isolieren
 
 - 2026-07-17: `RotatingAPIKeyRing` nahm zwar `name` entgegen, Registry-State
