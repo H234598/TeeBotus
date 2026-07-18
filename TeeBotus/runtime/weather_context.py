@@ -2255,6 +2255,12 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(r"\b(?:meine\s+stadt|mein\s+wohnort|mein\s+ort)\s+(?:ist|heisst|heißt)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})", re.IGNORECASE),
+    re.compile(
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+ist\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+neue[rsnm]?\s+"
+        r"(?:wohnort|wohnsitz|zuhause|zu\s+hause)\b",
+        re.IGNORECASE,
+    ),
 )
 CITY_TRAILING_STOP_RE = re.compile(
     r"\s+(?:und|aber|weil|wenn|falls|seit|schon|mit|bei|in|auf|neben|nahe|"
