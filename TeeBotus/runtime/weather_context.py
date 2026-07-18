@@ -215,6 +215,16 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich\s+)?(?:wohne|wohnen|lebe|leben)\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:nicht\s+(?:mehr|l(?:aenger|änger))?|nicht)\s+"
+        r"(?:in|bei)\s+[^,.;!?]{1,80}?"
+        r"(?:\s*(?:,|;|[-–—])\s*|\s+)"
+        r"(?:sondern|aber|doch|jedoch)\s+"
+        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)?\s*"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich\s+)?bin\s+umgezogen\s+von\s+[^,.;!?]{1,80}\s+nach\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -314,6 +324,12 @@ CITY_PATTERNS = (
     ),
     re.compile(
         rf"\bwir\s+(?:wohnen|leben)\s+(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?"
+        rf"(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b{_RESIDENCE_TIME_QUALIFIER}\s+(?:wohnen|leben)\s+wir\s+"
         rf"(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -634,7 +650,7 @@ def extract_residence_city(text: str) -> str:
 
 
 def _has_ambiguous_residence_targets(source: str) -> bool:
-    residence = r"(?:wohne|lebe|wohn|leb)"
+    residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb)"
     if re.search(
         rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
         rf"(?:(?:ich\s+)?{residence}\s+)?(?:in|bei)\s+",
@@ -645,10 +661,10 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     return bool(
         re.search(
             rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
-            r"(?!bin\b|arbeite\b|studiere\b|lerne\b|schlafe\b|mache\b|"
-            r"komme\b|fahre\b|gehe\b|habe\b|besuche\b|verbringe\b|"
-            r"treffe\b|reise\b|pendle\b|sehe\b|übernachte\b|"
-            r"uebernachte\b)[\wÄÖÜäöüß'-]+",
+            r"(?!bin\b|sind\b|sein\b|arbeit\w*\b|studier\w*\b|lern\w*\b|"
+            r"schlaf\w*\b|mach\w*\b|komm\w*\b|fahr\w*\b|geh\w*\b|"
+            r"hab\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|"
+            r"pendl\w*\b|seh\w*\b|übernacht\w*\b|uebernacht\w*\b)[\wÄÖÜäöüß'-]+",
             source,
             re.IGNORECASE,
         )
