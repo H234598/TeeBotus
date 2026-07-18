@@ -7932,6 +7932,20 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `19/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Kommende Komposit-Wochentage in Folgewoche verschieben
+
+- `Erinnere mich kommenden Montagabend ...` wurde am aktuellen Montagabend
+  statt am naechsten Montag geplant, weil `Montagabend` die Wochentaggrenze
+  brach.
+- `kommenden/nächsten + Wochentag` verschiebt jetzt immer auf die Folgewoche;
+  Tageszeit-Suffixe bleiben fuer die Uhrzeit auswertbar.
+- Verifikation: `tests/test_reminder_intent.py` -> `60 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1d5191e8 fix: advance compound future weekdays`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `20/20` Code-Commits. Kein
+Push. Restart jetzt faellig.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
