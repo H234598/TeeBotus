@@ -10950,3 +10950,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wiederholter Wohnrelativsatz
+
+- `Ich wohne in Berlin, wo ich lebe` und Pluralform behalten konkrete Stadt.
+- Nachfolgende Arbeitsaktivität überschreibt Wohnort nicht.
+- Verifikation: `tests/test_weather_context.py` -> `80 passed`, drei Wiederholungs-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7308b5ce fix: preserve residence in repeated relative clause`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
