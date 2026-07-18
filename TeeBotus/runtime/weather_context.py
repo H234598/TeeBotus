@@ -810,6 +810,13 @@ def _clean_city(value: str) -> str:
         return ""
     if re.search(r"(?i)\b(?:nicht(?:\s+mehr)?|kein(?:e|er|em|en)?|mein(?:e|er|em|en)?|ein(?:e|er|em|en)?)\b", city):
         return ""
+    if re.search(
+        r"(?i)\b(?:arbeit\w*|studier\w*|lern\w*|schlaf\w*|mach\w*|komm\w*|"
+        r"fahr\w*|geh\w*|hab\w*|besuch\w*|verbring\w*|treff\w*|reis\w*|"
+        r"pendl\w*|seh\w*|übernacht\w*|uebernacht\w*)\b",
+        city,
+    ):
+        return ""
     return city
 
 
