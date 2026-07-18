@@ -12926,3 +12926,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Herkunft mit bestätigtem Dort-Wohnen
+
+- `Ich komme/stamme aus Berlin und wohne/lebe dort` liefert Berlin als aktuelle Residenz.
+- `arbeite dort` bleibt ausgeschlossen und wird nicht als Wohnort fehlklassifiziert.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Origin-and-There-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bbb202d3 fix: parse origin residence confirmations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
