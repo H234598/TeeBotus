@@ -214,7 +214,7 @@ _RESIDENCE_TIME_QUALIFIER = (
     rf"(?:(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|schon\s+immer|seitdem|"
     r"(?:schon\s+)?seit\s+(?:gestern|heute|vorgestern)|jetzt|nun|nunmehr|aktuell|derzeit|gerade|grad|momentan|inzwischen|mittlerweile|zurzeit|zur\s+zeit|"
     r"weiterhin|nach\s+wie\s+vor|noch\s+immer|immer\s+noch|"
-    rf"dauerhaft|permanent|langfristig|kurzfristig|befristet|unbefristet|vorläufig|vorlaeufig|"
+    rf"dauerhaft|permanent|langfristig|kurzfristig|befristet|unbefristet|vorläufig|vorlaeufig|endgültig|endgueltig|"
     rf"ständig|staendig|wieder|erneut|für\s+{_RESIDENCE_DURATION}|"
     r"zur\s+(?:miete|untermiete|zwischenmiete)|"
     r"bis\s+(?:auf\s+weiteres|zum\s+ende\s+(?:des\s+)?(?:monats|jahres)|"
@@ -303,6 +303,47 @@ CITY_CHANGE_PATTERNS = (
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
         r"[,;]\s*(?:aber|doch|jedoch|sondern)?\s*"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+es\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"[^,.;!?]{1,80}\s*,\s*(?:genau\s+genommen|beziehungsweise|bzw\.)\s+"
+        r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[.!?;\n]\s*)(?:früher|frueher|ehemals|damals)\s+(?:in\s+)?"
+        r"[^,.;!?]{1,80}\s*,\s*(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+"
+        r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+habe(?:n)?\s+mich\s+"
+        r"(?:(?:von\s+[^,.;!?]{1,80}\s+nach)|(?:in|bei))\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+umgemeldet\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:nach|seit)\s+(?:dem|meinem|unserem)\s+umzug\s+"
+        r"(?:ist|bleibt)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+war\s+"
+        r"[^,.;!?]{1,80}[,;]\s*(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+"
+        r"ist\s+(?:er|sie|es)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz)\s+(?:ist|wurde)\s+"
+        r"(?:von\s+[^,.;!?]{1,80}\s+nach|nach|in|zu)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"(?:verlegt|umgezogen)\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -3543,7 +3584,9 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
     return bool(
         re.search(
             r"\b(?:wohne|wohnen|lebe|leben)\b[^.!?;\n]*\b(?:mal|manchmal|teils|teilweise|abwechselnd|zwischen|"
-            r"oder|beziehungsweise|bzw\.?)\b|"
+            r"oder)\b|"
+            r"\b(?:wohne|wohnen|lebe|leben)\b[^.!?;\n]*\b(?:beziehungsweise|bzw\.?)"
+            r"(?!\s+(?:in|bei)\b)|"
             r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnorte|wohnsitze)\b",
             multiplicity_source,
             re.IGNORECASE,
