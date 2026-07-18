@@ -50,6 +50,14 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt|stadt|ort|zu\s+hause|zuhause|daheim)\s+"
+        r"(?:ist|liegt|befindet\s+sich)\s+[^,.;!?]{1,80}?"
+        r"(?:\s*(?:,|;|[-–—])\s*|\s+und\s+)"
+        rf"{_RESIDENCE_TIME_QUALIFIER}\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt|stadt|ort|zu\s+hause|zuhause|daheim)\s+war\s+"
         r"[^,.;!?]{1,80}?(?:\s+und\s+ist|(?:,|;|[-–—])\s*ist)\s+(?:aber\s+)?"
         rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:(?:in|bei)\s+)?"
