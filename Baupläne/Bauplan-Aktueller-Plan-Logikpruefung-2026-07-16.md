@@ -11932,3 +11932,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Monatsnamen in Wohnzeitqualifiern
+
+- `Ich wohne seit Januar in Hamburg` und `Ich lebe seit März 2025 bei Potsdam` werden korrekt erkannt.
+- Monatsname plus optionales Jahr ist zentraler Residence-Duration-Bestandteil; generisches Fehlpattern greift nicht mehr.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, zwei Month-Duration-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `87dc1735 fix: parse month residence durations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
