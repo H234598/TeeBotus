@@ -12609,3 +12609,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Relativsatz mit „Platz“
+
+- `Berlin ist der Platz, an dem ich wohne` und `Der Platz, an dem ich lebe, ist Hamburg` werden erkannt.
+- Arbeitsrelativsatz bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Place-Relative-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d010fab8 fix: parse place relative residence clauses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
