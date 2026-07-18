@@ -11403,3 +11403,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: S-endende Städtenamen
+
+- Genitivische Capture-Sonderfälle für Paris, Reims, Worms, Tours, Cannes und Lens werden auf vollständige Stadtnamen repariert.
+- Verifikation: `tests/test_weather_context.py` -> `112 passed`, 18 s-ending-city-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e9a83b71 fix: preserve s-ending city names`.
+
+## Restart-Ledger 2026-07-18
+
+- Service läuft noch mit `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `20/20` Code-Fixes. User-Service-Restart jetzt fällig. Kein Push.
