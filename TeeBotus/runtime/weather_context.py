@@ -89,6 +89,17 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "beinahe",
         "möglicherweise",
         "moeglicherweise",
+        "freunden",
+        "freundinnen",
+        "bekannten",
+        "verwandten",
+        "kollegen",
+        "kolleginnen",
+        "eltern",
+        "familie",
+        "partner",
+        "partnerin",
+        "partnern",
     }
 )
 _NON_CITY_REGION_NAMES = frozenset(

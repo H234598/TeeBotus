@@ -1244,6 +1244,14 @@ def test_extract_residence_city_handles_frequency_qualifiers() -> None:
     assert extract_residence_city("Ich wohne meistens in Berlin, manchmal in Hamburg.") == "Berlin"
 
 
+def test_extract_residence_city_rejects_person_targets_without_city() -> None:
+    assert extract_residence_city("Ich wohne bei Freunden.") == ""
+    assert extract_residence_city("Ich wohne bei Bekannten.") == ""
+    assert extract_residence_city("Ich wohne bei Kollegen.") == ""
+    assert extract_residence_city("Ich wohne bei Freunden in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne bei meinen Eltern in Potsdam.") == "Potsdam"
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
