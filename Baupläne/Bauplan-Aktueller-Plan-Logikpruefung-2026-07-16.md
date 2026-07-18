@@ -9773,6 +9773,18 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Während-Trennung bei Herkunftslabels
+
+- `Berlin ist meine Heimat, während Hamburg mein Wohnort ist` wird korrekt auf `Hamburg` aufgelöst.
+- Komma- und direkte Während-Form werden unterstützt; Mehrfachwohnorte ohne Rollenlabels bleiben geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, zwei Während-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `cb70217d fix: parse waehrend origin residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Negierte Wohnortwechsel
 
 - `Mein Wohnort ist keinesfalls Berlin, sondern Hamburg` liefert jetzt den aktuellen Ort `Hamburg`.
