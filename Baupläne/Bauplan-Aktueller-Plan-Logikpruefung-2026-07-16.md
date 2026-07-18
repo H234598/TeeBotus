@@ -8600,6 +8600,20 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `11/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Naeheangaben in Wohnortlabels priorisieren
+
+- `Mein Wohnort ist in der Naehe von Berlin` wurde vom allgemeinen Labelpfad
+  als `der Naehe von Berlin` erfasst; `im Raum` und `unweit` konnten ebenfalls
+  falsch oder leer sein.
+- Ein spezifischer Labelpfad verarbeitet jetzt Naehe-/Umgebungsangaben vor
+  dem allgemeinen `in/bei`-Pfad und entfernt `von` korrekt.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c26c03d3 fix: prioritize nearby residence labels`.
+
+**Aktueller Laufstand:** Seit dem Restart `12/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
