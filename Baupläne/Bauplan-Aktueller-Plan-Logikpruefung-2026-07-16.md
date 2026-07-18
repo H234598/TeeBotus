@@ -11277,3 +11277,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Gelabelte Gemeinde-Relationen
+
+- Gemeindeangaben mit `nahe`, `unweit von`, `rund um` und direktem Stadtziel werden korrekt getrennt.
+- Verifikation: `tests/test_weather_context.py` -> `103 passed`, vier Gemeinde-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `78c51241 fix: parse labeled gemeinde relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
