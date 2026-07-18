@@ -11610,3 +11610,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Umgezogene Wohnort-Labels
+
+- `Wohnort/Wohnsitz/Hauptwohnsitz wurde von/aus Altstadt nach Neuort verlegt` liefert Neuort statt Rohkette.
+- Direkte `nach Neuort`-Form und falsches Verb bleiben getrennt geprüft.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Moved-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b000e64c fix: parse moved residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
