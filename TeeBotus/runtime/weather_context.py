@@ -60,6 +60,7 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "kommendes jahr",
         "kommenden jahr",
         "zukunft",
+        "nie",
         "künftig",
         "kuenftig",
         "zukünftig",
@@ -112,6 +113,12 @@ _RESIDENCE_LOCATION_ADVERB = (
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+nie\s+(?:in|bei)\s+"
+        r"[^,.;!?]{1,80}?\s*(?:,|;|[-–—])?\s*sondern\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
         r"(?:bin|sind)\s+(?:ich|wir)\s+(?:wohnhaft|ansässig|ansaessig)\b",
