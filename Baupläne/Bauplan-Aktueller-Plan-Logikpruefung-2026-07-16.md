@@ -12125,3 +12125,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Genitiv-Richtungsflächen
+
+- `Ich wohne in Hamburgs Norden` und `Ich lebe in Berlins Westen` werden auf Hamburg/Berlin normalisiert.
+- Bestehende `im Norden von ...`- und normale Städtenamen bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Direction-Genitive-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2f2856bd fix: normalize genitive directional residence areas`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
