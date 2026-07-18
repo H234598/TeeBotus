@@ -2105,7 +2105,9 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:wohnhaft|ansässig|ansaessig)\s+(?:bin\s+ich|sind\s+wir)\s+(?:in|bei)\s+"
+        r"(?<!beruflich\s)(?<!dienstlich\s)(?<!zur schule )(?<!zur arbeit )\b"
+        r"(?!(?:beruflich|dienstlich|zur\s+schule|zur\s+arbeit)\s+)"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+(?:bin\s+ich|sind\s+wir)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),

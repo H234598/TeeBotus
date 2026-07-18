@@ -1424,6 +1424,10 @@ def test_extract_residence_city_handles_comma_companion_before_activity() -> Non
 def test_extract_residence_city_handles_reversed_residence_phrasings() -> None:
     assert extract_residence_city("In Berlin bin ich wohnhaft.") == "Berlin"
     assert extract_residence_city("In Berlin bin ich ansässig.") == "Berlin"
+    assert extract_residence_city("Gemeldet bin ich in Leipzig.") == "Leipzig"
+    assert extract_residence_city("Registriert bin ich in Bonn.") == "Bonn"
+    assert extract_residence_city("Beruflich gemeldet bin ich in Berlin.") == ""
+    assert extract_residence_city("Dienstlich registriert bin ich in Hamburg.") == ""
     assert extract_residence_city("Ich nenne Berlin meinen Wohnort.") == "Berlin"
     assert extract_residence_city("Berlin nenne ich meinen Wohnort.") == "Berlin"
     assert extract_residence_city("Ich nenne Berlin meinen Wohnsitz.") == "Berlin"
