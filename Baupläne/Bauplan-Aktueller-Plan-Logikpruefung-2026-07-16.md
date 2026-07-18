@@ -10768,3 +10768,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Region- und Großraumlabels
+
+- `in der Region`, `im Großraum` und `im <Stadt>er Großraum` werden als Referenzstadt extrahiert.
+- Verifikation: `tests/test_weather_context.py` -> `66 passed`, drei Regions-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `04595808 fix: parse labeled residence regions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
