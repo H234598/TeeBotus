@@ -9812,3 +9812,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Negierte und spätere Connector-Wohnorte
+
+- `sondern bei ... in Stadt`, Label-Korrekturen mit `sondern bei` und `wohne aber bei` nach einem Umzug wurden bisher nicht oder falsch erkannt.
+- Eigene Connectorpfade priorisieren den letzten expliziten Wohnanker; Arbeits- und Doppelwohnorte bleiben geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3b0a2a39 fix: parse residence connector corrections`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
