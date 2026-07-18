@@ -14376,3 +14376,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Negative Wohnortkorrekturen
+
+- `Ich wohne nicht in Berlin, aber ich wohne in Hamburg` liefert Hamburg statt Scheinstadt `ich wohne`.
+- Ellipse `Berlin ist nicht mein Wohnort, Hamburg schon` wird als Hamburg erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Negative-Correction-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ac5e5ed1 fix: parse negative residence corrections`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
