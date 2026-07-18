@@ -8586,6 +8586,20 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `10/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Wohnort-Modifikatoren und zeitqualifizierte Negation
+
+- `Ich wohne nur/allein in Berlin` wurde bisher nicht erkannt.
+- `momentan nicht in Berlin, sondern in Hamburg` wurde bisher nicht als
+  aktueller Wechsel erkannt.
+- `eher ... als`, `ausser ... auch` und andere konkurrierende Angaben bleiben
+  bewusst unentschieden.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `207c49e5 fix: parse residence modifiers and negation`.
+
+**Aktueller Laufstand:** Seit dem Restart `11/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
