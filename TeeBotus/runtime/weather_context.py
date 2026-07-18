@@ -15,6 +15,22 @@ WEATHER_CONTEXT_SCHEMA_VERSION = 1
 WEATHER_CHECK_INTERVAL = timedelta(hours=2)
 WEATHER_TIMEOUT_SECONDS = 2.5
 MAX_CITY_LENGTH = 80
+_NON_CITY_RESIDENCE_NAMES = frozenset(
+    {
+        "deutschland",
+        "österreich",
+        "oesterreich",
+        "schweiz",
+        "frankreich",
+        "italien",
+        "spanien",
+        "polen",
+        "tschechien",
+        "niederlande",
+        "belgien",
+        "luxemburg",
+    }
+)
 _RESIDENCE_DURATION = (
     r"(?:(?:mehr\s+als|über|ueber|knapp|gut|etwa|ungefähr|ungefaehr|"
     r"fast|circa|ca\.|rund|mindestens|hoechstens|höchstens)\s+)?"
@@ -891,6 +907,8 @@ def _clean_city(value: str) -> str:
     city = re.split(r"(?<!\bSt)[.!?]\s+", city, maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,:;!?")
     city = re.sub(r"(?i)^(?:in|bei)\s+", "", city)
     if not city or len(city) > MAX_CITY_LENGTH:
+        return ""
+    if city.casefold() in _NON_CITY_RESIDENCE_NAMES:
         return ""
     if any(char.isdigit() for char in city):
         return ""
