@@ -158,6 +158,16 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:(?:(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))|"
+        r"(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+        r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)))\s+"
+        r"(?:(?:kurz|direkt|knapp|etwa|ungefähr|ungefaehr)\s+)?(?:vor|hinter)\s+"
+        r"(?:der\s+stadt\s+)?(?P<city>(?![^.!?;,]*\s+(?:und|oder)\s+)"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:(?:geboren\s+(?:wurde\s+)?(?:(?:ich|wir)\s+)?)|"
         r"(?:(?:ich|wir)\s+wurde(?:n)?\s+))"
         r"(?:in|bei)\s+[^,.;!?]{1,80}?\s*(?:geboren\s+)?(?:,|und)\s*"
@@ -2680,7 +2690,7 @@ def _clean_city(value: str) -> str:
     ):
         return ""
     if re.match(
-        r"(?i)^(?:nahe|innerhalb|außerhalb|ausserhalb|unter|aus|f(?:ür|uer)|"
+        r"(?i)^(?:nahe|vor|hinter|innerhalb|außerhalb|ausserhalb|unter|aus|f(?:ür|uer)|"
         r"wegen|als|neben|mit|w(?:ährend|aehrend)|zusammen|auf|am|im)\b",
         city,
     ):

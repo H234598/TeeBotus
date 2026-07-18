@@ -111,6 +111,10 @@ def test_extract_residence_city_from_direction_and_edge_relations() -> None:
     assert extract_residence_city("Mein Wohnort liegt am Rand von Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne im Norden von Berlin und Hamburg.") == ""
     assert extract_residence_city("Ich wohne am Rand von Berlin und arbeite in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne kurz vor Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort liegt hinter der Stadt Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne vor Berlin und Hamburg.") == ""
+    assert extract_residence_city("Ich fahre vor Berlin vorbei.") == ""
 
 
 def test_extract_residence_city_handles_settlement_labels() -> None:
