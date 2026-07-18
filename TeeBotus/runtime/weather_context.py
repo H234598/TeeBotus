@@ -18,6 +18,11 @@ MAX_CITY_LENGTH = 80
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:ich\s+wohne|ich\s+lebe)\s+nicht\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
+        r"(?:sondern\s+)?(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:nicht\s+mehr|nicht\s+l(?:aenger|änger))\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
         r"(?:sondern\s+)?(?:jetzt\s+|nun\s+|aktuell\s+|derzeit\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",

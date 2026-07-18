@@ -70,6 +70,12 @@ def test_extract_residence_city_after_person_or_household_phrase() -> None:
     assert extract_residence_city("Ich lebe bei meinen Eltern in Hamburg.") == "Hamburg"
 
 
+def test_extract_residence_city_from_plain_negated_change() -> None:
+    assert extract_residence_city("Ich lebe nicht in Berlin, sondern in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne nicht in Berlin, sondern in Potsdam.") == "Potsdam"
+    assert extract_residence_city("Ich wohne nicht in Berlin.") == ""
+
+
 def test_extract_residence_city_rejects_negated_or_non_city_phrases() -> None:
     for text in (
         "Ich wohne in keiner Stadt, sondern auf dem Land.",
