@@ -2343,6 +2343,12 @@ def _update_city_and_weather_context_unlocked(
         city_changed = _city_comparison_key(city) != _city_comparison_key(previous_city)
         if not city_changed:
             city = previous_city
+        if not _append_city_memory(account_store, account_id, city, resolved_now):
+            return WeatherContextResult(
+                city=previous_city,
+                weather_text=str(weather_state.get("summary") or "").strip(),
+                skipped_reason="memory_error",
+            )
         weather_state["city"] = city
         weather_state["city_updated_at"] = resolved_now.isoformat(timespec="seconds")
         if city_changed:
@@ -2350,7 +2356,6 @@ def _update_city_and_weather_context_unlocked(
             # presented as current weather while the global check window is active.
             weather_state["summary"] = ""
             weather_state["last_error"] = ""
-        _append_city_memory(account_store, account_id, city, resolved_now)
     current_city = str(weather_state.get("city") or "").strip()
     if not current_city:
         account_store.write_agent_state(account_id, state) if city else None
@@ -2383,7 +2388,7 @@ def _update_city_and_weather_context_unlocked(
     return WeatherContextResult(city=current_city, weather_text=weather_state["summary"], checked=True)
 
 
-def _append_city_memory(account_store: AccountStore, account_id: str, city: str, now: datetime) -> None:
+def _append_city_memory(account_store: AccountStore, account_id: str, city: str, now: datetime) -> bool:
     memory_id = f"mem_residence_city_{_city_id_token(city)}"
     try:
         rows = account_store.read_memory_entries(account_id)
@@ -2412,9 +2417,9 @@ def _append_city_memory(account_store: AccountStore, account_id: str, city: str,
         ]
         if not obsolete_rows:
             if has_current_memory:
-                return
+                return True
             account_store.append_structured_memory_entry(account_id, entry)
-            return
+            return True
         previous_rows = [dict(row) for row in rows if isinstance(row, Mapping)]
         previous_index = account_store.read_memory_index(account_id)
         retained_rows = [
@@ -2431,12 +2436,13 @@ def _append_city_memory(account_store: AccountStore, account_id: str, city: str,
             account_store.rebuild_structured_memory_index(account_id)
             if not has_current_memory:
                 account_store.append_structured_memory_entry(account_id, entry)
+            return True
         except Exception:
             account_store.write_memory_entries(account_id, previous_rows)
             account_store.write_memory_index(account_id, previous_index)
             raise
     except Exception:
-        return
+        return False
 
 
 def weather_context_text(account_store: AccountStore, account_id: str) -> str:

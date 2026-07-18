@@ -1622,7 +1622,7 @@ def test_city_change_rolls_back_residence_memory_when_new_append_fails(tmp_path)
         return original_append(write_account_id, entry, **kwargs)
 
     with patch.object(account_store, "append_structured_memory_entry", side_effect=fail_new_city):
-        update_city_and_weather_context(
+        result = update_city_and_weather_context(
             account_store,
             account_id,
             "Ich wohne in Potsdam.",
@@ -1630,6 +1630,9 @@ def test_city_change_rolls_back_residence_memory_when_new_append_fails(tmp_path)
             provider=provider,
         )
 
+    assert result.city == "Berlin"
+    assert result.skipped_reason == "memory_error"
+    assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "Berlin"
     assert [entry["id"] for entry in account_store.read_memory_entries(account_id)] == ["mem_residence_city_berlin"]
     assert account_store.read_memory_index(account_id) == previous_index
 
