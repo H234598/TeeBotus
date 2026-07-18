@@ -12281,3 +12281,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Umzug mit vorgeschaltetem Umzugskontext
+
+- `Ich bin nach dem Umzug nach Bonn gezogen` sowie `nach meinem Umzug in Bonn umgezogen` werden als aktueller Zielort erkannt.
+- Bereits funktionierende Formen `Nach dem Umzug bin ich ...` bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Umzugs-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9ef9208b fix: parse post-move destination wording`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
