@@ -10010,3 +10010,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Historische Wohnortlabels abweisen
+
+- `Mein ehemaliger/früherer/alter Wohnort`, Wohnsitz oder Zuhause wurde wegen eines später startenden Regex-Matches als aktuell übernommen.
+- Satzlokaler Historien-Guard verwirft solche Kandidaten; spätere aktuelle Wohnortangaben werden weiterhin ausgewählt.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 7 historische/aktuelle Label-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4d263352 fix: reject historical residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
