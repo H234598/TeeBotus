@@ -7906,6 +7906,19 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `17/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Geschriebene deutsche Uhrzeiten im Reminder-Parser
+
+- `um acht`, `um halb acht` und `Viertel nach acht` fielen bisher auf
+  `09:00` und blieben teilweise im Betreff.
+- Der Parser versteht jetzt geschriebene Stunden sowie `halb`, `Viertel nach`
+  und `Viertel vor`; numerische Uhrzeiten behalten Vorrang.
+- Verifikation: `tests/test_reminder_intent.py` -> `58 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `10507e5d fix: parse written reminder clock times`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `18/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
