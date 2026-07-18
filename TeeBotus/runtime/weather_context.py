@@ -770,25 +770,25 @@ CITY_PATTERNS = (
     ),
     re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich\s+)?(?:wohn(?:e)?|lebe)\s+"
-        rf"(?:ich\s+)?(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?bei\s+[^,.;!?]{{1,80}}\s+in\s+"
+        rf"(?:ich\s+)?(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?bei\s+[^,.;!?]{{1,80}}\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?wir\s+(?:wohnen|leben)\s+"
-        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?bei\s+[^,.;!?]{{1,80}}\s+in\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?bei\s+[^,.;!?]{{1,80}}\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?wir\s+(?:wohnen|leben)\s+"
-        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:zusammen\s+mit|mit)\s+[^,.;!?]{{1,80}}\s+in\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:zusammen\s+mit|mit)\s+[^,.;!?]{{1,80}}\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich\s+)?(?:wohne|lebe)\s+"
-        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:zusammen\s+mit|mit)\s+[^,.;!?]{{1,80}}\s+in\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:zusammen\s+mit|mit)\s+[^,.;!?]{{1,80}}\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
