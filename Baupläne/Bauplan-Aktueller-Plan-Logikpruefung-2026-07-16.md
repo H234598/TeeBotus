@@ -12317,3 +12317,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zukünftige numerische Wohntermine
+
+- `ab dem 01.01.2027`, `ab 01.01.2027` und `am 01.01.2027` blockieren nun Wohnortübernahme als Zukunftsangabe.
+- Vergangene `seit dem 01.01.2025`-Angaben bleiben gültig.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Future-Date-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `962ca6c9 fix: reject future numeric residence dates`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
