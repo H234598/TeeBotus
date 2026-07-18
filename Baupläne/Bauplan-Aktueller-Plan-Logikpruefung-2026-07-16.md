@@ -11157,3 +11157,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Aktuelle attributive Flächenwechsel
+
+- `jetzt im Hamburger Raum` und `jetzt in der Hamburger Umgebung` werden als aktueller Wohnortwechsel erkannt.
+- Historische und Arbeitsort-Kontexte bleiben geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `96 passed`, sechs Übergangs-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `59f10982 fix: parse current attributive area changes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
