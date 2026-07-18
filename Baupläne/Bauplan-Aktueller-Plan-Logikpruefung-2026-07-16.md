@@ -9730,6 +9730,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Erweiterte Ortsfragen
+
+- `Wo genau wohnst du`, `Wo in Deutschland wohnst du`, `In welcher Stadt wohnst du` und `An welchem Ort lebst du` werden mit Antwort erkannt.
+- Unbeantwortete Fragen und Mehrfachorte bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `154 passed`, sieben expanded-question-Smokes plus drei Mehrfachziel-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `257f698c fix: parse expanded residence questions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
 - Code-Fixes seit Restart: `8afef100`, `9ef3aff0`, `d10f95a1`, `7c18b6ee`, `5d08d5c4`, `a823e158`, `3c36731b`, `f84eb2e7`, `6c4eecd2`, `63c551d1`, `823d5753`, `7b9cf67a`, `706fcb48`.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
