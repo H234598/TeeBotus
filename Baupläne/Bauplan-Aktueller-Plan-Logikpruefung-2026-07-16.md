@@ -11169,3 +11169,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Unregelmäßige Stadtadjektive
+
+- `Münchner`, `Dresdner` und `Bremer` werden auf München, Dresden und Bremen normalisiert.
+- Reguläre Stadtadjektive bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `97 passed`, fünf Adjektiv-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c06a9457 fix: normalize irregular city adjectives`.
+
+## Restart-Ledger 2026-07-18
+
+- Service läuft noch mit `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
+- Seit diesem Restart: `20/20` Code-Fixes. User-Service-Restart jetzt fällig. Kein Push.
