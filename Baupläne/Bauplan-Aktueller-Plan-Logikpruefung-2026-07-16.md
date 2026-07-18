@@ -10034,3 +10034,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Temporale Labelpräfixe disambiguieren
+
+- `Heute/Nun/Seit heute ist mein Wohnort ...` wurde teilweise als City `Heute/Nun/Seit` fehlinterpretiert.
+- Temporale Einzelkandidaten werden verworfen; explizite aktuelle Labelpräfixe liefern die nachfolgende Stadt.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 8 Temporal-Label-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7851bd74 fix: disambiguate temporal residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
