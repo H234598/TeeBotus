@@ -14487,3 +14487,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Gemischte Wohnadress-Ziele
+
+- Direkte Aussagen wie `Berlin ist meine Wohnadresse. Hamburg ist mein Wohnort.` werden als widersprüchlich verworfen.
+- Arbeits-/Geschäftsadressen bleiben aus dem Wohnziel-Konflikt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Direct-Conflict-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `69efcc20 fix: reject mixed residence address targets`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
