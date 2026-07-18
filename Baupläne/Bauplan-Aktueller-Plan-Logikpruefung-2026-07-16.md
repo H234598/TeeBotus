@@ -10826,3 +10826,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Maskuline Aktivitätslabels
+
+- `mein Studium`, `mein Ausbildungsort`-nahe Form sowie weitere `mein/unser`-Flexionen werden hinter Wohnort korrekt als Nebenaktivität erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `70 passed`, zwei `mein Studium`-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `07936041 fix: handle masculine activity labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
