@@ -1004,6 +1004,15 @@ def test_extract_residence_city_normalizes_region_labels() -> None:
     assert extract_residence_city("Mein Wohnort befindet sich im Berliner Großraum.") == "Berlin"
 
 
+def test_extract_residence_city_rejects_future_residence_markers() -> None:
+    assert extract_residence_city("Demnächst wohne ich in Berlin.") == ""
+    assert extract_residence_city("Ich wohne seit morgen in Berlin.") == ""
+    assert extract_residence_city("Ich wohne künftig in Berlin.") == ""
+    assert extract_residence_city("Mein künftiger Wohnort ist Berlin.") == ""
+    assert extract_residence_city("Ab heute wohne ich in Berlin.") == "Berlin"
+    assert extract_residence_city("Seit heute wohne ich in Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_rejects_multiple_home_targets() -> None:
     assert extract_residence_city("Mein Zuhause ist in Berlin und Hamburg.") == ""
     assert extract_residence_city("Ich wohne werktags in Berlin und am Wochenende in Hamburg.") == ""

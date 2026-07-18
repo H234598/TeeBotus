@@ -60,6 +60,14 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "kommendes jahr",
         "kommenden jahr",
         "zukunft",
+        "künftig",
+        "kuenftig",
+        "zukünftig",
+        "zukuenftig",
+        "demnächst",
+        "demnaechst",
+        "bald",
+        "geplant",
     }
 )
 _NON_CITY_REGION_NAMES = frozenset(
@@ -2084,9 +2092,7 @@ def _has_historical_residence_prefix(source: str, match_start: int) -> bool:
 
 
 def _has_future_residence_prefix(source: str, match_start: int, city_start: int | None = None) -> bool:
-    prefix_end = match_start
-    if city_start is not None and match_start < len(source) and source[match_start] in ",;:":
-        prefix_end = city_start
+    prefix_end = city_start if city_start is not None else match_start
     prefix = source[:prefix_end]
     sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
     clause = re.split(r"[,;]\s*", sentence)[-1]
@@ -2094,9 +2100,10 @@ def _has_future_residence_prefix(source: str, match_start: int, city_start: int 
         re.search(
             r"(?i)(?:\bab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
             r"(?:jahr\w*|monat\w*|woche\w*)\b|\bab\s+\d{4}\b|"
-            r"\bab\s+(?:morgen|uebermorgen|übermorgen|sommer|winter|frühling|fruehling|herbst)\b|\bbald\b|"
+            r"\bab\s+(?:morgen|uebermorgen|übermorgen|sommer|winter|frühling|fruehling|herbst)\b|"
+            r"\bseit\s+(?:morgen|uebermorgen|übermorgen)\b|\b(?:demnächst|demnaechst)\b|\bbald\b|"
             r"\b(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*\b|\bin\s+zukunft\b|"
-            r"\b(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*)\s*$)",
+            r"\b(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*)\b)",
             clause,
         )
     )
