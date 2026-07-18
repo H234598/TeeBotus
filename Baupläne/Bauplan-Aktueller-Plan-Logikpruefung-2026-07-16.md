@@ -10996,3 +10996,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zeitliche Wohnadverbien
+
+- `bisher/bislang/vorerst/zeitweise` werden vor Stadt übersprungen.
+- `fast/beinahe` bleiben unsicher und erzeugen keinen Wohnort.
+- Verifikation: `tests/test_weather_context.py` -> `84 passed`, sechs Zeitadverb-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e5901726 fix: classify temporal residence adverbs`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
