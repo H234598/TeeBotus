@@ -8956,3 +8956,17 @@ Restart nach weiteren 20 Code-Fixes.
 - Verifikation: Wetterparser `25 passed`, Structured-Memory-Fokus `11
   passed`, SQLite-Wetter-Smoke-Test gruen. Kein Provider/API-Aufruf.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Freigabe.
+
+### Folgefix 2026-07-18: Getrennte Wohnortwechsel erkennen
+
+- `Ich wohne in Berlin; jetzt in Hamburg` und `... – inzwischen in Potsdam`
+  fielen bisher auf den alten Ort zurueck.
+- Semikolon und Gedankenstrich werden nun als Wechseltrenner akzeptiert, aber
+  nur mit eindeutigem aktuellem Wohnortanker. `aber arbeite jetzt in ...`
+  bleibt unveraendert.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5d5ab58c fix: parse separated residence changes`.
+
+**Aktueller Laufstand:** Seit dem Restart `4/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
