@@ -10921,3 +10921,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Benannte Ortsgattungen
+
+- `im Dorf/Ort`, `die/eine Gemeinde` und `namens/genannt` liefern konkrete Zielstadt.
+- Unbestimmte Ortsgattung bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `78 passed`, fünf Ortsgattungs-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4494b47c fix: parse named locality types`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
