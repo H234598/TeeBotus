@@ -14437,3 +14437,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Postpositive Sicherheitsadverbien
+
+- `Ich wohne in Berlin, wirklich/sicher/tatsächlich` wird nicht mehr als Mehrfachziel verworfen.
+- Echte Zweitstadt `Ich wohne in Berlin, Hamburg` bleibt mehrdeutig und leer.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Confidence-Suffix-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ac41a20c fix: allow confidence residence suffixes`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
