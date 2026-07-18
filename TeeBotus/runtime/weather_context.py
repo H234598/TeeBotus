@@ -2035,10 +2035,20 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?<![\wÄÖÜäöüß])(?!(?:ist|war|bleibt|wird)\b)"
+        r"(?:^|[.!?;,\n]\s*)(?!(?:ist|war|bleibt|wird)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*"
         r"(?:\s+(?!(?:ist|war|bleibt|wird)\b)[\wÄÖÜäöüß'-]+){0,6})\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[.!?;,\n]\s*)(?!(?:ist|war|bleibt|wird)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*"
+        r"(?:\s+(?!(?:ist|war|bleibt|wird)\b)[\wÄÖÜäöüß'-]+){0,6})"
+        r"(?:\s+(?:ist|bleibt)|\s*,)?\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|derzeit\w*|momentan\w*|hauptsächlich\w*|hauptsaechlich\w*|neu\w*)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
         re.IGNORECASE,
     ),
