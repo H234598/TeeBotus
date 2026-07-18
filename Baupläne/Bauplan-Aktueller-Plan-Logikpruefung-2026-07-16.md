@@ -9063,3 +9063,18 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `11/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Kontrastkontext trimmen und Ortsalternativen ablehnen
+
+- `Berlin obwohl/wobei/denn/da ...` lieferte teils verschmutzte oder leere
+  Ergebnisse. `Berlin oder Hamburg`/`sowie` konnte als scheinbar eindeutiger
+  erster Ort gespeichert werden.
+- Kontrast-/Begründungsmarker werden jetzt abgeschnitten; explizite
+  Alternativmarker `oder`, `sowie`, `bzw.` und `beziehungsweise` führen zu
+  keiner Wohnstadt statt zu einer falschen Auswahl.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e1debb2a fix: reject ambiguous residence alternatives`.
+
+**Aktueller Laufstand:** Seit dem Restart `12/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
