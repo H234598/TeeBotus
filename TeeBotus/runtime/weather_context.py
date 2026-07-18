@@ -162,7 +162,7 @@ _RESIDENCE_TIME_QUALIFIER = (
     rf"(?:(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|seitdem|"
     r"(?:schon\s+)?seit\s+(?:gestern|heute|vorgestern)|jetzt|nun|nunmehr|aktuell|derzeit|gerade|grad|momentan|inzwischen|mittlerweile|zurzeit|zur\s+zeit|"
     r"weiterhin|nach\s+wie\s+vor|noch\s+immer|immer\s+noch|"
-    r"dauerhaft|permanent|ständig|staendig|wieder|erneut|"
+    rf"dauerhaft|permanent|ständig|staendig|wieder|erneut|für\s+{_RESIDENCE_DURATION}|"
     r"vor(?:uebergehend|übergehend))"
 )
 _RESIDENCE_LOCATION_ADVERB = (
