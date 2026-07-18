@@ -319,6 +319,20 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich|wir)\s+(?:arbeite|arbeiten|studiere|studieren|lerne|lernen)\s+"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,?\s*"
+        r"(?:weil|da|denn)\s+(?:ich|wir)\s+dort\s+(?:wohne|wohnen|lebe|leben)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:arbeite|arbeiten|studiere|studieren|lerne|lernen)\s+"
+        r"(?:in|bei)\s+[^,.;!?]{1,80},?\s*"
+        r"(?:weil|da|denn|wobei|während|waehrend)\s+(?:ich|wir)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:wohne|wohnen|lebe|leben)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"(?:^|[.!?;\n]\s*)(?:früher|frueher|ehemals|damals)\s+(?:in\s+)?"
         r"[^,.;!?]{1,80}\s*,\s*(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+"
         r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
