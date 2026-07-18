@@ -3534,6 +3534,24 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 
     residence_cities = collect(residence_patterns)
     address_cities = collect(address_patterns)
+    registered_address_cities: set[str] = set()
+    for match in re.finditer(
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?meldeadresse\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        rf"{city_capture}",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            registered_address_cities.add(_city_comparison_key(city))
+    residence_address_cities = residence_cities | address_cities
+    if (
+        residence_address_cities
+        and registered_address_cities
+        and residence_address_cities.isdisjoint(registered_address_cities)
+    ):
+        return True
     work_address_cities: set[str] = set()
     for match in re.finditer(
         r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
@@ -3594,6 +3612,12 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         re.compile(
             r"\b(?:zu\s+hause|zuhause|daheim)\s+bin\s+(?:ich|wir)\s+(?:in|bei)\s+"
             r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[,.;!?]|$))",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?:^|[.!?;\n]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+            r"(?:ist\s+)?(?:mein(?:e)?|unser(?:e)?)\s+"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\b",
             re.IGNORECASE,
         ),
     )
