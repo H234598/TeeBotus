@@ -371,9 +371,20 @@ CITY_CHANGE_PATTERNS = (
     re.compile(
         r"\b(?:ich|wir)\s+(?:arbeite|arbeiten|studiere|studieren|lerne|lernen)\s+"
         r"(?:in|bei)\s+[^,.;!?]{1,80},?\s*"
-        r"(?:weil|da|denn|wobei|während|waehrend)\s+(?:ich|wir)\s+(?:in|bei)\s+"
+        r"(?:weil|da|denn|wobei|während|waehrend|auch\s+wenn)\s+(?:ich|wir)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
         r"(?:wohne|wohnen|lebe|leben)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}\s+ist\s+(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:arbeitsort|arbeitsadresse|geschäftsadresse|geschaeftsadresse|dienstadresse|"
+        r"büroadresse|bueroadresse)\s*,\s*"
+        r"(?:auch\s+wenn|trotzdem|dennoch)\s+(?:ist\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:ist\s+)?(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b"
+        r"(?:\s+ist)?",
         re.IGNORECASE,
     ),
     re.compile(
