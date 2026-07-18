@@ -3486,6 +3486,12 @@ def extract_residence_city(text: str) -> str:
                         continue
                     if _has_uncertain_residence_prefix(source, pattern_start):
                         continue
+                    if re.match(
+                        r"(?i)^\s*(?:ich|wir)\s+(?:glaube|denke|vermute)\b|"
+                        r"^\s*ich\s+nehme\s+an\b|^\s*soweit\s+ich\s+wei(?:ß|ss)\b",
+                        match.group("city"),
+                    ):
+                        continue
                     if _has_unresolved_location_separator(source, city_end):
                         continue
                     if _has_future_residence_suffix(source, city_end):
@@ -4000,6 +4006,13 @@ def _has_uncertain_residence_prefix(source: str, match_start: int) -> bool:
             r"\beventuell\b|\bwahrscheinlich\b|\bwohl\b|\bangeblich\b|\banscheinend\b|"
             r"\bscheinbar\b)\s*$",
             clause,
+        )
+    ) or bool(
+        re.search(
+            r"(?i)(?:^|[,;]\s*)(?:ich|wir)\s+(?:glaube|denke|vermute)\b[^.!?;\n]*$|"
+            r"(?:^|[,;]\s*)ich\s+nehme\s+an\b[^.!?;\n]*$|"
+            r"(?:^|[,;]\s*)soweit\s+ich\s+wei(?:ß|ss)\b[^.!?;\n]*$",
+            sentence,
         )
     )
 
