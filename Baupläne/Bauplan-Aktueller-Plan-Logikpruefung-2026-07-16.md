@@ -9755,6 +9755,18 @@ Restart erst bei `20/20`.
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Qualifizierte kompakte Wohnortlabels
+
+- `Hamburg ist mein momentaner/aktueller/hauptsächlicher Wohnort` und `Hamburg, mein aktueller Wohnort` werden erkannt.
+- Datumsangaben wie `Am 1. Januar ...` bleiben abgelehnt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, fünf Qualified-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5f3a9448 fix: parse qualified compact residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
