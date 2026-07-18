@@ -11055,3 +11055,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Direkte Flächenrelationen
+
+- `Ich wohne/lebe in Berlin und Umgebung`, Region und Gebiet liefern Berlin.
+- Verifikation: `tests/test_weather_context.py` -> `89 passed`, fünf Direkt-Area-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c5e00b31 fix: parse direct area relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
