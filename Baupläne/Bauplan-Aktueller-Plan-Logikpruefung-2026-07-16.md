@@ -13124,3 +13124,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zusammengesetzte Stadtnamen
+
+- `Frankfurt an der Oder` und `Ludwigshafen am Rhein` werden nicht durch geografische Stopwörter gekürzt.
+- Klammerzusätze wie `Halle (Saale)` bleiben erhalten; `Oder` wird nicht als Mehrfachort gewertet, wenn es Teil von `an der Oder` ist.
+- Verifikation: `tests/test_weather_context.py` -> `119 passed`, sechs Compound-City-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8693d919 fix: preserve compound residence city names`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
