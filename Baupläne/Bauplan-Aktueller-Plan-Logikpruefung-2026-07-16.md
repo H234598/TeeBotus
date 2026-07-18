@@ -12825,3 +12825,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Nachgestellte Landmarken
+
+- `Ich wohne in Berlin an der Spree` und `Ich lebe in Hamburg am Rhein` liefern die Stadt statt Landmarke.
+- `Frankfurt am Main` bleibt als vollständiger Stadtname erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Landmark-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `26698d15 fix: trim postposed landmark residence context`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
