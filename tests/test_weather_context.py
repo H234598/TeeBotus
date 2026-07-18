@@ -890,6 +890,12 @@ def test_extract_residence_city_handles_immediate_and_planned_start() -> None:
     assert extract_residence_city("Ich wohne ab morgen in Hamburg.") == ""
 
 
+def test_extract_residence_city_reads_current_label_after_future_context() -> None:
+    assert extract_residence_city("Mein künftiger Wohnort wird Hamburg, derzeit ist Berlin mein Wohnort.") == "Berlin"
+    assert extract_residence_city("Derzeit ist Berlin mein Wohnort.") == "Berlin"
+    assert extract_residence_city("Derzeit ist Berlin mein Arbeitsort.") == ""
+
+
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
