@@ -956,6 +956,13 @@ def test_extract_residence_city_rejects_negated_or_modal_direction_claims() -> N
     assert extract_residence_city("Mein Wohnort sollte westlich von Leipzig sein.") == ""
 
 
+def test_extract_residence_city_keeps_direction_before_activity_context() -> None:
+    assert extract_residence_city("Mein Wohnort ist nördlich von Berlin und ich studiere in Hamburg.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort liegt ungefähr 20 km nördlich von Berlin und ich studiere in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne nördlich von Berlin und ich studiere in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne ungefähr 20 km nördlich von Berlin und ich studiere in Hamburg.") == "Berlin"
+
+
 def test_extract_residence_city_handles_label_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist bei meinen Eltern in Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist rund um Berlin.") == "Berlin"

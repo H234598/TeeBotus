@@ -1054,7 +1054,8 @@ CITY_PATTERNS = (
         rf"(?:{_RESIDENCE_DISTANCE_PREFIX})?"
         r"(?:nördlich|südlich|östlich|westlich|nord[-\s]?östlich|nord[-\s]?westlich|"
         r"süd[-\s]?östlich|süd[-\s]?westlich)\s+(?:von\s+)?"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$|"
+        r"\b(?:und|aber|doch|jedoch)\b))",
         re.IGNORECASE,
     ),
     re.compile(
@@ -1138,7 +1139,8 @@ CITY_PATTERNS = (
         rf"(?:{_RESIDENCE_DISTANCE_PREFIX})?"
         r"(?:nördlich|südlich|östlich|westlich|nord[-\s]?östlich|nord[-\s]?westlich|"
         r"süd[-\s]?östlich|süd[-\s]?westlich)\s+(?:von\s+)?"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$|"
+        r"\b(?:und|aber|doch|jedoch)\b))",
         re.IGNORECASE,
     ),
     re.compile(
@@ -2251,8 +2253,11 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"süd[-\s]?westlich\s+von|"
         r"nördlich\s+von|südlich\s+von|östlich\s+von|westlich\s+von)\s+"
         r"[^,.;!?]{1,80}\s+und\s+"
-        r"(?!nicht\w*\b|(?:ich\s+)?(?:wohne|lebe)\s+nicht\b|arbeit\w*\b|studier\w*\b|"
-        r"lern\w*\b|schlaf\w*\b|mach\w*\b|komm\w*\b|fahr\w*\b|geh\w*\b|zieh\w*\b|"
+        r"(?!nicht\w*\b|(?:ich\s+)?(?:wohne|lebe)\s+nicht\b|(?:(?:ich|wir)\s+)?arbeit\w*\b|"
+        r"(?:(?:ich|wir)\s+)?studier\w*\b|(?:(?:ich|wir)\s+)?lern\w*\b|"
+        r"(?:(?:ich|wir)\s+)?schlaf\w*\b|(?:(?:ich|wir)\s+)?mach\w*\b|"
+        r"(?:(?:ich|wir)\s+)?komm\w*\b|(?:(?:ich|wir)\s+)?fahr\w*\b|"
+        r"(?:(?:ich|wir)\s+)?geh\w*\b|(?:(?:ich|wir)\s+)?zieh\w*\b|"
         r"hab\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|pend\w*\b|"
         r"seh\w*\b|übernacht\w*\b|uebernacht\w*\b)[\wÄÖÜäöüß'-]+",
         source,
@@ -2262,7 +2267,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     if re.search(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+[^,.;!?]{1,80}\s+und\s+"
-        r"(?!(?:arbeit|studier|lern|schlaf|mach|komm|fahr|geh|zieh|hab|besuch|verbring|treff|reis|pendl|seh|übernacht|uebernacht)\w*\b)"
+        r"(?!(?:(?:ich|wir)\s+)?(?:arbeit|studier|lern|schlaf|mach|komm|fahr|geh|zieh|hab|besuch|verbring|treff|reis|pendl|seh|übernacht|uebernacht)\w*\b)"
         r"(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß'-]*",
         source,
         re.IGNORECASE,
@@ -2414,7 +2419,8 @@ def _clean_city(value: str) -> str:
         r"unbestimmt\w*|wird|soll|geplant\w*|nimmer|werktags|wochentags|hier|dort|da|"
         r"vielleicht|vermutlich|angeblich|keineswegs|niemals|fast|beinahe|"
         r"möglicherweise|moeglicherweise|könnte|koennte|wäre|waere|würde|wuerde|"
-        r"sollte|dürfte|duerfte|müsste|muesste)\b",
+        r"sollte|dürfte|duerfte|müsste|muesste|nördlich|südlich|östlich|westlich|"
+        r"nord[-\s]?östlich|nord[-\s]?westlich|süd[-\s]?östlich|süd[-\s]?westlich)\b",
         city,
     ):
         return ""
