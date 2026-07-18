@@ -12161,3 +12161,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Ausbildungs- und Lehrzeit
+
+- `während der Ausbildung`, `nach der Ausbildung` und `nach der Lehre` werden wie bestehende Studienzeitphrasen als Wohnkontext erkannt.
+- `Ich arbeite während der Ausbildung ...` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Training-Time-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5f2e407d fix: parse residence during vocational training`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
