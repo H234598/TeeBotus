@@ -9818,6 +9818,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Direkte Registrierungslabels
+
+- `Gemeldet: Frankfurt`, `Registriert: Leipzig` und `Aktuell gemeldet in Hamburg` werden jetzt erkannt.
+- Historische Formen bleiben leer; Mehrfachziele wie `gemeldet in Berlin und Hamburg` werden abgewiesen.
+- Verifikation: `tests/test_weather_context.py` -> `142 passed`, vier Registration-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `fee5721e fix: parse direct registration labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
