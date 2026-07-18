@@ -1829,6 +1829,8 @@ def extract_residence_city(text: str) -> str:
                         continue
                     if _has_unresolved_location_separator(source, city_end):
                         continue
+                    if _has_historical_residence_suffix(source, city_end):
+                        continue
                     city = _clean_city(match.group("city"))
                     if city:
                         candidates.append((city_start, city))
@@ -2109,6 +2111,17 @@ def _has_future_residence_prefix(source: str, match_start: int, city_start: int 
     )
 
 
+def _has_historical_residence_suffix(source: str, city_end: int) -> bool:
+    tail = source[city_end:]
+    sentence = re.split(r"(?<!\bSt)[.!?;\n]", tail, maxsplit=1, flags=re.IGNORECASE)[0]
+    return bool(
+        re.match(
+            r"(?i)\s+(?:(?:wohnhaft|ansässig|ansaessig)\s+)?(?:gewesen|worden)\b",
+            sentence,
+        )
+    )
+
+
 def fetch_weather_summary(city: str) -> str:
     query = urllib.parse.quote(str(city or "").strip())
     if not query:
@@ -2189,6 +2202,8 @@ def _clean_city(value: str) -> str:
         r"unser(?:e|er|em|en)?|ein(?:e|er|em|en)?)\b",
         city,
     ):
+        return ""
+    if re.search(r"(?i)\b(?:gewesen|worden)\b", city):
         return ""
     if re.search(
         r"(?i)\b(?:arbeit\w*|studier\w*|lern\w*|schlaf\w*|mach\w*|komm\w*|bin\w*|"

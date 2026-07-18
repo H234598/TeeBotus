@@ -1013,6 +1013,13 @@ def test_extract_residence_city_rejects_future_residence_markers() -> None:
     assert extract_residence_city("Seit heute wohne ich in Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_rejects_historical_perfect_residence() -> None:
+    assert extract_residence_city("Ich bin früher in Berlin wohnhaft gewesen.") == ""
+    assert extract_residence_city("Ich bin in Berlin wohnhaft gewesen.") == ""
+    assert extract_residence_city("Ich bin wohnhaft in Berlin gewesen.") == ""
+    assert extract_residence_city("Ich bin in Berlin wohnhaft.") == "Berlin"
+
+
 def test_extract_residence_city_rejects_multiple_home_targets() -> None:
     assert extract_residence_city("Mein Zuhause ist in Berlin und Hamburg.") == ""
     assert extract_residence_city("Ich wohne werktags in Berlin und am Wochenende in Hamburg.") == ""
