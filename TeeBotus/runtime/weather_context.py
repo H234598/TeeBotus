@@ -2831,6 +2831,20 @@ CITY_PATTERNS = (
         r"(?:einem|einer)\s+ort\s+namens\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"adresse|wohnadresse|wohnanschrift|anschrift)\s+"
+        r"(?:ist|liegt|lautet|befindet\s+sich|bleibt|:)\s*(?:(?:in|bei)\s+)?"
+        r"(?P<city>[^\W\d_][\wÄÖÜäöüß .'-]{1,80})(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?P<city>[^\W\d_][\wÄÖÜäöüß .'-]{1,80})\s+(?:ist|bleibt)\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
 )
 CITY_TRAILING_STOP_RE = re.compile(
     r"\s+(?:und|aber|weil|wenn|falls|seit|schon|mit|bei|in|auf|neben|nahe|"

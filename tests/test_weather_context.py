@@ -1306,6 +1306,19 @@ def test_extract_residence_city_preserves_parenthetical_registration_and_bleibe_
     assert extract_residence_city("Mein Geburtsort ist Halle (Saale).") == ""
 
 
+def test_extract_residence_city_handles_unicode_label_initials() -> None:
+    cases = {
+        "Mein Wohnort ist Ålesund.": "Ålesund",
+        "Meine Adresse ist Évry.": "Évry",
+        "Čakovec ist mein Wohnort.": "Čakovec",
+        "Mein Wohnsitz liegt in Žilina.": "Žilina",
+        "Meine Wohnanschrift lautet Ørsta.": "Ørsta",
+        "Ærøskøbing ist mein Zuhause.": "Ærøskøbing",
+    }
+    for text, expected in cases.items():
+        assert extract_residence_city(text) == expected
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
