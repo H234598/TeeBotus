@@ -11759,3 +11759,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Konjunktiver Wohnortwechsel
+
+- `Berlin war mein Wohnort und ich lebe jetzt in Hamburg` sowie `... und ich wohne inzwischen bei Potsdam` liefern aktuellen Ort.
+- Arbeitsverb nach `und ich` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Conjunctive-Transition-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `fb888d41 fix: parse conjunctive residence transitions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
