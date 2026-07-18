@@ -9678,6 +9678,18 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Inverse Herkunfts-/Wohnortlabels
+
+- `Berlin ist meine Heimat, Hamburg mein Wohnort` und die Variante mit `Geburtsort` liefern jetzt `Hamburg` als aktuellen Wohnort.
+- Herkunft wird nicht als aktueller Wohnort überschrieben.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, zwei inverse-Origin-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `602f6199 fix: parse inverse origin residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Negierte Wohnortwechsel
 
 - `Mein Wohnort ist keinesfalls Berlin, sondern Hamburg` liefert jetzt den aktuellen Ort `Hamburg`.
