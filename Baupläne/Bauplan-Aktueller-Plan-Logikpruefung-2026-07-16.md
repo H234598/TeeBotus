@@ -9884,3 +9884,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Präzisierende Land-/Regionsangaben
+
+- `genauer gesagt`, `nämlich`, `und zwar`, `konkret` und ähnliche Präzisierungen nach Land/Region wurden bisher nicht bis zur Stadt verfolgt.
+- Der bestehende Land-/Regionspfad akzeptiert diese Connectoren jetzt.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7fa58a1b fix: parse residence clarification connectors`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
