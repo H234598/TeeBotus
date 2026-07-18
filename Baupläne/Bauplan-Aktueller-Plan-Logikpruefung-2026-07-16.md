@@ -7999,6 +7999,20 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `4/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Wohnortwechsel mit einfacher Negation erkennen
+
+- `Ich lebe nicht in Berlin, sondern in Hamburg` wurde nicht als neuer
+  Wohnort erkannt; ohne `sondern` bleibt ein reiner Negationssatz weiterhin
+  leer.
+- Der Wetterparser verarbeitet jetzt `nicht in/bei <alt>, sondern in/bei
+  <neu>` vor generischen Wohnmustern.
+- Verifikation: `tests/test_weather_context.py` -> `19 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `47392de0 fix: parse plain residence negation changes`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `5/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
