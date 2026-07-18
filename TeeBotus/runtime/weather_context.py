@@ -38,6 +38,12 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:seit\s+\d{4}\s+)?(?:ich\s+)?(?:wohne|lebe)\s+"
+        r"(?:ich\s+)?(?:seit\s+\d{4}\s+)?(?:jetzt|aktuell|derzeit)?\s*"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich\s+wohne|ich\s+lebe|wohn(?:e)?|lebe)\s+"
         r"(?:(?:jetzt|aktuell|derzeit)\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",

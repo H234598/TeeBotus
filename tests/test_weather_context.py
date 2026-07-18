@@ -54,6 +54,11 @@ def test_extract_residence_city_from_nearby_location_phrase() -> None:
     assert extract_residence_city("Ich lebe nahe Hamburg.") == "Hamburg"
 
 
+def test_extract_residence_city_from_time_qualified_residence_phrase() -> None:
+    assert extract_residence_city("Seit 2024 lebe ich in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich lebe seit 2024 in Potsdam.") == "Potsdam"
+
+
 def test_extract_residence_city_rejects_negated_or_non_city_phrases() -> None:
     for text in (
         "Ich wohne in keiner Stadt, sondern auf dem Land.",
