@@ -1241,7 +1241,7 @@ CITY_PATTERNS = (
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?:der|dem|einer|einem)\s+"
         r"(?:ortschaft|gemeinde|kommune|metropole|hauptstadt)\s+(?:von\s+)?"
-        r"(?:nahe\s+|unweit\s+von\s+|rund\s+um\s+)?"
+        r"(?:(?:namens|genannt)\s+|nahe\s+|unweit\s+von\s+|rund\s+um\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),

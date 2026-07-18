@@ -116,6 +116,8 @@ def test_extract_residence_city_from_direction_and_edge_relations() -> None:
 def test_extract_residence_city_handles_settlement_labels() -> None:
     for label in ("Ortschaft", "Gemeinde", "Kommune", "Metropole", "Hauptstadt"):
         assert extract_residence_city(f"Ich wohne in der {label} Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in einer Ortschaft namens Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in einer Gemeinde genannt Hamburg.") == "Hamburg"
 
 
 def test_extract_residence_city_from_genitive_relations() -> None:
