@@ -9642,6 +9642,18 @@ Restart erst bei `20/20`.
 - Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Umschreibung des Geburtsorts
+
+- `Berlin ist der/ein Ort meiner Geburt, Hamburg mein Wohnort` liefert `Hamburg`.
+- Die Umschreibung wird nur als Herkunftsteil des expliziten Herkunft-/Wohnort-Paares verwendet.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, zwei Birth-Place-Paraphrase-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9515e2ec fix: parse birth place residence paraphrases`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
