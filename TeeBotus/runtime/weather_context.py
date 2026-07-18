@@ -2993,7 +2993,9 @@ CITY_PATTERNS = (
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
         r"adresse|wohnadresse|wohnanschrift|anschrift)\s+"
-        r"(?:ist|liegt|lautet|befindet\s+sich|bleibt|:)\s*(?:(?:in|bei)\s+)?"
+        r"(?:ist|liegt|lautet|befindet\s+sich|bleibt|:)\s*"
+        r"(?:(?:eigentlich|genau|aktuell|derzeit|momentan|gegenwärtig|gegenwaertig)\s+)?"
+        r"(?:(?:in|bei)\s+)?"
         r"(?P<city>[^\W\d_][\wÄÖÜäöüß .'-]{1,80})(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
