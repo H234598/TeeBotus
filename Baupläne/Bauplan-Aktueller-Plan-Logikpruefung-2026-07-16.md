@@ -8279,6 +8279,22 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `0/20` Code-Commits. Kein Push.
 Restart nach weiteren 20 Code-Fixes.
 
+### 2026-07-18: Natuerliche Zeitangaben beim Wohnort erkennen
+
+- `Ich wohne seit kurzem in Berlin`, `Ich lebe seit einiger Zeit in Leipzig`
+  und `Ich wohne seit ein paar Jahren in Dresden` wurden bisher nicht als
+  Wohnort erkannt. Auch `Ich wohne aktuell bei meiner Freundin in Potsdam`
+  verlor den Zeitbezug vor der Haushaltsphrase.
+- Der Wetterparser akzeptiert diese begrenzten Zeitqualifizierer und fuehrt
+  optionale `jetzt`/`aktuell`/`derzeit`-Angaben vor `bei ... in <Stadt>` mit.
+  Offene Personenangaben ohne Stadt bleiben weiterhin ungueltig.
+- Verifikation: `tests/test_weather_context.py` -> `22 passed`,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2491af4f fix: parse natural residence time phrases`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `9/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### 2026-07-18: Ungueltige Identity-Routen-Slots frueh ablehnen
 
 - `AccountStore.update_identity_route()` speicherte `adapter_slot=0`, `False`
