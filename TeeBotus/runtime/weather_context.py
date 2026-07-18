@@ -2165,8 +2165,25 @@ CITY_PATTERNS = (
         r"\b(?:meine|unsere|mein|unser)\s+"
         r"(?:offiziell\w*|privat\w*)\s+"
         r"(?:meldadresse|meldeadresse|meldeanschrift|meldesitz)\s+"
-        r"(?:ist|liegt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        r"(?:ist|liegt|lautet|befindet\s+sich|:|=)\s*(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[.!?;,:]\s*)(?:meine|unsere|mein|unser)?\s*"
+        r"(?:offiziell\w*|privat\w*)\s+"
+        r"(?:meldadresse|meldeadresse|meldeanschrift|meldesitz)\s*"
+        r"(?::|=|,)\s*(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+(?:eine|meine|unsere)\s+"
+        r"(?:offiziell\w*|privat\w*)\s+"
+        r"(?:meldadresse|meldeadresse|meldeanschrift|meldesitz)\s+"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
         r"(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
@@ -2205,7 +2222,7 @@ CITY_PATTERNS = (
         r"\b(?:ich|wir)\s+(?:bin|sind)\s+(?:(?:derzeit|aktuell|gegenwärtig|gegenwaertig)\s+)?"
         r"(?:in|bei)\s+(?![^.!?;,]*\b(?:beruflich|dienstlich|zur\s+schule|zur\s+arbeit)\b)"
         r"(?P<city>(?![^.!?;,]*\s+(?:und|oder)\s+)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
-        r"(?:gemeldet|registriert)\b",
+        r"(?:amtlich\s+)?(?:gemeldet|registriert)\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -2340,7 +2357,8 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:ist|bleibt)\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
-        r"(?:(?:aktuell\w*|derzeit\w*|jetzig\w*|gegenwärtig\w*|gegenwaertig\w*|offiziell\w*)\s+)?"
+        r"(?:(?:aktuell\w*|derzeit\w*|jetzig\w*|gegenwärtig\w*|gegenwaertig\w*|"
+        r"offiziell\w*|gemeldet\w*|amtlich\w*)\s+)?"
         r"(?:wohnadresse|wohnanschrift|meldeadresse|anschrift|adresse)\b",
         re.IGNORECASE,
     ),
@@ -2939,7 +2957,7 @@ CITY_PATTERNS = (
         r"vorübergehend|vorlaeufig|nur\s+vorübergehend|nur\s+vorlaeufig)\s+)?"
         rf"(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
-        r"(?:(?:offiziell|polizeilich|privat|dauerhaft|permanent|vorübergehend|vorlaeufig)\s+)?"
+        r"(?:(?:offiziell|polizeilich|privat|amtlich|dauerhaft|permanent|vorübergehend|vorlaeufig)\s+)?"
         r"(?:gemeldet|registriert|ansässig|ansaessig)\b",
         re.IGNORECASE,
     ),
@@ -2951,7 +2969,8 @@ CITY_PATTERNS = (
     re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich\s+)?bin\s+"
         rf"(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?(?:in|bei)\s+"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+gemeldet\b",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:amtlich\s+)?gemeldet\b",
         re.IGNORECASE,
     ),
     re.compile(
