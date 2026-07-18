@@ -904,6 +904,15 @@ def test_extract_residence_city_handles_direct_time_synonyms() -> None:
     assert extract_residence_city("Ich wohne schon seit gestern in Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_handles_location_adverb_order() -> None:
+    assert extract_residence_city("Mein Wohnsitz ist direkt in Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort liegt hier in Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Zuhause ist dort in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne hier, in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne dort, in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich bin hier in Berlin daheim.") == "Berlin"
+
+
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
