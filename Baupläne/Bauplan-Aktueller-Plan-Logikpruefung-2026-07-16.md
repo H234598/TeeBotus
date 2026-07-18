@@ -12004,3 +12004,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wohnort mit Grundpräfix
+
+- `Ich wohne wegen der Arbeit in Hamburg` und `Ich lebe aufgrund meines Studiums bei Potsdam` liefern Wohnort.
+- `Ich arbeite wegen der Arbeit in Hamburg` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Reason-Prefix-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `88c6f2b8 fix: parse residence reason prefixes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
