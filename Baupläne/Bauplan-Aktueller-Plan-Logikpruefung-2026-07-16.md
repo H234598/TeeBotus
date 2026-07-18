@@ -9157,3 +9157,16 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `18/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Kontrastkonnektoren nach weiteren Separatoren
+
+- `doch/jedoch` nach Semikolon oder Gedankenstrich wurde bisher nicht als
+  Wohnortwechsel erkannt.
+- Der bestehende eindeutige Konnektorpfad akzeptiert nun Komma, Semikolon und
+  Gedankenstrich.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e5e0d3e3 fix: parse residence connectors after separators`.
+
+**Aktueller Laufstand:** Seit dem Restart `19/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
