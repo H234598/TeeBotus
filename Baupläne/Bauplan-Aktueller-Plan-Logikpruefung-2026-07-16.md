@@ -12064,3 +12064,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wohnort-Klarstellung nach Komma
+
+- `Ich wohne in Hamburg, dem Ort, den ich Zuhause nenne` wird als Klarstellung erkannt und liefert Hamburg.
+- `Zuhause nenne` wird nicht mehr als zweiter Wohnortkandidat gelesen; echte zweite Adressen bleiben mehrdeutig und liefern leer.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Clarification-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8c0d6553 fix: ignore residence clarification clauses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
