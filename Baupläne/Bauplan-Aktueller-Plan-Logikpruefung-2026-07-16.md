@@ -7866,6 +7866,20 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `14/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Reminder mit Nicht-Vergessen-Formulierung erkennen
+
+- `Bitte nicht vergessen, mich morgen an den Termin zu erinnern` wurde trotz
+  eindeutigem Auftrag nur als strukturierter Cue behandelt und konnte ohne
+  Planner verloren gehen.
+- `nicht vergessen` sowie `vergiss bitte nicht` werden jetzt klassisch
+  erkannt. Ein abschliessendes `zu erinnern` landet nicht mehr im Betreff.
+- Verifikation: `tests/test_reminder_intent.py` -> `55 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d4f78ae9 fix: parse do-not-forget reminders`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `15/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
