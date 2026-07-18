@@ -853,6 +853,13 @@ def test_extract_residence_city_rejects_bare_label_conflicts() -> None:
     assert extract_residence_city("Wohnort Berlin, Deutschland.") == "Berlin"
 
 
+def test_extract_residence_city_resolves_bare_label_changes() -> None:
+    assert extract_residence_city("Wohnort Berlin, genauer gesagt Potsdam.") == "Potsdam"
+    assert extract_residence_city("Wohnort: Deutschland; genauer gesagt in Berlin.") == "Berlin"
+    assert extract_residence_city("Wohnort Berlin, aber jetzt Hamburg.") == "Hamburg"
+    assert extract_residence_city("Daheim: Berlin, aber jetzt Hamburg.") == "Hamburg"
+
+
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
