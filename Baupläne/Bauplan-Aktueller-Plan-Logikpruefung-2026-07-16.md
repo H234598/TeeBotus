@@ -9770,6 +9770,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Unzuverlässige Label-Füller
+
+- `Wohnort ist laut Wikipedia/User Berlin` wird nicht mehr als Stadt gespeichert.
+- `Wohnort: derzeitig Berlin` funktioniert; Füller vor und nach `:` werden vollständig entfernt, ohne Präfixrest `ig Berlin`.
+- Verifikation: `tests/test_weather_context.py` -> `138 passed`, drei Untrusted-Filler-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1ae5bea5 fix: reject untrusted residence label fillers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
