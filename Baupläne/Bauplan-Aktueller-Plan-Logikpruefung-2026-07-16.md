@@ -8519,6 +8519,20 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Historische Wohnzeitphrasen erkennen
+
+- `seit dem letzten/vergangenen Jahr`, `seit meiner Kindheit/Geburt`, `seit
+  dem Studium`, `seit jeher` und `seit letztem Sommer` wurden bisher nicht
+  erkannt.
+- Der feste Zeitbaustein akzeptiert diese Wohnzeitangaben inklusive Dativ-
+  und ASCII-Varianten.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `38656492 fix: parse historical residence time phrases`.
+
+**Aktueller Laufstand:** Seit dem Restart `6/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
