@@ -10305,3 +10305,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Widersprüchliche Privatadressen
+
+- Spätere `Adresse`-/`Wohnadresse`-Treffer konnten expliziten Wohnort überschreiben; mehrere getrennte Privat-Wohnziele waren nicht konservativ behandelt.
+- Konfliktguard für positive Wohn-/Wohnsitzangabe plus abweichendes Privatadresslabel nach Komma/Semikolon ergänzt; Arbeits-/Geschäfts-/Postadresse bleibt neutral.
+- Verifikation: `tests/test_weather_context.py` -> `32 passed`, 10 Private-Address-Conflict-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9fa43c83 fix: guard conflicting residence addresses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
