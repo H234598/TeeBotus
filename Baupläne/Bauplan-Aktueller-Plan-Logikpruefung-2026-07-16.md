@@ -9956,3 +9956,27 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Eigene Wohnadressformulierungen
+
+- `Meine Adresse/Wohnadresse liegt in ...` und `Ich habe meine Anschrift in ...` wurden bisher nicht als Wohnort erkannt.
+- Unqualifizierte eigene Wohnadresse/Anschrift ist ergänzt; Negationen und Geschäftsadressen bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 5 Address-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5c6fd8c3 fix: parse residence address phrases`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Aktuelle Wohnadressen
+
+- `aktuelle/jetzige Wohnadresse`, `derzeitige Anschrift` und vergleichbare aktuelle Adressangaben wurden bisher nicht erkannt.
+- Aktuelle Adjektive sind erlaubt; `alte Adresse` bleibt bewusst ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 4 Current-Address-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a88975b1 fix: parse current residence addresses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `20/20` Code-Fixes. Restart jetzt fällig. Kein Push.
