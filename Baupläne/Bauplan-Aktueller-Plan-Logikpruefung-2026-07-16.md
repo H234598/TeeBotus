@@ -11231,3 +11231,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Stadtgebiet-Relationen
+
+- `im Münchner Stadtgebiet` und `im Stadtgebiet von München` werden erkannt.
+- Gelabelte und direkte Residence-Formen sind abgedeckt.
+- Verifikation: `tests/test_weather_context.py` -> `100 passed`, vier Stadtgebiet-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `becc0f78 fix: parse stadtgebiet residence relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
