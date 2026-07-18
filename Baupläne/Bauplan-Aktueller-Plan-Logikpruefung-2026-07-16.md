@@ -12466,3 +12466,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Meldungsrichtung und Kontextschutz
+
+- `gegenwärtig bei Potsdam gemeldet` und `Bei Leipzig bin ich gemeldet` werden erkannt.
+- `zur Schule`, berufliche/dienstliche Registrierung und Mehrfachorte mit `und/oder` bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, sechs Registration-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `015d237c fix: guard residence registration contexts`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
