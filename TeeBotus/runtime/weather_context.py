@@ -368,7 +368,9 @@ CITY_TRAILING_STOP_RE = re.compile(
     r"innerhalb|au(?:ßerhalb|sserhalb)|unter|aus|wegen|als|im|"
     r"am\s+(?:stadtrand|see|bahnhof|fluss|rand)|f(?:ür|uer)|"
     r"w(?:ährend|aehrend)|zusammen|obwohl|wobei|denn|da|dort|[-–—]|"
-    r"heute|morgen|gestern|gerade|aktuell|"
+    r"heute|morgen|gestern|gerade|aktuell|jetzt|nun|momentan|derzeit|"
+    r"zurzeit|zur\s+zeit|weiterhin|inzwischen|mittlerweile|"
+    r"vor(?:uebergehend|übergehend)|"
     r"frueh|früh|morgens|vormittags|mittags|nachmittags|abends|nachts|\.|,|;|:|!|\?).*$",
     re.IGNORECASE,
 )
