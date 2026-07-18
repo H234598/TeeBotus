@@ -2289,7 +2289,7 @@ CITY_TRAILING_STOP_RE = re.compile(
     r"zurzeit|zur\s+zeit|weiterhin|inzwischen|mittlerweile|dauerhaft|"
     r"permanent|ständig|staendig|vor(?:uebergehend|übergehend)|"
     r"frueh|früh|morgens|vormittags|mittags|nachmittags|abends|nachts|"
-    r"zuhause|zu\s+hause|daheim|wohnhaft|ansässig|ansaessig|geworden|\.|,|;|:|!|\?).*$",
+    r"zuhause|zu\s+hause|daheim|wohnhaft|ansässig|ansaessig|geworden|zur\s+miete|\.|,|;|:|!|\?).*$",
     re.IGNORECASE,
 )
 
