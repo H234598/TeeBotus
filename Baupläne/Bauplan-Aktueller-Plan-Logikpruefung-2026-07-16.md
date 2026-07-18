@@ -9791,6 +9791,18 @@ Restart erst bei `20/20`.
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Wohnort-Verb-Füllwörter
+
+- `Mein Wohnort ist eigentlich/gegenwärtig Hamburg` liefert `Hamburg` statt des Füllworts.
+- Zukunftsmarker wie `künftig` bleiben abgelehnt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, drei Residence-Filler-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `fd760b0b fix: trim residence label fillers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
