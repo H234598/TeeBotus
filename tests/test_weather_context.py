@@ -1448,6 +1448,14 @@ def test_extract_residence_city_rejects_punctuated_question_targets() -> None:
     assert extract_residence_city("Wo wohnst du? Berlin, Deutschland.") == "Berlin"
 
 
+def test_extract_residence_city_rejects_other_person_residence_labels() -> None:
+    assert extract_residence_city("Der Wohnort ist Berlin.") == ""
+    assert extract_residence_city("Sein Wohnort ist Hamburg.") == ""
+    assert extract_residence_city("Ihr Zuhause ist Potsdam.") == ""
+    assert extract_residence_city("Deren Wohnsitz ist Dresden.") == ""
+    assert extract_residence_city("Unser Wohnort ist Berlin.") == "Berlin"
+
+
 def test_repeated_city_updates_deduplicate_duplicate_residence_memories(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
