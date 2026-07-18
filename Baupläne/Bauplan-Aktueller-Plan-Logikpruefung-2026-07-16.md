@@ -10756,3 +10756,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Nahe-Wohnortlabels normalisieren
+
+- `unweit/nahe <Stadt>` sowie Genitivformen liefern Stadtwert statt Relationswort.
+- Bekannte echte s-Endungsstadt `Paris` bleibt geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `65 passed`, vier Nahbereich-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e53bb5ef fix: normalize nearby residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
