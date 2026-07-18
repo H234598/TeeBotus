@@ -896,6 +896,14 @@ def test_extract_residence_city_reads_current_label_after_future_context() -> No
     assert extract_residence_city("Derzeit ist Berlin mein Arbeitsort.") == ""
 
 
+def test_extract_residence_city_handles_direct_time_synonyms() -> None:
+    assert extract_residence_city("Ich wohne im Moment in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich lebe im Moment bei Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne gegenwärtig in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne derzeit noch in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne schon seit gestern in Berlin.") == "Berlin"
+
+
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
