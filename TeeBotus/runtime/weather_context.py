@@ -68,6 +68,19 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "demnächst",
         "demnaechst",
         "bald",
+        "januar",
+        "februar",
+        "märz",
+        "maerz",
+        "april",
+        "mai",
+        "juni",
+        "juli",
+        "august",
+        "september",
+        "oktober",
+        "november",
+        "dezember",
         "geplant",
         "vielleicht",
         "vermutlich",
@@ -2770,6 +2783,7 @@ def _has_future_residence_prefix(source: str, match_start: int, city_start: int 
             r"\bab\s+(?:morgen|uebermorgen|übermorgen|sommer|winter|frühling|fruehling|herbst)\b|"
             r"\bab\s+(?:dem\s+)?(?:\d{1,2}\.\s+)?(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember|"
             r"sommer|winter|frühling|fruehling|herbst|weihnachten|ostern|neujahr)\b|"
+            r"\bam\s+(?:\d{1,2}\.\s+)?(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember)\b|"
             r"\bseit\s+(?:morgen|uebermorgen|übermorgen)\b|\b(?:demnächst|demnaechst)\b|\bbald\b|"
             r"\b(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*\b|\bin\s+zukunft\b|"
             r"\b(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*)\b)",
