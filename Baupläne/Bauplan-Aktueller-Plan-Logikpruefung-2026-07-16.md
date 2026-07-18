@@ -14089,3 +14089,16 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Widersprüchliche Wohn- und Meldeziele
+
+- Zwei direkte aktuelle Wohnortlabels in getrennten Sätzen werden als Konflikt abgelehnt.
+- `Meldeadresse` wird mit direktem Wohnort und Wohnadresse verglichen; unterschiedliche Angaben liefern keinen eindeutigen Ort.
+- Arbeitsort/Geburtsort bleiben davon getrennt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, sieben Konflikt-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `51a631b9 fix: reject conflicting residence records`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
+- Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
