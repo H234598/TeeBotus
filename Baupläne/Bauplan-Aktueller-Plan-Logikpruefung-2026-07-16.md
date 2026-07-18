@@ -12305,3 +12305,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Numerische Wohnzeit-Daten
+
+- `seit dem 01.01.2025`, `seit dem 1.1.2025` und `seit dem 1.1.` werden als vergangene Zeitanker vor dem Wohnort erkannt.
+- Arbeitsphrasen mit demselben Datum bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Date-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `11dbe54e fix: parse numeric residence dates`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
