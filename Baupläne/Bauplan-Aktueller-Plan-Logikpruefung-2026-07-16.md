@@ -8530,6 +8530,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `6/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Nachgestellte Zeitmarker aus Stadttext entfernen
+
+- `Berlin zurzeit`, `Hamburg momentan`, `Potsdam derzeit` und
+  `Köln derzeit bei ...` wurden mit Kontextsuffix gespeichert.
+- Der City-Trailing-Stop erkennt nun nachgestellte aktuelle/temporäre
+  Zeitmarker inklusive `zur Zeit`.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3c36731b fix: trim trailing residence time markers`.
+
+**Aktueller Laufstand:** Seit dem Restart `7/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-18: Weitere Dauerqualifizierer abdecken
 
 - `seit fast zwei Jahren`, `seit circa/ca. drei Monaten`, `seit rund vier
