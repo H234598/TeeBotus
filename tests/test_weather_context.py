@@ -1281,6 +1281,15 @@ def test_extract_residence_city_preserves_regional_compound_names() -> None:
     assert extract_residence_city("Ich wohne in Königstein im Taunus.") == "Königstein im Taunus"
 
 
+def test_extract_residence_city_preserves_parenthetical_labels() -> None:
+    assert extract_residence_city("Mein Wohnort ist Halle (Saale).") == "Halle (Saale)"
+    assert extract_residence_city("Mein Wohnsitz liegt in Halle (Saale).") == "Halle (Saale)"
+    assert extract_residence_city("Meine Adresse ist Halle (Saale).") == "Halle (Saale)"
+    assert extract_residence_city("Meine Wohnanschrift lautet Halle (Saale).") == "Halle (Saale)"
+    assert extract_residence_city("Halle (Saale) ist mein Wohnort.") == "Halle (Saale)"
+    assert extract_residence_city("Ich habe meinen Wohnsitz in Halle (Saale).") == "Halle (Saale)"
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"

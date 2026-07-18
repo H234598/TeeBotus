@@ -1584,6 +1584,24 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
+        r"(?:meinen|meine|mein|unseren|unsere|unser)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|adresse|wohnadresse|wohnanschrift|anschrift)\s+"
+        r"(?:in|bei)\s+|"
+        r"(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|adresse|wohnadresse|wohnanschrift|anschrift)\s+"
+        r"(?:ist|liegt|lautet|befindet\s+sich|bleibt|:)\s*(?:(?:in|bei)\s+)?)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,70}\s+\([^)]{1,30}\))"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,70}\s+\([^)]{1,30}\))\s+"
+        r"(?:ist|bleibt)\s+(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
         r"(?:(?:einen|einem|meinen|meine|mein|unseren|unsere|unser)\s+)?"
         r"(?:(?:fest\w*|dauerhaft\w*|offiziell\w*|privat\w*|"
