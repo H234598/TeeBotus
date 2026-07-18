@@ -8695,6 +8695,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `18/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Satzgetrennte Wohnortwechsel erkennen
+
+- `Ich wohne in Berlin. Jetzt/Inzwischen lebe ich in Hamburg` und die
+  entsprechende Label-/Zuhauseform wurden bisher auf Berlin gekuerzt.
+- Satzgetrennte Aktualitaetsmarker akzeptieren nun beide Pronomenstellungen;
+  ein Folgesatz mit `arbeite` bleibt beim alten Wohnort.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1509cf3e fix: parse sentence-separated residence changes`.
+
+**Aktueller Laufstand:** Seit dem Restart `19/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
