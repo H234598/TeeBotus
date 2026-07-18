@@ -13071,3 +13071,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Absolute Wohnort-Negationen
+
+- `keinesfalls/keineswegs/niemals/nirgendwo/nirgends/nie` wird nicht mehr als Stadt gespeichert.
+- Negierte Korrekturen mit `sondern` liefern weiterhin den tatsächlichen Wohnort.
+- Verifikation: `tests/test_weather_context.py` -> `116 passed`, fünf Absolute-Negation-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ef592614 fix: reject absolute residence negations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
