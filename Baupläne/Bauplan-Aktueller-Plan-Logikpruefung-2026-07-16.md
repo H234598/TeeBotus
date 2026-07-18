@@ -8451,6 +8451,20 @@ Restart nach weiteren 20 Code-Fixes.
 **Aktueller Laufstand:** Seit dem Restart `1/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
+
+- Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
+  Ort hinzukam. Bei bereits vorhandenem Ziel-Entry führte ein früher Return die
+  Bereinigung jedoch nicht aus.
+- Wiederholte Nennung des aktuellen Orts entfernt jetzt ebenfalls alle alten
+  generierten Geschwister; das Ziel-Entry wird nicht doppelt angelegt.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2f6f3584 fix: clean stale residence siblings`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Natuerliche Zeitangaben beim Wohnort erkennen
 
 - `Ich wohne seit kurzem in Berlin`, `Ich lebe seit einiger Zeit in Leipzig`
