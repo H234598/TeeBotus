@@ -12890,3 +12890,15 @@ Restart erst bei `20/20`.
 
 - Vor Restart: Service soll nach diesem 20. Code-Fix neu geladen werden.
 - Seit letztem Restart: `20/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Qualifizierte Bleibe-Wohnform
+
+- `Ich habe eine feste/dauerhafte/ständige/stabile Bleibe in/bei ...` wird erkannt.
+- `Arbeitsbleibe` bleibt ausgeschlossen, damit Arbeitsort nicht als Wohnort gespeichert wird.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Qualified-Bleibe-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6328ff4e fix: parse qualified bleibe residence forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
