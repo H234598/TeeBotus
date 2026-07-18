@@ -11831,3 +11831,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Beruflicher Kontext als Negativfall
+
+- `Ich bin bei Hamburg beruflich ansässig` und `Ich bin bei Potsdam dienstlich wohnhaft` liefern keinen Wohnort.
+- `beruflich/dienstlich` werden in der City-Bereinigung als Aktivitätskontext verworfen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, zwei Professional-Context-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `501e9111 fix: reject professional residence contexts`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
