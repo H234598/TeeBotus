@@ -11944,3 +11944,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Qualifizierte Monatsdaten in Wohnzeit
+
+- `seit dem 1. Januar`, `seit Anfang Januar` und `seit letztem Januar` werden als Zeitqualifier erkannt; Stadt bleibt Hamburg.
+- Der generische Ortsmatcher kann diese Zeitphrase nicht mehr als Stadt übernehmen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Qualified-Month-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0d1bf547 fix: parse qualified month residence durations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
