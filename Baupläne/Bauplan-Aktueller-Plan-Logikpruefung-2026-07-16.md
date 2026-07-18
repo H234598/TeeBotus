@@ -11455,3 +11455,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Settlement-Labels
+
+- Direkte Wohnortformen mit `Ortschaft`, `Gemeinde`, `Kommune`, `Metropole` und `Hauptstadt` werden erkannt.
+- Ortsbezüge `nahe`, `unweit von` und `rund um` werden innerhalb dieser Formen korrekt extrahiert; Regionen bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `114 passed`, neun Settlement-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `170393ca fix: parse settlement residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
