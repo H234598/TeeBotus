@@ -13220,3 +13220,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Nicht-Ort-Zustände
+
+- `überall/ueberall`, `wechselnd`, `variabel`, `flexibel`, `offen`, `mobil` und `temporär` werden nicht als Wohnort gespeichert.
+- Konkrete Städte bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `127 passed`, acht Non-Location-State-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bfdf1fc2 fix: reject non-location residence states`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
