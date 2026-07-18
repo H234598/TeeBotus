@@ -95,6 +95,27 @@ def test_parse_reminder_removes_early_daypart_from_subject() -> None:
     assert intent.subject == "Sport"
 
 
+def test_parse_reminder_uses_evening_daypart() -> None:
+    intent = parse_reminder_intent(
+        "Denk bitte heute Abend an den Einkauf",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-06-15T18:00:00+00:00"
+    assert intent.subject == "den Einkauf"
+
+
+def test_parse_reminder_removes_next_week_from_subject() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich nächste Woche an den Antrag",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == ""
+    assert intent.missing_time is True
+    assert intent.subject == "den Antrag"
+
+
 def test_parse_reminder_accepts_reverse_question_wording() -> None:
     intent = parse_reminder_intent("Kannst du mich morgen an den Zahnarzt erinnern?", now=fixed_now())
     direct_subject = parse_reminder_intent("Kannst du mich bitte an Punkt 3.4 erinnern?", now=fixed_now())

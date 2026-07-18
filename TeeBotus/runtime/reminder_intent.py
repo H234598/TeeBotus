@@ -96,6 +96,15 @@ TIME_RE = re.compile(
     rf"\b(?:um|gegen)\s+(?P<hour>{_CLOCK_HOUR})(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?\b",
     re.IGNORECASE,
 )
+DAYPART_DEFAULT_HOURS = (
+    ("frueh", 9),
+    ("fruh", 9),
+    ("vormittag", 10),
+    ("mittag", 12),
+    ("nachmittag", 15),
+    ("abend", 18),
+    ("nacht", 21),
+)
 RELATIVE_RE = re.compile(
     r"\bin\s+(?P<count>\d{1,3})\s*(?P<unit>min(?:ute)?n?|minuten?|std|stunden?|h|tage?n?|wochen?)\b",
     re.IGNORECASE,
@@ -434,8 +443,7 @@ def _parse_due_at(text: str, now: datetime) -> str:
     if month_name_date:
         month = MONTH_NAMES[month_name_date.group("month").casefold()]
         day = int(month_name_date.group("day"))
-        hour = int(month_name_date.group("hour") or 9)
-        minute = int(month_name_date.group("minute") or 0)
+        hour, minute = _date_time_from_match(month_name_date, text)
         if month_name_date.group("year"):
             return _build_datetime(normalized_now, _normalize_year(month_name_date.group("year"), normalized_now.year), month, day, hour, minute)
         return _next_annual_date(normalized_now, month=month, day=day, hour=hour, minute=minute)
@@ -448,8 +456,7 @@ def _parse_due_at(text: str, now: datetime) -> str:
             int(iso.group("year")),
             int(iso.group("month")),
             int(iso.group("day")),
-            int(iso.group("hour") or 9),
-            int(iso.group("minute") or 0),
+            *_date_time_from_match(iso, text),
         )
     date = DATE_RE.search(text)
     if date is not None and _date_match_is_after_subject_marker(text, date):
@@ -461,24 +468,23 @@ def _parse_due_at(text: str, now: datetime) -> str:
                 normalized_now,
                 month=int(date.group("month")),
                 day=int(date.group("day")),
-                hour=int(date.group("hour") or 9),
-                minute=int(date.group("minute") or 0),
+                hour=_date_time_from_match(date, text)[0],
+                minute=_date_time_from_match(date, text)[1],
             )
         return _build_datetime(
             normalized_now,
             year,
             int(date.group("month")),
             int(date.group("day")),
-            int(date.group("hour") or 9),
-            int(date.group("minute") or 0),
+            *_date_time_from_match(date, text),
         )
     month_day = MONTH_DAY_RE.search(text)
     if month_day:
         return _next_month_day(
             normalized_now,
             day=int(month_day.group("day")),
-            hour=int(month_day.group("hour") or 9),
-            minute=int(month_day.group("minute") or 0),
+            hour=_date_time_from_match(month_day, text)[0],
+            minute=_date_time_from_match(month_day, text)[1],
         )
     lowered = _normalize(text)
     for word, offset in (("uebermorgen", 2), ("morgen", 1), ("heute", 0)):
@@ -495,8 +501,7 @@ def _parse_due_at(text: str, now: datetime) -> str:
         days = (target_weekday - normalized_now.weekday()) % 7
         if days == 0 and re.search(rf"\b(?:naechsten|kommenden)\s+{weekday.group('day')}\b", lowered):
             days = 7
-        hour = int(weekday.group("hour") or 9)
-        minute = int(weekday.group("minute") or 0)
+        hour, minute = _date_time_from_match(weekday, text)
         due = normalized_now + timedelta(days=days)
         candidate = due.replace(hour=hour, minute=minute, second=0, microsecond=0)
         if candidate <= normalized_now:
@@ -647,10 +652,27 @@ def _add_calendar_months(value: datetime, count: int) -> datetime:
 
 
 def _time_in_text(text: str, *, default_hour: int) -> tuple[int, int]:
+    marker = _time_marker_in_text(text)
+    return marker if marker is not None else (default_hour, 0)
+
+
+def _time_marker_in_text(text: str) -> tuple[int, int] | None:
     match = TIME_RE.search(text)
-    if not match:
-        return default_hour, 0
-    return int(match.group("hour")), int(match.group("minute") or 0)
+    if match:
+        return int(match.group("hour")), int(match.group("minute") or 0)
+    normalized = _normalize(text)
+    for marker, hour in DAYPART_DEFAULT_HOURS:
+        if re.search(rf"\b{marker}s?\b", normalized):
+            return hour, 0
+    return None
+
+
+def _date_time_from_match(match: re.Match[str], text: str) -> tuple[int, int]:
+    hour_text = match.groupdict().get("hour")
+    minute_text = match.groupdict().get("minute")
+    if hour_text is not None:
+        return int(hour_text), int(minute_text or 0)
+    return _time_in_text(text, default_hour=9)
 
 
 def _parse_recurrence(text: str) -> str:
@@ -767,12 +789,12 @@ def _initial_recurrence_due_with_time(now: datetime, recurrence: str, text: str)
 
 
 def _apply_explicit_time(value: datetime, text: str) -> datetime:
-    match = TIME_RE.search(text)
-    if not match:
+    marker = _time_marker_in_text(text)
+    if marker is None:
         return value
     return value.replace(
-        hour=int(match.group("hour")),
-        minute=int(match.group("minute") or 0),
+        hour=marker[0],
+        minute=marker[1],
         second=0,
         microsecond=0,
     )
@@ -811,7 +833,8 @@ def _date_match_is_after_subject_marker(text: str, match: re.Match[str]) -> bool
 def _has_temporal_anchor(text: str) -> bool:
     normalized = _normalize(text)
     return bool(
-        re.search(r"\b(?:heute|morgen|uebermorgen|naechsten|kommenden)\b", normalized)
+        re.search(r"\b(?:heute|morgen|uebermorgen|naechsten|kommenden|naechste|kommende)\b", normalized)
+        or re.search(r"\b(?:naechste|kommende)\s+woche\b", normalized)
         or RELATIVE_RE.search(normalized)
         or RELATIVE_TEXT_RE.search(normalized)
         or TIME_RE.search(normalized)
@@ -846,7 +869,8 @@ def _reminder_subject(text: str) -> str:
         lambda match: match.group(0) if _date_match_is_after_subject_marker(cleaned, match) else "",
         cleaned,
     )
-    cleaned = re.sub(r"(?i)\ban\s+den\s+(?=(?:um|gegen|an|daran|$))", " ", cleaned)
+    cleaned = re.sub(r"(?i)\b(?:naechste|nächste|kommende)\s+woche\b", " ", cleaned)
+    cleaned = re.sub(r"(?i)\ban\s+den\s+(?=(?:um|gegen|an|daran)\b|$)", " ", cleaned)
     cleaned = re.sub(
         r"(?i)\b("
         r"erinner(?:e|st|n)?\s+(?:mich|mi|uns)|"
@@ -872,7 +896,7 @@ def _reminder_subject(text: str) -> str:
     cleaned = MONTH_DAY_RE.sub("", cleaned)
     cleaned = DAY_WORD_RE.sub("", cleaned)
     cleaned = re.sub(
-        r"(?i)\b(heute|morgen|uebermorgen|übermorgen|naechsten|nächsten|kommenden|frueh|früh|morgens|vormittags|mittags|nachmittags|abends|nachts|um|gegen|uhr|am|daran|dran|an|dass)\b",
+        r"(?i)\b(heute|morgen|uebermorgen|übermorgen|naechsten|nächsten|kommenden|frueh|früh|morgens|vormittag|vormittags|mittag|mittags|nachmittag|nachmittags|abend|abends|nacht|nachts|um|gegen|uhr|am|daran|dran|an|dass)\b",
         " ",
         cleaned,
     )
