@@ -7916,6 +7916,20 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `17/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Zeit- und Begleitkontext aus Stadtnamen entfernen
+
+- Generische Sätze wie `Ich wohne in Berlin schon seit Jahren`, `in Potsdam
+  für zwei Jahre`, `in Berlin während meines Studiums` und `in München
+  zusammen mit meinen Eltern` lieferten bisher verschmutzte Stadtnamen.
+- Die bestehende Trailing-Stop-Logik beendet den Stadtnamen jetzt auch vor
+  diesen Zeit-/Begleitphrasen. Wortgrenzen schützen Stadtnamen wie `Fürth`.
+- Verifikation: `tests/test_weather_context.py` -> `22 passed`,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `668f86be fix: trim residence context qualifiers`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `18/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Gemini-Keyring: Cursor nach Route/Modell isolieren
 
 - 2026-07-17: `RotatingAPIKeyRing` nahm zwar `name` entgegen, Registry-State
