@@ -1514,6 +1514,16 @@ def test_extract_residence_city_handles_temporal_bare_labels() -> None:
     assert extract_residence_city("Wohnort ab morgen Berlin.") == ""
 
 
+def test_extract_residence_city_handles_expanded_location_questions() -> None:
+    assert extract_residence_city("Wo genau wohnst du? Berlin.") == "Berlin"
+    assert extract_residence_city("Wo genau lebst du? Hamburg.") == "Hamburg"
+    assert extract_residence_city("Wo in Deutschland wohnst du? Potsdam.") == "Potsdam"
+    assert extract_residence_city("In welcher Stadt wohnst du? Bonn.") == "Bonn"
+    assert extract_residence_city("An welchem Ort lebst du? Dresden.") == "Dresden"
+    assert extract_residence_city("Wo wohnst du denn? Leipzig.") == "Leipzig"
+    assert extract_residence_city("In welcher Stadt wohnst du?") == ""
+
+
 def test_repeated_city_updates_deduplicate_duplicate_residence_memories(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
