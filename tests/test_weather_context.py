@@ -1058,6 +1058,14 @@ def test_extract_residence_city_handles_region_prefix_before_target() -> None:
     assert extract_residence_city("Ich lebe in Brandenburg bei Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_handles_named_locality_types() -> None:
+    assert extract_residence_city("Mein Wohnort liegt im Dorf Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort liegt im Ort Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist die Gemeinde Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist eine Gemeinde namens Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist in einer Gemeinde.") == ""
+
+
 def test_extract_residence_city_rejects_multiple_home_targets() -> None:
     assert extract_residence_city("Mein Zuhause ist in Berlin und Hamburg.") == ""
     assert extract_residence_city("Ich wohne werktags in Berlin und am Wochenende in Hamburg.") == ""
