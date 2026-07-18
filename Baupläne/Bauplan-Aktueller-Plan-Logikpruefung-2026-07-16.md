@@ -11043,3 +11043,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Label-Flächenrelationen
+
+- Region/Gegend/Gebiet/Umgebung mit einer Zielstadt werden korrekt extrahiert.
+- Keine Freigabe für zweite, unabhängige Stadtziele.
+- Verifikation: `tests/test_weather_context.py` -> `88 passed`, sechs Area-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `55f6e05d fix: parse labeled area relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
