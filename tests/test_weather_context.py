@@ -479,6 +479,7 @@ def test_extract_residence_city_from_home_phrase() -> None:
     assert extract_residence_city("Seit 2024 bin ich in Köln zu Hause.") == "Köln"
     assert extract_residence_city("Ich bin hier in Potsdam zuhause.") == "Potsdam"
     assert extract_residence_city("Mein Zuhause ist Dresden.") == "Dresden"
+    assert extract_residence_city("Mein Zuhause lautet Hamburg.") == "Hamburg"
     assert extract_residence_city("Zu Hause bin ich in Köln.") == "Köln"
     assert extract_residence_city("Ich bin bei meiner Freundin zuhause.") == ""
 
