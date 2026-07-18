@@ -66,6 +66,33 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:mein(?:e)?\s+)?(?:(?:aktuell(?:er|e)?|jetzig(?:er|e))\s+)?"
+        r"(?:wohnort|wohnsitz|stadt|ort)(?:\s+(?:ist|heisst|heißt)\s*|:\s*)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich\s+)?habe\s+meinen\s+(?:wohnort|wohnsitz)\s+in\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich\s+)?bin\s+in\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+wohnhaft\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?\s+)?(?:zu\s+hause|zuhause|daheim)"
+        r"(?:\s+(?:ist|liegt)\s*|:\s*)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:zu\s+hause|zuhause|daheim)\s+bin\s+(?:ich\s+)?in\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich\s+)?bin\s+"
         r"(?:(?:seit\s+(?:\d{4}|kurzem|einiger\s+zeit|"
         r"(?:ein(?:en|igen)?|ein\s+paar|mehreren|vielen)\s+"
