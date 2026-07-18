@@ -12377,3 +12377,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Historische Wohnwechsel mit Prädikat
+
+- `wohnte/lebte ... lebe/wohne/bin jetzt ...` sowie `war ... wohnhaft ... bin jetzt ...` erkennen aktuellen Zielort.
+- `arbeite jetzt ...` bleibt als reiner Arbeitsort ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf historische Wechsel-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `33363590 fix: parse historical residence transitions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `20/20` Code-Fixes. Restart jetzt erforderlich.
