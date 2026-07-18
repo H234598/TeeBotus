@@ -10461,3 +10461,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Internationale Ortsnamen und Genitiv-Nähe
+
+- `in der Nähe Paris` ergänzt, ohne bestehende `Berlins`-Genitivnormalisierung zu übersteuern.
+- Weitere Länder-/Kontinentnamen (`Kanada`, `Japan`, `Amerika`, Großbritannien, Vereinigtes Königreich) werden nicht als Städte gespeichert; Land-plus-Stadt-Klarstellung bleibt möglich.
+- Verifikation: `tests/test_weather_context.py` -> `43 passed`, 19 globale Orts-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `975bed1c fix: normalize global residence locations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
