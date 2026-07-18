@@ -1597,6 +1597,13 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s\s+"
+        r"(?:norden|süden|osten|westen|nord[-\s]?osten|nord[-\s]?westen|"
+        r"süd[-\s]?osten|süd[-\s]?westen)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b(?:ich|i)\s+(?:bin|sein)\s+(?:{_RESIDENCE_LOCATION_ADVERB})\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:zu\s+hause|zuhause|daheim)\b",
         re.IGNORECASE,
