@@ -13035,3 +13035,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Inverse Zuhause- und Wohnsitzlabels
+
+- `Stadt, daheim/dort bin/lebe ich` sowie `Ich habe in Stadt meinen Wohnsitz/meine Bleibe` werden erkannt.
+- Unterschiedliche Wohnorte im selben Satz bleiben durch Konfliktprüfung leer.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, acht Inverse-Home-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1a8f0879 fix: parse inverse home labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
