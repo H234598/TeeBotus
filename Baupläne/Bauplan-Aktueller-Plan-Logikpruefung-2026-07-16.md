@@ -10583,3 +10583,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Klauselbezogene Zukunftsmarker
+
+- Bei `Ab morgen ... Hamburg, derzeit ... Berlin` wird Berlin als aktueller Ort behalten.
+- Zukunftsprüfung nutzt Boundary- und Stadtbeginn passend; historische Marker prüfen weiterhin Patternbeginn.
+- Verifikation: `tests/test_weather_context.py` -> `52 passed`, sechs Zukunft/Aktuell-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `df0d3f6e fix: scope residence future markers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
