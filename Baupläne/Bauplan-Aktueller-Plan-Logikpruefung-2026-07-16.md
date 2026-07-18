@@ -11322,3 +11322,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Genitivische Zentrum-Relationen
+
+- `im Zentrum Münchens`, `in der Innenstadt Münchens`, `Münchens Zentrum/Innenstadt` und `im Zentrum von München` werden erkannt.
+- Fehlcapture `d` aus Innenstadt-Genitiv ist beseitigt.
+- Verifikation: `tests/test_weather_context.py` -> `107 passed`, sechs Zentrum-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a4de032e fix: parse genitive center relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
