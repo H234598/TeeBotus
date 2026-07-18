@@ -8096,6 +8096,22 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `9/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Adapter-Slot bei Identity-Route-Updates erhalten
+
+- `AccountStore.update_identity_route()` ersetzte bei ausgelassenem
+  `adapter_slot` die Route ohne den bisher bekannten Slot. Aeltere Telegram-
+  Pfade fuer Memory, Privacy und Voice rufen die Methode ohne Slot auf; ein
+  Nutzer auf Telegram-Slot 2 konnte dadurch auf Slot 1 zurueckfallen.
+- Bei ausgelassenem Parameter wird ein vorhandener gueltiger Slot jetzt
+  normalisiert uebernommen. Neue Routen behalten weiterhin die implizite
+  Defaultbelegung Slot 1.
+- Verifikation: Identity-Route-Fokus `3 passed`, neuer Preserve-Slot-Test,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `13ed9d80 fix: preserve adapter slots on route updates`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `10/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Reminder-Parser: leere Themen nach benanntem Datum normalisieren
 
 - 2026-07-18: `Erinnere mich an den 20. Juni` entfernte das Datum, liess aber
