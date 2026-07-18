@@ -14388,3 +14388,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Negative Wohnortellipsen
+
+- `bleibt es`, `kein/keinesfalls/niemals`, `nicht als Wohnort` und `Nicht X, sondern Y wohne ich` liefern aktuelle Wohnstadt Y.
+- Nicht-Wohnverben bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, sieben Negative-Ellipse-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `985d9a57 fix: parse negative residence ellipses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
