@@ -8465,6 +8465,19 @@ Restart nach weiteren 20 Code-Fixes.
 **Aktueller Laufstand:** Seit dem Restart `1/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Artikel- und Deiktika-Descriptoren verwerfen
+
+- `der/die/das Berlin`, `dieser Berlin` und `dort Berlin` wurden als Stadt
+  uebernommen.
+- Der enge `_clean_city()`-Guard verwirft nun solche Starts; Wortgrenzen
+  lassen Komposita wie `Dortmund` weiterhin zu.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9ef3aff0 fix: reject residence article descriptors`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-18: Weitere Dauerqualifizierer abdecken
 
 - `seit fast zwei Jahren`, `seit circa/ca. drei Monaten`, `seit rund vier
