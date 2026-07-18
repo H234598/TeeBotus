@@ -929,6 +929,7 @@ def test_extract_residence_city_handles_genitive_and_distance_relations() -> Non
     assert extract_residence_city("Ich wohne um Berlin herum.") == "Berlin"
     assert extract_residence_city("Ich wohne außerhalb der Stadt Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne im nördlichen Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist Münchens Umland.") == "München"
 
 
 def test_extract_residence_city_handles_attributive_area_relations() -> None:
