@@ -10522,3 +10522,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Punktuierte Wohnort-Klarstellungen
+
+- Klarstellungen mit Semikolon, Doppelpunkt und optionalem `in/bei` werden erkannt, z. B. `genauer gesagt: Potsdam`.
+- Länder-/Grobraumangabe vor `genauer gesagt` wird nicht mehr fälschlich als Endort behalten.
+- Verifikation: `tests/test_weather_context.py` -> `47 passed`, vier Klarstellungs-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8b0dab86 fix: parse punctuated residence clarifications`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
