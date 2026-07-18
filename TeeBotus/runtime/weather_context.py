@@ -244,6 +244,37 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:nicht\s+)?[^,.;!?]{1,80}?\s+(?:ist\s+)?(?:nicht\s+)?"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
+        r"[,;]\s*(?:sondern|aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s+(?:ist\s+)?(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b|"
+        r"\s*[.!?;]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"[^,.;!?]{1,80}?(?:\s*,\s*|\s*;\s*|\s+und\s+)"
+        r"(?:aber|doch|jedoch)?\s*(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:lebensmittelpunkt|hauptwohnsitz)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b[^,.;!?]{1,80}?\s+ist\s+(?:meine|unsere)\s+"
+        r"(?:alte|ehemalige|frühere|fruehere)\s+"
+        r"(?:wohnadresse|wohnanschrift|adresse|anschrift|wohnort|wohnsitz)\s*"
+        r"[,;]\s*(?:(?:ist|liegt|befindet\s+sich)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:meine|unsere)\s+"
+        r"(?:aktuelle|jetzige|derzeitige|gegenwärtige|gegenwaertige)\s+"
+        r"(?:wohnadresse|wohnanschrift|adresse|anschrift|wohnort|wohnsitz)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b[^,.;!?]{1,80}\s+(?:ist|war)\s+(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:(?:frühere|fruehere|ehemalige|alte)\s+)?"
         r"(?:heimat|heimatstadt|herkunftsort|herkunftsstadt|geburtsort|geburtsstadt)\s*,\s*"
@@ -3399,9 +3430,16 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
                 r"besser\s+gesagt\b|sprich\b)",
                 second_raw,
             ):
-                second = _clean_city(second_raw)
-                if second and second.casefold() not in (_NON_CITY_RESIDENCE_NAMES | _NON_CITY_REGION_NAMES):
-                    return True
+                if not re.match(
+                    r"(?i)^(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
+                    r"(?:geburtsort|geburtsstadt|heimat|heimatstadt|herkunftsort|herkunftsstadt|"
+                    r"arbeitsort|arbeitsadresse|geschäftsadresse|geschaeftsadresse|"
+                    r"dienstadresse|büroadresse|bueroadresse)\b",
+                    second_raw,
+                ):
+                    second = _clean_city(second_raw)
+                    if second and second.casefold() not in (_NON_CITY_RESIDENCE_NAMES | _NON_CITY_REGION_NAMES):
+                        return True
     multiplicity_source = re.sub(
         r"\ban\s+der\s+Oder\b",
         "",
@@ -3496,12 +3534,39 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 
     residence_cities = collect(residence_patterns)
     address_cities = collect(address_patterns)
+    work_address_cities: set[str] = set()
+    for match in re.finditer(
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
+        r"(?:arbeitsadresse|geschäftsadresse|geschaeftsadresse|dienstadresse|büroadresse|bueroadresse|"
+        r"arbeitsanschrift|dienstanschrift)\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        rf"{city_capture}",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            work_address_cities.add(_city_comparison_key(city))
+    if address_cities and work_address_cities and address_cities.isdisjoint(work_address_cities):
+        return True
     return bool(residence_cities and address_cities and residence_cities.isdisjoint(address_cities))
 
 
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
+    if re.search(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+[^,.;!?]{1,80}?"
+        r"(?:\s*,\s*|\s*;\s*|\s+und\s+)"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:arbeitsort|arbeitsadresse|geschäftsadresse|geschaeftsadresse|dienstadresse|"
+        r"büroadresse|bueroadresse)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
     target_patterns = (
         re.compile(
             rf"\b(?:ich|wir)\s+{residence}\s+(?:in|bei)\s+"
