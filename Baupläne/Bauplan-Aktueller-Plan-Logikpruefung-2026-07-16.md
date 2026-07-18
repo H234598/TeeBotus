@@ -10559,3 +10559,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Heute- und Pronomen-Wohnortwechsel
+
+- `Mein Wohnort war Berlin, jetzt/heute ist er Hamburg` wird sauber auf Hamburg gekürzt.
+- `Früher wohnte/lebte ich in Berlin, heute in Hamburg` erkennt heute als aktuellen Zeitmarker.
+- Verifikation: `tests/test_weather_context.py` -> `50 passed`, vier Zeitwechsel-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c65dfb98 fix: parse today residence transitions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
