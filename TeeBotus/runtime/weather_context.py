@@ -576,6 +576,15 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt|stadt|ort|zuhause|zu\s+hause|daheim)\s+"
+        r"(?:liegt|befindet\s+sich)\s+"
+        r"(?:au(?:ßerhalb|sserhalb)\s+von|am\s+stadtrand\s+von|im\s+umland\s+von|"
+        r"nordöstlich\s+von|nordwestlich\s+von|südöstlich\s+von|südwestlich\s+von|"
+        r"nördlich\s+von|südlich\s+von|östlich\s+von|westlich\s+von)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:mein(?:e)?\s+)?(?:(?:aktuell(?:er|e)?|jetzig(?:er|e)|derzeitig(?:er|e)?|gegenwärtig(?:er|e)?)\s+)?"
         rf"(?:wohnort|wohnsitz|wohnstadt|stadt|ort)\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
@@ -673,7 +682,10 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich\s+wohne|ich\s+lebe|wir\s+wohnen|wir\s+leben|wohn(?:e)?|lebe)\s+"
-        r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|gegend)\s+von|in\s+der\s+stadt|im\s+raum|rund\s+um|nahe|unweit\s+von)\s+"
+        r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|gegend)\s+von|in\s+der\s+stadt|im\s+raum|"
+        r"au(?:ßerhalb|sserhalb)\s+von|am\s+stadtrand\s+von|im\s+umland\s+von|"
+        r"nordöstlich\s+von|nordwestlich\s+von|südöstlich\s+von|südwestlich\s+von|"
+        r"nördlich\s+von|südlich\s+von|östlich\s+von|westlich\s+von|rund\s+um|nahe|unweit\s+von)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
