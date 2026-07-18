@@ -11467,3 +11467,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Herkunft plus aktueller Wohnort
+
+- `stamme aus ...`, `lebe/wohne ...` wird wie bestehendes `komme aus ...` verarbeitet.
+- Übergangswörter `aber` an beiden natürlichen Positionen und `heute` werden erkannt; reine Arbeitsangabe bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `114 passed`, fünf Origin/Current-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `90eee6f7 fix: parse stamme aus residence changes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
