@@ -818,7 +818,8 @@ CITY_PATTERNS = (
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|im|bei)\s+"
         r"(?:(?:meine|meiner|meinem|meinen|mein|unsere|unserer|unserem|unseren|unser|"
         r"eine|einer|einem|eines|ein|der|dem|den)\s+)?"
-        r"(?:wohnung|haus|eigenheim|unterkunft|appartement|apartment|wg)\s+(?:in|bei)\s+"
+        r"(?:wohnung|haus|eigenheim|unterkunft|appartement|apartment|wg|wohnheim|"
+        r"studentenwohnheim|internat)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),

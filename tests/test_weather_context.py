@@ -176,6 +176,9 @@ def test_extract_residence_city_from_wonen_leben_change() -> None:
     assert extract_residence_city("Ich wohne in einer WG in Potsdam.") == "Potsdam"
     assert extract_residence_city("Wir wohnen in unserem Haus in Leipzig.") == "Leipzig"
     assert extract_residence_city("Ich wohne im Haus in Dresden.") == "Dresden"
+    assert extract_residence_city("Ich wohne im Wohnheim in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich lebe in einem Studentenwohnheim bei Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne im Internat in Potsdam.") == "Potsdam"
     assert extract_residence_city("Ich habe eine Wohnung in Berlin.") == ""
     assert extract_residence_city("Ich besitze ein Haus in Hamburg.") == ""
 
