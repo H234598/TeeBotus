@@ -10166,3 +10166,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wohnobjekt-Zwischenphrasen
+
+- `in meiner Wohnung/in meinem Haus/in einer WG in ...` wurde bisher nicht extrahiert; `unserem Haus` konnte als City-Kandidat stehen bleiben.
+- Enger Objektpfad für `wohne/lebe` ergänzt; Besitzsätze ohne Wohnverb bleiben leer, `unser...` wird im Cleanup verworfen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 9 Residence-Object-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `803eea8b fix: parse residence object phrases`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
