@@ -30,7 +30,10 @@ _RESIDENCE_TIME_QUALIFIER = (
     r"weiterhin|nach\s+wie\s+vor|noch\s+immer|immer\s+noch|"
     r"vor(?:uebergehend|übergehend))"
 )
-_RESIDENCE_LOCATION_ADVERB = r"(?:hier|dort|da|direkt|nur|allein)"
+_RESIDENCE_LOCATION_ADVERB = (
+    r"(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
+    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens)"
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -259,6 +262,17 @@ CITY_CHANGE_PATTERNS = (
     ),
 )
 CITY_PATTERNS = (
+    re.compile(
+        r"\b(?:mein(?:e)?\s+)?(?:lebensmittelpunkt|hauptwohnsitz)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich\s+)?habe\s+meinen\s+(?:lebensmittelpunkt|hauptwohnsitz)\s+in\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt|stadt|ort|zu\s+hause|zuhause|daheim)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
