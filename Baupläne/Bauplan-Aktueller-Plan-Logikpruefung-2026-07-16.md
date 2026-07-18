@@ -9752,3 +9752,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Aktivitätsfragmente nicht als Wohnort werten
+
+- `Jetzt in Hamburg arbeite ich` und `Inzwischen bei Hamburg arbeite ich` wurden als Wohnort erkannt.
+- Aktivitätsverben werden in bereinigten City-Kandidaten verworfen; reine Kurzformen `Jetzt in Hamburg` bleiben gültig.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0a858e46 fix: reject activity fragments as residences`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
