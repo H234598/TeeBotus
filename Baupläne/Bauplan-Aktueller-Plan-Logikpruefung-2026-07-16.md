@@ -11334,3 +11334,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Benannte Residence-Klauseln
+
+- `eine Stadt, die München heißt` und `München nennt sich mein Wohnort` werden erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `108 passed`, vier Benennungs-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `80d4ae11 fix: parse named residence clauses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
