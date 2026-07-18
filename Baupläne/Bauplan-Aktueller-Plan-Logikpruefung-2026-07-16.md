@@ -8465,6 +8465,19 @@ Restart nach weiteren 20 Code-Fixes.
 **Aktueller Laufstand:** Seit dem Restart `1/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Weitere Dauerqualifizierer abdecken
+
+- `seit fast zwei Jahren`, `seit circa/ca. drei Monaten`, `seit rund vier
+  Jahren` und `seit mindestens einem Jahr` wurden bisher nicht erkannt.
+- Der Dauerbaustein akzeptiert nun diese gaengigen Naeherungs- und
+  Untergrenzenangaben.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `eb5fdf1a fix: parse approximate residence durations`.
+
+**Aktueller Laufstand:** Seit dem Restart `2/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
