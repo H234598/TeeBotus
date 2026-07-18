@@ -2100,8 +2100,10 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich\s+)?(?:wohne|wohnen|lebe|leben)\s+"
-        r"(?!(?:ich|wir|tue|tun|mal|teils|abwechselnd|aber|doch|jedoch|zwischen|irgendwo|mit|auf|aus|nach|für|fuer|ab|seit|"
-        r"während|waehrend|jetzt|inzwischen|aktuell|derzeit|nun)\b)"
+        r"(?!(?:ich|wir|tue|tun|mal|teils|abwechselnd|aber|doch|jedoch|zwischen|irgendwo|mit|auf|aus|von|nach|für|fuer|ab|bis|seit|"
+        r"während|waehrend|montags?|dienstags?|mittwochs?|donnerstags?|freitags?|samstags?|sonntags?|"
+        r"morgens|vormittags|mittags|nachmittags|abends|nachts|täglich|taeglich|wöchentlich|woechentlich|"
+        r"monatlich|jährlich|jaehrlich|tagsüber|tagsueber|jeden|jede|jedes|alle|an|jetzt|inzwischen|aktuell|derzeit|nun)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
