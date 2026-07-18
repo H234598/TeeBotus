@@ -10070,3 +10070,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Ambige Rand-/Richtungsangaben
+
+- Nach dem neuen Relationpfad wurde `außerhalb von Berlin und Hamburg` fälschlich als Berlin gekürzt; zwei positive Randorte müssen unklar bleiben.
+- Neuer Ambiguitätsguard erkennt Rand-/Richtungsrelationen und schützt Aktivitätszusätze (`arbeite`, `pendle`, `besuche`).
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 6 Perimeter-Ambiguity-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c000e67a fix: reject ambiguous perimeter residences`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
