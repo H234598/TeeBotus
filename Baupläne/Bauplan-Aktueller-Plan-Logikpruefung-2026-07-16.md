@@ -11134,3 +11134,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Richtungsrelation vor Aktivitätskontext
+
+- Stadt-Captures enden vor Konjunktionen; Arbeits-/Studienort wird nicht als zweites Wohnziel gewertet.
+- Verifikation: `tests/test_weather_context.py` -> `94 passed`, sechs Aktivitäts-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `01a8fcb7 fix: bound directional residence captures`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
