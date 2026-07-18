@@ -9839,6 +9839,18 @@ Restart erst bei `20/20`.
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Qualifier nach Possessivlabel
+
+- `Hamburg ist mein jetziges/aktuelles Zuhause` wird korrekt erkannt.
+- Historische Form `früheres Zuhause` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, drei Post-Possessive-Qualifier-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `86bace30 fix: parse post-possessive residence qualifiers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
