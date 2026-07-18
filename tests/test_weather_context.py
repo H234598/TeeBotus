@@ -490,6 +490,8 @@ def test_extract_residence_city_from_plain_negated_change() -> None:
     assert extract_residence_city("Ich lebe nicht in Berlin, sondern in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne nicht in Berlin, sondern in Potsdam.") == "Potsdam"
     assert extract_residence_city("Ich wohne nicht in Berlin sondern in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne zwar in Berlin, aber in Hamburg lebe ich.") == "Hamburg"
+    assert extract_residence_city("Ich lebe zwar in Berlin, aber in Hamburg wohne ich.") == "Hamburg"
     assert extract_residence_city("Ich wohne nicht in Berlin.") == ""
 
 
