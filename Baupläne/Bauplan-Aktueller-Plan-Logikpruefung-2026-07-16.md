@@ -9815,6 +9815,18 @@ Restart erst bei `20/20`.
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Temporale aktuelle Wohnortlabels
+
+- `Eigentlich ist mein Wohnort Hamburg` und `Hamburg ist noch immer mein Wohnort` werden korrekt erkannt.
+- Aktuelle Marker werden erweitert; historische und künftige Marker bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, vier Temporal-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `29ed3096 fix: parse temporal current residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
