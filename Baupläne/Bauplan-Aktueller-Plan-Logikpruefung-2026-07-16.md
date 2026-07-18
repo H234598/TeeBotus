@@ -10437,3 +10437,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Adresswechsel und widersprüchliche Selbst-Orte
+
+- Aktuelle Wohnadressänderungen, PLZ-Adressen sowie `Privatadresse`/`Hauptadresse` ergänzt.
+- Unterschiedliche direkte Wohnort-/Zuhause-/Lebensmittelpunkt-Angaben werden konservativ als Konflikt leer gelassen; explizite Korrekturen mit `aber`/`und ... Wohnort ist` gewinnen.
+- Verifikation: `tests/test_weather_context.py` -> `41 passed`, 13 Adress-/Konflikt-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `606c175b fix: resolve current residence conflicts`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
