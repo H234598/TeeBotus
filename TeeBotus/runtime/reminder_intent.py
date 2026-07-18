@@ -873,6 +873,11 @@ def _reminder_subject(text: str) -> str:
         cleaned,
     )
     cleaned = re.sub(r"(?i)\b(?:naechste|nächste|kommende)\s+woche\b", " ", cleaned)
+    cleaned = re.sub(
+        r"(?i)\b(?:fuer|für)\s+(?=(?:heute|morgen|uebermorgen|übermorgen|naechste|nächste|kommende)\b)",
+        " ",
+        cleaned,
+    )
     cleaned = re.sub(r"(?i)\ban\s+den\s+(?=(?:um|gegen|an|daran)\b|$)", " ", cleaned)
     cleaned = re.sub(
         r"(?i)\b("

@@ -115,6 +115,16 @@ def test_parse_reminder_accepts_compound_weekday_evening() -> None:
     assert intent.subject == "den Arzt"
 
 
+def test_parse_reminder_removes_time_preposition_from_subject() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich für morgen an den Termin",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-06-16T09:00:00+00:00"
+    assert intent.subject == "den Termin"
+
+
 def test_parse_reminder_removes_next_week_from_subject() -> None:
     intent = parse_reminder_intent(
         "Erinnere mich nächste Woche an den Antrag",
