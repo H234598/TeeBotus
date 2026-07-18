@@ -1343,6 +1343,19 @@ def test_extract_residence_city_rejects_bare_region_placeholder() -> None:
     assert extract_residence_city("Ich wohne in der Region Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_handles_quoted_and_lautet_labels() -> None:
+    cases = {
+        'Mein Wohnort lautet: Berlin.': 'Berlin',
+        'Mein Wohnort lautet „Hamburg“.': 'Hamburg',
+        'Mein Wohnort ist "Berlin".': 'Berlin',
+        "Mein Wohnort ist 'Hamburg'.": 'Hamburg',
+        'Mein Wohnort ist (Potsdam).': 'Potsdam',
+        'Wohnort: "Dresden".': 'Dresden',
+    }
+    for text, expected in cases.items():
+        assert extract_residence_city(text) == expected
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"

@@ -99,6 +99,7 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "irgendwo",
         "unklar",
         "egal",
+        "lautet",
         "überall",
         "ueberall",
         "wechselnd",
@@ -2863,6 +2864,16 @@ CITY_PATTERNS = (
         r"\b(?P<city>[^\W\d_][\wÄÖÜäöüß .'-]{1,80})\s+(?:ist|bleibt)\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"adresse|wohnadresse|wohnanschrift|anschrift)\s*"
+        r"(?:ist|liegt|lautet|befindet\s+sich|bleibt|:)\s*(?::\s*)?"
+        r"(?:(?:in|bei)\s+)?[\"'„“‚‘«(]?"
+        r"(?P<city>[^\W\d_][\wÄÖÜäöüß .-]{1,80})"
+        r"[\"'”“’»)]?(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
 )
