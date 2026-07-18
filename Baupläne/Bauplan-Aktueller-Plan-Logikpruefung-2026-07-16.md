@@ -9653,6 +9653,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Explizite Antwortpräfixe
+
+- `Wo wohnst du? Antwort: Berlin`, `Antwort ist Hamburg` und `Antwort lautet: in Potsdam` werden korrekt extrahiert.
+- Mehrfachorte im Antworttext bleiben durch die bestehende Ambiguitätsprüfung gesperrt.
+- Verifikation: `tests/test_weather_context.py` -> `148 passed`, vier Answer-Prefix-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `959e2804 fix: parse explicit residence answer prefixes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
 - Code-Fixes seit Restart: `8afef100`, `9ef3aff0`, `d10f95a1`, `7c18b6ee`, `5d08d5c4`, `a823e158`, `3c36731b`, `f84eb2e7`, `6c4eecd2`, `63c551d1`, `823d5753`, `7b9cf67a`, `706fcb48`.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
