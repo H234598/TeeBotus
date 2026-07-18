@@ -9714,6 +9714,18 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Doppelpunkt-Herkunftslabels
+
+- `Geburtsort: Berlin` bzw. `Herkunftsort: Berlin` mit anschließendem aktuellem Wohnort werden korrekt auf `Hamburg` aufgelöst.
+- Komma-, Semikolon- und Konjunktionsformen sowie Statuswörter werden unterstützt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, drei Colon-Origin-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `16df7c5b fix: parse colon origin residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `20/20` Code-Fixes. Kein Push. Restart jetzt faellig.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
