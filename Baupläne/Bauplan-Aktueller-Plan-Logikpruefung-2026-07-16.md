@@ -12974,3 +12974,16 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zeitplan- und Primärort-Kontext disambiguieren
+
+- `nur am Wochenende` liefert keinen Scheinstadtwert.
+- `manchmal` markiert Mehrfachwohnen; ein expliziter Primärortmarker (`hauptsächlich`, `überwiegend`, …) erlaubt weiterhin den Hauptort.
+- `arbeite/studiere ... wo ich wohne/lebe` liefert die Stadt als Wohnort.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, sechs Schedule-Context-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ca426e63 fix: disambiguate scheduled residence contexts`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
