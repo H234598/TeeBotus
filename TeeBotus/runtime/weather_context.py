@@ -318,6 +318,18 @@ CITY_CHANGE_PATTERNS = (
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
+    re.compile(
+        rf"\b(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+"
+        r"(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:(?:ich|wir)\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:^|[.!?;]\s+)(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
 )
 CITY_PATTERNS = (
     re.compile(
@@ -478,7 +490,8 @@ CITY_TRAILING_STOP_RE = re.compile(
     r"heute|morgen|gestern|gerade|aktuell|jetzt|nun|momentan|derzeit|"
     r"zurzeit|zur\s+zeit|weiterhin|inzwischen|mittlerweile|dauerhaft|"
     r"permanent|ständig|staendig|vor(?:uebergehend|übergehend)|"
-    r"frueh|früh|morgens|vormittags|mittags|nachmittags|abends|nachts|\.|,|;|:|!|\?).*$",
+    r"frueh|früh|morgens|vormittags|mittags|nachmittags|abends|nachts|"
+    r"zuhause|zu\s+hause|daheim|\.|,|;|:|!|\?).*$",
     re.IGNORECASE,
 )
 
@@ -641,27 +654,33 @@ def weather_context_text(account_store: AccountStore, account_id: str) -> str:
 
 def extract_residence_city(text: str) -> str:
     source = str(text or "")
-    for pattern in CITY_CHANGE_PATTERNS:
-        match = pattern.search(source)
-        if not match:
-            continue
-        if _has_unresolved_location_separator(source, match.end("city")):
-            return ""
-        city = _clean_city(match.group("city"))
-        if city:
-            return city
+
+    def latest_match(patterns: tuple[re.Pattern[str], ...]) -> str:
+        candidates: list[tuple[int, str]] = []
+
+        def collect_matches(value: str, offset: int) -> None:
+            for pattern in patterns:
+                for match in pattern.finditer(value):
+                    city_end = offset + match.end("city")
+                    if _has_unresolved_location_separator(source, city_end):
+                        continue
+                    city = _clean_city(match.group("city"))
+                    if city:
+                        candidates.append((offset + match.start("city"), city))
+
+        collect_matches(source, 0)
+        for boundary in re.finditer(r"(?<!\bSt)[.!?;]\s+", source, re.IGNORECASE):
+            collect_matches(source[boundary.end() :], boundary.end())
+        if candidates:
+            return max(candidates, key=lambda candidate: candidate[0])[1]
+        return ""
+
+    city = latest_match(CITY_CHANGE_PATTERNS)
+    if city:
+        return city
     if _has_ambiguous_residence_targets(source):
         return ""
-    for pattern in CITY_PATTERNS:
-        match = pattern.search(source)
-        if not match:
-            continue
-        if _has_unresolved_location_separator(source, match.end("city")):
-            return ""
-        city = _clean_city(match.group("city"))
-        if city:
-            return city
-    return ""
+    return latest_match(CITY_PATTERNS)
 
 
 def _has_ambiguous_residence_targets(source: str) -> bool:
