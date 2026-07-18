@@ -905,7 +905,8 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        rf"\b(?:mein(?:e)?\s+)?{_PRIMARY_RESIDENCE_LABEL}\s+wurde\s+(?:(?:nach|in|zu)\s+)?"
+        rf"\b(?:mein(?:e)?\s+)?{_PRIMARY_RESIDENCE_LABEL}\s+wurde\s+"
+        r"(?:(?:von|aus)\s+[^,.;!?]{1,80}\s+(?:nach|in|zu)\s+|(?:nach|in|zu)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+verlegt\b",
         re.IGNORECASE,
     ),
@@ -1111,7 +1112,8 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt)\s+wurde\s+(?:(?:nach|in|zu)\s+)?"
+        r"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt)\s+wurde\s+"
+        r"(?:(?:von|aus)\s+[^,.;!?]{1,80}\s+(?:nach|in|zu)\s+|(?:nach|in|zu)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+verlegt\b",
         re.IGNORECASE,
     ),
