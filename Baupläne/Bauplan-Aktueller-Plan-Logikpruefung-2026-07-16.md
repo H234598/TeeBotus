@@ -10341,3 +10341,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Invertierte Orts-/Wohnverbformen
+
+- `In Berlin wohne ich`, `Bei meinen Eltern in Berlin wohne ich`, `In Berlin habe ich meinen Wohnsitz` und `In Berlin befindet sich mein Wohnort` wurden bisher verpasst; Kurzpfad las `ich` als City.
+- Direkte, relationale, Haushalts- und Wohnlabel-Inversionen ergänzt; Negation und Arbeitsort bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `35 passed`, 12 Inverted-Location-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2b385355 fix: parse inverted residence locations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
