@@ -12682,3 +12682,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wohnort-Apposition
+
+- `Berlin, mein Wohnort` und `Hamburg, unser Zuhause` werden erkannt.
+- `Berlin, mein Arbeitsort` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Appositions-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `fc0ded1f fix: parse appositive residence statements`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
