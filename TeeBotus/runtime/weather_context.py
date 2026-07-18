@@ -303,6 +303,21 @@ CITY_CHANGE_PATTERNS = (
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
+    re.compile(
+        r"\bwir\s+(?:wohnen|leben|wohnten|lebten)\s+(?:in|bei)\s+[^,.;!?]{1,80}?"
+        r"(?:[.!?]|,|;|[-–—])\s*(?:aber\s+)?"
+        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bwir\s+(?:wohnen|leben)\s+(?:nicht\s+(?:mehr|l(?:aenger|änger))?|nicht)\s+"
+        r"(?:in|bei)\s+[^,.;!?]{1,80}?"
+        r"(?:[.!?]|,|;|[-–—])\s*(?:(?:sondern|aber)\s+)?"
+        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
 )
 CITY_PATTERNS = (
     re.compile(
@@ -337,13 +352,13 @@ CITY_PATTERNS = (
     re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?wir\s+sind\s+"
         rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+wohnhaft\b",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:wohnhaft|ansässig|ansaessig)\b",
         re.IGNORECASE,
     ),
     re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?sind\s+wir\s+"
         rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+wohnhaft\b",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:wohnhaft|ansässig|ansaessig)\b",
         re.IGNORECASE,
     ),
     re.compile(
