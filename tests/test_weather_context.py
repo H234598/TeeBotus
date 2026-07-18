@@ -1108,6 +1108,15 @@ def test_extract_residence_city_handles_labeled_local_districts() -> None:
     assert extract_residence_city("Mein Wohnort ist im Ortsteil Prenzlauer Berg.") == ""
 
 
+def test_extract_residence_city_handles_labeled_center_relations() -> None:
+    assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist im Berliner Zentrum.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist im Zentrum Berlins.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist am Rand Berlins.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist am Berliner Stadtrand.") == "Berlin"
+
+
 def test_extract_residence_city_handles_named_locality_types() -> None:
     assert extract_residence_city("Mein Wohnort liegt im Dorf Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort liegt im Ort Berlin.") == "Berlin"
