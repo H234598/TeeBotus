@@ -11646,3 +11646,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Aktueller Ort als Satzfragment
+
+- `Ich wohnte in Berlin. Jetzt Hamburg` und `Berlin ist nicht mehr mein Wohnort. Jetzt Hamburg` werden erkannt.
+- Arbeitsverb-Folgen bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, sechs Bare-Current-Transition-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `50b08e4f fix: parse bare current residence transitions`.
+
+## Restart-Ledger 2026-07-18
+
+- Service läuft noch mit `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `20/20` Code-Fixes. User-Service-Restart jetzt fällig. Kein Push.
