@@ -14143,3 +14143,16 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Unsichere Wohnortbehauptungen
+
+- Prefixe wie `Vielleicht`, `vermutlich`, `möglicherweise`, `eventuell`, `wahrscheinlich`, `wohl`, `angeblich` und `anscheinend` blockieren Speicherung sicherer Wohnorte.
+- Der Guard arbeitet vor eigentlichen Regex-Matches und verhindert dadurch auch Matchverschiebung auf `wohne in ...`.
+- Direkte Tatsachenformen und explizite Korrekturen bleiben gültig.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, sieben Unsicherheits-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b44c2600 fix: reject uncertain residence claims`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
