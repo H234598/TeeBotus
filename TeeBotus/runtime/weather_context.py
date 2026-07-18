@@ -158,6 +158,19 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:ich|wir)\s+(?:wohnte|wohnten|lebte|lebten)\s+(?:in|bei)\s+[^.!?]{1,80}[.!?]\s*"
+        r"(?:jetzt|heute|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}\s+ist\s+nicht(?:\s+mehr)?\s+mein(?:e)?\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim|lebensmittelpunkt)"
+        r"\s*[.!?;]\s*(?:jetzt|heute|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:(?:früher|frueher|ehemals|damals)\s+war\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?|"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+war)\s+"
         r"(?:mein(?:e)?|unser(?:e)?)?\s*"
