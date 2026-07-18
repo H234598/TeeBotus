@@ -846,6 +846,8 @@ def extract_residence_city(text: str) -> str:
             for pattern in patterns:
                 for match in pattern.finditer(value):
                     city_end = offset + match.end("city")
+                    if _has_historical_residence_prefix(source, offset + match.start()):
+                        continue
                     if _has_unresolved_location_separator(source, city_end):
                         continue
                     city = _clean_city(match.group("city"))
@@ -911,6 +913,17 @@ def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
             r"habe\b|bin\b|mein(?:e)?\b|der\b|die\b|das\b)[A-ZÄÖÜäöüß]",
             segment,
             re.IGNORECASE,
+        )
+    )
+
+
+def _has_historical_residence_prefix(source: str, match_start: int) -> bool:
+    prefix = source[:match_start]
+    sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
+    return bool(
+        re.search(
+            r"(?i)\b(?:ehemalig\w*|frueh\w*|früh\w*|einstig\w*|alt\w*|vorherig\w*)\s*$",
+            sentence,
         )
     )
 
