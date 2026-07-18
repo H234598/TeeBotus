@@ -249,7 +249,9 @@ CITY_CHANGE_PATTERNS = (
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
         r"[,;]\s*(?:sondern|aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
-        r"(?=\s+(?:ist\s+)?(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?=\s+(?:ist\s+)?(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|"
+        r"gegenwärtig|gegenwaertig|vorläufig|vorlaeufig|dauerhaft|temporär|temporaer)?\s*"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b|"
         r"\s*[.!?;]|$)",
         re.IGNORECASE,
@@ -1708,6 +1710,14 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+im\s+"
+        r"(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:er|s)\s+"
+        r"(?:norden|süden|osten|westen|nord[-\s]?osten|nord[-\s]?westen|"
+        r"süd[-\s]?osten|süd[-\s]?westen)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
         r"(?:meinen|meine|mein|unseren|unsere|unser)\s+"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|adresse|wohnadresse|wohnanschrift|anschrift)\s+"
@@ -1717,6 +1727,18 @@ CITY_PATTERNS = (
         r"(?:ist|liegt|lautet|befindet\s+sich|bleibt|:)\s*(?:(?:in|bei)\s+)?)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,70}\s+\([^)]{1,30}\))"
         r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?!(?:aber|doch|jedoch|sondern|jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+"
+        r"(?:(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|gegenwärtig|gegenwaertig)\s+)?"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:aktuell\w*|jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*|"
+        r"vorläufig\w*|vorlaeufig\w*|vorübergehend\w*|dauerhaft\w*|temporär\w*|temporaer\w*|"
+        r"befristet\w*|unbefristet\w*|fest\w*|hauptsächlich\w*|hauptsaechlich\w*|"
+        r"gemeldet\w*|offiziell\w*|privat\w*|tatsächlich\w*|tatsaechlich)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -3018,7 +3040,8 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+ist\s+"
+        r"\b(?!(?:aber|doch|jedoch|sondern|jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+ist\s+"
         r"(?:(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|noch\s+immer|immer\s+noch|weiterhin|"
         r"nach\s+wie\s+vor|gegenwärtig|gegenwaertig|jetzig\w*|vorläufig|vorlaeufig|dauerhaft|permanent|"
         r"temporär|temporaer|vorübergehend|voruebergehend|befristet|unbefristet|kurzfristig|langfristig)\s+)?"
@@ -3503,7 +3526,23 @@ def _has_conflicting_direct_residence_labels(source: str) -> bool:
         city = _clean_city(match.group("city"))
         if city:
             cities.add(_city_comparison_key(city))
-    return len(cities) > 1
+    if len(cities) > 1:
+        return True
+    pair = re.search(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|daheim)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+        r"(?:bleibt|ist)\s+(?:aber|doch|jedoch)?\s*(?:(?:in|bei)\s+)?"
+        r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*[.!?;]|$)",
+        source,
+        re.IGNORECASE,
+    )
+    if pair:
+        first = _clean_city(pair.group("first"))
+        second = _clean_city(pair.group("second"))
+        return bool(first and second and _city_comparison_key(first) != _city_comparison_key(second))
+    return False
 
 
 def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
