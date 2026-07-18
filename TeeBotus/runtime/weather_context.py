@@ -135,6 +135,20 @@ CITY_CHANGE_PATTERNS = (
     re.compile(
         r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
         r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
+        r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+in\s+der\s+stadtmitte\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+        r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
+        r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+in\s+der\s+stadtmitte\s+"
+        r"(?:von\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+        r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
         r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+innerhalb\s+"
         r"(?:(?:des\s+stadtgebiets?|der\s+stadt)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s(?=\s*(?:[.!?;,]|$|"
@@ -259,7 +273,7 @@ CITY_CHANGE_PATTERNS = (
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
         r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         r"(?:in\s+der|im|in\s+einem|in\s+einer|in|am)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:er|s)\s+"
-        r"(?:innenstadt|zentrum|stadtrand|rand|vorstadt|vorort)\b",
+        r"(?:innenstadt|stadtmitte|zentrum|stadtrand|rand|vorstadt|vorort)\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -1340,7 +1354,7 @@ CITY_PATTERNS = (
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:im|in\s+der|in\s+dem|in\s+einem|in\s+einer|in|am)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]*?)er\s+"
-        r"(?:stadtteil|bezirk|innenstadt|stadtrand|rand|vorstadt|vorort|umland|stadtzentrum|zentrum)\b",
+        r"(?:stadtteil|bezirk|innenstadt|stadtmitte|stadtrand|rand|vorstadt|vorort|umland|stadtzentrum|zentrum)\b",
         re.IGNORECASE,
     ),
     re.compile(
