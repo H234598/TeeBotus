@@ -3581,6 +3581,14 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
         re.IGNORECASE,
     ):
         multiplicity_source = re.sub(r"\bmanchmal\b", "", source, flags=re.IGNORECASE)
+    if re.search(
+        r"\b(?:wohne|wohnen|lebe|leben)\b[^.!?;\n]*\b(?:und)\s+"
+        r"(?:der\s+)?(?:umgebung|region|nähe|naehe)\s+von\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}",
+        source,
+        re.IGNORECASE,
+    ):
+        return True
     return bool(
         re.search(
             r"\b(?:wohne|wohnen|lebe|leben)\b[^.!?;\n]*\b(?:mal|manchmal|teils|teilweise|abwechselnd|zwischen|"

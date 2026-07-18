@@ -2091,6 +2091,7 @@ def test_extract_residence_city_rejects_multiple_home_targets() -> None:
     assert extract_residence_city("Mein Zuhause ist in Berlin und Hamburg.") == ""
     assert extract_residence_city("Ich wohne werktags in Berlin und am Wochenende in Hamburg.") == ""
     assert extract_residence_city("Ich wohne wochentags in Berlin und am Wochenende in Hamburg.") == ""
+    assert extract_residence_city("Ich wohne in Berlin und Umgebung von Hamburg.") == ""
     assert extract_residence_city("Ich wohne hauptsächlich in Berlin, manchmal in Hamburg.") == "Berlin"
 
 
