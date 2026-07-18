@@ -1386,6 +1386,8 @@ def test_extract_residence_city_handles_question_answer_forms() -> None:
     assert extract_residence_city("Adresse? Bonn.") == "Bonn"
     assert extract_residence_city("Dein Wohnort: Bonn.") == "Bonn"
     assert extract_residence_city("Wo ist dein Wohnort? Berlin.") == "Berlin"
+    assert extract_residence_city("Wo ist dein Zuhause? Berlin.") == "Berlin"
+    assert extract_residence_city("Wo wohnst du eigentlich: in Hamburg.") == "Hamburg"
     assert extract_residence_city("Wohnst du in Hamburg?") == ""
     assert extract_residence_city("Wo wohnst du?") == ""
     assert extract_residence_city("Ist dein Wohnort Berlin?") == ""
