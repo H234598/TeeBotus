@@ -626,7 +626,10 @@ def _clean_city(value: str) -> str:
         return ""
     if any(char.isdigit() for char in city):
         return ""
-    if re.match(r"(?i)^(?:der|die|das)\s+(?:stadt|nähe|naehe|umgebung|arbeit)\b", city):
+    if re.match(
+        r"(?i)^(?:der|die|das|dies(?:er|e|es)|jen(?:er|e|es)|hier|dort|da)\b",
+        city,
+    ):
         return ""
     if re.match(
         r"(?i)^(?:nahe|innerhalb|außerhalb|ausserhalb|unter|aus|f(?:ür|uer)|"
