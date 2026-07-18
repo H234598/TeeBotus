@@ -8543,6 +8543,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `7/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Primaere Wohnsynonyme erkennen
+
+- `Lebensmittelpunkt`, `Hauptwohnsitz` und `lebe ueberwiegend/hauptsaechlich`
+  wurden bisher nicht erkannt.
+- Eindeutige Primaerwohnanker werden nun verarbeitet; `Heimat` bleibt als
+  Herkunftsbegriff ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f84eb2e7 fix: parse primary residence synonyms`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-18: Weitere Dauerqualifizierer abdecken
 
 - `seit fast zwei Jahren`, `seit circa/ca. drei Monaten`, `seit rund vier
