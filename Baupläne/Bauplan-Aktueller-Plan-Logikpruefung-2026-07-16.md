@@ -12914,3 +12914,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Explizite Unterkunfts- und Mietformen
+
+- `feste Unterkunft`, `Mietwohnung`, `miete eine Wohnung` und `in ... eine Bleibe` werden als Wohnortangabe erkannt.
+- `Ich habe eine Wohnung in ...` und `Ich besitze eine Unterkunft in ...` bleiben Besitzangaben und liefern keinen Wohnort.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, acht Housing-Form-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0aed1174 fix: parse explicit housing residence forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
