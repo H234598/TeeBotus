@@ -12902,3 +12902,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zeitplan-Fragmente nicht als Wohnort werten
+
+- Präpositionslose Sätze mit `von Montag bis Freitag`, `täglich`, `nachts`, `jeden Tag` und ähnlichen Zeitplanpräfixen liefern keinen Scheinstadtwert.
+- Normale Sätze wie `Ich wohne weiterhin in Leipzig` und `Ich wohne in Berlin` bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, acht Schedule-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d77e6495 fix: reject scheduled residence fragments`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
