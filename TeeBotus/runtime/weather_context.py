@@ -2303,6 +2303,16 @@ CITY_PATTERNS = (
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
+    re.compile(
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+ist\s+der\s+ort,\s+"
+        r"in\s+dem\s+ich\s+lebe\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bder\s+ort,\s+in\s+dem\s+ich\s+lebe,\s+ist\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
 )
 CITY_TRAILING_STOP_RE = re.compile(
     r"\s+(?:und|aber|weil|wenn|falls|seit|schon|mit|bei|in|auf|neben|nahe|"
