@@ -14322,3 +14322,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
 - Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Terse Zuhause-Labels
+
+- `Berlin, daheim`, `Potsdam, zuhause` und `Leipzig, zu Hause` liefern den genannten Wohnort.
+- Arbeitskontext `Berlin, dort arbeite ich` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, vier Kurzform-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6627adf3 fix: parse terse home labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
