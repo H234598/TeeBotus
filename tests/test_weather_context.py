@@ -1493,6 +1493,11 @@ def test_extract_residence_city_handles_negated_label_changes() -> None:
     assert extract_residence_city("Mein Wohnort ist nicht Berlin, aber ich arbeite in Hamburg.") == ""
 
 
+def test_extract_residence_city_handles_inverted_label_changes() -> None:
+    assert extract_residence_city("Nicht mehr Berlin, jetzt Hamburg ist mein Wohnort.") == "Hamburg"
+    assert extract_residence_city("Nicht länger Berlin, jetzt in Potsdam ist mein Wohnsitz.") == "Potsdam"
+
+
 def test_repeated_city_updates_deduplicate_duplicate_residence_memories(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
