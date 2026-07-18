@@ -3421,7 +3421,9 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
         r"(?::|=|,)?\s*(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*(?:[,;]|\bund\b)\s*"
         r"(?!(?:aber|doch|jedoch|genauer\b|konkret\b|nämlich\b|naemlich\b|und\s+zwar\b|"
-        r"umgebung\b|region\b|nähe\b|naehe\b))"
+        r"umgebung\b|region\b|nähe\b|naehe\b|"
+        r"(?:mein(?:e)?|unser(?:e)?)?\s*(?:geburtsort|geburtsstadt|heimat|heimatstadt|"
+        r"herkunftsort|herkunftsstadt)\b))"
         r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]*?)\s*(?:[.!?;,]|$)",
         source,
         re.IGNORECASE,
