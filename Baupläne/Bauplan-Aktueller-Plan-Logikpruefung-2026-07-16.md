@@ -9666,6 +9666,18 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Statusqualifizierter aktueller Wohnort
+
+- `in/bei Hamburg wohnhaft/gemeldet/registriert` wird nach Herkunftsangabe als aktueller Wohnort erkannt.
+- Vorwärts- und Reverse-Form teilen dieselbe Statuswortliste; unqualifizierte Präpositionsorte bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, drei Status-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `df8ebbe1 fix: parse status-qualified current residence`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
