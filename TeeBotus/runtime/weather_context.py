@@ -748,12 +748,12 @@ CITY_CHANGE_PATTERNS = (
     ),
     re.compile(
         r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+"
-        r"(?:die|der|das)\s+(?:stadt|ort)\s*,?\s*"
+        r"(?:die|der|das)\s+(?:stadt|ort|platz)\s*,?\s*"
         r"(?:in\s+der|an\s+dem|wo)\s+(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\b",
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:der|die|das)\s+(?:ort|stadt)\s*,?\s*"
+        r"\b(?:der|die|das)\s+(?:ort|stadt|platz)\s*,?\s*"
         r"(?:in\s+der|an\s+dem|wo)\s+(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s*,?\s+ist\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
