@@ -12389,3 +12389,9 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `20/20` Code-Fixes. Restart jetzt erforderlich.
+
+## Restart-Ledger 2026-07-18
+
+- `systemctl --user restart teebotus.service` erfolgreich.
+- Service `active/running`, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
+- Neuer Zyklus: `0/20` Code-Fixes. Kein Push.
