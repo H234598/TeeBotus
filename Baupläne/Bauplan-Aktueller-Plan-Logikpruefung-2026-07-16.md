@@ -9131,3 +9131,16 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `16/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Praepositionen hinter Kontinuitaetsmarkern korrekt parsen
+
+- `Mein Wohnort ist weiterhin in Hamburg` wurde als `in Hamburg` statt als
+  `Hamburg` erkannt.
+- Relationale Labels akzeptieren Zeitqualifizierer nun vor `in/bei`; der
+  direkte Labelpfad behandelt dieselbe Form ohne doppelte Praeposition.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3ef8e8e6 fix: keep residence prepositions out of city names`.
+
+**Aktueller Laufstand:** Seit dem Restart `17/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
