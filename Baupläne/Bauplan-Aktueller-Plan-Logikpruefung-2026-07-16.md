@@ -13232,3 +13232,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Kontinental- und globale Regionen
+
+- `Ausland`, `Inland`, `Europa`, `Afrika`, `Asien`, `Australien` und `Welt` werden nicht als Städte gespeichert.
+- Konkrete Stadtlabels bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `128 passed`, zehn Continental-Region-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d3e45aa4 fix: reject continental residence regions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
