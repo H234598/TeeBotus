@@ -10619,3 +10619,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Aktuelles Label nach Zukunftskontext
+
+- `Mein künftiger Wohnort wird Hamburg, derzeit ist Berlin mein Wohnort` liefert Berlin.
+- Marker-Satz `Derzeit ist Berlin mein Wohnort` wird erkannt; `Arbeitsort` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `55 passed`, drei Current-label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ef5caf3c fix: parse current residence label after future`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
