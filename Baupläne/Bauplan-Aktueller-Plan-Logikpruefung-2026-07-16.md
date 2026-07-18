@@ -12574,3 +12574,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
 - Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Gelabelte Stadt-/Ort-Formen
+
+- `Mein Zuhause ist die Stadt Hamburg` und `Mein Zuhause ist der Ort Potsdam` werden erkannt.
+- `Mein Arbeitsort ist die Stadt Hamburg` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Labeled-City-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `906f3496 fix: parse labeled city residence forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
+- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
