@@ -9980,3 +9980,9 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `20/20` Code-Fixes. Restart jetzt fällig. Kein Push.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` nach 20 Code-Fixes erfolgreich neugestartet.
+- Service aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
