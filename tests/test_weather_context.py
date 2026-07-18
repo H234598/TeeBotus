@@ -1262,6 +1262,16 @@ def test_extract_residence_city_preserves_compound_city_names() -> None:
     assert extract_residence_city("Ich wohne in Neustadt an der Weinstraße.") == "Neustadt an der Weinstraße"
 
 
+def test_extract_residence_city_does_not_split_stopword_prefixes() -> None:
+    assert extract_residence_city("Ich wohne in St. Ingbert.") == "St. Ingbert"
+    assert extract_residence_city("Ich wohne in Ingolstadt.") == "Ingolstadt"
+    assert extract_residence_city("Ich wohne in Immenstadt.") == "Immenstadt"
+    assert extract_residence_city("Ich wohne in Augsburg.") == "Augsburg"
+    assert extract_residence_city("Ich wohne in Alsfeld.") == "Alsfeld"
+    assert extract_residence_city("Ich wohne in Unterhaching.") == "Unterhaching"
+    assert extract_residence_city("Ich wohne in Beilngries.") == "Beilngries"
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"

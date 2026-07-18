@@ -2786,7 +2786,7 @@ CITY_TRAILING_STOP_RE = re.compile(
     r"zur\s+(?:unter|zwischen)miete|nur\s+vor(?:uebergehend|übergehend)|zur\s+miete|"
     r"bis\s+(?:auf\s+weiteres|zum\s+ende\s+(?:des\s+)?(?:monats|jahres)|"
     r"ende\s+(?:des\s+)?(?:monats|jahres))|"
-    r"\.|,|;|:|!|\?).*$",
+    r"\.|,|;|:|!|\?)(?=\s|[.!?;,]|$).*$",
     re.IGNORECASE,
 )
 
