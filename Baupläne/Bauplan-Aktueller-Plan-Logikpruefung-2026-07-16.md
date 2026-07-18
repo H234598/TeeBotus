@@ -8079,6 +8079,21 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `4/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### Reminder-Parser: Wiederholungsintervall mit Uhrzeit erhalten
+
+- 2026-07-18: `alle 2 Tage um 9`, `alle 2 Wochen um 9` und `monatlich um 9`
+  wurden wegen des Uhrzeit-Parsers am naechsten Tag eingeplant. Das verwarf
+  das erkannte Wiederholungsintervall.
+- Zeit-only-Wiederholungen berechnen den ersten Termin jetzt aus dem Intervall
+  und setzen danach die explizite Uhrzeit. Explizite Tage, Daten und relative
+  Anker bleiben autoritativ.
+- Verifikation: `tests/test_reminder_intent.py` -> `47 passed`; `py_compile`,
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: folgt nach Commit.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `5/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### 2026-07-18: Wettercache bei Wohnortwechsel sofort erneuern
 
 - Bei erkannter neuer Wohnstadt wurde der alte Wettertext zwar geloescht,

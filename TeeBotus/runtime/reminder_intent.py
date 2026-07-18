@@ -234,6 +234,8 @@ def parse_reminder_intent(text: str, *, now: datetime | None = None) -> Reminder
     normalized_now = resolved_now if resolved_now.tzinfo else resolved_now.replace(tzinfo=timezone.utc)
     recurrence = _parse_recurrence(raw)
     due_at = _parse_due_at(raw, resolved_now)
+    if due_at and TIME_RE.search(raw) and _recurrence_has_clock_only_anchor(raw, recurrence):
+        due_at = _initial_recurrence_due_with_time(normalized_now, recurrence, raw)
     if recurrence == "weekdays" and due_at:
         due_at = _move_due_to_weekday(due_at, normalized_now)
     if not due_at and recurrence.startswith("every ") and not _has_invalid_explicit_time(raw):
@@ -694,6 +696,42 @@ def _initial_interval_due(now: datetime, recurrence: str) -> str:
     else:
         due = _add_calendar_months(now, count)
     return _iso(due)
+
+
+def _recurrence_has_clock_only_anchor(text: str, recurrence: str) -> bool:
+    if recurrence in {"weekly", "monthly"} or re.fullmatch(r"every\s+\d{1,3}\s+(?:days|weeks|months)", recurrence):
+        normalized = _normalize(text)
+        return not bool(
+            re.search(r"\b(?:heute|morgen|uebermorgen|naechsten|kommenden)\b", normalized)
+            or RELATIVE_RE.search(normalized)
+            or RELATIVE_TEXT_RE.search(normalized)
+            or DAY_WORD_RE.search(normalized)
+            or MONTH_DAY_RE.search(normalized)
+            or MONTH_NAME_DATE_RE.search(normalized)
+            or ISO_RE.search(normalized)
+            or DATE_RE.search(normalized)
+        )
+    return False
+
+
+def _initial_recurrence_due_with_time(now: datetime, recurrence: str, text: str) -> str:
+    if recurrence == "weekly":
+        base = now + timedelta(weeks=1)
+    elif recurrence == "monthly":
+        base = _add_calendar_months(now, 1)
+    else:
+        match = re.fullmatch(r"every\s+(?P<count>\d{1,3})\s+(?P<unit>days|weeks|months)", recurrence)
+        if match is None:
+            return ""
+        count = int(match.group("count"))
+        unit = match.group("unit")
+        if unit == "days":
+            base = now + timedelta(days=count)
+        elif unit == "weeks":
+            base = now + timedelta(weeks=count)
+        else:
+            base = _add_calendar_months(now, count)
+    return _iso(_apply_explicit_time(base, text))
 
 
 def _apply_explicit_time(value: datetime, text: str) -> datetime:
