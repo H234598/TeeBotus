@@ -157,7 +157,8 @@ CITY_PATTERNS = (
     re.compile(r"\b(?:meine\s+stadt|mein\s+wohnort|mein\s+ort)\s+(?:ist|heisst|heißt)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})", re.IGNORECASE),
 )
 CITY_TRAILING_STOP_RE = re.compile(
-    r"\s+(?:und|aber|weil|wenn|falls|seit|mit|bei|heute|morgen|gestern|gerade|aktuell|"
+    r"\s+(?:und|aber|weil|wenn|falls|seit|schon|mit|bei|f(?:ür|uer)|"
+    r"w(?:ährend|aehrend)|zusammen|heute|morgen|gestern|gerade|aktuell|"
     r"frueh|früh|morgens|vormittags|mittags|nachmittags|abends|nachts|\.|,|;|:|!|\?).*$",
     re.IGNORECASE,
 )
