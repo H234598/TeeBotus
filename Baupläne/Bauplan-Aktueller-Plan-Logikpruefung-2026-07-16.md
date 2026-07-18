@@ -9677,6 +9677,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Negierte Wohnortwechsel
+
+- `Mein Wohnort ist keinesfalls Berlin, sondern Hamburg` liefert jetzt den aktuellen Ort `Hamburg`.
+- `nicht ... aber ich arbeite in Hamburg` bleibt leer; Arbeitsort wird nicht als Wohnort umgedeutet.
+- Verifikation: `tests/test_weather_context.py` -> `150 passed`, drei negated-label-change-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `79bc2e7c fix: resolve negated residence label changes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
 - Code-Fixes seit Restart: `8afef100`, `9ef3aff0`, `d10f95a1`, `7c18b6ee`, `5d08d5c4`, `a823e158`, `3c36731b`, `f84eb2e7`, `6c4eecd2`, `63c551d1`, `823d5753`, `7b9cf67a`, `706fcb48`.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
