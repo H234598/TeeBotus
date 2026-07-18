@@ -8013,6 +8013,19 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `5/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Umzugsziel als aktuellen Wohnort erkennen
+
+- `Ich bin von Berlin nach Hamburg gezogen` und `Ich bin umgezogen von Berlin
+  nach Potsdam` wurden nicht erkannt.
+- Klare Umzugsformen extrahieren jetzt nur das Ziel; auch `Ich bin nach
+  Leipzig gezogen` wird unterstuetzt. Herkunft bleibt unberuehrt.
+- Verifikation: `tests/test_weather_context.py` -> `20 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8f8f3d89 fix: parse residence move destinations`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `6/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
