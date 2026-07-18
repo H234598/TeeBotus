@@ -8080,6 +8080,22 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `8/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Wohnortwechsel und Tageszeit im Wetterparser korrigieren
+
+- `Ich wohne in Hamburg nachts` wurde bisher als Stadt `Hamburg nachts`
+  gespeichert. Bei `Ich wohne in Berlin nicht mehr, jetzt in Hamburg` bzw.
+  `nicht mehr bei meiner Mutter, jetzt in Hamburg` wurde der neue Wohnort
+  nicht erkannt.
+- Der Parser behandelt klare Wechselmuster vor dem allgemeinen Wohnsatz und
+  beendet Stadtnamen an Tageszeitwoertern. Arbeits- und Reisesaetze wie
+  `Ich wohne in Berlin und arbeite jetzt in Hamburg` bleiben bei Berlin.
+- Verifikation: `tests/test_weather_context.py` -> `14 passed`; `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `288f989e fix: parse current city after residence changes`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `9/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Reminder-Parser: leere Themen nach benanntem Datum normalisieren
 
 - 2026-07-18: `Erinnere mich an den 20. Juni` entfernte das Datum, liess aber
