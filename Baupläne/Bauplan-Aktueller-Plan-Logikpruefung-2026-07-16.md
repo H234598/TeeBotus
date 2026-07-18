@@ -10933,3 +10933,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Bare Wohnort-Adresslabels
+
+- `Wohnort/Wohnsitz: Straße Nummer, Stadt` wird erkannt; Mehrfachstadt bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `79 passed`, drei Adress-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a95db38d fix: parse bare residence address labels`.
+
+## Aktueller Ledger 2026-07-18-Pre-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `20/20` Code-Fixes. Kein Push.
+- Regel erfüllt: Bot-/Service-Restart jetzt ausführen.
