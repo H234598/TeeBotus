@@ -483,6 +483,18 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:meine|unsere)\s+(?:wohnadresse|wohnanschrift|adresse|anschrift)\s+"
+        r"(?:ist|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+habe(?:n)?\s+(?:meine|unsere)\s+"
+        r"(?:wohnadresse|wohnanschrift|adresse|anschrift)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
         rf"(?:(?:{_RESIDENCE_TIME_QUALIFIER}|{_RESIDENCE_LOCATION_ADVERB})\s+)+"
         r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
