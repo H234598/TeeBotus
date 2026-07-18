@@ -370,6 +370,20 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"(?:^|[.!?;\n]\s*)(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:daheim|zuhause|zu\s+hause)(?=\s*[.!?;]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[.!?;\n]\s*)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*"
+        r"(?:\s+(?!(?:ist|war|bleibt|wird|inzwischen|jetzt|nun|aktuell|derzeit|momentan|"
+        r"mein(?:e)?|unser(?:e)?|dein(?:e)?|wo|ich|wir)\b)[\wÄÖÜäöüß'-]+){0,3}?)\s+"
+        r"(?:daheim|zuhause|zu\s+hause)(?=\s*[.!?;]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"(?:^|[.!?;\n]\s*)(?:früher|frueher|ehemals|damals)\s+(?:in\s+)?"
         r"[^,.;!?]{1,80}\s*,\s*(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+"
         r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
