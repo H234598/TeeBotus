@@ -28,7 +28,7 @@ _RESIDENCE_TIME_QUALIFIER = (
     rf"(?:(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|seitdem|"
     r"jetzt|nun|aktuell|derzeit|gerade|momentan|inzwischen|mittlerweile|"
     r"weiterhin|nach\s+wie\s+vor|noch\s+immer|immer\s+noch|"
-    r"dauerhaft|permanent|ständig|staendig|"
+    r"dauerhaft|permanent|ständig|staendig|wieder|erneut|"
     r"vor(?:uebergehend|übergehend))"
 )
 _RESIDENCE_LOCATION_ADVERB = (
@@ -321,7 +321,8 @@ CITY_CHANGE_PATTERNS = (
     re.compile(
         rf"\b(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+"
         r"(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
-        r"(?:(?:ich|wir)\s+)?(?:in|bei)\s+"
+        r"(?:(?:ich|wir)\s+)?"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
