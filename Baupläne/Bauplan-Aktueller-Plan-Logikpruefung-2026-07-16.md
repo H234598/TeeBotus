@@ -10377,3 +10377,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Invertierte Wohn- und Länder-Klarstellungen
+
+- `Berlin, dort wohne ich`, `In Berlin bin ich zu Hause` und `Ich lebe derzeit in Deutschland, genauer gesagt in Berlin` wurden nicht zuverlässig erkannt.
+- Enge Inversions- und Länder-Klarstellungsmuster ergänzt; semikolon-getrennte widersprüchliche Selbstangaben bleiben konservativ ohne Stadt.
+- Verifikation: `tests/test_weather_context.py` -> `36 passed`, 23 lokale Korpus-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `07c0cf07 fix: parse inverted residence statements`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
