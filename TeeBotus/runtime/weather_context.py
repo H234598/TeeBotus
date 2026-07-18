@@ -1538,6 +1538,24 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
+        r"(?:(?:einen|einem|meinen|meine|mein|unseren|unsere|unser)\s+)?"
+        r"(?:(?:fest\w*|dauerhaft\w*|offiziell\w*|privat\w*|"
+        r"ständig\w*|staendig\w*|stabil\w*)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
+        r"(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:meine|unsere)\s+"
+        r"(?:offiziell\w*|privat\w*|aktuell\w*)\s+"
+        r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+"
+        r"(?:ist|liegt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+eine\s+"
         r"(?:feste|dauerhafte|ständige|staendige|stabile)\s+bleibe\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
@@ -2910,6 +2928,8 @@ def extract_residence_city(text: str) -> str:
                     city_end = offset + match.end("city")
                     if _has_historical_residence_prefix(source, pattern_start):
                         continue
+                    if _has_non_residential_label_prefix(source, pattern_start):
+                        continue
                     if _has_future_residence_prefix(source, pattern_start, city_start):
                         continue
                     if _has_unresolved_location_separator(source, city_end):
@@ -2952,6 +2972,16 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
             r"oder|beziehungsweise|bzw\.?)\b|"
             r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnorte|wohnsitze)\b",
             multiplicity_source,
+            re.IGNORECASE,
+        )
+    )
+
+
+def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
+    return bool(
+        re.search(
+            r"(?:\b(?:dienst\w*|beruf\w*|arbeits[-\s]?\w*)\s*)$",
+            source[:pattern_start],
             re.IGNORECASE,
         )
     )
