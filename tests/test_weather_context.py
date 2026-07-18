@@ -941,6 +941,11 @@ def test_extract_residence_city_handles_attributive_area_relations() -> None:
     assert extract_residence_city("Mein Wohnort liegt in der Berliner Umgebung.") == "Berlin"
 
 
+def test_extract_residence_city_handles_genitive_area_relations() -> None:
+    for area in ("Stadtgebiet", "Stadtrand", "Stadtmitte", "Stadtzentrum", "Vorstadt", "Vorort", "Umland", "Raum"):
+        assert extract_residence_city(f"Ich wohne in Berlins {area}.") == "Berlin"
+
+
 def test_extract_residence_city_normalizes_postposed_area_suffixes() -> None:
     assert extract_residence_city("Mein Wohnort ist nicht in Berlin, sondern in Hamburg-Nähe.") == "Hamburg"
     assert extract_residence_city("Mein Wohnort war in Berlin, jetzt in Hamburg Nähe.") == "Hamburg"

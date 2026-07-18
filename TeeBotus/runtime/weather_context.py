@@ -303,8 +303,10 @@ CITY_CHANGE_PATTERNS = (
     re.compile(
         r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
         r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
-        r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+(?:im|in\s+dem|in\s+der)\s+"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:er|s)\s+stadtgebiet\b",
+        r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+(?:im|in\s+dem|in\s+der|in)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:er|s)\s+"
+        r"(?:stadtgebiet|stadtteil|bezirk|innenstadt|stadtmitte|stadtrand|rand|vorstadt|vorort|"
+        r"umland|stadtzentrum|zentrum|raum|region|gebiet)\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -1489,7 +1491,7 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:im|in\s+der|in\s+dem|in\s+einem|in\s+einer|in|am)\s+"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]*?)er\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]*?)(?:er|(?<!s)s)\s+"
         r"(?:stadtteil|bezirk|innenstadt|stadtmitte|stadtrand|rand|vorstadt|vorort|umland|stadtzentrum|zentrum|raum|region|gebiet)\b",
         re.IGNORECASE,
     ),
