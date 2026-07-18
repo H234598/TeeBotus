@@ -154,7 +154,9 @@ _RESIDENCE_DURATION = (
     r"(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember)(?:\s+\d{4})?|"
     r"(?:dem\s+)?(?:(?:anfang|ende|mitte|beginn|letzte[rnm]?|dies(?:e[mr]?|en)|vergangen(?:e[rnm]?))\s+)?"
     r"(?:\d{1,2}\.\s+)?(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember)(?:\s+\d{4})?|"
-    r"(?:anfang|ende|mitte|beginn)\s+\d{4}|(?:dem\s+)?(?:sommer|winter|frühling|fruehling|herbst|weihnachten|ostern|neujahr)|"
+    r"(?:anfang|ende|mitte|beginn)\s+\d{4}|"
+    r"(?:dem\s+)?\d{1,2}\.\d{1,2}\.(?:\d{2,4})?|"
+    r"(?:dem\s+)?(?:sommer|winter|frühling|fruehling|herbst|weihnachten|ostern|neujahr)|"
     r"(?:(?:ein\s+paar|\w+)\s+(?:tag(?:e|en)?|woche(?:n)?|monat(?:e|en)?|jahr(?:e|en)?)|"
     r"tag(?:e|en)?|woche(?:n)?|monat(?:e|en)?|jahr(?:e|en)?))"
 )
