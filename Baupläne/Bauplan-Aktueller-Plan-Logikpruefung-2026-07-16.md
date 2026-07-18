@@ -7880,6 +7880,19 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `15/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Zusammengeschriebene Reminder-Tageszeiten erkennen
+
+- `Erinnere mich am Freitagabend an den Arzt` wurde als Freitag `09:00`
+  erkannt, weil `Abend` direkt am Wochentag stand.
+- Tageszeitmarker werden jetzt auch in Komposita wie `Freitagabend` erkannt;
+  Wortgrenze am Ende verhindert weiterhin Treffer in `Abendbrot`.
+- Verifikation: `tests/test_reminder_intent.py` -> `56 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2b03d222 fix: parse compound reminder dayparts`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `16/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
