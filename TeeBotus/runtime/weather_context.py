@@ -1600,6 +1600,26 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
                 residence_targets.add(_city_comparison_key(city))
     if len(residence_targets) > 1:
         return True
+    bare_label_conflict = re.search(
+        r"(?:^|[.!?;\n]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
+        r"(?::|=|,)?\s*(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+        r"(?!(?:aber|doch|jedoch|genauer\b|konkret\b|nämlich\b|naemlich\b|und\s+zwar\b))"
+        r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]*?)\s*(?:[.!?;,]|$)",
+        source,
+        re.IGNORECASE,
+    )
+    if bare_label_conflict:
+        first = _clean_city(bare_label_conflict.group("first"))
+        second_raw = bare_label_conflict.group("second").strip()
+        second = _clean_city(bare_label_conflict.group("second"))
+        if (
+            first
+            and not re.match(r"(?i)^(?:in|bei)\s+", second_raw)
+            and second
+            and second.casefold() not in (_NON_CITY_RESIDENCE_NAMES | _NON_CITY_REGION_NAMES)
+        ):
+            return True
     if re.search(
         rf"\b{residence}\s+(?:mal|teils)\s+(?:in|bei)\s+[^,.;!?]+,\s*"
         r"(?:mal|teils)\s+(?:in|bei)\s+[^,.;!?]+",
