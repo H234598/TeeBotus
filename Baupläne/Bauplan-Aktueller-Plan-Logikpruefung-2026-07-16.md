@@ -14156,3 +14156,16 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Ausgeschriebene Entfernungsangaben
+
+- Zahlwörter wie `fünf`, `zehn`, `zwanzig`, `hundert` und `tausend` sind im Distanzpräfix gültig.
+- `fünf Kilometer von Berlin entfernt` und `fünf Kilometer außerhalb von Berlin` liefern Berlin.
+- Arbeitskontext bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, sechs Distanz-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `85ffc991 fix: parse residence distance forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
