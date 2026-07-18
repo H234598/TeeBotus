@@ -847,7 +847,7 @@ CITY_CHANGE_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich|wir)\s+(?:bin|sind)\s+(?:in|bei|nach)\s+"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:eingezogen|sesshaft\s+geworden)\b",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:eingezogen|sesshaft(?:\s+geworden)?)\b",
         re.IGNORECASE,
     ),
     re.compile(
