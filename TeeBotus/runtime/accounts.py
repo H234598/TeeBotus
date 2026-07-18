@@ -2103,6 +2103,13 @@ class AccountStore:
             }
             if adapter_slot is not None:
                 route["adapter_slot"] = int(adapter_slot)
+            else:
+                previous_route = payload.get("last_route")
+                previous_slot = previous_route.get("adapter_slot") if isinstance(previous_route, dict) else None
+                if isinstance(previous_slot, int) and not isinstance(previous_slot, bool) and previous_slot >= 1:
+                    route["adapter_slot"] = previous_slot
+                elif isinstance(previous_slot, str) and previous_slot.strip().isdecimal() and int(previous_slot) >= 1:
+                    route["adapter_slot"] = int(previous_slot)
             payload["last_route"] = route
             payload["last_seen_at"] = route["last_seen_at"]
             identities[key] = payload

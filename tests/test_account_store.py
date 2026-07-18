@@ -1172,6 +1172,19 @@ def test_identity_route_is_stored_encrypted_and_read_back(tmp_path):
     assert "395935293" not in raw_identity_file
 
 
+def test_identity_route_update_without_slot_preserves_existing_adapter_slot(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    identity = telegram_identity_key(395935293)
+    store.resolve_or_create_account(identity)
+
+    store.update_identity_route(identity, channel="telegram", chat_id="395935293", chat_type="private", adapter_slot=2)
+    store.update_identity_route(identity, channel="telegram", chat_id="395935293", chat_type="private")
+
+    route = store.get_identity_route(identity)
+    assert route is not None
+    assert route["adapter_slot"] == 2
+
+
 def test_identity_route_normalizes_channel_and_chat_type(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     identity = signal_identity_key(source_uuid="abc")
