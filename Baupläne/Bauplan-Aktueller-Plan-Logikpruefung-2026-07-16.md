@@ -10269,3 +10269,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Vollständige Wohnadressen
+
+- Straßen-/Hausnummern in Wohnangaben wurden bisher als gesamter City-Kandidat verworfen; Kommaform wurde zusätzlich fälschlich als Ortsambiguität behandelt.
+- Wohnverb-, Wohnlabel- und Anschrift-Muster extrahieren jetzt nur Zielstadt nach Straße/Nummer; Straßenbestandteile bleiben außerhalb Memory.
+- Verifikation: `tests/test_weather_context.py` -> `30 passed`, 10 Address-/Ambiguity-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5f1335b9 fix: parse residential street addresses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
