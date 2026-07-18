@@ -9740,3 +9740,15 @@ Restart erst bei `20/20`.
 - `systemctl --user restart teebotus.service` erfolgreich.
 - Service aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Neuer Zähler seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Gemeinsame Wohnortlabels disambiguieren
+
+- `Wir wohnen in Berlin und unser Wohnort ist Hamburg` wurde verworfen; `Unser Wohnort ist Berlin und Hamburg` wurde als Berlin übernommen.
+- Explizite gemeinsame Wohnortlabels werden jetzt als letzter Wohnort berücksichtigt; Arbeitsortzusätze bleiben erlaubt, echte Doppelorte bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `25f2d3b2 fix: disambiguate shared residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
