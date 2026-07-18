@@ -2015,6 +2015,10 @@ def test_extract_residence_city_handles_confidence_adverbs() -> None:
     assert extract_residence_city("Ich nehme an, ich wohne in Berlin.") == ""
     assert extract_residence_city("Soweit ich weiß, wohne ich in Berlin.") == ""
     assert extract_residence_city("Soweit ich weiss, wohne ich in Berlin.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, glaube ich.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, denke ich.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, vermute ich.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, nehme ich an.") == ""
 
 
 def test_extract_residence_city_handles_additional_location_adverbs() -> None:

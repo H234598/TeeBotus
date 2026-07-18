@@ -3635,6 +3635,8 @@ def extract_residence_city(text: str) -> str:
                         continue
                     if _has_historical_residence_suffix(source, city_end):
                         continue
+                    if _has_uncertain_residence_suffix(source, city_end):
+                        continue
                     if _has_temporal_residence_suffix_text(match.group("city")):
                         continue
                     city = _clean_city(match.group("city"))
@@ -4161,6 +4163,18 @@ def _has_historical_residence_suffix(source: str, city_end: int) -> bool:
         re.match(
             r"(?i)\s+(?:(?:wohnhaft|ansässig|ansaessig)\s+)?(?:gewesen|worden|frueher|frühere?\b|"
             r"ehemals|damals|vormalig\w*)\b",
+            sentence,
+        )
+    )
+
+
+def _has_uncertain_residence_suffix(source: str, city_end: int) -> bool:
+    tail = source[city_end:]
+    sentence = re.split(r"(?<!\bSt)[.!?;]", tail, maxsplit=1, flags=re.IGNORECASE)[0]
+    return bool(
+        re.match(
+            r"(?i)\s*,?\s*(?:glaube|denke|vermute)\s+ich\b|"
+            r"\s*,?\s*(?:nehme\s+ich\s+an|soweit\s+ich\s+weiß|soweit\s+ich\s+weiss)\b",
             sentence,
         )
     )
