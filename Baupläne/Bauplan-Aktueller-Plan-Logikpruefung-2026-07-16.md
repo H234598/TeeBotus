@@ -8533,6 +8533,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `6/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Erweiterte Umzugsformulierungen erkennen
+
+- `Ich bin aus Berlin nach Hamburg gezogen/umgezogen` und `von ... nach
+  ... umgezogen` wurden bisher nicht erkannt.
+- Ein gemeinsamer Zielstadtpfad akzeptiert nun `von/aus` sowie beide
+  Umzugsverben.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8dcc3df5 fix: parse extended move phrases`.
+
+**Aktueller Laufstand:** Seit dem Restart `7/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
