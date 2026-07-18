@@ -10546,3 +10546,16 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Bare-Label-Klarstellungen und Ortswechsel
+
+- Bare Labels wie `Wohnort Deutschland, genauer gesagt in Berlin` werden auf die konkrete Stadt aufgelöst.
+- `Wohnort Berlin, aber jetzt Hamburg` und `Daheim: Berlin, aber jetzt Hamburg` verwenden den expliziten letzten Wohnort.
+- Unmarkierte Aufzählungen bleiben durch den Konfliktguard leer.
+- Verifikation: `tests/test_weather_context.py` -> `49 passed`, fünf Bare-Label-Change-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `db9047b0 fix: resolve bare residence label changes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
