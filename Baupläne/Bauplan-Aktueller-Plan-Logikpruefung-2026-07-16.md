@@ -13256,3 +13256,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zitierte Wohnortlabels
+
+- `Mein Wohnort lautet: Berlin`, deutsche Anführungszeichen, ASCII-Anführungszeichen und Klammerwerte werden korrekt gelesen.
+- `lautet` wird nicht mehr als Stadtfragment gespeichert.
+- Verifikation: `tests/test_weather_context.py` -> `130 passed`, sechs Quoted-Lautet-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `857c8667 fix: parse quoted residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
