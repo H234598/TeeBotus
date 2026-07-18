@@ -95,6 +95,14 @@ _NON_CITY_REGION_NAMES = frozenset(
         "schleswig-holstein",
         "mecklenburg-vorpommern",
         "niedersachsen",
+        "norddeutschland",
+        "süddeutschland",
+        "sueddeutschland",
+        "westdeutschland",
+        "ostdeutschland",
+        "mitteldeutschland",
+        "ruhrgebiet",
+        "rheinland",
     }
 )
 _IRREGULAR_CITY_ADJECTIVE_BASES = {

@@ -1015,6 +1015,8 @@ def test_extract_residence_city_rejects_region_names_as_cities() -> None:
     assert extract_residence_city("Mein Wohnort ist in Brandenburg.") == ""
     assert extract_residence_city("Ich wohne im Raum Bayern.") == ""
     assert extract_residence_city("Mein Wohnort ist in der Region Hessen.") == ""
+    assert extract_residence_city("Ich wohne in Norddeutschland.") == ""
+    assert extract_residence_city("Mein Wohnort liegt im Ruhrgebiet.") == ""
 
 
 def test_extract_residence_city_handles_outside_city_relations() -> None:
