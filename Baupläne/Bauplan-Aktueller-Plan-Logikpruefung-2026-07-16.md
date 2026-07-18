@@ -11687,3 +11687,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Expliziter Kontrast-Wohnsatz
+
+- `Berlin ist nicht mein Wohnort, sondern ich lebe in Hamburg` liefert Hamburg statt `ich lebe`.
+- Arbeitsverb bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Contrast-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3984d604 fix: parse explicit contrast residence clauses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
