@@ -12950,3 +12950,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Ortsarten Landkreis und Dorf
+
+- `auf dem/einem Dorf bei/in ...` sowie `im Kreis/Landkreis ...` werden als Ortsangabe erkannt.
+- `arbeite im Landkreis ...` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Locality-Form-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7c7513b9 fix: parse district and village residence forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
