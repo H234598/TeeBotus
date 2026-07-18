@@ -10221,3 +10221,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Invertierte und umgangssprachliche Wohnangaben
+
+- `Wohnhaft bin ich in ...`, `Berlin bleibt mein Wohnort`, `Ich hab' meinen Wohnsitz in ...` und aktuelle Rückwechsel wurden bisher verpasst.
+- Invertierte aktuelle Wohnlabels und `hab`-Formen ergänzt; `ehemals` blockiert neue invertierte Treffer weiterhin als historisch.
+- Verifikation: `tests/test_weather_context.py` -> `26 passed`, 15 Inversion-/Historien-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d0020476 fix: parse inverted residence statements`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
