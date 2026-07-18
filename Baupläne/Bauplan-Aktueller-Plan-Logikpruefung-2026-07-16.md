@@ -12938,3 +12938,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Erweiterte Herkunfts-Wohnbestätigung
+
+- Kommaform, `weiterhin`/`immer noch` sowie `bin dort wohnhaft/ansässig` werden zusätzlich erkannt.
+- `Ich komme aus Berlin, wohne aber jetzt in Hamburg` bleibt als Ortswechsel geschützt und liefert Hamburg.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, sieben Origin-and-There-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2baacd88 fix: broaden origin residence confirmations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
