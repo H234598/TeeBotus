@@ -2183,8 +2183,8 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:ich\s+)?habe\s+meinen\s+(?:festen|ständigen|staendigen|permanenten)\s+"
-        r"(?:wohnort|wohnsitz|hauptwohnsitz)\s+in\s+"
+        r"\b(?:ich\s+)?habe\s+(?:meinen|einen)\s+(?:festen|ständigen|staendigen|permanenten)\s+"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
