@@ -48,6 +48,25 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "frueher",
     }
 )
+_NON_CITY_REGION_NAMES = frozenset(
+    {
+        "brandenburg",
+        "bayern",
+        "hessen",
+        "sachsen",
+        "sachsen-anhalt",
+        "thueringen",
+        "thüringen",
+        "nordrhein-westfalen",
+        "baden-württemberg",
+        "baden-wuerttemberg",
+        "rheinland-pfalz",
+        "saarland",
+        "schleswig-holstein",
+        "mecklenburg-vorpommern",
+        "niedersachsen",
+    }
+)
 _RESIDENCE_DURATION = (
     r"(?:(?:mehr\s+als|über|ueber|knapp|gut|etwa|ungefähr|ungefaehr|"
     r"fast|circa|ca\.|rund|mindestens|hoechstens|höchstens)\s+)?"
@@ -71,6 +90,19 @@ _RESIDENCE_LOCATION_ADVERB = (
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
+    re.compile(
+        r"\b(?:ich\s+)?(?:wohne|lebe)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
+        r"(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s+"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+[^,.;!?]{1,80},\s*"
+        r"(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s+"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
     re.compile(
         rf"\b{_RESIDENCE_TIME_QUALIFIER}\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         r"(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
@@ -924,6 +956,31 @@ def extract_residence_city(text: str) -> str:
 
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb)"
+    for pattern in (
+        re.compile(
+            rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}},\s*"
+            r"(?!(?:aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|"
+            r"besuch\w*|pendl\w*|reis\w*|genauer\b|konkret\b|nämlich\b|naemlich\b|"
+            r"und\s+zwar\b|besser\s+gesagt\b|sprich\b))"
+            r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*)\s*(?:[.!?;]|$)",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
+            r"(?:ist|liegt|befindet\s+sich|bleibt)\s+[^,.;!?]{1,80},\s*"
+            r"(?!(?:aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|"
+            r"besuch\w*|pendl\w*|reis\w*|genauer\b|konkret\b|nämlich\b|naemlich\b|"
+            r"und\s+zwar\b|besser\s+gesagt\b|sprich\b))"
+            r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*)\s*(?:[.!?;]|$)",
+            re.IGNORECASE,
+        ),
+    ):
+        comma_match = pattern.search(source)
+        if comma_match and comma_match.group("second").casefold() not in (
+            _NON_CITY_RESIDENCE_NAMES | _NON_CITY_REGION_NAMES
+        ):
+            return True
     if re.search(
         rf"\b{residence}\s+(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung)\s+von|im\s+raum|"
         r"rund\s+um|nahe|unweit\s+von|au(?:ßerhalb|sserhalb)\s+von|am\s+stadtrand\s+von|im\s+umland\s+von|"
