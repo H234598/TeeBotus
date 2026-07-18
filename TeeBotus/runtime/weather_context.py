@@ -3784,7 +3784,11 @@ def _has_conflicting_direct_residence_labels(source: str) -> bool:
         r"(?:^|[.!?;,\n]\s*)(?:aber|doch|jedoch|sondern|jetzt|nun|aktuell|derzeit)?\s*"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
-        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|daheim)\b",
+        r"(?:(?:aktuell\w*|derzeit\w*|jetzig\w*|gegenwärtig\w*|gegenwaertig\w*|"
+        r"gemeldet\w*|offiziell\w*|amtlich\w*|neu\w*|privat\w*)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|meldeadresse|meldeanschrift|adresse|anschrift|"
+        r"zuhause|zu\s+hause|daheim)\b",
         re.IGNORECASE,
     )
     for match in pattern.finditer(source):
