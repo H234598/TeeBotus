@@ -13107,3 +13107,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Gemeinsamer Haushaltskontext ohne Ort
+
+- `gemeinsam mit Partnerin/Familie` ohne konkrete Stadt wird nicht mehr als Wohnort gespeichert.
+- Die Form mit nachfolgender Stadt bleibt erkennbar.
+- Verifikation: `tests/test_weather_context.py` -> `118 passed`, zwei Shared-Household-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ae367502 fix: reject shared household context without city`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv vor dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `20/20` Code-Fixes. Restart jetzt faellig. Kein Push.
