@@ -11066,3 +11066,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Label-Richtungsrelationen
+
+- Nördlich/westlich und kombinierte Richtungen werden als Stadtanker extrahiert.
+- Adjektiv-, Stadtadjektiv- und Genitivform sind abgedeckt.
+- Verifikation: `tests/test_weather_context.py` -> `90 passed`, sechs Richtungs-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4fbc5cf9 fix: parse labeled direction relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
