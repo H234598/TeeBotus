@@ -34,6 +34,19 @@ _RESIDENCE_LOCATION_ADVERB = r"(?:hier|dort|da|direkt|nur|allein)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:ich\s+)?(?:wohne|lebe)\s+(?:in|bei)\s+[^,.;!?]{1,80}[.!?]\s*"
+        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+(?:ich\s+)?(?:wohne|lebe)(?:\s+ich)?\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt|stadt|ort|zu\s+hause|zuhause|daheim)\s+"
+        r"(?:ist|liegt|befindet\s+sich)\s+[^,.;!?]{1,80}[.!?]\s*"
+        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+(?:ich\s+)?(?:wohne|lebe)(?:\s+ich)?\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt|stadt|ort|zu\s+hause|zuhause|daheim)\s+"
         r"(?:ist|liegt|befindet\s+sich)\s+"
         r"nicht(?:\s+mehr)?\s+(?:(?:in|bei)\s+)?[^,.;!?]{1,80}?"
