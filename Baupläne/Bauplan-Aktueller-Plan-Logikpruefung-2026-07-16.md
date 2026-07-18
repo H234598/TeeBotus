@@ -10721,3 +10721,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Label-Regionen normalisieren
+
+- `im/am <Stadt>er Umland/Stadtrand`, Genitiv-Umgebung, `in der Gegend um` und `um ... herum` liefern Referenzstadt statt Relationsrest.
+- Verifikation: `tests/test_weather_context.py` -> `62 passed`, fünf Relations-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f24e96bd fix: normalize labeled residence regions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
