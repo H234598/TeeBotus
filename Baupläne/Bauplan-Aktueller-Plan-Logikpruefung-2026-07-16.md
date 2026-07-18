@@ -9682,3 +9682,16 @@ Restart erst bei `20/20`.
 - Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
+
+### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
+
+- Mehrere Wechsel in einer Nachricht (`Berlin -> Hamburg -> Potsdam`) lieferten bisher den ersten aktuellen Ort.
+- Treffer werden jetzt zusätzlich auf Satzsuffixen gesammelt und nach absoluter Position bewertet; Aktivitätsorte wie `arbeite jetzt in` bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4c3616c3 fix: prefer latest residence mention`.
+
+## Aktueller Ledger 2026-07-18-True-Tail-Final
+
+- Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+- Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
