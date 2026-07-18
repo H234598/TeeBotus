@@ -10257,3 +10257,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Richtungs- und Randlagen mit `von`
+
+- `im Norden/Süden/Osten/Westen von ...` und `am Rand von ...` wurden bisher nicht als Wohnortrelation erkannt.
+- Wohnverb-/Wohnlabel-Pfad ergänzt; zwei Zielstädte bleiben ambig, Arbeitskontext nach erster Stadt bleibt geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `29 passed`, 8 Direction-/Edge-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `64781681 fix: parse directional residence relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
