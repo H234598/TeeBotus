@@ -13119,3 +13119,8 @@ Restart erst bei `20/20`.
 
 - Service aktiv vor dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `20/20` Code-Fixes. Restart jetzt faellig. Kein Push.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
