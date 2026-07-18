@@ -2188,7 +2188,9 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:meine|unsere|mein|unser)\s+(?:meldadresse|meldeadresse|meldeanschrift|meldesitz)\s+"
+        r"\b(?:meine|unsere|mein|unser)\s+"
+        r"(?:(?:aktuell\w*|amtlich\w*|neu\w*|gemeldet\w*)\s+)?"
+        r"(?:meldadresse|meldeadresse|meldeanschrift|meldesitz)\s+"
         r"(?:ist|liegt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
         r"(?=\s*(?:[.!?;,]|$))",
@@ -2215,7 +2217,8 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?:ich|wir)\s+(?:bin|sind)\s+(?:(?:derzeit|aktuell|gegenwärtig|gegenwaertig)\s+)?"
         r"(?:in|bei)\s+(?![^.!?;,]*\b(?:beruflich|dienstlich|zur\s+schule|zur\s+arbeit)\b)"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+registriert\b",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:amtlich\s+)?registriert\b",
         re.IGNORECASE,
     ),
     re.compile(
