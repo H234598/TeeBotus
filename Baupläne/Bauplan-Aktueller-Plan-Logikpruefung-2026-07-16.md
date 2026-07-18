@@ -14224,3 +14224,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Widersprüchliche Gebietsziele
+
+- `Berlin und Umgebung von Hamburg` sowie analoge `Region`-/`Nähe`-Formen werden nicht mehr fälschlich als Berlin gespeichert.
+- Das gültige Einzelziel `Berlin und Umgebung` bleibt erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, vier Gebiets-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ed1ea265 fix: reject conflicting area residence targets`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
