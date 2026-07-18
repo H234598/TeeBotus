@@ -12101,3 +12101,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Relativsatz `dort, wo ich arbeite`
+
+- `Ich wohne dort, wo ich arbeite: in Hamburg` und die Komma-Variante liefern Hamburg.
+- Auch die umgekehrte Aussage `Ich arbeite dort, wo ich wohne: in Hamburg` bleibt als Wohnortbezug erkennbar.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Relative-Work-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `48a5e106 fix: parse residence relative work clauses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
