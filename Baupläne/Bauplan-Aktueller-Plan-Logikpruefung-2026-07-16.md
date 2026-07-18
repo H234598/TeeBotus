@@ -9920,3 +9920,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Siedlungsdescriptoren und Nähe-Relationen
+
+- `im Dorf`, `kleines Dorf`, `Vorort/Vorstadt`, `Mein Wohnort ist ein Dorf` und `auf dem Land in der Nähe von ...` wurden bisher nicht erkannt.
+- Spezifische Relationen werden vor dem generischen `in` geprüft; unvollständige Descriptoren ohne konkrete Stadt bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 8 gezielte Settlement-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e686876c fix: parse settlement residence descriptors`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
