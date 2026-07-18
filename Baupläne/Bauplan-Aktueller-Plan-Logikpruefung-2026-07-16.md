@@ -9851,6 +9851,18 @@ Restart erst bei `20/20`.
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Statuswort-Grenzen bei Wohnortlabels
+
+- `gemeldeter Wohnsitz` wird nicht mehr in `er Wohnsitz` zerlegt; `Hamburg` bleibt Ergebnis.
+- Statusverben werden nur noch an vollständigen Wortgrenzen erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, sechs Status-Adjective-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b108919e fix: enforce residence status word boundaries`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
