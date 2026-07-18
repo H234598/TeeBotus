@@ -91,6 +91,21 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:ich|wir)\s+habe(?:n)?\s+mich\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:niedergelassen|angesiedelt)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:bin|sind)\s+(?:in|bei|nach)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:eingezogen|sesshaft\s+geworden)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:ließ|liess|ließen|liessen)\s+mich\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+nieder\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich\s+)?(?:wohne|lebe)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
         r"(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s+"
         r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
