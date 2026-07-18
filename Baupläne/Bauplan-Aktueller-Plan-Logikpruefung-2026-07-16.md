@@ -10679,3 +10679,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Direkte Wohnortbeziehungen
+
+- `Ich nenne Berlin mein Zuhause`, `Berlin nenne ich mein Zuhause`, `Berlin als Wohnort` und `Ich bin in Berlin daheim` werden erkannt.
+- Arbeitsort-Beziehungen bleiben ausgeschlossen; gieriger Capture wurde auf lazy Stadtgrenze korrigiert.
+- Verifikation: `tests/test_weather_context.py` -> `60 passed`, fünf Home-Relationship-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a08616d2 fix: parse direct home relationships`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
