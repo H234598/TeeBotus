@@ -8726,6 +8726,19 @@ Restart erst bei `20/20`.
 - Service aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
 - Neuer Zaehler seit diesem Restart: `0/20` Code-Commits. Kein Push.
 
+### Folgefix 2026-07-18: Negierte Mehrsatz-Wohnortwechsel
+
+- `Ich wohne nicht mehr in Berlin. Jetzt/Sondern in Hamburg` blieb bisher
+  leer.
+- Negierte Wohnsaetze akzeptieren nun Satzgrenze, Aktualitaetsmarker und
+  Zielpraeposition; Arbeitsverben ohne `in/bei` werden nicht uebernommen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8afef100 fix: parse sentence-separated residence negation`.
+
+**Aktueller Laufstand:** Seit dem Restart `1/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
