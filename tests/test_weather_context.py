@@ -969,6 +969,14 @@ def test_extract_residence_city_handles_direct_adjectival_rand() -> None:
     assert extract_residence_city("Ich wohne am Berliner Rand.") == "Berlin"
 
 
+def test_extract_residence_city_handles_adjectival_vorstadt_relations() -> None:
+    assert extract_residence_city("Ich wohne in der Münchner Vorstadt.") == "München"
+    assert extract_residence_city("Mein Wohnort ist in einem Münchner Vorort.") == "München"
+    assert extract_residence_city("Mein Wohnort liegt in Münchens Vorort.") == "München"
+    assert extract_residence_city("Ich lebe in einem Vorort von München.") == "München"
+    assert extract_residence_city("Mein Wohnort ist in Berliner Vorstadt.") == "Berlin"
+
+
 def test_extract_residence_city_handles_stadtgebiet_relations() -> None:
     assert extract_residence_city("Ich wohne im Münchner Stadtgebiet.") == "München"
     assert extract_residence_city("Ich wohne im Stadtgebiet von München.") == "München"

@@ -258,8 +258,8 @@ CITY_CHANGE_PATTERNS = (
     re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
         r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
-        r"(?:in\s+der|im|am)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:er|s)\s+"
-        r"(?:innenstadt|zentrum|stadtrand|rand)\b",
+        r"(?:in\s+der|im|in\s+einem|in\s+einer|in|am)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:er|s)\s+"
+        r"(?:innenstadt|zentrum|stadtrand|rand|vorstadt|vorort)\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -1117,7 +1117,7 @@ CITY_PATTERNS = (
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         r"(?:in\s+)?(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s\s+(?:nähe|naehe|umgebung|umland)\b",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s\s+(?:nähe|naehe|umgebung|umland|vorstadt|vorort)\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -1337,9 +1337,9 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
-        r"(?:im|in\s+der|in\s+dem|am)\s+"
+        r"(?:im|in\s+der|in\s+dem|in\s+einem|in\s+einer|in|am)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]*?)er\s+"
-        r"(?:stadtteil|bezirk|innenstadt|stadtrand|rand|umland|stadtzentrum|zentrum)\b",
+        r"(?:stadtteil|bezirk|innenstadt|stadtrand|rand|vorstadt|vorort|umland|stadtzentrum|zentrum)\b",
         re.IGNORECASE,
     ),
     re.compile(
