@@ -8628,6 +8628,20 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `13/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Wohnortlabel-Wechsel mit Aktualitaetsmarker
+
+- `Wohnort ist in Berlin; jetzt/inzwischen in Hamburg` und die `und jetzt`
+  Variante wurden bisher nicht aktualisiert.
+- Labels mit Komma, Semikolon, Gedankenstrich oder `und` akzeptieren nun einen
+  eindeutigen Aktualitaetsmarker plus verpflichtendes `in/bei`; Arbeitslabels
+  bleiben unangetastet.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1b7f3374 fix: parse labeled residence changes`.
+
+**Aktueller Laufstand:** Seit dem Restart `14/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
