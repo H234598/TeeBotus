@@ -7837,6 +7837,22 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `12/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Reminder-Tageszeiten und Wochenanker korrekt behandeln
+
+- `Denk bitte heute Abend an den Einkauf` wurde trotz Tageszeit als `09:00`
+  geplant. Tageszeitwoerter liefern jetzt konservative Defaults: frueh 09,
+  vormittags 10, mittags 12, nachmittags 15, abends 18, nachts 21.
+- `naechste Woche`/`nächste Woche` blieb im Betreff und `an den Antrag` verlor
+  durch ein zu loses Lookahead den Artikel `den`. Wochenanker werden aus dem
+  Betreff entfernt; das ungenaue Zeitfenster bleibt `missing_time`, und
+  Lookaheads erkennen nur ganze Woerter.
+- Verifikation: `tests/test_reminder_intent.py` -> `52 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `03f5d6f4 fix: parse reminder dayparts and week anchors`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `13/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
