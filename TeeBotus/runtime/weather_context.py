@@ -173,6 +173,12 @@ _KNOWN_COMPOUND_CITY_NAMES = {
     "st. georgen im schwarzwald": "St. Georgen im Schwarzwald",
     "wörth am rhein": "Wörth am Rhein",
 }
+_KNOWN_CITY_DISTRICT_BASES = {
+    "berlin-mitte": "Berlin",
+    "berlin-kreuzberg": "Berlin",
+    "hamburg-altona": "Hamburg",
+    "köln-deutz": "Köln",
+}
 _GENITIVE_CITY_REPAIRS = {
     "pari": "Paris",
     "reim": "Reims",
@@ -4187,6 +4193,9 @@ def _clean_city(value: str) -> str:
     known_compound_city = _KNOWN_COMPOUND_CITY_NAMES.get(normalized_source.casefold())
     if known_compound_city:
         return known_compound_city
+    known_city_district_base = _KNOWN_CITY_DISTRICT_BASES.get(normalized_source.casefold())
+    if known_city_district_base:
+        return known_city_district_base
     if re.search(r"(?i)\s+(?:oder|sowie|bzw\.?|beziehungsweise)\s+", source):
         return ""
     first_sentence = re.split(r"(?<!\bSt)[.!?;]\s+", source, maxsplit=1, flags=re.IGNORECASE)[0]
