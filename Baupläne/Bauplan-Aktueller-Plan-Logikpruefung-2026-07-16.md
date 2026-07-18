@@ -12526,3 +12526,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wohnort-Frage mit Antwort
+
+- `Wo ich wohne? In Berlin`, `Wo lebe ich: in Hamburg` und `Wo wohnen wir? Bei Potsdam` werden als Wohnortantwort erkannt.
+- Arbeitsfrage `Wo arbeite ich?` bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Question-Answer-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b2392aff fix: parse residence question answers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
