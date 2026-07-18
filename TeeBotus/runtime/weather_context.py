@@ -1131,9 +1131,8 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:ich\s+)?(?:wohne|lebe)\s+(?:in|bei)\s+[^,.;!?]{1,80}?"
-        r"(?:,|;|[-–—])\s*(?:aber\s+)?(?:jetzt|nun|aktuell|derzeit|"
-        r"inzwischen|mittlerweile|seitdem)\s+(?:in|bei)\s+"
+        rf"\b(?:ich\s+)?(?:wohne|lebe)\s+(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+[^,.;!?]{{1,80}}?"
+        rf"(?:,|;|[-–—])\s*(?:aber\s+)?(?:{_RESIDENCE_TIME_QUALIFIER})\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
