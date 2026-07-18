@@ -1257,6 +1257,13 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:meine|unsere|mein|unser)\s+(?:meldadresse|meldeadresse|meldeanschrift|meldesitz)\s+"
+        r"(?:ist|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:meine|unsere)\s+(?:wohnung|wg|unterkunft)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
         r"(?P<city>(?![^.!?;,]*\s+(?:und|oder)\s+)"
