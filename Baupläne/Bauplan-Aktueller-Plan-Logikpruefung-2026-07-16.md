@@ -12137,3 +12137,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zeitqualifizierter Wohnortwechsel
+
+- `Ich wohne aktuell in Hamburg, seit Januar in Berlin` erkennt Berlin als jüngeren aktuellen Wohnort.
+- Erster Wohnort darf nun ebenfalls Zeitqualifier tragen; Zukunftsangaben und Arbeitsort-Wechsel bleiben korrekt getrennt.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier temporal-change-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3b0d48bd fix: resolve residence changes with duration qualifiers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Vor Restart: Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `20/20` Code-Fixes. Restart jetzt fällig. Kein Push.
