@@ -13184,3 +13184,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Parenthesized-Registration-Labels
+
+- `Halle (Saale)` wird auch bei `gemeldet/ansässig`, `Bleibe` und `Ich habe in ... meinen Wohnsitz` erkannt.
+- Arbeits- und Geburtsortlabels bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `124 passed`, sechs Parenthetical-Registration-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `59879672 fix: parse parenthetical registration labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
