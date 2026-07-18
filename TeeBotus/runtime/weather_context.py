@@ -54,6 +54,8 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "nun",
         "aktuell",
         "derzeit",
+        "momentan",
+        "gerade",
         "inzwischen",
         "mittlerweile",
         "seit",
@@ -100,6 +102,9 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "irgendwo",
         "unklar",
         "egal",
+        "daheim",
+        "zuhause",
+        "zu hause",
         "lautet",
         "überall",
         "ueberall",
@@ -3597,6 +3602,7 @@ def _clean_city(value: str) -> str:
         r"(?i)^(?:der|die|das|den|dem|des|dies(?:er|e|es)|jen(?:er|e|es)|"
         r"welch(?:er|e|es)|irgendein|mehrere|einige|manche|ohne|unbekannt\w*|"
         r"unbestimmt\w*|ab|wird|soll|geplant\w*|voraussichtlich|künftig|kuenftig|zukünftig|zukuenftig|"
+        r"aktuell|derzeit|momentan|gerade|jetzt|nun|inzwischen|mittlerweile|unklar|egal|"
         r"nimmer|werktags|wochentags|hier|dort|da|"
         r"vielleicht|vermutlich|wahrscheinlich|wohl|angeblich|laut|derzeitig|ist|sind|bin|lautet|heißt|heisst|nennt|genannt|keineswegs|keinesfalls|niemals|nirgendwo|nirgends|nie|fast|beinahe|"
         r"möglicherweise|moeglicherweise|könnte|koennte|wäre|waere|würde|wuerde|"

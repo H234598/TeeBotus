@@ -1479,6 +1479,14 @@ def test_extract_residence_city_handles_explicit_answer_prefixes() -> None:
     assert extract_residence_city("Wo wohnst du? Antwort: Berlin und Hamburg.") == ""
 
 
+def test_extract_residence_city_rejects_unresolved_label_states() -> None:
+    assert extract_residence_city("Wohnort ist momentan unklar.") == ""
+    assert extract_residence_city("Wohnort ist aktuell unbekannt.") == ""
+    assert extract_residence_city("Wohnort ist derzeit egal.") == ""
+    assert extract_residence_city("Wohnort ist daheim.") == ""
+    assert extract_residence_city("Wohnort ist aktuell Berlin.") == "Berlin"
+
+
 def test_repeated_city_updates_deduplicate_duplicate_residence_memories(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
