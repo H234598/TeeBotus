@@ -12221,3 +12221,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Begrenzte Wohnzeiträume vor Ortsangabe
+
+- `für zwei Wochen/ein Jahr in ...` wird wie die bestehende Dauer nach der Ortsangabe erkannt.
+- Nichtzeitliche Phrasen mit `für` werden nicht als Wohnort gewertet.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Bounded-Duration-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4513e5a3 fix: parse bounded residence durations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
