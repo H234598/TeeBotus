@@ -8050,6 +8050,20 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `0/20` Code-Commits. Kein Push.
 Restart nach weiteren 20 Code-Fixes.
 
+### Reminder-Parser: leere Themen nach benanntem Datum normalisieren
+
+- 2026-07-18: `Erinnere mich an den 20. Juni` entfernte das Datum, liess aber
+  den Artikel `den` als Reminder-Thema zurueck. Numerische Datumsformen fielen
+  bereits korrekt auf `deinen Termin` zurueck.
+- Einzelne Artikelreste werden jetzt ebenfalls als leeres Thema behandelt.
+  Das Datum und die Uhrzeit bleiben unveraendert.
+- Verifikation: `tests/test_reminder_intent.py` -> `44 passed`; `py_compile`,
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: folgt nach Commit.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `3/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### 2026-07-18: Wettercache bei Wohnortwechsel sofort erneuern
 
 - Bei erkannter neuer Wohnstadt wurde der alte Wettertext zwar geloescht,

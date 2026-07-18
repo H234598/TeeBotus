@@ -808,6 +808,21 @@ def _reminder_subject(text: str) -> str:
     )
     cleaned = re.sub(r"(?i)\b(?:erinnern|erinnerst|erinnere?)\b", " ", cleaned)
     cleaned = re.sub(r"\s+", " ", cleaned).strip(" \t\r\n.,:;!?-")
+    if cleaned.casefold() in {
+        "der",
+        "die",
+        "das",
+        "den",
+        "dem",
+        "des",
+        "ein",
+        "eine",
+        "einen",
+        "einem",
+        "einer",
+        "eines",
+    }:
+        return "deinen Termin"
     return cleaned[:240] or "deinen Termin"
 
 

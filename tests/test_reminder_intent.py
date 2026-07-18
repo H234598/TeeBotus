@@ -222,6 +222,26 @@ def test_parse_reminder_accepts_numeric_date_after_an_den_marker() -> None:
     assert intent.subject == "den Termin"
 
 
+def test_parse_reminder_uses_default_subject_for_bare_named_date() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich an den 20. Juni um 9.",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-06-20T09:00:00+00:00"
+    assert intent.subject == "deinen Termin"
+
+
+def test_parse_reminder_uses_default_subject_for_bare_named_date_without_time() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich an den 20. Juni.",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-06-20T09:00:00+00:00"
+    assert intent.subject == "deinen Termin"
+
+
 def test_parse_reminder_keeps_date_subject_after_relative_time() -> None:
     intent = parse_reminder_intent(
         "Erinnere mich in 2 Stunden an den 20.06.",
