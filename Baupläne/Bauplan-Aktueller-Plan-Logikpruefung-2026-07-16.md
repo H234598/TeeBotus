@@ -12801,3 +12801,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Herzen-von-/Genitiv-Ortsform
+
+- `Ich wohne im Herzen von Hamburg` und `Ich lebe im Herzen Berlins` werden erkannt und Genitiv normalisiert.
+- Arbeitsverb bleibt ausgeschlossen; bekannte `-s`-Stadtnamen bleiben erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Heart-of-City-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a0db5ddd fix: parse heart-of-city residence forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
