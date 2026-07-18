@@ -1487,6 +1487,12 @@ def test_extract_residence_city_rejects_unresolved_label_states() -> None:
     assert extract_residence_city("Wohnort ist aktuell Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_handles_negated_label_changes() -> None:
+    assert extract_residence_city("Mein Wohnort ist keinesfalls Berlin, sondern Hamburg.") == "Hamburg"
+    assert extract_residence_city("Mein Wohnort ist nie Berlin, aber jetzt Potsdam.") == "Potsdam"
+    assert extract_residence_city("Mein Wohnort ist nicht Berlin, aber ich arbeite in Hamburg.") == ""
+
+
 def test_repeated_city_updates_deduplicate_duplicate_residence_memories(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
