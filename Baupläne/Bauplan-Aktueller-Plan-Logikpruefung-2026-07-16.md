@@ -8434,6 +8434,23 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `0/20` Code-Commits. Kein Push.
 Restart nach weiteren 20 Code-Fixes.
 
+### 2026-07-18: Veraltete generierte Wohnort-Memories ersetzen
+
+- Nach Berlin -> Potsdam blieben beide automatisch erzeugten
+  `mem_residence_city_*`-Eintraege aktiv; die Memory-Auswahl lieferte dadurch
+  zwei aktuelle Wohnorte.
+- Beim Wechsel werden alte generierte Wohnort-Entries jetzt atomar aus
+  Entries/Index entfernt, bevor der neue aktuelle Eintrag geschrieben wird.
+  Snapshot/Rollback schuetzt den alten Zustand bei Schreibfehlern.
+- Verifikation: `tests/test_weather_context.py` -> `24 passed`,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e0246899 fix: replace stale residence memories`.
+- Restart: `systemctl --user restart teebotus.service` erfolgreich; Service
+  `active`.
+
+**Aktueller Laufstand:** Seit dem Restart `1/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Natuerliche Zeitangaben beim Wohnort erkennen
 
 - `Ich wohne seit kurzem in Berlin`, `Ich lebe seit einiger Zeit in Leipzig`
