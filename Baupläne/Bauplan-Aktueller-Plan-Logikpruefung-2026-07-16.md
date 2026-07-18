@@ -9803,6 +9803,18 @@ Restart erst bei `20/20`.
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Vorangestellte aktuelle Adverbien
+
+- `Eigentlich/Aktuell/Derzeit/Momentan Hamburg ist mein Wohnort` liefert `Hamburg`.
+- `Nächstes Jahr Hamburg ...` bleibt als Zukunftsfragment abgelehnt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, fünf Leading-Adverb-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `37e6c5b2 fix: reject future year residence fragments`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
