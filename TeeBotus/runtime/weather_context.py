@@ -1542,6 +1542,18 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:das\s+ist\s+)?(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:zuhause|zu\s+hause|daheim|bleibe)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:ist|bleibt)\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+(?:(?:feste|dauerhafte|ständige|staendige|stabile)\s+)?"
+        r"(?:zuhause|zu\s+hause|daheim|bleibe)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+(?:eine\s+)?"
         r"(?:(?:feste|dauerhafte|ständige|staendige|stabile)\s+)?"
         r"(?:unterkunft|bleibe|mietwohnung)\s+(?:in|bei)\s+"
