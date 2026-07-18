@@ -8065,6 +8065,21 @@ Restart nach weiteren 20 Code-Fixes.
 **Aktueller Laufstand:** Seit dem letzten Restart `7/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Zeitlich verneinte Reminder und Aussagesaetze sperren
+
+- `Sag mir morgen nicht Bescheid` und `Denk morgen nicht an ...` konnten trotz
+  Verneinung als Proactive-Reminder angelegt werden, weil `nicht` erst nach
+  dem Zeitwort kam. Auch `Du erinnerst mich ...` wurde als Auftrag erkannt.
+- Parser und optionaler strukturierter Classifier verwerfen jetzt solche
+  Negationen bzw. Pronomen-Aussagen. Inhalt wie `Erinnere mich daran, nicht zu
+  rauchen` bleibt weiterhin ein gueltiges Reminder-Thema.
+- Verifikation: `tests/test_reminder_intent.py` -> `50 passed`; `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a4b04abd fix: reject temporal reminder negations`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `8/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Reminder-Parser: leere Themen nach benanntem Datum normalisieren
 
 - 2026-07-18: `Erinnere mich an den 20. Juni` entfernte das Datum, liess aber
