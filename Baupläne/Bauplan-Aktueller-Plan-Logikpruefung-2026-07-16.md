@@ -9695,3 +9695,16 @@ Restart erst bei `20/20`.
 - Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
 - Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
+
+### Folgefix 2026-07-18: Wiederholte Wohnortmarker erkennen
+
+- `Jetzt wohne ich wieder in Hamburg` wurde wegen `wieder` zwischen Verb und Präposition bisher übersehen.
+- `wieder` und `erneut` sind jetzt Zeitqualifizierer; Aktivitätsformen wie `arbeite wieder in` bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `dd95eebf fix: parse repeated residence markers`.
+
+## Aktueller Ledger 2026-07-18-True-Tail-Final
+
+- Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+- Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
