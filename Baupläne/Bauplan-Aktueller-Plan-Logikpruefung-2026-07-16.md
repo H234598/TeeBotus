@@ -9998,3 +9998,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Vergangene Wohnstatus nicht übernehmen
+
+- `Ich war wohnhaft/ansässig in ...` wurde durch den freistehenden Statuspfad fälschlich als aktueller Wohnort gespeichert.
+- Freistehende `Wohnhaft/Ansässig in ...`-Formen benötigen jetzt Satzanfang oder sicheren `bin/sind`-Präfix; `war/früher/ehemals` bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 8 Past/Current-Wohnhaft-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `caea6f4a fix: reject past residence status`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
