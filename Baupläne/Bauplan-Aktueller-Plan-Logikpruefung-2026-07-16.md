@@ -7972,6 +7972,20 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `2/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Zuhause-Wohnortangaben erkennen
+
+- `Ich bin in Berlin zuhause` und `Ich bin in Hamburg zu Hause` wurden nicht
+  erkannt. Ein Satz wie `Ich bin bei meiner Freundin zuhause` darf dagegen
+  keine Personenbezeichnung als Stadt speichern.
+- Der Wetterparser erkennt jetzt explizite Zuhause-Muster; der Negativfall
+  bleibt durch bestehende City-Bereinigung ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `17 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `14ff92b2 fix: parse home residence phrases`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `3/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
