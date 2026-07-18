@@ -317,7 +317,8 @@ CITY_CHANGE_PATTERNS = (
         r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         r"(?:(?:im|in\s+der|in\s+einem|in\s+einer)\s+"
         r"(?:dorf|ort|gemeinde)|(?:ein(?:e|em|er)?|der|die|das)\s+gemeinde)\s+"
-        r"(?:(?:namens|genannt)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        r"(?:(?:namens|genannt)\s+)?(?:nahe|unweit\s+von|rund\s+um|bei)?\s*"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
