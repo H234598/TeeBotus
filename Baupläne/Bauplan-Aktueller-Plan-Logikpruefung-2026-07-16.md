@@ -8559,6 +8559,20 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `8/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Konkurrierende Wohnorte nicht raten
+
+- `Ich wohne in Berlin und Hamburg` sowie `... und lebe in Hamburg` wurden
+  bisher faelschlich als Berlin gespeichert.
+- Eindeutige Wechselpfade werden zuerst ausgewertet; danach verwirft ein
+  enger Guard konkurrierende Wohnziele ohne Aktualitaetsmarker. Arbeits- und
+  Alltagssätze bleiben gültig.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a7da6952 fix: reject ambiguous residence targets`.
+
+**Aktueller Laufstand:** Seit dem Restart `9/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
