@@ -7930,6 +7930,20 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `18/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Präpositionalen Wohnortkontext abschneiden
+
+- `Ich wohne in Berlin in einer WG`, `auf dem Land`, `neben meinen Eltern`,
+  `nahe der Innenstadt` und `innerhalb der Stadt` lieferten bisher keinen
+  sauberen Stadtnamen.
+- Diese Begleitpräpositionen werden nun als Trailing-Stop erkannt. Die
+  Wortgrenze verhindert Treffer mitten in Ortsnamen.
+- Verifikation: `tests/test_weather_context.py` -> `22 passed`,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5b7fb503 fix: trim prepositional residence context`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `19/20` Code-Commits. Kein
+Push. Restart nach dem nächsten Code-Fix.
+
 ### Gemini-Keyring: Cursor nach Route/Modell isolieren
 
 - 2026-07-17: `RotatingAPIKeyRing` nahm zwar `name` entgegen, Registry-State
