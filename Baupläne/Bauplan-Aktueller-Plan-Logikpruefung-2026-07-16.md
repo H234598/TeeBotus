@@ -9642,6 +9642,18 @@ Restart erst bei `20/20`.
 - Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Benennungsformen für Wohnort
+
+- `Hamburg heißt/heisst mein Wohnort`, `wird als mein Wohnort genannt` und `nennt man meinen Wohnort` liefern `Hamburg`.
+- Gleichlautende Arbeitsortformen bleiben abgelehnt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, fünf Naming-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ba521c39 fix: parse naming residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Umschreibung des Geburtsorts
 
 - `Berlin ist der/ein Ort meiner Geburt, Hamburg mein Wohnort` liefert `Hamburg`.
