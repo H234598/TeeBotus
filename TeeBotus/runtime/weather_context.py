@@ -2888,7 +2888,7 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b[^,.;!?]{1,80}\s+ist\s+(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"\b[^,.;!?]{1,80}\s+(?:ist|war)\s+(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:(?:frühere|fruehere|ehemalige|alte)\s+)?"
         r"(?:heimat|heimatstadt|herkunftsort|herkunftsstadt|geburtsort|geburtsstadt)"
         r"(?:\s*,\s*|\s+und\s+)"
