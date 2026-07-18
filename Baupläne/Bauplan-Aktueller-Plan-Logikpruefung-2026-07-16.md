@@ -10425,3 +10425,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wohnort-Klarstellungen und Labelvarianten
+
+- Region-plus-Relation (`in Brandenburg bei Berlin`), Klarstellungen mit `aber` oder ohne zweites `in`, Komma nach Elternrelation sowie `wird genannt`/`heißt` werden jetzt korrekt aufgelöst.
+- Spätere Präzisierung gewinnt gegenüber grober erster Ortsangabe; vorhandene Ambiguitätsguards bleiben aktiv.
+- Verifikation: `tests/test_weather_context.py` -> `40 passed`, 13 Klarstellungs-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5dfaa42d fix: parse residence clarification forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
