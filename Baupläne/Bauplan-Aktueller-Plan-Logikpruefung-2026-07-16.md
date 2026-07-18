@@ -12659,3 +12659,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Bare-Wohnhaft-Phrase
+
+- `In Berlin wohnhaft` wird als Berlin erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, ein Bare-Residence-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9ecc3087 fix: parse bare wohnhaft residence phrases`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
