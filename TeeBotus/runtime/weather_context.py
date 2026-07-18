@@ -133,7 +133,8 @@ CITY_CHANGE_PATTERNS = (
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+und\s+"
         r"(?:(?:(?:ich|wir)\s+)?(?:arbeite\w*|studier\w*|lern\w*|schlaf\w*|"
         r"besuch\w*|reis\w*|pendl\w*|fahr\w*|geh\w*|komm\w*)|"
-        r"(?:meine|unsere)\s+(?:arbeit|studium|ausbildung|schule)\b|"
+        r"(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+        r"(?:arbeit|studium|ausbildung|schule)\b|"
         r"(?:(?:ich|wir)\s+)?bin\s+(?:heute|gerade|nur|unterwegs)\b)",
         re.IGNORECASE,
     ),
@@ -148,7 +149,8 @@ CITY_CHANGE_PATTERNS = (
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+und\s+"
         r"(?:(?:(?:ich|wir)\s+)?(?:arbeite\w*|studier\w*|lern\w*|schlaf\w*|"
         r"besuch\w*|reis\w*|pendl\w*|fahr\w*|geh\w*|komm\w*)|"
-        r"(?:meine|unsere)\s+(?:arbeit|studium|ausbildung|schule)\b|"
+        r"(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+        r"(?:arbeit|studium|ausbildung|schule)\b|"
         r"(?:(?:ich|wir)\s+)?bin\s+(?:heute|gerade|nur|unterwegs)\b)",
         re.IGNORECASE,
     ),
@@ -183,7 +185,8 @@ CITY_CHANGE_PATTERNS = (
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+und\s+"
         r"(?:(?:ich|wir)\s+(?:arbeite\w*|studier\w*|lern\w*|schlaf\w*|"
         r"besuch\w*|reis\w*|pendl\w*|fahr\w*|geh\w*|komm\w*)|"
-        r"(?:meine|unsere)\s+(?:arbeit|studium|ausbildung|schule)\b|"
+        r"(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+        r"(?:arbeit|studium|ausbildung|schule)\b|"
         r"(?:ich|wir)\s+bin\s+(?:heute|gerade|nur|unterwegs)\b)",
         re.IGNORECASE,
     ),
@@ -194,7 +197,8 @@ CITY_CHANGE_PATTERNS = (
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+und\s+"
         r"(?:(?:ich|wir)\s+(?:arbeite\w*|studier\w*|lern\w*|schlaf\w*|"
         r"besuch\w*|reis\w*|pendl\w*|fahr\w*|geh\w*|komm\w*)|"
-        r"(?:meine|unsere)\s+(?:arbeit|studium|ausbildung|schule)\b|"
+        r"(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+        r"(?:arbeit|studium|ausbildung|schule)\b|"
         r"(?:ich|wir)\s+bin\s+(?:heute|gerade|nur|unterwegs)\b)",
         re.IGNORECASE,
     ),
