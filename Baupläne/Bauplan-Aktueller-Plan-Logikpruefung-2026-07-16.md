@@ -10607,3 +10607,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Sofortiger versus geplanter Beginn
+
+- `ab sofort` wird als aktueller Zeitmarker erkannt und extrahiert die Stadt.
+- `ab morgen` und `ab nächstem Jahr` bleiben geplante Orte und werden nicht als aktueller Wohnort gespeichert.
+- Verifikation: `tests/test_weather_context.py` -> `54 passed`, drei Sofort/Planstart-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e1c1eb47 fix: distinguish immediate residence start`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
