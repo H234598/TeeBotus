@@ -581,7 +581,15 @@ def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
     tail = source[city_end:]
     boundary = re.search(r"[.!?;\n]", tail)
     segment = tail if boundary is None else tail[: boundary.start()]
-    return bool(re.match(r"\s*(?:/|&)\s*[A-ZÄÖÜäöüß]", segment, re.IGNORECASE))
+    return bool(
+        re.match(
+            r"\s*(?:/|&)\s*(?!arbeite\b|studiere\b|lerne\b|schlafe\b|"
+            r"besuche\b|reise\b|pendle\b|fahre\b|gehe\b|komme\b|"
+            r"habe\b|bin\b|mein(?:e)?\b|der\b|die\b|das\b)[A-ZÄÖÜäöüß]",
+            segment,
+            re.IGNORECASE,
+        )
+    )
 
 
 def fetch_weather_summary(city: str) -> str:
