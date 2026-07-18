@@ -9729,6 +9729,11 @@ Restart erst bei `20/20`.
 
 - Service bisher aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `20/20` Code-Fixes. Kein Push.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
