@@ -7959,6 +7959,19 @@ Push. Restart jetzt faellig.
 **Aktueller Laufstand:** Seit dem letzten Restart `1/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Zeitqualifizierte Wohnsaetze erkennen
+
+- `Seit 2024 lebe ich in Hamburg` und `Ich lebe seit 2024 in Potsdam` wurden
+  nicht als Wohnort erkannt.
+- Wohn-/Lebenssaetze mit Jahresanker werden jetzt vor dem generischen Pattern
+  erkannt; reine Herkunftssaetze bleiben weiterhin ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `16 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bc6bd9db fix: parse time-qualified residence cities`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `2/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
