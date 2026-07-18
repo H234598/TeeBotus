@@ -10233,3 +10233,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zukünftige Wohnorte nicht als aktuell speichern
+
+- `Ab nächstem Jahr`, `bald`, `künftig`, `zukünftig` und `Nächstes Jahr ist mein Wohnort ...` wurden teilweise als aktueller Wohnort erkannt.
+- Future-Prefix-Guard ergänzt; geplante Umzüge mit `ziehen` werden als Nicht-Wohnaktivität behandelt und überschreiben aktuelle Stadt nicht.
+- Verifikation: `tests/test_weather_context.py` -> `27 passed`, 7 Future-Residence-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `dff7a93f fix: reject future residence claims`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
