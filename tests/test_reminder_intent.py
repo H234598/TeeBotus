@@ -148,6 +148,16 @@ def test_parse_reminder_applies_morning_daypart_to_relative_calendar_time() -> N
     assert intent.subject == "den Termin"
 
 
+def test_parse_reminder_moves_compound_coming_weekday_to_next_week() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich kommenden Montagabend an den Termin",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-06-22T18:00:00+00:00"
+    assert intent.subject == "den Termin"
+
+
 def test_parse_reminder_removes_next_week_from_subject() -> None:
     intent = parse_reminder_intent(
         "Erinnere mich nächste Woche an den Antrag",

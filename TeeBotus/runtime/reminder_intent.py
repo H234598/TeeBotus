@@ -511,7 +511,11 @@ def _parse_due_at(text: str, now: datetime) -> str:
     if weekday:
         target_weekday = DAY_WORDS[weekday.group("day").casefold()]
         days = (target_weekday - normalized_now.weekday()) % 7
-        if days == 0 and re.search(rf"\b(?:naechsten|kommenden)\s+{weekday.group('day')}\b", lowered):
+        if days == 0 and re.search(
+            rf"\b(?:naechsten|kommenden)\s+{weekday.group('day')}"
+            r"(?:abend(?:s)?|morgen(?:s)?|nacht(?:s)?|vormittag(?:s)?|mittag(?:s)?|nachmittag(?:s)?)?\b",
+            lowered,
+        ):
             days = 7
         hour, minute = _date_time_from_match(weekday, text)
         due = normalized_now + timedelta(days=days)
