@@ -92,6 +92,7 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "vielleicht",
         "vermutlich",
         "angeblich",
+        "bitte",
         "fast",
         "beinahe",
         "möglicherweise",
@@ -2308,6 +2309,7 @@ CITY_PATTERNS = (
         r"(?:^|[.!?;\n]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:(?:aktuell(?:er|e)?|jetzig(?:er|e)|derzeitig(?:er|e)?|gegenwärtig(?:er|e)?)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
+        r"(?:(?:bitte|aktuell|derzeit|gegenwärtig)\s*)?"
         r"(?::|=|,)?\s*(?!(?:ist|war|w(?:äre|urde)|liegt|befindet|bleibt|nicht)\b)"
         r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,

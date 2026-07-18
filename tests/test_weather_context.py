@@ -1396,6 +1396,12 @@ def test_extract_residence_city_handles_question_answer_forms() -> None:
     assert extract_residence_city("Ist dein Wohnort Berlin?") == ""
 
 
+def test_extract_residence_city_skips_label_fillers() -> None:
+    assert extract_residence_city("Wohnort bitte: Berlin.") == "Berlin"
+    assert extract_residence_city("Wohnort aktuell Berlin.") == "Berlin"
+    assert extract_residence_city("Wohnort bitte.") == ""
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
