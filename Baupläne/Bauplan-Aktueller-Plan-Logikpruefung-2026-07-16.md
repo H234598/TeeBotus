@@ -9541,3 +9541,14 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `1/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+## Aktueller Ledger 2026-07-18
+
+- Letzter Restart: `systemctl --user restart teebotus.service`, aktiv,
+  `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
+- Seit diesem Restart: `6/20` Code-Commits. Kein Push.
+- Code-Fixes: `8afef100`, `9ef3aff0`, `d10f95a1`, `7c18b6ee`, `5d08d5c4`,
+  `a823e158`.
+- Verifikation je Fix: `tests/test_weather_context.py` -> `25 passed`,
+  `py_compile`, `git diff --check`; kein Provider/API-Aufruf.
+- Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
