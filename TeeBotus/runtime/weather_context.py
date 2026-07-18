@@ -2299,7 +2299,8 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
-        r"(?:(?:wegen|aufgrund)\s+[^,.;!?]{1,80})\s+(?:in|bei)\s+"
+        r"(?:(?:wegen|aufgrund)\s+[^,.;!?]{1,80}|aus\s+[^,.;!?]{1,80}\s+"
+        r"gr(?:ünden|uenden))\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
