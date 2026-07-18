@@ -665,7 +665,7 @@ def _time_marker_in_text(text: str) -> tuple[int, int] | None:
         return int(match.group("hour")), int(match.group("minute") or 0)
     normalized = _normalize(text)
     for marker, hour in DAYPART_DEFAULT_HOURS:
-        if re.search(rf"\b{marker}s?\b", normalized):
+        if re.search(rf"{marker}s?\b", normalized):
             return hour, 0
     return None
 
