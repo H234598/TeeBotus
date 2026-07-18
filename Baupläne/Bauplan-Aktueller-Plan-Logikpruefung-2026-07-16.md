@@ -9764,3 +9764,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Kontextuelle aktuelle Wohnorte erkennen
+
+- `Jetzt bei/mit ... in Hamburg`, `Jetzt im Raum Hamburg` und `Jetzt in Hamburg wohnhaft` wurden bisher nicht als aktueller Wohnort erkannt.
+- Entsprechende Markerpfade ergänzt; `Jetzt in Hamburg bin ich im Urlaub` wird nicht als Wohnort übernommen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `34922e53 fix: parse contextual current residences`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
