@@ -512,7 +512,10 @@ CITY_PATTERNS = (
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         r"(?:liegt|befindet\s+sich))\s+"
         r"(?:im|in\s+(?:dem|der|einem|einer))\s+"
-        r"(?:stadtteil|bezirk|viertel|kiez)\s+"
+        r"(?:stadtteil|bezirk|viertel|kiez|ortsteil|quartier|altstadt|stadtzentrum|zentrum|innenstadt)\s+"
+        r"(?!(?:(?!\s+(?:in|bei|von)\s+)[^,.;!?])*\b(?:und|aber|doch|jedoch|"
+        r"arbeite\w*|studier\w*|lern\w*|schlaf\w*|pendl\w*|reis\w*|"
+        r"besuch\w*|übernacht\w*|uebernacht\w*)\b)"
         r"[^,.;!?]{1,80}?\s+(?:in|bei|von)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -523,7 +526,7 @@ CITY_PATTERNS = (
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         r"(?:liegt|befindet\s+sich))\s+"
         r"(?:im|in\s+(?:dem|der|einem|einer))\s+"
-        r"(?:stadtteil|bezirk|viertel|kiez)\s+von\s+"
+        r"(?:stadtteil|bezirk|viertel|kiez|ortsteil|quartier|altstadt|stadtzentrum|zentrum|innenstadt)\s+von\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -604,9 +607,9 @@ CITY_PATTERNS = (
         r"(?:(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+)?"
         r"(?:auf\s+dem\s+land|in\s+(?:einer|einem|der)\s+"
         r"(?:(?:klein|groß|gross)(?:e|en|er|es|em)?\s*)?"
-        r"(?:stadt|vorstadt|dorf|ort|vorort)|"
+        r"(?:stadt|vorstadt|dorf|ort|vorort)(?![\wÄÖÜäöüß])|"
         r"im\s+(?:(?:klein|groß|gross)(?:e|en|er|es|em)?\s*)?"
-        r"(?:dorf|ort|vorort|großraum|grossraum))\s*"
+        r"(?:dorf|ort|vorort|großraum|grossraum)(?![\wÄÖÜäöüß]))\s*"
         r"(?:,\s*)?"
         r"(?:\s*(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s*)?"
         r"(?:(?:in\s+(?:der\s+)?(?:naehe|n(?:ä|ae)he|umgebung)\s+von|"
@@ -621,7 +624,7 @@ CITY_PATTERNS = (
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         r"(?:(?:ein(?:e|em|er)?|der|die|das)\s+)?"
         r"(?:(?:klein|groß|gross)(?:e|en|er|es|em)?\s*)?"
-        r"(?:stadt|vorstadt|dorf|ort|vorort)\s*"
+        r"(?:stadt|vorstadt|dorf|ort|vorort)(?![\wÄÖÜäöüß])\s*"
         r"(?:,\s*)?"
         r"(?:\s*(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s*)?"
         r"(?:(?:in\s+(?:der\s+)?(?:naehe|n(?:ä|ae)he|umgebung)\s+von|"
