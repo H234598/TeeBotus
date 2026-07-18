@@ -14273,3 +14273,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Arbeits-gegen-Wohnort-Konjunktion
+
+- `Ich arbeite in Berlin, obwohl ich in Hamburg wohne` liefert Hamburg.
+- Der Arbeitsort bleibt bei `obwohl ich ... studiere` oder ähnlichen Nicht-Wohnformen ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, drei `obwohl`-Kontext-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `da23f3e2 fix: parse residence obwohl clauses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
