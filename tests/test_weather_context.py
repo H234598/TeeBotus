@@ -167,6 +167,12 @@ def test_extract_residence_city_from_current_location_label() -> None:
     assert extract_residence_city("Mein Zuhause bleibt in Köln.") == "Köln"
     assert extract_residence_city("Mein Zuhause ist weiterhin in Frankfurt.") == "Frankfurt"
     assert extract_residence_city("Mein Zuhause liegt nach wie vor in München.") == "München"
+    assert extract_residence_city("Mein Zuhause ist nicht Berlin, sondern Hamburg.") == "Hamburg"
+    assert extract_residence_city("Mein Zuhause befindet sich nicht in Berlin, sondern in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Mein Zuhause ist Berlin, aber jetzt Hamburg.") == "Hamburg"
+    assert extract_residence_city("Mein Zuhause liegt in Berlin, aber inzwischen in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Mein Zuhause war Berlin und ist jetzt Hamburg.") == "Hamburg"
+    assert extract_residence_city("Mein Zuhause ist Berlin, aber ich arbeite in Hamburg.") == "Berlin"
 
 
 def test_extract_residence_city_rejects_negated_or_non_city_phrases() -> None:
