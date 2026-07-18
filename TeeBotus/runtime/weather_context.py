@@ -627,7 +627,8 @@ def _clean_city(value: str) -> str:
     if any(char.isdigit() for char in city):
         return ""
     if re.match(
-        r"(?i)^(?:der|die|das|dies(?:er|e|es)|jen(?:er|e|es)|hier|dort|da)\b",
+        r"(?i)^(?:der|die|das|den|dem|des|dies(?:er|e|es)|jen(?:er|e|es)|"
+        r"welch(?:er|e|es)|irgendein|mehrere|einige|manche|hier|dort|da)\b",
         city,
     ):
         return ""
