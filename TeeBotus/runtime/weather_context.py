@@ -2896,9 +2896,12 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b[^,.;!?]{1,80}\s+(?:ist|war)\s+(?:mein(?:e)?|unser(?:e)?)\s+"
-        r"(?:(?:frühere|fruehere|ehemalige|alte)\s+)?"
+        r"\b[^,.;!?]{1,80}\s+(?:ist|war)\s+"
+        r"(?:"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+(?:(?:frühere|fruehere|ehemalige|alte)\s+)?"
         r"(?:heimat|heimatstadt|herkunftsort|herkunftsstadt|geburtsort|geburtsstadt)"
+        r"|(?:der|ein)\s+ort\s+meiner\s+geburt"
+        r")"
         r"(?:\s*,\s*(?:(?:aber|doch|jedoch|dafür|stattdessen|während|waehrend)\s+)?(?:ist\s+)?|"
         r"\s+(?:und|sowie|während|waehrend)\s+)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s+ist)?(?=\s+(?:mein|unser)\s+"
