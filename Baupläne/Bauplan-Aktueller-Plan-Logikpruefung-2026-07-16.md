@@ -12341,3 +12341,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Aktivitätsziel nach Zwar-Aber-Wechsel
+
+- `Ich wohne zwar in Berlin, aber in Hamburg lebe ich` begrenzt Zielort nun auf `Hamburg`; nachgestellte Verben werden nicht verschluckt.
+- `in Hamburg arbeite/studiere ich` überschreibt Wohnort Berlin nicht.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Wechsel-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e9ac1eaf fix: keep activity after change target out`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
