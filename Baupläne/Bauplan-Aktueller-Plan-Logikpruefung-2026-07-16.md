@@ -9629,3 +9629,17 @@ Restart erst bei `20/20`.
 - Verifikation je Fix: `tests/test_weather_context.py` -> `25 passed`,
   `py_compile`, `git diff --check`; kein Provider/API-Aufruf.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
+
+### Folgefix 2026-07-18: Plurale Wohnortformulierungen erkennen
+
+- Plurale Aussagen wie `Wir wohnen in Berlin`, `Wir leben seit zwei Jahren in Hamburg`, `Seit 2020 sind wir in Leipzig wohnhaft` und `Wir haben unseren Wohnsitz in Dresden` wurden bisher nicht oder nur zufaellig erkannt.
+- Eigene Muster fuer `wir wohnen/leben`, `sind wir ... wohnhaft` und `wir haben unseren Wohnort/Wohnsitz` ergaenzt.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `706fcb48 fix: parse plural residence wording`.
+
+## Aktueller Ledger 2026-07-18-True-Tail
+
+- Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+- Code-Fixes seit Restart: `8afef100`, `9ef3aff0`, `d10f95a1`, `7c18b6ee`, `5d08d5c4`, `a823e158`, `3c36731b`, `f84eb2e7`, `6c4eecd2`, `63c551d1`, `823d5753`, `7b9cf67a`, `706fcb48`.
+- Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
