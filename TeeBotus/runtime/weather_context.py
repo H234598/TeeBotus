@@ -2876,6 +2876,13 @@ CITY_PATTERNS = (
         r"[\"'”“’»)]?(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
+    re.compile(
+        r"(?:\bwo\s+(?:wohnst|lebst)\s+du|\bwo\s+ist\s+"
+        r"(?:dein(?:e)?|euer(?:e)?)\s+(?:wohnort|wohnsitz|adresse)|"
+        r"\b(?:wohnort|wohnsitz|adresse))\s*\?\s*"
+        r"(?P<city>[^\W\d_][\wÄÖÜäöüß .'-]{1,80})(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
 )
 CITY_TRAILING_STOP_RE = re.compile(
     r"\s+(?:und|aber|weil|wenn|falls|seit|schon|mit|bei|in|auf|neben|nahe|"
