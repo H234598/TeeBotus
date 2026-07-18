@@ -10595,3 +10595,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Aktueller Ort vor historischem Nachsatz
+
+- `Mein Wohnort ist Berlin, war aber früher Hamburg` und ähnliche Formulierungen behalten Berlin.
+- Historische Nachsätze werden nicht als aktuelle Change-Kandidaten übernommen.
+- Verifikation: `tests/test_weather_context.py` -> `53 passed`, drei Current-before-history-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `87f0ceda fix: preserve current residence before history`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
