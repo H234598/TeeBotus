@@ -11090,3 +11090,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Attributive Flächenrelationen
+
+- `Berlin-Nähe`, `Berliner Nähe`, `Berliner Raum` und `Berliner Umgebung` werden auf Berlin normalisiert.
+- Verifikation: `tests/test_weather_context.py` -> `91 passed`, vier Area-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `368eb67e fix: normalize attributive area relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
