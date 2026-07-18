@@ -480,7 +480,9 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         re.search(
             rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
             r"(?!bin\b|arbeite\b|studiere\b|lerne\b|schlafe\b|mache\b|"
-            r"komme\b|fahre\b|gehe\b|habe\b|bin\b)[\wÄÖÜäöüß'-]+",
+            r"komme\b|fahre\b|gehe\b|habe\b|besuche\b|verbringe\b|"
+            r"treffe\b|reise\b|pendle\b|sehe\b|übernachte\b|"
+            r"uebernachte\b)[\wÄÖÜäöüß'-]+",
             source,
             re.IGNORECASE,
         )

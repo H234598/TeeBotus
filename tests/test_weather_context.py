@@ -195,6 +195,11 @@ def test_extract_residence_city_from_current_location_label() -> None:
     assert extract_residence_city("Ich wohne in Berlin und in Hamburg.") == ""
     assert extract_residence_city("Ich wohne in Berlin und lebe in Hamburg.") == ""
     assert extract_residence_city("Ich wohne in Berlin und bin heute müde.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin und besuche Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin und verbringe die Wochenenden in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin und treffe Freunde in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin und reise oft nach Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin und pendle nach Hamburg.") == "Berlin"
 
 
 def test_extract_residence_city_rejects_negated_or_non_city_phrases() -> None:
