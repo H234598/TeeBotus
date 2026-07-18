@@ -12365,3 +12365,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Temporale Zuhause-Wechsel
+
+- `war ... heute/heute liegt ...`, `ist ... jetzt aber ...` und entsprechende Wohnortvarianten werden als aktueller Wechsel erkannt.
+- Historische Home-Angabe mit anschließendem Arbeitsort bleibt leer und wird nicht als Wohnort übernommen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Home-Zeit-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9bc5493f fix: parse temporal home transitions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
