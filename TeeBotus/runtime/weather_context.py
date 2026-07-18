@@ -340,6 +340,22 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"(?:^|[.!?;\n]\s*)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}\s+"
+        r"\((?:arbeitsort|arbeitsadresse|geschäftsadresse|geschaeftsadresse|dienstadresse|"
+        r"büroadresse|bueroadresse)\)\s*[,;/]\s*"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"\((?:wohnort|wohnsitz|wohnadresse|wohnanschrift|anschrift|hauptwohnsitz)\)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[.!?;\n]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"\((?:wohnort|wohnsitz|wohnadresse|wohnanschrift|anschrift|hauptwohnsitz)\)\s*[,;/]\s*"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}\s+"
+        r"\((?:arbeitsort|arbeitsadresse|geschäftsadresse|geschaeftsadresse|dienstadresse|"
+        r"büroadresse|bueroadresse)\)",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"(?:^|[.!?;\n]\s*)(?:früher|frueher|ehemals|damals)\s+(?:in\s+)?"
         r"[^,.;!?]{1,80}\s*,\s*(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+"
         r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
