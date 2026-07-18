@@ -209,6 +209,21 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,70}\s+\([^)]{1,30}\)),\s*"
+        r"(?:dort|da|daheim|zuhause|zu\s+hause)?\s*(?:bin|wohne|lebe)\s+(?:ich|wir)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,70}\s+\([^)]{1,30}\))\s+"
+        r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,70}\s+\([^)]{1,30}\))\s+ist\s+"
+        r"(?:dort|da)\s*,?\s*wo\s+(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:keinesfalls|keineswegs|niemals|nirgendwo|nirgends|nie)\s+(?:in|bei)\s+"
         r"[^,.;!?]{1,80}?,\s*sondern\s+(?:in|bei)\s+"
@@ -1599,6 +1614,13 @@ CITY_PATTERNS = (
         r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,70}\s+\([^)]{1,30}\))\s+"
         r"(?:ist|bleibt)\s+(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s*,\s*"
+        r"(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,70}\s+\([^)]{1,30}\))"
+        r"(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
     re.compile(
@@ -3436,7 +3458,7 @@ def _clean_city(value: str) -> str:
         r"(?i)^(?:der|die|das|den|dem|des|dies(?:er|e|es)|jen(?:er|e|es)|"
         r"welch(?:er|e|es)|irgendein|mehrere|einige|manche|ohne|unbekannt\w*|"
         r"unbestimmt\w*|ab|wird|soll|geplant\w*|nimmer|werktags|wochentags|hier|dort|da|"
-        r"vielleicht|vermutlich|angeblich|keineswegs|keinesfalls|niemals|nirgendwo|nirgends|nie|fast|beinahe|"
+        r"vielleicht|vermutlich|angeblich|ist|sind|bin|keineswegs|keinesfalls|niemals|nirgendwo|nirgends|nie|fast|beinahe|"
         r"möglicherweise|moeglicherweise|könnte|koennte|wäre|waere|würde|wuerde|"
         r"sollte|dürfte|duerfte|müsste|muesste|nördlich|südlich|östlich|westlich|"
         r"nord[-\s]?östlich|nord[-\s]?westlich|süd[-\s]?östlich|süd[-\s]?westlich)\b",

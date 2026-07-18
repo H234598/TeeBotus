@@ -1290,6 +1290,13 @@ def test_extract_residence_city_preserves_parenthetical_labels() -> None:
     assert extract_residence_city("Ich habe meinen Wohnsitz in Halle (Saale).") == "Halle (Saale)"
 
 
+def test_extract_residence_city_preserves_parenthetical_inverse_forms() -> None:
+    assert extract_residence_city("Halle (Saale), dort wohne ich.") == "Halle (Saale)"
+    assert extract_residence_city("In Halle (Saale) wohne ich.") == "Halle (Saale)"
+    assert extract_residence_city("Halle (Saale) ist dort, wo ich wohne.") == "Halle (Saale)"
+    assert extract_residence_city("Ich wohne, lebe in Halle (Saale).") == "Halle (Saale)"
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
