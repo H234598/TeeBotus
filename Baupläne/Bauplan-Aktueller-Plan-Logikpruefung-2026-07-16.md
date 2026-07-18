@@ -7946,6 +7946,19 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `20/20` Code-Commits. Kein
 Push. Restart jetzt faellig.
 
+### 2026-07-18: Naehe-Ortsangaben im Wetterparser
+
+- `Ich wohne in der Naehe von Berlin` wurde als Stadt `der Naehe von Berlin`
+  gespeichert; `Ich lebe nahe Hamburg` wurde gar nicht erkannt.
+- Spezifische `in der Naehe von`-/`nahe`-Muster laufen jetzt vor dem generischen
+  Wohnsatz und liefern den Referenzort.
+- Verifikation: `tests/test_weather_context.py` -> `15 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7564c771 fix: parse nearby residence cities`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `1/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
