@@ -533,6 +533,27 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:(?:aktuell(?:er|e)?|jetzig(?:er|e)|derzeitig(?:er|e)?|gegenwärtig(?:er|e)?)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
+        r"(?::|=|,)?\s*(?!(?:ist|war|w(?:äre|urde)|liegt|befindet|bleibt|nicht)\b)"
+        r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:wohnhaft|ansässig|ansaessig)\s*"
+        r"(?::|=|,)?\s*(?!(?:bin|sind|war|w(?:äre|urde)|nicht)\b)"
+        r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich\s+)?(?:wohne|wohnen|lebe|leben)\b\s*"
+        r"(?::|=|,)?\s*(?!(?:ist|war|w(?:äre|urde)|nicht|künft\w*|kuenft\w*|"
+        r"zukünft\w*|zukuenft\w*|bald|morgen|nächste\w*|naechste\w*)\b)"
+        r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)|"
         r"(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
@@ -1324,7 +1345,7 @@ def _has_historical_residence_prefix(source: str, match_start: int) -> bool:
             r"alt\w*|vorherig\w*)\s*$",
             sentence,
         )
-    )
+    ) or bool(re.search(r"(?i)\bwar(?:en)?(?:\s+\w+){0,3}\s*$", sentence))
 
 
 def _has_future_residence_prefix(source: str, match_start: int) -> bool:
@@ -1335,6 +1356,7 @@ def _has_future_residence_prefix(source: str, match_start: int) -> bool:
             r"(?i)(?:\bab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
             r"(?:jahr\w*|monat\w*|woche\w*)\b|\bab\s+\d{4}\b|"
             r"\bab\s+(?:sommer|winter|frühling|fruehling|herbst)\b|\bbald\b|"
+            r"\b(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*\b|"
             r"\b(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*)\s*$)",
             sentence,
         )

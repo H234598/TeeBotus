@@ -100,6 +100,24 @@ def test_extract_residence_city_from_genitive_relations() -> None:
     assert extract_residence_city("Ich wohne unweit Berlin und Hamburg.") == ""
 
 
+def test_extract_residence_city_from_short_profile_forms() -> None:
+    assert extract_residence_city("Wohnhaft: Berlin.") == "Berlin"
+    assert extract_residence_city("Ansässig: Hamburg.") == "Hamburg"
+    assert extract_residence_city("Wohnort Berlin.") == "Berlin"
+    assert extract_residence_city("Wohnort = Berlin.") == "Berlin"
+    assert extract_residence_city("Wohne: Leipzig.") == "Leipzig"
+    assert extract_residence_city("Bin wohnhaft: Berlin.") == "Berlin"
+    assert extract_residence_city("Derzeit wohnhaft Berlin.") == "Berlin"
+    assert extract_residence_city("Aktuell ansässig Hamburg.") == "Hamburg"
+    assert extract_residence_city("Mein aktueller Wohnort Berlin.") == "Berlin"
+    assert extract_residence_city("Mein jetziger Wohnsitz Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne, in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne Berlin.") == "Berlin"
+    assert extract_residence_city("Ich lebe Berlin.") == "Berlin"
+    assert extract_residence_city("Herkunft: Hamburg.") == ""
+    assert extract_residence_city("Arbeitsort: Berlin.") == ""
+
+
 def test_extract_residence_city_from_nearby_location_phrase() -> None:
     assert extract_residence_city("Ich wohne in der Nähe von Berlin.") == "Berlin"
     assert extract_residence_city("Ich lebe nahe Hamburg.") == "Hamburg"
