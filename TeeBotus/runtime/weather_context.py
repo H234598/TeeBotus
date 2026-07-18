@@ -1470,6 +1470,13 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|zurzeit|zur\s+zeit)\s*:\s*"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:meine|unsere)?\s*(?:adresse|wohnadresse|wohnanschrift|privatadresse|privatanschrift)\s+"
         r"(?:ist|liegt|befindet\s+sich)\s+in\s+"
         r"(?:deutschland|österreich|oesterreich|(?:der\s+)?schweiz)\s*,\s*"
