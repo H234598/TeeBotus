@@ -81,6 +81,18 @@ def test_extract_residence_city_from_additional_change_forms() -> None:
     assert extract_residence_city("Ich wohne in Berlin; zu Hause bin ich in Potsdam.") == ""
 
 
+def test_extract_residence_city_from_change_timing_forms() -> None:
+    assert extract_residence_city("Früher in Hamburg, jetzt in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich bin letzten Monat nach Hamburg umgezogen.") == "Hamburg"
+    assert extract_residence_city("Ich zog nach Hamburg.") == "Hamburg"
+    assert extract_residence_city("Berlin ist meine Heimat, wohnen tue ich in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne mal in Berlin, mal in Hamburg.") == ""
+    assert extract_residence_city("Ich wohne teils in Berlin, teils in Hamburg.") == ""
+    assert extract_residence_city("Ich lebe abwechselnd in Berlin und Hamburg.") == ""
+    assert extract_residence_city("Meine Wohnorte sind Berlin und Hamburg.") == ""
+    assert extract_residence_city("Ab morgen wohne ich in Berlin.") == ""
+
+
 def test_extract_residence_city_from_direction_and_edge_relations() -> None:
     assert extract_residence_city("Ich wohne im Norden von Berlin.") == "Berlin"
     assert extract_residence_city("Ich lebe im Süden von Hamburg.") == "Hamburg"
