@@ -12147,5 +12147,5 @@ Restart erst bei `20/20`.
 
 ## Aktueller Ledger 2026-07-18-Post-Restart
 
-- Vor Restart: Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
-- Seit diesem Restart: `20/20` Code-Fixes. Restart jetzt fällig. Kein Push.
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
