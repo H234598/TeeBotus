@@ -10210,7 +10210,14 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `25 passed`, 8 Neighborhood-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `28fcbd3b fix: parse neighborhood residence phrases`.
 
+### Folgefix 2026-07-18: Ortslabel-Grenzen und Aktivitätskontext
+
+- `Ort`/`Stadt` wurden als Präfix in `Ortsteil`/`Stadtteil` erkannt; fehlende Zielstädte konnten dadurch falsche Orte erzeugen.
+- Zwischenort-Labels um `Ortsteil`, `Quartier`, `Altstadt`, `Stadtzentrum`, `Zentrum` und `Innenstadt` erweitert; Aktivitäts-/Verbindungsphrasen vor dem Zieltrenner werden verworfen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 12 Neighborhood-Boundary-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9db8723a fix: guard neighborhood residence parsing`.
+
 ## Aktueller Ledger 2026-07-18-Post-Restart
 
-- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
-- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
