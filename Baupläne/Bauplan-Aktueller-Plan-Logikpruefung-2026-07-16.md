@@ -10885,3 +10885,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Nachgestellte Ortsadverbien
+
+- `Es ist Berlin, wo ich wohne` sowie `Ich wohne in Berlin, dort/hier` werden erkannt.
+- Relativsatz mit Arbeitsverb bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `75 passed`, fünf Nachstellungs-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `05cca64b fix: parse postposed residence adverbs`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
