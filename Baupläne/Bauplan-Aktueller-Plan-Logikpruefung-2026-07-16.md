@@ -9091,3 +9091,16 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `13/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: `Wohnstadt` und aktuelle Profiladjektive erkennen
+
+- `Meine aktuelle Wohnstadt ist Dresden`, `mein derzeitiger Wohnort` und
+  `mein gegenwärtiger Ort` wurden bisher nicht erkannt.
+- `wohnstadt`, `derzeitig` und `gegenwärtig` sind nun in expliziten aktuellen
+  Wohnlabels erlaubt; `Heimatstadt` bleibt bewusst ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e925add7 fix: parse Wohnstadt residence labels`.
+
+**Aktueller Laufstand:** Seit dem Restart `14/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
