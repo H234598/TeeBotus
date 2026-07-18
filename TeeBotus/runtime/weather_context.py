@@ -72,6 +72,14 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        rf"\b{_RESIDENCE_TIME_QUALIFIER}\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
+        r"nicht(?:\s+mehr)?\s+(?:(?:in|bei)\s+)?[^,.;!?]{1,80}?"
+        r"(?:\s*(?:,|;|[-–—])\s*|\s+)sondern\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b(?:mein(?:e)?\s+)?{_PRIMARY_RESIDENCE_LABEL}\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         r"[^,.;!?]{1,80}?(?:,|;|[-–—])\s*(?:aber|doch|jedoch)?\s*"
         rf"(?:{_RESIDENCE_TIME_QUALIFIER})\s+(?:in|bei)\s+"
@@ -430,6 +438,14 @@ CITY_PATTERNS = (
     re.compile(
         rf"\b(?:mein(?:e)?\s+)?{_PRIMARY_RESIDENCE_LABEL}"
         rf"(?:\s+(?:ist|liegt|befindet\s+sich|bleibt)\s*|:\s*)(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b{_RESIDENCE_TIME_QUALIFIER}\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
