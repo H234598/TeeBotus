@@ -10814,3 +10814,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Umgekehrte Wohnortformulierungen
+
+- `In Berlin bin ich wohnhaft/ansässig` sowie `Ich nenne/Berlin nenne ich meinen Wohnort/Wohnsitz` werden erkannt.
+- Arbeitsortlabels bleiben ausgeschlossen; Possessivflexion `meinen` wird unterstützt.
+- Verifikation: `tests/test_weather_context.py` -> `70 passed`, sieben Reversed-Form-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1fabd5fc fix: parse reversed residence statements`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
