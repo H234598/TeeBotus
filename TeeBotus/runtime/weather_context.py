@@ -331,6 +331,31 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}\s+ist\s+nicht\s+(?:mehr\s+)?mein(?:e)?\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*,\s*"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+bleibt\s+es\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}\s+ist\s+"
+        r"(?:kein(?:e|en|er|em)?|keinesfalls|niemals)\s+"
+        r"(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)"
+        r"(?:\s+von\s+mir)?\s*,\s*(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+schon\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}\s+nicht\s+als\s+"
+        r"(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)"
+        r"\s*,\s*sondern\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bnicht\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80},\s*sondern\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+(?:arbeite|arbeiten)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
         r"obwohl\s+(?:ich|wir)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
