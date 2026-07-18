@@ -10485,3 +10485,16 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Umgangssprachliche Wohnortformen
+
+- `wohn/leb`, `grad`, `zurzeit`, `dahoam`, `I leb`, invertierte Formen und Bindestrich-Klarstellungen werden erkannt.
+- Ungeankertes `Wohnsitz`-Matching wird auf Satzanfang begrenzt; dadurch wird Text wie `ha e meinen Wohnsitz in Berlin` nicht mehr fälschlich als Wohnort gespeichert.
+- Negative invertierte Aussagen wie `In Berlin wohne ich nicht` bleiben leer; Genitiv-Nähe `Berlins Nähe` bleibt `Berlin`.
+- Verifikation: `tests/test_weather_context.py` -> `45 passed`, 8 fokussierte Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bbc53b52 fix: parse colloquial residence forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
