@@ -9666,6 +9666,18 @@ Restart erst bei `20/20`.
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
 - Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: City-vor-Adresslabels
+
+- `Hamburg ist meine Wohnadresse/Meldeadresse/Anschrift`, `Hamburg als Wohnadresse` und `Als Meldeadresse Hamburg` werden erkannt.
+- `Arbeitsadresse` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, sechs Address-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `324799c5 fix: parse residence address labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Umschreibung des Geburtsorts
 
 - `Berlin ist der/ein Ort meiner Geburt, Hamburg mein Wohnort` liefert `Hamburg`.
