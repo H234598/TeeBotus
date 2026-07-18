@@ -97,6 +97,11 @@ _NON_CITY_REGION_NAMES = frozenset(
         "niedersachsen",
     }
 )
+_IRREGULAR_CITY_ADJECTIVE_BASES = {
+    "brem": "Bremen",
+    "dresdn": "Dresden",
+    "münchn": "München",
+}
 _RESIDENCE_DURATION = (
     r"(?:(?:mehr\s+als|über|ueber|knapp|gut|etwa|ungefähr|ungefaehr|"
     r"fast|circa|ca\.|rund|mindestens|hoechstens|höchstens)\s+)?"
@@ -2418,6 +2423,7 @@ def _clean_city(value: str) -> str:
     city = re.split(r"(?<!\bSt)[.!?]\s+", city, maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,:;!?")
     city = re.sub(r"(?i)^(?:in|bei)\s+", "", city)
     city = re.sub(r"(?i)(?<!er)(?:[-\s]+)(?:nähe|umgebung)\b$", "", city).strip()
+    city = _IRREGULAR_CITY_ADJECTIVE_BASES.get(city.casefold(), city)
     if not city or len(city) > MAX_CITY_LENGTH:
         return ""
     if city.casefold() in _NON_CITY_RESIDENCE_NAMES or city.casefold() in _NON_CITY_CONTEXT_TOKENS:

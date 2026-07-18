@@ -951,6 +951,12 @@ def test_extract_residence_city_handles_current_attributive_area_changes() -> No
     assert extract_residence_city("Ich wohne in Berlin, aber jetzt in der Hamburger Umgebung.") == "Hamburg"
 
 
+def test_extract_residence_city_normalizes_irregular_city_adjectives() -> None:
+    assert extract_residence_city("Mein Wohnort ist im Münchner Raum.") == "München"
+    assert extract_residence_city("Mein Wohnort liegt in der Dresdner Umgebung.") == "Dresden"
+    assert extract_residence_city("Mein Wohnort ist in Bremer Nähe.") == "Bremen"
+
+
 def test_extract_residence_city_handles_hyphenated_direction_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist nord-östlich von Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort liegt 20 km nord-östlich von Berlin.") == "Berlin"
