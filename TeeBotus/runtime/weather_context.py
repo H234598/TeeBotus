@@ -2335,6 +2335,16 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich|wir)\s+(?:bin|sind)\s+"
+        rf"(?:(?:{_RESIDENCE_TIME_QUALIFIER}|offiziell|polizeilich|privat|dauerhaft|permanent|"
+        r"vorübergehend|vorlaeufig|nur\s+vorübergehend|nur\s+vorlaeufig)\s+)?"
+        rf"(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:(?:offiziell|polizeilich|privat|dauerhaft|permanent|vorübergehend|vorlaeufig)\s+)?"
+        r"(?:gemeldet|registriert|ansässig|ansaessig)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:(?:ich|wir)\s+)?residier(?:e|en|t)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -3267,6 +3277,11 @@ def _clean_city(value: str) -> str:
         return ""
     city = CITY_TRAILING_STOP_RE.sub("", source).strip(" .,:;!?")
     city = re.sub(r"\s+", " ", city)
+    city = re.sub(
+        r"(?i)\s+(?:offiziell|polizeilich|privat|dauerhaft|permanent|vorübergehend|vorlaeufig)$",
+        "",
+        city,
+    ).strip()
     city = re.sub(r"\s+\d{5}(?:-\d{4})?$", "", city)
     city = re.split(r"(?<!\bSt)[.!?]\s+", city, maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,:;!?")
     city = re.sub(r"(?i)^(?:in|bei)\s+", "", city)
@@ -3314,7 +3329,7 @@ def _clean_city(value: str) -> str:
     if re.search(r"(?i)\b(?:gewesen|worden|geblieben)\b", city):
         return ""
     if re.search(
-        r"(?i)\b(?:arbeit\w*|beruflich|dienstlich|studier\w*|lern\w*|schlaf\w*|mach\w*|komm\w*|bin\w*|"
+        r"(?i)\b(?:arbeit\w*|beruflich|dienstlich|studier\w*|lern\w*|schule\w*|schlaf\w*|mach\w*|komm\w*|bin\w*|"
         r"fahr\w*|geh\w*|hab\w*|besuch\w*|verbring\w*|treff\w*|reis\w*|"
         r"pend\w*|seh\w*|übernacht\w*|uebernacht\w*)\b",
         city,
