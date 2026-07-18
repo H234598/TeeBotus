@@ -3407,6 +3407,8 @@ def extract_residence_city(text: str) -> str:
                         continue
                     if _has_future_residence_prefix(source, pattern_start, city_start):
                         continue
+                    if _has_uncertain_residence_prefix(source, pattern_start):
+                        continue
                     if _has_unresolved_location_separator(source, city_end):
                         continue
                     if _has_future_residence_suffix(source, city_end):
@@ -3895,6 +3897,20 @@ def _has_future_residence_prefix(source: str, match_start: int, city_start: int 
             r"\bseit\s+(?:morgen|uebermorgen|übermorgen)\b|\b(?:demnächst|demnaechst)\b|\bbald\b|"
             r"\b(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*\b|\bin\s+zukunft\b|"
             r"\b(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*)\b)",
+            clause,
+        )
+    )
+
+
+def _has_uncertain_residence_prefix(source: str, match_start: int) -> bool:
+    prefix = source[:match_start]
+    sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
+    clause = re.split(r"[,;]\s*", sentence)[-1]
+    return bool(
+        re.search(
+            r"(?i)(?:\bvielleicht\b|\bvermutlich\b|\bmöglicherweise\b|\bmoeglicherweise\b|"
+            r"\beventuell\b|\bwahrscheinlich\b|\bwohl\b|\bangeblich\b|\banscheinend\b|"
+            r"\bscheinbar\b)\s*$",
             clause,
         )
     )
