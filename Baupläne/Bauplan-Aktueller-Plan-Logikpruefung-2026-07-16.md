@@ -10510,3 +10510,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Semikolon-Konflikte
+
+- Ambiguitätsprüfung erkennt jetzt auch `Ich wohne in Berlin; Hamburg` sowie Wohnortlabels mit Semikolon.
+- Korrektursegmente nach `aber`, `jetzt` und ähnlichen Markern bleiben vom Konfliktguard ausgenommen und werden weiter vom Change-Pfad aufgelöst.
+- Verifikation: `tests/test_weather_context.py` -> `46 passed`, vier Semikolon-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `54bccacf fix: reject semicolon residence conflicts`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
