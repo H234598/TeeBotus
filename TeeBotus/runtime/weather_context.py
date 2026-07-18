@@ -3120,6 +3120,26 @@ def extract_residence_city(text: str) -> str:
 
 def _has_explicit_residence_multiplicity(source: str) -> bool:
     multiplicity_source = source
+    question_answer = re.search(
+        r"(?:\bwo\s+(?:wohnst|lebst)\s+du|\bwo\s+ist\s+"
+        r"(?:dein(?:e)?|euer(?:e)?|mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"adresse|zuhause|zu\s+hause|daheim)|"
+        r"\b(?:(?:dein(?:e)?|euer(?:e)?|mein(?:e)?|unser(?:e)?)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"adresse|zuhause|zu\s+hause|daheim))"
+        r"(?:\s+(?:ist|lautet))?\s*(?:eigentlich|genau|aktuell|derzeit)?\s*[?:]\s*"
+        r"(?P<answer>[^.!?\n]{1,160})",
+        source,
+        re.IGNORECASE,
+    )
+    if question_answer:
+        answer = question_answer.group("answer")
+        if re.search(
+            r"\b(?:und|oder)\s+(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß'-]*",
+            answer,
+        ) and not re.search(r"\bund\s+(?:umgebung|region|nähe|naehe)\b", answer, re.IGNORECASE):
+            return True
     multiplicity_source = re.sub(
         r"\ban\s+der\s+Oder\b",
         "",
