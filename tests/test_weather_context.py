@@ -913,6 +913,16 @@ def test_extract_residence_city_handles_location_adverb_order() -> None:
     assert extract_residence_city("Ich bin hier in Berlin daheim.") == "Berlin"
 
 
+def test_extract_residence_city_handles_genitive_and_distance_relations() -> None:
+    assert extract_residence_city("Ich wohne in Berlins Umgebung.") == "Berlin"
+    assert extract_residence_city("Ich wohne in der Umgebung Berlins.") == "Berlin"
+    assert extract_residence_city("Ich wohne in der Gegend um Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne 20 km nördlich von Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne um Berlin herum.") == "Berlin"
+    assert extract_residence_city("Ich wohne außerhalb der Stadt Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne im nördlichen Berlin.") == "Berlin"
+
+
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

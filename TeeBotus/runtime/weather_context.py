@@ -666,6 +666,54 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
+        r"(?:in\s+der\s+(?:nähe|naehe|umgebung)\s+(?:von\s+)?)"
+        r"(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
+        r"(?:in\s+)?(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s\s+(?:nähe|naehe|umgebung)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
+        r"(?:(?:in\s+der\s+(?:gegend|umgebung)\s+)?um)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s+herum)?(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
+        r"(?:\d+\s*(?:km|kilometer)\s+)?"
+        r"(?:nördlich|südlich|östlich|westlich|nordöstlich|nordwestlich|"
+        r"südöstlich|südwestlich)\s+(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
+        r"(?:\d+\s*(?:km|kilometer)\s+)?"
+        r"(?:nördlich|südlich|östlich|westlich|nordöstlich|nordwestlich|"
+        r"südöstlich|südwestlich)\s+(?:von\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
+        r"(?:au(?:ßerhalb|sserhalb))\s+(?:der\s+stadt|des\s+orts|des\s+ortes)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
+        r"im\s+(?:nördlichen|südlichen|östlichen|westlichen|nordöstlichen|"
+        r"nordwestlichen|südöstlichen|südwestlichen)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
         rf"zuhause|zu\s+hause|daheim|{_PRIMARY_RESIDENCE_LABEL})\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
