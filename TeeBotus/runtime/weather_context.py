@@ -2542,7 +2542,7 @@ CITY_PATTERNS = (
         r"(?:(?:meine|meiner|meinem|meinen|mein|unsere|unserer|unserem|unseren|unser|"
         r"eine|einer|einem|eines|ein|der|dem|den)\s+)?"
         r"(?:wohnung|haus|eigenheim|unterkunft|appartement|apartment|wg|wohnheim|"
-        r"studentenwohnheim|internat|übergangswohnung|uebergangswohnung|zwischenwohnung)\s+(?:in|bei)\s+"
+        r"studentenwohnheim|internat|mehrfamilienhaus|übergangswohnung|uebergangswohnung|zwischenwohnung)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
