@@ -9824,3 +9824,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Pendel- und `sind in`-Kontexte disambiguieren
+
+- `pendeln` wurde wegen eines falschen Regex-Stamms als unklarer zweiter Wohnort gewertet.
+- `Wir wohnen ... und sind in ...` bleibt unklar; `sind beruflich in ...` und Pendeln bleiben Aktivitätszusätze.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `753640a9 fix: refine residence activity disambiguation`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
