@@ -10498,3 +10498,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Direkte Zuhause-Formen
+
+- `Ich bin daheim/zuhause/zu Hause in Stadt` wird als aktuelle Wohnortangabe erkannt und nutzt das vorhandene `dahoam`-Muster.
+- Besuchs- und Arbeitskontext bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `45 passed`, vier Home-Form-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2fc67035 fix: parse direct home residence forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
