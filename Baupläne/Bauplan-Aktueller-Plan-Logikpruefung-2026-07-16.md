@@ -7816,6 +7816,21 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `10/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Qualifizierte Zuhause- und Haushaltsangaben erkennen
+
+- `Ich bin aktuell in Potsdam zuhause`, `Ich bin seit kurzem in Leipzig zu
+  Hause` und `Ich lebe seit einiger Zeit bei meiner Freundin in Dresden`
+  wurden bisher verworfen. Wohnortlabels mit `Wohnort: Stadt` ebenfalls.
+- Der Parser akzeptiert begrenzte Zeit-/Aktuell-Qualifizierer vor Zuhause- und
+  Haushaltsangaben sowie `:` als Labelseparator. Eine unvollstaendige
+  `bei ...`-Angabe ohne Stadt bleibt ungueltig.
+- Verifikation: `tests/test_weather_context.py` -> `22 passed`,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b1f13cba fix: parse qualified home residences`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `11/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Gemini-Keyring: Cursor nach Route/Modell isolieren
 
 - 2026-07-17: `RotatingAPIKeyRing` nahm zwar `name` entgegen, Registry-State
