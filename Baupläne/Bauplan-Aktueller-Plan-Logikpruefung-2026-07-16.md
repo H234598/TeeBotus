@@ -11675,3 +11675,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Ersatzrelationen
+
+- `Hamburg statt/anstatt/anstelle von Berlin` wird auf Hamburg gekürzt.
+- Ersatzwörter gehören jetzt zu den lokalen City-Trailing-Stops.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Replacement-Relation-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `abdfedb5 fix: trim replacement residence relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
