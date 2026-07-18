@@ -2755,13 +2755,15 @@ def _has_historical_residence_prefix(source: str, match_start: int) -> bool:
 def _has_future_residence_prefix(source: str, match_start: int, city_start: int | None = None) -> bool:
     prefix_end = city_start if city_start is not None else match_start
     prefix = source[:prefix_end]
-    sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
+    sentence = re.split(r"(?<!\d)(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
     clause = re.split(r"[,;]\s*", sentence)[-1]
     return bool(
         re.search(
             r"(?i)(?:\bab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
             r"(?:jahr\w*|monat\w*|woche\w*)\b|\bab\s+\d{4}\b|"
             r"\bab\s+(?:morgen|uebermorgen|übermorgen|sommer|winter|frühling|fruehling|herbst)\b|"
+            r"\bab\s+(?:dem\s+)?(?:\d{1,2}\.\s+)?(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember|"
+            r"sommer|winter|frühling|fruehling|herbst|weihnachten|ostern|neujahr)\b|"
             r"\bseit\s+(?:morgen|uebermorgen|übermorgen)\b|\b(?:demnächst|demnaechst)\b|\bbald\b|"
             r"\b(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*\b|\bin\s+zukunft\b|"
             r"\b(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*)\b)",
@@ -2858,7 +2860,7 @@ def _clean_city(value: str) -> str:
     if re.match(
         r"(?i)^(?:der|die|das|den|dem|des|dies(?:er|e|es)|jen(?:er|e|es)|"
         r"welch(?:er|e|es)|irgendein|mehrere|einige|manche|ohne|unbekannt\w*|"
-        r"unbestimmt\w*|wird|soll|geplant\w*|nimmer|werktags|wochentags|hier|dort|da|"
+        r"unbestimmt\w*|ab|wird|soll|geplant\w*|nimmer|werktags|wochentags|hier|dort|da|"
         r"vielleicht|vermutlich|angeblich|keineswegs|niemals|fast|beinahe|"
         r"möglicherweise|moeglicherweise|könnte|koennte|wäre|waere|würde|wuerde|"
         r"sollte|dürfte|duerfte|müsste|muesste|nördlich|südlich|östlich|westlich|"
