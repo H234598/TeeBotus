@@ -9734,3 +9734,9 @@ Restart erst bei `20/20`.
 - Letzter Restart: steht nach diesem `20/20`-Fix an.
 - Seit letztem Restart: `20/20` Code-Fixes. Kein Push.
 - Restart jetzt ausführen; danach Zähler `0/20`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `systemctl --user restart teebotus.service` erfolgreich.
+- Service aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Neuer Zähler seit diesem Restart: `0/20` Code-Fixes. Kein Push.
