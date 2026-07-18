@@ -1079,6 +1079,11 @@ def test_extract_residence_city_handles_confidence_adverbs() -> None:
     assert extract_residence_city("Mein Wohnort ist angeblich Berlin.") == ""
 
 
+def test_extract_residence_city_handles_additional_location_adverbs() -> None:
+    assert extract_residence_city("Ich wohne erst in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne immer in Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_handles_named_locality_types() -> None:
     assert extract_residence_city("Mein Wohnort liegt im Dorf Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort liegt im Ort Berlin.") == "Berlin"

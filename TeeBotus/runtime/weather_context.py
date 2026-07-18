@@ -113,7 +113,7 @@ _RESIDENCE_TIME_QUALIFIER = (
 )
 _RESIDENCE_LOCATION_ADVERB = (
     r"(?:(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
-    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|irgendwo|dahoam)|"
+    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|irgendwo|dahoam|erst|immer)|"
     r"(?:sicher|wirklich|definitiv|tatsächlich|tatsaechlich))"
 )
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
