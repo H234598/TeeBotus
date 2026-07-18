@@ -944,6 +944,13 @@ def test_extract_residence_city_normalizes_postposed_area_suffixes() -> None:
     assert extract_residence_city("Mein Wohnort ist in Berlin, aber jetzt in Hamburg-Umgebung.") == "Hamburg"
 
 
+def test_extract_residence_city_handles_current_attributive_area_changes() -> None:
+    assert extract_residence_city("Mein Wohnort ist in Berlin, aber jetzt im Hamburger Raum.") == "Hamburg"
+    assert extract_residence_city("Mein Wohnort ist in Berlin, aber jetzt in der Hamburger Umgebung.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Berlin, aber jetzt im Hamburger Raum.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Berlin, aber jetzt in der Hamburger Umgebung.") == "Hamburg"
+
+
 def test_extract_residence_city_handles_hyphenated_direction_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist nord-östlich von Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort liegt 20 km nord-östlich von Berlin.") == "Berlin"
