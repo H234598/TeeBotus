@@ -10058,3 +10058,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Dauer-Qualifier vor Wohnortlabels
+
+- `Seit 2020/kurzem/einiger Zeit ist/liegt ... Wohnort/Wohnsitz ...` wurde bisher nicht erkannt; `Seit` konnte als Kandidat erscheinen.
+- Dauer-Qualifier vor aktuellen Labels und deren negierter Änderungszweig sind ergänzt; `war` bleibt historisch ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 7 Duration-Label-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c0105219 fix: parse duration-qualified residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
