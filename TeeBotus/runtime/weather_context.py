@@ -2043,7 +2043,8 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?:^|[.!?;,\n]\s*)(?!(?:ist|war|bleibt|wird)\b)"
+        r"(?:^|[.!?;,\n]\s*)(?:(?:eigentlich|aktuell|derzeit|momentan|nun|jetzt|gerade)\s+)?"
+        r"(?!(?:ist|war|bleibt|wird)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*"
         r"(?:\s+(?!(?:ist|war|bleibt|wird)\b)[\wÄÖÜäöüß'-]+){0,6})\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
@@ -2051,7 +2052,8 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?:^|[.!?;,\n]\s*)(?!(?:ist|war|bleibt|wird)\b)"
+        r"(?:^|[.!?;,\n]\s*)(?:(?:eigentlich|aktuell|derzeit|momentan|nun|jetzt|gerade)\s+)?"
+        r"(?!(?:ist|war|bleibt|wird)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*(?:\s+(?!(?:ist|war|bleibt|wird)\b)"
         r"[\wÄÖÜäöüß'-]+){0,6})\s+als\s+"
         r"(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
@@ -2068,7 +2070,9 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?:^|[.!?;,\n]\s*)(?!(?:ist|war|bleibt|wird)\b)"
+        r"(?:^|[.!?;,\n]\s*)(?:(?:eigentlich|aktuell|derzeit|momentan|nun|jetzt|gerade)\s+)?"
+        r"(?!(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\b)"
+        r"(?!(?:ist|war|bleibt|wird)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*"
         r"(?:\s+(?!(?:ist|war|bleibt|wird)\b)[\wÄÖÜäöüß'-]+){0,6})"
         r"(?:\s+(?:ist|bleibt)|\s*,)?\s+"
@@ -3777,7 +3781,9 @@ def _clean_city(value: str) -> str:
     if re.match(
         r"(?i)^(?:der|die|das|den|dem|des|dies(?:er|e|es)|jen(?:er|e|es)|"
         r"welch(?:er|e|es)|irgendein|mehrere|einige|manche|ohne|unbekannt\w*|"
-        r"unbestimmt\w*|ab|wird|soll|geplant\w*|voraussichtlich|künftig|kuenftig|zukünftig|zukuenftig|"
+        r"unbestimmt\w*|ab|wird|soll|geplant\w*|voraussichtlich|"
+        r"(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*|"
+        r"künftig|kuenftig|zukünftig|zukuenftig|"
         r"aktuell|derzeit|momentan|gerade|jetzt|nun|inzwischen|mittlerweile|unklar|egal|"
         r"nimmer|werktags|wochentags|hier|dort|da|sondern|"
         r"vielleicht|vermutlich|wahrscheinlich|wohl|angeblich|laut|derzeitig|ist|sind|bin|lautet|heißt|heisst|nennt|genannt|keineswegs|keinesfalls|niemals|nirgendwo|nirgends|nie|fast|beinahe|"
