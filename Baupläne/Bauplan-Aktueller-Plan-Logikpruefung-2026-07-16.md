@@ -8065,6 +8065,20 @@ Restart nach weiteren 20 Code-Fixes.
 **Aktueller Laufstand:** Seit dem letzten Restart `1/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Numerische Reminder-Daten hinter `an den` korrekt auswerten
+
+- `Erinnere mich an den 20.06. um 9 ...` wurde wegen der Subject-Schutzlogik
+  als morgiger Termin um 09:00 gespeichert; das Datum landete im Betreff.
+- Der Parser erkennt `an den <Datum>` und `an <Datum>` jetzt als Terminanker,
+  wenn davor kein anderer Zeitanker steht. Bei `morgen/in 2 Stunden an den
+  <Datum>` bleibt das Datum dagegen Betreffinhalt.
+- Verifikation: `tests/test_reminder_intent.py` -> `42 passed`; Compile und
+  `git diff --check` gruen; kein Provider/API-Aufruf.
+- Code-Commit: `79c6d645 fix: parse dates after reminder markers`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `2/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Proactive-LLM-Plan: parallele identische Entscheidungen idempotent anwenden
 
 - 2026-07-18: Zwei gleichzeitig laufende LLM-/Tool-Planner konnten denselben
