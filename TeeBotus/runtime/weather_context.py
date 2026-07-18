@@ -2079,7 +2079,8 @@ CITY_PATTERNS = (
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:(?:aktuell\w*|derzeit\w*|momentan\w*|hauptsächlich\w*|hauptsaechlich\w*|neu\w*|"
         r"jetzig\w*|gegenwärtig\w*|gegenwaertig\w*|vorläufig\w*|vorlaeufig\w*|dauerhaft|permanent|"
-        r"temporär|temporaer|vorübergehend|voruebergehend|befristet|unbefristet|kurzfristig|langfristig)\s+)?"
+        r"temporär|temporaer|vorübergehend|voruebergehend|befristet|unbefristet|kurzfristig|langfristig|"
+        r"gemeldet\w*|offiziell\w*|fest\w*|tatsächlich\w*|tatsaechlich\w*|privat\w*|polizeilich\w*)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
         re.IGNORECASE,
     ),
@@ -2405,7 +2406,7 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s*"
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b\s*"
         r"(?::|=|,)?\s*(?!(?:bin|sind|war|w(?:äre|urde)|nicht)\b)"
         r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
