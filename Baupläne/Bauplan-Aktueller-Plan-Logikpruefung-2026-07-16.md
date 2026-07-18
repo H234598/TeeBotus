@@ -9036,3 +9036,16 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `9/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Kontrastkorrekturen mit `zwar ... aber` erkennen
+
+- `Ich wohne zwar in Berlin, aber aktuell in Hamburg` wurde bisher nicht
+  erkannt; ein Arbeitsortzusatz durfte dagegen Berlin nicht überschreiben.
+- `zwar` ist nun im Wohnanker erlaubt, und ein klares `aber ... in <Ort>`-
+  Muster setzt den aktuellen Ort. `aber arbeite ...` bleibt beim Wohnort.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1740bd75 fix: parse zwar residence corrections`.
+
+**Aktueller Laufstand:** Seit dem Restart `10/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
