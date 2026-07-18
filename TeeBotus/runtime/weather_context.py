@@ -575,7 +575,8 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:ich\s+)?(?:wohnhaft|ansässig|ansaessig)\s+(?:in|bei)\s+"
+        r"(?:^|[.!?;\n]\s*)(?:(?:(?:ich|wir)\s+)?(?:bin|sind)\s+)?"
+        r"(?:ich\s+)?(?:wohnhaft|ansässig|ansaessig)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
