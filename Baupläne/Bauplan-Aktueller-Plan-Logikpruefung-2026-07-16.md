@@ -11980,3 +11980,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zeitlicher Nebensatz als Negativfall
+
+- `Ich wohne seit ich in Hamburg arbeite in Hamburg` liefert keinen falschen Stadtrest `seit ich`.
+- Unterstützte `seit <Dauer>`-Formen wie `seit Januar` und `seit dem Einzug` bleiben aktiv.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, ein Temporal-Subordinate-Smoke plus zwei Regression-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `fd044b96 fix: reject temporal subordinate residence fragments`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
