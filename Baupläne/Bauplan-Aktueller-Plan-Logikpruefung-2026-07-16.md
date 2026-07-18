@@ -11920,3 +11920,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Temporäre Miet- und Wohnzusätze
+
+- `zur Untermiete`, `zur Zwischenmiete` und `nur vorübergehend` werden nach dem Ortsnamen abgeschnitten.
+- Temporärer Wohnort bleibt als aktueller Wetterort erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Temporary-Housing-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4ff6dad3 fix: trim temporary housing suffixes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
