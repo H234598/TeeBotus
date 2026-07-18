@@ -2891,7 +2891,7 @@ CITY_PATTERNS = (
         r"\b[^,.;!?]{1,80}\s+(?:ist|war)\s+(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:(?:frühere|fruehere|ehemalige|alte)\s+)?"
         r"(?:heimat|heimatstadt|herkunftsort|herkunftsstadt|geburtsort|geburtsstadt)"
-        r"(?:\s*,\s*|\s+(?:und|sowie)\s+)"
+        r"(?:\s*,\s*(?:(?:aber|doch|jedoch)\s+)?|\s+(?:und|sowie)\s+)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s+ist)?(?=\s+(?:mein|unser)\s+"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b)",
         re.IGNORECASE,
