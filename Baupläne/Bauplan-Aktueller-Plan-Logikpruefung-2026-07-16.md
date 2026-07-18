@@ -11491,3 +11491,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Benannte Settlement-Orte
+
+- `Ortschaft/Gemeinde/Kommune/Metropole/Hauptstadt namens/genannt Stadt` entfernt Zwischenwort korrekt.
+- Verifikation: `tests/test_weather_context.py` -> `114 passed`, fünf Named-Settlement-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ead90539 fix: parse named settlement locations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
