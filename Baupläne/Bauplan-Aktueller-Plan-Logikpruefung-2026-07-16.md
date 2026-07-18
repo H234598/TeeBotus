@@ -8089,7 +8089,7 @@ Push. Restart erst bei `20/20`.
   Anker bleiben autoritativ.
 - Verifikation: `tests/test_reminder_intent.py` -> `47 passed`; `py_compile`,
   `git diff --check` gruen. Kein Provider/API-Aufruf.
-- Code-Commit: folgt nach Commit.
+- Code-Commit: `26533381 fix: preserve reminder recurrence intervals`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `5/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
