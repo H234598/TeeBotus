@@ -10046,3 +10046,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Rand- und Richtungsrelationen
+
+- `außerhalb von`, `am Stadtrand`, `im Umland` sowie Himmelsrichtungen wurden bei Verbformen nicht erkannt.
+- Relation ist für `wohne/lebe` und präzise Labels mit `liegt/befindet sich` ergänzt; pauschales `ist außerhalb` bleibt gemäß bestehender Negativsemantik leer.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 8 Perimeter/Direction-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `298cc36b fix: parse residence perimeter relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
