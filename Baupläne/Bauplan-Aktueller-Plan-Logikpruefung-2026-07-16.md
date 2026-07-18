@@ -12638,6 +12638,18 @@ Restart erst bei `20/20`.
 - Service aktiv, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Elliptische Wohnlabel-Klauseln
+
+- `Geburtsort ..., Arbeit ..., mein Zuhause Potsdam` liefert Potsdam.
+- Mehrfach-Wohnlabel (`Wohnort Berlin, Zuhause Hamburg`) bleibt absichtlich leer; historische Wohn-/Arbeitsklauseln bleiben geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Elliptical-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a62f51a9 fix: parse elliptical residence label clauses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
 ## Aktueller Ledger 2026-07-18-Post-Restart
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
