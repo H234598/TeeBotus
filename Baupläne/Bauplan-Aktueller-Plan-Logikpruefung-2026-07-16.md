@@ -9737,6 +9737,18 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Sowie-Trennung bei Herkunftslabels
+
+- `Berlin ist meine Heimat sowie Hamburg mein Wohnort` wird wie die klar disambiguierte `und`-Form gelesen.
+- Allgemeine Mehrfachwohnorte bleiben unverändert geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, ein Sowie-Origin-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1616c03f fix: parse sowie origin residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Negierte Wohnortwechsel
 
 - `Mein Wohnort ist keinesfalls Berlin, sondern Hamburg` liefert jetzt den aktuellen Ort `Hamburg`.
