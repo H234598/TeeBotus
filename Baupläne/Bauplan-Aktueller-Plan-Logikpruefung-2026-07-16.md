@@ -10709,3 +10709,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wohnortrelationen in Labels
+
+- Wohnortlabels mit `bei meinen Eltern`, Regionsbezug, Richtungsbezug, Genitiv-Umgebung und `Stadt namens` werden erkannt.
+- Arbeits-/Studienbezug bleibt ausgeschlossen; `außerhalb von Berlin` bleibt ohne Stadtwert, weil Berlin dort nur Referenzgebiet ist.
+- Verifikation: `tests/test_weather_context.py` -> `62 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `47946711 fix: parse label-based residence relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
