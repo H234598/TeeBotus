@@ -254,26 +254,49 @@ def _update_city_and_weather_context_unlocked(
 def _append_city_memory(account_store: AccountStore, account_id: str, city: str, now: datetime) -> None:
     memory_id = f"mem_residence_city_{_city_id_token(city)}"
     try:
-        if any(
-            str(entry.get("id") or "").strip() == memory_id
-            for entry in account_store.read_memory_entries(account_id)
-            if isinstance(entry, Mapping)
-        ):
+        rows = account_store.read_memory_entries(account_id)
+        if any(str(entry.get("id") or "").strip() == memory_id for entry in rows if isinstance(entry, Mapping)):
             return
-        account_store.append_structured_memory_entry(
-            account_id,
-            {
-                "id": memory_id,
-                "created_at": now.isoformat(timespec="seconds"),
-                "updated_at": now.isoformat(timespec="seconds"),
-                "kind": "biographical_fact",
-                "memory_type": "semantic",
-                "importance": 4,
-                "user_text": f"User erwaehnt als Wohnstadt: {city}.",
-                "bot_text": "Als Wohnort fuer Wetter- und Kontextchecks gemerkt.",
-                "keywords": ["wohnort", "stadt", city.casefold()],
-            },
-        )
+        entry = {
+            "id": memory_id,
+            "created_at": now.isoformat(timespec="seconds"),
+            "updated_at": now.isoformat(timespec="seconds"),
+            "kind": "biographical_fact",
+            "memory_type": "semantic",
+            "importance": 4,
+            "user_text": f"User erwaehnt als Wohnstadt: {city}.",
+            "bot_text": "Als Wohnort fuer Wetter- und Kontextchecks gemerkt.",
+            "keywords": ["wohnort", "stadt", city.casefold()],
+        }
+        obsolete_rows = [
+            row
+            for row in rows
+            if isinstance(row, Mapping)
+            and str(row.get("id") or "").strip().startswith("mem_residence_city_")
+            and str(row.get("id") or "").strip() != memory_id
+        ]
+        if not obsolete_rows:
+            account_store.append_structured_memory_entry(account_id, entry)
+            return
+        previous_rows = [dict(row) for row in rows if isinstance(row, Mapping)]
+        previous_index = account_store.read_memory_index(account_id)
+        retained_rows = [
+            dict(row)
+            for row in rows
+            if not (
+                isinstance(row, Mapping)
+                and str(row.get("id") or "").strip().startswith("mem_residence_city_")
+                and str(row.get("id") or "").strip() != memory_id
+            )
+        ]
+        try:
+            account_store.write_memory_entries(account_id, retained_rows)
+            account_store.rebuild_structured_memory_index(account_id)
+            account_store.append_structured_memory_entry(account_id, entry)
+        except Exception:
+            account_store.write_memory_entries(account_id, previous_rows)
+            account_store.write_memory_index(account_id, previous_index)
+            raise
     except Exception:
         return
 
