@@ -10791,3 +10791,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Companion-Wohnort vor Aktivität
+
+- `bei/mit Eltern, Familie oder Kindern in Berlin und ...` behält Berlin vor Arbeits-/Studienkontext.
+- `bei meiner Arbeit` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `68 passed`, sechs Companion-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e4f98526 fix: preserve companion residence before activity`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
