@@ -2412,7 +2412,9 @@ def _clean_city(value: str) -> str:
         r"(?i)^(?:der|die|das|den|dem|des|dies(?:er|e|es)|jen(?:er|e|es)|"
         r"welch(?:er|e|es)|irgendein|mehrere|einige|manche|ohne|unbekannt\w*|"
         r"unbestimmt\w*|wird|soll|geplant\w*|nimmer|werktags|wochentags|hier|dort|da|"
-        r"vielleicht|vermutlich|angeblich|fast|beinahe|möglicherweise|moeglicherweise)\b",
+        r"vielleicht|vermutlich|angeblich|keineswegs|niemals|fast|beinahe|"
+        r"möglicherweise|moeglicherweise|könnte|koennte|wäre|waere|würde|wuerde|"
+        r"sollte|dürfte|duerfte|müsste|muesste)\b",
         city,
     ):
         return ""
