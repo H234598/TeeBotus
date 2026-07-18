@@ -11879,3 +11879,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Persönlicher Umzug mit Aus-Quelle
+
+- `Ich habe meinen Wohnsitz aus Berlin nach Hamburg verlegt` und `Ich habe den Wohnort aus Berlin nach Potsdam verlegt` liefern Zielort.
+- Bestehender persönlicher Verlegungspfad akzeptiert jetzt `von` und `aus`.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, zwei Personal-Source-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b5e13f1d fix: parse personal residence move from source`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
