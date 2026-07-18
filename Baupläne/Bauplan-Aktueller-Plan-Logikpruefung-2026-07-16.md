@@ -8104,7 +8104,7 @@ Push. Restart erst bei `20/20`.
   Stadtwechsel invalidieren weiterhin sofort.
 - Verifikation: `tests/test_weather_context.py` -> `12 passed`; `py_compile`,
   `git diff --check` gruen. Kein Provider/API-Aufruf.
-- Code-Commit: folgt nach Commit.
+- Code-Commit: `dbd6e00e fix: normalize weather city comparisons`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `6/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
