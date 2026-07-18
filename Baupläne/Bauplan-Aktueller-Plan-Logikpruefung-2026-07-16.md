@@ -9761,6 +9761,18 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Alternative Gegenstellungsmarker
+
+- `dafür ist` und `stattdessen ist` werden zwischen Herkunft und aktuellem Wohnort korrekt übersprungen.
+- Die Regel bleibt auf explizite Herkunft-/Wohnortpaare beschränkt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, zwei Alternative-Contrast-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b407b9a2 fix: parse alternative origin residence markers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Negierte Wohnortwechsel
 
 - `Mein Wohnort ist keinesfalls Berlin, sondern Hamburg` liefert jetzt den aktuellen Ort `Hamburg`.
