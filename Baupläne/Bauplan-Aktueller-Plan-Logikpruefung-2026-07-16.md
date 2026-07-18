@@ -11891,3 +11891,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Mietzusatz im Wohnort
+
+- `Ich wohne in Hamburg zur Miete` wird auf Hamburg gekürzt.
+- `zur Miete` ist lokaler City-Trailing-Stop; Wohnort bleibt erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, ein Rental-Suffix-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `054f51b5 fix: trim rental residence suffix`.
+
+## Restart-Ledger 2026-07-18
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `20/20` Code-Fixes. User-Service-Restart jetzt fällig. Kein Push.
