@@ -28,6 +28,7 @@ _RESIDENCE_TIME_QUALIFIER = (
     rf"(?:(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|seitdem|"
     r"jetzt|nun|aktuell|derzeit|gerade|momentan|inzwischen|mittlerweile|"
     r"weiterhin|nach\s+wie\s+vor|noch\s+immer|immer\s+noch|"
+    r"dauerhaft|permanent|ständig|staendig|"
     r"vor(?:uebergehend|übergehend))"
 )
 _RESIDENCE_LOCATION_ADVERB = (
@@ -306,6 +307,12 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich\s+)?habe\s+meinen\s+(?:festen|ständigen|staendigen|permanenten)\s+"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz)\s+in\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt|stadt|ort|zu\s+hause|zuhause|daheim|{_PRIMARY_RESIDENCE_LABEL})\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|stadt)(?:\s+von)?|im\s+raum|nahe|unweit\s+von)\s+"
@@ -415,8 +422,8 @@ CITY_TRAILING_STOP_RE = re.compile(
     r"am\s+(?:stadtrand|see|bahnhof|fluss|rand)|f(?:ür|uer)|"
     r"w(?:ährend|aehrend)|zusammen|obwohl|wobei|denn|da|dort|[-–—]|"
     r"heute|morgen|gestern|gerade|aktuell|jetzt|nun|momentan|derzeit|"
-    r"zurzeit|zur\s+zeit|weiterhin|inzwischen|mittlerweile|"
-    r"vor(?:uebergehend|übergehend)|"
+    r"zurzeit|zur\s+zeit|weiterhin|inzwischen|mittlerweile|dauerhaft|"
+    r"permanent|ständig|staendig|vor(?:uebergehend|übergehend)|"
     r"frueh|früh|morgens|vormittags|mittags|nachmittags|abends|nachts|\.|,|;|:|!|\?).*$",
     re.IGNORECASE,
 )
