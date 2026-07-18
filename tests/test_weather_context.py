@@ -841,6 +841,12 @@ def test_extract_residence_city_rejects_semicolon_conflicts() -> None:
     assert extract_residence_city("Ich wohne in Berlin; aber ich arbeite in Hamburg.") == "Berlin"
 
 
+def test_extract_residence_city_handles_punctuated_clarifications() -> None:
+    assert extract_residence_city("Ich wohne in Berlin, genauer gesagt: Potsdam.") == "Potsdam"
+    assert extract_residence_city("Ich wohne in Deutschland; genauer gesagt in Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist Berlin; konkret: Potsdam.") == "Potsdam"
+
+
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
