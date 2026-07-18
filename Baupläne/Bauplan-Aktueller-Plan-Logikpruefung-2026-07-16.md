@@ -7919,6 +7919,19 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `18/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Morgen-Tageszeit bei relativen Kalender-Remindern
+
+- `Erinnere mich in zwei Wochen morgens an den Termin` uebernahm bisher
+  aktuelle Uhrzeit `12:34`, weil `morgens` kein Tageszeitmarker war.
+- `morgens` wird jetzt als `09:00` auf den relativen Kalendertag angewendet;
+  der Datumsanker `morgen` bleibt davon getrennt.
+- Verifikation: `tests/test_reminder_intent.py` -> `59 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c669af38 fix: apply morning daypart to relative reminders`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `19/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
