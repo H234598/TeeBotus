@@ -11711,3 +11711,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zeitlicher Nicht-mehr-Kontrast
+
+- `Ich lebe nun nicht mehr in Berlin, sondern Hamburg` und `Wir wohnen aktuell nicht mehr bei Berlin, sondern bei Potsdam` liefern aktuellen Ort.
+- Arbeitsverb im Ersatzteil bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Timed-Contrast-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `62968cab fix: parse timed residence contrast clauses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
