@@ -2532,12 +2532,26 @@ def extract_residence_city(text: str) -> str:
             return max(candidates, key=lambda candidate: candidate[0])[1]
         return ""
 
+    if _has_conflicting_residence_address_targets(source) or _has_explicit_residence_multiplicity(source):
+        return ""
     city = latest_match(CITY_CHANGE_PATTERNS)
     if city:
         return city
-    if _has_conflicting_residence_address_targets(source) or _has_ambiguous_residence_targets(source):
+    if _has_ambiguous_residence_targets(source):
         return ""
     return latest_match(CITY_PATTERNS)
+
+
+def _has_explicit_residence_multiplicity(source: str) -> bool:
+    return bool(
+        re.search(
+            r"\b(?:wohne|wohnen|lebe|leben)\b[^.!?;\n]*\b(?:mal|teils|teilweise|abwechselnd|zwischen|"
+            r"oder|beziehungsweise|bzw\.?)\b|"
+            r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnorte|wohnsitze)\b",
+            source,
+            re.IGNORECASE,
+        )
+    )
 
 
 def _has_conflicting_residence_address_targets(source: str) -> bool:
@@ -2548,8 +2562,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             re.IGNORECASE,
         ),
         re.compile(
-            r"(?:^|[.!?;\n]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz)\s+"
+            r"(?:^|[.!?;,\n]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz)\s+"
             rf"(?:ist|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?:^|[.!?;,\n]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz)\s+"
+            r"(?!(?:ist|liegt|befindet\s+sich)\b)"
+            rf"{city_capture}",
             re.IGNORECASE,
         ),
     )
@@ -2648,8 +2668,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         ):
             return True
     if re.search(
-        rf"\b{residence}\s+(?:mal|teils)\s+(?:in|bei)\s+[^,.;!?]+,\s*"
-        r"(?:mal|teils)\s+(?:in|bei)\s+[^,.;!?]+",
+        rf"\b{residence}\s+(?:mal|teils|teilweise)\s+(?:in|bei)\s+[^,.;!?]+,\s*"
+        r"(?:mal|teils|teilweise)\s+(?:in|bei)\s+[^,.;!?]+",
         source,
         re.IGNORECASE,
     ) or re.search(
