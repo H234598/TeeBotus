@@ -14461,3 +14461,16 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Registrierte Wohnadressen
+
+- Qualifizierte Meldeanschriften mit Doppelpunkt und `eine offizielle Meldeadresse in ...` werden erkannt.
+- `Ich bin in Berlin amtlich gemeldet` liefert nur Berlin, nicht `Berlin amtlich`.
+- `Berlin ist meine gemeldete Adresse` wird erkannt; Geschäftsadressen bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, fünf Registered-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `171e1b76 fix: parse registered residence variants`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
