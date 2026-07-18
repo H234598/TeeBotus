@@ -28,6 +28,12 @@ _RESIDENCE_LOCATION_ADVERB = r"(?:hier|dort|da|direkt)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:ich\s+)?(?:wohne|lebe)\s+(?:in|bei)\s+[^,.;!?]{1,80}\s+und\s+"
+        r"(?:ich\s+)?(?:wohne|lebe)\s+(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich\s+wohne|ich\s+lebe)\s+"
         r"(?:nicht\s+(?:mehr|l(?:aenger|änger))?|nicht)\s+(?:in|bei)\s+[^,.;!?]{1,80}?"
         r"(?:,|;|[-–—])\s*(?:(?:sondern|aber)\s+)?"
