@@ -9863,6 +9863,18 @@ Restart erst bei `20/20`.
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Neutrale der/ein-Wohnortlabels
+
+- `Hamburg ist der Wohnort`, `der gemeldete Wohnsitz` und `ein fester Wohnort` werden erkannt.
+- `dein/ihr/deren` bleiben ausgeschlossen; `Wohnort ist daheim` wird nicht als Stadt gelesen.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, sechs Neutral-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4b69367b fix: parse neutral residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
