@@ -7903,6 +7903,19 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `16/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Offene Wohnort-Dauern erkennen
+
+- `Ich lebe seit Jahren in Köln` und `Ich wohne seit Monaten in Dresden`
+  wurden wegen fehlender Zahl vor der Zeiteinheit verworfen.
+- Eigenständige Einheiten wie `Tagen`, `Wochen`, `Monaten` und `Jahren` sind
+  nun gültige begrenzte Zeitqualifizierer.
+- Verifikation: `tests/test_weather_context.py` -> `22 passed`,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9ca1f067 fix: parse open-ended residence durations`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `17/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Gemini-Keyring: Cursor nach Route/Modell isolieren
 
 - 2026-07-17: `RotatingAPIKeyRing` nahm zwar `name` entgegen, Registry-State
