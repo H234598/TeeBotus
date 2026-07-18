@@ -2367,6 +2367,12 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"(?:^|[.!?;,:]\s*)(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:wohnhaft|ansässig|ansaessig)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:mein(?:e)?\s+)?(?:(?:aktuell(?:er|e)?|jetzig(?:er|e)|derzeitig(?:er|e)?|gegenwärtig(?:er|e)?)\s+)?"
         rf"(?:wohnort|wohnsitz|wohnstadt|stadt|ort)(?:\s+(?:ist|heisst|heißt|lautet|liegt|befindet\s+sich|bleibt)\s*|:\s*)"
         rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:(?:in|bei)\s+)?"
