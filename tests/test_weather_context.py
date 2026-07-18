@@ -119,6 +119,9 @@ def test_extract_residence_city_from_current_location_label() -> None:
     assert extract_residence_city("Wohnort: Dresden.") == "Dresden"
     assert extract_residence_city("Ich habe meinen Wohnsitz in München.") == "München"
     assert extract_residence_city("Ich bin in Köln wohnhaft.") == "Köln"
+    assert extract_residence_city("Berlin ist mein Wohnort.") == "Berlin"
+    assert extract_residence_city("Wohnhaft in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich bin ansässig in Potsdam.") == "Potsdam"
 
 
 def test_extract_residence_city_rejects_negated_or_non_city_phrases() -> None:
@@ -128,6 +131,8 @@ def test_extract_residence_city_rejects_negated_or_non_city_phrases() -> None:
         "Mein Wohnort ist nicht Berlin.",
         "Meine Heimatstadt ist Hamburg.",
         "Mein Zuhause ist nicht Berlin.",
+        "Berlin ist mein Arbeitsort.",
+        "Hamburg ist mein Herkunftsort.",
         "Ich wohne in Berlin nicht mehr.",
     ):
         assert extract_residence_city(text) == ""
