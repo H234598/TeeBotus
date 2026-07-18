@@ -923,6 +923,13 @@ def test_extract_residence_city_handles_genitive_and_distance_relations() -> Non
     assert extract_residence_city("Ich wohne im nördlichen Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_rejects_multiple_home_targets() -> None:
+    assert extract_residence_city("Mein Zuhause ist in Berlin und Hamburg.") == ""
+    assert extract_residence_city("Ich wohne werktags in Berlin und am Wochenende in Hamburg.") == ""
+    assert extract_residence_city("Ich wohne wochentags in Berlin und am Wochenende in Hamburg.") == ""
+    assert extract_residence_city("Ich wohne hauptsächlich in Berlin, manchmal in Hamburg.") == "Berlin"
+
+
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

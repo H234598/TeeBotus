@@ -113,7 +113,7 @@ CITY_CHANGE_PATTERNS = (
     ),
     re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
-        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
         r"(?:war\s+)?(?:aber\s+)?(?:früher|frueher|ehemals|damals|vormalig\w*)\b",
@@ -586,7 +586,7 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+nicht(?:\s+mehr)?\s+"
         r"[^,.;!?]{1,80}?(?:\s*(?:,|;|[-–—])\s*|\s+)sondern\s+"
         rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:bei|mit|zusammen\s+mit)\s+[^,.;!?]{{1,80}}\s+in\s+"
@@ -1814,7 +1814,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     ):
         return True
     if re.search(
-        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+[^,.;!?]{1,80}\s+und\s+"
         r"(?!(?:arbeit|studier|lern|schlaf|mach|komm|fahr|geh|zieh|hab|besuch|verbring|treff|reis|pendl|seh|übernacht|uebernacht)\w*\b)"
         r"(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß'-]*",
@@ -1955,7 +1955,7 @@ def _clean_city(value: str) -> str:
     if re.match(
         r"(?i)^(?:der|die|das|den|dem|des|dies(?:er|e|es)|jen(?:er|e|es)|"
         r"welch(?:er|e|es)|irgendein|mehrere|einige|manche|ohne|unbekannt\w*|"
-        r"unbestimmt\w*|wird|soll|geplant\w*|nimmer|hier|dort|da)\b",
+        r"unbestimmt\w*|wird|soll|geplant\w*|nimmer|werktags|wochentags|hier|dort|da)\b",
         city,
     ):
         return ""
