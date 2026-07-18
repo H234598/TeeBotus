@@ -9794,6 +9794,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Confidence-Adverbien in Labels
+
+- `Wohnort ist wahrscheinlich/wohl Berlin` wird verworfen, statt Unsicherheit als Fakt zu speichern.
+- `Wohnort ist sicher/tatsächlich Berlin` entfernt das Adverb und speichert `Berlin`.
+- Verifikation: `tests/test_weather_context.py` -> `140 passed`, vier Confidence-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8a67af00 fix: normalize residence confidence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
