@@ -9896,3 +9896,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Ortsdescriptoren mit konkreter Stadt
+
+- `auf dem Land bei/in`, `Kleinstadt/Dorf nahe` sowie `Großstadt/Stadt, nämlich` wurden bisher nicht bis zur konkreten Stadt verfolgt.
+- Der Descriptorpfad akzeptiert diese Ortsbeschreibung nur mit nachfolgender Stadt; alleinige Aussagen wie `Ich wohne auf dem Land` bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 9 Descriptor-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bad7cf4e fix: parse residence place descriptors`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
