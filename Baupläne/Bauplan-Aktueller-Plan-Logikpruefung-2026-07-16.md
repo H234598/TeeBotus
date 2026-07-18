@@ -10365,3 +10365,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Ambige Wohn-Kurzformen und Ortswechsel
+
+- Freier Kurzpfad las in `wohne aber inzwischen in Hamburg`, `zwischen Berlin und Potsdam` und `irgendwo bei Berlin` falsche Wörter als Stadt.
+- Kurzform ohne Präposition nur noch als klar begrenzter Satzkandidat; Wohnwechsel aus `komme aus ..., wohne ...` ergänzt; Mehrfachrelation `zwischen ... und ...` bleibt leer; `beheimatet` und `irgendwo bei` unterstützt.
+- Verifikation: `tests/test_weather_context.py` -> `36 passed`, 6 Parser-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ffe5cf9c fix: reject ambiguous residence shorthand`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
