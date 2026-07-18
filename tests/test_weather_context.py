@@ -1060,6 +1060,7 @@ def test_extract_residence_city_normalizes_unweit_and_nahe_labels() -> None:
 def test_extract_residence_city_normalizes_region_labels() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Region Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort liegt im Großraum Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort liegt im Großraum von München.") == "München"
     assert extract_residence_city("Mein Wohnort befindet sich im Berliner Großraum.") == "Berlin"
 
 

@@ -399,7 +399,7 @@ CITY_CHANGE_PATTERNS = (
     re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
-        r"(?:in\s+der\s+region|im\s+großraum|im\s+grossraum)\s+"
+        r"(?:in\s+der\s+region|im\s+großraum|im\s+grossraum)\s+(?:von\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
