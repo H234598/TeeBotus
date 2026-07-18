@@ -1549,7 +1549,8 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:meine|unsere)\s+"
-        r"(?:offiziell\w*|privat\w*|aktuell\w*)\s+"
+        r"(?:offiziell\w*|privat\w*|aktuell\w*|dauerhaft\w*|fest\w*|"
+        r"ständig\w*|staendig\w*|stabil\w*|gegenwärtig\w*|gegenwaertig\w*)\s+"
         r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+"
         r"(?:ist|liegt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
