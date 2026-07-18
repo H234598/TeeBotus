@@ -11243,3 +11243,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Genitivisches Stadtgebiet
+
+- `im Stadtgebiet Münchens` und `im Stadtgebiet Berlins` werden erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `100 passed`, drei Genitiv-Stadtgebiet-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f871bf96 fix: parse genitive stadtgebiet relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
