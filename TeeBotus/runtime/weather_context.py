@@ -587,6 +587,7 @@ def _clean_city(value: str) -> str:
         return ""
     city = CITY_TRAILING_STOP_RE.sub("", source).strip(" .,:;!?")
     city = re.sub(r"\s+", " ", city)
+    city = re.split(r"(?<!\bSt)[.!?]\s+", city, maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,:;!?")
     city = re.sub(r"(?i)^(?:in|bei)\s+", "", city)
     if not city or len(city) > MAX_CITY_LENGTH:
         return ""
