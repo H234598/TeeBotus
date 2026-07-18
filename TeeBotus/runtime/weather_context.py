@@ -536,6 +536,8 @@ def extract_residence_city(text: str) -> str:
         match = pattern.search(source)
         if not match:
             continue
+        if _has_unresolved_location_separator(source, match.end("city")):
+            return ""
         city = _clean_city(match.group("city"))
         if city:
             return city
@@ -545,6 +547,8 @@ def extract_residence_city(text: str) -> str:
         match = pattern.search(source)
         if not match:
             continue
+        if _has_unresolved_location_separator(source, match.end("city")):
+            return ""
         city = _clean_city(match.group("city"))
         if city:
             return city
@@ -571,6 +575,13 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             re.IGNORECASE,
         )
     )
+
+
+def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
+    tail = source[city_end:]
+    boundary = re.search(r"[.!?;\n]", tail)
+    segment = tail if boundary is None else tail[: boundary.start()]
+    return bool(re.match(r"\s*(?:/|&)\s*[A-ZÄÖÜäöüß]", segment, re.IGNORECASE))
 
 
 def fetch_weather_summary(city: str) -> str:
