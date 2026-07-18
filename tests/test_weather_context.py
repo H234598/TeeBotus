@@ -1223,6 +1223,13 @@ def test_extract_residence_city_handles_nimmer_changes() -> None:
     assert extract_residence_city("Ich wohne nimmer in Berlin.") == ""
 
 
+def test_extract_residence_city_rejects_absolute_negation_labels() -> None:
+    assert extract_residence_city("Ich wohne keinesfalls in Hamburg.") == ""
+    assert extract_residence_city("Ich wohne keineswegs in Potsdam.") == ""
+    assert extract_residence_city("Ich lebe niemals in Berlin.") == ""
+    assert extract_residence_city("Ich wohne keinesfalls in Berlin, sondern in Hamburg.") == "Hamburg"
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
