@@ -11526,3 +11526,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Historischer Hauptwohnsitz ohne Präposition
+
+- `Mein Lebensmittelpunkt/Hauptwohnsitz war Hamburg, jetzt Berlin` akzeptiert aktuellen Ort auch ohne `in/bei`.
+- Arbeits- und Studienverben bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Primary-Label-History-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `da127eb8 fix: parse primary residence history without preposition`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
