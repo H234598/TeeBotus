@@ -212,6 +212,26 @@ def test_parse_reminder_date_without_year_rolls_to_next_occurrence() -> None:
     assert intent.due_at == "2027-01-01T09:00:00+00:00"
 
 
+def test_parse_reminder_accepts_numeric_date_after_an_den_marker() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich an den 20.06. um 9 an den Termin",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-06-20T09:00:00+00:00"
+    assert intent.subject == "den Termin"
+
+
+def test_parse_reminder_keeps_date_subject_after_relative_time() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich in 2 Stunden an den 20.06.",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-06-15T14:00:00+00:00"
+    assert intent.subject == "den 20.06"
+
+
 def test_parse_reminder_supports_german_month_names_and_explicit_year() -> None:
     now = datetime(2026, 6, 15, 12, 0, tzinfo=timezone.utc)
 

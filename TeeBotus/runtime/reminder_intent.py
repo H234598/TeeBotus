@@ -730,9 +730,27 @@ def _has_invalid_explicit_time(text: str) -> bool:
 
 def _date_match_is_after_subject_marker(text: str, match: re.Match[str]) -> bool:
     prefix = _normalize(str(text or "")[: match.start()])
+    direct_date_marker = re.search(r"\ban(?:\s+den)?\s*$", prefix)
+    if direct_date_marker:
+        return _has_temporal_anchor(prefix[: direct_date_marker.start()])
     if not re.search(r"\ban\b", prefix):
         return False
     return not bool(re.match(r"\s*am\b", _normalize(match.group(0))))
+
+
+def _has_temporal_anchor(text: str) -> bool:
+    normalized = _normalize(text)
+    return bool(
+        re.search(r"\b(?:heute|morgen|uebermorgen|naechsten|kommenden)\b", normalized)
+        or RELATIVE_RE.search(normalized)
+        or RELATIVE_TEXT_RE.search(normalized)
+        or TIME_RE.search(normalized)
+        or DAY_WORD_RE.search(normalized)
+        or MONTH_DAY_RE.search(normalized)
+        or MONTH_NAME_DATE_RE.search(normalized)
+        or ISO_RE.search(normalized)
+        or DATE_RE.search(normalized)
+    )
 
 
 def _normalize_year(value: str | None, current_year: int) -> int:
@@ -746,6 +764,19 @@ def _normalize_year(value: str | None, current_year: int) -> int:
 
 def _reminder_subject(text: str) -> str:
     cleaned = str(text or "").strip()
+    cleaned = ISO_RE.sub(
+        lambda match: match.group(0) if _date_match_is_after_subject_marker(cleaned, match) else "",
+        cleaned,
+    )
+    cleaned = MONTH_NAME_DATE_RE.sub(
+        lambda match: match.group(0) if _date_match_is_after_subject_marker(cleaned, match) else "",
+        cleaned,
+    )
+    cleaned = DATE_RE.sub(
+        lambda match: match.group(0) if _date_match_is_after_subject_marker(cleaned, match) else "",
+        cleaned,
+    )
+    cleaned = re.sub(r"(?i)\ban\s+den\s+(?=(?:um|gegen|an|daran|$))", " ", cleaned)
     cleaned = re.sub(
         r"(?i)\b("
         r"erinner(?:e|st|n)?\s+(?:mich|mi|uns)|"
@@ -768,18 +799,6 @@ def _reminder_subject(text: str) -> str:
     cleaned = RELATIVE_TEXT_RE.sub("", cleaned)
     cleaned = RELATIVE_RE.sub("", cleaned)
     cleaned = TIME_RE.sub("", cleaned)
-    cleaned = ISO_RE.sub(
-        lambda match: match.group(0) if _date_match_is_after_subject_marker(cleaned, match) else "",
-        cleaned,
-    )
-    cleaned = MONTH_NAME_DATE_RE.sub(
-        lambda match: match.group(0) if _date_match_is_after_subject_marker(cleaned, match) else "",
-        cleaned,
-    )
-    cleaned = DATE_RE.sub(
-        lambda match: match.group(0) if _date_match_is_after_subject_marker(cleaned, match) else "",
-        cleaned,
-    )
     cleaned = MONTH_DAY_RE.sub("", cleaned)
     cleaned = DAY_WORD_RE.sub("", cleaned)
     cleaned = re.sub(
