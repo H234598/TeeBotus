@@ -12813,3 +12813,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Genitiv-Regionsform
+
+- `Ich wohne in Berlins Gegend` und `Ich lebe in Münchens Region` werden normalisiert erkannt.
+- Arbeitsverb bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Genitive-Area-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `619b0a12 fix: parse genitive residence area forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
