@@ -14364,3 +14364,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Bekannte Stadtteil-Basen
+
+- `Berlin-Kreuzberg`, `Hamburg-Altona`, `Köln-Deutz` und `Berlin-Mitte` werden für Wetter-/Wohnortzwecke auf jeweilige Stadtbasis normalisiert.
+- Bekannte echte Kompositstädte wie `Frankfurt am Main` und `Frankfurt an der Oder` bleiben vollständig erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, fünf District-Normalization-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b8d26c77 fix: normalize known city districts`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
