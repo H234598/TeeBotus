@@ -974,6 +974,8 @@ def test_extract_residence_city_handles_stadtgebiet_relations() -> None:
     assert extract_residence_city("Ich wohne im Stadtgebiet von München.") == "München"
     assert extract_residence_city("Mein Wohnort ist im Berliner Stadtgebiet.") == "Berlin"
     assert extract_residence_city("Mein Wohnort liegt im Stadtgebiet von Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne im Stadtgebiet Münchens.") == "München"
+    assert extract_residence_city("Mein Wohnort liegt im Stadtgebiet Berlins.") == "Berlin"
 
 
 def test_extract_residence_city_handles_hyphenated_direction_relations() -> None:
