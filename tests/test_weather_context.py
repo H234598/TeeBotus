@@ -171,6 +171,8 @@ def test_extract_residence_city_removes_daypart_context() -> None:
     assert extract_residence_city("Ich wohne in Potsdam neben meinen Eltern.") == "Potsdam"
     assert extract_residence_city("Ich lebe in Dresden nahe der Innenstadt.") == "Dresden"
     assert extract_residence_city("Ich wohne in Köln innerhalb der Stadt.") == "Köln"
+    assert extract_residence_city("Ich wohne in Berlin - meine Arbeit ist in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Bad Homburg-Süd.") == "Bad Homburg-Süd"
 
 
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
