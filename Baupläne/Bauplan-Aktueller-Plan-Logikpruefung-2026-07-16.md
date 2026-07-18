@@ -11550,3 +11550,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Präsentes Sesshaft-Signal
+
+- `Ich bin in/bei Berlin sesshaft` wird wie `sesshaft geworden` erkannt.
+- Besuchsformulierungen bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Sesshaft-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `cc3b7569 fix: parse present sesshaft residence`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
