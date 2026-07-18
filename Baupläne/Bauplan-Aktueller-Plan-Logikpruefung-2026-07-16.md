@@ -10909,3 +10909,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Bundeslandpräfixe vor Zielstadt
+
+- `in/im <Bundesland> bei/in <Stadt>` extrahiert Zielstadt statt Bundesland.
+- Label- und Direktform inklusive `im Bundesland` werden erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `77 passed`, fünf Regionspräfix-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2acec0a3 fix: parse regional residence prefixes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
