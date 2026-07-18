@@ -77,6 +77,8 @@ def test_extract_residence_city_rejects_future_residence() -> None:
 def test_extract_residence_city_from_additional_change_forms() -> None:
     assert extract_residence_city("Ich wohne nicht mehr in Berlin, bin jetzt in Hamburg.") == "Hamburg"
     assert extract_residence_city("Nach meinem Umzug bin ich nach Hamburg gezogen.") == "Hamburg"
+    assert extract_residence_city("Ich lebe derzeit in Deutschland, genauer gesagt in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin; zu Hause bin ich in Potsdam.") == ""
 
 
 def test_extract_residence_city_from_direction_and_edge_relations() -> None:
@@ -120,11 +122,13 @@ def test_extract_residence_city_from_short_profile_forms() -> None:
 
 def test_extract_residence_city_from_inverted_location_forms() -> None:
     assert extract_residence_city("In Berlin wohne ich.") == "Berlin"
+    assert extract_residence_city("Berlin, dort wohne ich.") == "Berlin"
     assert extract_residence_city("In Hamburg lebe ich.") == "Hamburg"
     assert extract_residence_city("Bei meinen Eltern in Berlin wohne ich.") == "Berlin"
     assert extract_residence_city("In der Nähe von Potsdam lebe ich.") == "Potsdam"
     assert extract_residence_city("Im Raum Leipzig wohne ich.") == "Leipzig"
     assert extract_residence_city("In Berlin habe ich meinen Wohnsitz.") == "Berlin"
+    assert extract_residence_city("In Berlin bin ich zu Hause.") == "Berlin"
     assert extract_residence_city("In Berlin befindet sich mein Wohnort.") == "Berlin"
     assert extract_residence_city("In Berlin liegt mein Wohnsitz.") == "Berlin"
     assert extract_residence_city("In Berlin arbeite ich.") == ""

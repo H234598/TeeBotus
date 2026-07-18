@@ -540,6 +540,26 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}),\s*"
+        r"(?:hier|dort|da)\s+(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"(?:bin|sind)\s+(?:ich|wir)\s+(?:hier|dort|da\s+)?"
+        r"(?:zu\s+hause|zuhause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
+        r"(?:deutschland|österreich|oesterreich|schweiz)\s*,\s*"
+        r"(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|"
+        r"besser\s+gesagt|sprich)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
         r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\b(?!\s+(?:nicht|früher|frueher|ehemals)\b)",
         re.IGNORECASE,
@@ -1300,6 +1320,14 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb)"
     if re.search(
         rf"\b{residence}\s+zwischen\s+[^,.;!?]+\s+und\s+[^,.;!?]+",
+        source,
+        re.IGNORECASE,
+    ):
+        return True
+    if re.search(
+        rf"\b{residence}\s+(?:in|bei)\s+[^;.!?]+;\s*"
+        r"[^;.!?]*(?:zuhause|zu\s+hause|daheim|wohnort|wohnsitz)\b"
+        r"[^;.!?]*(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]*",
         source,
         re.IGNORECASE,
     ):
