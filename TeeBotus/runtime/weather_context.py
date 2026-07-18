@@ -2903,6 +2903,7 @@ CITY_PATTERNS = (
         r"|(?:der|ein)\s+ort\s+meiner\s+geburt"
         r")"
         r"(?:\s*,\s*(?:(?:aber|doch|jedoch|dafür|stattdessen|während|waehrend)\s+)?(?:ist\s+)?|"
+        r"\s*;\s*|"
         r"\s+(?:und|sowie|während|waehrend)\s+)"
         r"(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s+ist)?(?=\s+(?:(?:mein|unser)\s+"
