@@ -2346,11 +2346,11 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+ist\s+der\s+ort,\s+"
-        r"in\s+dem\s+ich\s+lebe\b",
+        r"in\s+dem\s+ich\s+(?:lebe|wohne)\b",
         re.IGNORECASE,
     ),
     re.compile(
-        r"\bder\s+ort,\s+in\s+dem\s+ich\s+lebe,\s+ist\s+"
+        r"\bder\s+ort,\s+in\s+dem\s+ich\s+(?:lebe|wohne),\s+ist\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
