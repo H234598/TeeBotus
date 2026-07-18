@@ -133,6 +133,7 @@ _RESIDENCE_DURATION = (
     r"(?:\d{4}|kurzem|kurzer\s+zeit|einiger\s+zeit|jeher|"
     r"(?:dem\s+)?(?:letzten|letztem|vergangenen|vergangenem|aktuellen|aktuellem|diesem)\s+(?:jahr|sommer|winter)|"
     r"(?:meiner\s+)?(?:kindheit|jugend|geburt)|(?:dem|meinem)\s+(?:studium|umzug)|"
+    r"(?:januar|februar|märz|maerz|april|mai|juni|juli|august|september|oktober|november|dezember)(?:\s+\d{4})?|"
     r"(?:(?:ein\s+paar|\w+)\s+(?:tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?)|"
     r"tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?))"
 )
