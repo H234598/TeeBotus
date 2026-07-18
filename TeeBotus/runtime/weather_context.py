@@ -457,6 +457,7 @@ CITY_PATTERNS = (
         r"(?:\s*(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s*)?"
         r"(?:(?:in\s+(?:der\s+)?(?:naehe|n(?:ä|ae)he|umgebung)\s+von|"
         r"unweit\s+von|rund\s+um|bei|nahe|in|von)\s+)?"
+        r"(?:(?:namens|genannt)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -471,7 +472,14 @@ CITY_PATTERNS = (
         r"(?:\s*(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s*)?"
         r"(?:(?:in\s+(?:der\s+)?(?:naehe|n(?:ä|ae)he|umgebung)\s+von|"
         r"unweit\s+von|rund\s+um|bei|nahe|in|von)\s+)?"
+        r"(?:(?:namens|genannt)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|stadt|ort|zuhause|zu\s+hause|daheim)\s+"
+        r"nennt\s+sich\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
