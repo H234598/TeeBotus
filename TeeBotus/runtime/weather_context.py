@@ -229,7 +229,10 @@ _RESIDENCE_LOCATION_ADVERB = (
 )
 _RESIDENCE_DISTANCE_PREFIX = (
     r"(?:(?:ungefähr|ungefaehr|ca\.?|circa|etwa|rund|knapp)\s+)?"
-    r"(?:\d+(?:[,.]\d+)?|ein(?:e|en)?|ein\s+paar|mehrere|wenige)\s*"
+    r"(?:\d+(?:[,.]\d+)?|ein(?:e|en)?|ein\s+paar|mehrere|wenige|"
+    r"null|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn|elf|"
+    r"zwölf|zwoelf|dreizehn|vierzehn|fünfzehn|fuenfzehn|sechzehn|"
+    r"siebzehn|achtzehn|neunzehn|zwanzig|hundert|tausend)\s*"
     r"(?:km|kilometer)\s+"
 )
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
@@ -2242,6 +2245,18 @@ CITY_PATTERNS = (
         r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
         r"(?:(?:in\s+der\s+(?:gegend|umgebung)\s+)?um)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s+herum)?(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
+        rf"(?:{_RESIDENCE_DISTANCE_PREFIX})(?:von|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+entfernt\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
+        rf"(?:{_RESIDENCE_DISTANCE_PREFIX})au(?:ßerhalb|sserhalb)\s+von\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
