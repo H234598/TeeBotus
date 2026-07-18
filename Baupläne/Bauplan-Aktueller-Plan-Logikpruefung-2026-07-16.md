@@ -14334,3 +14334,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wohnort vor Konnektor
+
+- `Mein Wohnsitz liegt in Hamburg, obwohl/während ich in Berlin arbeite` behält Hamburg.
+- Der nachgestellte Aktivitätsort wird nicht als Wohnort überschrieben.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, drei Residence-First-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c1710423 fix: parse residence-first connectors`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
