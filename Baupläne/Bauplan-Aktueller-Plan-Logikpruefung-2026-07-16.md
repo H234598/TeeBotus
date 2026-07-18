@@ -12694,3 +12694,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Kontrahierte Ortsart „am Ort“
+
+- `Ich wohne/lebe am Ort ...` wird erkannt; `Ich arbeite am Ort ...` bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Am-Ort-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3684152e fix: parse contracted residence locality forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
