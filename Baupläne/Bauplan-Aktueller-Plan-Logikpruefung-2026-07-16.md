@@ -7845,6 +7845,20 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `12/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Wohnortwechsel mit `inzwischen` erkennen
+
+- `Ich wohne in Berlin, aber inzwischen in Hamburg` und `... lebe aber
+  inzwischen in Potsdam` wurden vom ersten Wohnortmatch auf Berlin gekuerzt.
+- `inzwischen` und `mittlerweile` gelten jetzt als Wechselmarker, auch bei
+  negiertem Ausgangsort und ohne wiederholtes `wohne/lebe`. Arbeitsortsaetze
+  mit `arbeite inzwischen in ...` bleiben beim Wohnort Berlin.
+- Verifikation: `tests/test_weather_context.py` -> `22 passed`,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ef0fcdc3 fix: parse updated residence markers`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `13/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Gemini-Keyring: Cursor nach Route/Modell isolieren
 
 - 2026-07-17: `RotatingAPIKeyRing` nahm zwar `name` entgegen, Registry-State
