@@ -118,6 +118,20 @@ def test_extract_residence_city_from_short_profile_forms() -> None:
     assert extract_residence_city("Arbeitsort: Berlin.") == ""
 
 
+def test_extract_residence_city_from_inverted_location_forms() -> None:
+    assert extract_residence_city("In Berlin wohne ich.") == "Berlin"
+    assert extract_residence_city("In Hamburg lebe ich.") == "Hamburg"
+    assert extract_residence_city("Bei meinen Eltern in Berlin wohne ich.") == "Berlin"
+    assert extract_residence_city("In der Nähe von Potsdam lebe ich.") == "Potsdam"
+    assert extract_residence_city("Im Raum Leipzig wohne ich.") == "Leipzig"
+    assert extract_residence_city("In Berlin habe ich meinen Wohnsitz.") == "Berlin"
+    assert extract_residence_city("In Berlin befindet sich mein Wohnort.") == "Berlin"
+    assert extract_residence_city("In Berlin liegt mein Wohnsitz.") == "Berlin"
+    assert extract_residence_city("In Berlin arbeite ich.") == ""
+    assert extract_residence_city("In Berlin wohne ich nicht.") == ""
+    assert extract_residence_city("In Berlin ist mein Arbeitsort.") == ""
+
+
 def test_extract_residence_city_from_nearby_location_phrase() -> None:
     assert extract_residence_city("Ich wohne in der Nähe von Berlin.") == "Berlin"
     assert extract_residence_city("Ich lebe nahe Hamburg.") == "Hamburg"

@@ -533,6 +533,37 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\b(?!\s+(?:nicht|früher|frueher|ehemals)\b)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bbei\s+[^,.;!?]{1,80}?\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\b(?!\s+(?:nicht|früher|frueher|ehemals)\b)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung)\s+von|im\s+raum|"
+        r"nahe|unweit\s+von|au(?:ßerhalb|sserhalb)\s+von|am\s+stadtrand\s+von|"
+        r"im\s+umland\s+von|im\s+(?:norden|süden|osten|westen)\s+von|am\s+rand\s+von)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\b(?!\s+(?:nicht|früher|frueher|ehemals)\b)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"habe(?:n)?\s+(?:ich|wir)\s+(?:meinen|meine|mein|unseren|unsere|unser|den|die|das)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"(?:ist|liegt|befindet\s+sich)\s+(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:(?:aktuell(?:er|e)?|jetzig(?:er|e)|derzeitig(?:er|e)?|gegenwärtig(?:er|e)?)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
@@ -548,7 +579,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich\s+)?(?:wohne|wohnen|lebe|leben)\b\s*"
-        r"(?::|=|,)?\s*(?!(?:ist|war|w(?:äre|urde)|nicht|künft\w*|kuenft\w*|"
+        r"(?::|=|,)?\s*(?!(?:ich|wir|ist|war|w(?:äre|urde)|nicht|künft\w*|kuenft\w*|"
         r"zukünft\w*|zukuenft\w*|bald|morgen|nächste\w*|naechste\w*)\b)"
         r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
