@@ -2089,6 +2089,13 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:der|die|das|ein(?:e)?|eine)\s+"
+        r"(?:wohnadresse|wohnanschrift|meldeadresse|anschrift|adresse)\s+"
+        r"(?:ist|liegt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"(?:^|[.!?;,\n]\s*)(?:(?:eigentlich|aktuell|derzeit|momentan|nun|jetzt|gerade)\s+)?"
         r"(?!(?:ist|war|bleibt|wird)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*"
