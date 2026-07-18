@@ -1459,7 +1459,7 @@ CITY_PATTERNS = (
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:im|in\s+der|in\s+dem|in\s+einem|in\s+einer|in|am)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]*?)er\s+"
-        r"(?:stadtteil|bezirk|innenstadt|stadtmitte|stadtrand|rand|vorstadt|vorort|umland|stadtzentrum|zentrum)\b",
+        r"(?:stadtteil|bezirk|innenstadt|stadtmitte|stadtrand|rand|vorstadt|vorort|umland|stadtzentrum|zentrum|raum|region|gebiet)\b",
         re.IGNORECASE,
     ),
     re.compile(
