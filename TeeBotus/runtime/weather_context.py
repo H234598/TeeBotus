@@ -1767,7 +1767,7 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:während\s+(?:(?:meines|des)\s+studiums|(?:meiner|der)\s+(?:ausbildung|lehre))|"
-        r"nach\s+(?:dem\s+studium|der\s+(?:ausbildung|lehre)))\s+(?:in|bei)\s+"
+        r"nach\s+(?:dem\s+studium|der\s+(?:ausbildung|lehre)|(?:dem|meinem)\s+umzug))\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
