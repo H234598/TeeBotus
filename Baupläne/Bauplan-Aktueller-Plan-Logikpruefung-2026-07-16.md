@@ -9117,3 +9117,17 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `15/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Kontinuitaetsformulierungen beim Wohnort erkennen
+
+- `weiterhin`, `nach wie vor`, `noch immer` und `immer noch` werden jetzt als
+  aktuelle Wohnortqualifizierung erkannt.
+- `Mein Wohnort bleibt Hamburg` und entsprechende `ist weiterhin`-/`ist nach
+  wie vor`-Labels liefern den genannten Ort; vergangene Formen bleiben
+  ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `155531cd fix: parse residence continuity wording`.
+
+**Aktueller Laufstand:** Seit dem Restart `16/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
