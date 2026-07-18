@@ -1135,6 +1135,12 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt)\s+ist\s+(?:von|aus)\s+"
+        r"[^,.;!?]{1,80}\s+(?:zu|nach|in)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+gewechselt\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt)\s+verlegte\s+sich\s+(?:zu|nach|in)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -2740,7 +2746,7 @@ def _clean_city(value: str) -> str:
         city,
     ):
         return ""
-    if re.search(r"(?i)\b(?:gewesen|worden)\b", city):
+    if re.search(r"(?i)\b(?:gewesen|worden|geblieben)\b", city):
         return ""
     if re.search(
         r"(?i)\b(?:arbeit\w*|studier\w*|lern\w*|schlaf\w*|mach\w*|komm\w*|bin\w*|"
