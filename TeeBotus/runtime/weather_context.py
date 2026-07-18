@@ -2585,7 +2585,9 @@ CITY_PATTERNS = (
 CITY_TRAILING_STOP_RE = re.compile(
     r"\s+(?:und|aber|weil|wenn|falls|seit|schon|mit|bei|in|auf|neben|nahe|"
     r"innerhalb|au(?:ßerhalb|sserhalb)|unter|aus|wegen|als|statt|anstatt|anstelle\s+von|im|"
-    r"am\s+(?:stadtrand|see|bahnhof|fluss|rand)|f(?:ür|uer)|"
+    r"am\s+(?:stadtrand|see|bahnhof|fluss|rand|spree|elbe|donau|rhein|isar|weser|oder|neckar|ruhr|havel|saale)|"
+    r"an\s+der\s+(?:spree|elbe|donau|rhein|main|isar|weser|oder|neckar|ruhr|havel|saale)\b|"
+    r"f(?:ür|uer)|"
     r"w(?:ährend|aehrend)|zusammen|ohne|obwohl|wobei|denn|da|dort|[-–—]|"
     r"heute|morgen|gestern|gerade|aktuell|jetzt|nun|momentan|derzeit|"
     r"zurzeit|zur\s+zeit|weiterhin|inzwischen|mittlerweile|dauerhaft|"
