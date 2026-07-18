@@ -2093,7 +2093,7 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:ich\s+)?residiere\s+(?:in|bei)\s+"
+        r"\b(?:(?:ich|wir)\s+)?residier(?:e|en|t)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
