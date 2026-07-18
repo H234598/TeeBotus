@@ -13095,3 +13095,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Personen- statt Ortsziele bei `bei`
+
+- `bei Freunden/Bekannten/Kollegen/Eltern` ohne Stadt wird nicht mehr als Wohnort gespeichert.
+- `bei Freunden in Berlin` und ähnliche Formen behalten die konkrete Stadt.
+- Verifikation: `tests/test_weather_context.py` -> `118 passed`, fünf Person-Target-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `24037022 fix: reject person residence targets`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
