@@ -10245,3 +10245,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Weitere vollzogene Wohnortwechsel
+
+- `Ich wohne nicht mehr in Berlin, bin jetzt in Hamburg` und `Nach meinem Umzug bin ich nach Hamburg gezogen` wurden bisher verpasst.
+- Konnektorlose `bin jetzt`-Wechsel und invertierte abgeschlossene `bin ich ... gezogen`-Formen ergänzt; Zukunftswechsel bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `28 passed`, 4 Change-Form-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3a1e4543 fix: parse additional residence changes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
