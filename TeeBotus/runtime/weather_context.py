@@ -444,10 +444,15 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
-        r"(?:auf\s+dem\s+land|in\s+(?:einer|einem|der)\s+(?:klein|groß|gross)?stadt|"
+        r"\b(?:(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+)?"
+        r"(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:(?:ich|wir)\s+)?"
+        r"(?:(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+)?"
+        r"(?:auf\s+dem\s+land|in\s+(?:einer|einem|der)\s+"
+        r"(?:(?:klein|groß|gross)(?:e|en|er|es|em)?)?\s*stadt|"
         r"in\s+(?:einem|einer)\s+dorf)\s*"
-        r"(?:,?\s*(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s*)?"
+        r"(?:,\s*)?"
+        r"(?:\s*(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s*)?"
         r"(?:(?:bei|nahe|in)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -926,7 +931,8 @@ def _clean_city(value: str) -> str:
         return ""
     if re.match(
         r"(?i)^(?:der|die|das|den|dem|des|dies(?:er|e|es)|jen(?:er|e|es)|"
-        r"welch(?:er|e|es)|irgendein|mehrere|einige|manche|hier|dort|da)\b",
+        r"welch(?:er|e|es)|irgendein|mehrere|einige|manche|ohne|unbekannt\w*|"
+        r"unbestimmt\w*|hier|dort|da)\b",
         city,
     ):
         return ""
