@@ -9776,3 +9776,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Singuläre Begleit-Wohnorte erkennen
+
+- `Ich wohne zusammen mit meinen Eltern in Leipzig` und `Ich lebe mit Freunden in Dresden` wurden bisher nicht erkannt.
+- Der singuläre `mit ... in Stadt`-Pfad ergänzt den pluralen Begleitpfad; mehrere Wohnanker bleiben unklar.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3127b287 fix: parse singular companion residences`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
