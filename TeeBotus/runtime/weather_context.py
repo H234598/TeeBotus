@@ -3487,7 +3487,9 @@ def extract_residence_city(text: str) -> str:
                     if _has_uncertain_residence_prefix(source, pattern_start):
                         continue
                     if re.match(
-                        r"(?i)^\s*(?:ich|wir)\s+(?:glaube|denke|vermute)\b|"
+                        r"(?i)^\s*(?:vielleicht|vermutlich|möglicherweise|moeglicherweise|eventuell|"
+                        r"wahrscheinlich|wohl|angeblich|anscheinend|scheinbar)\b|"
+                        r"^\s*(?:ich|wir)\s+(?:glaube|denke|vermute)\b|"
                         r"^\s*ich\s+nehme\s+an\b|^\s*soweit\s+ich\s+wei(?:ß|ss)\b",
                         match.group("city"),
                     ):
