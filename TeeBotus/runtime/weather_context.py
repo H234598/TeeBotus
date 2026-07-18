@@ -1811,7 +1811,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich\s+)?(?:wohne|wohnen|lebe|leben)\s+"
-        r"(?!(?:ich|wir|tue|tun|mal|teils|abwechselnd|aber|doch|jedoch|zwischen|irgendwo|mit|auf|aus|nach|für|fuer|ab|"
+        r"(?!(?:ich|wir|tue|tun|mal|teils|abwechselnd|aber|doch|jedoch|zwischen|irgendwo|mit|auf|aus|nach|für|fuer|ab|seit|"
         r"während|waehrend|jetzt|inzwischen|aktuell|derzeit|nun)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
