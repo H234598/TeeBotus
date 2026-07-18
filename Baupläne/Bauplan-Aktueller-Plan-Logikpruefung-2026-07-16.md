@@ -9678,6 +9678,18 @@ Restart erst bei `20/20`.
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Artikel bei Adresslabels
+
+- `Die Wohnadresse/Meldeadresse/Anschrift/Adresse ... Hamburg` werden erkannt.
+- Neutrale `der Wohnort/der Wohnsitz` bleiben wegen möglicher Fremdperson mehrdeutig und abgelehnt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, sechs Neutral-Address-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `fbb9cfc5 fix: scope neutral address labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Umschreibung des Geburtsorts
 
 - `Berlin ist der/ein Ort meiner Geburt, Hamburg mein Wohnort` liefert `Hamburg`.
