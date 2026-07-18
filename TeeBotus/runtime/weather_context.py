@@ -2894,6 +2894,7 @@ CITY_PATTERNS = (
         r"adresse|wohnadresse|wohnanschrift|anschrift|meldeadresse|zuhause|"
         r"zu\s+hause|daheim))"
         r"(?:\s+(?:ist|lautet))?\s*(?:eigentlich|genau|aktuell|derzeit)?\s*[?:]\s*"
+        r"(?:(?:antwort\s+(?:ist|lautet)|antwort)\s*(?::|=)?\s*)?"
         r"(?:(?:in|bei)\s+)?"
         r"(?P<city>[^\W\d_][\wÄÖÜäöüß .'-]{1,80})(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,

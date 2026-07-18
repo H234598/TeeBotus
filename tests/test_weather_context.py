@@ -1472,6 +1472,13 @@ def test_extract_residence_city_rejects_future_confidence_prefixes() -> None:
     assert extract_residence_city("Wohnort ist wieder Potsdam.") == "Potsdam"
 
 
+def test_extract_residence_city_handles_explicit_answer_prefixes() -> None:
+    assert extract_residence_city("Wo wohnst du? Antwort: Berlin.") == "Berlin"
+    assert extract_residence_city("Wo wohnst du? Antwort ist Hamburg.") == "Hamburg"
+    assert extract_residence_city("Wo wohnst du? Antwort lautet: in Potsdam.") == "Potsdam"
+    assert extract_residence_city("Wo wohnst du? Antwort: Berlin und Hamburg.") == ""
+
+
 def test_repeated_city_updates_deduplicate_duplicate_residence_memories(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
