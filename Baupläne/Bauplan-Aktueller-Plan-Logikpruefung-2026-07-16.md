@@ -12197,3 +12197,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Qualifizierte Umzugsdauer
+
+- `seit dem letzten Umzug`, `seit meinem vergangenen Umzug` und `seit dem ersten Einzug` werden als Daueranker erkannt.
+- Einfacher `seit dem Umzug`-Pfad bleibt unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Move-Duration-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `da12f153 fix: parse qualified move residence durations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
