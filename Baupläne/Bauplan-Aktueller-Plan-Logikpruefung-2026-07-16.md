@@ -10449,3 +10449,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Letzte Umzugs- und Zukunftsformen
+
+- Invertierter Satz `Nicht mehr ... sondern ... wohne ich`, `früher war ... jetzt ist er ...`, zeitmarkierte Umzüge und `seit meinem Umzug` ergänzt.
+- `Wird ab morgen`/`soll ... werden` werden nicht als aktueller Ort gespeichert.
+- Verifikation: `tests/test_weather_context.py` -> `42 passed`, 33 finale Korpus-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a427f702 fix: parse final residence move forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
