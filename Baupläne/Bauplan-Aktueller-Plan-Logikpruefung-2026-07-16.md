@@ -9749,6 +9749,18 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Kontrastmarker bei Herkunftslabels
+
+- `aber`, `doch` und `jedoch` zwischen Herkunft und aktuellem Wohnort werden korrekt übersprungen.
+- Das Muster bleibt auf explizite Herkunft-/Wohnortpaare begrenzt; Mehrfachwohnorte ohne Labels bleiben geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, drei Kontrastmarker-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a9a523e6 fix: parse contrastive origin residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Negierte Wohnortwechsel
 
 - `Mein Wohnort ist keinesfalls Berlin, sondern Hamburg` liefert jetzt den aktuellen Ort `Hamburg`.
