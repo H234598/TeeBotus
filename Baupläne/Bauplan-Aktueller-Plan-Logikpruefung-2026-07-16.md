@@ -12419,3 +12419,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Verändern-Verb beim Wohnortwechsel
+
+- `Wohnort/Wohnsitz hat sich ... verändert/veraendert` wird nun wie `geändert/geaendert` erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Change-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c330a2e9 fix: parse residence change verb variants`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
