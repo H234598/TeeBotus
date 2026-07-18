@@ -9170,3 +9170,22 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `19/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Wohnort-Labels mit alter und neuer Angabe korrigieren
+
+- `Mein Wohnort ist nicht Berlin, sondern Hamburg`, `... ist Berlin, aber
+  jetzt Hamburg` und `... war Berlin und ist jetzt Hamburg` lieferten bisher
+  keinen oder den alten Ort.
+- Eindeutige Label-Korrekturen werden jetzt vor allgemeinen Labels erkannt;
+  `aber ich arbeite in Hamburg` bleibt beim Wohnort Berlin.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d1831581 fix: parse residence label corrections`.
+
+**Aktueller Laufstand:** Seit dem Restart `20/20` Code-Commits.
+
+### Restart 2026-07-18
+
+- `systemctl --user restart teebotus.service` erfolgreich.
+- Service aktiv, `MainPID 3387406`, Start `2026-07-18 04:23:40 CEST`.
+- Neuer Zaehler seit diesem Restart: `0/20` Code-Commits. Kein Push.
