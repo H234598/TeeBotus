@@ -9693,6 +9693,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Frage-Antworten mit Doppelpunkt
+
+- `Wo wohnst du: Berlin`, `Wohnort ist? Potsdam` und `Dein Wohnort: Bonn` werden als Antwortformen erkannt.
+- Der Frage-Antwort-Parser akzeptiert jetzt `?` oder `:`; reine Fragen wie `Wo wohnst du?` und `Ist dein Wohnort Berlin?` bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `135 passed`, erweiterte Question-Answer-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ba76df8e fix: parse colon residence questions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
