@@ -319,6 +319,27 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich\s+)?(?:wohne|lebe|wohnen|leben)\s+"
+        r"(?:nicht\s+(?:mehr|l(?:aenger|änger))?|nicht)\s+(?:in|bei)\s+[^,.;!?]{1,80}?"
+        r"(?:\s*(?:,|;|[-–—])\s*|\s+)sondern\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:bei|mit|zusammen\s+mit)\s+[^,.;!?]{{1,80}}\s+in\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+nicht(?:\s+mehr)?\s+"
+        r"[^,.;!?]{1,80}?(?:\s*(?:,|;|[-–—])\s*|\s+)sondern\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:bei|mit|zusammen\s+mit)\s+[^,.;!?]{{1,80}}\s+in\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich\s+)?(?:wohne|lebe|wohnen|leben)\s+(?:aber|doch|jedoch)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"(?:^|[.!?;,\-]\s*(?:aber|doch|jedoch)?\s*)(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+"
         rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:bei|mit|zusammen\s+mit)\s+"
         r"(?!(?:[^,.;!?]*\b(?:arbeit\w*|studier\w*|studium\w*|ausbildung\w*|"
