@@ -10779,3 +10779,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zuhause-Labels vor Aktivitätskontext
+
+- `Mein Zuhause/Daheim ist in Berlin und ...` behält Berlin bei Arbeit oder Studium.
+- Zweite Wohnortangabe bleibt widersprüchlich.
+- Verifikation: `tests/test_weather_context.py` -> `67 passed`, drei Zuhause-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `acb116d3 fix: preserve home labels before activity`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
