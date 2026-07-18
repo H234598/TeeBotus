@@ -1185,6 +1185,24 @@ def test_identity_route_update_without_slot_preserves_existing_adapter_slot(tmp_
     assert route["adapter_slot"] == 2
 
 
+@pytest.mark.parametrize("invalid_slot", (0, False, "telegram:broken"))
+def test_identity_route_update_rejects_invalid_adapter_slot(tmp_path, invalid_slot):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    identity = telegram_identity_key(395935293)
+    store.resolve_or_create_account(identity)
+
+    with pytest.raises(AccountStoreError, match="adapter_slot must be a positive integer"):
+        store.update_identity_route(
+            identity,
+            channel="telegram",
+            chat_id="395935293",
+            chat_type="private",
+            adapter_slot=invalid_slot,
+        )
+
+    assert store.get_identity_route(identity) is None
+
+
 def test_identity_route_normalizes_channel_and_chat_type(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     identity = signal_identity_key(source_uuid="abc")

@@ -2102,7 +2102,17 @@ class AccountStore:
                 "last_seen_at": utc_now(),
             }
             if adapter_slot is not None:
-                route["adapter_slot"] = int(adapter_slot)
+                if isinstance(adapter_slot, bool):
+                    raise AccountStoreError("adapter_slot must be a positive integer")
+                if isinstance(adapter_slot, int):
+                    normalized_slot = adapter_slot
+                elif isinstance(adapter_slot, str) and adapter_slot.strip().isdecimal():
+                    normalized_slot = int(adapter_slot.strip())
+                else:
+                    raise AccountStoreError("adapter_slot must be a positive integer")
+                if normalized_slot < 1:
+                    raise AccountStoreError("adapter_slot must be a positive integer")
+                route["adapter_slot"] = normalized_slot
             else:
                 previous_route = payload.get("last_route")
                 previous_slot = previous_route.get("adapter_slot") if isinstance(previous_route, dict) else None
