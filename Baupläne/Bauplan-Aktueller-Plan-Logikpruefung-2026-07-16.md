@@ -13172,3 +13172,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Kopulawörter als Fehlkandidaten
+
+- In inversen Sätzen werden `ist/sind/bin` nicht mehr als Städte akzeptiert.
+- Parenthesized-Inversformen wie `Halle (Saale) ist dort, wo ich wohne` liefern wieder den vollständigen Ort.
+- Verifikation: `tests/test_weather_context.py` -> `123 passed`, fünf Parenthetical-Inverse-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e45145ae fix: reject copula words as residence cities`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
