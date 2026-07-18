@@ -46,6 +46,12 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "damals",
         "früher",
         "frueher",
+        "nächstes jahr",
+        "naechstes jahr",
+        "nächstem jahr",
+        "naechstem jahr",
+        "kommendes jahr",
+        "kommenden jahr",
     }
 )
 _NON_CITY_REGION_NAMES = frozenset(
@@ -1064,6 +1070,8 @@ def extract_residence_city(text: str) -> str:
                     city_end = offset + match.end("city")
                     if _has_historical_residence_prefix(source, offset + match.start()):
                         continue
+                    if _has_future_residence_prefix(source, offset + match.start()):
+                        continue
                     if _has_unresolved_location_separator(source, city_end):
                         continue
                     city = _clean_city(match.group("city"))
@@ -1090,7 +1098,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     for pattern in (
         re.compile(
             rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}},\s*"
-            r"(?!(?:aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|"
+            r"(?!(?:aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|zieh\w*|"
             r"besuch\w*|pendl\w*|reis\w*|genauer\b|konkret\b|nämlich\b|naemlich\b|"
             r"und\s+zwar\b|besser\s+gesagt\b|sprich\b))"
             r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*)\s*(?:[.!?;]|$)",
@@ -1100,7 +1108,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
             r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
             r"(?:ist|liegt|befindet\s+sich|bleibt)\s+[^,.;!?]{1,80},\s*"
-            r"(?!(?:aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|"
+            r"(?!(?:aber|doch|jedoch|arbeite\w*|studier\w*|lern\w*|schlaf\w*|zieh\w*|"
             r"besuch\w*|pendl\w*|reis\w*|genauer\b|konkret\b|nämlich\b|naemlich\b|"
             r"und\s+zwar\b|besser\s+gesagt\b|sprich\b))"
             r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*)\s*(?:[.!?;]|$)",
@@ -1119,7 +1127,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"nördlich\s+von|südlich\s+von|östlich\s+von|westlich\s+von)\s+"
         r"[^,.;!?]{1,80}\s+und\s+"
         r"(?!nicht\w*\b|(?:ich\s+)?(?:wohne|lebe)\s+nicht\b|arbeit\w*\b|studier\w*\b|"
-        r"lern\w*\b|schlaf\w*\b|mach\w*\b|komm\w*\b|fahr\w*\b|geh\w*\b|"
+        r"lern\w*\b|schlaf\w*\b|mach\w*\b|komm\w*\b|fahr\w*\b|geh\w*\b|zieh\w*\b|"
         r"hab\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|pend\w*\b|"
         r"seh\w*\b|übernacht\w*\b|uebernacht\w*\b)[\wÄÖÜäöüß'-]+",
         source,
@@ -1129,7 +1137,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     if re.search(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+[^,.;!?]{1,80}\s+und\s+"
-        r"(?!(?:arbeit|studier|lern|schlaf|mach|komm|fahr|geh|hab|besuch|verbring|treff|reis|pendl|seh|übernacht|uebernacht)\w*\b)"
+        r"(?!(?:arbeit|studier|lern|schlaf|mach|komm|fahr|geh|zieh|hab|besuch|verbring|treff|reis|pendl|seh|übernacht|uebernacht)\w*\b)"
         r"(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß'-]*",
         source,
         re.IGNORECASE,
@@ -1146,7 +1154,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         re.search(
             rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
             r"(?!nicht\w*\b|(?:ich\s+)?(?:wohne|lebe)\s+nicht\b|"
-            r"bin\b|sein\b|sind\s+(?:beruflich|dienstlich|zum\s+arbeiten)\b|arbeit\w*\b|studier\w*\b|lern\w*\b|"
+            r"bin\b|sein\b|sind\s+(?:beruflich|dienstlich|zum\s+arbeiten)\b|arbeit\w*\b|studier\w*\b|lern\w*\b|zieh\w*\b|"
             r"schlaf\w*\b|mach\w*\b|komm\w*\b|fahr\w*\b|geh\w*\b|"
             r"hab\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|"
             r"pend\w*\b|seh\w*\b|übernacht\w*\b|uebernacht\w*\b|"
@@ -1179,6 +1187,20 @@ def _has_historical_residence_prefix(source: str, match_start: int) -> bool:
         re.search(
             r"(?i)\b(?:ehemalig\w*|ehemals\b|frueh\w*|früh\w*|einstig\w*|vormalig\w*|damalig\w*|"
             r"alt\w*|vorherig\w*)\s*$",
+            sentence,
+        )
+    )
+
+
+def _has_future_residence_prefix(source: str, match_start: int) -> bool:
+    prefix = source[:match_start]
+    sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
+    return bool(
+        re.search(
+            r"(?i)(?:\bab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
+            r"(?:jahr\w*|monat\w*|woche\w*)\b|\bab\s+\d{4}\b|"
+            r"\bab\s+(?:sommer|winter|frühling|fruehling|herbst)\b|\bbald\b|"
+            r"\b(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*)\s*$)",
             sentence,
         )
     )

@@ -63,6 +63,17 @@ def test_extract_residence_city_from_inverted_and_colloquial_forms() -> None:
     assert extract_residence_city("Ehemals ansässig sind wir bei Hamburg.") == ""
 
 
+def test_extract_residence_city_rejects_future_residence() -> None:
+    assert extract_residence_city("Ab nächstem Jahr wohne ich in Hamburg.") == ""
+    assert extract_residence_city("Ab nächstem Jahr lebe ich in Hamburg.") == ""
+    assert extract_residence_city("Bald wohne ich in Hamburg.") == ""
+    assert extract_residence_city("Mein künftiger Wohnort ist Hamburg.") == ""
+    assert extract_residence_city("Mein zukünftiger Wohnsitz liegt in Hamburg.") == ""
+    assert extract_residence_city("Nächstes Jahr ist mein Wohnort Hamburg.") == ""
+    assert extract_residence_city("Ich wohne derzeit in Berlin, nächstes Jahr in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin und ziehe morgen nach Hamburg.") == "Berlin"
+
+
 def test_extract_residence_city_from_nearby_location_phrase() -> None:
     assert extract_residence_city("Ich wohne in der Nähe von Berlin.") == "Berlin"
     assert extract_residence_city("Ich lebe nahe Hamburg.") == "Hamburg"
