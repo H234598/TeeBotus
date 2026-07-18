@@ -185,6 +185,17 @@ def test_extract_residence_city_from_address_conflict_forms() -> None:
     assert extract_residence_city("Ich wohne in Berlin, zu Hause bin ich in Hamburg.") == ""
 
 
+def test_extract_residence_city_from_final_move_forms() -> None:
+    assert extract_residence_city("Nicht mehr in Berlin, sondern in Hamburg wohne ich.") == "Hamburg"
+    assert extract_residence_city("Früher war mein Wohnort Hamburg. Jetzt ist er Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort wird ab morgen Hamburg.") == ""
+    assert extract_residence_city("Mein Wohnort soll Hamburg werden.") == ""
+    assert extract_residence_city("Ich bin gerade nach Hamburg gezogen.") == "Hamburg"
+    assert extract_residence_city("Ich bin vor kurzem nach Hamburg gezogen.") == "Hamburg"
+    assert extract_residence_city("Ich bin vor zwei Wochen nach Hamburg umgezogen.") == "Hamburg"
+    assert extract_residence_city("Ich wohne seit meinem Umzug in Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_from_inverted_location_forms() -> None:
     assert extract_residence_city("In Berlin wohne ich.") == "Berlin"
     assert extract_residence_city("Berlin, dort wohne ich.") == "Berlin"

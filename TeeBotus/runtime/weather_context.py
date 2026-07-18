@@ -79,7 +79,7 @@ _RESIDENCE_DURATION = (
     r"fast|circa|ca\.|rund|mindestens|hoechstens|höchstens)\s+)?"
     r"(?:\d{4}|kurzem|kurzer\s+zeit|einiger\s+zeit|jeher|"
     r"(?:dem\s+)?(?:letzten|letztem|vergangenen|vergangenem|aktuellen|aktuellem|diesem)\s+(?:jahr|sommer|winter)|"
-    r"(?:meiner\s+)?(?:kindheit|jugend|geburt)|dem\s+(?:studium|umzug)|"
+    r"(?:meiner\s+)?(?:kindheit|jugend|geburt)|(?:dem|meinem)\s+(?:studium|umzug)|"
     r"(?:(?:ein\s+paar|\w+)\s+(?:tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?)|"
     r"tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?))"
 )
@@ -97,6 +97,25 @@ _RESIDENCE_LOCATION_ADVERB = (
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
+    re.compile(
+        r"\b(?:nicht\s+(?:mehr|l(?:aenger|änger))?|nicht)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
+        r"(?:sondern|aber)\s+(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:früher|frueher|ehemals|damals)\s+war\s+(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+[^.!?]{1,80}[.!?]\s*"
+        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+ist\s+(?:er|sie|es)\s+(?:in|bei)?\s*"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:bin|sind)\s+"
+        r"(?:(?:gerade|vor\s+kurzem|vor\s+(?:\w+\s+)?(?:tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?))\s+)?"
+        r"(?:nach|in)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:gezogen|umgezogen)\b",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+[^,.;!?]{1,80}\s+und\s+"
         r"(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
@@ -1747,7 +1766,7 @@ def _clean_city(value: str) -> str:
     if re.match(
         r"(?i)^(?:der|die|das|den|dem|des|dies(?:er|e|es)|jen(?:er|e|es)|"
         r"welch(?:er|e|es)|irgendein|mehrere|einige|manche|ohne|unbekannt\w*|"
-        r"unbestimmt\w*|hier|dort|da)\b",
+        r"unbestimmt\w*|wird|soll|geplant\w*|hier|dort|da)\b",
         city,
     ):
         return ""
