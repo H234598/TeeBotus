@@ -8569,6 +8569,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `9/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Primaerwohnlabel mit Verb oder Doppelpunkt
+
+- `Lebensmittelpunkt:` und `Hauptwohnsitz:` waren trotz funktionierendem
+  `ist/liegt`-Pfad leer.
+- Der Aliasparser akzeptiert nun beide Separatorformen ohne doppelte oder
+  fehlende Leerzeichen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `63c551d1 fix: parse primary residence label separators`.
+
+**Aktueller Laufstand:** Seit dem Restart `10/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-18: Weitere Dauerqualifizierer abdecken
 
 - `seit fast zwei Jahren`, `seit circa/ca. drei Monaten`, `seit rund vier
