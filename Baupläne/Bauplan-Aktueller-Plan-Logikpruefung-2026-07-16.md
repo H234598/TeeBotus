@@ -9189,3 +9189,16 @@ Restart erst bei `20/20`.
 - `systemctl --user restart teebotus.service` erfolgreich.
 - Service aktiv, `MainPID 3387406`, Start `2026-07-18 04:23:40 CEST`.
 - Neuer Zaehler seit diesem Restart: `0/20` Code-Commits. Kein Push.
+
+### Folgefix 2026-07-18: Qualifizierte Wohndauern erkennen
+
+- `seit mehr als zwei Jahren`, `seit über einem Jahr`, `seit knapp drei
+  Monaten` und ähnliche Angaben wurden bisher nicht erkannt.
+- Der vorhandene Dauerbaustein akzeptiert nun Vergleichs- und
+  Näherungsqualifizierer inklusive ASCII-Umschriften.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `fee1fd30 fix: parse qualified residence durations`.
+
+**Aktueller Laufstand:** Seit dem Restart `1/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
