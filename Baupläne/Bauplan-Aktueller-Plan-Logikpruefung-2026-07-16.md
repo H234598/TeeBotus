@@ -14196,3 +14196,17 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Strukturierte Wohnortprofile
+
+- Bare `Meldeadresse Berlin` wird bei abweichendem `Wohnort Hamburg` als Konflikt behandelt.
+- Country-Refinement `Wohnort Deutschland, Berlin` liefert Berlin.
+- `genauer gesagt`, `konkret`, `nämlich` und `und zwar` werden dabei nicht als Stadtfragment gespeichert.
+- Arbeits-/Geburtsort bleiben als nicht-residentielle Zusatzfelder zulässig.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, zehn strukturierte Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a61accb5 fix: resolve structured residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
