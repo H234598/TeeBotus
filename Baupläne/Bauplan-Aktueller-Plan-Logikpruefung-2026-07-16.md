@@ -10094,3 +10094,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Komma-Mehrfachorte und Präzisierungen
+
+- `Berlin, Hamburg` wurde fälschlich auf Berlin gekürzt; `genauer gesagt/konkret in Hamburg` wurde nicht als Korrektur erkannt.
+- Präzisierungswechsel priorisiert; rohe Mehrfachorte werden verworfen, bekannte Länder/Regionen als Nachsatz bleiben kompatibel.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 8 Comma/Clarification-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `35ab68ac fix: disambiguate comma residence phrases`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
