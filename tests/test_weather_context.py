@@ -340,6 +340,46 @@ def test_city_change_rolls_back_residence_memory_when_new_append_fails(tmp_path)
     assert account_store.read_memory_index(account_id) == previous_index
 
 
+def test_repeated_current_city_cleans_preexisting_stale_residence_memory(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    provider = lambda city: f"{city}: 9 C"
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=provider,
+    )
+    account_store.append_structured_memory_entry(
+        account_id,
+        {
+            "id": "mem_residence_city_potsdam",
+            "kind": "biographical_fact",
+            "memory_type": "semantic",
+            "importance": 4,
+            "user_text": "User erwaehnt als Wohnstadt: Potsdam.",
+            "bot_text": "Als Wohnort fuer Wetter- und Kontextchecks gemerkt.",
+            "keywords": ["wohnort", "stadt", "potsdam"],
+        },
+    )
+
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc),
+        provider=provider,
+    )
+
+    residence_ids = [
+        entry["id"]
+        for entry in account_store.read_memory_entries(account_id)
+        if str(entry.get("id") or "").startswith("mem_residence_city_")
+    ]
+    assert residence_ids == ["mem_residence_city_berlin"]
+
+
 def test_city_case_change_does_not_bypass_weather_rate_limit(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

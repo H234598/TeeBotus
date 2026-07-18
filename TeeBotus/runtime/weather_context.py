@@ -255,8 +255,11 @@ def _append_city_memory(account_store: AccountStore, account_id: str, city: str,
     memory_id = f"mem_residence_city_{_city_id_token(city)}"
     try:
         rows = account_store.read_memory_entries(account_id)
-        if any(str(entry.get("id") or "").strip() == memory_id for entry in rows if isinstance(entry, Mapping)):
-            return
+        has_current_memory = any(
+            str(entry.get("id") or "").strip() == memory_id
+            for entry in rows
+            if isinstance(entry, Mapping)
+        )
         entry = {
             "id": memory_id,
             "created_at": now.isoformat(timespec="seconds"),
@@ -276,6 +279,8 @@ def _append_city_memory(account_store: AccountStore, account_id: str, city: str,
             and str(row.get("id") or "").strip() != memory_id
         ]
         if not obsolete_rows:
+            if has_current_memory:
+                return
             account_store.append_structured_memory_entry(account_id, entry)
             return
         previous_rows = [dict(row) for row in rows if isinstance(row, Mapping)]
@@ -292,7 +297,8 @@ def _append_city_memory(account_store: AccountStore, account_id: str, city: str,
         try:
             account_store.write_memory_entries(account_id, retained_rows)
             account_store.rebuild_structured_memory_index(account_id)
-            account_store.append_structured_memory_entry(account_id, entry)
+            if not has_current_memory:
+                account_store.append_structured_memory_entry(account_id, entry)
         except Exception:
             account_store.write_memory_entries(account_id, previous_rows)
             account_store.write_memory_index(account_id, previous_index)
