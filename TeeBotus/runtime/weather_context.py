@@ -128,6 +128,11 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich\s+)?bin\s+(?:von|aus)\s+[^,.;!?]{1,80}\s+nach\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:gezogen|umgezogen)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich\s+)?bin\s+von\s+[^,.;!?]{1,80}\s+nach\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+gezogen\b",
         re.IGNORECASE,
