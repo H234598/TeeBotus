@@ -9800,3 +9800,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Vorübergehende Reiseorte aus Wohnortwahl ausschließen
+
+- `auf/im/zum Urlaub`, `als Tourist` und `zu Besuch` wurden als Wohnortwechsel übernommen.
+- Besuchs- und Urlaubskontext wird nur im jeweiligen Satz ausgeschlossen; bestehende Wohnortangaben und `wohnhaft` bleiben gültig.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0059d3c6 fix: ignore transient travel locations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
