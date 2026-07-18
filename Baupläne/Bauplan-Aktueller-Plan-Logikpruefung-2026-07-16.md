@@ -14424,3 +14424,16 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Länderzusätze in Klammern
+
+- `Berlin (Deutschland)` wird auf Berlin normalisiert.
+- Echte Kompositstadt `Halle (Saale)` bleibt unverändert.
+- Länder/Regionen werden nicht als Städte erfunden.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Parenthesized-Location-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4f99b457 fix: normalize parenthesized country suffixes`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
