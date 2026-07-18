@@ -13160,3 +13160,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Parenthesized-Labels
+
+- `Halle (Saale)` bleibt in Wohnort-, Wohnsitz-, Adress-, Besitz- und inversen Labels vollständig.
+- Besitzbranch konsumiert `in/bei` jetzt mit Separator und greift dadurch auch bei `Ich habe ... in Halle (Saale)`.
+- Verifikation: `tests/test_weather_context.py` -> `122 passed`, sechs Parenthetical-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d2bbe185 fix: preserve parenthetical residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
