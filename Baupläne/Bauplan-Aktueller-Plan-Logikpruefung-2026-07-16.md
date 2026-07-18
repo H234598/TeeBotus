@@ -10571,3 +10571,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: `nimmer`-Wohnortwechsel
+
+- `nimmer` wird als Negationsmarker erkannt und nicht mehr als Stadt gespeichert.
+- `Ich wohne nimmer in Berlin, sondern/aber ...` wird auf den neuen Ort aufgelöst; bestehende `nicht mehr`-Formen bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `51 passed`, vier nimmer-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e7058157 fix: parse nimmer residence changes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
