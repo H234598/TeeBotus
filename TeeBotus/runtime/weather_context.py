@@ -1470,6 +1470,14 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:meine|unsere)?\s*(?:adresse|wohnadresse|wohnanschrift|privatadresse|privatanschrift)\s+"
+        r"(?:ist|liegt|befindet\s+sich)\s+in\s+"
+        r"(?:deutschland|österreich|oesterreich|(?:der\s+)?schweiz)\s*,\s*"
+        r"(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s+"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"(?:^|[.!?;,:]\s*)(?:meine|unsere)?\s*"
         r"(?:meldeadresse|meldeanschrift|meldesitz|privatadresse|privatanschrift)\s*"
         r"(?::|=|,)\s*(?:(?:in|bei)\s+)?"
