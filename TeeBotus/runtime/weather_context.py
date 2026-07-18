@@ -16,6 +16,20 @@ WEATHER_CHECK_INTERVAL = timedelta(hours=2)
 WEATHER_TIMEOUT_SECONDS = 2.5
 MAX_CITY_LENGTH = 80
 
+CITY_CHANGE_PATTERNS = (
+    re.compile(
+        r"\b(?:nicht\s+mehr|nicht\s+l(?:aenger|änger))\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
+        r"(?:sondern\s+)?(?:jetzt\s+|nun\s+|aktuell\s+|derzeit\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:nicht\s+mehr|nicht\s+l(?:aenger|änger))(?:\s*,)?\s+"
+        r"(?:jetzt|nun|aktuell|derzeit)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+)
 CITY_PATTERNS = (
     re.compile(
         r"\b(?:ich\s+wohne|ich\s+lebe|wohn(?:e)?|lebe)\s+"
@@ -26,7 +40,8 @@ CITY_PATTERNS = (
     re.compile(r"\b(?:meine\s+stadt|mein\s+wohnort|mein\s+ort)\s+(?:ist|heisst|heißt)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})", re.IGNORECASE),
 )
 CITY_TRAILING_STOP_RE = re.compile(
-    r"\s+(?:und|aber|weil|wenn|falls|seit|mit|bei|heute|morgen|gestern|gerade|aktuell|\.|,|;|:|!|\?).*$",
+    r"\s+(?:und|aber|weil|wenn|falls|seit|mit|bei|heute|morgen|gestern|gerade|aktuell|"
+    r"frueh|früh|morgens|vormittags|mittags|nachmittags|abends|nachts|\.|,|;|:|!|\?).*$",
     re.IGNORECASE,
 )
 
@@ -160,7 +175,7 @@ def weather_context_text(account_store: AccountStore, account_id: str) -> str:
 
 def extract_residence_city(text: str) -> str:
     source = str(text or "")
-    for pattern in CITY_PATTERNS:
+    for pattern in (*CITY_CHANGE_PATTERNS, *CITY_PATTERNS):
         match = pattern.search(source)
         if not match:
             continue

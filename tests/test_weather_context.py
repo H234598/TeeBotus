@@ -63,6 +63,16 @@ def test_extract_residence_city_prefers_explicit_current_residence_after_origin(
     assert extract_residence_city("Ich komme aus Deutschland und lebe jetzt in Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_handles_current_city_after_residence_change() -> None:
+    assert extract_residence_city("Ich wohne nicht mehr in Berlin, sondern in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Berlin nicht mehr, jetzt in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne nicht mehr bei meiner Mutter, jetzt in Hamburg.") == "Hamburg"
+
+
+def test_extract_residence_city_removes_daypart_context() -> None:
+    assert extract_residence_city("Ich wohne in Hamburg nachts.") == "Hamburg"
+
+
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
