@@ -9144,3 +9144,16 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `17/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Eindeutige Wohnortwechsel mit Konnektoren erkennen
+
+- Unpunktuierte Formen wie `nicht in Berlin sondern in Hamburg` sowie
+  `doch/jedoch jetzt in Hamburg` wurden bisher nicht als Wechsel erkannt.
+- Diese eindeutigen Gegenueberstellungen werden jetzt erkannt; reine
+  Arbeitsortsaetze bleiben ausserhalb des Wohnortpfads.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `469a79e3 fix: parse residence contrast connectors`.
+
+**Aktueller Laufstand:** Seit dem Restart `18/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
