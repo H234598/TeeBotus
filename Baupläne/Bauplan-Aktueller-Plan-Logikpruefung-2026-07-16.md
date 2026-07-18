@@ -9690,6 +9690,18 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Herkunftslabel mit Konjunktion
+
+- `Berlin ist meine Heimat und Hamburg mein Wohnort` sowie die Form mit `Geburtsort` und `ist` liefern `Hamburg`.
+- Komma- und Konjunktionsform nutzen dieselbe aktuelle-Wohnort-Regel.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, zwei Konjunktions-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `aa14d99a fix: parse conjunction origin residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Negierte Wohnortwechsel
 
 - `Mein Wohnort ist keinesfalls Berlin, sondern Hamburg` liefert jetzt den aktuellen Ort `Hamburg`.
