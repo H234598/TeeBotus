@@ -10082,3 +10082,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Ambige Referenzrelationen
+
+- `rund um/nahe/unweit von/im Raum Berlin und Hamburg` wurde bei bestehenden Referenzpfaden teilweise auf Berlin gekürzt.
+- Ambiguitätsguard deckt jetzt bestehende und neue Referenzrelationen ab; Aktivitätszusätze bleiben gültig.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 7 Reference-Ambiguity-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `394d5cf6 fix: reject ambiguous reference residences`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
