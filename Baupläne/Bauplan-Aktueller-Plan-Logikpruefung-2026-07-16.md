@@ -9872,3 +9872,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Länder nicht als Städte speichern
+
+- `Ich wohne in Deutschland/Österreich/der Schweiz` wurde bisher als City-Kandidat akzeptiert.
+- Bekannte Länderbezeichnungen werden bei alleiniger Angabe verworfen; Land-plus-Stadt bleibt gültig.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4e2347f4 fix: reject country-only residence candidates`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
