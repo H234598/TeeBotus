@@ -12293,3 +12293,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Nominativische Dauerpluralformen
+
+- Daueranker akzeptieren nun auch `Tage`, `Monate` und `Jahre`; flektierte Formen wie `Tagen`, `Monaten`, `Jahren` bleiben erhalten.
+- Arbeitskontext wird weiterhin nicht als Wohnortsignal gewertet.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, sieben Duration-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a95f0a16 fix: parse nominative duration plurals`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
