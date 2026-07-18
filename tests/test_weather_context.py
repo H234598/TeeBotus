@@ -160,6 +160,13 @@ def test_extract_residence_city_from_current_location_label() -> None:
     assert extract_residence_city("Mein Wohnort war Berlin und ist jetzt Hamburg.") == "Hamburg"
     assert extract_residence_city("Mein Wohnort war Berlin, ist aber jetzt Hamburg.") == "Hamburg"
     assert extract_residence_city("Mein Wohnort ist Berlin, aber ich arbeite in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich bin weiterhin in Potsdam wohnhaft.") == "Potsdam"
+    assert extract_residence_city("Seit zwei Jahren bin ich in Leipzig wohnhaft.") == "Leipzig"
+    assert extract_residence_city("Derzeit bin ich in Dresden ansässig.") == "Dresden"
+    assert extract_residence_city("Ich bin seit 2020 in Bonn ansässig.") == "Bonn"
+    assert extract_residence_city("Mein Zuhause bleibt in Köln.") == "Köln"
+    assert extract_residence_city("Mein Zuhause ist weiterhin in Frankfurt.") == "Frankfurt"
+    assert extract_residence_city("Mein Zuhause liegt nach wie vor in München.") == "München"
 
 
 def test_extract_residence_city_rejects_negated_or_non_city_phrases() -> None:

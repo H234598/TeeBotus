@@ -167,7 +167,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:mein(?:e)?\s+)?(?:zu\s+hause|zuhause|daheim)\s+"
-        r"(?:ist|liegt|befindet\s+sich)\s+(?:in|bei)\s+"
+        rf"(?:ist|liegt|befindet\s+sich|bleibt)\s+(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -177,7 +177,13 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:ich\s+)?(?:bin\s+)?(?:wohnhaft|ansässig|ansaessig)\s+(?:in|bei)\s+"
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich\s+)?bin\s+(?:ich\s+)?"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:wohnhaft|ansässig|ansaessig)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich\s+)?(?:wohnhaft|ansässig|ansaessig)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -200,7 +206,8 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:mein(?:e)?\s+)?(?:zu\s+hause|zuhause|daheim)"
-        r"(?:\s+(?:ist|liegt)\s*|:\s*)"
+        rf"(?:\s+(?:ist|liegt|befindet\s+sich|bleibt)\s*|:\s*)(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?"
+        rf"(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
