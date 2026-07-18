@@ -132,6 +132,24 @@ def test_extract_residence_city_from_short_profile_forms() -> None:
     assert extract_residence_city("Arbeitsort: Berlin.") == ""
 
 
+def test_extract_residence_city_from_profile_address_and_study_forms() -> None:
+    assert extract_residence_city("In Berlin wohnhaft bin ich.") == "Berlin"
+    assert extract_residence_city("Ich wohne im Berliner Stadtteil Prenzlauer Berg.") == "Berlin"
+    assert extract_residence_city("Ich wohne in der Berliner Innenstadt.") == "Berlin"
+    assert extract_residence_city("Ich wohne am Berliner Stadtrand.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlins Nähe.") == "Berlin"
+    assert extract_residence_city("Ich wohne südlich Berlins.") == "Berlin"
+    assert extract_residence_city("Ich wohne im Berliner Umland.") == "Berlin"
+    assert extract_residence_city("Ich wohne in der Region Berlin.") == "Berlin"
+    assert extract_residence_city("Meine Anschrift: 10115 Berlin.") == "Berlin"
+    assert extract_residence_city("Adresse: Musterstraße 1, 10115 Berlin.") == "Berlin"
+    assert extract_residence_city("Wohnadresse: Musterstraße 1, 10115 Berlin.") == "Berlin"
+    assert extract_residence_city("Meine aktuelle Wohnadresse lautet Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne während meines Studiums in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne nach dem Studium in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne bei meiner Arbeit in Berlin.") == ""
+
+
 def test_extract_residence_city_from_inverted_location_forms() -> None:
     assert extract_residence_city("In Berlin wohne ich.") == "Berlin"
     assert extract_residence_city("Berlin, dort wohne ich.") == "Berlin"
