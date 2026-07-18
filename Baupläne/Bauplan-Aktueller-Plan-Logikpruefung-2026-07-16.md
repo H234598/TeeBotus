@@ -12717,3 +12717,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Kopuläre Wohnort-Relativsätze
+
+- `Berlin ist, wo ich wohne` und `Wo ich wohne, ist Berlin` werden erkannt.
+- Arbeitsrelativsätze bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Copular-Relative-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1c6d2ae4 fix: parse copular residence relative clauses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
