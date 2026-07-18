@@ -11735,3 +11735,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Kompakte Perfektform
+
+- `Ich hab in Berlin gewohnt, jetzt Hamburg` und `Wir haben bei Berlin gelebt, heute Potsdam` liefern aktuellen Ort.
+- Arbeitsverb nach Zeitmarker bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Compact-Perfect-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `47e4479c fix: parse compact perfect residence transitions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
