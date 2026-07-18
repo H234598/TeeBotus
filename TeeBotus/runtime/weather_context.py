@@ -1636,6 +1636,12 @@ CITY_CHANGE_PATTERNS = (
         r"zuhause|zu\s+hause|daheim)\b",
         re.IGNORECASE,
     ),
+    re.compile(
+        r"\bnein\s*[,;:]?\s+(?:nicht|keinesfalls|keineswegs|niemals|nie)\s+"
+        r"(?:(?:in|bei)\s+)?[^,.;!?]{1,80},\s*sondern\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
 )
 CITY_PATTERNS = (
     re.compile(
