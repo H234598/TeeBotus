@@ -9767,6 +9767,18 @@ Restart erst bei `20/20`.
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Als-Wohnortlabels
+
+- `Hamburg als Wohnort/Hauptwohnsitz` sowie `Als Wohnort/Wohnsitz Hamburg` werden erkannt.
+- `Hamburg als Arbeitsort` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, fünf Als-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4a483297 fix: parse als residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
