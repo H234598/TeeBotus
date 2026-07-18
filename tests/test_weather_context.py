@@ -120,6 +120,14 @@ def test_extract_residence_city_handles_settlement_labels() -> None:
     assert extract_residence_city("Ich wohne in einer Gemeinde genannt Hamburg.") == "Hamburg"
 
 
+def test_extract_residence_city_normalizes_city_area_suffixes() -> None:
+    for suffix in ("Mitte", "Stadt", "Zentrum", "Innenstadt", "Stadtmitte", "Altstadt"):
+        assert extract_residence_city(f"Ich wohne in Berlin-{suffix}.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin Stadt.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Baden-Baden.") == "Baden-Baden"
+    assert extract_residence_city("Ich wohne in Berlin-Brandenburg.") == "Berlin-Brandenburg"
+
+
 def test_extract_residence_city_from_genitive_relations() -> None:
     assert extract_residence_city("Ich wohne in der Nähe Berlins.") == "Berlin"
     assert extract_residence_city("Ich lebe unweit Dresdens.") == "Dresden"
