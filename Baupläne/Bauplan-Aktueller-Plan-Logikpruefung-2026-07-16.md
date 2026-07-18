@@ -12777,3 +12777,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Gemeinsam-Mit-Wohnform
+
+- `Ich wohne gemeinsam mit meiner Freundin in Dresden` und Wir-Formen werden erkannt.
+- Arbeitsverb bleibt ausgeschlossen; bestehender Kontextschutz bleibt aktiv.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Gemeinsam-Mit-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e114510b fix: parse gemeinsam mit residence forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
