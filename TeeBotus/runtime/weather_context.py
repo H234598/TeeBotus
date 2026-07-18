@@ -543,9 +543,14 @@ def _clean_city(value: str) -> str:
         return ""
     city = CITY_TRAILING_STOP_RE.sub("", source).strip(" .,:;!?")
     city = re.sub(r"\s+", " ", city)
+    city = re.sub(r"(?i)^(?:in|bei)\s+", "", city)
     if not city or len(city) > MAX_CITY_LENGTH:
         return ""
     if any(char.isdigit() for char in city):
+        return ""
+    if re.match(r"(?i)^(?:der|die|das)\s+(?:stadt|nähe|naehe|umgebung|arbeit)\b", city):
+        return ""
+    if re.match(r"(?i)^(?:nahe|innerhalb|außerhalb|ausserhalb|unter)\b", city):
         return ""
     if re.search(r"(?i)\b(?:nicht(?:\s+mehr)?|kein(?:e|er|em|en)?|mein(?:e|er|em|en)?|ein(?:e|er|em|en)?)\b", city):
         return ""
