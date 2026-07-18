@@ -136,9 +136,15 @@ _IRREGULAR_CITY_ADJECTIVE_BASES = {
     "münchn": "München",
 }
 _KNOWN_COMPOUND_CITY_NAMES = {
+    "brandenburg an der havel": "Brandenburg an der Havel",
     "frankfurt an der oder": "Frankfurt an der Oder",
+    "königstein im taunus": "Königstein im Taunus",
     "ludwigshafen am rhein": "Ludwigshafen am Rhein",
+    "mülheim an der ruhr": "Mülheim an der Ruhr",
+    "rüdesheim am rhein": "Rüdesheim am Rhein",
     "halle (saale)": "Halle (Saale)",
+    "st. georgen im schwarzwald": "St. Georgen im Schwarzwald",
+    "wörth am rhein": "Wörth am Rhein",
 }
 _GENITIVE_CITY_REPAIRS = {
     "pari": "Paris",

@@ -1272,6 +1272,15 @@ def test_extract_residence_city_does_not_split_stopword_prefixes() -> None:
     assert extract_residence_city("Ich wohne in Beilngries.") == "Beilngries"
 
 
+def test_extract_residence_city_preserves_regional_compound_names() -> None:
+    assert extract_residence_city("Ich wohne in Mülheim an der Ruhr.") == "Mülheim an der Ruhr"
+    assert extract_residence_city("Ich wohne in Brandenburg an der Havel.") == "Brandenburg an der Havel"
+    assert extract_residence_city("Ich wohne in Wörth am Rhein.") == "Wörth am Rhein"
+    assert extract_residence_city("Ich wohne in Rüdesheim am Rhein.") == "Rüdesheim am Rhein"
+    assert extract_residence_city("Ich wohne in St. Georgen im Schwarzwald.") == "St. Georgen im Schwarzwald"
+    assert extract_residence_city("Ich wohne in Königstein im Taunus.") == "Königstein im Taunus"
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
