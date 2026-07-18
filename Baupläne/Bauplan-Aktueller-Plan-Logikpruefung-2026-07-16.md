@@ -10202,3 +10202,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Stadtteil-/Bezirk-/Viertel-/Kiez-Zwischenorte
+
+- `Stadtteil Kreuzberg in Berlin`, `Bezirk Neukölln bei Berlin`, `Viertel Altona in Hamburg`, `Kiez von Potsdam` und `Stadtteil von Leipzig` wurden bisher verpasst.
+- Enger Parserpfad extrahiert nur bei explizitem Wohnverb/Wohnlabel plus Zielstadt; `Ich arbeite im Bezirk Mitte in Berlin` bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 8 Neighborhood-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `28fcbd3b fix: parse neighborhood residence phrases`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
