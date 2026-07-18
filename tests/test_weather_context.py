@@ -972,6 +972,13 @@ def test_extract_residence_city_keeps_companion_residence_before_activity_contex
     assert extract_residence_city("Ich wohne bei meiner Arbeit in Berlin und studiere in Hamburg.") == ""
 
 
+def test_extract_residence_city_handles_comma_companion_before_activity() -> None:
+    assert extract_residence_city("Ich wohne bei meinen Eltern, in Berlin und arbeite in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich lebe mit meiner Familie, in Berlin und studiere in Hamburg.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist bei meinen Eltern, in Berlin und meine Arbeit ist in Hamburg.") == "Berlin"
+    assert extract_residence_city("Mein Zuhause ist bei meinen Eltern, in Berlin und ich arbeite in Hamburg.") == "Berlin"
+
+
 def test_extract_residence_city_normalizes_unweit_and_nahe_labels() -> None:
     assert extract_residence_city("Mein Wohnort ist unweit Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist unweit Berlins.") == "Berlin"
