@@ -10631,3 +10631,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Direkte Zeitmarker-Synonyme
+
+- Direkte Angaben mit `im Moment`, `gegenwärtig`, `derzeit noch` und `schon seit` werden korrekt auf die Stadt extrahiert.
+- `ab sofort` bleibt aktuell; geplante `ab morgen`/`ab nächstem Jahr`-Angaben bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `56 passed`, sieben Zeitmarker-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `31509f65 fix: parse direct residence time synonyms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
