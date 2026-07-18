@@ -14474,3 +14474,16 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Qualifier registrierter Wohnsitz
+
+- `amtlich gemeldet/registriert` behält nur Stadtnamen und verschluckt Qualifier nicht als Stadtteil.
+- `aktuelle`, `amtliche`, `neue` und `gemeldete Meldeadresse` werden erkannt.
+- Arbeits-/Geschäftsadressen bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, sechs Qualifier-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `dfbdf953 fix: cover qualified registered addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
