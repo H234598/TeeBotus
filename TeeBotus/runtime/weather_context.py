@@ -1168,9 +1168,56 @@ def extract_residence_city(text: str) -> str:
     city = latest_match(CITY_CHANGE_PATTERNS)
     if city:
         return city
-    if _has_ambiguous_residence_targets(source):
+    if _has_conflicting_residence_address_targets(source) or _has_ambiguous_residence_targets(source):
         return ""
     return latest_match(CITY_PATTERNS)
+
+
+def _has_conflicting_residence_address_targets(source: str) -> bool:
+    city_capture = r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[,.;!?]|$))"
+    residence_patterns = (
+        re.compile(
+            rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?:^|[.!?;\n]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz)\s+"
+            rf"(?:ist|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?{city_capture}",
+            re.IGNORECASE,
+        ),
+    )
+    address_patterns = (
+        re.compile(
+            r"\b(?:mein(?:e)?|unser(?:e)?)\s*"
+            r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+"
+            rf"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+(?:meine|unsere)\s+"
+            r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+(?:in|bei)\s+"
+            rf"{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"[,;]\s*(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz)\s+"
+            rf"(?:ist|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?{city_capture}",
+            re.IGNORECASE,
+        ),
+    )
+
+    def collect(patterns: tuple[re.Pattern[str], ...]) -> set[str]:
+        values: set[str] = set()
+        for pattern in patterns:
+            for match in pattern.finditer(source):
+                city = _clean_city(match.group("city"))
+                if city:
+                    values.add(_city_comparison_key(city))
+        return values
+
+    residence_cities = collect(residence_patterns)
+    address_cities = collect(address_patterns)
+    return bool(residence_cities and address_cities and residence_cities.isdisjoint(address_cities))
 
 
 def _has_ambiguous_residence_targets(source: str) -> bool:
