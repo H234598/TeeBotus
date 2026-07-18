@@ -14499,3 +14499,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Unaufgelöste `sondern`-Wohnsätze
+
+- Unvollständige Kontrastsätze wie `Ich wohne in Berlin, sondern in Hamburg` speichern keinen Wohnort.
+- Valide Negationskorrekturen mit `nicht ..., sondern ...` bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Separator-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7535f23b fix: reject unresolved sondern residence clauses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
