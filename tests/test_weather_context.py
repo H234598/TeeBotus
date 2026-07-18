@@ -65,6 +65,11 @@ def test_extract_residence_city_from_home_phrase() -> None:
     assert extract_residence_city("Ich bin bei meiner Freundin zuhause.") == ""
 
 
+def test_extract_residence_city_after_person_or_household_phrase() -> None:
+    assert extract_residence_city("Ich wohne bei meiner Freundin in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich lebe bei meinen Eltern in Hamburg.") == "Hamburg"
+
+
 def test_extract_residence_city_rejects_negated_or_non_city_phrases() -> None:
     for text in (
         "Ich wohne in keiner Stadt, sondern auf dem Land.",
