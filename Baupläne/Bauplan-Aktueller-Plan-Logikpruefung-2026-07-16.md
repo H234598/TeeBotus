@@ -14102,3 +14102,17 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Direkte Labelkonflikte und Meldeadresse
+
+- Direkte aktuelle Wohnort-/Zuhause-Labels werden vor Korrekturmustern auf Mehrfachkonflikte geprüft.
+- `Meine Meldeadresse lautet Berlin` wird erkannt; abweichende Meldeadresse gegenüber Wohnort/Wohnadresse bleibt unbestimmt.
+- Rollenangabe nach `/` (`Wohnort Berlin / Arbeitsort Hamburg`) wird nicht mehr als ungeklärter zweiter Wohnort gewertet.
+- Historische Kompaktform `Hamburg war mein Wohnort, jetzt Berlin mein Wohnort` liefert Berlin.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, elf gezielte Konflikt-/Rollen-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `66d7f866 fix: guard direct residence label conflicts`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
