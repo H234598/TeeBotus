@@ -923,6 +923,17 @@ def test_extract_residence_city_handles_genitive_and_distance_relations() -> Non
     assert extract_residence_city("Ich wohne im nördlichen Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_handles_label_relations() -> None:
+    assert extract_residence_city("Mein Wohnort ist bei meinen Eltern in Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist rund um Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist nördlich von Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist südlich Berlins.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist in Berlins Umgebung.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist in einer Stadt namens Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist bei meiner Arbeit in Berlin.") == ""
+    assert extract_residence_city("Mein Wohnort ist außerhalb von Berlin.") == ""
+
+
 def test_extract_residence_city_rejects_multiple_home_targets() -> None:
     assert extract_residence_city("Mein Zuhause ist in Berlin und Hamburg.") == ""
     assert extract_residence_city("Ich wohne werktags in Berlin und am Wochenende in Hamburg.") == ""
