@@ -1448,6 +1448,36 @@ def test_extract_residence_city_rejects_punctuated_question_targets() -> None:
     assert extract_residence_city("Wo wohnst du? Berlin, Deutschland.") == "Berlin"
 
 
+def test_repeated_city_updates_deduplicate_duplicate_residence_memories(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: f"{city}: 12 C",
+    )
+    rows = account_store.read_memory_entries(account_id)
+    berlin = next(row for row in rows if row.get("id") == "mem_residence_city_berlin")
+    account_store.write_memory_entries(account_id, rows + [dict(berlin)])
+
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, 1, tzinfo=timezone.utc),
+        provider=lambda city: f"{city}: 13 C",
+    )
+
+    residence_rows = [
+        row
+        for row in account_store.read_memory_entries(account_id)
+        if str(row.get("id") or "").startswith("mem_residence_city_")
+    ]
+    assert [row["id"] for row in residence_rows] == ["mem_residence_city_berlin"]
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"

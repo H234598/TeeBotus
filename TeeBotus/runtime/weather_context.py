@@ -3023,6 +3023,11 @@ def _append_city_memory(account_store: AccountStore, account_id: str, city: str,
             for entry in rows
             if isinstance(entry, Mapping)
         )
+        current_memory_count = sum(
+            1
+            for entry in rows
+            if isinstance(entry, Mapping) and str(entry.get("id") or "").strip() == memory_id
+        )
         entry = {
             "id": memory_id,
             "created_at": now.isoformat(timespec="seconds"),
@@ -3041,22 +3046,24 @@ def _append_city_memory(account_store: AccountStore, account_id: str, city: str,
             and str(row.get("id") or "").strip().startswith("mem_residence_city_")
             and str(row.get("id") or "").strip() != memory_id
         ]
-        if not obsolete_rows:
+        if not obsolete_rows and current_memory_count < 2:
             if has_current_memory:
                 return True
             account_store.append_structured_memory_entry(account_id, entry)
             return True
         previous_rows = [dict(row) for row in rows if isinstance(row, Mapping)]
         previous_index = account_store.read_memory_index(account_id)
-        retained_rows = [
-            dict(row)
-            for row in rows
-            if not (
-                isinstance(row, Mapping)
-                and str(row.get("id") or "").strip().startswith("mem_residence_city_")
-                and str(row.get("id") or "").strip() != memory_id
-            )
-        ]
+        retained_rows: list[dict[str, Any]] = []
+        kept_current_memory = False
+        for row in rows:
+            if not isinstance(row, Mapping):
+                continue
+            row_id = str(row.get("id") or "").strip()
+            if row_id.startswith("mem_residence_city_"):
+                if row_id != memory_id or kept_current_memory:
+                    continue
+                kept_current_memory = True
+            retained_rows.append(dict(row))
         try:
             account_store.write_memory_entries(account_id, retained_rows)
             account_store.rebuild_structured_memory_index(account_id)
