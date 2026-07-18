@@ -10293,3 +10293,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Genitiv-Ortsrelationen
+
+- `Nähe Berlins`, `unweit Dresdens`, `außerhalb Berlins`, `am Rand Dresdens`, `im Umland Potsdams` und `im Norden Berlins` wurden bisher verpasst.
+- Direkte und deutsche Genitivformen ergänzt; unverändert auf `s` endende Ortsnamen werden konservativ nicht geraten.
+- Verifikation: `tests/test_weather_context.py` -> `31 passed`, 8 Genitive-Relation-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a84fe96b fix: parse genitive residence relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
