@@ -9830,6 +9830,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Punktuierte Q&A-Mehrfachziele
+
+- `Wo wohnst du? Berlin, Hamburg` und `Berlin; Hamburg` werden nicht mehr auf ersten Ort gekürzt.
+- `Berlin, Deutschland` bleibt als Ort plus Land gültig; Klarstellungs- und Adresspfade werden nicht überdehnt.
+- Verifikation: `tests/test_weather_context.py` -> `143 passed`, drei punctuated-question-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `445b929d fix: reject punctuated residence question conflicts`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
