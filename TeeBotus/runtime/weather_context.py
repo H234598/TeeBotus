@@ -108,6 +108,7 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "mobil",
         "temporär",
         "temporaer",
+        "region",
         "freunden",
         "freundinnen",
         "bekannten",
@@ -3492,7 +3493,7 @@ def _clean_city(value: str) -> str:
     ).strip()
     city = _IRREGULAR_CITY_ADJECTIVE_BASES.get(city.casefold(), city)
     city = _GENITIVE_CITY_REPAIRS.get(city.casefold(), city)
-    if not city or len(city) > MAX_CITY_LENGTH:
+    if not city or len(city) < 2 or len(city) > MAX_CITY_LENGTH:
         return ""
     if (
         city.casefold() in _NON_CITY_RESIDENCE_NAMES
