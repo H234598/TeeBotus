@@ -137,8 +137,8 @@ CITY_CHANGE_PATTERNS = (
     re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
         r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
-        r"im\s+(?:nördlichen|südlichen|östlichen|westlichen|nordöstlichen|"
-        r"nordwestlichen|südöstlichen|südwestlichen)\s+"
+        r"im\s+(?:nördlichen|südlichen|östlichen|westlichen|nord[-\s]?östlichen|"
+        r"nord[-\s]?westlichen|süd[-\s]?östlichen|süd[-\s]?westlichen)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -146,13 +146,15 @@ CITY_CHANGE_PATTERNS = (
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
         r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+im\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:er|s)\s+"
-        r"(?:norden|süden|osten|westen|nordosten|nordwesten|südosten|südwesten)\b",
+        r"(?:norden|süden|osten|westen|nord[-\s]?osten|nord[-\s]?westen|"
+        r"süd[-\s]?osten|süd[-\s]?westen)\b",
         re.IGNORECASE,
     ),
     re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
         r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
-        r"im\s+(?:norden|süden|osten|westen|nordosten|nordwesten|südosten|südwesten)\s+"
+        r"im\s+(?:norden|süden|osten|westen|nord[-\s]?osten|nord[-\s]?westen|"
+        r"süd[-\s]?osten|süd[-\s]?westen)\s+"
         r"(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s\b",
         re.IGNORECASE,
@@ -1040,8 +1042,8 @@ CITY_PATTERNS = (
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         rf"(?:{_RESIDENCE_DISTANCE_PREFIX})?"
-        r"(?:nördlich|südlich|östlich|westlich|nordöstlich|nordwestlich|"
-        r"südöstlich|südwestlich)\s+(?:von\s+)?"
+        r"(?:nördlich|südlich|östlich|westlich|nord[-\s]?östlich|nord[-\s]?westlich|"
+        r"süd[-\s]?östlich|süd[-\s]?westlich)\s+(?:von\s+)?"
         r"(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s\b",
         re.IGNORECASE,
@@ -1050,8 +1052,8 @@ CITY_PATTERNS = (
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         rf"(?:{_RESIDENCE_DISTANCE_PREFIX})?"
-        r"(?:nördlich|südlich|östlich|westlich|nordöstlich|nordwestlich|"
-        r"südöstlich|südwestlich)\s+(?:von\s+)?"
+        r"(?:nördlich|südlich|östlich|westlich|nord[-\s]?östlich|nord[-\s]?westlich|"
+        r"süd[-\s]?östlich|süd[-\s]?westlich)\s+(?:von\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -1126,16 +1128,16 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
         rf"(?:{_RESIDENCE_DISTANCE_PREFIX})?"
-        r"(?:nördlich|südlich|östlich|westlich|nordöstlich|nordwestlich|"
-        r"südöstlich|südwestlich)\s+(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
+        r"(?:nördlich|südlich|östlich|westlich|nord[-\s]?östlich|nord[-\s]?westlich|"
+        r"süd[-\s]?östlich|süd[-\s]?westlich)\s+(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s\b",
         re.IGNORECASE,
     ),
     re.compile(
         r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
         rf"(?:{_RESIDENCE_DISTANCE_PREFIX})?"
-        r"(?:nördlich|südlich|östlich|westlich|nordöstlich|nordwestlich|"
-        r"südöstlich|südwestlich)\s+(?:von\s+)?"
+        r"(?:nördlich|südlich|östlich|westlich|nord[-\s]?östlich|nord[-\s]?westlich|"
+        r"süd[-\s]?östlich|süd[-\s]?westlich)\s+(?:von\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -1147,8 +1149,8 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
-        r"im\s+(?:nördlichen|südlichen|östlichen|westlichen|nordöstlichen|"
-        r"nordwestlichen|südöstlichen|südwestlichen)\s+"
+        r"im\s+(?:nördlichen|südlichen|östlichen|westlichen|nord[-\s]?östlichen|"
+        r"nord[-\s]?westlichen|süd[-\s]?östlichen|süd[-\s]?westlichen)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -1707,7 +1709,8 @@ CITY_PATTERNS = (
         r"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt|stadt|ort|zuhause|zu\s+hause|daheim)\s+"
         r"(?:liegt|befindet\s+sich)\s+"
         r"(?:au(?:ßerhalb|sserhalb)\s+von|am\s+stadtrand\s+von|im\s+umland\s+von|"
-        r"nordöstlich\s+von|nordwestlich\s+von|südöstlich\s+von|südwestlich\s+von|"
+        r"nord[-\s]?östlich\s+von|nord[-\s]?westlich\s+von|süd[-\s]?östlich\s+von|"
+        r"süd[-\s]?westlich\s+von|"
         r"nördlich\s+von|südlich\s+von|östlich\s+von|westlich\s+von)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -1829,7 +1832,8 @@ CITY_PATTERNS = (
         r"\b(?:ich\s+wohne|ich\s+lebe|wir\s+wohnen|wir\s+leben|wohn(?:e)?|lebe)\s+"
         r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|gegend)\s+von|in\s+der\s+stadt|im\s+raum|"
         r"au(?:ßerhalb|sserhalb)\s+von|am\s+stadtrand\s+von|im\s+umland\s+von|"
-        r"nordöstlich\s+von|nordwestlich\s+von|südöstlich\s+von|südwestlich\s+von|"
+        r"nord[-\s]?östlich\s+von|nord[-\s]?westlich\s+von|süd[-\s]?östlich\s+von|"
+        r"süd[-\s]?westlich\s+von|"
         r"nördlich\s+von|südlich\s+von|östlich\s+von|westlich\s+von|rund\s+um|nahe|unweit\s+von)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -2243,7 +2247,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         rf"\b{residence}\s+(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung)(?:\s+von)?|im\s+raum|"
         r"rund\s+um|nahe|unweit(?:\s+von)?|au(?:ßerhalb|sserhalb)(?:\s+von)?|am\s+stadtrand\s+von|im\s+umland(?:\s+von)?|"
         r"im\s+(?:norden|süden|osten|westen)(?:\s+von)?|am\s+rand(?:\s+von)?|"
-        r"nordöstlich\s+von|nordwestlich\s+von|südöstlich\s+von|südwestlich\s+von|"
+        r"nord[-\s]?östlich\s+von|nord[-\s]?westlich\s+von|süd[-\s]?östlich\s+von|"
+        r"süd[-\s]?westlich\s+von|"
         r"nördlich\s+von|südlich\s+von|östlich\s+von|westlich\s+von)\s+"
         r"[^,.;!?]{1,80}\s+und\s+"
         r"(?!nicht\w*\b|(?:ich\s+)?(?:wohne|lebe)\s+nicht\b|arbeit\w*\b|studier\w*\b|"

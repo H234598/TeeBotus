@@ -938,6 +938,17 @@ def test_extract_residence_city_handles_attributive_area_relations() -> None:
     assert extract_residence_city("Mein Wohnort liegt in der Berliner Umgebung.") == "Berlin"
 
 
+def test_extract_residence_city_handles_hyphenated_direction_relations() -> None:
+    assert extract_residence_city("Mein Wohnort ist nord-östlich von Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort liegt 20 km nord-östlich von Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne süd-westlich von Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne im nord-östlichen Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort liegt im nord-östlichen Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist im Berliner Nord-Osten.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist im Nord-Osten Berlins.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort liegt im süd-westlichen Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_handles_label_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist bei meinen Eltern in Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist rund um Berlin.") == "Berlin"
