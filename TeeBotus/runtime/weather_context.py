@@ -3197,6 +3197,14 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
 
 
 def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
+    prefix = source[:pattern_start]
+    if re.search(r"\b(?:dein(?:e)?|euer(?:e)?)\s*$", prefix, re.IGNORECASE) and re.match(
+        r"\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\b",
+        source[pattern_start:],
+        re.IGNORECASE,
+    ):
+        return True
     return bool(
         re.search(
             r"(?:\b(?:dienst\w*|beruf\w*|arbeits[-\s]?\w*)\s*|"
