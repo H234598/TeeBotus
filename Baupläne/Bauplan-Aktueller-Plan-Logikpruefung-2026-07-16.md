@@ -11186,3 +11186,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Großraum-von-Relation
+
+- `im Großraum von München` extrahiert München statt `von München`.
+- Verifikation: `tests/test_weather_context.py` -> `97 passed`, drei Großraum-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `88d4ebcb fix: parse grossraum von relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
