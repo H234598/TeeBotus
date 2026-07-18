@@ -11562,3 +11562,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Invertierte Meldeadresse
+
+- `Ich bin gemeldet/registriert in/bei Berlin` wird erkannt.
+- Mehrfachziel und reiner Arbeitsort bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf invertierte-Registration-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `40d7937c fix: parse inverted registration residence`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
