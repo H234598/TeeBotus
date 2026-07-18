@@ -7944,6 +7944,19 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `19/20` Code-Commits. Kein
 Push. Restart nach dem nächsten Code-Fix.
 
+### 2026-07-18: Wohnort in expliziter Stadtphrase erkennen
+
+- `Ich wohne in der Stadt Berlin` wurde vom Naehe-/Wohnortparser bisher nicht
+  erkannt.
+- `in der Stadt <Ort>` ist nun eine sichere explizite Wohnortphrase; die
+  bestehende Bindung an `wohne/lebe` bleibt erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `22 passed`,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ffc4b259 fix: parse city residence phrases`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `20/20` Code-Commits.
+Restart jetzt faellig. Kein Push.
+
 ### Gemini-Keyring: Cursor nach Route/Modell isolieren
 
 - 2026-07-17: `RotatingAPIKeyRing` nahm zwar `name` entgegen, Registry-State
