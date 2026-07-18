@@ -12705,3 +12705,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Invertierte Registrierungs-Kontexte
+
+- `Gemeldet/Registriert bin ich in ...` wird erkannt.
+- Berufliche, dienstliche, Schul- und Arbeitskontexte bleiben ausgeschlossen; Schutz gilt auch bei Teilmatch ab `gemeldet/registriert`.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, sechs Registration-Inversion-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ee6c7fe9 fix: guard reversed residence registration context`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
