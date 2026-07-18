@@ -12741,3 +12741,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Gegenrichtung „wird ... genannt“
+
+- `Berlin wird mein Wohnort genannt` und `Hamburg wird unser Zuhause genannt` werden erkannt.
+- Arbeitsort-Label bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Reversed-Named-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `853ef32a fix: parse reversed named residence clauses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
