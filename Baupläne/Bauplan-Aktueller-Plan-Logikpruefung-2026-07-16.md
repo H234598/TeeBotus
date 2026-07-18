@@ -10744,3 +10744,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Direkter Wohnort vor Aktivitätskontext
+
+- `Ich wohne/lebe in Berlin und arbeite/studiere/besuche ...` behält Berlin als Wohnort.
+- Zweite Wohnortangabe bleibt widersprüchlich und leer.
+- Verifikation: `tests/test_weather_context.py` -> `64 passed`, sieben Aktivitäts-/Konflikt-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `901b5f74 fix: preserve direct residence before activity`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
