@@ -9788,3 +9788,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Arbeits- und Studienkontext im Markerpfad sperren
+
+- `... jetzt mit meiner Arbeit/mit meinem Studium in Hamburg` wurde als Wohnortwechsel fehlklassifiziert.
+- Arbeits-, Studien- und Ausbildungsbegriffe werden im `bei/mit ... in Stadt`-Kontext ausgeschlossen; Familienkontext bleibt gültig.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `15cb01d6 fix: reject study context as residence`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
