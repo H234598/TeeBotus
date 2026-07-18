@@ -134,6 +134,20 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 CITY_CHANGE_PATTERNS = (
     re.compile(
         r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+        r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
+        r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+(?:im|in\s+dem|in\s+der)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:er|s)\s+stadtgebiet\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+        r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)|"
+        r"(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben))\s+im\s+stadtgebiet\s+von\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
         r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|war)|"
         r"(?:ich|wir)\s+(?:wohne|wohnen|wohnte|wohnten|lebe|leben|lebte|lebten))\s+"
         r"[^,.;!?]{1,80}?(?:,|;|[-–—])\s*(?:aber|doch|jedoch)?\s*"
