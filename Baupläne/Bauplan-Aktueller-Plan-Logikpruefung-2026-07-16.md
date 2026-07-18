@@ -9726,6 +9726,11 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `20/20` Code-Fixes. Kein Push. Restart jetzt faellig.
 
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` erfolgreich neu gestartet; `ActiveState=active`, `SubState=running`, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
