@@ -3313,6 +3313,8 @@ def weather_context_text(account_store: AccountStore, account_id: str) -> str:
 
 def extract_residence_city(text: str) -> str:
     source = str(text or "")
+    if source.strip().endswith("?"):
+        return ""
 
     def latest_match(patterns: tuple[re.Pattern[str], ...]) -> str:
         candidates: list[tuple[int, str]] = []
@@ -3873,7 +3875,8 @@ def _clean_city(value: str) -> str:
         return ""
     if re.search(
         r"(?i)\b(?:nicht(?:\s+mehr)?|kein(?:e|er|em|en)?|mein(?:e|er|em|en)?|"
-        r"unser(?:e|er|em|en)?|ein(?:e|er|em|en)?)\b",
+        r"unser(?:e|er|em|en)?|ein(?:e|er|em|en)?|könnte|koennte|wäre|waere|"
+        r"würde|wuerde|soll|sollte|dürfte|duerfte|muss|müsste|muesste)\b",
         city,
     ):
         return ""
