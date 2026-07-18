@@ -82,6 +82,11 @@ def test_extract_residence_city_from_move_phrases() -> None:
     assert extract_residence_city("Ich bin nach Leipzig gezogen.") == "Leipzig"
 
 
+def test_extract_residence_city_from_wonen_leben_change() -> None:
+    assert extract_residence_city("Ich wohne in Berlin, lebe aber jetzt in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Berlin, aber arbeite jetzt in Hamburg.") == "Berlin"
+
+
 def test_extract_residence_city_rejects_negated_or_non_city_phrases() -> None:
     for text in (
         "Ich wohne in keiner Stadt, sondern auf dem Land.",
