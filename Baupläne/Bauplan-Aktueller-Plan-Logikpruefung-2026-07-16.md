@@ -9842,6 +9842,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Doppelte Wohnort-Memorys
+
+- `_append_city_memory` dedupliziert gleiche `mem_residence_city_*`-IDs statt sie bei erneutem Hinweis liegenzulassen.
+- Aktueller Wohnort bleibt erhalten, alte Wohnorte werden weiterhin entfernt; Schreibfehler behalten Rollback-Verhalten.
+- Verifikation: `tests/test_weather_context.py` -> `144 passed`, ein Duplicate-Memory-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0ab037f3 fix: deduplicate residence city memories`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
