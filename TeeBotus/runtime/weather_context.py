@@ -448,7 +448,16 @@ def weather_context_text(account_store: AccountStore, account_id: str) -> str:
 
 def extract_residence_city(text: str) -> str:
     source = str(text or "")
-    for pattern in (*CITY_CHANGE_PATTERNS, *CITY_PATTERNS):
+    for pattern in CITY_CHANGE_PATTERNS:
+        match = pattern.search(source)
+        if not match:
+            continue
+        city = _clean_city(match.group("city"))
+        if city:
+            return city
+    if _has_ambiguous_residence_targets(source):
+        return ""
+    for pattern in CITY_PATTERNS:
         match = pattern.search(source)
         if not match:
             continue
@@ -456,6 +465,26 @@ def extract_residence_city(text: str) -> str:
         if city:
             return city
     return ""
+
+
+def _has_ambiguous_residence_targets(source: str) -> bool:
+    residence = r"(?:wohne|lebe|wohn|leb)"
+    if re.search(
+        rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
+        rf"(?:(?:ich\s+)?{residence}\s+)?(?:in|bei)\s+",
+        source,
+        re.IGNORECASE,
+    ):
+        return True
+    return bool(
+        re.search(
+            rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
+            r"(?!bin\b|arbeite\b|studiere\b|lerne\b|schlafe\b|mache\b|"
+            r"komme\b|fahre\b|gehe\b|habe\b|bin\b)[\wÄÖÜäöüß'-]+",
+            source,
+            re.IGNORECASE,
+        )
+    )
 
 
 def fetch_weather_summary(city: str) -> str:
