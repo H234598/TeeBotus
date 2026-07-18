@@ -7761,6 +7761,19 @@ Plan-Commit zaehlt als `20/20`. Kein Push. Restart jetzt.
 **Aktueller Laufstand:** Seit dem letzten Restart `7/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Aktuelle Wohnort-/Stadtlabels erkennen
+
+- `Mein aktueller Wohnort ist Berlin`, `Meine aktuelle Stadt ist Hamburg`
+  und `Mein jetziger Ort ist Potsdam` wurden bisher nicht erkannt.
+- Attribute `aktuell`/`jetzig` werden jetzt vor `Wohnort`, `Stadt` oder `Ort`
+  akzeptiert.
+- Verifikation: `tests/test_weather_context.py` -> `22 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `76c4ff8e fix: parse labeled current residence cities`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `8/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### YouTube-Parser-Misses: JSONL-Schreibzugriffe serialisieren
 
 - 2026-07-17: Engine und Telegram konnten dieselbe
