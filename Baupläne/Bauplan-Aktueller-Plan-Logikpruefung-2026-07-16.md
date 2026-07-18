@@ -12173,3 +12173,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Aktueller Zustand nach historischem Label
+
+- `Hamburg war mein Wohnort, heute ist/bin/lebe ich in Berlin` liefert Berlin statt `ist es Berlin` oder einer Restphrase.
+- Arbeitskontext wie `Berlin war mein Wohnort, ich arbeite jetzt in Hamburg` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, sechs Historical-State-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `84ab346a fix: parse current state after historical residence`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
