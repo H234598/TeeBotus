@@ -10118,3 +10118,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Regionale Wohnortlabels
+
+- `Wohnort/Wohnsitz/Zuhause in Deutschland/Schweiz/Bundesland, ... konkrete Stadt` blieb bei Dauer- und Tagesprefixen leer.
+- Regionaler Labelpfad verarbeitet jetzt `heute/seit heute` und Dauerqualifier; Länder-only und unverbundene Kommas bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 7 Regional-Label-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `16f4804d fix: parse regional residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
