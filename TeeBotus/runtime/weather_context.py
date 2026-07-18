@@ -477,6 +477,18 @@ CITY_CHANGE_PATTERNS = (
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:wohnhaft|ansässig|ansaessig)\b",
         re.IGNORECASE,
     ),
+    re.compile(
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}|seit\s+heute|heute)\s+"
+        r"(?:(?:ich|wir)\s+)?(?:bin|sind)\s+"
+        r"(?:(?:ich|wir)\s+)?"
+        r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|gegend)\s+von\s+|"
+        r"in\s+der\s+(?:schweiz|stadt)\s*|im\s+(?:raum|bundesland)\s+|"
+        r"in\s+(?:deutschland|österreich|oesterreich|schweiz)\s*)"
+        r"[^,.;!?]{0,80},\s*(?:(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|"
+        r"besser\s+gesagt|sprich)\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:wohnhaft|ansässig|ansaessig)\b",
+        re.IGNORECASE,
+    ),
 )
 CITY_PATTERNS = (
     re.compile(
@@ -507,6 +519,7 @@ CITY_PATTERNS = (
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?"
         r"(?:in\s+der\s+(?:schweiz|stadt)|in\s+(?:deutschland|österreich|oesterreich|schweiz)\s*|"
         r"im\s+(?:raum|bundesland)\s+)[^,.;!?]{0,80},\s*"
         r"(?:(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s+)?"
