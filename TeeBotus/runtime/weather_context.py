@@ -36,6 +36,13 @@ _NON_CITY_RESIDENCE_NAMES = frozenset(
         "kanada",
         "japan",
         "amerika",
+        "ausland",
+        "inland",
+        "europa",
+        "afrika",
+        "asien",
+        "australien",
+        "welt",
     }
 )
 _NON_CITY_CONTEXT_TOKENS = frozenset(

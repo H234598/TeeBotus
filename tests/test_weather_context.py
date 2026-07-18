@@ -1331,6 +1331,12 @@ def test_extract_residence_city_rejects_non_location_states() -> None:
         assert extract_residence_city(f"Mein Wohnort ist {value}.") == ""
 
 
+def test_extract_residence_city_rejects_continental_and_global_regions() -> None:
+    for value in ("Ausland", "Europa", "Welt", "Afrika", "Asien"):
+        assert extract_residence_city(f"Mein Wohnort ist {value}.") == ""
+        assert extract_residence_city(f"Ich wohne in {value}.") == ""
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
