@@ -1049,6 +1049,12 @@ def test_extract_residence_city_handles_residence_relative_repeat() -> None:
     assert extract_residence_city("Ich wohne in Berlin, wo ich arbeite.") == "Berlin"
 
 
+def test_extract_residence_city_handles_labeled_residence_relative_repeat() -> None:
+    assert extract_residence_city("Mein Wohnort ist in Berlin, wo ich lebe.") == "Berlin"
+    assert extract_residence_city("Mein Zuhause ist in Berlin, wo ich lebe.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist in Berlin, wo ich arbeite.") == "Berlin"
+
+
 def test_extract_residence_city_handles_country_prefix_without_comma() -> None:
     assert extract_residence_city("Ich wohne in Deutschland in Berlin.") == "Berlin"
     assert extract_residence_city("Ich lebe in Österreich in Wien.") == "Wien"
