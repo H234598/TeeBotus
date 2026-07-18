@@ -12269,3 +12269,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Befristungs-Endanker
+
+- `bis auf Weiteres`, `bis zum Ende des Monats/Jahres` und `bis Ende des Jahres` werden vor sowie nach der Ortsangabe als aktueller Wohnzeitraum erkannt.
+- Arbeitskontext bleibt ausgeschlossen; zentrale City-Abbruchlogik entfernt Endanker hinter dem Ort.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, sechs End-Date-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f8e7ba17 fix: parse residence end-date qualifiers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
