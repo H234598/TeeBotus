@@ -980,7 +980,7 @@ CITY_CHANGE_PATTERNS = (
         rf"(?:^|[.!?;,\-]\s*(?:aber|doch|jedoch)?\s*)(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+"
         r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|gegend)\s+von|in\s+der\s+stadt|"
         r"im\s+raum|rund\s+um|nahe|unweit\s+von)\s+"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s+herum)?(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
     re.compile(
@@ -1050,7 +1050,8 @@ CITY_PATTERNS = (
         r"rund\s+um\s+|nahe\s+|unweit\s+von\s+|"
         r"am\s+(?:stadt)?rand\s+von\s+|im\s+umland\s+(?:von\s+)?|"
         r"im\s+(?:norden|süden|osten|westen)\s+von\s+)"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s+herum)?(?=\s*(?:[.!?;,]|$|"
+        r"\b(?:und|aber|doch|jedoch)\b))",
         re.IGNORECASE,
     ),
     re.compile(
@@ -1852,7 +1853,8 @@ CITY_PATTERNS = (
         r"nord[-\s]?östlich\s+von|nord[-\s]?westlich\s+von|süd[-\s]?östlich\s+von|"
         r"süd[-\s]?westlich\s+von|"
         r"nördlich\s+von|südlich\s+von|östlich\s+von|westlich\s+von|rund\s+um|nahe|unweit\s+von)\s+"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s+herum)?(?=\s*(?:[.!?;,]|$|"
+        r"\b(?:und|aber|doch|jedoch)\b))",
         re.IGNORECASE,
     ),
     re.compile(

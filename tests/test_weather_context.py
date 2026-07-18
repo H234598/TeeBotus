@@ -951,6 +951,12 @@ def test_extract_residence_city_handles_current_attributive_area_changes() -> No
     assert extract_residence_city("Ich wohne in Berlin, aber jetzt in der Hamburger Umgebung.") == "Hamburg"
 
 
+def test_extract_residence_city_normalizes_rund_um_herum() -> None:
+    assert extract_residence_city("Mein Wohnort ist rund um München herum.") == "München"
+    assert extract_residence_city("Ich lebe rund um München herum.") == "München"
+    assert extract_residence_city("Ich wohne in Berlin, aber jetzt rund um München herum.") == "München"
+
+
 def test_extract_residence_city_normalizes_irregular_city_adjectives() -> None:
     assert extract_residence_city("Mein Wohnort ist im Münchner Raum.") == "München"
     assert extract_residence_city("Mein Wohnort liegt in der Dresdner Umgebung.") == "Dresden"
