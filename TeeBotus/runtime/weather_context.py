@@ -1685,7 +1685,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich|i)\s+(?:bin|sein)\s+(?:in|bei)\s+"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:zu\s+hause|zuhause|daheim)\b",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:zu\s+hause|zuhause|daheim|dahoam)\b",
         re.IGNORECASE,
     ),
     re.compile(

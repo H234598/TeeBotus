@@ -470,6 +470,7 @@ def test_extract_residence_city_from_time_qualified_residence_phrase() -> None:
 def test_extract_residence_city_from_home_phrase() -> None:
     assert extract_residence_city("Ich bin in Berlin zuhause.") == "Berlin"
     assert extract_residence_city("Ich bin in Hamburg zu Hause.") == "Hamburg"
+    assert extract_residence_city("Ich bin in Hamburg dahoam.") == "Hamburg"
     assert extract_residence_city("Ich bin aktuell in Potsdam zuhause.") == "Potsdam"
     assert extract_residence_city("Ich bin seit kurzem in Leipzig zu Hause.") == "Leipzig"
     assert extract_residence_city("Ich wohne zu Hause in Berlin.") == "Berlin"
