@@ -110,6 +110,7 @@ WRITTEN_TIME_RE = re.compile(
 DAYPART_DEFAULT_HOURS = (
     ("frueh", 9),
     ("fruh", 9),
+    ("morgens", 9),
     ("vormittag", 10),
     ("mittag", 12),
     ("nachmittag", 15),
@@ -709,7 +710,8 @@ def _time_marker_in_text(text: str) -> tuple[int, int] | None:
         return hour, 0
     normalized = _normalize(text)
     for marker, hour in DAYPART_DEFAULT_HOURS:
-        if re.search(rf"{marker}s?\b", normalized):
+        suffix = "" if marker.endswith("s") else "s?"
+        if re.search(rf"{marker}{suffix}\b", normalized):
             return hour, 0
     return None
 

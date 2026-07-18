@@ -138,6 +138,16 @@ def test_parse_reminder_accepts_written_clock_times() -> None:
         assert intent.subject == "den Termin"
 
 
+def test_parse_reminder_applies_morning_daypart_to_relative_calendar_time() -> None:
+    intent = parse_reminder_intent(
+        "Erinnere mich in zwei Wochen morgens an den Termin",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-06-29T09:00:00+00:00"
+    assert intent.subject == "den Termin"
+
+
 def test_parse_reminder_removes_next_week_from_subject() -> None:
     intent = parse_reminder_intent(
         "Erinnere mich nächste Woche an den Antrag",
