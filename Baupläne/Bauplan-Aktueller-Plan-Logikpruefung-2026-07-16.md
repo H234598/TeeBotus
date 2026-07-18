@@ -14210,3 +14210,17 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Umzugs- und Korrekturvarianten
+
+- Korrekturformen wie `genau genommen` und `beziehungsweise in` liefern aktuellen Wohnort statt historischem Erstwert.
+- Umzugs-/Ummeldungsformen, `Nach dem Umzug ...` und Wohnortwechsel mit `war ...; jetzt ...` werden erkannt.
+- `endgültig`/`endgueltig` gilt als stabiler aktueller Wohnort-Qualifier.
+- Mehrdeutiges `beziehungsweise` ohne `in/bei` bleibt abgelehnt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, zehn gezielte Umzugs-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8422982d fix: parse residence move corrections`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
