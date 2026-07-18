@@ -9860,3 +9860,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Aktuelle Wohnsitz-Synonyme
+
+- `Ich residiere in Berlin`, `Ich bin in Leipzig gemeldet` und `Meine Bleibe ist in Potsdam` wurden bisher nicht erkannt.
+- Diese aktuellen Wohnsitzformulierungen sind ergänzt; `beheimatet/heimisch` bleibt wegen Herkunftssemantik ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `be6c8f3f fix: parse residence synonym phrases`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
