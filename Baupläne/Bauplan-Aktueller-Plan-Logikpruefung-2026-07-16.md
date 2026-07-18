@@ -9806,6 +9806,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Nachgestellte Evidenzhinweise
+
+- `Wohnort: Berlin laut Meldeadresse/Profil` wird auf `Berlin` gekürzt.
+- Führende unzuverlässige Quellenangaben wie `laut Wikipedia Berlin` bleiben verworfen.
+- Verifikation: `tests/test_weather_context.py` -> `141 passed`, zwei Trailing-Evidence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `920e5ff8 fix: trim trailing residence evidence`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
