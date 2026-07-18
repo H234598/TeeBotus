@@ -29,6 +29,12 @@ _RESIDENCE_LOCATION_ADVERB = r"(?:hier|dort|da|direkt)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:ich\s+)?(?:wohne|lebe)\s+zwar\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
+        rf"aber\s+(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich\s+)?(?:wohne|lebe)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
         rf"(?:aber\s+)?(?:{_RESIDENCE_TIME_QUALIFIER}\s+)(?:ich\s+)?(?:wohne|lebe)\s+"
         rf"(?:ich\s+)?(?:aber\s+)?(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
@@ -178,13 +184,13 @@ CITY_PATTERNS = (
     ),
     re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich\s+)?(?:wohne|lebe)\s+"
-        rf"(?:ich\s+)?(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?"
+        rf"(?:ich\s+)?(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:zwar\s+)?(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?"
         r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
         r"\b(?:ich\s+wohne|ich\s+lebe|wohn(?:e)?|lebe)\s+"
-        r"(?:(?:jetzt|aktuell|derzeit)\s+)?(?:in|bei)\s+"
+        r"(?:(?:jetzt|aktuell|derzeit)\s+)?(?:zwar\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
