@@ -14075,3 +14075,17 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Rollen- und Korrekturformulierungen
+
+- Korrekturen wie `Nicht Hamburg ist mein Wohnort, sondern Berlin` und `Hamburg ist nicht mein Wohnort, sondern Berlin` liefern nur aktuellen Wohnort Berlin.
+- Expliziter `Lebensmittelpunkt`/`Hauptwohnsitz` überschreibt vorherige einfache Wohnangabe in derselben Aussage.
+- `Geburtsort` und Arbeitsrollen werden bei strukturierten Wohnortlisten nicht fälschlich als zweiter Wohnort bewertet; unterschiedliche Wohn-/Arbeitsadressen bleiben Mehrdeutigkeitsfehler.
+- Alte/aktuelle Wohnadressen werden in der Stadt-vor-Label-Form korrekt auf aktuellen Ort reduziert.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, acht gezielte Rollen-/Korrektur-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a122bab0 fix: resolve residence role corrections`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
