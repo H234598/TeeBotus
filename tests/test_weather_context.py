@@ -150,6 +150,19 @@ def test_extract_residence_city_from_profile_address_and_study_forms() -> None:
     assert extract_residence_city("Ich wohne bei meiner Arbeit in Berlin.") == ""
 
 
+def test_extract_residence_city_from_time_and_activity_markers() -> None:
+    assert extract_residence_city("Ich wohne mit meiner Arbeit in Berlin.") == ""
+    assert extract_residence_city("Ich wohne zusammen mit meinem Studium in Berlin.") == ""
+    assert extract_residence_city("Ich wohne neben Berlin.") == "Berlin"
+    assert extract_residence_city("Früher wohnte ich in Hamburg, jetzt in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne nunmehr in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich lebe seit gestern in Berlin.") == "Berlin"
+    assert extract_residence_city("In Zukunft wohne ich in Berlin.") == ""
+    assert extract_residence_city("Ich wohne bereits in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne schon in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne noch in Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_from_inverted_location_forms() -> None:
     assert extract_residence_city("In Berlin wohne ich.") == "Berlin"
     assert extract_residence_city("Berlin, dort wohne ich.") == "Berlin"

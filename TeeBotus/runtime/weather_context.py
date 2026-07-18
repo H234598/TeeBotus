@@ -52,6 +52,7 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "naechstem jahr",
         "kommendes jahr",
         "kommenden jahr",
+        "zukunft",
     }
 )
 _NON_CITY_REGION_NAMES = frozenset(
@@ -84,7 +85,7 @@ _RESIDENCE_DURATION = (
 )
 _RESIDENCE_TIME_QUALIFIER = (
     rf"(?:(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|seitdem|"
-    r"jetzt|nun|aktuell|derzeit|gerade|momentan|inzwischen|mittlerweile|"
+    r"seit\s+(?:gestern|heute|vorgestern)|jetzt|nun|nunmehr|aktuell|derzeit|gerade|momentan|inzwischen|mittlerweile|"
     r"weiterhin|nach\s+wie\s+vor|noch\s+immer|immer\s+noch|"
     r"dauerhaft|permanent|ständig|staendig|wieder|erneut|"
     r"vor(?:uebergehend|übergehend))"
@@ -96,6 +97,12 @@ _RESIDENCE_LOCATION_ADVERB = (
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
+    re.compile(
+        r"\b(?:früher|frueher|ehemals|damals)\s+(?:wohnte|lebte)\s+(?:ich|wir)\s+"
+        r"(?:in|bei)\s+[^,.;!?]{1,80},\s*(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:früher|frueher|ehemals|damals)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
         r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+(?:in|bei)\s+"
@@ -556,6 +563,17 @@ CITY_CHANGE_PATTERNS = (
     ),
 )
 CITY_PATTERNS = (
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:bereits|schon|noch)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+neben\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
         r"(?:wohnhaft|ansässig|ansaessig)\s+(?:bin ich|sind wir)\b",
@@ -1089,13 +1107,17 @@ CITY_PATTERNS = (
     ),
     re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?wir\s+(?:wohnen|leben)\s+"
-        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:zusammen\s+mit|mit)\s+[^,.;!?]{{1,80}}\s+(?:in|bei)\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:zusammen\s+mit|mit)\s+"
+        r"(?![^,.;!?]*\b(?:arbeit\w*|job\w*|büro\w*|buero\w*|studier\w*|studium\w*|lern\w*)\b)"
+        rf"[^,.;!?]{{1,80}}\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich\s+)?(?:wohne|lebe)\s+"
-        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:zusammen\s+mit|mit)\s+[^,.;!?]{{1,80}}\s+(?:in|bei)\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:zusammen\s+mit|mit)\s+"
+        r"(?![^,.;!?]*\b(?:arbeit\w*|job\w*|büro\w*|buero\w*|studier\w*|studium\w*|lern\w*)\b)"
+        rf"[^,.;!?]{{1,80}}\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -1539,7 +1561,7 @@ def _has_future_residence_prefix(source: str, match_start: int) -> bool:
             r"(?i)(?:\bab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
             r"(?:jahr\w*|monat\w*|woche\w*)\b|\bab\s+\d{4}\b|"
             r"\bab\s+(?:morgen|uebermorgen|übermorgen|sommer|winter|frühling|fruehling|herbst)\b|\bbald\b|"
-            r"\b(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*\b|"
+            r"\b(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*\b|\bin\s+zukunft\b|"
             r"\b(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*)\s*$)",
             sentence,
         )
