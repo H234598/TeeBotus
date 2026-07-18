@@ -114,6 +114,25 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|im)\s+"
+        r"(?:(?:bundesland|land)\s+)?(?:brandenburg|bayern|hessen|sachsen|"
+        r"sachsen-anhalt|thüringen|thueringen|nordrhein-westfalen|"
+        r"baden-württemberg|baden-wuerttemberg|rheinland-pfalz|saarland|"
+        r"schleswig-holstein|mecklenburg-vorpommern|niedersachsen)\s+"
+        r"(?:bei|in)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+        r"zuhause|zu\s+hause|daheim)\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        r"(?:in|im)\s+(?:(?:bundesland|land)\s+)?"
+        r"(?:brandenburg|bayern|hessen|sachsen|sachsen-anhalt|thüringen|thueringen|"
+        r"nordrhein-westfalen|baden-württemberg|baden-wuerttemberg|rheinland-pfalz|"
+        r"saarland|schleswig-holstein|mecklenburg-vorpommern|niedersachsen)\s+"
+        r"(?:bei|in)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:in\s+)?(?:deutschland|österreich|oesterreich|(?:der\s+)?schweiz)\s+"
         r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
