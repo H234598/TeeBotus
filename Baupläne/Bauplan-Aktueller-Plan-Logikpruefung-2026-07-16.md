@@ -12454,3 +12454,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Unbestimmter fester Wohnsitz
+
+- `Ich habe einen festen/ständigen/permanenten Wohnort/Wohnsitz/Hauptwohnsitz in/bei ...` wird erkannt.
+- Arbeitsort bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Fixed-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7581007f fix: parse indefinite fixed residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
