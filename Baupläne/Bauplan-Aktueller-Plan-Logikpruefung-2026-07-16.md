@@ -9734,6 +9734,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wohnort-Label-Füller
+
+- `Wohnort bitte: Berlin` und `Wohnort aktuell Berlin` liefern jetzt `Berlin`, statt Fülltext als Stadt zu speichern.
+- `Wohnort bitte` ohne Ortswert bleibt leer; ältere breite Pattern können `bitte` nicht mehr als Ort durchreichen.
+- Verifikation: `tests/test_weather_context.py` -> `136 passed`, drei Label-Filler-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c79d3ef8 fix: skip residence label fillers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
