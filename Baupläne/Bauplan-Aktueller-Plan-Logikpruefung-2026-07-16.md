@@ -7890,6 +7890,19 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `15/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Umgekehrte Wohnsitzlabels erkennen
+
+- `Berlin ist mein Wohnort`, `Wohnhaft in Hamburg` und `Ich bin ansässig in
+  Potsdam` wurden bisher nicht als Wohnstadt erkannt.
+- Umgekehrte Labels sowie explizite `wohnhaft`-/`ansässig`-Formulierungen sind
+  jetzt abgedeckt. `Arbeitsort` und `Herkunftsort` werden nicht übernommen.
+- Verifikation: `tests/test_weather_context.py` -> `22 passed`,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `160f34f9 fix: parse inverted residence labels`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `16/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Gemini-Keyring: Cursor nach Route/Modell isolieren
 
 - 2026-07-17: `RotatingAPIKeyRing` nahm zwar `name` entgegen, Registry-State
