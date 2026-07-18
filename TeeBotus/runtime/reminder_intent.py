@@ -59,6 +59,16 @@ STRUCTURED_REMINDER_CUE_RE = re.compile(
     r")",
     re.IGNORECASE,
 )
+NEGATED_REMINDER_REQUEST_RE = re.compile(
+    r"\b(?:"
+    r"erinner(?:e|st|n)?\s+(?:mich|mi|uns)|"
+    r"remind\s+(?:me|us)|"
+    r"sag(?:e)?\s+(?:mir|uns)|"
+    r"denk(?:e)?(?:\s+bitte)?(?:\s+(?:fuer\s+)?(?:mich|uns))?|"
+    r"(?:kannst|koenntest)\s+du\s+(?:mich|uns)"
+    r")\s+(?:bitte\s+)?(?:nicht|nie)\b",
+    re.IGNORECASE,
+)
 
 _CLOCK_HOUR = r"(?:2[0-3]|[01]?\d)(?!\d)"
 EXPLICIT_TIME_CANDIDATE_RE = re.compile(
@@ -179,6 +189,8 @@ def maybe_queue_natural_reminder(
     structured_decision_runner: StructuredReminderRunner | None = None,
 ) -> str | None:
     resolved_now = now or local_now()
+    if _is_negated_reminder_request(text):
+        return None
     intent = parse_reminder_intent(text, now=resolved_now)
     if (
         not intent.is_request
@@ -228,7 +240,7 @@ def maybe_queue_natural_reminder(
 
 def parse_reminder_intent(text: str, *, now: datetime | None = None) -> ReminderIntent:
     raw = str(text or "").strip()
-    if not raw or not REMINDER_REQUEST_RE.search(_normalize(raw)):
+    if not raw or _is_negated_reminder_request(raw) or not REMINDER_REQUEST_RE.search(_normalize(raw)):
         return ReminderIntent(False)
     resolved_now = now or local_now()
     normalized_now = resolved_now if resolved_now.tzinfo else resolved_now.replace(tzinfo=timezone.utc)
@@ -370,6 +382,10 @@ def _normalized_categories(values: object) -> list[str]:
 
 def _has_structured_reminder_cue(text: str) -> bool:
     return STRUCTURED_REMINDER_CUE_RE.search(str(text or "")) is not None
+
+
+def _is_negated_reminder_request(text: str) -> bool:
+    return NEGATED_REMINDER_REQUEST_RE.search(_normalize(str(text or ""))) is not None
 
 
 def _parse_due_at(text: str, now: datetime) -> str:

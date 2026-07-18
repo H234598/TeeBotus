@@ -24,6 +24,43 @@ def test_parse_reminder_with_tomorrow_time() -> None:
     assert intent.subject == "den Zahnarzt"
 
 
+def test_parse_reminder_rejects_direct_negation() -> None:
+    for text in (
+        "Erinnere mich bitte nicht morgen um 9 an den Zahnarzt",
+        "Denk nicht an den Zahnarzt morgen",
+        "Kannst du mich nicht morgen an den Zahnarzt erinnern?",
+    ):
+        intent = parse_reminder_intent(text, now=fixed_now())
+
+        assert intent.is_request is False
+
+
+def test_negated_reminder_does_not_reach_structured_classifier(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="negated-reminder")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+    calls = []
+
+    def runner(*_args):
+        calls.append(True)
+        raise AssertionError("negated reminder must not reach classifier")
+
+    reply = maybe_queue_natural_reminder(
+        account_store=account_store,
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        text="Erinnere mich bitte nicht morgen um 9 an den Zahnarzt",
+        now=fixed_now(),
+        structured_decision_runner=runner,
+    )
+
+    assert reply is None
+    assert calls == []
+    assert account_store.read_proactive_outbox(account_id) == []
+
+
 def test_parse_reminder_accepts_delayed_bescheid_wording() -> None:
     intent = parse_reminder_intent(
         "Sag mir morgen um 9 Bescheid wegen der Tabletten",
