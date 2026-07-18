@@ -11956,3 +11956,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Saisonale Wohnzeitqualifier
+
+- `seit dem Sommer`, `seit Weihnachten` und `seit Anfang 2024` werden vor dem Wohnort erkannt.
+- Zeitphrase wird nicht mehr als Stadtkandidat übernommen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Seasonal-Duration-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c6505e36 fix: parse seasonal residence durations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
