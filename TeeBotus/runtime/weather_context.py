@@ -533,9 +533,21 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben))\s+(?:in|bei)\s+"
+        r"\d{5}\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
+        r"(?:ist|liegt|befindet\s+sich|bleibt|:)\s*(?:(?:in|bei)\s+)?"
+        r"\d{5}\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben))\s+"
         r"[^,.;!?]{1,100}?(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
-        r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?"
+        r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?(?:\d{5}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -544,7 +556,7 @@ CITY_PATTERNS = (
         r"(?:adresse|wohnadresse|wohnanschrift|anschrift|wohnort|wohnsitz)\s+"
         r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
         r"[^,.;!?]{1,100}?(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
-        r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?"
+        r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?(?:\d{5}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -552,7 +564,7 @@ CITY_PATTERNS = (
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+(?:meine|unsere)\s+"
         r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+"
         r"[^,.;!?]{1,100}?(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
-        r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?"
+        r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?(?:\d{5}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
