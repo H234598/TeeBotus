@@ -1294,7 +1294,7 @@ CITY_CHANGE_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich|i)\s+(?:wohne|wohn|lebe|leb)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
-        r"(?:aber\s+)?(?:grad\s+|gerade\s+|jetzt\s+|nun\s+|aktuell\s+|derzeit\s+)?(?:in|bei)\s+"
+        r"(?:aber\s+)?(?:grad\s+|gerade\s+|jetzt\s+|nun\s+|aktuell\s+|derzeit\s+)(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -3791,7 +3791,18 @@ def _has_conflicting_direct_residence_labels(source: str) -> bool:
         r"zuhause|zu\s+hause|daheim)\b",
         re.IGNORECASE,
     )
-    for match in pattern.finditer(source):
+    contrast_pattern = re.compile(
+        r"(?:^|[.!?;,\n]\s*)(?:aber|doch|jedoch)\s*"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:ist\s+)?"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|derzeit\w*|jetzig\w*|gegenwärtig\w*|gegenwaertig\w*|"
+        r"gemeldet\w*|offiziell\w*|amtlich\w*|neu\w*|privat\w*)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|meldeadresse|meldeanschrift|adresse|anschrift|"
+        r"zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    )
+    for match in (*pattern.finditer(source), *contrast_pattern.finditer(source)):
         city = _clean_city(match.group("city"))
         if city:
             cities.add(_city_comparison_key(city))
@@ -4129,7 +4140,8 @@ def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
     segment = tail if boundary is None else tail[: boundary.start()]
     return bool(
         re.match(
-            r"\s*(?:[,;]\s*sondern\b|/|&)\s*(?!arbeite\b|studiere\b|lerne\b|schlafe\b|"
+            r"\s*(?:[,;]\s*(?:aber|doch|jedoch)\s+(?!nicht\b)(?:in|bei)\s+[A-ZÄÖÜ]|"
+            r"[,;]\s*sondern\b|/|&)\s*(?!arbeite\b|studiere\b|lerne\b|schlafe\b|"
             r"besuche\b|reise\b|pendle\b|fahre\b|gehe\b|komme\b|"
             r"habe\b|bin\b|mein(?:e)?\b|der\b|die\b|das\b|"
             r"arbeitsort\b|arbeitsadresse\b|arbeitsanschrift\b|geburtsort\b|geburtsstadt\b|"
