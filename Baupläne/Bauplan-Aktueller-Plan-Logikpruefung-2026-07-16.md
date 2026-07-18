@@ -9717,6 +9717,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Mehrfachziele in Frage-Antworten
+
+- Antworten wie `Wo wohnst du? Berlin und Hamburg` oder `Berlin oder Potsdam` werden nicht mehr still auf ersten Ort gekürzt.
+- Ein einzelner Ort mit Kontext `Berlin und Umgebung` bleibt gültig.
+- Verifikation: `tests/test_weather_context.py` -> `135 passed`, drei Ambiguitäts-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a04e6046 fix: reject multiple residence question targets`.
+
+## Aktueller Ledger 2026-07-18-Vor-Restart
+
+- Service bisher aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `20/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
