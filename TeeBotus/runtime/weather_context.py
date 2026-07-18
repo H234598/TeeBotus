@@ -2316,7 +2316,7 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:wohnhaft|ansässig|ansaessig)\s*"
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s*"
         r"(?::|=|,)?\s*(?!(?:bin|sind|war|w(?:äre|urde)|nicht)\b)"
         r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -3242,7 +3242,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 
 
 def _has_ambiguous_residence_targets(source: str) -> bool:
-    residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb)"
+    residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
     target_patterns = (
         re.compile(

@@ -1435,6 +1435,13 @@ def test_extract_residence_city_trims_trailing_evidence_filler() -> None:
     assert extract_residence_city("Wohnort: Berlin laut Profil.") == "Berlin"
 
 
+def test_extract_residence_city_handles_direct_registration_labels() -> None:
+    assert extract_residence_city("Gemeldet: Frankfurt.") == "Frankfurt"
+    assert extract_residence_city("Registriert: Leipzig.") == "Leipzig"
+    assert extract_residence_city("Aktuell gemeldet in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Früher gemeldet in Berlin.") == ""
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
