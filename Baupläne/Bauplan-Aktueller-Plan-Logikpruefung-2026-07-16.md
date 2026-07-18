@@ -9654,6 +9654,18 @@ Restart erst bei `20/20`.
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Qualifizierte Benennungsformen
+
+- `Hamburg heißt mein aktueller Wohnort`, `wird mein/als mein derzeitiger Wohnort genannt` und `nennt man meinen derzeitigen Wohnort` werden erkannt.
+- Historisches `früherer Wohnort` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, fünf Qualified-Naming-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `47e715e7 fix: parse qualified naming residence forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Umschreibung des Geburtsorts
 
 - `Berlin ist der/ein Ort meiner Geburt, Hamburg mein Wohnort` liefert `Hamburg`.
