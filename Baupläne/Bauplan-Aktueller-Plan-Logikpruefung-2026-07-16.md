@@ -12016,3 +12016,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Kalenderdatum vor Wohnlabel
+
+- `Am 1. Januar ist mein Wohnort Hamburg` und `Am 1. Mai bin ich in Hamburg wohnhaft` liefern keinen aktuellen Wohnort.
+- Monatsnamen sind Nicht-Ort-Kontext; `am <Tag.Monat>` wird zusätzlich als Future-/Kalenderpräfix erkannt.
+- Erster Lauf fand den direkten `bin ... wohnhaft`-Pfad; danach erneut `115 passed`, vier Calendar-Date-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7f66dafe fix: reject calendar date residence prefixes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
