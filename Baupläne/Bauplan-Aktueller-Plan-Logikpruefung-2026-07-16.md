@@ -11502,3 +11502,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Eindeutige Stadtflächen-Suffixe
+
+- `Berlin-Mitte`, `Berlin Stadt`, `Berlin-Zentrum` und vergleichbare eindeutige Bezirkswörter werden auf Berlin reduziert.
+- Himmelsrichtungs-Suffixe bleiben bewusst unangetastet; `Bad Homburg-Süd`, `Baden-Baden` und `Berlin-Brandenburg` bleiben erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, sieben City-Area-Suffix-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0dc7b1dd fix: normalize unambiguous city area suffixes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
