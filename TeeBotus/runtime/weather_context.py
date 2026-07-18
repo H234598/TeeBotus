@@ -164,6 +164,7 @@ _RESIDENCE_TIME_QUALIFIER = (
     r"weiterhin|nach\s+wie\s+vor|noch\s+immer|immer\s+noch|"
     rf"dauerhaft|permanent|langfristig|kurzfristig|befristet|unbefristet|vorläufig|vorlaeufig|"
     rf"ständig|staendig|wieder|erneut|für\s+{_RESIDENCE_DURATION}|"
+    r"zur\s+(?:miete|untermiete|zwischenmiete)|"
     r"vor(?:uebergehend|übergehend))"
 )
 _RESIDENCE_LOCATION_ADVERB = (
