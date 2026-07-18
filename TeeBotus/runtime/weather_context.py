@@ -121,6 +121,14 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich|i)\s+(?:wohne|wohn|lebe|leb)\s+"
+        r"(?:nimmer|nicht\s+(?:mehr|l(?:aenger|änger))?|nicht)\s+(?:in|bei)\s+"
+        r"[^,.;!?]{1,80}[,;]\s*(?:sondern|aber)\s+"
+        r"(?:(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+)?"
+        r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+war\s+[^,.;!?]{1,80},\s*"
         r"(?:jetzt|heute|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+ist\s+"
@@ -1854,7 +1862,7 @@ def _clean_city(value: str) -> str:
     if re.match(
         r"(?i)^(?:der|die|das|den|dem|des|dies(?:er|e|es)|jen(?:er|e|es)|"
         r"welch(?:er|e|es)|irgendein|mehrere|einige|manche|ohne|unbekannt\w*|"
-        r"unbestimmt\w*|wird|soll|geplant\w*|hier|dort|da)\b",
+        r"unbestimmt\w*|wird|soll|geplant\w*|nimmer|hier|dort|da)\b",
         city,
     ):
         return ""
