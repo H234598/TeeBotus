@@ -105,6 +105,26 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"(?:bin|sind)\s+(?:ich|wir)\s+(?:wohnhaft|ansässig|ansaessig)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|i)\s+nenn(?:e|en)?\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+        r"lebensmittelpunkt|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+nenn(?:e|en)?\s+"
+        r"(?:ich|i)\s+(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:bei|mit|zusammen\s+mit)\s+"
         r"(?!(?:(?!\s+(?:in|bei)\s+)[^,.;!?])*\b(?:arbeit\w*|studier\w*|"
