@@ -699,6 +699,15 @@ def extract_residence_city(text: str) -> str:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb)"
     if re.search(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+[^,.;!?]{1,80}\s+und\s+"
+        r"(?!(?:arbeit|studier|lern|schlaf|mach|komm|fahr|geh|hab|besuch|verbring|treff|reis|pendl|seh|übernacht|uebernacht)\w*\b)"
+        r"(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß'-]*",
+        source,
+        re.IGNORECASE,
+    ):
+        return True
+    if re.search(
         rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
         rf"(?:(?:ich\s+)?{residence}\s+)?(?:in|bei)\s+",
         source,
@@ -711,7 +720,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             r"(?!bin\b|sind\b|sein\b|arbeit\w*\b|studier\w*\b|lern\w*\b|"
             r"schlaf\w*\b|mach\w*\b|komm\w*\b|fahr\w*\b|geh\w*\b|"
             r"hab\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|"
-            r"pendl\w*\b|seh\w*\b|übernacht\w*\b|uebernacht\w*\b)[\wÄÖÜäöüß'-]+",
+            r"pendl\w*\b|seh\w*\b|übernacht\w*\b|uebernacht\w*\b|"
+            r"unser(?:e)?\s+(?:wohnort|wohnsitz|hauptwohnsitz|arbeitsort)\b)[\wÄÖÜäöüß'-]+",
             source,
             re.IGNORECASE,
         )
