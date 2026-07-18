@@ -104,7 +104,7 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        rf"\b{_RESIDENCE_TIME_QUALIFIER}\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}|seit\s+heute|heute)\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         r"(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         r"nicht(?:\s+mehr)?\s+(?:(?:in|bei)\s+)?[^,.;!?]{1,80}?"
         r"(?:\s*(?:,|;|[-–—])\s*|\s+)sondern\s+(?:(?:in|bei)\s+)?"
@@ -486,11 +486,31 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        rf"\b{_RESIDENCE_TIME_QUALIFIER}\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}|seit\s+heute|heute)\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         r"(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}|seit\s+heute|heute)\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
+        r"(?:in\s+der\s+(?:schweiz|stadt)|in\s+(?:deutschland|österreich|oesterreich|schweiz)\s*|"
+        r"im\s+(?:raum|bundesland)\s+)[^,.;!?]{0,80},\s*"
+        r"(?:(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s+)?"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        r"(?:in\s+der\s+(?:schweiz|stadt)|in\s+(?:deutschland|österreich|oesterreich|schweiz)\s*|"
+        r"im\s+(?:raum|bundesland)\s+)[^,.;!?]{0,80},\s*"
+        r"(?:(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s+)?"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
