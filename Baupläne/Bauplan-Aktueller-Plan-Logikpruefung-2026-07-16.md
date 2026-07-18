@@ -10861,3 +10861,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Nie-Negation
+
+- `nie in Berlin, sondern in Hamburg` extrahiert Hamburg statt Negationswort.
+- Reine `nie`-Wohnortangabe bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `73 passed`, drei Nie-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `022c5675 fix: handle never residence negation`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
