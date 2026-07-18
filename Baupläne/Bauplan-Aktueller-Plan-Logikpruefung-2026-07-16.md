@@ -8970,3 +8970,16 @@ Restart nach weiteren 20 Code-Fixes.
 
 **Aktueller Laufstand:** Seit dem Restart `4/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Negierte Wohnortwechsel mit Separator erkennen
+
+- `Ich wohne nicht in Berlin; sondern in Dresden` und `nicht mehr ... – jetzt
+  in Leipzig` wurden bisher nicht als neuer Wohnort erkannt.
+- Negierte Wechsel akzeptieren nun Komma, Semikolon und Gedankenstrich mit
+  `sondern`/Aktualitaetsmarker. Ein reiner Arbeitsortzusatz bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `344a7b01 fix: parse negated residence changes`.
+
+**Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
