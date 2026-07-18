@@ -205,6 +205,15 @@ def test_extract_residence_city_from_global_city_forms() -> None:
     assert extract_residence_city("Ich wohne in Kanada, genauer gesagt in Toronto.") == "Toronto"
 
 
+def test_extract_residence_city_from_s_ending_relation_forms() -> None:
+    assert extract_residence_city("Ich wohne außerhalb Paris.") == "Paris"
+    assert extract_residence_city("Ich wohne südlich Paris.") == "Paris"
+    assert extract_residence_city("Ich wohne am Rand Paris.") == "Paris"
+    assert extract_residence_city("Ich wohne im Umland Paris.") == "Paris"
+    assert extract_residence_city("Ich wohne im Norden Paris.") == "Paris"
+    assert extract_residence_city("Ich wohne in der Nähe des Zentrums von Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_from_inverted_location_forms() -> None:
     assert extract_residence_city("In Berlin wohne ich.") == "Berlin"
     assert extract_residence_city("Berlin, dort wohne ich.") == "Berlin"

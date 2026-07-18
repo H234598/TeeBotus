@@ -619,6 +619,19 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:au(?:ßerhalb|sserhalb)|am\s+rand|im\s+umland|im\s+(?:norden|süden|osten|westen)|"
+        r"nördlich|südlich|östlich|westlich)\s+(?:von\s+)?"
+        r"(?P<city>Paris|Reims|Worms|Tours|Cannes|Lens)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"in\s+der\s+(?:nähe|naehe|umgebung)\s+(?:des|der)\s+[^,.;!?]{1,80}\s+"
+        r"(?:von|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+in\s+der\s+nähe\s+(?:von\s+)?"
         r"(?P<city>Paris|Reims|Worms|Tours|Cannes|Lens)\b",
         re.IGNORECASE,
