@@ -8708,6 +8708,24 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `19/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Satzgetrennte Wohnort-Kurzform
+
+- `Ich wohne in Berlin. Jetzt/Inzwischen in Hamburg` und die entsprechende
+  Wohnort-/Zuhause-Labelvariante wurden bisher auf Berlin gekuerzt.
+- Eindeutige Aktualitaetsmarker mit `in/bei` werden nun auch ohne zweiten
+  Wohn-/Lebensverb erkannt; `Jetzt arbeite ...` bleibt beim alten Ort.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6b548514 fix: parse sentence-separated residence shorthand`.
+
+**Aktueller Laufstand:** Seit dem Restart `20/20` Code-Commits.
+
+### Restart 2026-07-18
+
+- `systemctl --user restart teebotus.service` erfolgreich.
+- Service aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
+- Neuer Zaehler seit diesem Restart: `0/20` Code-Commits. Kein Push.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
