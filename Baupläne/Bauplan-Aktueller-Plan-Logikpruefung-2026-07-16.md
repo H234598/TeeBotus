@@ -9104,3 +9104,16 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `14/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Geografische Wohnortzusätze trimmen
+
+- `Berlin im Norden`, `Hamburg am Stadtrand`, `Potsdam am See` und `Leipzig
+  im Zentrum` wurden mit Zusatz am Stadtnamen gespeichert.
+- `im` sowie begrenzte `am ...`-Kontexte werden jetzt abgeschnitten.
+  `Frankfurt am Main` bleibt als legitimer Ortsname erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `42001d5e fix: trim geographic residence qualifiers`.
+
+**Aktueller Laufstand:** Seit dem Restart `15/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
