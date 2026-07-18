@@ -10190,3 +10190,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Haushaltsrelationen mit `bei`
+
+- `mit meiner Familie bei Berlin`, `bei meinen Eltern bei Potsdam` und ähnliche Haushaltsformen wurden bisher nicht erkannt.
+- Personen-/Haushaltsmuster akzeptieren jetzt `in` und `bei` als Zielpräposition; Aktivitätsverben bleiben geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 6 Household-Relation-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `590c0ec9 fix: parse household residence relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
