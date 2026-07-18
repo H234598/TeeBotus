@@ -15,24 +15,32 @@ WEATHER_CONTEXT_SCHEMA_VERSION = 1
 WEATHER_CHECK_INTERVAL = timedelta(hours=2)
 WEATHER_TIMEOUT_SECONDS = 2.5
 MAX_CITY_LENGTH = 80
+_RESIDENCE_DURATION = (
+    r"(?:\d{4}|kurzem|kurzer\s+zeit|einiger\s+zeit|"
+    r"(?:ein\s+paar|\w+)\s+(?:tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?))"
+)
+_RESIDENCE_TIME_QUALIFIER = (
+    rf"(?:(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|seitdem|"
+    r"jetzt|aktuell|derzeit|gerade|momentan|vor(?:uebergehend|übergehend))"
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
         r"\b(?:ich\s+)?(?:wohne|lebe)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
-        r"(?:aber\s+)?(?:inzwischen|mittlerweile)\s+(?:in|bei)\s+"
+        r"(?:aber\s+)?(?:inzwischen|mittlerweile|seitdem)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
         r"\b(?:ich\s+)?(?:wohne|lebe)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
-        r"(?:aber\s+)?(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+(?:in|bei)\s+"
+        r"(?:aber\s+)?(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
         r"\b(?:ich\s+)?(?:wohne|lebe)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
         r"(?:aber\s+)?(?:ich\s+)?(?:wohne|lebe)\s+(?:aber\s+)?"
-        r"(?:jetzt\s+|nun\s+|aktuell\s+|derzeit\s+|inzwischen\s+|mittlerweile\s+)?(?:in|bei)\s+"
+        r"(?:jetzt\s+|nun\s+|aktuell\s+|derzeit\s+|inzwischen\s+|mittlerweile\s+|seitdem\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -53,13 +61,13 @@ CITY_CHANGE_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich\s+wohne|ich\s+lebe)\s+nicht\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
-        r"(?:(?:sondern|aber)\s+)?(?:jetzt\s+|nun\s+|aktuell\s+|derzeit\s+|inzwischen\s+|mittlerweile\s+)?"
+        r"(?:(?:sondern|aber)\s+)?(?:jetzt\s+|nun\s+|aktuell\s+|derzeit\s+|inzwischen\s+|mittlerweile\s+|seitdem\s+)?"
         r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
         r"\b(?:nicht\s+mehr|nicht\s+l(?:aenger|änger))\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
-        r"(?:(?:sondern|aber)\s+)?(?:jetzt\s+|nun\s+|aktuell\s+|derzeit\s+|inzwischen\s+|mittlerweile\s+)?(?:in|bei)\s+"
+        r"(?:(?:sondern|aber)\s+)?(?:jetzt\s+|nun\s+|aktuell\s+|derzeit\s+|inzwischen\s+|mittlerweile\s+|seitdem\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -99,20 +107,14 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:ich\s+)?bin\s+"
-        r"(?:(?:seit\s+(?:\d{4}|kurzem|einiger\s+zeit|"
-        r"(?:ein(?:en|igen)?|ein\s+paar|mehreren|vielen)\s+"
-        r"(?:tagen|wochen|monaten|jahren))|jetzt|aktuell|derzeit|gerade)\s+)?"
-        r"(?:in|bei)\s+"
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich\s+)?bin\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:zu\s+hause|zuhause)\b",
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:ich\s+wohne|ich\s+lebe|wohn(?:e)?|lebe)\s+"
-        r"(?:(?:seit\s+(?:\d{4}|kurzem|einiger\s+zeit|"
-        r"(?:ein(?:en|igen)?|ein\s+paar|mehreren|vielen)\s+"
-        r"(?:tagen|wochen|monaten|jahren))|jetzt|aktuell|derzeit|gerade)\s+)?"
-        r"bei\s+[^,.;!?]{1,80}\s+in\s+"
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich\s+)?(?:wohne|lebe)\s+"
+        rf"(?:ich\s+)?(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?bei\s+[^,.;!?]{{1,80}}\s+in\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -129,13 +131,8 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:seit\s+(?:\d{4}|kurzem|einiger\s+zeit|"
-        r"(?:ein(?:en|igen)?|ein\s+paar|mehreren|vielen)\s+"
-        r"(?:tagen|wochen|monaten|jahren))\s+)?"
-        r"(?:ich\s+)?(?:wohne|lebe)\s+"
-        r"(?:ich\s+)?(?:seit\s+(?:\d{4}|kurzem|einiger\s+zeit|"
-        r"(?:ein(?:en|igen)?|ein\s+paar|mehreren|vielen)\s+"
-        r"(?:tagen|wochen|monaten|jahren))\s+)?(?:jetzt|aktuell|derzeit)?\s*"
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich\s+)?(?:wohne|lebe)\s+"
+        rf"(?:ich\s+)?(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?"
         r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
