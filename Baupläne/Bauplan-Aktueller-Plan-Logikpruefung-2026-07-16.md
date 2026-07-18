@@ -14346,3 +14346,16 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Kompakte Zuhause-Ausdrücke
+
+- `In Berlin zuhause`, `Berlin daheim` und `Berlin zu Hause` werden als Wohnort erkannt.
+- Breit matchende Regexe überschreiben keine bestehenden Formen wie `Potsdam ist inzwischen unser Zuhause` oder Frage-Antwort-Sätze.
+- Unvollständiges Label `Wohnort ist daheim` bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, sechs Compact-Home-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e18d1b28 fix: parse compact home expressions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
+- Seit diesem Restart: `20/20` Code-Fixes. Kein Push.
