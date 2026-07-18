@@ -163,6 +163,35 @@ def test_city_change_invalidates_weather_cache_and_checks_new_city(tmp_path) -> 
     assert calls == ["Berlin", "Potsdam"]
 
 
+def test_city_case_change_does_not_bypass_weather_rate_limit(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    calls: list[str] = []
+
+    def provider(city: str) -> str:
+        calls.append(city)
+        return f"{city}: 9 C"
+
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=provider,
+    )
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "ich wohne in berlin.",
+        now=datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc),
+        provider=provider,
+    )
+
+    assert result.skipped_reason == "rate_limited"
+    assert calls == ["Berlin"]
+    assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "Berlin"
+
+
 def test_city_memory_is_not_duplicated_when_state_write_fails_after_append(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

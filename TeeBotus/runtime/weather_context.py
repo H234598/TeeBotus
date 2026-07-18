@@ -76,7 +76,10 @@ def _update_city_and_weather_context_unlocked(
     city = extract_residence_city(text)
     city_changed = False
     if city:
-        city_changed = city != str(weather_state.get("city") or "").strip()
+        previous_city = str(weather_state.get("city") or "").strip()
+        city_changed = _city_comparison_key(city) != _city_comparison_key(previous_city)
+        if not city_changed:
+            city = previous_city
         weather_state["city"] = city
         weather_state["city_updated_at"] = resolved_now.isoformat(timespec="seconds")
         if city_changed:
@@ -224,6 +227,10 @@ def _city_id_token(city: str) -> str:
     normalized = re.sub(r"\s+", "_", city.strip().casefold())
     normalized = re.sub(r"[^a-z0-9_]+", "", normalized)
     return normalized[:48] or hashlib.sha256(city.encode("utf-8")).hexdigest()[:16]
+
+
+def _city_comparison_key(city: str) -> str:
+    return re.sub(r"\s+", " ", str(city or "").strip()).casefold()
 
 
 def _area_name(area: Mapping[str, Any]) -> str:

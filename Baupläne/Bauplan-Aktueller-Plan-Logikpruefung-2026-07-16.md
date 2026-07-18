@@ -8094,6 +8094,21 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `5/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### Wettercache: Gross-/Kleinschreibung darf Rate-Limit nicht umgehen
+
+- 2026-07-18: `Berlin` und `berlin` wurden als verschiedene Wohnstaedte
+  behandelt. Eine erneute Nachricht konnte dadurch den Wettercheck innerhalb
+  des 2-Stunden-Fensters unnoetig erneut ausloesen.
+- Stadtvergleich erfolgt jetzt whitespace-normalisiert und casefolded. Bei
+  gleicher Stadt bleibt die bisherige Darstellung erhalten; echte
+  Stadtwechsel invalidieren weiterhin sofort.
+- Verifikation: `tests/test_weather_context.py` -> `12 passed`; `py_compile`,
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: folgt nach Commit.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `6/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### 2026-07-18: Wettercache bei Wohnortwechsel sofort erneuern
 
 - Bei erkannter neuer Wohnstadt wurde der alte Wettertext zwar geloescht,
