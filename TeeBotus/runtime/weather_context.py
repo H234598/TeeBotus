@@ -16,7 +16,8 @@ WEATHER_CHECK_INTERVAL = timedelta(hours=2)
 WEATHER_TIMEOUT_SECONDS = 2.5
 MAX_CITY_LENGTH = 80
 _RESIDENCE_DURATION = (
-    r"(?:(?:mehr\s+als|über|ueber|knapp|gut|etwa|ungefähr|ungefaehr)\s+)?"
+    r"(?:(?:mehr\s+als|über|ueber|knapp|gut|etwa|ungefähr|ungefaehr|"
+    r"fast|circa|ca\.|rund|mindestens|hoechstens|höchstens)\s+)?"
     r"(?:\d{4}|kurzem|kurzer\s+zeit|einiger\s+zeit|"
     r"(?:(?:ein\s+paar|\w+)\s+(?:tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?)|"
     r"tag(?:en)?|woche(?:n)?|monat(?:en)?|jahr(?:en)?))"
