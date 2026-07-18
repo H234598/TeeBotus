@@ -146,6 +146,7 @@ _RESIDENCE_DURATION = (
     r"(?:\d{4}|kurzem|kurzer\s+zeit|einiger\s+zeit|jeher|"
     r"(?:dem\s+)?(?:letzten|letztem|vergangenen|vergangenem|aktuellen|aktuellem|diesem)\s+(?:jahr|sommer|winter)|"
     r"(?:meiner\s+)?(?:kindheit|jugend|geburt)|(?:dem|meinem|meiner)\s+"
+    r"(?:(?:letzten|letztem|vergangenen|vergangenem|ersten)\s+)?"
     r"(?:studium|umzug|einzug|ausbildung|lehre)|"
     r"(?:(?:dem|der)\s+)?(?:beginn|ende|abschluss)\s+"
     r"(?:(?:meines|meiner|des|der)\s+)?(?:studiums|ausbildung|lehre)|"
