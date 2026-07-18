@@ -533,6 +533,29 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)|"
+        r"(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
+        r"(?:liegt|befindet\s+sich))\s+"
+        r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung)|unweit|"
+        r"au(?:ßerhalb|sserhalb)|am\s+rand|im\s+umland|"
+        r"im\s+(?:norden|süden|osten|westen))\s+(?:von\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80})(?<!s)(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)|"
+        r"(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
+        r"(?:liegt|befindet\s+sich))\s+"
+        r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung)|unweit|"
+        r"au(?:ßerhalb|sserhalb)|am\s+rand|im\s+umland|"
+        r"im\s+(?:norden|süden|osten|westen))\s+(?:von\s+)?"
+        r"(?!(?:paris|reims|worms|tours|cannes|lens)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}(?<!s))s(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben))\s+(?:in|bei)\s+"
         r"\d{5}\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -1184,9 +1207,9 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         ):
             return True
     if re.search(
-        rf"\b{residence}\s+(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung)\s+von|im\s+raum|"
-        r"rund\s+um|nahe|unweit\s+von|au(?:ßerhalb|sserhalb)\s+von|am\s+stadtrand\s+von|im\s+umland\s+von|"
-        r"im\s+(?:norden|süden|osten|westen)\s+von|am\s+rand\s+von|"
+        rf"\b{residence}\s+(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung)(?:\s+von)?|im\s+raum|"
+        r"rund\s+um|nahe|unweit(?:\s+von)?|au(?:ßerhalb|sserhalb)(?:\s+von)?|am\s+stadtrand\s+von|im\s+umland(?:\s+von)?|"
+        r"im\s+(?:norden|süden|osten|westen)(?:\s+von)?|am\s+rand(?:\s+von)?|"
         r"nordöstlich\s+von|nordwestlich\s+von|südöstlich\s+von|südwestlich\s+von|"
         r"nördlich\s+von|südlich\s+von|östlich\s+von|westlich\s+von)\s+"
         r"[^,.;!?]{1,80}\s+und\s+"

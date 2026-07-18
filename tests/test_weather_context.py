@@ -90,6 +90,16 @@ def test_extract_residence_city_from_direction_and_edge_relations() -> None:
     assert extract_residence_city("Ich wohne am Rand von Berlin und arbeite in Hamburg.") == "Berlin"
 
 
+def test_extract_residence_city_from_genitive_relations() -> None:
+    assert extract_residence_city("Ich wohne in der Nähe Berlins.") == "Berlin"
+    assert extract_residence_city("Ich lebe unweit Dresdens.") == "Dresden"
+    assert extract_residence_city("Mein Wohnort liegt außerhalb Berlins.") == "Berlin"
+    assert extract_residence_city("Ich wohne am Rand Dresdens.") == "Dresden"
+    assert extract_residence_city("Ich lebe im Umland Potsdams.") == "Potsdam"
+    assert extract_residence_city("Ich wohne im Norden Berlins.") == "Berlin"
+    assert extract_residence_city("Ich wohne unweit Berlin und Hamburg.") == ""
+
+
 def test_extract_residence_city_from_nearby_location_phrase() -> None:
     assert extract_residence_city("Ich wohne in der Nähe von Berlin.") == "Berlin"
     assert extract_residence_city("Ich lebe nahe Hamburg.") == "Hamburg"
