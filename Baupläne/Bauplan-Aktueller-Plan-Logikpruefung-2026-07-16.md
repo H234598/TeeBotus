@@ -8074,7 +8074,7 @@ Push. Restart erst bei `20/20`.
   entfernt. Andere Themen bleiben unveraendert.
 - Verifikation: `tests/test_reminder_intent.py` -> `46 passed`; `py_compile`,
   `git diff --check` gruen. Kein Provider/API-Aufruf.
-- Code-Commit: folgt nach Commit.
+- Code-Commit: `37096a6e fix: parse natural reminder wording`.
 
 **Aktueller Laufstand:** Seit dem letzten Restart `4/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
