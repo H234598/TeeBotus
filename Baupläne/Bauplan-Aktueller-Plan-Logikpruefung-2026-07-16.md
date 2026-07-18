@@ -8504,6 +8504,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `4/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Slash-/Ampersand-Aktivitaetsanschluesse erhalten
+
+- Der neue `/&`-Guard verwarf `Berlin / arbeite ...` und `Berlin & meine
+  Arbeit ...` zu streng.
+- Bekannte Aktivitaetsanschluesse werden nun durchgelassen; echte
+  Ortsalternativen mit zweitem Ortswort bleiben unentschieden.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5d08d5c4 fix: preserve residence before activity separators`.
+
+**Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-18: Weitere Dauerqualifizierer abdecken
 
 - `seit fast zwei Jahren`, `seit circa/ca. drei Monaten`, `seit rund vier
