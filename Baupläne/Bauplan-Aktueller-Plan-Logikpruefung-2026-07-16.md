@@ -10985,3 +10985,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Weitere Wohnadverbien
+
+- `erst/immer` werden vor Stadt übersprungen statt als Stadtwert gespeichert.
+- Verifikation: `tests/test_weather_context.py` -> `83 passed`, zwei Adverb-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7c8597a9 fix: parse additional residence adverbs`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1517099`, Start `2026-07-18 11:01:58 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
