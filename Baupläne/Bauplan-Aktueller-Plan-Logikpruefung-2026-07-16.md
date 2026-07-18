@@ -10281,3 +10281,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Postleitzahlen in Wohnadressen
+
+- `10115 Berlin` wurde als City-Kandidat verworfen; auch Straßenadressen mit Postleitzahl fielen aus.
+- Postalpräfixe bei Wohnverb, Wohnlabel und Straße/Nummer ergänzt; Arbeitsangaben bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `30 passed`, 7 Postal-Address-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1a0f03c1 fix: parse postal residence addresses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
