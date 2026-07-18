@@ -2872,7 +2872,7 @@ CITY_PATTERNS = (
         r"adresse|wohnadresse|wohnanschrift|anschrift)\s*"
         r"(?:ist|liegt|lautet|befindet\s+sich|bleibt|:)\s*(?::\s*)?"
         r"(?:(?:in|bei)\s+)?[\"'„“‚‘«(]?"
-        r"(?P<city>[^\W\d_][\wÄÖÜäöüß .-]{1,80})"
+        r"(?:\d{5}\s+)?(?P<city>[^\W\d_][\wÄÖÜäöüß .()-]{1,80})"
         r"[\"'”“’»)]?(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
@@ -3473,6 +3473,8 @@ def _ensure_weather_state(state: dict[str, Any]) -> dict[str, Any]:
 
 def _clean_city(value: str) -> str:
     source = str(value or "")
+    if source.count(")") > source.count("("):
+        source = re.sub(r"[.!?;,]+$", "", source).rstrip(")").rstrip()
     normalized_source = re.sub(r"\s+", " ", source).strip(" .,:;!?")
     known_compound_city = _KNOWN_COMPOUND_CITY_NAMES.get(normalized_source.casefold())
     if known_compound_city:

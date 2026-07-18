@@ -1368,6 +1368,11 @@ def test_extract_residence_city_rejects_modal_residence_claims() -> None:
     assert extract_residence_city("Mein Wohnort ist Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_handles_quoted_compound_and_postal_values() -> None:
+    assert extract_residence_city('Mein Wohnort ist "Halle (Saale)".') == "Halle (Saale)"
+    assert extract_residence_city('Meine Adresse lautet "10115 Berlin".') == "Berlin"
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
