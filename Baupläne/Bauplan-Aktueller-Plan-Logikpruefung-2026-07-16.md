@@ -10401,3 +10401,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Profil-, Adress- und Studienangaben
+
+- Invertiertes `wohnhaft`, Stadtteil-/Innenstadt-/Umland-Adjektive, genitive Nähe/Richtung, kurze Adresslabels und `während/nach dem Studium` wurden ergänzt.
+- Arbeits-/Job-/Büro-/Studienkontext bei `bei ... in Stadt` wird nicht mehr als Wohnort übernommen; `Wohnadresse lautet` ist gültig.
+- Verifikation: `tests/test_weather_context.py` -> `38 passed`, 48 lokale Korpus-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `37c244c7 fix: parse residence profile variants`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
