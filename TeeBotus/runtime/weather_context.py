@@ -4129,7 +4129,7 @@ def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
     segment = tail if boundary is None else tail[: boundary.start()]
     return bool(
         re.match(
-            r"\s*(?:/|&)\s*(?!arbeite\b|studiere\b|lerne\b|schlafe\b|"
+            r"\s*(?:[,;]\s*sondern\b|/|&)\s*(?!arbeite\b|studiere\b|lerne\b|schlafe\b|"
             r"besuche\b|reise\b|pendle\b|fahre\b|gehe\b|komme\b|"
             r"habe\b|bin\b|mein(?:e)?\b|der\b|die\b|das\b|"
             r"arbeitsort\b|arbeitsadresse\b|arbeitsanschrift\b|geburtsort\b|geburtsstadt\b|"
