@@ -7831,6 +7831,20 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `11/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Explizite Wohnsitz- und Zuhause-Labels erkennen
+
+- `Wohnort: Dresden`, `Ich habe meinen Wohnsitz in München`, `Ich bin in Köln
+  wohnhaft` und `Mein Zuhause ist Dresden` wurden bisher nicht erkannt.
+- Explizite Labels und sichere Zuhause-/Daheim-Formulierungen werden jetzt
+  ausgewertet. `Heimatstadt` bleibt ausgeschlossen; daraus folgt keine
+  aktuelle Wohnstadt.
+- Verifikation: `tests/test_weather_context.py` -> `22 passed`,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `313073d4 fix: parse explicit residence labels`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `12/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Gemini-Keyring: Cursor nach Route/Modell isolieren
 
 - 2026-07-17: `RotatingAPIKeyRing` nahm zwar `name` entgegen, Registry-State
