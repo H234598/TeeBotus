@@ -11663,3 +11663,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Historische Statuswörter
+
+- `Früher ansässig/gemeldet/registriert in Altort, heute/jetzt in Neuort` liefert Neuort.
+- Arbeitsübergänge bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Historical-Status-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7648aeb8 fix: parse historical residence status`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
