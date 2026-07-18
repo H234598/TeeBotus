@@ -313,6 +313,29 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        rf"\bwir\s+(?:wohnen|leben)\s+(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?"
+        rf"(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?wir\s+sind\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+wohnhaft\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?sind\s+wir\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+wohnhaft\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\bwir\s+haben\s+unseren\s+(?:wohnort|wohnsitz|hauptwohnsitz)\s+in\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b(?:mein(?:e)?\s+)?(?:wohnort|wohnsitz|wohnstadt|stadt|ort|zu\s+hause|zuhause|daheim|{_PRIMARY_RESIDENCE_LABEL})\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|stadt)(?:\s+von)?|im\s+raum|nahe|unweit\s+von)\s+"
