@@ -8478,6 +8478,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `2/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Weitere Determinierer vor Stadttext verwerfen
+
+- `den/dem Berlin`, `welcher Berlin` und `mehrere Berlin` wurden als Wohnort
+  uebernommen.
+- Der bestehende Descriptor-Guard verwirft nun weitere Artikel, Pronomen und
+  Mengenangaben vor dem Stadtnamen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d10f95a1 fix: reject residence determiner descriptors`.
+
+**Aktueller Laufstand:** Seit dem Restart `3/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-18: Weitere Dauerqualifizierer abdecken
 
 - `seit fast zwei Jahren`, `seit circa/ca. drei Monaten`, `seit rund vier
