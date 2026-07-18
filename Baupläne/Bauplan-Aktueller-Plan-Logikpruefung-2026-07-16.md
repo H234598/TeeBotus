@@ -7986,6 +7986,19 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `3/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Wohnort nach Haushalts-/Personenphrase erkennen
+
+- `Ich wohne bei meiner Freundin in Berlin` und `Ich lebe bei meinen Eltern
+  in Hamburg` wurden wegen des vorangestellten `bei`-Teils verworfen.
+- Ein spezifisches `bei ... in <Stadt>`-Pattern extrahiert jetzt den
+  nachfolgenden Ort; `Ich wohne bei meiner Freundin` ohne Stadt bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `18 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d6883997 fix: parse residence after household phrase`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `4/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
