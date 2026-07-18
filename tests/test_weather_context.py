@@ -952,6 +952,32 @@ def test_city_case_change_does_not_bypass_weather_rate_limit(tmp_path) -> None:
     assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "Berlin"
 
 
+def test_repeated_city_mention_persists_city_updated_at_when_rate_limited(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    first_now = datetime(2026, 6, 15, 9, tzinfo=timezone.utc)
+    second_now = datetime(2026, 6, 15, 10, tzinfo=timezone.utc)
+
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=first_now,
+        provider=lambda city: f"{city}: 9 C",
+    )
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne weiterhin in Berlin.",
+        now=second_now,
+        provider=lambda city: f"{city}: 9 C",
+    )
+
+    assert result.skipped_reason == "rate_limited"
+    state = account_store.read_agent_state(account_id)["weather_context"]
+    assert state["city_updated_at"] == second_now.isoformat(timespec="seconds")
+
+
 def test_city_memory_is_not_duplicated_when_state_write_fails_after_append(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
