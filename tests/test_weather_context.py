@@ -78,6 +78,10 @@ def test_extract_residence_city_rejects_future_residence() -> None:
 
 def test_extract_residence_city_from_additional_change_forms() -> None:
     assert extract_residence_city("Ich wohne nicht mehr in Berlin, bin jetzt in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich stamme aus Berlin, lebe jetzt aber in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich stamme aus Berlin, wohne heute in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich stamme aus Berlin, lebe aber inzwischen in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich stamme aus Berlin, aber arbeite in Hamburg.") == ""
     assert extract_residence_city("Nach meinem Umzug bin ich nach Hamburg gezogen.") == "Hamburg"
     assert extract_residence_city("Ich lebe derzeit in Deutschland, genauer gesagt in Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin; zu Hause bin ich in Potsdam.") == ""
