@@ -121,6 +121,14 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+war\s+[^,.;!?]{1,80},\s*"
+        r"(?:jetzt|heute|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+ist\s+"
+        r"(?:er|sie|es)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:nicht\s+(?:mehr|l(?:aenger|änger))?|nicht)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
         r"(?:sondern|aber)\s+(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
         r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\b",
@@ -170,13 +178,13 @@ CITY_CHANGE_PATTERNS = (
     ),
     re.compile(
         r"\b(?:früher|frueher|ehemals|damals)\s+(?:wohnte|lebte)\s+(?:ich|wir)\s+"
-        r"(?:in|bei)\s+[^,.;!?]{1,80},\s*(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+(?:in|bei)\s+"
+        r"(?:in|bei)\s+[^,.;!?]{1,80},\s*(?:jetzt|heute|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
         r"\b(?:früher|frueher|ehemals|damals)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
-        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+(?:in|bei)\s+"
+        r"(?:jetzt|heute|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
