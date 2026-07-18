@@ -110,6 +110,14 @@ _IRREGULAR_CITY_ADJECTIVE_BASES = {
     "dresdn": "Dresden",
     "münchn": "München",
 }
+_GENITIVE_CITY_REPAIRS = {
+    "pari": "Paris",
+    "reim": "Reims",
+    "worm": "Worms",
+    "tour": "Tours",
+    "canne": "Cannes",
+    "len": "Lens",
+}
 _RESIDENCE_DURATION = (
     r"(?:(?:mehr\s+als|über|ueber|knapp|gut|etwa|ungefähr|ungefaehr|"
     r"fast|circa|ca\.|rund|mindestens|hoechstens|höchstens)\s+)?"
@@ -2601,6 +2609,7 @@ def _clean_city(value: str) -> str:
     city = re.sub(r"(?i)^(?:in|bei)\s+", "", city)
     city = re.sub(r"(?i)(?<!er)(?:[-\s]+)(?:nähe|umgebung)\b$", "", city).strip()
     city = _IRREGULAR_CITY_ADJECTIVE_BASES.get(city.casefold(), city)
+    city = _GENITIVE_CITY_REPAIRS.get(city.casefold(), city)
     if not city or len(city) > MAX_CITY_LENGTH:
         return ""
     if (
