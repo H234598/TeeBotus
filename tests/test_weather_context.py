@@ -1026,6 +1026,15 @@ def test_extract_residence_city_handles_never_negation() -> None:
     assert extract_residence_city("Ich lebe nie in Berlin.") == ""
 
 
+def test_extract_residence_city_handles_relative_place_sentences() -> None:
+    assert extract_residence_city("Berlin ist die Stadt, in der ich wohne.") == "Berlin"
+    assert extract_residence_city("Berlin ist der Ort, an dem ich lebe.") == "Berlin"
+    assert extract_residence_city("Der Ort, an dem ich wohne, ist Berlin.") == "Berlin"
+    assert extract_residence_city("Der Ort wo ich wohne ist Berlin.") == "Berlin"
+    assert extract_residence_city("Da, wo ich wohne, ist Berlin.") == "Berlin"
+    assert extract_residence_city("Berlin ist mein Arbeitsort.") == ""
+
+
 def test_extract_residence_city_rejects_multiple_home_targets() -> None:
     assert extract_residence_city("Mein Zuhause ist in Berlin und Hamburg.") == ""
     assert extract_residence_city("Ich wohne werktags in Berlin und am Wochenende in Hamburg.") == ""
