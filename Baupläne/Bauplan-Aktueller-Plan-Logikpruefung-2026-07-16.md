@@ -10691,3 +10691,16 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zeitmarker in Wohnortlabels
+
+- `Mein Wohnort ist gegenwärtig/ab sofort Berlin` und `Ab sofort ist mein Wohnort Berlin` werden korrekt extrahiert.
+- Zukunftslabel `Mein künftiger Wohnort ist Hamburg` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `61 passed`, vier Temporal-label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f4429701 fix: parse temporal residence labels`.
+
+## Aktueller Ledger 2026-07-18-Pre-Restart
+
+- Service weiterhin aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `20/20` Code-Fixes. Kein Push.
+- Regel erfüllt: Bot-/Service-Restart jetzt ausführen.
