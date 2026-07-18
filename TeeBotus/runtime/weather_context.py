@@ -31,6 +31,23 @@ _NON_CITY_RESIDENCE_NAMES = frozenset(
         "luxemburg",
     }
 )
+_NON_CITY_CONTEXT_TOKENS = frozenset(
+    {
+        "heute",
+        "gestern",
+        "morgen",
+        "jetzt",
+        "nun",
+        "aktuell",
+        "derzeit",
+        "inzwischen",
+        "mittlerweile",
+        "seit",
+        "damals",
+        "früher",
+        "frueher",
+    }
+)
 _RESIDENCE_DURATION = (
     r"(?:(?:mehr\s+als|über|ueber|knapp|gut|etwa|ungefähr|ungefaehr|"
     r"fast|circa|ca\.|rund|mindestens|hoechstens|höchstens)\s+)?"
@@ -414,6 +431,14 @@ CITY_PATTERNS = (
         rf"\b(?:mein(?:e)?\s+)?{_PRIMARY_RESIDENCE_LABEL}"
         rf"(?:\s+(?:ist|liegt|befindet\s+sich|bleibt)\s*|:\s*)(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:seit\s+heute|heute|jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
+        r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
@@ -987,7 +1012,7 @@ def _clean_city(value: str) -> str:
     city = re.sub(r"(?i)^(?:in|bei)\s+", "", city)
     if not city or len(city) > MAX_CITY_LENGTH:
         return ""
-    if city.casefold() in _NON_CITY_RESIDENCE_NAMES:
+    if city.casefold() in _NON_CITY_RESIDENCE_NAMES or city.casefold() in _NON_CITY_CONTEXT_TOKENS:
         return ""
     if any(char.isdigit() for char in city):
         return ""
