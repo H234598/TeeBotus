@@ -3154,6 +3154,17 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
             answer,
         ) and not re.search(r"\bund\s+(?:umgebung|region|nähe|naehe)\b", answer, re.IGNORECASE):
             return True
+        separator = re.search(r"[,;]\s*(?P<second>[^,;.!?\n]+)", answer)
+        if separator and not re.search(r"\d", answer[: separator.start()]):
+            second_raw = separator.group("second").strip()
+            if not re.match(
+                r"(?i)^(?:aber|doch|jedoch|genauer\b|konkret\b|nämlich\b|naemlich\b|und\s+zwar\b|"
+                r"besser\s+gesagt\b|sprich\b)",
+                second_raw,
+            ):
+                second = _clean_city(second_raw)
+                if second and second.casefold() not in (_NON_CITY_RESIDENCE_NAMES | _NON_CITY_REGION_NAMES):
+                    return True
     multiplicity_source = re.sub(
         r"\ban\s+der\s+Oder\b",
         "",
