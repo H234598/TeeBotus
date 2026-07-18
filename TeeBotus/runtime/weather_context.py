@@ -3518,7 +3518,7 @@ def _clean_city(value: str) -> str:
         r"(?i)^(?:der|die|das|den|dem|des|dies(?:er|e|es)|jen(?:er|e|es)|"
         r"welch(?:er|e|es)|irgendein|mehrere|einige|manche|ohne|unbekannt\w*|"
         r"unbestimmt\w*|ab|wird|soll|geplant\w*|nimmer|werktags|wochentags|hier|dort|da|"
-        r"vielleicht|vermutlich|angeblich|ist|sind|bin|keineswegs|keinesfalls|niemals|nirgendwo|nirgends|nie|fast|beinahe|"
+        r"vielleicht|vermutlich|angeblich|ist|sind|bin|lautet|heißt|heisst|nennt|genannt|keineswegs|keinesfalls|niemals|nirgendwo|nirgends|nie|fast|beinahe|"
         r"möglicherweise|moeglicherweise|könnte|koennte|wäre|waere|würde|wuerde|"
         r"sollte|dürfte|duerfte|müsste|muesste|nördlich|südlich|östlich|westlich|"
         r"nord[-\s]?östlich|nord[-\s]?westlich|süd[-\s]?östlich|süd[-\s]?westlich)\b",

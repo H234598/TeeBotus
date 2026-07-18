@@ -1356,6 +1356,13 @@ def test_extract_residence_city_handles_quoted_and_lautet_labels() -> None:
         assert extract_residence_city(text) == expected
 
 
+def test_extract_residence_city_rejects_naming_verb_fragments() -> None:
+    assert extract_residence_city("Mein Wohnort heißt irgendwo.") == ""
+    assert extract_residence_city("Mein Wohnort nennt sich unbekannt.") == ""
+    assert extract_residence_city("Mein Wohnort heißt.") == ""
+    assert extract_residence_city("Mein Wohnort heißt Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
