@@ -13244,3 +13244,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Leere Regionsplatzhalter
+
+- `Ich wohne in der Region` erzeugt keinen Einzelbuchstaben- oder Platzhalterort mehr.
+- `Region Berlin` liefert weiterhin `Berlin`.
+- Verifikation: `tests/test_weather_context.py` -> `129 passed`, drei Bare-Region-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7498ab13 fix: reject bare residence region placeholders`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
