@@ -925,7 +925,8 @@ def extract_residence_city(text: str) -> str:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb)"
     if re.search(
-        rf"\b{residence}\s+(?:au(?:ßerhalb|sserhalb)\s+von|am\s+stadtrand\s+von|im\s+umland\s+von|"
+        rf"\b{residence}\s+(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung)\s+von|im\s+raum|"
+        r"rund\s+um|nahe|unweit\s+von|au(?:ßerhalb|sserhalb)\s+von|am\s+stadtrand\s+von|im\s+umland\s+von|"
         r"nordöstlich\s+von|nordwestlich\s+von|südöstlich\s+von|südwestlich\s+von|"
         r"nördlich\s+von|südlich\s+von|östlich\s+von|westlich\s+von)\s+"
         r"[^,.;!?]{1,80}\s+und\s+"
