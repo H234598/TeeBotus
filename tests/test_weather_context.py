@@ -158,9 +158,12 @@ def test_extract_residence_city_handles_current_city_after_residence_change() ->
     assert extract_residence_city("Ich wohne in Berlin, seitdem in Dresden.") == "Dresden"
     assert extract_residence_city("Ich wohne in Berlin; jetzt in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne in Berlin – inzwischen in Potsdam.") == "Potsdam"
+    assert extract_residence_city("Ich wohne nicht in Berlin; sondern in Dresden.") == "Dresden"
+    assert extract_residence_city("Ich wohne nicht mehr in Berlin – jetzt in Leipzig.") == "Leipzig"
     assert extract_residence_city("Ich wohne in Berlin, aber arbeite jetzt in Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, aber arbeite inzwischen in Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin; aber arbeite jetzt in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne nicht in Berlin; aber arbeite jetzt in Hamburg.") == ""
 
 
 def test_extract_residence_city_removes_daypart_context() -> None:
