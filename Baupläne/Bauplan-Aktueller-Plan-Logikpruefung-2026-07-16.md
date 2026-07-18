@@ -11968,3 +11968,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Einzugs- und Studienzeitanker
+
+- `seit dem Einzug`, `seit Beginn meines Studiums` und `seit dem ersten Tag` werden als Residence-Duration erkannt.
+- Restphrase wird nicht als Stadt übernommen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Move-In-Duration-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2125337b fix: parse move-in residence durations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
