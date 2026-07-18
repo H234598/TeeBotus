@@ -13047,3 +13047,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Qualifizierte Wohnsitz- und Adresslabels
+
+- Dauerhafter/privater/offizieller Wohnsitz mit `Ich habe ...` wird erkannt.
+- Offizielle Adresse wird erkannt; dienstlicher/beruflicher Prefix bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, acht Qualified-Residence-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0538efed fix: parse qualified residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
