@@ -2909,6 +2909,17 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:frühere|fruehere|ehemalige|alte)\s+)?"
+        r"(?:heimat|heimatstadt|herkunftsort|herkunftsstadt|geburtsort|geburtsstadt)\s+"
+        r"(?:ist|war)\s+[^,.;!?]{1,80}?"
+        r"(?:\s*,\s*(?:(?:aber|doch|jedoch|dafür|stattdessen|während|waehrend)\s+)?(?:ist\s+)?|"
+        r"\s*;\s*|\s+(?:und|sowie|während|waehrend)\s+)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s+ist)?(?=\s+(?:mein|unser)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b)",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
         r"adresse|wohnadresse|wohnanschrift|anschrift)\s+"
