@@ -2146,6 +2146,11 @@ def test_extract_residence_city_handles_direct_home_relationships() -> None:
     assert extract_residence_city("Hamburg ist mein tatsächlicher Wohnort.") == "Hamburg"
     assert extract_residence_city("Hamburg ist mein privater Wohnort.") == "Hamburg"
     assert extract_residence_city("Hamburg ist mein ehemaliger Wohnort.") == ""
+    assert extract_residence_city("Hamburg ist der Wohnort.") == "Hamburg"
+    assert extract_residence_city("Hamburg ist der gemeldete Wohnsitz.") == "Hamburg"
+    assert extract_residence_city("Hamburg ist der offizielle Wohnsitz.") == "Hamburg"
+    assert extract_residence_city("Hamburg ist ein fester Wohnort.") == "Hamburg"
+    assert extract_residence_city("Hamburg ist der Arbeitsort.") == ""
     assert extract_residence_city("Ich nenne Berlin meinen Arbeitsort.") == ""
     assert extract_residence_city("Ich bin in Berlin daheim.") == "Berlin"
 
