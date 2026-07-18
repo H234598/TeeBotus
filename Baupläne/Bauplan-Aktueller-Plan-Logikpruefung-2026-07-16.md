@@ -11699,3 +11699,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Gegenwartsort nach Vergangenheitsform
+
+- `Ich wohnte in Berlin, bin aber jetzt in Hamburg` und `Wir lebten bei Berlin, sind inzwischen in Potsdam` liefern den aktuellen Ort.
+- `arbeite aber jetzt` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Past-to-Current-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1b247f89 fix: parse current residence after past tense`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
