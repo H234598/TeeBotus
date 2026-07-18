@@ -8983,3 +8983,16 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Wohnortkorrektur mit `und lebe jetzt` erkennen
+
+- `Ich wohne in Berlin und lebe jetzt in Hamburg` und die `inzwischen`-
+  Variante wurden bisher auf Berlin gekuerzt.
+- Ein zweiter `wohne/lebe`-Anker mit Aktualitaetsmarker nach `und` wird nun
+  als Korrektur erkannt; `und arbeite jetzt ...` bleibt unberuehrt.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `81d67a9c fix: parse and residence corrections`.
+
+**Aktueller Laufstand:** Seit dem Restart `6/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
