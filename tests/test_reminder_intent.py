@@ -126,6 +126,25 @@ def test_parse_reminder_accepts_attention_wording() -> None:
     assert intent.subject == "den Termin"
 
 
+def test_parse_reminder_accepts_do_not_forget_wording() -> None:
+    intent = parse_reminder_intent(
+        "Bitte nicht vergessen, mich morgen an den Termin zu erinnern",
+        now=fixed_now(),
+    )
+
+    assert intent.due_at == "2026-06-16T09:00:00+00:00"
+    assert intent.subject == "den Termin"
+
+
+def test_parse_reminder_removes_infinitive_tail_from_subject() -> None:
+    intent = parse_reminder_intent(
+        "Kannst du mich morgen an den Termin zu erinnern",
+        now=fixed_now(),
+    )
+
+    assert intent.subject == "den Termin"
+
+
 def test_parse_reminder_accepts_reverse_question_wording() -> None:
     intent = parse_reminder_intent("Kannst du mich morgen an den Zahnarzt erinnern?", now=fixed_now())
     direct_subject = parse_reminder_intent("Kannst du mich bitte an Punkt 3.4 erinnern?", now=fixed_now())
