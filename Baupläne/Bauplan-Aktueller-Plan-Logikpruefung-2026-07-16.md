@@ -11345,3 +11345,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Lebensmittelpunkt-Flächenrelationen
+
+- `Lebensmittelpunkt in der Münchner Region` und `außerhalb der Stadt München` werden erkannt.
+- Bestehende Raumform bleibt unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `109 passed`, drei Lebensmittelpunkt-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0468dbd4 fix: parse lebensmittelpunkt area relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
