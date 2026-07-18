@@ -13208,3 +13208,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Unbestimmte Labelwerte
+
+- `irgendwo`, `unklar` und `egal` werden nicht mehr als Wohnort gespeichert.
+- Konkrete Orte wie `Berlin` bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `126 passed`, vier Unknown-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `efcb7044 fix: reject unknown residence label values`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
