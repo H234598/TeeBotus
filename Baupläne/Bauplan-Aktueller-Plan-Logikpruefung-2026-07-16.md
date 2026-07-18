@@ -10178,3 +10178,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Institutionelle Wohnobjekte
+
+- `im Wohnheim`, `im Studentenwohnheim` und `im Internat in ...` wurden bisher nicht extrahiert.
+- Dauerhafte institutionelle Wohnobjekte sind ergänzt; Hotel bleibt bewusst außerhalb des Wohnortpfads.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 4 Institutional-Residence-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `91cb439b fix: parse institutional residence objects`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
