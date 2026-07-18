@@ -12028,3 +12028,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Saisonale Zeitpräfixe vor Wohnsatz
+
+- `Im Januar wohne ich in Hamburg`, `Im Sommer ... wohnhaft` und `Zu Weihnachten wohne ich in Hamburg` liefern keinen aktuellen Ort.
+- `Seit Januar` und `Seit dem Sommer` bleiben als vergangene Zeitanker gültig.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Seasonal-Prefix-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `504e6fea fix: reject seasonal residence time prefixes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
