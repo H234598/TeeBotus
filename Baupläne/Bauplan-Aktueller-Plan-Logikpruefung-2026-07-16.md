@@ -11908,3 +11908,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Wetter-State bei Residence-Memory-Fehler
+
+- Wenn neuer Wohnort-Memory nicht geschrieben werden kann, bleibt Wetter-State bei vorheriger Stadt.
+- Ergebnis meldet `skipped_reason=memory_error`; kein Wetterprovider-Aufruf mit inkonsistenter Stadt.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, zusätzlicher Rollback-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `85973bd6 fix: keep weather state with residence memory`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
