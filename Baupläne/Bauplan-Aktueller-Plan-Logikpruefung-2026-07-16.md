@@ -11771,3 +11771,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Verlagerter Wohnort
+
+- `Mein Wohnort hat sich von Berlin nach Hamburg verlagert` und `Unser Wohnsitz hat sich aus Berlin nach Potsdam verschoben` liefern Zielort statt Restphrase.
+- Arbeitsort bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Relocation-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `655c364a fix: parse relocated residence transitions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
