@@ -9010,3 +9010,16 @@ Restart erst bei `20/20`.
 
 **Aktueller Laufstand:** Seit dem Restart `7/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
+
+### Folgefix 2026-07-18: Pronomen in zeitqualifizierter Korrektur erlauben
+
+- `Ich wohne in Berlin, seit 2020 lebe ich in Hamburg` wurde trotz erkanntem
+  Zeitanker auf Berlin gekuerzt, weil `ich` hinter dem zweiten Verb fehlte.
+- Das optionale Pronomen wird nun zwischen zweitem Wohn-/Lebensverb und
+  aktuellem Ortsanker akzeptiert.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `50f69d34 fix: handle pronoun in timed residence corrections`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
