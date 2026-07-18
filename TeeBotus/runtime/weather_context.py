@@ -2407,6 +2407,7 @@ def _clean_city(value: str) -> str:
     city = re.sub(r"\s+", " ", city)
     city = re.split(r"(?<!\bSt)[.!?]\s+", city, maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,:;!?")
     city = re.sub(r"(?i)^(?:in|bei)\s+", "", city)
+    city = re.sub(r"(?i)(?<!er)(?:[-\s]+)(?:nähe|umgebung)\b$", "", city).strip()
     if not city or len(city) > MAX_CITY_LENGTH:
         return ""
     if city.casefold() in _NON_CITY_RESIDENCE_NAMES or city.casefold() in _NON_CITY_CONTEXT_TOKENS:
