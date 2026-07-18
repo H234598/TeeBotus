@@ -11380,3 +11380,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
 - Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Direkte Adjektiv-Flächenarten
+
+- Direkte Formen `im Münchner Raum/ Gebiet` werden erkannt und vor Folgesätzen begrenzt.
+- Verifikation: `tests/test_weather_context.py` -> `110 passed`, vier Adjektiv-Area-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a57e17cc fix: parse direct adjectival area types`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2408904`, Start `2026-07-18 11:55:13 CEST`.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
