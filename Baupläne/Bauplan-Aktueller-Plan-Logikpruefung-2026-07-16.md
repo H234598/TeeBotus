@@ -10329,3 +10329,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Kurze Wohnprofilangaben
+
+- Formular-/Kurzformen wie `Wohnhaft: Berlin`, `Wohnort = Berlin`, `Wohne: Leipzig` und `Mein aktueller Wohnort Berlin` wurden bisher verpasst.
+- Drei enge Kurzpfade ergänzt; Negativwörter, Future- und History-Guards verhindern falsche Treffer in `Lebensmittelpunkt`, `war wohnhaft` und Zukunftssätzen.
+- Verifikation: `tests/test_weather_context.py` -> `34 passed`, Short-Profile-/History-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4b6cd6f8 fix: parse short residence profile forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
