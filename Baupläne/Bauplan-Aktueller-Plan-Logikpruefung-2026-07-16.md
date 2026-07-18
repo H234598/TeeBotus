@@ -8582,6 +8582,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `10/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Dauerhafte Wohnortangaben
+
+- `dauerhaft` wurde als Teil der Stadt gespeichert; `fester Wohnsitz` wurde
+  nicht erkannt.
+- Dauer-/Permanentmarker sind nun zentrale Qualifizierer; feste, staendige
+  und permanente Wohnsitzformulierungen werden als Wohnanker erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `823d5753 fix: parse permanent residence qualifiers`.
+
+**Aktueller Laufstand:** Seit dem Restart `11/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-18: Weitere Dauerqualifizierer abdecken
 
 - `seit fast zwei Jahren`, `seit circa/ca. drei Monaten`, `seit rund vier
