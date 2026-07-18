@@ -9986,3 +9986,15 @@ Restart erst bei `20/20`.
 - `teebotus.service` nach 20 Code-Fixes erfolgreich neugestartet.
 - Service aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Negierte Wohnortalternativen
+
+- `Ich wohne in Berlin und nicht in Hamburg` wurde fälschlich als mehrdeutiger Doppelwohnsitz verworfen.
+- Negierter zweiter Ort wird jetzt als Ausschluss behandelt; zwei positive Wohnorte bleiben weiterhin leer.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 4 Residence-Negation-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c27bd5f0 fix: distinguish negated residence alternatives`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
