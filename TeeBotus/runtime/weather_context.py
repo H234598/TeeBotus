@@ -1390,6 +1390,12 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich|wir)\s+(?:bin|sind)\s+(?:(?:derzeit|aktuell|gegenwärtig|gegenwaertig)\s+)?"
+        r"(?:in|bei)\s+(?![^.!?;,]*\b(?:beruflich|dienstlich|zur\s+schule|zur\s+arbeit)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+registriert\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER})\s+(?:ist|bleibt)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
         r"(?:mein(?:e)?|unser(?:e)?)?\s*"
