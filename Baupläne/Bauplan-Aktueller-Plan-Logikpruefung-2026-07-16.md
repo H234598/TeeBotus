@@ -11867,3 +11867,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Perfektpassive Relokation
+
+- `Mein Wohnort ist nach Hamburg verlegt worden` und `Unser Wohnsitz ist von Berlin nach Potsdam verschoben worden` liefern Zielort.
+- Präsens-Zukunft `wird ... verlegt` bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Perfect-Passive-Relocation-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6ccb50b7 fix: parse perfect passive residence relocations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
