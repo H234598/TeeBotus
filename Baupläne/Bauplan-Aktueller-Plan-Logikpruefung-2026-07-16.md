@@ -13148,3 +13148,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Regionale Compound-Stadtnamen
+
+- `Mülheim an der Ruhr`, `Brandenburg an der Havel`, `Wörth/Rüdesheim am Rhein`, `St. Georgen im Schwarzwald` und `Königstein im Taunus` bleiben vollständig.
+- Kanonische Liste greift nur bei vollständigem Label; allgemeine geografische Stoplogik bleibt aktiv.
+- Verifikation: `tests/test_weather_context.py` -> `121 passed`, sechs Regional-Compound-City-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `39be4513 fix: preserve regional compound city names`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
