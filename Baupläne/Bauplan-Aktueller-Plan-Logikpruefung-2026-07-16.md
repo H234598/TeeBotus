@@ -11574,3 +11574,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Explizite Wohnformen
+
+- `Meine/unsere Wohnung`, `WG` und `Unterkunft ist/liegt/befindet sich in/bei Stadt` werden erkannt.
+- Alte Wohnungen und Mehrfachziele bleiben ausgeschlossen; Eigentums-/Hausannahmen wurden nicht erweitert.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, sechs Dwelling-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `345983a2 fix: parse explicit dwelling residences`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
