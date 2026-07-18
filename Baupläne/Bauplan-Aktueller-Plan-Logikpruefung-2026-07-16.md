@@ -12478,3 +12478,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Residieren-Verbflexionen
+
+- `Ich residiere`, `Wir residieren` und `Sie residiert` werden nun als Wohnortsignal erkannt.
+- Beruflicher Zusatz bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, vier Residieren-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7ec8716a fix: parse residence verb inflections`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2665587`, Start `2026-07-18 16:33:14 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
