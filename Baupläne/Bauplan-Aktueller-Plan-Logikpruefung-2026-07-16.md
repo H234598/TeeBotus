@@ -13083,3 +13083,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Häufigkeits- und Primärort-Kontext
+
+- `oft/meist/gelegentlich/regelmäßig/selten/manchmal` wird nicht mehr als Stadtfragment gespeichert.
+- `manchmal ... meistens/hauptsächlich/überwiegend ...` liefert den ausdrücklich priorisierten Ort.
+- Verifikation: `tests/test_weather_context.py` -> `117 passed`, elf Frequency-Qualifier-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4093bebb fix: disambiguate residence frequency qualifiers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
