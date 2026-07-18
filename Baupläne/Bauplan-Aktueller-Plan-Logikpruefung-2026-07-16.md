@@ -12789,3 +12789,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Neben-Personenrelation
+
+- `Ich wohne neben meiner Familie in Berlin` und Wir-Formen werden erkannt.
+- `neben meiner Arbeit` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Neben-Relation-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c1b6d4f9 fix: parse neben residence relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
