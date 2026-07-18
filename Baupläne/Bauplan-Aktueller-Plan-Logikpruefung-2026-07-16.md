@@ -13268,3 +13268,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Benennungsverb-Fragmente
+
+- `heißt/heisst/nennt/genannt` werden nicht mehr als Wohnortfragment gespeichert.
+- Konkrete Formen wie `Mein Wohnort heißt Berlin` bleiben gültig.
+- Verifikation: `tests/test_weather_context.py` -> `131 passed`, vier Naming-Verb-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `630bbda2 fix: reject residence naming verb fragments`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
