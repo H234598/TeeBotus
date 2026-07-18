@@ -119,6 +119,11 @@ _RESIDENCE_LOCATION_ADVERB = (
     r"bisher|bislang|vorerst|zeitweise)|"
     r"(?:sicher|wirklich|definitiv|tatsächlich|tatsaechlich))"
 )
+_RESIDENCE_DISTANCE_PREFIX = (
+    r"(?:(?:ungefähr|ungefaehr|ca\.?|circa|etwa|rund|knapp)\s+)?"
+    r"(?:\d+(?:[,.]\d+)?|ein(?:e|en)?|ein\s+paar|mehrere|wenige)\s*"
+    r"(?:km|kilometer)\s+"
+)
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
@@ -1034,7 +1039,7 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
-        r"(?:\d+\s*(?:km|kilometer)\s+)?"
+        rf"(?:{_RESIDENCE_DISTANCE_PREFIX})?"
         r"(?:nördlich|südlich|östlich|westlich|nordöstlich|nordwestlich|"
         r"südöstlich|südwestlich)\s+(?:von\s+)?"
         r"(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
@@ -1044,7 +1049,7 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
-        r"(?:\d+\s*(?:km|kilometer)\s+)?"
+        rf"(?:{_RESIDENCE_DISTANCE_PREFIX})?"
         r"(?:nördlich|südlich|östlich|westlich|nordöstlich|nordwestlich|"
         r"südöstlich|südwestlich)\s+(?:von\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
@@ -1120,7 +1125,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
-        r"(?:\d+\s*(?:km|kilometer)\s+)?"
+        rf"(?:{_RESIDENCE_DISTANCE_PREFIX})?"
         r"(?:nördlich|südlich|östlich|westlich|nordöstlich|nordwestlich|"
         r"südöstlich|südwestlich)\s+(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?<!s)s\b",
@@ -1128,7 +1133,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
-        r"(?:\d+\s*(?:km|kilometer)\s+)?"
+        rf"(?:{_RESIDENCE_DISTANCE_PREFIX})?"
         r"(?:nördlich|südlich|östlich|westlich|nordöstlich|nordwestlich|"
         r"südöstlich|südwestlich)\s+(?:von\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
