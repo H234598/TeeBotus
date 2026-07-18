@@ -356,6 +356,11 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"(?:^|[.!?;\n]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s*,\s*"
+        r"(?:daheim|zuhause|zu\s+hause)(?=\s*[.!?;]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"(?:^|[.!?;\n]\s*)(?:früher|frueher|ehemals|damals)\s+(?:in\s+)?"
         r"[^,.;!?]{1,80}\s*,\s*(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+"
         r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
