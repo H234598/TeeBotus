@@ -8656,6 +8656,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `15/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Fuehrende Kontextpraepositionen verwerfen
+
+- `Wohnort ist aus/für/wegen/neben Berlin` wurde vom optionalen Labelpfad als
+  Stadt uebernommen.
+- `_clean_city()` verwirft nun solche Kontextstarts sowie `mit/als/waehrend`
+  und `auf/am/im`; Wortgrenzen schuetzen echte Komposita wie `Amberg`.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b6d9bdb1 fix: reject residence context prefixes`.
+
+**Aktueller Laufstand:** Seit dem Restart `16/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
