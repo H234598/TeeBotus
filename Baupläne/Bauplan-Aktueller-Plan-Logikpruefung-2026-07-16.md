@@ -8507,6 +8507,18 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `4/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Umgangssprachliches `wohn` mit Zeitangabe
+
+- `Ich wohn seit zwei Jahren in Köln`, `ich wohn weiterhin ...` und `Wohn
+  seit 2020 ...` wurden bisher nicht erkannt; `wohn jetzt` funktionierte.
+- Der generische Wohn-/Lebenspfad akzeptiert nun auch die Kurzform `wohn`.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `cb1ed6eb fix: parse colloquial residence verb`.
+
+**Aktueller Laufstand:** Seit dem Restart `5/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
