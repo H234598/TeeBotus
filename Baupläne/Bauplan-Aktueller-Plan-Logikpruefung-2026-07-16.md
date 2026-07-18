@@ -9678,6 +9678,18 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Semikolon bei Vorwärts-Herkunftslabels
+
+- `Berlin ist meine Heimat; Hamburg mein Wohnort` und die statusqualifizierte Form werden korrekt gelesen.
+- Der Semikolontrenner gilt nur im expliziten Herkunft-/Wohnort-Muster.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, zwei Semicolon-Origin-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b1b50e52 fix: parse semicolon origin residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
