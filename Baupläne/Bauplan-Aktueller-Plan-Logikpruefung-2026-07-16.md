@@ -9836,3 +9836,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Region-/Land-Präfixe mit konkreter Stadt
+
+- `in Deutschland, in Berlin`, `im Bundesland Bayern, in München` und `im Raum Berlin, in Potsdam` lieferten bisher Land/Region oder keinen Ort.
+- Spezifischer Präfixpfad wählt konkrete Stadt; `Berlin, in Deutschland` bleibt beim Wohnort Berlin.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `95cc502f fix: parse regional residence qualifiers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
