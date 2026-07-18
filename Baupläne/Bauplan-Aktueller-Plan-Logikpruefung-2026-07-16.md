@@ -12185,3 +12185,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Ausbildungs-/Abschluss-Daueranker
+
+- `seit Beginn/Ende/Abschluss meiner Ausbildung`, `seit dem Abschluss meines Studiums`, `seit Beginn meiner Lehre` und `seit meiner Ausbildung` werden als Daueranker erkannt.
+- Bestehende Studien-/Einzugsanker bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, sieben Duration-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e1502f1e fix: parse training and graduation residence durations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
