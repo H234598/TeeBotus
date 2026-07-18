@@ -12987,3 +12987,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Aktivitätsverknüpfte Wohnrelationen
+
+- `arbeite/studiere ... wo/dort ich wohne/lebe` sowie `wohne dort, wo ich studiere/lerne` liefern den Wohnort.
+- Ein bloßer Satz `Ich arbeite in ...` bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, sieben Activity-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `15aac3a9 fix: parse activity-linked residence relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
