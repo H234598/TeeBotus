@@ -66,7 +66,19 @@ NEGATED_REMINDER_REQUEST_RE = re.compile(
     r"sag(?:e)?\s+(?:mir|uns)|"
     r"denk(?:e)?(?:\s+bitte)?(?:\s+(?:fuer\s+)?(?:mich|uns))?|"
     r"(?:kannst|koenntest)\s+du\s+(?:mich|uns)"
-    r")\s+(?:bitte\s+)?(?:nicht|nie)\b",
+    r")\s+(?:bitte\s+)?(?:nicht|nie)\b|"
+    r"erinner(?:e|st|n)?\s+(?:mich|mi|uns)(?:(?!\b(?:an|dran|daran)\b).){0,80}\b(?:nicht|nie)\b"
+    r"(?:(?!\b(?:an|dran|daran)\b).){0,20}\b(?:an|dran|daran)\b|"
+    r"denk(?:e)?(?:(?!\b(?:an|dran|daran)\b).){0,80}\b(?:nicht|nie)\b"
+    r"(?:(?!\b(?:an|dran|daran)\b).){0,20}\b(?:an|dran|daran)\b|"
+    r"sag(?:e)?\s+(?:mir|uns)(?:(?!\bbescheid\b).){0,80}\b(?:nicht|nie)\b"
+    r"(?:(?!\bbescheid\b).){0,20}\bbescheid\b|"
+    r"(?:kannst|koenntest)\s+du\s+(?:mich|uns)(?:(?!\berinner\w*\b).){0,120}\b(?:nicht|nie)\b"
+    r"(?:(?!\berinner\w*\b).){0,30}\berinner\w*\b",
+    re.IGNORECASE,
+)
+NON_REQUEST_REMINDER_STATEMENT_RE = re.compile(
+    r"\b(?:ich|du|er|sie|wir|ihr)\s+(?:erinner\w*|denk\w*)\b",
     re.IGNORECASE,
 )
 
@@ -189,7 +201,7 @@ def maybe_queue_natural_reminder(
     structured_decision_runner: StructuredReminderRunner | None = None,
 ) -> str | None:
     resolved_now = now or local_now()
-    if _is_negated_reminder_request(text):
+    if _is_negated_reminder_request(text) or _is_reminder_statement(text):
         return None
     intent = parse_reminder_intent(text, now=resolved_now)
     if (
@@ -240,7 +252,7 @@ def maybe_queue_natural_reminder(
 
 def parse_reminder_intent(text: str, *, now: datetime | None = None) -> ReminderIntent:
     raw = str(text or "").strip()
-    if not raw or _is_negated_reminder_request(raw) or not REMINDER_REQUEST_RE.search(_normalize(raw)):
+    if not raw or _is_negated_reminder_request(raw) or _is_reminder_statement(raw) or not REMINDER_REQUEST_RE.search(_normalize(raw)):
         return ReminderIntent(False)
     resolved_now = now or local_now()
     normalized_now = resolved_now if resolved_now.tzinfo else resolved_now.replace(tzinfo=timezone.utc)
@@ -386,6 +398,10 @@ def _has_structured_reminder_cue(text: str) -> bool:
 
 def _is_negated_reminder_request(text: str) -> bool:
     return NEGATED_REMINDER_REQUEST_RE.search(_normalize(str(text or ""))) is not None
+
+
+def _is_reminder_statement(text: str) -> bool:
+    return NON_REQUEST_REMINDER_STATEMENT_RE.search(_normalize(str(text or ""))) is not None
 
 
 def _parse_due_at(text: str, now: datetime) -> str:

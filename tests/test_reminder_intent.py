@@ -29,6 +29,20 @@ def test_parse_reminder_rejects_direct_negation() -> None:
         "Erinnere mich bitte nicht morgen um 9 an den Zahnarzt",
         "Denk nicht an den Zahnarzt morgen",
         "Kannst du mich nicht morgen an den Zahnarzt erinnern?",
+        "Erinnere mich morgen nicht an den Zahnarzt",
+        "Denk morgen nicht an den Zahnarzt",
+        "Sag mir morgen nicht Bescheid wegen des Zahnarztes",
+    ):
+        intent = parse_reminder_intent(text, now=fixed_now())
+
+        assert intent.is_request is False
+
+
+def test_parse_reminder_ignores_pronoun_reminder_statements() -> None:
+    for text in (
+        "Ich erinnere mich morgen an den Zahnarzt",
+        "Du erinnerst mich morgen an den Zahnarzt",
+        "Wir erinnern uns morgen an den Zahnarzt",
     ):
         intent = parse_reminder_intent(text, now=fixed_now())
 
