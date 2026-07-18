@@ -8478,6 +8478,20 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `2/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Qualifizierte Zuhause- und Wohnhaft-Labels
+
+- `weiterhin in Potsdam wohnhaft`, `seit 2020 ... ansässig`, `Mein Zuhause
+  bleibt in Köln` und `Zuhause liegt nach wie vor in München` wurden bisher
+  leer oder mit Qualifizierer als Stadt erkannt.
+- Wohnhaft-/Ansässig-Labels und relationale Zuhause-Labels akzeptieren nun
+  Zeitqualifizierer sowie die Wortstellung `bin ich`.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c68e2ce5 fix: parse qualified home and residence labels`.
+
+**Aktueller Laufstand:** Seit dem Restart `3/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
