@@ -990,6 +990,41 @@ def test_weather_provider_error_does_not_expose_stale_summary(tmp_path) -> None:
     assert "offline" in weather_state["last_error"]
 
 
+def test_weather_state_timestamps_use_supplied_now(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    first_now = datetime(2026, 6, 15, 9, 0, 0, tzinfo=timezone.utc)
+    second_now = datetime(2026, 6, 15, 11, 1, 0, tzinfo=timezone.utc)
+
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=first_now,
+        provider=lambda city: f"{city}: 12 C",
+    )
+    first_state = account_store.read_agent_state(account_id)["weather_context"]
+    expected_first = first_now.isoformat(timespec="seconds")
+    assert first_state["city_updated_at"] == expected_first
+    assert first_state["last_checked_at"] == expected_first
+    assert first_state["updated_at"] == expected_first
+
+    def failing_provider(_city: str) -> str:
+        raise RuntimeError("offline")
+
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Hallo.",
+        now=second_now,
+        provider=failing_provider,
+    )
+    second_state = account_store.read_agent_state(account_id)["weather_context"]
+    expected_second = second_now.isoformat(timespec="seconds")
+    assert second_state["last_checked_at"] == expected_second
+    assert second_state["updated_at"] == expected_second
+
+
 def test_future_weather_check_timestamp_does_not_block_recheck(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

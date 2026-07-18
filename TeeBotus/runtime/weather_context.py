@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping
 
-from TeeBotus.runtime.accounts import AccountStore, utc_now
+from TeeBotus.runtime.accounts import AccountStore
 
 WEATHER_CONTEXT_SCHEMA_VERSION = 1
 WEATHER_CHECK_INTERVAL = timedelta(hours=2)
@@ -1058,12 +1058,13 @@ def _update_city_and_weather_context_unlocked(
         weather_state["summary"] = ""
         weather_state["last_error"] = f"{type(exc).__name__}: {exc}"[:240]
         weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
+        weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
         account_store.write_agent_state(account_id, state)
         return WeatherContextResult(city=current_city, checked=True, skipped_reason="weather_error")
     weather_state["summary"] = summary[:500]
     weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
     weather_state["last_error"] = ""
-    weather_state["updated_at"] = utc_now()
+    weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
     account_store.write_agent_state(account_id, state)
     return WeatherContextResult(city=current_city, weather_text=weather_state["summary"], checked=True)
 
