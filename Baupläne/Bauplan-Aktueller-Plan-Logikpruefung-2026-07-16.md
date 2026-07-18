@@ -12637,3 +12637,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Präpositionslose Wohnortlabels
+
+- `Mein Wohnort befindet sich Berlin` und `Mein Wohnsitz liegt Hamburg` werden erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, zwei Unqualified-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f2a085fc fix: parse unqualified residence label locations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
