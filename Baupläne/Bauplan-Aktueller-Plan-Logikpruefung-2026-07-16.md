@@ -9908,3 +9908,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Aktuelle und flektierte Ortsdescriptoren
+
+- Descriptoren mit `Jetzt`/`aktuell`, Pronomen nach dem Verb, Komma-Connectoren sowie `kleinen/großen Stadt` wurden bisher nicht erkannt.
+- Unbestimmte Angaben wie `ohne konkrete Angabe` werden nicht mehr als Stadt gespeichert.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 6 gezielte Current/Inflection/Negative-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6bee6c60 fix: handle current residence descriptors`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
