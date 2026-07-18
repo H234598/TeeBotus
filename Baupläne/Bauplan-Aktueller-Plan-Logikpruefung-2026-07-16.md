@@ -12040,3 +12040,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Relativsatz mit Leben-Verb
+
+- `Hamburg ist der Ort, in dem ich lebe` und `Der Ort, in dem ich lebe, ist Hamburg` liefern Hamburg.
+- `in dem ich arbeite` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Living-Relative-Clause-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c8804d56 fix: parse living relative clauses`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
