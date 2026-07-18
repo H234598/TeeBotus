@@ -275,6 +275,15 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b[^,.;!?]{1,80}?\s+war\s+(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
+        r"[,;]\s*(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:ist\s+)?(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b[^,.;!?]{1,80}\s+(?:ist|war)\s+(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:(?:frühere|fruehere|ehemalige|alte)\s+)?"
         r"(?:heimat|heimatstadt|herkunftsort|herkunftsstadt|geburtsort|geburtsstadt)\s*,\s*"
@@ -1937,7 +1946,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:meine|unsere|mein|unser)\s+(?:meldadresse|meldeadresse|meldeanschrift|meldesitz)\s+"
-        r"(?:ist|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        r"(?:ist|liegt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
         r"(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
@@ -3381,7 +3390,11 @@ def extract_residence_city(text: str) -> str:
             return max(candidates, key=lambda candidate: candidate[0])[1]
         return ""
 
-    if _has_conflicting_residence_address_targets(source) or _has_explicit_residence_multiplicity(source):
+    if (
+        _has_conflicting_residence_address_targets(source)
+        or _has_explicit_residence_multiplicity(source)
+        or _has_conflicting_direct_residence_labels(source)
+    ):
         return ""
     city = latest_match(CITY_CHANGE_PATTERNS)
     if city:
@@ -3462,6 +3475,22 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
             re.IGNORECASE,
         )
     )
+
+
+def _has_conflicting_direct_residence_labels(source: str) -> bool:
+    cities: set[str] = set()
+    pattern = re.compile(
+        r"(?:^|[.!?;,\n]\s*)(?:aber|doch|jedoch|sondern|jetzt|nun|aktuell|derzeit)?\s*"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(source):
+        city = _clean_city(match.group("city"))
+        if city:
+            cities.add(_city_comparison_key(city))
+    return len(cities) > 1
 
 
 def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
@@ -3615,9 +3644,10 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             re.IGNORECASE,
         ),
         re.compile(
-            r"(?:^|[.!?;\n]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
-            r"(?:ist\s+)?(?:mein(?:e)?|unser(?:e)?)\s+"
-            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\b",
+            r"(?:^|[.!?;,\n]\s*)(?:aber|doch|jedoch|sondern)?\s*"
+            r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+            r"ist\s+(?:mein(?:e)?|unser(?:e)?)\s+"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|daheim)\b",
             re.IGNORECASE,
         ),
     )
@@ -3772,7 +3802,9 @@ def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
         re.match(
             r"\s*(?:/|&)\s*(?!arbeite\b|studiere\b|lerne\b|schlafe\b|"
             r"besuche\b|reise\b|pendle\b|fahre\b|gehe\b|komme\b|"
-            r"habe\b|bin\b|mein(?:e)?\b|der\b|die\b|das\b)[A-ZÄÖÜäöüß]",
+            r"habe\b|bin\b|mein(?:e)?\b|der\b|die\b|das\b|"
+            r"arbeitsort\b|arbeitsadresse\b|arbeitsanschrift\b|geburtsort\b|geburtsstadt\b|"
+            r"heimat\b|heimatstadt\b)[A-ZÄÖÜäöüß]",
             segment,
             re.IGNORECASE,
         )
