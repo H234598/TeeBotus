@@ -8669,6 +8669,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `16/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Historische Wohnortkorrekturen
+
+- `Wohnort war frueher Berlin, jetzt in Hamburg` sowie `wohnte in Berlin,
+  jetzt in Hamburg` wurden bisher nicht erkannt.
+- Vergangenheitsformen mit eindeutigem Aktualitaetsmarker und Zielpraeposition
+  liefern nun die neue Stadt; `jetzt arbeite ...` bleibt ohne Wohnortwert.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9c648cd2 fix: parse historical residence corrections`.
+
+**Aktueller Laufstand:** Seit dem Restart `17/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
