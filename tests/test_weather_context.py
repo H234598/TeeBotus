@@ -163,6 +163,15 @@ def test_extract_residence_city_from_time_and_activity_markers() -> None:
     assert extract_residence_city("Ich wohne noch in Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_from_clarification_forms() -> None:
+    assert extract_residence_city("Ich wohne in Brandenburg bei Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, aber genauer gesagt in Potsdam.") == "Potsdam"
+    assert extract_residence_city("Mein Wohnort ist Berlin, genauer gesagt Potsdam.") == "Potsdam"
+    assert extract_residence_city("Mein Wohnort wird Berlin genannt.") == "Berlin"
+    assert extract_residence_city("Ich wohne bei meinen Eltern, in Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Zuhause heißt Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_from_inverted_location_forms() -> None:
     assert extract_residence_city("In Berlin wohne ich.") == "Berlin"
     assert extract_residence_city("Berlin, dort wohne ich.") == "Berlin"
