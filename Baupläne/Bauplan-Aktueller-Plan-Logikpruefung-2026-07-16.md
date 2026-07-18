@@ -12632,3 +12632,8 @@ Restart erst bei `20/20`.
 
 - Vor Restart: Service soll nach diesem 20. Code-Fix neu geladen werden.
 - Seit letztem Restart: `20/20` Code-Fixes. Kein Push.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
