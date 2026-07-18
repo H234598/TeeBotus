@@ -8064,6 +8064,21 @@ Restart nach weiteren 20 Code-Fixes.
 **Aktueller Laufstand:** Seit dem letzten Restart `3/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### Reminder-Parser: freie Bescheid- und Tageszeit-Formulierungen
+
+- 2026-07-18: `Sag mir morgen um 9 Bescheid wegen ...` wurde nicht erkannt,
+  weil `Bescheid` direkt auf `mir` folgen musste. `morgen frueh` liess
+  `frueh` im Thema stehen.
+- Die Bescheid-Erkennung erlaubt jetzt kurze Zeit-/Kontextwoerter zwischen
+  `mir/uns` und `Bescheid`; typische Tageszeitwoerter werden aus dem Thema
+  entfernt. Andere Themen bleiben unveraendert.
+- Verifikation: `tests/test_reminder_intent.py` -> `46 passed`; `py_compile`,
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: folgt nach Commit.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `4/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### 2026-07-18: Wettercache bei Wohnortwechsel sofort erneuern
 
 - Bei erkannter neuer Wohnstadt wurde der alte Wettertext zwar geloescht,

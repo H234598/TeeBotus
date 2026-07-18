@@ -40,7 +40,7 @@ REMINDER_REQUEST_RE = re.compile(
     r"(?<!ich )erinner(?:e|st|n)?\s+(?:mich|mi|uns)|"
     r"(?<!ich )erinnere?\s+(?:mich|mi|uns)|"
     r"(?<!ich )denk(?:e)?(?:\s+bitte)?(?:\s+(?:fuer\s+)?(?:mich|uns))?(?:\s+.{0,80}?)?\s+(?:an|dran|daran)|"
-    r"sag(?:e)?\s+(?:mir|uns)\s+(?:bitte\s+)?bescheid|"
+    r"sag(?:e)?\s+(?:mir|uns)\s+(?:(?!\bbescheid\b).){0,80}\bbescheid|"
     r"remind\s+(?:me|us)|"
     r"(?:kannst|koenntest)\s+du\s+(?:mich|uns)\s+(?!irgendwann\b)"
     r"(?:(?!\berinner(?:n|en)?\b).){0,120}\berinner(?:n|en)?|"
@@ -781,7 +781,7 @@ def _reminder_subject(text: str) -> str:
         r"(?i)\b("
         r"erinner(?:e|st|n)?\s+(?:mich|mi|uns)|"
         r"remind\s+(?:me|us)|"
-        r"sag(?:e)?\s+(?:mir|uns)\s+(?:bitte\s+)?bescheid|"
+        r"sag(?:e)?\s+(?:mir|uns)\s+(?:(?!\bbescheid\b).){0,80}\bbescheid|"
         r"denk(?:e)?(?:\s+bitte)?(?:\s+(?:fuer\s+)?(?:mich|uns))?"
         r")\b",
         "",
@@ -802,7 +802,7 @@ def _reminder_subject(text: str) -> str:
     cleaned = MONTH_DAY_RE.sub("", cleaned)
     cleaned = DAY_WORD_RE.sub("", cleaned)
     cleaned = re.sub(
-        r"(?i)\b(heute|morgen|uebermorgen|übermorgen|naechsten|nächsten|kommenden|um|gegen|uhr|am|daran|dran|an|dass)\b",
+        r"(?i)\b(heute|morgen|uebermorgen|übermorgen|naechsten|nächsten|kommenden|frueh|früh|morgens|vormittags|mittags|nachmittags|abends|nachts|um|gegen|uhr|am|daran|dran|an|dass)\b",
         " ",
         cleaned,
     )
