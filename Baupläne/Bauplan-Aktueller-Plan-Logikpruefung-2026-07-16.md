@@ -11443,3 +11443,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Besitz-Zuhause
+
+- `Ich habe mein/unser Zuhause in/bei Stadt` wird als aktueller Wohnort erkannt.
+- Bestehende Negations- und Arbeitsort-Ausschlüsse bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `113 passed`, sechs Possessive-Home-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5e63f83c fix: parse possessive home locations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
