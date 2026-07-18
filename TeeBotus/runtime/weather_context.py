@@ -2289,6 +2289,14 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich|wir)\s+(?:bin|sind)\s+"
+        r"(?!(?:in|bei)\s+[^.!?;,]*\b(?:beruflich|dienstlich)\b)"
+        r"(?:in\s+der\s+(?:nähe|naehe|umgebung|gegend)\s+von|nahe|unweit\s+von)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:wohnhaft|ansässig|ansaessig)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|i|wir)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+"
         r"(?:in\s+der\s+(?:nähe|naehe|umgebung)\s+(?:von\s+)?)"
         r"(?!(?:Paris|Reims|Worms|Tours|Cannes|Lens)\b)"
