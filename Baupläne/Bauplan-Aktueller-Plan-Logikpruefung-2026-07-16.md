@@ -10022,3 +10022,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
 - Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Eindeutig historische Adjektive
+
+- `vormaliger` und `damaliger Wohnort/Wohnsitz` wurden bisher als aktuelle Labels akzeptiert.
+- Eindeutig historische Adjektive werden verworfen; `bisheriger` bleibt wegen möglicher Gegenwartsbedeutung offen.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, 4 historische Adjektiv-Smoke-Checks, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c0fdc605 fix: reject unambiguous historical residence adjectives`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 1480061`, Start `2026-07-18 06:45:34 CEST`.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
