@@ -9848,3 +9848,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
 - Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Regionale Wohnortwechsel priorisieren
+
+- `Jetzt lebe ich in Deutschland, in Hamburg`, `im Raum Berlin, in Potsdam` und `bin ... wohnhaft` lieferten bisher Region/Land oder den alten Ort.
+- Regionale Präfixe sind jetzt auch im Änderungszweig aktiv; konkrete Stadt gewinnt.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0d4f416d fix: parse regional residence changes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 620028`, Start `2026-07-18 05:52:25 CEST`.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
