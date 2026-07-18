@@ -1613,7 +1613,22 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,70}\s+\([^)]{1,30}\))\s+"
         r"(?:ist|bleibt)\s+(?:mein(?:e)?|unser(?:e)?)\s+"
-        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|daheim)\b",
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|bleibe|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:bin|sind)\s+"
+        r"(?:(?:offiziell|polizeilich|privat|dauerhaft|permanent|vorübergehend|vorlaeufig)\s+)?"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,70}\s+\([^)]{1,30}\))\s+"
+        r"(?:(?:offiziell|polizeilich|privat|dauerhaft|permanent|vorübergehend|vorlaeufig)\s+)?"
+        r"(?:gemeldet|registriert|ansässig|ansaessig)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,70}\s+\([^)]{1,30}\))\s+"
+        r"(?:meinen|meine|mein|unseren|unsere|unser)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|bleibe)\b",
         re.IGNORECASE,
     ),
     re.compile(
