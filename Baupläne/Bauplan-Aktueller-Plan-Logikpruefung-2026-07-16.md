@@ -9785,6 +9785,18 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Herkunftsnegation mit Korrektur
+
+- `Berlin ist meine Heimat, dort wohne ich nicht, sondern in Hamburg` liefert `Hamburg`.
+- Herkunft wird als Negativkontext behandelt; `sondern in ...` wird als aktuelle Korrektur erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, ein Origin-Negation-Correction-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `10f57cba fix: parse origin negation corrections`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Negierte Wohnortwechsel
 
 - `Mein Wohnort ist keinesfalls Berlin, sondern Hamburg` liefert jetzt den aktuellen Ort `Hamburg`.
