@@ -8573,6 +8573,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `9/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Aktivitaetszusatz nicht als Wohnortkonkurrenz werten
+
+- Der Mehrfachwohnort-Guard verwarf `besuche`, `verbringe`, `treffe`, `reise`
+  und `pendle` in einer zweiten Stadt faelschlich als unklar.
+- Diese Aktivitaetsverben bleiben jetzt beim ersten Wohnort; konkurrierende
+  `wohne/lebe`-Angaben bleiben weiterhin unentschieden.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `eac898c1 fix: preserve residence through activity clauses`.
+
+**Aktueller Laufstand:** Seit dem Restart `10/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
