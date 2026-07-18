@@ -1126,6 +1126,14 @@ def test_extract_residence_city_handles_labeled_area_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in Berlin und Umgebung.") == "Berlin"
 
 
+def test_extract_residence_city_handles_direct_area_relations() -> None:
+    assert extract_residence_city("Ich wohne in Berlin und Umgebung.") == "Berlin"
+    assert extract_residence_city("Ich lebe in Berlin und Umgebung.") == "Berlin"
+    assert extract_residence_city("Ich wohne in der Region um Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in der Berliner Region.") == "Berlin"
+    assert extract_residence_city("Ich wohne im Berliner Gebiet.") == "Berlin"
+
+
 def test_extract_residence_city_handles_named_locality_types() -> None:
     assert extract_residence_city("Mein Wohnort liegt im Dorf Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort liegt im Ort Berlin.") == "Berlin"
