@@ -1417,6 +1417,12 @@ def test_extract_residence_city_rejects_untrusted_label_filler() -> None:
     assert extract_residence_city("Wohnort: derzeitig Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_rejects_bare_label_multiple_targets() -> None:
+    assert extract_residence_city("Wohnort Berlin und Hamburg.") == ""
+    assert extract_residence_city("Mein Wohnort Berlin und Umgebung.") == "Berlin"
+    assert extract_residence_city("Wohnort Berlin und arbeite in Hamburg.") == "Berlin"
+
+
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
     assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
     assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"

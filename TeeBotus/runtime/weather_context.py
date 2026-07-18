@@ -3282,8 +3282,9 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     bare_label_conflict = re.search(
         r"(?:^|[.!?;\n]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
-        r"(?::|=|,)?\s*(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
-        r"(?!(?:aber|doch|jedoch|genauer\b|konkret\b|nämlich\b|naemlich\b|und\s+zwar\b))"
+        r"(?::|=|,)?\s*(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*(?:[,;]|\bund\b)\s*"
+        r"(?!(?:aber|doch|jedoch|genauer\b|konkret\b|nämlich\b|naemlich\b|und\s+zwar\b|"
+        r"umgebung\b|region\b|nähe\b|naehe\b))"
         r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]*?)\s*(?:[.!?;,]|$)",
         source,
         re.IGNORECASE,
