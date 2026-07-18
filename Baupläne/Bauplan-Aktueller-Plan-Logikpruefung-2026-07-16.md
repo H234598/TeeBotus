@@ -9681,6 +9681,18 @@ Restart erst bei `20/20`.
 
 - Letzter Restart: `systemctl --user restart teebotus.service`, aktiv, `MainPID 3950560`, Start `2026-07-18 04:59:30 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Frage-Antwort-Wohnortformen
+
+- `Wo wohnst du? Berlin`, `Wohnort? Potsdam`, `Wohnsitz? Dresden`, `Adresse? Bonn` und `Wo ist dein Wohnort? Berlin` werden korrekt erkannt.
+- Reine Fragen wie `Wohnst du in Hamburg?` bleiben leer; eine Frage wird nicht als bestätigter Wohnort gespeichert.
+- Verifikation: `tests/test_weather_context.py` -> `135 passed`, sechs Question-Answer-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1580a5a1 fix: parse residence question answer forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
