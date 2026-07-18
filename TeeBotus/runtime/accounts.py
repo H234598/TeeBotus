@@ -353,6 +353,18 @@ def validate_sha512_token(value: str, *, field_name: str) -> str:
     return token
 
 
+def _normalize_positive_adapter_slot(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        slot = value
+    elif isinstance(value, str) and value.strip().isdecimal():
+        slot = int(value.strip())
+    else:
+        return None
+    return slot if slot >= 1 else None
+
+
 def _safe_filename(value: str) -> str:
     safe = re.sub(r"[^A-Za-z0-9_.:@+-]", "_", value.strip())
     if not safe:
@@ -2102,24 +2114,16 @@ class AccountStore:
                 "last_seen_at": utc_now(),
             }
             if adapter_slot is not None:
-                if isinstance(adapter_slot, bool):
-                    raise AccountStoreError("adapter_slot must be a positive integer")
-                if isinstance(adapter_slot, int):
-                    normalized_slot = adapter_slot
-                elif isinstance(adapter_slot, str) and adapter_slot.strip().isdecimal():
-                    normalized_slot = int(adapter_slot.strip())
-                else:
-                    raise AccountStoreError("adapter_slot must be a positive integer")
-                if normalized_slot < 1:
+                normalized_slot = _normalize_positive_adapter_slot(adapter_slot)
+                if normalized_slot is None:
                     raise AccountStoreError("adapter_slot must be a positive integer")
                 route["adapter_slot"] = normalized_slot
             else:
                 previous_route = payload.get("last_route")
                 previous_slot = previous_route.get("adapter_slot") if isinstance(previous_route, dict) else None
-                if isinstance(previous_slot, int) and not isinstance(previous_slot, bool) and previous_slot >= 1:
-                    route["adapter_slot"] = previous_slot
-                elif isinstance(previous_slot, str) and previous_slot.strip().isdecimal() and int(previous_slot) >= 1:
-                    route["adapter_slot"] = int(previous_slot)
+                normalized_previous_slot = _normalize_positive_adapter_slot(previous_slot)
+                if normalized_previous_slot is not None:
+                    route["adapter_slot"] = normalized_previous_slot
             payload["last_route"] = route
             payload["last_seen_at"] = route["last_seen_at"]
             identities[key] = payload
@@ -2138,7 +2142,13 @@ class AccountStore:
         chat_id = str(route.get("chat_id") or "").strip()
         if not channel or not chat_id:
             return None
-        return dict(route)
+        normalized_route = dict(route)
+        if "adapter_slot" in normalized_route:
+            normalized_slot = _normalize_positive_adapter_slot(normalized_route.get("adapter_slot"))
+            if normalized_slot is None:
+                return None
+            normalized_route["adapter_slot"] = normalized_slot
+        return normalized_route
 
     @_serialize_identity_map
     def register_account(self, account_id: str) -> tuple[str, str]:

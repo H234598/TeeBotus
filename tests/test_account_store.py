@@ -1203,6 +1203,22 @@ def test_identity_route_update_rejects_invalid_adapter_slot(tmp_path, invalid_sl
     assert store.get_identity_route(identity) is None
 
 
+def test_identity_route_read_rejects_legacy_invalid_adapter_slot(tmp_path):
+    store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
+    identity = telegram_identity_key(395935293)
+    store.resolve_or_create_account(identity)
+    identities = store._load_identities()
+    identities[identity]["last_route"] = {
+        "channel": "telegram",
+        "chat_id": "395935293",
+        "chat_type": "private",
+        "adapter_slot": 0,
+    }
+    store._save_identities(identities)
+
+    assert store.get_identity_route(identity) is None
+
+
 def test_identity_route_normalizes_channel_and_chat_type(tmp_path):
     store = AccountStore(tmp_path / "accounts", "Depressionsbot", provider())
     identity = signal_identity_key(source_uuid="abc")
