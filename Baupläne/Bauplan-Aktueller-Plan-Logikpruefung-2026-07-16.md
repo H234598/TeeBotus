@@ -9725,6 +9725,18 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Vergangenheitsform bei Herkunftslabels
+
+- `Berlin war meine Heimat/Geburtsort, Hamburg mein Wohnort` liefert den aktuellen Wohnort `Hamburg`.
+- `war` wird nur im expliziten Herkunft-zu-Wohnort-Muster akzeptiert; historische Einzelangaben bleiben geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, zwei Past-Origin-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `31a84537 fix: parse past origin residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Negierte Wohnortwechsel
 
 - `Mein Wohnort ist keinesfalls Berlin, sondern Hamburg` liefert jetzt den aktuellen Ort `Hamburg`.
