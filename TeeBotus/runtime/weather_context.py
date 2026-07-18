@@ -29,6 +29,13 @@ _NON_CITY_RESIDENCE_NAMES = frozenset(
         "niederlande",
         "belgien",
         "luxemburg",
+        "großbritannien",
+        "grossbritannien",
+        "vereinigtes königreich",
+        "vereinigte staaten",
+        "kanada",
+        "japan",
+        "amerika",
     }
 )
 _NON_CITY_CONTEXT_TOKENS = frozenset(
@@ -611,6 +618,11 @@ CITY_CHANGE_PATTERNS = (
     ),
 )
 CITY_PATTERNS = (
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+in\s+der\s+nähe\s+(?:von\s+)?"
+        r"(?P<city>Paris|Reims|Worms|Tours|Cannes|Lens)\b",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:meine\s+|unsere\s+)?(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+"
         r"(?:ist|lautet|liegt|befindet\s+sich)\s+\d{5}\s+"
