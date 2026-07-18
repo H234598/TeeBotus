@@ -55,6 +55,7 @@ def test_extract_residence_city_from_nearby_location_phrase() -> None:
     assert extract_residence_city("Ich wohne in der Umgebung von Potsdam.") == "Potsdam"
     assert extract_residence_city("Ich lebe im Raum Leipzig.") == "Leipzig"
     assert extract_residence_city("Ich wohne unweit von Dresden.") == "Dresden"
+    assert extract_residence_city("Ich wohne in der Stadt Berlin.") == "Berlin"
 
 
 def test_extract_residence_city_from_time_qualified_residence_phrase() -> None:
