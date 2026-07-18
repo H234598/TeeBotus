@@ -12052,3 +12052,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Benannter Wohnort als Ort
+
+- `Ich wohne an einem Ort namens Hamburg` und `Wir leben an einem Ort namens Potsdam` liefern Stadt.
+- `Ich arbeite an einem Ort namens Hamburg` bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Named-Place-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d794d6d9 fix: parse named residence places`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 658107`, Start `2026-07-18 14:27:15 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
