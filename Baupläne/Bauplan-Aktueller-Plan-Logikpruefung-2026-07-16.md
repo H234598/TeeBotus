@@ -10317,3 +10317,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Konsistente Wetter-State-Zeitstempel
+
+- `updated_at` nutzte bisher reale Systemzeit trotz injiziertem `now`; Providerfehler setzten `updated_at` gar nicht.
+- Success- und Error-Pfad verwenden jetzt `resolved_now` für `updated_at`, `last_checked_at` und City-Zeitbezug.
+- Verifikation: `tests/test_weather_context.py` -> `33 passed`, State-Timestamp-Smoke gruen, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c00f48ff fix: use resolved weather timestamps`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
