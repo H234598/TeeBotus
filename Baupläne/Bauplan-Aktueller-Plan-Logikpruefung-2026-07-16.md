@@ -9758,6 +9758,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
 - Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Meldeadress-Evidenz als Fülltext
+
+- `Wohnort ist laut Meldeadresse Berlin` und `laut der Adresse Hamburg` speichern jetzt nur den Ort.
+- Der vorhandene direkte Label-Parser überspringt dafür den expliziten Evidenz-Füller; keine Provider/API-Aufrufe.
+- Verifikation: `tests/test_weather_context.py` -> `137 passed`, zwei Registration-Evidence-Smokes, `py_compile` und `git diff --check` gruen.
+- Code-Commit: `20d72ada fix: parse residence registration evidence`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
