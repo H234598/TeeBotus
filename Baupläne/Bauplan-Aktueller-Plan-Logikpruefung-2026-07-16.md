@@ -10353,3 +10353,15 @@ Restart erst bei `20/20`.
 
 - Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Persistenter Mention-Zeitpunkt trotz Wetter-Rate-Limit
+
+- Wiederholte Wohnstadt-Erwähnung innerhalb 2h aktualisierte `city_updated_at` bisher nur im RAM; die Rückgabe `rate_limited` verwarf diese Änderung.
+- State wird bei erkannter Stadt vor `rate_limited` persistiert; stumme Nachrichten ohne Stadt erzeugen keinen unnötigen Write.
+- Verifikation: `tests/test_weather_context.py` -> `36 passed`, Mention-Timestamp-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `51727687 fix: persist repeated residence mentions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service weiterhin aktiv, `MainPID 2415017`, Start `2026-07-18 07:42:32 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
