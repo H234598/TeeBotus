@@ -10655,3 +10655,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Regionale Wohnortrelationen
+
+- Genitiv-Umgebung (`Berlins Umgebung`), Distanz-Richtung, `um ... herum`, `außerhalb der Stadt` und nördliches Stadtgebiet werden auf Stadtbasis extrahiert.
+- Genitiv-Normalisierung schützt bekannte echte s-Endungsstädte.
+- Verifikation: `tests/test_weather_context.py` -> `58 passed`, zehn Relations-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `412c53c0 fix: parse residence relation forms`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
