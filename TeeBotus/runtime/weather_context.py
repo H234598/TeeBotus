@@ -2162,6 +2162,15 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:meine|unsere|mein|unser)\s+"
+        r"(?:offiziell\w*|privat\w*)\s+"
+        r"(?:meldadresse|meldeadresse|meldeanschrift|meldesitz)\s+"
+        r"(?:ist|liegt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:meine|unsere|mein|unser)\s+(?:meldadresse|meldeadresse|meldeanschrift|meldesitz)\s+"
         r"(?:ist|liegt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
@@ -3790,7 +3799,7 @@ def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
         return True
     return bool(
         re.search(
-            r"(?:\b(?:dienst\w*|beruf\w*|arbeits[-\s]?\w*)\s*|"
+            r"(?:\b(?:dienst\w*|beruf\w*|arbeits[-\s]?\w*|geschäft\w*|geschaeft\w*|büro\w*|buero\w*)\s*|"
             r"\b(?:der|die|das|sein(?:e|en|em|er)?|ihr(?:e|en|em|er)?|deren)\s*|"
             r"\bkein(?:e|en|er|em)?\s+(?:fest(?:e|en|er|em)?\s*)?\s*)$",
             source[:pattern_start],
