@@ -91,11 +91,18 @@ _RESIDENCE_TIME_QUALIFIER = (
 )
 _RESIDENCE_LOCATION_ADVERB = (
     r"(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
-    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens)"
+    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|irgendwo)"
 )
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
+    re.compile(
+        r"\b(?:ich|wir)\s+komm(?:e|en)\s+aus\s+[^,.;!?]{1,80},\s*"
+        r"(?:aber\s+)?(?:wohne|wohnen|lebe|leben)\s+"
+        rf"(?:aber\s+)?(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:ich\s+)?(?:wohne|lebe)\s+(?:nicht\s+(?:mehr|l(?:aenger|änger))?|nicht)\s+(?:in|bei)\s+"
         r"[^,.;!?]{1,80},\s*(?:aber\s+)?(?:bin|sind)\s+"
@@ -579,9 +586,17 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich\s+)?(?:wohne|wohnen|lebe|leben)\b\s*"
-        r"(?::|=|,)?\s*(?!(?:ich|wir|ist|war|w(?:äre|urde)|nicht|künft\w*|kuenft\w*|"
+        r"(?:(?::|=|,)\s*(?:(?:in|bei)\s+)?|(?:in|bei)\s+)"
+        r"(?!(?:ich|wir|ist|war|w(?:äre|urde)|nicht|künft\w*|kuenft\w*|"
         r"zukünft\w*|zukuenft\w*|bald|morgen|nächste\w*|naechste\w*)\b)"
-        r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich\s+)?(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?!(?:ich|wir|aber|doch|jedoch|zwischen|irgendwo|mit|auf|aus|nach|für|fuer|"
+        r"während|waehrend|jetzt|inzwischen|aktuell|derzeit|nun)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
     re.compile(
@@ -747,6 +762,12 @@ CITY_PATTERNS = (
         rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich\s+)?bin\s+"
         rf"(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+gemeldet\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich|wir)\s+"
+        r"(?:bin|sind)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+beheimatet\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -1277,6 +1298,12 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb)"
+    if re.search(
+        rf"\b{residence}\s+zwischen\s+[^,.;!?]+\s+und\s+[^,.;!?]+",
+        source,
+        re.IGNORECASE,
+    ):
+        return True
     for pattern in (
         re.compile(
             rf"\b{residence}\s+(?:in|bei)\s+(?P<first>[^,.;!?]{{1,80}}),\s*"
