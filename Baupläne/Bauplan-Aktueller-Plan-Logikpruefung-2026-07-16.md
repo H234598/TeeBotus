@@ -8050,6 +8050,21 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `0/20` Code-Commits. Kein Push.
 Restart nach weiteren 20 Code-Fixes.
 
+### 2026-07-18: Negierte Reminder duerfen keine Erinnerung anlegen
+
+- `Erinnere mich bitte nicht morgen ...`, `Denk nicht an ...` und vergleichbare
+  direkte Negationen wurden bisher als echte Reminder-Anfragen erkannt. Der
+  Parser konnte dadurch ein falsches Proactive-Outbox-Item erzeugen.
+- Direkte Negationen werden jetzt vor klassischem Parser und strukturiertem
+  Reminder-Classifier verworfen. Eine Negation im eigentlichen Inhalt, etwa
+  `Erinnere mich daran, nicht zu rauchen`, bleibt als Erinnerungsthema erlaubt.
+- Verifikation: `tests/test_reminder_intent.py` -> `49 passed`; `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d2a061c9 fix: reject negated reminder requests`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `7/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Reminder-Parser: leere Themen nach benanntem Datum normalisieren
 
 - 2026-07-18: `Erinnere mich an den 20. Juni` entfernte das Datum, liess aber
