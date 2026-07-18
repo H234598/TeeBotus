@@ -8050,6 +8050,21 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `0/20` Code-Commits. Kein Push.
 Restart nach weiteren 20 Code-Fixes.
 
+### 2026-07-18: Ungueltige Identity-Routen-Slots frueh ablehnen
+
+- `AccountStore.update_identity_route()` speicherte `adapter_slot=0`, `False`
+  oder nichtnumerische Werte. Downstream-Pruefungen verwarfen solche Routen;
+  der Nutzer blieb dadurch still unerreichbar.
+- Explizite Slots muessen jetzt positive Integer sein. Dezimalstrings wie
+  `"2"` bleiben fuer alte Datenpfade zulaessig; ungueltige Werte werden vor
+  dem Schreiben mit `AccountStoreError` abgelehnt.
+- Verifikation: Identity-Route-Fokus `6 passed`, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4e7918c8 fix: reject invalid identity route slots`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `11/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### 2026-07-18: Negierte Reminder duerfen keine Erinnerung anlegen
 
 - `Erinnere mich bitte nicht morgen ...`, `Denk nicht an ...` und vergleichbare
