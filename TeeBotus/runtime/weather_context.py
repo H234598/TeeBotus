@@ -608,7 +608,7 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        rf"(?:^|[.!?;]\s+)(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+(?:in|bei)\s+"
+        rf"(?:^|[.!?;,:]\s+)(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -1513,16 +1513,18 @@ def extract_residence_city(text: str) -> str:
         def collect_matches(value: str, offset: int) -> None:
             for pattern in patterns:
                 for match in pattern.finditer(value):
+                    pattern_start = offset + match.start()
+                    city_start = offset + match.start("city")
                     city_end = offset + match.end("city")
-                    if _has_historical_residence_prefix(source, offset + match.start()):
+                    if _has_historical_residence_prefix(source, pattern_start):
                         continue
-                    if _has_future_residence_prefix(source, offset + match.start()):
+                    if _has_future_residence_prefix(source, pattern_start, city_start):
                         continue
                     if _has_unresolved_location_separator(source, city_end):
                         continue
                     city = _clean_city(match.group("city"))
                     if city:
-                        candidates.append((offset + match.start("city"), city))
+                        candidates.append((city_start, city))
 
         collect_matches(source, 0)
         for boundary in re.finditer(r"(?<!\bSt)[.!?;]\s+", source, re.IGNORECASE):
@@ -1782,9 +1784,13 @@ def _has_historical_residence_prefix(source: str, match_start: int) -> bool:
     ) or bool(re.search(r"(?i)\bwar(?:en)?(?:\s+\w+){0,3}\s*$", sentence))
 
 
-def _has_future_residence_prefix(source: str, match_start: int) -> bool:
-    prefix = source[:match_start]
+def _has_future_residence_prefix(source: str, match_start: int, city_start: int | None = None) -> bool:
+    prefix_end = match_start
+    if city_start is not None and match_start < len(source) and source[match_start] in ",;:":
+        prefix_end = city_start
+    prefix = source[:prefix_end]
     sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
+    clause = re.split(r"[,;]\s*", sentence)[-1]
     return bool(
         re.search(
             r"(?i)(?:\bab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
@@ -1792,7 +1798,7 @@ def _has_future_residence_prefix(source: str, match_start: int) -> bool:
             r"\bab\s+(?:morgen|uebermorgen|übermorgen|sommer|winter|frühling|fruehling|herbst)\b|\bbald\b|"
             r"\b(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*\b|\bin\s+zukunft\b|"
             r"\b(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*)\s*$)",
-            sentence,
+            clause,
         )
     )
 

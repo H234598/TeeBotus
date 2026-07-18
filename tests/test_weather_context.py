@@ -873,6 +873,12 @@ def test_extract_residence_city_handles_nimmer_changes() -> None:
     assert extract_residence_city("Ich wohne nimmer in Berlin.") == ""
 
 
+def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:
+    assert extract_residence_city("Ab morgen wohne ich in Hamburg, derzeit in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich werde bald in Hamburg wohnen, derzeit in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, ab morgen in Hamburg.") == "Berlin"
+
+
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
