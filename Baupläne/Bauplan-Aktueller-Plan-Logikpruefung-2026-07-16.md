@@ -8434,6 +8434,20 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `0/20` Code-Commits. Kein Push.
 Restart nach weiteren 20 Code-Fixes.
 
+## Aktueller Lauf nach Restart: Wetter-/Wohnortlogik
+
+- Restart `systemctl --user restart teebotus.service` am 2026-07-18 war
+  erfolgreich; Service ist `active`, `.env`-Check und Signal-CLI starten.
+- Seit diesem Restart: `3/20` Code-Commits, kein Push.
+- Neue Fixes: `e0246899` ersetzt veraltete generierte Wohnort-Memories mit
+  Snapshot/Rollback, `2f6f3584` bereinigt bereits vorhandene Geschwister bei
+  erneuter Ortsnennung, `ec0f3431` schneidet Gedankenstrich-Kontext sauber ab.
+- Verifikation: Wetterparser `25 passed`; Structured-Memory-Fokus `11 passed`;
+  zusätzlicher SQLite-Wetter-Rebuild-Smoke-Test gruen. Kein Provider/API-
+  Aufruf.
+- Naechster Restart bei Code-Fix `20/20`; kein Push ohne ausdrueckliche
+  Freigabe.
+
 ### 2026-07-18: Veraltete generierte Wohnort-Memories ersetzen
 
 - Nach Berlin -> Potsdam blieben beide automatisch erzeugten
