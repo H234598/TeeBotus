@@ -8642,6 +8642,20 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `14/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Explizite Wohnort-Relokationslabels
+
+- `Wohnort wurde nach Hamburg verlegt`, `änderte sich zu`, `hat sich nach
+  Hamburg geändert` und `Wohnort nach Hamburg verlegt` wurden bisher nicht
+  erkannt.
+- Abgeschlossene Änderungslabels werden jetzt erkannt; pauschale
+  `Adresse`-Interpretation bleibt bewusst aus.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f8ed3cc6 fix: parse explicit residence relocation labels`.
+
+**Aktueller Laufstand:** Seit dem Restart `15/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
