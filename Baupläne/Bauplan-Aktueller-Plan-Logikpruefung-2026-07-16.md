@@ -10873,3 +10873,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Relativsätze mit Wohnverb
+
+- `Berlin ist die Stadt, in der ich wohne` und `Der Ort, an dem ich lebe, ist Berlin` werden extrahiert.
+- `Arbeitsort` bleibt kein Wohnort.
+- Verifikation: `tests/test_weather_context.py` -> `74 passed`, sechs Relativsatz-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `cab1c2a2 fix: parse relative residence sentences`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
