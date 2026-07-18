@@ -13292,3 +13292,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zitierte Compound- und Postleitzahlwerte
+
+- `Halle (Saale)` und `10115 Berlin` werden in Wohnort-/Adresslabels korrekt normalisiert.
+- Unausgeglichene schließende Klammern vor Satzzeichen werden bereinigt; echte Klammernamen bleiben erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `133 passed`, drei Quoted-Compound-Postal-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `31837154 fix: parse quoted compound postal residence values`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
