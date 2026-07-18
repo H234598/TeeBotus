@@ -239,6 +239,15 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s*[:=]?\s*"
+        r"(?:in\s+)?(?:deutschland|österreich|oesterreich|(?:der\s+)?schweiz)\s*[,;]\s*"
+        r"(?:(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar)\s+)?"
+        r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})"
+        r"(?=\s*[.!?;]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b[^,.;!?]{1,80}\s+nicht\s*,\s+sondern\s+(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß'-]*(?:\s+(?!(?:ist|war|bleibt|wird)\b)"
         r"[\wÄÖÜäöüß'-]+){0,6})"
@@ -3646,8 +3655,9 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     address_cities = collect(address_patterns)
     registered_address_cities: set[str] = set()
     for match in re.finditer(
-        r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?meldeadresse\s+"
-        r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?meldeadresse\s*"
+        r"(?:(?::|=|,)\s*|(?:ist|lautet|liegt|befindet\s+sich)\s+)?"
+        r"(?:(?:in|bei)\s+)?"
         rf"{city_capture}",
         source,
         re.IGNORECASE,
