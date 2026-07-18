@@ -8614,6 +8614,20 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `12/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Unvollstaendige Wohnort-Descriptoren verwerfen
+
+- `in der Stadt`, `in der Naehe`, `bei der Arbeit`, `nahe` und `ausserhalb
+  von Berlin` wurden teils als Staedte gespeichert.
+- `_clean_city()` entfernt nun versehentlich mitgecapturte `in/bei`-Praefixe
+  und verwirft enge Descriptor-Starts; echte `Berlin`-/`Muenchen`-Werte
+  bleiben gueltig.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `75e40033 fix: reject incomplete residence descriptors`.
+
+**Aktueller Laufstand:** Seit dem Restart `13/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
