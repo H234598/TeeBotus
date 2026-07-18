@@ -1093,6 +1093,12 @@ def test_extract_residence_city_handles_temporal_location_adverbs() -> None:
     assert extract_residence_city("Ich wohne beinahe in Berlin.") == ""
 
 
+def test_extract_residence_city_handles_remaining_label_relations() -> None:
+    assert extract_residence_city("Mein Wohnort liegt außerhalb der Stadt Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort liegt am Berliner Rand.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist außerhalb von Berlin.") == ""
+
+
 def test_extract_residence_city_handles_named_locality_types() -> None:
     assert extract_residence_city("Mein Wohnort liegt im Dorf Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort liegt im Ort Berlin.") == "Berlin"
