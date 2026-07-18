@@ -12353,3 +12353,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
 - Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Expliziter Zuhause-Wechsel
+
+- Nach `Ich wohne in Berlin, aber mein Zuhause/Wohnort/Lebensmittelpunkt ist Hamburg` wird Hamburg als aktueller Wohnort priorisiert.
+- `in/bei Hamburg` nach Label wird ebenfalls erkannt; Aktivitätskontext bleibt separat.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, fünf Home-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1bab39f8 fix: prioritize explicit home label changes`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1795209`, Start `2026-07-18 15:37:30 CEST`.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
