@@ -2051,18 +2051,21 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:heißt|heisst)\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|derzeit\w*|jetzig\w*|gegenwärtig\w*|gegenwaertig\w*|neu\w*)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+wird\s+als\s+"
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+wird\s+(?:als\s+)?"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|derzeit\w*|jetzig\w*|gegenwärtig\w*|gegenwaertig\w*|neu\w*)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+genannt\b",
         re.IGNORECASE,
     ),
     re.compile(
         r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+nennt\s+man\s+"
         r"(?:mein(?:en|e)?|unser(?:en|e)?)\s+"
+        r"(?:(?:aktuell\w*|derzeit\w*|jetzig\w*|gegenwärtig\w*|gegenwaertig\w*|neu\w*)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
         re.IGNORECASE,
     ),
