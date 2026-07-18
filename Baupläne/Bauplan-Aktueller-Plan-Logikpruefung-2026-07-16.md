@@ -9702,6 +9702,17 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Qualifizierte Herkunftslabels
+
+- `frühere/fruehere/ehemalige/alte Heimat` und entsprechende Geburtsort-/Geburtsstadtformen werden als Herkunft erkannt; aktueller Wohnort bleibt Ergebnis.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, drei historische-Herkunfts-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `86d7e315 fix: parse qualified origin residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Negierte Wohnortwechsel
 
 - `Mein Wohnort ist keinesfalls Berlin, sondern Hamburg` liefert jetzt den aktuellen Ort `Hamburg`.
