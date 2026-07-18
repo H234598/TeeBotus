@@ -9878,6 +9878,18 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Negierte feste Wohnorte
+
+- `Kein fester Wohnort: Berlin` und `Keinen festen Wohnsitz: Hamburg` werden nicht mehr als Wohnortfakt übernommen.
+- Der Präfixschutz funktioniert auch bei Pattern-Start direkt vor dem Label; positive `Mein Wohnort`-Labels bleiben gültig.
+- Verifikation: `tests/test_weather_context.py` -> `146 passed`, drei Negation-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `59be2873 fix: reject fixed residence negations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 2727920`, Start `2026-07-18 21:08:53 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
 - Naechster Restart bei `20/20`; Push nur nach ausdruecklicher Anweisung.
 
 ### Folgefix 2026-07-18: Letzten Wohnort bei Mehrfachwechseln wählen
