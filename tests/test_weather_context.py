@@ -998,6 +998,13 @@ def test_extract_residence_city_handles_outside_city_relations() -> None:
     assert extract_residence_city("Ich lebe außerhalb von Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_handles_direct_stadtrand_relations() -> None:
+    assert extract_residence_city("Ich wohne am Stadtrand München.") == "München"
+    assert extract_residence_city("Ich wohne am Stadtrand Münchens.") == "München"
+    assert extract_residence_city("Mein Wohnort ist am Stadtrand München.") == "München"
+    assert extract_residence_city("Mein Wohnort liegt am Stadtrand von Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_handles_stadtgebiet_relations() -> None:
     assert extract_residence_city("Ich wohne im Münchner Stadtgebiet.") == "München"
     assert extract_residence_city("Ich wohne im Stadtgebiet von München.") == "München"
