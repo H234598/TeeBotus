@@ -93,6 +93,8 @@ def test_extract_residence_city_from_additional_change_forms() -> None:
     assert extract_residence_city("Ich wohne jetzt in Hamburg statt in Berlin.") == "Hamburg"
     assert extract_residence_city("Ich lebe in Hamburg anstatt in Berlin.") == "Hamburg"
     assert extract_residence_city("Ich lebe in Hamburg anstelle von Berlin.") == "Hamburg"
+    assert extract_residence_city("Berlin ist nicht mein Wohnort, sondern ich lebe in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Berlin ist nicht mein Wohnort, sondern ich arbeite in Hamburg.") == ""
     assert extract_residence_city("Ich wohne in Berlin; zu Hause bin ich in Potsdam.") == ""
 
 
