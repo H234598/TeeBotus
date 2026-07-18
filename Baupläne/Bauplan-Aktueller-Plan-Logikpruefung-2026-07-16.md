@@ -11419,3 +11419,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Negierte Wohnort-Kontraste
+
+- `Nicht Berlin, sondern Hamburg ist mein Wohnort` wird korrekt auf Hamburg begrenzt.
+- Generisches Muster nimmt bei `Berlin ist nicht mein Wohnort, ich lebe in Hamburg` nicht mehr den ganzen Folgesatz als Städtenamen; Arbeitsort bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `112 passed`, sieben Negations-/Kontrast-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0a0f1468 fix: parse negated residence contrasts`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
