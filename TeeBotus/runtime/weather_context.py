@@ -2879,7 +2879,8 @@ CITY_PATTERNS = (
     re.compile(
         r"(?:\bwo\s+(?:wohnst|lebst)\s+du|\bwo\s+ist\s+"
         r"(?:dein(?:e)?|euer(?:e)?)\s+(?:wohnort|wohnsitz|adresse)|"
-        r"\b(?:wohnort|wohnsitz|adresse))\s*\?\s*"
+        r"\b(?:(?:dein(?:e)?|euer(?:e)?)\s+)?(?:wohnort|wohnsitz|adresse))"
+        r"(?:\s+(?:ist|lautet))?\s*[?:]\s*"
         r"(?P<city>[^\W\d_][\wÄÖÜäöüß .'-]{1,80})(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
