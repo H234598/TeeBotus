@@ -11514,3 +11514,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Vor-/Hinter-Ortsrelationen
+
+- `wohne kurz vor Berlin`, `Wohnort liegt hinter der Stadt Berlin` werden als Berlin erkannt.
+- Interne Mehrfachziele und Aktivitätssätze werden nicht als Einzelort gespeichert; Roh-Cities mit führendem `vor/hinter` werden verworfen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, acht Front/Back-Relation-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `84ce8f9c fix: parse bounded front back residence relations`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
