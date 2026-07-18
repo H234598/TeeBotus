@@ -114,6 +114,16 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:es\s+ist\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,?\s+"
+        r"wo\s+(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,?\s+(?:hier|dort|da)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+"
         r"(?:die|der|das)\s+(?:stadt|ort)\s*,?\s*"
         r"(?:in\s+der|an\s+dem|wo)\s+(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\b",
