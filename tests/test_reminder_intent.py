@@ -125,6 +125,19 @@ def test_parse_reminder_removes_time_preposition_from_subject() -> None:
     assert intent.subject == "den Termin"
 
 
+def test_parse_reminder_accepts_written_clock_times() -> None:
+    cases = (
+        ("Erinnere mich morgen um acht an den Termin", "2026-06-16T08:00:00+00:00"),
+        ("Erinnere mich morgen um halb acht an den Termin", "2026-06-16T07:30:00+00:00"),
+        ("Erinnere mich morgen um Viertel nach acht an den Termin", "2026-06-16T08:15:00+00:00"),
+    )
+
+    for text, expected_due_at in cases:
+        intent = parse_reminder_intent(text, now=fixed_now())
+        assert intent.due_at == expected_due_at
+        assert intent.subject == "den Termin"
+
+
 def test_parse_reminder_removes_next_week_from_subject() -> None:
     intent = parse_reminder_intent(
         "Erinnere mich nächste Woche an den Antrag",

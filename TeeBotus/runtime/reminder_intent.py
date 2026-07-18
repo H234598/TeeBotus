@@ -99,6 +99,14 @@ TIME_RE = re.compile(
     rf"\b(?:um|gegen)\s+(?P<hour>{_CLOCK_HOUR})(?::(?P<minute>[0-5]\d))?\s*(?:uhr)?\b",
     re.IGNORECASE,
 )
+WRITTEN_TIME_RE = re.compile(
+    r"\b(?:um|gegen)\s+"
+    r"(?:(?P<quarter>viertel)\s+(?P<direction>nach|vor)\s+|(?P<half>halb)\s+)?"
+    r"(?P<hour>eins|ein|zwei|drei|vier|fuenf|fünf|sechs|sieben|acht|neun|zehn|elf|zwoelf|zwölf|"
+    r"dreizehn|vierzehn|fuenfzehn|fünfzehn|sechzehn|siebzehn|achtzehn|neunzehn|zwanzig)"
+    r"(?:\s+uhr)?\b",
+    re.IGNORECASE,
+)
 DAYPART_DEFAULT_HOURS = (
     ("frueh", 9),
     ("fruh", 9),
@@ -548,6 +556,32 @@ _RELATIVE_TEXT_UNITS = {
     "woche": "weeks",
     "wochen": "weeks",
 }
+_WRITTEN_HOURS = {
+    "ein": 1,
+    "eins": 1,
+    "zwei": 2,
+    "drei": 3,
+    "vier": 4,
+    "fuenf": 5,
+    "fünf": 5,
+    "sechs": 6,
+    "sieben": 7,
+    "acht": 8,
+    "neun": 9,
+    "zehn": 10,
+    "elf": 11,
+    "zwoelf": 12,
+    "zwölf": 12,
+    "dreizehn": 13,
+    "vierzehn": 14,
+    "fuenfzehn": 15,
+    "fünfzehn": 15,
+    "sechzehn": 16,
+    "siebzehn": 17,
+    "achtzehn": 18,
+    "neunzehn": 19,
+    "zwanzig": 20,
+}
 
 
 def _relative_text_delta(phrase: str) -> timedelta | None:
@@ -663,6 +697,16 @@ def _time_marker_in_text(text: str) -> tuple[int, int] | None:
     match = TIME_RE.search(text)
     if match:
         return int(match.group("hour")), int(match.group("minute") or 0)
+    written = WRITTEN_TIME_RE.search(text)
+    if written:
+        hour = _WRITTEN_HOURS[written.group("hour").casefold()]
+        if written.group("half"):
+            return max(hour - 1, 0), 30
+        if written.group("quarter"):
+            if written.group("direction") == "vor":
+                return max(hour - 1, 0), 45
+            return hour, 15
+        return hour, 0
     normalized = _normalize(text)
     for marker, hour in DAYPART_DEFAULT_HOURS:
         if re.search(rf"{marker}s?\b", normalized):
@@ -912,6 +956,7 @@ def _reminder_subject(text: str) -> str:
     cleaned = RELATIVE_TEXT_RE.sub("", cleaned)
     cleaned = RELATIVE_RE.sub("", cleaned)
     cleaned = TIME_RE.sub("", cleaned)
+    cleaned = WRITTEN_TIME_RE.sub("", cleaned)
     cleaned = MONTH_DAY_RE.sub("", cleaned)
     cleaned = DAY_WORD_RE.sub("", cleaned)
     cleaned = re.sub(
