@@ -7822,6 +7822,21 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `11/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Legacy-Identity-Routen beim Lesen validieren
+
+- Bereits gespeicherte Identity-Maps konnten ungueltige `adapter_slot`-Werte
+  enthalten. Neue Schreibvalidierung allein reparierte diesen Altbestand nicht;
+  Routing erkannte ihn erst spaet oder verwirft ihn je nach Pfad.
+- `get_identity_route()` normalisiert positive Dezimalstrings und gibt bei
+  ungueltigem, booleschem oder nichtpositivem Slot keine Route zurueck. Die
+  Normalisierung wird beim Schreiben wiederverwendet.
+- Verifikation: Identity-Route-Fokus `7 passed`, `py_compile` und
+  `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `202752fa fix: reject corrupt identity routes on read`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `12/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
