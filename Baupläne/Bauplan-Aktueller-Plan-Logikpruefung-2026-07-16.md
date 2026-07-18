@@ -9702,6 +9702,18 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Status-Wohnort nach Geburtsverb
+
+- `Ich bin in Berlin geboren und in Hamburg wohnhaft` sowie `bei Hamburg gemeldet` liefern `Hamburg`.
+- Die Statuswortliste bleibt auf explizite aktuelle Belege begrenzt.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, zwei Birth-Status-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `58890426 fix: parse status residence after birth clause`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
