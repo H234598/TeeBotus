@@ -11807,3 +11807,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Neue invertierte Wohnlabels
+
+- `Hamburg ist mein neuer Wohnort` und `Potsdam ist unser neues Zuhause` liefern aktuellen Ort.
+- `Arbeitsort` wird durch enges Wohnlabel-Pattern nicht übernommen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei New-Residence-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `10b9c315 fix: parse new residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
