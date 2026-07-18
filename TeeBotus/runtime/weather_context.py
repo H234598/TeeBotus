@@ -122,8 +122,8 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
-        r"\b(?:mein(?:e)?\s+)?(?:(?:aktuell(?:er|e)?|jetzig(?:er|e))\s+)?"
-        r"(?:wohnort|wohnsitz|stadt|ort)\s+(?:ist|liegt|befindet\s+sich)\s+(?:in|bei)\s+"
+        r"\b(?:mein(?:e)?\s+)?(?:(?:aktuell(?:er|e)?|jetzig(?:er|e)|derzeitig(?:er|e)?|gegenwärtig(?:er|e)?)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|stadt|ort)\s+(?:ist|liegt|befindet\s+sich)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -144,8 +144,8 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:mein(?:e)?\s+)?(?:(?:aktuell(?:er|e)?|jetzig(?:er|e))\s+)?"
-        r"(?:wohnort|wohnsitz|stadt|ort)(?:\s+(?:ist|heisst|heißt)\s*|:\s*)"
+        r"\b(?:mein(?:e)?\s+)?(?:(?:aktuell(?:er|e)?|jetzig(?:er|e)|derzeitig(?:er|e)?|gegenwärtig(?:er|e)?)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|stadt|ort)(?:\s+(?:ist|heisst|heißt)\s*|:\s*)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -183,8 +183,8 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\bmein(?:e)?\s+(?:(?:aktuell(?:er|e)?|jetzig(?:er|e))\s+)?"
-        r"(?:wohnort|stadt|ort)(?:\s+(?:ist|heisst|heißt)\s*|:\s*)"
+        r"\bmein(?:e)?\s+(?:(?:aktuell(?:er|e)?|jetzig(?:er|e)|derzeitig(?:er|e)?|gegenwärtig(?:er|e)?)\s+)?"
+        r"(?:wohnort|wohnstadt|stadt|ort)(?:\s+(?:ist|heisst|heißt)\s*|:\s*)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
