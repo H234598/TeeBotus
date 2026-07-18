@@ -9654,6 +9654,18 @@ Restart erst bei `20/20`.
 - Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
 
+### Folgefix 2026-07-18: Reverse-Herkunftslabels
+
+- `Meine Heimat ist Berlin, Hamburg mein Wohnort`, Geburtsort-Variante und Semikolonform liefern `Hamburg`.
+- Reverse-Labels werden separat erkannt; unbeschriftete Ortsfragmente bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, drei Reverse-Origin-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d88e0b63 fix: parse reverse origin residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 3547275`, Start `2026-07-18 22:02:50 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
 ### Folgefix 2026-07-18: Zukunfts-/Unsicherheitspräfixe
 
 - `Wohnort ist voraussichtlich/künftig/zukünftig Berlin` wird nicht als aktueller Wohnort gespeichert.
