@@ -12648,3 +12648,14 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
 - Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zeitadverb vor Wohnverb mit Doppelpunkt
+
+- `Aktuell wohne ich: Hamburg` und `Derzeit leben wir: Potsdam` werden erkannt.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, zwei Prefixed-Temporal-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `874fa374 fix: parse prefixed temporal residence labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3561310`, Start `2026-07-18 17:31:15 CEST`.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
