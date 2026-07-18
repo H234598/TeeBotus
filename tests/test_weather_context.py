@@ -1614,6 +1614,9 @@ def test_extract_residence_city_rejects_multiple_home_targets() -> None:
 def test_extract_residence_city_handles_direct_home_relationships() -> None:
     assert extract_residence_city("Ich nenne Berlin mein Zuhause.") == "Berlin"
     assert extract_residence_city("Berlin nenne ich mein Zuhause.") == "Berlin"
+    assert extract_residence_city("Mein Zuhause nenne ich Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort nenne ich Hamburg.") == "Hamburg"
+    assert extract_residence_city("Mein Arbeitsort nenne ich Berlin.") == ""
     assert extract_residence_city("Ich habe Berlin als Wohnort.") == "Berlin"
     assert extract_residence_city("Ich habe jetzt Hamburg als Wohnort.") == "Hamburg"
     assert extract_residence_city("Ich habe nun Potsdam als Wohnsitz.") == "Potsdam"
