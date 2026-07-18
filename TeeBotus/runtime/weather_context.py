@@ -302,7 +302,7 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        rf"\b(?:ich\s+)?habe\s+meinen\s+{_PRIMARY_RESIDENCE_LABEL}\s+in\s+"
+        rf"\b(?:ich\s+)?habe\s+(?:meinen|den)\s+{_PRIMARY_RESIDENCE_LABEL}\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
