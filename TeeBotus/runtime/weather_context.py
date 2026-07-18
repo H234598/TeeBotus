@@ -2879,13 +2879,17 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?:\bwo\s+(?:wohnst|lebst)\s+du|\bwo\s+ist\s+"
+        r"(?:\bwo\s+(?:wohnst|lebst)\s+du|\bwo\s+(?:bist|bleibst)\s+du\s+"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)|"
+        r"\bwo\s+ist\s+"
         r"(?:dein(?:e)?|euer(?:e)?|mein(?:e)?|unser(?:e)?)\s+"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
-        r"adresse|zuhause|zu\s+hause|daheim)|"
+        r"adresse|wohnadresse|wohnanschrift|anschrift|meldeadresse|zuhause|"
+        r"zu\s+hause|daheim)|"
         r"\b(?:(?:dein(?:e)?|euer(?:e)?|mein(?:e)?|unser(?:e)?)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
-        r"adresse|zuhause|zu\s+hause|daheim))"
+        r"adresse|wohnadresse|wohnanschrift|anschrift|meldeadresse|zuhause|"
+        r"zu\s+hause|daheim))"
         r"(?:\s+(?:ist|lautet))?\s*(?:eigentlich|genau|aktuell|derzeit)?\s*[?:]\s*"
         r"(?:(?:in|bei)\s+)?"
         r"(?P<city>[^\W\d_][\wÄÖÜäöüß .'-]{1,80})(?=\s*(?:[.!?;,]|$))",
@@ -3123,13 +3127,17 @@ def extract_residence_city(text: str) -> str:
 def _has_explicit_residence_multiplicity(source: str) -> bool:
     multiplicity_source = source
     question_answer = re.search(
-        r"(?:\bwo\s+(?:wohnst|lebst)\s+du|\bwo\s+ist\s+"
+        r"(?:\bwo\s+(?:wohnst|lebst)\s+du|\bwo\s+(?:bist|bleibst)\s+du\s+"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)|"
+        r"\bwo\s+ist\s+"
         r"(?:dein(?:e)?|euer(?:e)?|mein(?:e)?|unser(?:e)?)\s+"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
-        r"adresse|zuhause|zu\s+hause|daheim)|"
+        r"adresse|wohnadresse|wohnanschrift|anschrift|meldeadresse|zuhause|"
+        r"zu\s+hause|daheim)|"
         r"\b(?:(?:dein(?:e)?|euer(?:e)?|mein(?:e)?|unser(?:e)?)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
-        r"adresse|zuhause|zu\s+hause|daheim))"
+        r"adresse|wohnadresse|wohnanschrift|anschrift|meldeadresse|zuhause|"
+        r"zu\s+hause|daheim))"
         r"(?:\s+(?:ist|lautet))?\s*(?:eigentlich|genau|aktuell|derzeit)?\s*[?:]\s*"
         r"(?P<answer>[^.!?\n]{1,160})",
         source,
