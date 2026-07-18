@@ -10704,3 +10704,8 @@ Restart erst bei `20/20`.
 - Service weiterhin aktiv, `MainPID 3748148`, Start `2026-07-18 09:03:55 CEST`.
 - Seit diesem Restart: `20/20` Code-Fixes. Kein Push.
 - Regel erfüllt: Bot-/Service-Restart jetzt ausführen.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `0/20` Code-Fixes. Kein Push.
