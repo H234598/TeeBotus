@@ -818,6 +818,20 @@ def test_extract_residence_city_removes_daypart_context() -> None:
     assert extract_residence_city("Ich bin in Berlin beheimatet.") == "Berlin"
 
 
+def test_extract_residence_city_from_colloquial_forms() -> None:
+    assert extract_residence_city("Ich wohn in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich leb in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne grad in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne zurzeit in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne dahoam in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich bin dahoam in Berlin.") == "Berlin"
+    assert extract_residence_city("I leb in Berlin.") == "Berlin"
+    assert extract_residence_city("Berlin - da lebe ich.") == "Berlin"
+    assert extract_residence_city("In Berlin leb ich.") == "Berlin"
+    assert extract_residence_city("In Berlin wohn ich.") == "Berlin"
+    assert extract_residence_city("Ich ha e meinen Wohnsitz in Berlin.") == ""
+
+
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

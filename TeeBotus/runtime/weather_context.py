@@ -92,18 +92,24 @@ _RESIDENCE_DURATION = (
 )
 _RESIDENCE_TIME_QUALIFIER = (
     rf"(?:(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|seitdem|"
-    r"seit\s+(?:gestern|heute|vorgestern)|jetzt|nun|nunmehr|aktuell|derzeit|gerade|momentan|inzwischen|mittlerweile|"
+    r"seit\s+(?:gestern|heute|vorgestern)|jetzt|nun|nunmehr|aktuell|derzeit|gerade|grad|momentan|inzwischen|mittlerweile|zurzeit|zur\s+zeit|"
     r"weiterhin|nach\s+wie\s+vor|noch\s+immer|immer\s+noch|"
     r"dauerhaft|permanent|ständig|staendig|wieder|erneut|"
     r"vor(?:uebergehend|übergehend))"
 )
 _RESIDENCE_LOCATION_ADVERB = (
     r"(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
-    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|irgendwo)"
+    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|irgendwo|dahoam)"
 )
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 
 CITY_CHANGE_PATTERNS = (
+    re.compile(
+        r"\b(?:ich|i)\s+(?:wohne|wohn|lebe|leb)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
+        r"(?:aber\s+)?(?:grad\s+|gerade\s+|jetzt\s+|nun\s+|aktuell\s+|derzeit\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:nicht\s+(?:mehr|l(?:aenger|änger))?|nicht)\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
         r"(?:sondern|aber)\s+(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
@@ -619,6 +625,25 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:ich|i)\s+(?:wohne|wohn|lebe|leb)\s+"
+        r"(?:(?:grad|gerade|zurzeit|zur\s+zeit|jetzt|nun|aktuell|derzeit)\s+)?"
+        r"(?:in|bei)\s+"
+        r"(?!(?:[A-ZÄÖÜ][\wÄÖÜäöüß .'-]*s)\s+(?:nähe|naehe|umgebung)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|i)\s+(?:bin|sein)\s+dahoam\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"(?:wohne|wohn|wohnen|lebe|leb|leben)\s+(?:ich|i|wir)\b"
+        r"(?!\s+(?:nicht|früher|frueher|ehemals)\b)",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:au(?:ßerhalb|sserhalb)|am\s+rand|im\s+umland|im\s+(?:norden|süden|osten|westen)|"
         r"nördlich|südlich|östlich|westlich)\s+(?:von\s+)?"
@@ -747,8 +772,8 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}),\s*"
-        r"(?:hier|dort|da)\s+(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\b",
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s*(?:,|[-–—])\s*"
+        r"(?:hier|dort|da)\s+(?:wohne|wohn|wohnen|lebe|leb|leben)\s+(?:ich|i|wir)\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -798,7 +823,7 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:^|[.!?;\n]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:(?:aktuell(?:er|e)?|jetzig(?:er|e)|derzeitig(?:er|e)?|gegenwärtig(?:er|e)?)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
         r"(?::|=|,)?\s*(?!(?:ist|war|w(?:äre|urde)|liegt|befindet|bleibt|nicht)\b)"
