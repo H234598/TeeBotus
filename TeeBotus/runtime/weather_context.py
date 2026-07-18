@@ -211,7 +211,7 @@ _RESIDENCE_DURATION = (
     r"tag(?:e|en)?|woche(?:n)?|monat(?:e|en)?|jahr(?:e|en)?))"
 )
 _RESIDENCE_TIME_QUALIFIER = (
-    rf"(?:(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|seitdem|"
+    rf"(?:(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|schon\s+immer|seitdem|"
     r"(?:schon\s+)?seit\s+(?:gestern|heute|vorgestern)|jetzt|nun|nunmehr|aktuell|derzeit|gerade|grad|momentan|inzwischen|mittlerweile|zurzeit|zur\s+zeit|"
     r"weiterhin|nach\s+wie\s+vor|noch\s+immer|immer\s+noch|"
     rf"dauerhaft|permanent|langfristig|kurzfristig|befristet|unbefristet|vorläufig|vorlaeufig|"
@@ -286,6 +286,14 @@ CITY_CHANGE_PATTERNS = (
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
         r"(?:ist\s+)?(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b[^,.;!?]{1,80}?\s+ist\s+nicht(?:\s+mehr)?\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
+        r"[,;]\s*(?:aber|doch|jedoch|sondern)?\s*"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+es\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -3164,6 +3172,8 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?P<city>[^\W\d_][\wÄÖÜäöüß .'-]{1,80})\s+(?:ist|bleibt)\s+"
+        rf"(?:(?:weiterhin|nach\s+wie\s+vor|noch\s+immer|immer\s+noch|vorerst|"
+        rf"bis\s+auf\s+weiteres|seit\s+{_RESIDENCE_DURATION})\s+)?"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|daheim)\b",
         re.IGNORECASE,
