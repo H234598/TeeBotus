@@ -12999,3 +12999,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
 - Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Copula-Labels für Zuhause und Bleibe
+
+- `Das ist mein Zuhause in ...` sowie `... bleibt/ist unser Zuhause` werden erkannt.
+- `... ist meine feste Bleibe` wird erkannt; Arbeitsort-/Arbeitsadresse-Labels bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, sieben Home-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `fba9d52a fix: parse copular home labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv nach dem planmaessigen Restart, `MainPID 168706`, Start `2026-07-18 18:24:15 CEST`.
+- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
