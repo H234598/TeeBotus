@@ -363,6 +363,11 @@ def test_extract_residence_city_removes_daypart_context() -> None:
     assert extract_residence_city("Ich lebe überwiegend in Bonn.") == "Bonn"
     assert extract_residence_city("Ich lebe hauptsächlich in Köln.") == "Köln"
     assert extract_residence_city("Meine Heimat ist München.") == ""
+    assert extract_residence_city("Mein Lebensmittelpunkt ist Berlin, jetzt in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Mein Hauptwohnsitz ist nicht Berlin, sondern Hamburg.") == "Hamburg"
+    assert extract_residence_city("Mein Lebensmittelpunkt war Berlin, inzwischen in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Mein Hauptwohnsitz wurde nach Hamburg verlegt.") == "Hamburg"
+    assert extract_residence_city("Ich habe meinen Hauptwohnsitz nach Potsdam verlegt.") == "Potsdam"
 
 
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
