@@ -7853,6 +7853,19 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `13/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Reminder-Aufmerksamkeitsformulierung erkennen
+
+- `Mach mich morgen um 9 auf den Termin aufmerksam` war weder klassischer
+  Reminder noch strukturierter Cue und wurde deshalb nicht geplant.
+- Eindeutige `mach ... auf ... aufmerksam`-Formulierungen werden jetzt
+  deterministisch erkannt; Zeitmarker und Betreff bleiben getrennt.
+- Verifikation: `tests/test_reminder_intent.py` -> `53 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `fe1635bf fix: parse reminder attention wording`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `14/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### SourceHarvester: parallele Harvest-/Promotion-Schreibzugriffe serialisieren
 
 - 2026-07-17: Duplicate-Hash-Pruefung, Zielauswahl, Kopie und Manifest-Append
