@@ -10837,3 +10837,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
 - Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Zukunftsmarker vor Wohnort
+
+- `Demnächst`, `seit morgen`, `künftig` und künftige Wohnortlabels werden nicht als aktueller Wohnort gespeichert.
+- Prefixprüfung reicht bis Stadtbeginn; `ab/seit heute` bleiben gültig.
+- Verifikation: `tests/test_weather_context.py` -> `71 passed`, sechs Zukunftsmarker-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `50648500 fix: reject future residence markers`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 595833`, Start `2026-07-18 10:07:18 CEST`.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
