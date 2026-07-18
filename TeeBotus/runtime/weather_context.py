@@ -391,7 +391,8 @@ CITY_CHANGE_PATTERNS = (
         r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|gegend)\s+von\s+|"
         r"in\s+der\s+(?:schweiz|stadt)\s*|im\s+(?:raum|bundesland)\s+|"
         r"in\s+(?:deutschland|österreich|oesterreich|schweiz)\s*)"
-        r"[^,.;!?]{0,80},\s*(?:in|bei)\s+"
+        r"[^,.;!?]{0,80},\s*(?:(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|"
+        r"besser\s+gesagt|sprich)\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -402,7 +403,8 @@ CITY_CHANGE_PATTERNS = (
         r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|gegend)\s+von\s+|"
         r"in\s+der\s+(?:schweiz|stadt)\s*|im\s+(?:raum|bundesland)\s+|"
         r"in\s+(?:deutschland|österreich|oesterreich|schweiz)\s*)"
-        r"[^,.;!?]{0,80},\s*(?:in|bei)\s+"
+        r"[^,.;!?]{0,80},\s*(?:(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|"
+        r"besser\s+gesagt|sprich)\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+(?:wohnhaft|ansässig|ansaessig)\b",
         re.IGNORECASE,
     ),
@@ -436,7 +438,8 @@ CITY_PATTERNS = (
         r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|gegend)\s+von\s+|"
         r"in\s+der\s+(?:schweiz|stadt)\s*|im\s+(?:raum|bundesland)\s+|"
         r"in\s+(?:deutschland|österreich|oesterreich|schweiz)\s*)"
-        r"[^,.;!?]{0,80},\s*(?:in|bei)\s+"
+        r"[^,.;!?]{0,80},\s*(?:(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|"
+        r"besser\s+gesagt|sprich)\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
