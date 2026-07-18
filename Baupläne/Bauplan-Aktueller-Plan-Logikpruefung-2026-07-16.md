@@ -14412,3 +14412,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Unsichere Wohnort-Suffixe
+
+- Nachgestellte Unsicherheit (`glaube ich`, `denke ich`, `vermute ich`, `nehme ich an`) blockiert Wohnortspeicherung.
+- Sichere Zusätze bleiben gültig.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, fünf Uncertainty-Suffix-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `98b3ac88 fix: reject uncertain residence suffixes`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
