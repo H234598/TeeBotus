@@ -13196,3 +13196,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Unicode-Erstbuchstaben in Ortslabels
+
+- Wohnort-/Adresslabels akzeptieren internationale Städte mit `Å/É/Č/Ž/Ø/Æ` und anderen Unicode-Buchstaben.
+- Bestehende ASCII-/Sondermuster bleiben vorrangig; Arbeits- und Geburtslabels bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `125 passed`, sechs Unicode-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a6c50589 fix: parse unicode residence label initials`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
