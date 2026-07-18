@@ -11723,3 +11723,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
 - Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Perfektform beim Wohnortwechsel
+
+- `Ich habe in Berlin gewohnt, bin jetzt in Hamburg` und `Wir haben bei Berlin gelebt, sind inzwischen in Potsdam` liefern aktuellen Ort.
+- Arbeitsverb im Folgesatz bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `115 passed`, drei Perfect-Transition-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b9d53372 fix: parse perfect residence transitions`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 2301`, Start `2026-07-18 13:46:09 CEST`.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
