@@ -104,6 +104,7 @@ def test_extract_residence_city_after_person_or_household_phrase() -> None:
 def test_extract_residence_city_from_plain_negated_change() -> None:
     assert extract_residence_city("Ich lebe nicht in Berlin, sondern in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne nicht in Berlin, sondern in Potsdam.") == "Potsdam"
+    assert extract_residence_city("Ich wohne nicht in Berlin sondern in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne nicht in Berlin.") == ""
 
 
@@ -167,6 +168,8 @@ def test_extract_residence_city_handles_current_city_after_residence_change() ->
     assert extract_residence_city("Ich wohne in Berlin nicht mehr, jetzt in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne nicht mehr bei meiner Mutter, jetzt in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne in Berlin, aber jetzt in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Berlin, doch jetzt in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Berlin, jedoch jetzt in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich lebe nicht in Berlin, aber jetzt in Potsdam.") == "Potsdam"
     assert extract_residence_city("Ich wohne nicht mehr in Berlin, aber jetzt in Leipzig.") == "Leipzig"
     assert extract_residence_city("Ich wohne in Berlin, aber inzwischen in Hamburg.") == "Hamburg"
