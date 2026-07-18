@@ -14182,3 +14182,17 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
 - Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Persistente Zeitlabels und Pronomenkorrektur
+
+- `schon immer` wird als aktuelle stabile Wohnangabe unterstützt.
+- Zeitangaben zwischen Stadt und Label (`Berlin ist seit 2020 mein Wohnort`) werden erkannt.
+- `weiterhin`, `vorerst` und `bis auf Weiteres` funktionieren auch nach `ist/bleibt`.
+- `Berlin ist nicht mehr mein Wohnort, Hamburg ist es` liefert Hamburg.
+- Verifikation: `tests/test_weather_context.py` -> `157 passed`, elf Zeit-/Pronomen-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `481cd6df fix: parse persistent residence time labels`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 1080447`, Start `2026-07-18 23:52:22 CEST`.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
