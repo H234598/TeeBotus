@@ -107,6 +107,7 @@ def test_extract_residence_city_from_move_phrases() -> None:
     assert extract_residence_city("Ich bin von Berlin nach Hamburg gezogen.") == "Hamburg"
     assert extract_residence_city("Ich bin umgezogen von Berlin nach Potsdam.") == "Potsdam"
     assert extract_residence_city("Ich bin nach Leipzig gezogen.") == "Leipzig"
+    assert extract_residence_city("Ich bin nach Hamburg umgezogen.") == "Hamburg"
 
 
 def test_extract_residence_city_from_wonen_leben_change() -> None:
