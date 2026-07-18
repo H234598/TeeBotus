@@ -60,6 +60,8 @@ def test_extract_residence_city_from_inverted_and_colloquial_forms() -> None:
     assert extract_residence_city("Ich hab' meinen Wohnsitz in Berlin.") == "Berlin"
     assert extract_residence_city("Berlin ist nicht mehr mein Wohnort, sondern Hamburg.") == "Hamburg"
     assert extract_residence_city("Berlin ist nicht mehr mein Wohnort, jetzt in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Nicht Berlin, sondern Hamburg ist mein Wohnort.") == "Hamburg"
+    assert extract_residence_city("Berlin ist nicht mein Wohnort, ich lebe in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ehemals ansässig sind wir bei Hamburg.") == ""
 
 
