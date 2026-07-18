@@ -1250,6 +1250,8 @@ def test_extract_residence_city_rejects_person_targets_without_city() -> None:
     assert extract_residence_city("Ich wohne bei Kollegen.") == ""
     assert extract_residence_city("Ich wohne bei Freunden in Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne bei meinen Eltern in Potsdam.") == "Potsdam"
+    assert extract_residence_city("Ich wohne gemeinsam mit meiner Partnerin.") == ""
+    assert extract_residence_city("Ich wohne gemeinsam mit meiner Partnerin in Dresden.") == "Dresden"
 
 
 def test_extract_residence_city_keeps_current_clause_after_future_clause() -> None:

@@ -100,6 +100,7 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "partner",
         "partnerin",
         "partnern",
+        "gemeinsam",
     }
 )
 _NON_CITY_REGION_NAMES = frozenset(
