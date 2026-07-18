@@ -1291,6 +1291,9 @@ def test_extract_residence_city_handles_named_residence_clauses() -> None:
     assert extract_residence_city("Ich lebe in einer Stadt, die München heißt.") == "München"
     assert extract_residence_city("Mein Wohnort ist eine Stadt, die München heißt.") == "München"
     assert extract_residence_city("München nennt sich mein Wohnort.") == "München"
+    assert extract_residence_city("Berlin wird mein Wohnort genannt.") == "Berlin"
+    assert extract_residence_city("Hamburg wird unser Zuhause genannt.") == "Hamburg"
+    assert extract_residence_city("Berlin wird mein Arbeitsort genannt.") == ""
 
 
 def test_extract_residence_city_handles_lebensmittelpunkt_area_relations() -> None:
