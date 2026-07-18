@@ -2579,7 +2579,11 @@ def _clean_city(value: str) -> str:
     city = _IRREGULAR_CITY_ADJECTIVE_BASES.get(city.casefold(), city)
     if not city or len(city) > MAX_CITY_LENGTH:
         return ""
-    if city.casefold() in _NON_CITY_RESIDENCE_NAMES or city.casefold() in _NON_CITY_CONTEXT_TOKENS:
+    if (
+        city.casefold() in _NON_CITY_RESIDENCE_NAMES
+        or city.casefold() in _NON_CITY_CONTEXT_TOKENS
+        or city.casefold() in _NON_CITY_REGION_NAMES
+    ):
         return ""
     if any(char.isdigit() for char in city):
         return ""
