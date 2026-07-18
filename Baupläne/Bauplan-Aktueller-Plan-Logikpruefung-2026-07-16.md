@@ -7859,6 +7859,22 @@ Push. Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem letzten Restart `13/20` Code-Commits. Kein
 Push. Restart erst bei `20/20`.
 
+### 2026-07-18: Zeitqualifizierer im Wohnortparser vereinheitlichen
+
+- `seit zwei Jahren`, `schon seit 2020`, `schon lange`, `momentan`,
+  `vorübergehend` und `seitdem` wurden in direkten, Zuhause- und
+  Haushaltsangaben teilweise verworfen. Vorangestellte Formen wie `Seit 2024
+  bin ich ...` fehlten ebenfalls.
+- Ein gemeinsames lokales Regex-Fragment deckt nun begrenzte Dauerangaben,
+  aktuelle Zeitmarker und übliche Wortstellungen ab. Die bestehenden
+  Negativregeln für Arbeitsort und Herkunft bleiben erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `22 passed`,
+  `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `90854ed3 fix: normalize residence time qualifiers`.
+
+**Aktueller Laufstand:** Seit dem letzten Restart `14/20` Code-Commits. Kein
+Push. Restart erst bei `20/20`.
+
 ### Gemini-Keyring: Cursor nach Route/Modell isolieren
 
 - 2026-07-17: `RotatingAPIKeyRing` nahm zwar `name` entgegen, Registry-State
