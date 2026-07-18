@@ -11431,3 +11431,15 @@ Restart erst bei `20/20`.
 
 - Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
 - Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Genitivische Wohnort-Flächen
+
+- Postponierte Genitivformen wie `in Berlins Stadtgebiet`, `Stadtrand`, `Stadtmitte`, `Vorstadt`, `Umland` und `Raum` werden auf Berlin reduziert.
+- Adjektivformen bleiben erhalten; Regionen wie Bayern werden weiterhin nicht als Stadt akzeptiert.
+- Verifikation: `tests/test_weather_context.py` -> `113 passed`, neun Genitiv-Area-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b0d1390b fix: parse genitive residence areas`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service aktiv, `MainPID 3246439`, Start `2026-07-18 12:48:04 CEST`.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
