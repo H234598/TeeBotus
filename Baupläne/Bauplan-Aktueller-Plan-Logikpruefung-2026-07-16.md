@@ -14449,3 +14449,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Qualifizierte Meldeadressen
+
+- `Meine offizielle/private Meldeadresse ist Berlin` wird als Berlin erkannt.
+- `Meine geschäftliche Adresse ist Berlin` wird nicht mehr als Wohnort gespeichert.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Address-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bcb0ee81 fix: parse qualified registered addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
