@@ -8682,6 +8682,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `17/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Satzgrenzen in Wohnort-Captures
+
+- Bei `Berlin. Jetzt ...` wurde der Satzpunkt samt Folgesatz als Stadttext
+  aufgenommen.
+- `_clean_city()` trennt nun Satzzeichen mit folgendem Text; `St. Gallen`
+  bleibt als legitimer Ortsname erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1243c8de fix: trim sentence boundaries from residence captures`.
+
+**Aktueller Laufstand:** Seit dem Restart `18/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
