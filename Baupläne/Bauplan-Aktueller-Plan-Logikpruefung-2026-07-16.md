@@ -13136,3 +13136,15 @@ Restart erst bei `20/20`.
 
 - Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
 - Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-18: Stopwort-Prefixe in Stadtnamen
+
+- Stopregex zerlegt Ortsnamen nicht mehr an Präpositionspräfixen wie `in`/`aus`/`als`/`unter`.
+- `St. Ingbert`, `Ingolstadt`, `Immenstadt`, `Augsburg`, `Alsfeld`, `Unterhaching` und `Beilngries` bleiben vollständig.
+- Verifikation: `tests/test_weather_context.py` -> `120 passed`, sieben Stopword-Prefix-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `76ea0940 fix: protect city names from stopword matching`.
+
+## Aktueller Ledger 2026-07-18-Post-Restart
+
+- Service nach planmaessigem Restart aktiv, `MainPID 1590772`, Start `2026-07-18 19:56:08 CEST`.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
