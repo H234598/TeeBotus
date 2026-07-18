@@ -8546,6 +8546,19 @@ Restart erst bei `20/20`.
 **Aktueller Laufstand:** Seit dem Restart `7/20` Code-Commits. Kein Push.
 Restart erst bei `20/20`.
 
+### Folgefix 2026-07-18: Abgeschlossene Relokationsverben erkennen
+
+- `Ich zog von Berlin nach Hamburg`, `bin ... gewechselt/weggezogen` und
+  `habe meinen Wohnort ... verlegt` wurden bisher nicht erkannt.
+- Abgeschlossene Zielwechsel werden nun erkannt; Zukunft (`werde ziehen`) und
+  reine Fahrt (`bin ... gefahren`) bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `25 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ca377c23 fix: parse completed relocation verbs`.
+
+**Aktueller Laufstand:** Seit dem Restart `8/20` Code-Commits. Kein Push.
+Restart erst bei `20/20`.
+
 ### 2026-07-18: Bestehende Wohnort-Duplikate auch bei Wiederholung bereinigen
 
 - Der erste Fix konnte veraltete Wohnort-Entries entfernen, wenn ein neuer
