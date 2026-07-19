@@ -15822,3 +15822,14 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
 - Neuer Zyklus seit diesem Restart: `6/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+## Vault-Migration 2026-07-19
+
+- Kanonischer Default-Vault fuer alle Instanzen ist jetzt `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Programming`.
+- `TeeBotus/artifact_outputs.py` fuehrt den Vault-Pfad zentral; Standardausgaben gehen nach `Teladi_Programming/incomming`.
+- `TeeBotus/runtime/codex_command.py` nutzt den Bauplanpfad unter `Teladi_Programming/Projekte/TeeBotus/Bauplaene!`.
+- `.env` wurde lokal auf den neuen `TEEBOTUS_OBSIDIAN_INCOMING_DIR` umgestellt; der alte `Teladi_Def_Obs_Vault` bleibt unangetastet und ist EOL.
+- Der aktuelle externe Bauplanstand wurde nach `Teladi_Programming/Projekte/TeeBotus/Bauplaene!` migriert. Der alte Plan wird nicht weiter gepflegt.
+- Verifikation: 150 fokussierte Tests gruen, `py_compile` gruen, `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-/Konfigurationscommit: `2a95628f config: switch default Obsidian vault to Teladi Programming`.
+- `teebotus.service` bleibt bis zum planmaessigen `20/20`-Restart unveraendert laufend; neue Umgebung greift beim naechsten Restart.
