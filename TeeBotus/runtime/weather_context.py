@@ -4883,6 +4883,8 @@ def extract_residence_city(text: str) -> str:
                         continue
                     if _has_other_person_residence_prefix(source, pattern_start):
                         continue
+                    if _has_other_person_residence_suffix(source, city_end):
+                        continue
                     if _has_future_residence_prefix(source, pattern_start, city_start):
                         continue
                     if _has_uncertain_residence_prefix(source, pattern_start):
@@ -5142,6 +5144,22 @@ def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
             r"mutter|vater|tochter|sohn|geschwister|kolleg(?:e|in|en)|"
             r"mitbewohner(?:in)?|nachbar(?:in)?)\s*$",
             segment,
+        )
+    )
+
+
+def _has_other_person_residence_suffix(source: str, city_end: int) -> bool:
+    suffix = source[city_end:]
+    return bool(
+        re.match(
+            r"(?i)\s+(?:ist|war|bleibt|liegt|befindet\s+sich)\s+"
+            r"(?:(?:der|die|das|ein(?:e|en|em|er|es)?)\s+)?"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+            r"arbeitsort|arbeitsadresse)\s+"
+            r"(?:mein(?:er|es|em|en)?|unser(?:er|es|em|en)?)\s+"
+            r"(?:freund(?:in)?|partner(?:in)?|eltern|familie|kinder|mutter|vater|"
+            r"tochter|sohn|geschwister|kolleg(?:e|in|en)|mitbewohner(?:in)?|nachbar(?:in)?)\b",
+            suffix,
         )
     )
 
@@ -5770,6 +5788,20 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"(?:freund(?:in)?|partner(?:in)?|eltern|familie|kinder|mutter|vater|"
         r"tochter|sohn|geschwister|kolleg(?:e|in|en)|mitbewohner(?:in)?|nachbar(?:in)?)\s+"
         r"(?:wohne|wohnen|wohnt|lebe|leben|lebt)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
+        rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:ist|war|bleibt|liegt|befindet\s+sich)\s+"
+        r"(?:(?:der|die|das|ein(?:e|en|em|er|es)?)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"arbeitsort|arbeitsadresse)\s+"
+        r"(?:mein(?:er|es|em|en)?|unser(?:er|es|em|en)?)\s+"
+        r"(?:freund(?:in)?|partner(?:in)?|eltern|familie|kinder|mutter|vater|"
+        r"tochter|sohn|geschwister|kolleg(?:e|in|en)|mitbewohner(?:in)?|nachbar(?:in)?)\b",
         source,
         re.IGNORECASE,
     ):
