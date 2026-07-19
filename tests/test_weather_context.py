@@ -456,6 +456,7 @@ def test_extract_residence_city_from_inverted_location_forms() -> None:
 def test_extract_residence_city_from_nearby_location_phrase() -> None:
     assert extract_residence_city("Ich wohne in der Nähe von Berlin.") == "Berlin"
     assert extract_residence_city("Ich lebe nahe Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne nicht weit von Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne in der Umgebung von Potsdam.") == "Potsdam"
     assert extract_residence_city("Ich lebe im Raum Leipzig.") == "Leipzig"
     assert extract_residence_city("Ich bin in der Nähe von Berlin wohnhaft.") == "Berlin"

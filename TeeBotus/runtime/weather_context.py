@@ -4603,7 +4603,8 @@ CITY_PATTERNS = (
         r"au(?:ßerhalb|sserhalb)\s+von|am\s+stadtrand\s+von|im\s+umland\s+von|"
         r"nord[-\s]?östlich\s+von|nord[-\s]?westlich\s+von|süd[-\s]?östlich\s+von|"
         r"süd[-\s]?westlich\s+von|"
-        r"nördlich\s+von|südlich\s+von|östlich\s+von|westlich\s+von|rund\s+um|nahe|unweit\s+von)\s+"
+        r"nördlich\s+von|südlich\s+von|östlich\s+von|westlich\s+von|rund\s+um|nahe|unweit\s+von|"
+        r"nicht\s+weit\s+(?:entfernt\s+)?von)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s+herum)?(?=\s*(?:[.!?;,]|$|"
         r"\b(?:und|aber|doch|jedoch)\b))",
         re.IGNORECASE,
@@ -6265,7 +6266,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             return True
     if re.search(
         rf"\b{residence}\s+(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung)(?:\s+von)?|im\s+raum|"
-        r"rund\s+um|nahe|unweit(?:\s+von)?|au(?:ßerhalb|sserhalb)(?:\s+von)?|am\s+stadtrand\s+von|im\s+umland(?:\s+von)?|"
+        r"rund\s+um|nahe|unweit(?:\s+von)?|nicht\s+weit\s+(?:entfernt\s+)?von|"
+        r"au(?:ßerhalb|sserhalb)(?:\s+von)?|am\s+stadtrand\s+von|im\s+umland(?:\s+von)?|"
         r"im\s+(?:norden|süden|osten|westen)(?:\s+von)?|am\s+rand(?:\s+von)?|"
         r"nord[-\s]?östlich\s+von|nord[-\s]?westlich\s+von|süd[-\s]?östlich\s+von|"
         r"süd[-\s]?westlich\s+von|"
