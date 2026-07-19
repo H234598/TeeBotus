@@ -262,15 +262,16 @@ _LABELED_STREET_ADDRESS_DETAIL = (
     r"(?:\s+(?:links|rechts))?"
     r")"
 )
-_LABELED_STREET_ADDRESS = (
+_LABELED_STREET_ADDRESS_CORE = (
     r"(?:"
     r"[^,.;!?]{1,100}?(?:straße|strasse|str\.?|weg|allee|gasse|platz|ufer|ring|"
     r"chaussee|steig|promenade)\s+|"
     r"(?:am|an der|an den|auf der|auf dem|auf den|unter der|unter den|in der|in den|"
     r"im|zum|zur|vom|von der|vor der|hinter der)\s+[^,.;!?]{1,100}?\s+"
     r")"
-    rf"(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?(?:[/-]\s*\d+[a-z]?|\s+[a-z])?(?:,\s*{_LABELED_STREET_ADDRESS_DETAIL})*(?:\s*,\s*|\s+)"
+    rf"(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?(?:[/-]\s*\d+[a-z]?|\s+[a-z])?(?:,\s*{_LABELED_STREET_ADDRESS_DETAIL})*"
 )
+_LABELED_STREET_ADDRESS = rf"{_LABELED_STREET_ADDRESS_CORE}(?:\s*,\s*|\s+)"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -2041,6 +2042,15 @@ CITY_CHANGE_PATTERNS = (
     ),
 )
 CITY_PATTERNS = (
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:(?:aktuell\w*|momentan\w*|derzeit\w*|inzwischen\w*|weiterhin\w*|jetzt\w*|nun\w*)\s+)?"
+        r"(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:in|an|auf|unter)\s+"
+        rf"{_LABELED_STREET_ADDRESS_CORE}"
+        r"(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
         r"(?:meinen|meine|mein|unseren|unsere|unser|einen|eine|ein)\s+"
