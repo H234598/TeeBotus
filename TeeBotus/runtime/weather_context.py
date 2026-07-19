@@ -5912,6 +5912,46 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         city = _clean_city(match.group("city"))
         if city:
             address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
+        rf"\bund\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
+        r"ist\s+(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"haupt\w*|jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+        r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|privatanschrift|"
+        r"anschrift)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
+        rf"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
+        r"(?:ist\s+)?(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"haupt\w*|jetzig\w*|derzeitig\w*|gegenwärtig|gegenwaertig)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"zuhause|zu\s+hause|daheim)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        city_start = match.start("city")
+        city_end = match.end("city")
+        if (
+            _has_historical_residence_prefix(source, match.start())
+            or _has_future_residence_prefix(source, match.start(), city_start)
+            or _has_uncertain_residence_prefix(source, match.start())
+            or _has_temporary_residence_prefix(source, match.start())
+            or _has_historical_residence_suffix(source, city_end)
+            or _has_future_residence_suffix(source, city_end)
+            or _has_uncertain_residence_suffix(source, city_end)
+            or _has_non_residential_city_tail(match.group("city"))
+            or _has_non_residential_city_suffix(source, city_end)
+        ):
+            continue
+        city = _clean_city(match.group("city"))
+        if city:
+            residence_cities.add(_city_comparison_key(city))
     registered_address_cities: set[str] = set()
     for match in re.finditer(
         rf"\b(?:(?:{_RESIDENCE_LABEL_DETERMINER})\s+)?"
@@ -5935,6 +5975,29 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         if city:
             registered_address_cities.add(_city_comparison_key(city))
     for match in re.finditer(
+        rf"\bund\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
+        r"ist\s+(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+        r"(?:meldeadresse|meldeanschrift|meldesitz)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        city_start = match.start("city")
+        city_end = match.end("city")
+        if (
+            _has_historical_residence_prefix(source, match.start())
+            or _has_future_residence_prefix(source, match.start(), city_start)
+            or _has_uncertain_residence_prefix(source, match.start())
+            or _has_historical_residence_suffix(source, city_end)
+            or _has_future_residence_suffix(source, city_end)
+            or _has_uncertain_residence_suffix(source, city_end)
+        ):
+            continue
+        city = _clean_city(match.group("city"))
+        if city:
+            registered_address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
         rf"\b(?:(?:{_RESIDENCE_LABEL_DETERMINER})\s+)?"
         r"(?:meldeadresse|meldeanschrift|meldesitz)\s*"
         r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
@@ -6110,6 +6173,29 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         source,
         re.IGNORECASE,
     ):
+        city = _clean_city(match.group("city"))
+        if city:
+            registered_address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
+        rf"(?:^|[.!?;,:]\s*|\bund\s+)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
+        r"ist\s+(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+        r"(?:meldeadresse|meldeanschrift|meldesitz)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        city_start = match.start("city")
+        city_end = match.end("city")
+        if (
+            _has_historical_residence_prefix(source, match.start())
+            or _has_future_residence_prefix(source, match.start(), city_start)
+            or _has_uncertain_residence_prefix(source, match.start())
+            or _has_historical_residence_suffix(source, city_end)
+            or _has_future_residence_suffix(source, city_end)
+            or _has_uncertain_residence_suffix(source, city_end)
+        ):
+            continue
         city = _clean_city(match.group("city"))
         if city:
             registered_address_cities.add(_city_comparison_key(city))

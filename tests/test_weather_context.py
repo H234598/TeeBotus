@@ -2965,6 +2965,12 @@ def test_extract_residence_city_rejects_secondary_residence_without_primary() ->
     assert extract_residence_city("Ich wohne in Berlin und Hamburg ist mein Arbeitsort.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, meine Hauptadresse ist ebenfalls Berlin.") == "Berlin"
     assert extract_residence_city("Hamburg ist meine Hauptadresse.") == "Hamburg"
+    assert extract_residence_city("Berlin ist mein Wohnort, Hamburg ist meine Hauptadresse.") == ""
+    assert extract_residence_city("Hamburg ist meine Hauptadresse, Berlin mein Wohnort.") == ""
+    assert extract_residence_city("Berlin ist mein Wohnort und Hamburg ist meine aktuelle Adresse.") == ""
+    assert extract_residence_city("Berlin ist mein Wohnort und Hamburg ist meine Meldeadresse.") == ""
+    assert extract_residence_city("Hamburg ist meine offizielle Meldeadresse, Berlin mein Wohnort.") == ""
+    assert extract_residence_city("Berlin ist mein Wohnort, Berlin ist meine Meldeadresse.") == "Berlin"
 
 
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
