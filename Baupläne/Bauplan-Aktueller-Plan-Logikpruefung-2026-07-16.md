@@ -14702,7 +14702,14 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, sechs Postal-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `c0f3c357 fix: parse postal residence locations`.
 
+### Folgefix 2026-07-19: PLZ bei Wohnort-Präzisierungen
+
+- `10115 Berlin, genauer gesagt 20095 Hamburg` wird auch in First-Person-Adresssätzen als Wechsel nach Hamburg erkannt.
+- Klammerzusätze und `in/bei` bleiben kompatibel.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, zwei Postal-Change-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `67433899 fix: parse postal residence changes`.
+
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
