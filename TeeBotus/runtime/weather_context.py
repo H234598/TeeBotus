@@ -1105,7 +1105,7 @@ CITY_CHANGE_PATTERNS = (
     ),
     re.compile(
         r"\b(?:wohnort|wohnsitz)\s*:\s*[^,.;!?]{1,100}?"
-        r"(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
+        r"(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
         r"\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?\s*,\s*(?:\d{5}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -2806,7 +2806,7 @@ CITY_PATTERNS = (
     re.compile(
         rf"\b(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
         r"(?:adresse|wohnadresse|wohnanschrift|anschrift|meldeadresse|meldeanschrift|meldesitz)\s*(?::|=|,)\s*"
-        r"(?:[^,.;!?]{1,100}?(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
+        r"(?:[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
         r"\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?\s*,\s*)?(?:\d{5}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})"
         r"(?=\s*[.!?;,]|$)",
@@ -2819,7 +2819,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:meine\s+|unsere\s+)?(?:adresse|wohnadresse|wohnanschrift|anschrift)\s*:\s*"
-        r"[^,.;!?]{1,100}?(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
+        r"[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
         r"\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?\s*,\s*(?:\d{5}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -2966,7 +2966,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben))\s+"
-        r"[^,.;!?]{1,100}?(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
+        r"[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
         r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?(?:\d{5}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -2975,7 +2975,7 @@ CITY_PATTERNS = (
         r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:adresse|wohnadresse|wohnanschrift|anschrift|wohnort|wohnsitz)\s+"
         r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
-        r"[^,.;!?]{1,100}?(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
+        r"[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
         r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?(?:\d{5}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -2983,7 +2983,7 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+(?:meine|unsere)\s+"
         r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+"
-        r"[^,.;!?]{1,100}?(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
+        r"[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
         r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?(?:\d{5}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -4013,7 +4013,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         r"(?:\s+\([^)]{1,30}\))?)(?=\s*(?:[,.;!?]|$))"
     )
     street_address_prefix = (
-        r"[^,.;!?]{1,100}?(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|"
+        r"[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|"
         r"chaussee|steig|promenade)\s+"
         r"\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?\s*,\s*"
     )
@@ -4314,7 +4314,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         comma_match = pattern.search(source)
         first = comma_match.groupdict().get("first", "") if comma_match else ""
         if first and re.search(
-            r"(?i)(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+\d+[a-z]?\b",
+            r"(?i)(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+\d+[a-z]?\b",
             first,
         ):
             continue
@@ -4542,6 +4542,11 @@ def _ensure_weather_state(state: dict[str, Any]) -> dict[str, Any]:
 
 def _clean_city(value: str) -> str:
     source = str(value or "")
+    if re.search(
+        r"(?i)(?:straße|strasse|str\.)\s+\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?\b",
+        source,
+    ):
+        return ""
     if source.count(")") > source.count("("):
         source = re.sub(r"[.!?;,]+$", "", source).rstrip(")").rstrip()
     normalized_source = re.sub(r"\s+", " ", source).strip(" .,:;!?")
