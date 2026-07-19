@@ -384,6 +384,18 @@ _PARENTHESIZED_STREET_DETAIL = re.compile(
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+nicht\s+mehr\s+(?:in|bei)\s+"
+        r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s+\([^)]{1,30}\))?"
+        r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+        rf"{_LABELED_STREET_ADDRESS_CORE}\s*,\s*"
+        r"(?:sondern|aber|jetzt)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s+\([^)]{1,30}\))?"
+        r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+        rf"{_LABELED_STREET_ADDRESS_CORE}"
+        r"(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
         r"(?:meine|unsere)\s+(?:wohnadresse|wohnanschrift|adresse)\s+von\s+"
         rf"{_LABELED_STREET_ADDRESS}(?:\d{{5}}\s+)?"
@@ -2153,10 +2165,21 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
 )
+_CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         rf"{_COUNTRY_CITY_BEFORE_STREET}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:bin|sind)\s+"
+        r"(?:(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+)?"
+        r"(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s+\([^)]{1,30}\))?"
+        r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+        rf"{_LABELED_STREET_ADDRESS_CORE}\s+"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -4729,6 +4752,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     )
     street_address_prefix = _LABELED_STREET_ADDRESS
     residence_patterns = (
+        _CITY_CHANGE_CITY_BEFORE_STREET,
         re.compile(
             rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
             rf"{country_city_before_street_capture}",

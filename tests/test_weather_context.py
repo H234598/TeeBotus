@@ -2427,6 +2427,17 @@ def test_extract_residence_city_handles_country_status_label_separator() -> None
     assert extract_residence_city("Wohnhaft: Österreich, Wien, Musterstr. 5; Meldeadresse Hamburg.") == ""
 
 
+def test_extract_residence_city_handles_current_status_and_city_change_street_forms() -> None:
+    assert extract_residence_city("Ich bin jetzt in Berlin, Musterstr. 5 wohnhaft.") == "Berlin"
+    assert extract_residence_city(
+        "Ich wohne nicht mehr in Berlin, Musterstr. 5, sondern in Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Ich wohne nicht mehr in Berlin, Musterstr. 5, sondern in Hamburg, Hauptweg 7; "
+        "Meldeadresse München."
+    ) == ""
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
