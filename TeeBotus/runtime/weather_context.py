@@ -4012,6 +4012,10 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
         r"(?:\s+\([^)]{1,30}\))?)(?=\s*(?:[,.;!?]|$))"
     )
+    street_address_prefix = (
+        r"[^,.;!?]{1,100}?(?:straße|strasse|weg|allee|gasse|platz|ufer|ring|"
+        r"chaussee|steig|promenade)\s+\d+[a-z]?\s*,\s*"
+    )
     residence_patterns = (
         re.compile(
             rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+{city_capture}",
@@ -4041,6 +4045,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         ),
     )
     address_patterns = (
+        re.compile(
+            rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+            rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+            r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
+            r"(?:(?::|=|,)\s*|\s+)"
+            rf"{street_address_prefix}{city_capture}",
+            re.IGNORECASE,
+        ),
         re.compile(
             rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
             r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
@@ -4096,7 +4108,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         rf"\b(?:(?:{_RESIDENCE_LABEL_DETERMINER})\s+)?"
         r"(?:meldeadresse|meldeanschrift|meldesitz)\s*"
         r"(?:(?::|=|,)\s*|(?:ist|lautet|liegt|befindet\s+sich)\s+)?"
-        r"(?:(?:in|bei)\s+)?"
+        rf"(?:{street_address_prefix}|(?:(?:in|bei)\s+))?"
         rf"{city_capture}",
         source,
         re.IGNORECASE,
