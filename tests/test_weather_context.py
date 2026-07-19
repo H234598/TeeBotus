@@ -1463,6 +1463,8 @@ def test_extract_residence_city_handles_label_confidence_adverbs() -> None:
     assert extract_residence_city("Wir wohnen in Unter den Linden 5, Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne in Am Markt 5, Berlin.") == "Berlin"
     assert extract_residence_city("Ich bin in Musterstraße 5, 10115 Berlin wohnhaft.") == "Berlin"
+    assert extract_residence_city("Ich lebe momentan in Unter den Linden 5, Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne aktuell bei Am Markt 5, Berlin.") == "Berlin"
 
 
 def test_extract_residence_city_trims_trailing_evidence_filler() -> None:
