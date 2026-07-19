@@ -14649,7 +14649,14 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Adresspräzisierungs-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `9518c7eb fix: parse residence address clarifications`.
 
+### Folgefix 2026-07-19: Separatorvarianten bei Adresspräzisierungen
+
+- Präzisierungen nach `:`, `=` oder Komma werden auch bei Leerzeichen vor dem Separator erkannt.
+- Bestehende Leerzeichen- und Konfliktformen bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, zwei Separator-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7e2ff63e fix: accept separator variants in address changes`.
+
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
