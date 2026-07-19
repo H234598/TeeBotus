@@ -15798,3 +15798,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
 - Neuer Zyklus seit diesem Restart: `4/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Wohnortlabels von Organisationen
+
+- `Wohnort meiner Firma/meines Arbeitgebers` wird nicht als eigener User-Wohnort gewertet.
+- Organisationen, Schulen und Betriebe folgen derselben Fremdträger-Regel wie Personen.
+- Verifikation: `tests/test_weather_context.py` -> `231 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0959c2b2 fix: ignore organization residence labels`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-60
+
+- `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
+- Neuer Zyklus seit diesem Restart: `5/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
