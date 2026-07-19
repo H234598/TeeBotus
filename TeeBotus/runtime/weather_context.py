@@ -321,9 +321,9 @@ _GENITIVE_AREA_BEFORE_STREET_CITY = (
 _POSTAL_CITY_BEFORE_STREET = (
     rf"{_POSTAL_CODE}\s+"
     rf"(?P<city>(?:{_STREET_COMPOUND_CITY_PATTERN}|"
-    r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?))\s+(?:in|an|auf|unter)\s+"
+    r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?))(?:\s+(?:in|an|auf|unter)\s+|,\s+)"
     rf"{_LABELED_STREET_ADDRESS_CORE}"
-    r"(?=\s*[.!?;,]|$)"
+    r"(?=\s*(?:[.!?;,]|wohnhaft|ansässig|ansaessig|gemeldet|registriert|$))"
 )
 
 CITY_CHANGE_PATTERNS = (
@@ -2098,6 +2098,19 @@ CITY_CHANGE_PATTERNS = (
     ),
 )
 CITY_PATTERNS = (
+    re.compile(
+        rf"\b(?:ich|wir)\s+(?:bin|sind)\s+(?:in|bei)\s+"
+        rf"{_POSTAL_CITY_BEFORE_STREET}\s+"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?:(?:ich|wir)\s+(?:bin|sind)\s+)?"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)"
+        r"(?:\s+(?:in|bei)\s+|\s*[:=,]\s*|\s+)"
+        rf"{_POSTAL_CITY_BEFORE_STREET}",
+        re.IGNORECASE,
+    ),
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         rf"{_POSTAL_CITY_BEFORE_STREET}",
@@ -4590,6 +4603,19 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
             r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+"
             rf"(?:im|in\s+der)\s+{attributive_area_before_street_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            rf"\b(?:ich|wir)\s+(?:bin|sind)\s+(?:in|bei)\s+"
+            rf"{postal_city_before_street_capture}\s+"
+            r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            rf"(?:^|[.!?;,:]\s*)(?:(?:ich|wir)\s+(?:bin|sind)\s+)?"
+            r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)"
+            r"(?:\s+(?:in|bei)\s+|\s*[:=,]\s*|\s+)"
+            rf"{postal_city_before_street_capture}",
             re.IGNORECASE,
         ),
         re.compile(
