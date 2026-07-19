@@ -2765,6 +2765,17 @@ CITY_PATTERNS = (
         r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift)\b",
         re.IGNORECASE,
     ),
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+ist\s+"
+        rf"(?:(?:{_RESIDENCE_TIME_QUALIFIER}|ab\s+(?:sofort|jetzt)|"
+        r"bis\s+(?:zum\s+)?jahresende)\s+)?"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"zuhause|zu\s+hause|daheim)\b"
+        rf"(?:\s+(?:{_RESIDENCE_TIME_QUALIFIER}|ab\s+(?:sofort|jetzt)))?"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
     _TEMPORAL_REGISTERED_CITY,
     _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET,
     _LABELED_COUNTRY_CITY,
@@ -6274,6 +6285,22 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
+    if re.search(
+        r"(?:^|[.!?;,:]\s*)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+ist\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"zuhause|zu\s+hause|daheim)\b\s+"
+        r"(?:ab\s+(?:morgen|übermorgen|uebermorgen|nächste\w*|naechste\w*|kommende\w*)\b|"
+        r"ab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
+        r"(?:jahr\w*|monat\w*|woche\w*)\b|"
+        r"ab\s+(?:übermorgen|uebermorgen|morgen|sommer|winter|frühling|fruehling|herbst)\b|"
+        r"ab\s+\d{4}\b|"
+        r"(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*|beabsichtig\w*)\b|"
+        r"(?:gewesen|worden|ehemals|damals|vormalig\w*|früher|frueher)\b)",
+        source,
+        re.IGNORECASE,
+    ):
+        return True
     if re.search(
         rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}[,;]\s*"
         r"(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
