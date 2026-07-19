@@ -14770,7 +14770,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-2
 
 - `teebotus.service` aktiv/running, `MainPID 434057`, Start `2026-07-19 03:36:33 CEST`.
-- Neuer Zyklus seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `5/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Präpositionale Straßennamen
 
@@ -14799,3 +14799,10 @@ Restart erst bei `20/20`.
 - Stadtwert bleibt stabil; keine Adressfragmente als Wohnort.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Compound-Building-Detail-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `3ce4c531 fix: parse compound building address details`.
+
+### Folgefix 2026-07-19: Weitere Gebäudedetails
+
+- `1. Etage`, `Souterrain`, `Aufgang A` und `Haus A` werden als Adressdetails übersprungen.
+- Gemeinsame Regex schützt direkte Stadt-Erkennung und Konfliktguard.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Additional-Building-Detail-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `fcc4f05d fix: parse additional building address details`.
