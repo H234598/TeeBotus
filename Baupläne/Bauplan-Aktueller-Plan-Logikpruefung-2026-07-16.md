@@ -14561,3 +14561,16 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Zeitstellung bei Wohnsitz und Wohnung
+
+- `Ich habe meinen Wohnsitz derzeit/seit 2020 in ...` wird erkannt.
+- Aktuelle/neue `Wohnung` und `Unterkunft` mit Ortsangabe werden erkannt.
+- Unklare Zweitwohnungsform `Ich habe derzeit eine Wohnung in ...` bleibt leer; historische und Arbeitsorte bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, acht Housing/Time-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bae5820b fix: parse timed housing residence forms`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
