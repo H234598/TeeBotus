@@ -378,11 +378,11 @@ _PARENTHESIZED_AREA_STREET_ADDRESS = re.compile(
 )
 _PARENTHESIZED_STREET_DETAIL = re.compile(
     rf"(?P<address>{_LABELED_STREET_ADDRESS_CORE})\s*\(\s*"
-    rf"{_LABELED_STREET_ADDRESS_DETAIL}\s*\)(?=\s*[,.;!?]|$)",
+    rf"{_LABELED_STREET_ADDRESS_DETAIL}\s*\)(?=\s*(?:[,.;!?]|(?:auf|nach|statt|sondern|aber|und|gezogen|umgezogen|übersiedelt|uebergesiedelt)\b|$))",
     re.IGNORECASE,
 )
 _CITY_CHANGE_CITY_FRAGMENT = (
-    rf"(?:{_STREET_COMPOUND_CITY_PATTERN}|[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)"
+    rf"(?:(?:{_POSTAL_CODE})\s+)?(?:{_STREET_COMPOUND_CITY_PATTERN}|[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)"
 )
 _CITY_CHANGE_CITY_BEFORE_STREET_MOVE = re.compile(
     r"\b(?:"
