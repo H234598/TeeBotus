@@ -15447,3 +15447,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `15/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Gleiche Wohn- und Meldeadresse
+
+- `Meldeadresse ist auch Berlin` wird im Konflikt-Guard als `Berlin`, nicht als `auch Berlin`, erfasst.
+- `_clean_city` normalisiert führendes `auch`; zwei Adressen in derselben Stadt erzeugen keinen falschen Konflikt.
+- Verifikation: `tests/test_weather_context.py` -> `209 passed`, zwei Same-City-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `32caf811 fix: normalize same-city registration context`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-30
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `16/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
