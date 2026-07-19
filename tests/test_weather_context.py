@@ -1525,6 +1525,13 @@ def test_extract_residence_city_handles_status_after_residence_verb() -> None:
     assert extract_residence_city("Ich lebe in München registriert.") == "München"
 
 
+def test_extract_residence_city_handles_comma_before_home_adverb() -> None:
+    assert extract_residence_city("Ich wohne in Berlin, zu Hause.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Hamburg, zuhause.") == "Hamburg"
+    assert extract_residence_city("Ich bin in Köln, daheim.") == "Köln"
+    assert extract_residence_city("Wir sind in München, zu Hause.") == "München"
+
+
 def test_extract_residence_city_handles_house_number_words() -> None:
     assert extract_residence_city("Ich wohne in Musterstraße Nummer 5, Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne in Musterstraße Hausnummer 5, Berlin.") == "Berlin"

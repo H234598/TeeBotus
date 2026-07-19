@@ -585,7 +585,9 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?:^|[.!?;\n]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s*,\s*"
+        r"(?:^|[.!?;\n]\s*)"
+        r"(?!(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben|bin|sind)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s*,\s*"
         r"(?:daheim|zuhause|zu\s+hause)(?=\s*[.!?;]|$)",
         re.IGNORECASE,
     ),
@@ -2055,6 +2057,12 @@ CITY_CHANGE_PATTERNS = (
     ),
 )
 CITY_PATTERNS = (
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben|bin|sind)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?:\s*,\s*|\s+)(?:zu\s+hause|zuhause|daheim)\b",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
@@ -4611,6 +4619,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
+    if re.search(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben|bin|sind)\s+(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*,\s*"
+        r"(?:zu\s+hause|zuhause|daheim)\s*[.!?;]?$",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
     if re.search(
         rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}},\s*"
         r"(?:ganz\s+)?(?:sicher|wirklich|tatsächlich|tatsaechlich)\s*[.!?]?$",
