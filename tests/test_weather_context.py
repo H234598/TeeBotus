@@ -2404,6 +2404,12 @@ def test_extract_residence_city_handles_postal_and_status_address_variants() -> 
     assert extract_residence_city("Ich wohne in Berlin, Musterstr. 5 wohnhaft.") == "Berlin"
 
 
+def test_extract_residence_city_handles_comma_genitive_area_addresses() -> None:
+    assert extract_residence_city("Ich wohne im Bezirk Mitte Berlins, Musterstr. 5.") == "Berlin"
+    assert extract_residence_city("Wohnadresse: im Bezirk Kreuzbergs, Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Wohnort: im Bezirk Mitte Berlins, Musterstraße 5.") == "Berlin"
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"

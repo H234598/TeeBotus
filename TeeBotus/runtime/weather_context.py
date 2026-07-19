@@ -189,6 +189,7 @@ _KNOWN_CITY_DISTRICT_BASES = {
     "berlin (kreuzberg)": "Berlin",
     "berlin (prenzlauer berg)": "Berlin",
     "berlin kreuzberg": "Berlin",
+    "kreuzberg": "Berlin",
     "hamburg-altona": "Hamburg",
     "hamburg (altona)": "Hamburg",
     "köln-deutz": "Köln",
@@ -329,7 +330,15 @@ _ATTRIBUTIVE_AREA_BEFORE_STREET_CITY = (
 _GENITIVE_AREA_BEFORE_STREET_CITY = (
     rf"(?:im|in\s+der)\s+{_AREA_RELATION_NOUNS}\s+"
     rf"(?P<city>(?:{_STREET_COMPOUND_CITY_PATTERN}|"
-    r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?))s?\s+(?:in|an|auf|unter)\s+"
+    r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?))s?(?:\s+(?:in|an|auf|unter)\s+|,\s*)"
+    rf"{_LABELED_STREET_ADDRESS_CORE}"
+    r"(?=\s*[.!?;,]|$)"
+)
+_GENITIVE_AREA_NAME_BEFORE_STREET_CITY = (
+    rf"(?:im|in\s+der)\s+{_AREA_RELATION_NOUNS}\s+"
+    r"[^,.;!?]{1,80}?\s+"
+    rf"(?P<city>(?:{_STREET_COMPOUND_CITY_PATTERN}|"
+    r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?))s?,\s*"
     rf"{_LABELED_STREET_ADDRESS_CORE}"
     r"(?=\s*[.!?;,]|$)"
 )
@@ -2224,6 +2233,11 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        rf"{_GENITIVE_AREA_NAME_BEFORE_STREET_CITY}",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b(?:mein(?:e)?|unser(?:e)?)\s+"
         rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
         r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
@@ -2241,6 +2255,16 @@ CITY_PATTERNS = (
         r"meldesitz|wohnung|unterkunft|bleibe|mietwohnung|wg)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
         rf"{_GENITIVE_AREA_BEFORE_STREET_CITY}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?:mein(?:e)?|unser(?:e)?)\s+"
+        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
+        r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
+        r"meldesitz|wohnung|unterkunft|bleibe|mietwohnung|wg)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        rf"{_GENITIVE_AREA_NAME_BEFORE_STREET_CITY}",
         re.IGNORECASE,
     ),
     re.compile(
@@ -2258,6 +2282,13 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?:(?:ich|wir)\s+(?:bin|sind)\s+)?"
+        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+"
+        rf"{_GENITIVE_AREA_NAME_BEFORE_STREET_CITY}",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
         r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
         r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
@@ -2271,6 +2302,14 @@ CITY_PATTERNS = (
         r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
         r"meldesitz|wohnung|unterkunft|bleibe|mietwohnung|wg)\s*(?::|=|,)\s*"
         rf"{_GENITIVE_AREA_BEFORE_STREET_CITY}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
+        r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
+        r"meldesitz|wohnung|unterkunft|bleibe|mietwohnung|wg)\s*(?::|=|,)\s*"
+        rf"{_GENITIVE_AREA_NAME_BEFORE_STREET_CITY}",
         re.IGNORECASE,
     ),
     re.compile(
