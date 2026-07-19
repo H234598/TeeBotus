@@ -2438,6 +2438,13 @@ def test_extract_residence_city_handles_current_status_and_city_change_street_fo
     ) == ""
 
 
+def test_extract_residence_city_handles_formulated_city_before_street_moves() -> None:
+    assert extract_residence_city("Meine Wohnadresse wechselte von Berlin, Musterstr. 5 auf Hamburg, Hauptweg 7.") == "Hamburg"
+    assert extract_residence_city("Meine Wohnadresse hat sich von Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7 verlagert.") == "Hamburg"
+    assert extract_residence_city("Meine Wohnadresse wurde von Berlin, Musterstr. 5 auf Hamburg, Hauptweg 7 geändert.") == "Hamburg"
+    assert extract_residence_city("Ich bin von Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7 gezogen.") == "Hamburg"
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
