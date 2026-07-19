@@ -2162,6 +2162,15 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"(?:^|[.!?;,:]\s*)(?:meine|unsere|mein|unser)?\s*"
+        r"(?:(?:offiziell\w*|privat\w*|aktuell\w*|amtlich\w*|neu\w*|gemeldet\w*)\s+)?"
+        r"(?:meldeadresse|meldeanschrift|meldesitz)\s*"
+        r"(?:(?::|=|,)\s*|(?:ist|liegt|lautet|befindet\s+sich)\s+)"
+        r"\d{5}\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:meine|unsere|mein|unser)\s+"
         r"(?:offiziell\w*|privat\w*)\s+"
         r"(?:meldadresse|meldeadresse|meldeanschrift|meldesitz)\s+"
@@ -2974,6 +2983,13 @@ CITY_PATTERNS = (
         rf"(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
         r"(?:amtlich\s+)?gemeldet\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:ich\s+)?bin\s+"
+        rf"(?:{_RESIDENCE_LOCATION_ADVERB}\s+)?(?:in|bei)\s+\d{{5}}\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:amtlich\s+)?(?:gemeldet|registriert)\b",
         re.IGNORECASE,
     ),
     re.compile(
