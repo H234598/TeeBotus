@@ -273,6 +273,17 @@ _LABELED_STREET_ADDRESS = (
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:wohnadresse|wohnanschrift|anschrift|adresse|meldeadresse|meldeanschrift|meldesitz)\s*:\s*"
+        r"(?:vorher|früher|frueher|zuvor|ehemals)\s+"
+        rf"{_LABELED_STREET_ADDRESS}(?:\d{{5}}\s+)?"
+        r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,\s*"
+        r"(?:jetzt|nun|aktuell|derzeit|inzwischen)\s+"
+        rf"{_LABELED_STREET_ADDRESS}(?:\d{{5}}\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+(?:bin|sind)\s+von\s+"
         rf"{_LABELED_STREET_ADDRESS}(?:\d{{5}}\s+)?"
         r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+nach\s+"
