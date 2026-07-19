@@ -5039,6 +5039,8 @@ def extract_residence_city(text: str) -> str:
                         continue
                     if _has_other_person_residence_prefix(source, pattern_start):
                         continue
+                    if _has_temporary_residence_prefix(source, pattern_start):
+                        continue
                     if _has_other_person_residence_suffix(source, city_end):
                         continue
                     if _has_future_residence_prefix(source, pattern_start, city_start):
@@ -5700,6 +5702,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
                     _has_historical_residence_prefix(source, pattern_start)
                     or _has_future_residence_prefix(source, pattern_start, city_start)
                     or _has_uncertain_residence_prefix(source, pattern_start)
+                    or _has_temporary_residence_prefix(source, pattern_start)
                     or _has_historical_residence_suffix(source, city_end)
                     or _has_future_residence_suffix(source, city_end)
                     or _has_uncertain_residence_suffix(source, city_end)
@@ -6474,6 +6477,18 @@ def _has_non_residential_city_tail(value: str) -> bool:
             r"(?:(?:meines|meiner|meinem|meinen|unseres|unserer|unserem|unseren)\s+)?"
             r"(?:arbeitgeber\w*|firma\w*|unternehmen\w*|betrieb\w*|organisation\w*|verein\w*)\b",
             str(value or ""),
+        )
+    )
+
+
+def _has_temporary_residence_prefix(source: str, match_start: int) -> bool:
+    prefix = source[:match_start]
+    sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
+    return bool(
+        re.search(
+            r"(?i)(?:\bim|\bin\s+den|\bwährend\s+der|\bwährend\s+meines|\bwaehrend\s+der|"
+            r"\bwaehrend\s+meines)\s+(?:urlaub|ferien)\s*$",
+            sentence,
         )
     )
 
