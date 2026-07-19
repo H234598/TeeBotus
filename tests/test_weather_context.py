@@ -1370,6 +1370,12 @@ def test_city_id_token_keeps_long_city_names_distinct() -> None:
     assert len(second_token) <= 48
 
 
+def test_extract_residence_city_accepts_activity_prefix_city_names() -> None:
+    for city in ("Gehrden", "Reiskirchen", "Machern", "Sehnde", "Treffurt"):
+        assert extract_residence_city(f"Ich wohne in {city}.") == city
+    assert extract_residence_city("Ich wohne in Hamburg, weil ich arbeite.") == "Hamburg"
+
+
 def test_extract_residence_city_rejects_unknown_label_values() -> None:
     assert extract_residence_city("Mein Wohnort ist irgendwo.") == ""
     assert extract_residence_city("Mein Wohnort ist unklar.") == ""

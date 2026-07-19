@@ -6334,9 +6334,16 @@ def _clean_city(value: str) -> str:
     if re.search(r"(?i)\b(?:gewesen|worden|geblieben)\b", city):
         return ""
     if re.search(
-        r"(?i)\b(?:arbeit\w*|beruflich|dienstlich|studier\w*|lern\w*|schule\w*|schlaf\w*|mach\w*|komm\w*|bin\b|"
-        r"fahr\w*|geh\w*|hab\w*|besuch\w*|verbring\w*|treff\w*|reis\w*|"
-        r"pend\w*|seh\w*|übernacht\w*|uebernacht\w*)\b",
+        r"(?i)\b(?:arbeit(?:e|en|est|et|ete|eten|end)?|beruflich|dienstlich|"
+        r"studier(?:e|en|st|t|te|ten|end)?|lern(?:e|en|st|t|te|ten|end)?|"
+        r"schule(?:n)?|schlaf(?:e|en|st|t|te|ten|end)?|"
+        r"mach(?:e|en|st|t|te|ten|end)?|komm(?:e|en|st|t|te|ten|end)?|bin|"
+        r"fahr(?:e|en|st|t|te|ten|end)?|geh(?:e|en|st|t|te|ten|end)?|"
+        r"hab(?:e|en|st|t|te|ten|end)?|besuch(?:e|en|st|t|te|ten|end|er)?|"
+        r"verbring(?:e|en|st|t|te|ten|end)?|treff(?:e|en|st|t|te|ten|end)?|"
+        r"reis(?:e|en|t|te|ten|end)?|pend(?:le|eln|elst|elt|elte|elnd)?|"
+        r"seh(?:e|en|st|t|te|ten|end)?|übernacht(?:e|en|st|t|te|ten|end)?|"
+        r"uebernacht(?:e|en|st|t|te|ten|end)?)\b",
         city,
     ):
         return ""
