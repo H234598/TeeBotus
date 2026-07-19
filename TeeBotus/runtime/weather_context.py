@@ -659,6 +659,31 @@ _CITY_CHANGE_COLON_LABELLED_OLD_NEW_STREET = re.compile(
     r"(?=\s*[.!?;,]|$)",
     re.IGNORECASE,
 )
+_CITY_CHANGE_LABELLED_ALT_NEW_COLON_STREET = re.compile(
+    r"\b(?:wohnadresse|wohnanschrift|adresse)\s+(?:alt|früher|frueher|vorher)\s*:\s*"
+    rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
+    r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+    rf"{_LABELED_STREET_ADDRESS_CORE}\s*[.!?;,]\s*"
+    r"(?:wohnadresse|wohnanschrift|adresse)\s+(?:neu|aktuell|jetzt)\s*:\s*"
+    rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
+    r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+    rf"{_LABELED_STREET_ADDRESS_CORE}"
+    r"(?=\s*[.!?;,]|$)",
+    re.IGNORECASE,
+)
+_CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY = re.compile(
+    r"\b(?:wohnadresse|wohnanschrift|adresse)\s+"
+    r"(?:(?:alt|früher|frueher|vorher)\s+)?"
+    rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
+    r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+    rf"{_LABELED_STREET_ADDRESS_CORE}\s*[,;]\s*"
+    r"(?:heute|jetzt|nun|aktuell|derzeit|inzwischen)\s+"
+    rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
+    r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+    rf"{_LABELED_STREET_ADDRESS_CORE}"
+    r"(?=\s*[.!?;,]|$)",
+    re.IGNORECASE,
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -694,6 +719,8 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_STREET_BEFORE_LABEL_CURRENT_CITY,
     _CITY_CHANGE_STREET_BEFORE_LABEL_NOT_MORE,
     _CITY_CHANGE_COLON_LABELLED_OLD_NEW_STREET,
+    _CITY_CHANGE_LABELLED_ALT_NEW_COLON_STREET,
+    _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
     re.compile(
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
         r"(?:meine|unsere)\s+(?:wohnadresse|wohnanschrift|adresse)\s+von\s+"
@@ -4827,7 +4854,14 @@ def extract_residence_city(text: str) -> str:
 
 def _has_explicit_residence_multiplicity(source: str) -> bool:
     multiplicity_source = re.sub(r"(?i)str\.(?=\s)", "str", source)
-    if _CITY_CHANGE_COLON_LABELLED_OLD_NEW_STREET.search(source):
+    if any(
+        pattern.search(source)
+        for pattern in (
+            _CITY_CHANGE_COLON_LABELLED_OLD_NEW_STREET,
+            _CITY_CHANGE_LABELLED_ALT_NEW_COLON_STREET,
+            _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
+        )
+    ):
         return False
     if re.search(
         rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
@@ -5075,6 +5109,8 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         _CITY_CHANGE_STREET_BEFORE_LABEL_CURRENT_CITY,
         _CITY_CHANGE_STREET_BEFORE_LABEL_NOT_MORE,
         _CITY_CHANGE_COLON_LABELLED_OLD_NEW_STREET,
+        _CITY_CHANGE_LABELLED_ALT_NEW_COLON_STREET,
+        _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
         re.compile(
             rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
             rf"{country_city_before_street_capture}",
@@ -5583,6 +5619,8 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             _CITY_CHANGE_STREET_BEFORE_LABEL_CURRENT_CITY,
             _CITY_CHANGE_STREET_BEFORE_LABEL_NOT_MORE,
             _CITY_CHANGE_COLON_LABELLED_OLD_NEW_STREET,
+            _CITY_CHANGE_LABELLED_ALT_NEW_COLON_STREET,
+            _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
         )
     ) and not registered_address_cities:
         return False
