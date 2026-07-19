@@ -14770,4 +14770,11 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-2
 
 - `teebotus.service` aktiv/running, `MainPID 434057`, Start `2026-07-19 03:36:33 CEST`.
-- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Präpositionale Straßennamen
+
+- `Unter den Linden 5`, `Am Markt 5` und `Zur Alten Post 5` werden im Adresslabel erkannt.
+- Gemeinsame Straßenadress-Regex wird für direkte Erkennung und Konfliktguard verwendet.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Prepositional-Street-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `86842852 fix: parse prepositional street addresses`.
