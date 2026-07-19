@@ -2949,6 +2949,10 @@ def test_extract_residence_city_rejects_secondary_residence_without_primary() ->
     assert extract_residence_city("Hauptwohnsitz Berlin, Zweitwohnsitz Hamburg.") == "Berlin"
     assert extract_residence_city("Hauptwohnsitz Berlin; Nebenwohnsitz Hamburg.") == "Berlin"
     assert extract_residence_city("Wohnsitz: Berlin; ehemaliger Wohnsitz: Hamburg.") == "Berlin"
+    assert extract_residence_city("Berlin (Hauptwohnsitz), Hamburg (Zweitwohnsitz).") == "Berlin"
+    assert extract_residence_city("Berlin (Hauptwohnsitz); Hamburg (Nebenwohnsitz).") == "Berlin"
+    assert extract_residence_city("Berlin (Hauptwohnsitz), Hamburg (Wohnsitz).") == ""
+    assert extract_residence_city("Berlin (Hauptwohnsitz) und Hamburg (Arbeitsort).") == "Berlin"
 
 
 def test_extract_residence_city_handles_labeled_center_relations() -> None:

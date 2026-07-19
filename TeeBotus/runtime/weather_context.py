@@ -2752,7 +2752,7 @@ CITY_PATTERNS = (
     _CURRENT_RESIDENCE_LABEL_CITY,
     re.compile(
         rf"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
-        rf"\({_PRIMARY_RESIDENCE_LABEL}\)(?=\s*(?:[.!?;,]|$))",
+        rf"\({_PRIMARY_RESIDENCE_LABEL}\)(?=\s*(?:[.!?;,]|\b(?:und|sowie)\b|$))",
         re.IGNORECASE,
     ),
     _TEMPORAL_REGISTERED_CITY,
@@ -5152,6 +5152,7 @@ def extract_residence_city(text: str) -> str:
         _has_conflicting_residence_address_targets(source)
         or _has_explicit_residence_multiplicity(source)
         or _has_conflicting_direct_residence_labels(source)
+        or _has_conflicting_parenthetical_residence_labels(source)
     ):
         return ""
     city = latest_match(CITY_CHANGE_PATTERNS)
@@ -5410,6 +5411,35 @@ def _has_conflicting_direct_residence_labels(source: str) -> bool:
         second = _clean_city(pair.group("second"))
         return bool(first and second and _city_comparison_key(first) != _city_comparison_key(second))
     return False
+
+
+def _has_conflicting_parenthetical_residence_labels(source: str) -> bool:
+    cities: set[str] = set()
+    pattern = re.compile(
+        r"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"\((?P<label>[^)]{1,50})\)(?=\s*(?:[.!?;,]|\b(?:und|sowie)\b|$))",
+        re.IGNORECASE,
+    )
+    for match in pattern.finditer(source):
+        label = match.group("label").strip()
+        if re.fullmatch(rf"(?i){_SECONDARY_RESIDENCE_LABEL}", label):
+            continue
+        if re.search(
+            r"(?i)\b(?:ehemalig\w*|ehemals|frueh\w*|früh\w*|vormalig\w*|damalig\w*|"
+            r"alt\w*|arbeitsort|arbeitsadresse|geschäftsadresse|geschaeftsadresse|"
+            r"dienstadresse|büroadresse|bueroadresse)\b",
+            label,
+        ):
+            continue
+        if not re.search(
+            r"(?i)\b(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\b",
+            label,
+        ):
+            continue
+        city = _clean_city(match.group("city"))
+        if city:
+            cities.add(_city_comparison_key(city))
+    return len(cities) > 1
 
 
 def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
