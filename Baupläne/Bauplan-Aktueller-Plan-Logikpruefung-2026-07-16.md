@@ -14915,7 +14915,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-3
 
 - `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
-- Neuer Zyklus seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `9/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Freie Straßenadress-Sätze
 
@@ -14972,3 +14972,10 @@ Restart erst bei `20/20`.
 - Straßenadress-Kern ist vom nachfolgenden Trenner getrennt; mehrteilige Städte wie Frankfurt am Main bleiben korrekt.
 - Verifikation: `tests/test_weather_context.py` -> `162 passed`, drei City-Before-Street-Smokes, Compound-City-Smokes und `py_compile`/`git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `f2ff3d79 fix: parse city before street addresses`.
+
+### Folgefix 2026-07-19: Beschriftete Stadt-vor-Straße-Sätze
+
+- `Wohnadresse/Wohnsitz/Wohnung liegt in Stadt in/an der Straße` und `ich bin wohnhaft in Stadt in/an der Straße` werden erkannt.
+- Arbeits- und Geburtsadressen bleiben ausgeschlossen; mehrteilige Städte bleiben korrekt.
+- Verifikation: `tests/test_weather_context.py` -> `163 passed`, vier Labeled-City-Before-Street-Smokes plus Negativ-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8fc5d4c1 fix: parse labeled city before street`.
