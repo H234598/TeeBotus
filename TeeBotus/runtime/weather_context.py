@@ -2199,6 +2199,13 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"(?:^|[.!?;,:]\s*)(?:meine|unsere|mein|unser)?\s*"
+        r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s*"
+        r"(?::|=|,)?\s*(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"(?:^|[.!?;,:]\s*)(?:meine|unsere|mein|unser)?\s*"
         r"(?:(?:offiziell\w*|privat\w*|aktuell\w*|amtlich\w*|neu\w*|gemeldet\w*)\s+)?"
         r"(?:meldeadresse|meldeanschrift|meldesitz)\s*"
         r"(?:(?::|=|,)\s*|(?:ist|liegt|lautet|befindet\s+sich)\s+)"
@@ -3944,6 +3951,13 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             r"\b(?:mein(?:e)?|unser(?:e)?)\s*"
             r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+"
             rf"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?:^|[.!?;,:]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*"
+            r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s*"
+            r"(?::|=|,)?\s*"
+            rf"{city_capture}",
             re.IGNORECASE,
         ),
         re.compile(
