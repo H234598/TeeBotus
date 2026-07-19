@@ -5255,7 +5255,13 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
                     second_raw,
                 ) and not re.match(
                     rf"(?i)^(?:(?:mein(?:e)?|unser(?:e)?)\s+)?{_SECONDARY_RESIDENCE_LABEL}"
-                    r"\s*(?::|=|,|\b(?:ist|liegt|befindet\s+sich|bleibt)\b)",
+                    r"(?=\s|[:=,]|$)",
+                    second_raw,
+                ) and not re.match(
+                    r"(?i)^(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
+                    r"(?:ehemalig\w*|ehemals|frueh\w*|früh\w*|vormalig\w*|damalig\w*|"
+                    r"alt\w*)\s+(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
+                    r"lebensmittelpunkt|wohnadresse|wohnanschrift|adresse|anschrift)\b",
                     second_raw,
                 ):
                     second = _clean_city(second_raw)
@@ -6335,6 +6341,11 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             and not re.match(r"(?i)^(?:in|bei)\s+", second_raw)
             and second
             and second.casefold() not in (_NON_CITY_RESIDENCE_NAMES | _NON_CITY_REGION_NAMES)
+            and not re.match(
+                rf"(?i)^(?:(?:mein(?:e)?|unser(?:e)?)\s+)?{_SECONDARY_RESIDENCE_LABEL}"
+                r"(?=\s|[:=,]|$)",
+                second_raw,
+            )
         ):
             return True
     if re.search(
@@ -6693,6 +6704,11 @@ def _clean_city(value: str) -> str:
     if source.count(")") > source.count("("):
         source = re.sub(r"[.!?;,]+$", "", source).rstrip(")").rstrip()
     normalized_source = re.sub(r"\s+", " ", source).strip(" .,:;!?")
+    normalized_source = re.sub(
+        rf"(?i)\s+\({_PRIMARY_RESIDENCE_LABEL}\)$",
+        "",
+        normalized_source,
+    ).strip()
     known_compound_city = _KNOWN_COMPOUND_CITY_NAMES.get(normalized_source.casefold())
     if known_compound_city:
         return known_compound_city
@@ -6721,6 +6737,11 @@ def _clean_city(value: str) -> str:
         return ""
     city = CITY_TRAILING_STOP_RE.sub("", source).strip(" .,:;!?")
     city = re.sub(r"\s+", " ", city)
+    city = re.sub(
+        rf"(?i)\s+\({_PRIMARY_RESIDENCE_LABEL}\)$",
+        "",
+        city,
+    ).strip()
     city = re.sub(
         r"(?i)\s+(?:offiziell|polizeilich|privat|dauerhaft|permanent|vorübergehend|vorlaeufig)$",
         "",
