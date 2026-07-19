@@ -15626,3 +15626,14 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `10/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Zeitlich mehrere Wohnadressen
+
+- `Ich wohne in Berlin, ... und lebe zeitweise/abwechselnd in Hamburg, ...` wird nicht auf den zweiten Ort reduziert, sondern bleibt ungeklärt.
+- Verifikation: `tests/test_weather_context.py` -> `223 passed`, zwei temporale Mehrfach-Wohn-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `cfc4b3d9 fix: reject temporal multiple street residences`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-45
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `11/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
