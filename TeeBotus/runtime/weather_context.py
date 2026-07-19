@@ -548,8 +548,29 @@ _CITY_CHANGE_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET = re.compile(
     r"\b(?:meine|unsere)\s+(?:wohnadresse|wohnanschrift|adresse)\s+war\s+"
     rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
     r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
-    rf"{_LABELED_STREET_ADDRESS_CORE}\s*[.!?;]\s*"
-    r"(?:jetzt|nun|aktuell|derzeit|inzwischen)\s+ist\s+(?:sie|diese)\s+"
+    rf"{_LABELED_STREET_ADDRESS_CORE}\s*[,.!?;]\s*"
+    r"(?:"
+    r"(?:(?:jetzt|nun|aktuell|derzeit|inzwischen|seitdem)\s+)?"
+    r"(?:ist|lautet|bleibt(?:\s+aber)?)\s+(?:(?:sie|diese|die)\s+)?|"
+    r"(?:sie|diese|die)\s+(?:ist|lautet|bleibt(?:\s+aber)?)\s+"
+    r"(?:jetzt|nun|aktuell|derzeit|inzwischen|seitdem)?\s*"
+    r")"
+    r"(?:(?:in|bei)\s+)?"
+    rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
+    r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+    rf"{_LABELED_STREET_ADDRESS_CORE}"
+    r"(?=\s*[.!?;,]|$)",
+    re.IGNORECASE,
+)
+_CITY_CHANGE_LEADING_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET = re.compile(
+    r"\b(?:früher|frueher|zuvor|ehemals)\s+war\s+"
+    r"(?:meine|unsere)\s+(?:wohnadresse|wohnanschrift|adresse)\s+"
+    rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
+    r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+    rf"{_LABELED_STREET_ADDRESS_CORE}\s*[,.;!?]\s*"
+    r"(?:jetzt|nun|aktuell|derzeit|inzwischen)\s+"
+    r"(?:ist|lautet|bleibt(?:\s+aber)?)\s+(?:(?:sie|diese|die)\s+)?"
+    r"(?:(?:in|bei)\s+)?"
     rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
     r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
     rf"{_LABELED_STREET_ADDRESS_CORE}"
@@ -584,6 +605,7 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_UPDATED_NEW_FIRST_CITY_BEFORE_STREET,
     _CITY_CHANGE_CURRENT_NOT_MORE_CITY_BEFORE_STREET,
     _CITY_CHANGE_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET,
+    _CITY_CHANGE_LEADING_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET,
     re.compile(
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
         r"(?:meine|unsere)\s+(?:wohnadresse|wohnanschrift|adresse)\s+von\s+"
@@ -4956,6 +4978,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         _CITY_CHANGE_UPDATED_NEW_FIRST_CITY_BEFORE_STREET,
         _CITY_CHANGE_CURRENT_NOT_MORE_CITY_BEFORE_STREET,
         _CITY_CHANGE_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET,
+        _CITY_CHANGE_LEADING_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET,
         re.compile(
             rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
             rf"{country_city_before_street_capture}",
@@ -5457,6 +5480,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             _CITY_CHANGE_UPDATED_NEW_FIRST_CITY_BEFORE_STREET,
             _CITY_CHANGE_CURRENT_NOT_MORE_CITY_BEFORE_STREET,
             _CITY_CHANGE_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET,
+            _CITY_CHANGE_LEADING_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET,
         )
     ) and not registered_address_cities:
         return False

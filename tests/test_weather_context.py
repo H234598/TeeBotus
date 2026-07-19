@@ -2542,6 +2542,24 @@ def test_extract_residence_city_handles_pronoun_address_changes() -> None:
         "Meine Wohnadresse war Berlin, Musterstr. 5. Jetzt ist sie Hamburg, Hauptweg 7."
     ) == "Hamburg"
     assert extract_residence_city(
+        "Meine Wohnadresse war Berlin, Musterstr. 5. Jetzt lautet sie Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Früher war meine Wohnadresse Berlin, Musterstr. 5, jetzt ist sie Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Zuvor war meine Wohnadresse Berlin, Musterstr. 5, nun ist sie Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Meine Wohnadresse war Berlin, Musterstr. 5. Seitdem ist sie Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Meine Wohnadresse war Berlin, Musterstr. 5, bleibt aber Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Meine Wohnadresse war Berlin, Musterstr. 5; die ist jetzt Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
         "Meine Wohnadresse war Berlin, Musterstr. 5; nun ist diese Hamburg, Hauptweg 7."
     ) == "Hamburg"
     assert extract_residence_city(
