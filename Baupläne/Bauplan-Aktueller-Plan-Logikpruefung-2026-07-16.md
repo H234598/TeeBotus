@@ -15218,3 +15218,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
 - Neuer Zyklus seit diesem Restart: `16/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Normalisierung geklammerter Stadtteile
+
+- Bekannte Formen wie `Berlin (Kreuzberg)`, `Berlin (Mitte)`, `Hamburg (Altona)` und `Frankfurt am Main (Sachsenhausen)` liefern die übergeordnete Stadt.
+- `Halle (Saale)` bleibt als echter zusammengesetzter Ortsname vollständig erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `190 passed`, vier Parenthesized-District-Smokes plus Halle-Regression, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4e13ad1a fix: normalize parenthesized city districts`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-11
+
+- `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
+- Neuer Zyklus seit diesem Restart: `17/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
