@@ -15590,3 +15590,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `7/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Unabgeschlossene Straßenumzüge
+
+- `Ich ziehe von ... nach ...` und `Ich ziehe gerade von ... nach ...` werden nicht mehr als aktueller Wohnort übernommen.
+- Abgeschlossene Form `Ich bin von ... nach ... gezogen` bleibt gültig.
+- Verifikation: `tests/test_weather_context.py` -> `220 passed`, zwei Future-Smokes plus abgeschlossener Move-Regression, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `28f1b380 fix: reject unfinished street moves`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-42
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `8/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
