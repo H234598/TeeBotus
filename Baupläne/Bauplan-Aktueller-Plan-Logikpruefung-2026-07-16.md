@@ -15845,3 +15845,15 @@ Restart erst bei `20/20`.
 - Die gemeinsame Label-Liste verhindert sowohl falsche Ueberschreibung durch `Hamburg ist der Wohnort meiner Frau` als auch falsche Mehrdeutigkeit bei `Ich wohne in Berlin und meine Frau wohnt in Hamburg`.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `7a14b886 fix: ignore common foreign residence labels`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-63
+
+- `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
+- Neuer Zyklus seit diesem Restart: `8/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Hauptwohnung ohne Strassenadresse
+
+- `Meine Hauptwohnung ist in Berlin, meine Zweitwohnung in Hamburg` liefert jetzt Berlin als Primaerwohnort.
+- Das gilt auch fuer `befindet sich` und `und`-Verknuepfungen; eine explizite Zweitwohnung ueberschreibt den Hauptort nicht.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `aa10c31c fix: recognize primary home without street address`.
