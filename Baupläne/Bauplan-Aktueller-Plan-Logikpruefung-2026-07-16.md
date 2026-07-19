@@ -14549,3 +14549,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Zeitlicher Einschub vor Wohnsitz
+
+- `Ich habe derzeit/aktuell meinen Wohnsitz in ...` wird erkannt.
+- Gleichlautende Arbeitsort-Angaben bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Time-Insertion-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `fa2c7d37 fix: parse timed residence declarations`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
