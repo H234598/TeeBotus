@@ -14586,3 +14586,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Arbeitgeber als Begleitperson
+
+- `bei meinem Chef/Arbeitgeber` wird nicht mehr als Wohnkontext missinterpretiert.
+- Familiäre Begleiter und Gastfamilie bleiben gültige Wohnkontexte.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Work-Companion-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8b8e6d75 fix: reject employer companion contexts`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
