@@ -15170,3 +15170,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
 - Neuer Zyklus seit diesem Restart: `12/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Straßenart `Markt`
+
+- `am Markt 5` wird wie andere Straßenarten erkannt; Stadt bleibt aus Stadt-vor-Straßen-, Label- und Bare-Adressformen erhalten.
+- Gemeinsamer `_STREET_TYPE` hält Parser, `_clean_city` und Guards synchron.
+- Verifikation: `tests/test_weather_context.py` -> `187 passed`, drei Marktadress-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e43d1413 fix: parse markt street addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-7
+
+- `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
+- Neuer Zyklus seit diesem Restart: `13/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
