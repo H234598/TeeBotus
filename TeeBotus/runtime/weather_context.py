@@ -3991,6 +3991,16 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             rf"{city_capture}",
             re.IGNORECASE,
         ),
+        re.compile(
+            r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
+            r"(?:meinen|meine|mein|unseren|unsere|unser|einen|eine|ein|den|die|das)\s+"
+            r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+            r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+            r"adresse|wohnadresse|wohnanschrift|anschrift)\s+(?:in|bei)\s+"
+            rf"{city_capture}",
+            re.IGNORECASE,
+        ),
     )
     address_patterns = (
         re.compile(
@@ -4013,6 +4023,15 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         ),
         re.compile(
             r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+(?:meine|unsere)\s+"
+            r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+(?:in|bei)\s+"
+            rf"{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
+            r"(?:meine|unsere|eine|ein|die|das)\s+"
+            r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+            r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
             r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+(?:in|bei)\s+"
             rf"{city_capture}",
             re.IGNORECASE,
@@ -4061,6 +4080,17 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         r"(?:arbeitsadresse|geschäftsadresse|geschaeftsadresse|dienstadresse|büroadresse|bueroadresse|"
         r"arbeitsanschrift|dienstanschrift)\s+"
         r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        rf"{city_capture}",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            work_address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
+        r"\b(?:meine|unsere|meinen|unseren)\s+"
+        r"(?:arbeitsadresse|geschäftsadresse|geschaeftsadresse|dienstadresse|büroadresse|bueroadresse|"
+        r"arbeitsanschrift|dienstanschrift)\s+(?:in|bei)\s+"
         rf"{city_capture}",
         source,
         re.IGNORECASE,
