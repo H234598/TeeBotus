@@ -1435,6 +1435,9 @@ def test_extract_residence_city_ignores_property_activity() -> None:
 
 def test_extract_residence_city_rejects_holiday_address_purpose() -> None:
     assert extract_residence_city("Meine Adresse in Berlin ist für meinen Urlaub.") == ""
+    assert extract_residence_city("Meine Adresse in Berlin dient als Büro.") == ""
+    assert extract_residence_city("Meine Adresse in Berlin ist für die Arbeit.") == ""
+    assert extract_residence_city("Meine Adresse in Berlin ist die meines Arbeitgebers.") == ""
 
 
 def test_extract_residence_city_ignores_other_person_residence() -> None:

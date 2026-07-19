@@ -6458,8 +6458,12 @@ def _has_temporal_residence_suffix_text(value: str) -> bool:
 def _has_non_residential_city_tail(value: str) -> bool:
     return bool(
         re.search(
-            r"(?i)\s+(?:ist|war|wird)\s+(?:für|fuer)\s+"
-            r"(?:(?:meinen|meine|den|die|das)\s+)?urlaub\b",
+            r"(?i)\s+dient\s+als\s+(?:büro|buero|arbeitsplatz|geschäft|geschaeft)\b|"
+            r"\s+(?:ist|war|wird)\s+(?:für|fuer)\s+"
+            r"(?:(?:meinen|meine|den|die|das)\s+)?(?:urlaub|arbeit)\b|"
+            r"\s+(?:ist|war|wird)\s+(?:(?:die|der|das)\s+)?"
+            r"(?:(?:meines|meiner|meinem|meinen|unseres|unserer|unserem|unseren)\s+)?"
+            r"(?:arbeitgeber\w*|firma\w*|unternehmen\w*|betrieb\w*|organisation\w*|verein\w*)\b",
             str(value or ""),
         )
     )
