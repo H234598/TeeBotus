@@ -4373,6 +4373,14 @@ def extract_residence_city(text: str) -> str:
     source = str(text or "")
     if source.strip().endswith("?"):
         return ""
+    for district_name, base_city in _KNOWN_CITY_DISTRICT_BASES.items():
+        if "(" in district_name:
+            source = re.sub(
+                rf"(?<!\w){re.escape(district_name)}(?!\w)",
+                base_city,
+                source,
+                flags=re.IGNORECASE,
+            )
     source = re.sub(r"\bhalle\s*\(\s*saale\s*\)", "Halle Saale", source, flags=re.IGNORECASE)
     source = _PARENTHESIZED_STREET_DETAIL.sub(
         lambda match: match.group("address"),
