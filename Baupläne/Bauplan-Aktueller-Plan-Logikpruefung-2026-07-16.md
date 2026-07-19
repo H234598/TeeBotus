@@ -15182,3 +15182,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
 - Neuer Zyklus seit diesem Restart: `13/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Weitere häufige Straßenarten
+
+- `Wall`, `Tor`, `Brücke/Bruecke`, `Bogen`, `Zeile`, `Stein`, `Winkel`, `Kamp`, `Koppel`, `Dorf`, `Feld` und `Wiesen` werden zentral erkannt.
+- Bestehende Street-Type-Tests bleiben aktiv; doppelter Testname wurde bereinigt, damit keine Testgruppe überschrieben wird.
+- Verifikation: `tests/test_weather_context.py` -> `188 passed`, dreizehn zusätzliche Street-Type-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `001ed14a fix: parse extended street types`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-8
+
+- `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
+- Neuer Zyklus seit diesem Restart: `14/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
