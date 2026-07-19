@@ -233,6 +233,7 @@ _KNOWN_CITY_DISTRICT_BASES = {
     "köln (deutz)": "Köln",
     "köln deutz": "Köln",
     "köln ehrenfeld": "Köln",
+    "münchen-schwabing": "München",
     "münchen schwabing": "München",
     "frankfurt am main (sachsenhausen)": "Frankfurt am Main",
     "frankfurt am main sachsenhausen": "Frankfurt am Main",
@@ -852,6 +853,7 @@ _LABELED_COUNTRY_CITY = re.compile(
     r"(?:(?:genauer(?:\s+gesagt)?|konkret|nämlich|naemlich|und\s+zwar|"
     r"besser\s+gesagt|sprich)\s*:?[ \t]+)?"
     r"(?:(?:in|bei)\s+)?"
+    rf"(?:{_COUNTRY_POSTAL_CODE}\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
     r"(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
