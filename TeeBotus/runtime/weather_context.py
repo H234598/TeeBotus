@@ -6814,7 +6814,15 @@ def _clean_city(value: str) -> str:
         first_sentence,
     ):
         return ""
-    city = CITY_TRAILING_STOP_RE.sub("", source).strip(" .,:;!?")
+    city = re.sub(
+        r"(?i)^(?:(?:nur|rein|bloß|bloss)\s+)?"
+        r"(?:vorübergehend|voruebergehend|zeitweise|temporär|temporaer|"
+        r"befristet|unbefristet|dauerhaft|permanent|kurzfristig|langfristig|"
+        r"vorläufig|vorlaeufig)\s+(?:in|bei)\s+",
+        "",
+        source,
+    ).strip()
+    city = CITY_TRAILING_STOP_RE.sub("", city).strip(" .,:;!?")
     city = re.sub(r"\s+", " ", city)
     city = re.sub(
         rf"(?i)\s+\({_PRIMARY_RESIDENCE_LABEL}\)$",
