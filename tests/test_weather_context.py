@@ -1288,6 +1288,7 @@ def test_extract_residence_city_preserves_compound_city_names() -> None:
     assert extract_residence_city("Ich wohne in Halle (Saale).") == "Halle (Saale)"
     assert extract_residence_city("Ich wohne in Frankfurt am Main.") == "Frankfurt am Main"
     assert extract_residence_city("Ich wohne in Frankfurt (Oder).") == "Frankfurt (Oder)"
+    assert extract_residence_city("Ich wohne in neustadt an der weinstraße.") == "Neustadt an der Weinstraße"
     assert extract_residence_city("Ich wohne in Neustadt an der Weinstraße.") == "Neustadt an der Weinstraße"
 
 

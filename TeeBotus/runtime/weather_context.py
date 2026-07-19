@@ -180,7 +180,7 @@ _KNOWN_COMPOUND_CITY_NAMES = {
     "königstein im taunus": "Königstein im Taunus",
     "ludwigshafen am rhein": "Ludwigshafen am Rhein",
     "mülheim an der ruhr": "Mülheim an der Ruhr",
-    "neustadt an der weinstraße": "Neustadt an der Weinstraße",
+    "neustadt an der weinstrasse": "Neustadt an der Weinstraße",
     "rüdesheim am rhein": "Rüdesheim am Rhein",
     "halle (saale)": "Halle (Saale)",
     "halle saale": "Halle (Saale)",
