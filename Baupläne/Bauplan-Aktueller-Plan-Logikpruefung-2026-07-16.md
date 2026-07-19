@@ -14915,7 +14915,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-3
 
 - `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
-- Neuer Zyklus seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `11/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Freie Straßenadress-Sätze
 
@@ -14986,3 +14986,10 @@ Restart erst bei `20/20`.
 - Komma- und Präpositionsvarianten funktionieren; `geschäftlich` und historische Statuszusätze bleiben ausgeschlossen.
 - Verifikation: `tests/test_weather_context.py` -> `164 passed`, vier Postposed-Residence-Status-Smokes plus Negativ-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `6f121412 fix: parse postposed residence status`.
+
+### Folgefix 2026-07-19: Beschriftete Statusadresse
+
+- `Wohnhaft:`, `ansässig in`, `gemeldet in`, `registriert:` und `Ich bin aktuell wohnhaft:` mit Straßenadresse werden erkannt.
+- Geschäftliche, historische und künftige Statusangaben bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `165 passed`, sechs Labeled-Residence-Status-Smokes plus Negativ-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `da55d3d6 fix: parse labeled residence status`.
