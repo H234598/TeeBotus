@@ -2797,6 +2797,16 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        rf"\b(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"adresse|wohnadresse|wohnanschrift|anschrift|meldeadresse|meldeanschrift|meldesitz)\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        rf"{_LABELED_STREET_ADDRESS}(?:\d{{5}}\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})"
+        r"(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:im|in\s+der|in\s+dem|in\s+einem|in\s+einer|in|am)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]*?)(?:er|(?<!s)s)\s+"
@@ -4058,6 +4068,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     )
     address_patterns = (
         re.compile(
+            rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+            r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s+"
+            r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+            rf"{street_address_prefix}{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
             rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
             rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
             r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
@@ -4325,7 +4343,9 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         comma_match = pattern.search(source)
         first = comma_match.groupdict().get("first", "") if comma_match else ""
         if first and re.search(
-            r"(?i)(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+\d+[a-z]?\b",
+            r"(?i)(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+\d+[a-z]?\b|"
+            r"(?:am|an der|an den|auf der|auf dem|auf den|unter der|unter den|in der|in den|"
+            r"im|zum|zur|vom|von der|vor der|hinter der)\s+[^,.;!?]{1,100}?\s+\d+[a-z]?\b",
             first,
         ):
             continue
@@ -4616,7 +4636,7 @@ def _clean_city(value: str) -> str:
         r"(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*|"
         r"künftig|kuenftig|zukünftig|zukuenftig|"
         r"aktuell|derzeit|momentan|gerade|jetzt|nun|inzwischen|mittlerweile|unklar|egal|"
-        r"nimmer|werktags|wochentags|hier|dort|da|sondern|"
+        r"nimmer|werktags|wochentags|hier|dort|da|sondern|liegt|befindet|"
         r"vielleicht|vermutlich|wahrscheinlich|wohl|angeblich|laut|derzeitig|ist|sind|bin|lautet|heißt|heisst|nennt|genannt|keineswegs|keinesfalls|niemals|nirgendwo|nirgends|nie|fast|beinahe|"
         r"möglicherweise|moeglicherweise|könnte|koennte|wäre|waere|würde|wuerde|"
         r"sollte|dürfte|duerfte|muss|müsste|muesste|nördlich|südlich|östlich|westlich|"
