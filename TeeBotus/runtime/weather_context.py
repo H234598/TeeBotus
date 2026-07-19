@@ -2404,7 +2404,8 @@ CITY_PATTERNS = (
         r"(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
         rf"{_LABELED_STREET_ADDRESS_CORE}"
-        r"(?=\s*(?:[.!?;,]|wohnhaft|ansässig|ansaessig|gemeldet|registriert|$))",
+        r"(?=\s*(?:[.!?;,]|wohnhaft|ansässig|ansaessig|gemeldet|registriert|"
+        r"und\s+(?:umgebung|region|nähe|naehe)|$))",
         re.IGNORECASE,
     ),
     re.compile(
@@ -4493,7 +4494,7 @@ def extract_residence_city(text: str) -> str:
 
 
 def _has_explicit_residence_multiplicity(source: str) -> bool:
-    multiplicity_source = source
+    multiplicity_source = re.sub(r"(?i)str\.(?=\s)", "str", source)
     if re.search(
         rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
         r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
@@ -4590,7 +4591,7 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
         r"\b(?:wohne|wohnen|lebe|leben)\b[^.!?;\n]*\b(?:und)\s+"
         r"(?:der\s+)?(?:umgebung|region|nähe|naehe)\s+von\s+"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}",
-        source,
+        multiplicity_source,
         re.IGNORECASE,
     ):
         return True
@@ -5239,7 +5240,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         rf"(?:{_STREET_COMPOUND_CITY_PATTERN}|[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)"
         rf"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+){_LABELED_STREET_ADDRESS_CORE}"
-        r"(?=\s*(?:[.!?;,]|wohnhaft|ansässig|ansaessig|gemeldet|registriert|$))",
+        r"(?=\s*(?:[.!?;,]|wohnhaft|ansässig|ansaessig|gemeldet|registriert|"
+        r"und\s+(?:umgebung|region|nähe|naehe)|$))",
         source,
         re.IGNORECASE,
     ):
