@@ -15602,3 +15602,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `8/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Geplante Wohnadresswechsel
+
+- `Ich plane/beabsichtige, meine Wohnadresse von ... nach ... zu verlegen` wird als Zukunft verworfen.
+- Ein bestehender aktueller Wohnort vor einem späteren Plan bleibt erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `221 passed`, zwei Plan-Smokes plus Current-before-plan-Regression, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8c13df14 fix: reject planned address moves`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-43
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `9/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
