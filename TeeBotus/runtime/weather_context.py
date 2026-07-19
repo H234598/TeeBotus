@@ -265,6 +265,7 @@ _STREET_TYPE = (
     r"(?:straße|strasse|str\.?|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade|"
     r"damm|kai|deich|hang|höhe|hoehe|park|terrasse|hof|berg|gürtel|guertel)"
 )
+_POSTAL_CODE = r"(?:[A-Z]{1,3}[- ]?)?\d{5}"
 _LABELED_STREET_ADDRESS_DETAIL = (
     r"(?:"
     r"(?:hinterhaus|vorderhaus|hinterhof|vorderhof|seitenflügel|seitenfluegel|"
@@ -282,7 +283,7 @@ _LABELED_STREET_ADDRESS_CORE = (
     r")"
     rf"(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?(?:[/-]\s*\d+[a-z]?|\s+[a-z])?(?:,\s*{_LABELED_STREET_ADDRESS_DETAIL})*"
 )
-_LABELED_STREET_ADDRESS = rf"{_LABELED_STREET_ADDRESS_CORE}(?:\s*,\s*|\s+)"
+_LABELED_STREET_ADDRESS = rf"{_LABELED_STREET_ADDRESS_CORE}(?:\s*,\s*|\s+)(?:{_POSTAL_CODE}\s+)?"
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -4333,6 +4334,11 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             re.IGNORECASE,
         ),
         re.compile(
+            rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+            rf"{street_address_prefix}{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
             rf"(?:^|[.!?;,\n]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*(?:wohnort|wohnsitz)\s+"
             rf"(?:ist|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?{city_capture}",
             re.IGNORECASE,
@@ -5018,7 +5024,8 @@ def _clean_city(value: str) -> str:
         "",
         city,
     ).strip()
-    city = re.sub(r"\s+\d{5}(?:-\d{4})?$", "", city)
+    city = re.sub(r"(?i)^(?:[A-Z]{1,3}[- ]?)?\d{5}\s+", "", city)
+    city = re.sub(r"(?i)\s+(?:[A-Z]{1,3}[- ]?)?\d{5}(?:-\d{4})?$", "", city)
     city = re.sub(
         r"(?i)\s+\((?:deutschland|österreich|oesterreich|schweiz)\)$",
         "",

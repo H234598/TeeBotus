@@ -1498,6 +1498,14 @@ def test_extract_residence_city_handles_additional_street_types() -> None:
     assert extract_residence_city("Ich wohne in Mustergürtel 5, Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_handles_international_postal_prefixes() -> None:
+    assert extract_residence_city("Ich wohne in Musterstraße 5, D-10115 Berlin.") == "Berlin"
+    assert extract_residence_city("Wohnadresse: Musterstraße 5, DE-10115 Berlin.") == "Berlin"
+    assert extract_residence_city("Meldeadresse: D 10115 Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in D-10115 Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Musterstraße 5, D-10115 Berlin; Meldeadresse Hamburg.") == ""
+
+
 def test_extract_residence_city_handles_house_number_words() -> None:
     assert extract_residence_city("Ich wohne in Musterstraße Nummer 5, Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne in Musterstraße Hausnummer 5, Berlin.") == "Berlin"
