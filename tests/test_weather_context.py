@@ -1376,6 +1376,12 @@ def test_extract_residence_city_accepts_activity_prefix_city_names() -> None:
     assert extract_residence_city("Ich wohne in Hamburg, weil ich arbeite.") == "Hamburg"
 
 
+def test_extract_residence_city_ignores_owned_secondary_property() -> None:
+    assert extract_residence_city("Ich wohne in Berlin und besitze ein Haus in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin und besitze eine Wohnung in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin und habe eine Wohnung in Hamburg.") == "Berlin"
+
+
 def test_extract_residence_city_rejects_unknown_label_values() -> None:
     assert extract_residence_city("Mein Wohnort ist irgendwo.") == ""
     assert extract_residence_city("Mein Wohnort ist unklar.") == ""

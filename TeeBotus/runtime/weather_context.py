@@ -6011,7 +6011,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"(?:(?:ich|wir)\s+)?schlaf\w*\b|(?:(?:ich|wir)\s+)?mach\w*\b|"
         r"(?:(?:ich|wir)\s+)?komm\w*\b|(?:(?:ich|wir)\s+)?fahr\w*\b|"
         r"(?:(?:ich|wir)\s+)?geh\w*\b|(?:(?:ich|wir)\s+)?zieh\w*\b|"
-        r"hab\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|pend\w*\b|"
+        r"hab\w*\b|besitz\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|pend\w*\b|"
         r"seh\w*\b|übernacht\w*\b|uebernacht\w*\b)[\wÄÖÜäöüß'-]+",
         source,
         re.IGNORECASE,
@@ -6039,7 +6039,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             r"(?!nicht\w*\b|(?:ich\s+)?(?:wohne|lebe)\s+nicht\b|"
             r"bin\b|sein\b|sind\s+(?:beruflich|dienstlich|zum\s+arbeiten)\b|arbeit\w*\b|studier\w*\b|lern\w*\b|zieh\w*\b|"
             r"schlaf\w*\b|mach\w*\b|komm\w*\b|fahr\w*\b|geh\w*\b|"
-            r"hab\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|"
+            r"hab\w*\b|besitz\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|"
             r"pend\w*\b|seh\w*\b|übernacht\w*\b|uebernacht\w*\b|"
             r"unser(?:e)?\s+(?:wohnort|wohnsitz|hauptwohnsitz|arbeitsort)\b)[\wÄÖÜäöüß'-]+",
             source,
