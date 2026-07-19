@@ -2175,7 +2175,7 @@ CITY_CHANGE_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich\s+)?(?:wohne|lebe)\s+(?:in|bei)\s+[^,.;!?]{1,80}[,;]\s*"
-        r"(?:genauer\s+gesagt|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s*:?[ \t]+"
+        r"(?:genauer(?:\s+gesagt)?|konkret|nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s*:?[ \t]+"
         r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
