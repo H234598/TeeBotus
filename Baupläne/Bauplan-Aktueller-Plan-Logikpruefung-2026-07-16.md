@@ -15519,3 +15519,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `1/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Doppelpunkt-Labels für alte/neue Adresse
+
+- `Alte Wohnadresse: Berlin, ...; Neue Wohnadresse: Hamburg, ...` und `Meine alte Wohnadresse: ...; Meine neue: ...` werden erkannt.
+- Der Multiplicity-Guard behandelt das explizite alte/neue Paar als Wechsel; Arbeitsadresse und zusätzliche `Meldeadresse` bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `214 passed`, zwei positive Colon-Label-Smokes plus Arbeits-/Melde-Negativfälle, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `170aec31 fix: preserve colon labelled address moves`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-36
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `2/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
