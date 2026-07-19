@@ -188,6 +188,7 @@ _KNOWN_COMPOUND_CITY_NAMES = {
     "wörth am rhein": "Wörth am Rhein",
     "weiden in der oberpfalz": "Weiden in der Oberpfalz",
     "weil am rhein": "Weil am Rhein",
+    "neustadt bei coburg": "Neustadt bei Coburg",
 }
 _STREET_COMPOUND_CITY_PATTERN = (
     r"(?:Brandenburg\s+an\s+der\s+Havel|Frankfurt\s+an\s+der\s+Oder|"
@@ -195,7 +196,7 @@ _STREET_COMPOUND_CITY_PATTERN = (
     r"Frankfurt\s+am\s+Main|Königstein\s+im\s+Taunus|Ludwigshafen\s+am\s+Rhein|"
     r"Mülheim\s+an\s+der\s+Ruhr|Neustadt\s+an\s+der\s+Weinstraße|"
     r"Rüdesheim\s+am\s+Rhein|Wörth\s+am\s+Rhein|Weiden\s+in\s+der\s+Oberpfalz|"
-    r"Weil\s+am\s+Rhein|St\.\s+Georgen\s+im\s+Schwarzwald)"
+    r"Weil\s+am\s+Rhein|Neustadt\s+bei\s+Coburg|St\.\s+Georgen\s+im\s+Schwarzwald)"
 )
 _KNOWN_CITY_DISTRICT_BASES = {
     "berlin-mitte": "Berlin",
@@ -764,6 +765,12 @@ _MAIN_RESIDENCE_CITY = re.compile(
     r"(?:ist|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
     r"(?=\s*(?:[.!?;,]|\b(?:und|sowie)\b|$))",
+    re.IGNORECASE,
+)
+_COMPOUND_CITY_RESIDENCE = re.compile(
+    r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+    rf"(?P<city>{_STREET_COMPOUND_CITY_PATTERN})"
+    r"(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
 _HAVE_PRIMARY_HOME_CITY_BEFORE_STREET = re.compile(
@@ -2591,6 +2598,7 @@ _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
     _MAIN_RESIDENCE_CITY_BEFORE_STREET,
     _MAIN_RESIDENCE_CITY,
+    _COMPOUND_CITY_RESIDENCE,
     _HAVE_PRIMARY_HOME_CITY_BEFORE_STREET,
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
@@ -4893,6 +4901,11 @@ def extract_residence_city(text: str) -> str:
 
     def latest_match(patterns: tuple[re.Pattern[str], ...]) -> str:
         candidates: list[tuple[int, str]] = []
+        compound_pattern = re.compile(
+            rf"(?<!\w)(?:{'|'.join(re.escape(name) for name in _KNOWN_COMPOUND_CITY_NAMES)})(?!\w)",
+            re.IGNORECASE,
+        )
+        compound_spans = tuple((match.start(), match.end()) for match in compound_pattern.finditer(source))
 
         def collect_matches(value: str, offset: int) -> None:
             for pattern in patterns:
@@ -4932,6 +4945,20 @@ def extract_residence_city(text: str) -> str:
                         continue
                     city = _clean_city(match.group("city"))
                     if city:
+                        # Generic patterns may match trailing pieces inside a known compound city.
+                        comparable_city_end = city_end
+                        while (
+                            comparable_city_end > city_start
+                            and source[comparable_city_end - 1] in " .,:;!?"
+                        ):
+                            comparable_city_end -= 1
+                        if any(
+                            span_start <= city_start
+                            and comparable_city_end <= span_end
+                            and (span_start, span_end) != (city_start, comparable_city_end)
+                            for span_start, span_end in compound_spans
+                        ):
+                            continue
                         candidates.append((city_start, city))
 
         collect_matches(source, 0)
