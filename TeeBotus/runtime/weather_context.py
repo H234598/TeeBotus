@@ -351,6 +351,11 @@ _PARENTHESIZED_AREA_STREET_ADDRESS = re.compile(
     rf"(?=\s*,\s*{_LABELED_STREET_ADDRESS_CORE}(?=\s*[.!?;,]|$))",
     re.IGNORECASE,
 )
+_PARENTHESIZED_STREET_DETAIL = re.compile(
+    rf"(?P<address>{_LABELED_STREET_ADDRESS_CORE})\s*\(\s*"
+    rf"{_LABELED_STREET_ADDRESS_DETAIL}\s*\)(?=\s*[,.;!?]|$)",
+    re.IGNORECASE,
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -4362,6 +4367,10 @@ def extract_residence_city(text: str) -> str:
     source = str(text or "")
     if source.strip().endswith("?"):
         return ""
+    source = _PARENTHESIZED_STREET_DETAIL.sub(
+        lambda match: match.group("address"),
+        source,
+    )
     source = _PARENTHESIZED_AREA_STREET_ADDRESS.sub(
         lambda match: f"in {match.group('city')}",
         source,
