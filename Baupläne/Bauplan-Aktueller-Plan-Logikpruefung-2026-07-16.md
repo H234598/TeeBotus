@@ -15338,3 +15338,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `6/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Stadtadjektiv plus Gebietsbegriff
+
+- `Berliner/Hamburger Umgebung`, `Münchner Gegend`, `Kölner Nähe` und `Hamburger Region` werden mit anschließender Straße auf die bekannte Stadt normalisiert.
+- Unbekannte Adjektive und Wohn-/Meldekonflikte bleiben ungeklärt bzw. leer.
+- Verifikation: `tests/test_weather_context.py` -> `200 passed`, fünf positive Area-Smokes plus unbekannte-/Konflikt-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `dc6bf269 fix: normalize adjectival city area addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-21
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `7/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
