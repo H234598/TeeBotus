@@ -15996,6 +15996,17 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `bc2412ea fix: ignore question prefixes as cities`.
 
+## Aktueller Ledger 2026-07-19-Post-Restart-5-11
+
+- `teebotus.service` aktiv/running, `MainPID 929669`, Start `2026-07-19 22:00:21 CEST`.
+- Neuer Zyklus seit diesem Restart: `11/20` Code-Fixes. Dieser Plan-Commit erreicht den 20-Commit-Restartpunkt; danach Service-Restart.
+
+### Folgefix 2026-07-19: Kurzform `genauer:`
+
+- `Ich lebe in Köln, genauer: Bonn.` liefert jetzt Bonn wie die bereits unterstuetzte Form `genauer gesagt:`.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0111779d fix: parse shorthand residence clarifications`.
+
 ## Aktueller Ledger 2026-07-19-Post-Restart-5-09
 
 - `teebotus.service` aktiv/running, `MainPID 929669`, Start `2026-07-19 22:00:21 CEST`.
