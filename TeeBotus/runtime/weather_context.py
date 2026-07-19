@@ -3982,7 +3982,9 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     )
     address_patterns = (
         re.compile(
-            r"\b(?:mein(?:e)?|unser(?:e)?)\s*"
+            rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+            r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+            r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
             r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+"
             rf"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?{city_capture}",
             re.IGNORECASE,
