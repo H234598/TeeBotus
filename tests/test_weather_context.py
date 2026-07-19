@@ -1489,6 +1489,15 @@ def test_extract_residence_city_handles_numbered_street_labels() -> None:
     assert extract_residence_city("Ich wohne in Hauptweg Nr. 7a, Hamburg.") == "Hamburg"
 
 
+def test_extract_residence_city_handles_additional_street_types() -> None:
+    assert extract_residence_city("Ich wohne in Musterdamm 5, Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Musterkai 5, Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Musterdeich 5, Köln.") == "Köln"
+    assert extract_residence_city("Ich wohne in Musterhöhe 5, Frankfurt.") == "Frankfurt"
+    assert extract_residence_city("Ich wohne in Musterpark 5, München.") == "München"
+    assert extract_residence_city("Ich wohne in Mustergürtel 5, Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_handles_house_number_words() -> None:
     assert extract_residence_city("Ich wohne in Musterstraße Nummer 5, Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne in Musterstraße Hausnummer 5, Berlin.") == "Berlin"
