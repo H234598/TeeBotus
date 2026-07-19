@@ -165,14 +165,22 @@ _IRREGULAR_CITY_ADJECTIVE_BASES = {
 _KNOWN_COMPOUND_CITY_NAMES = {
     "brandenburg an der havel": "Brandenburg an der Havel",
     "frankfurt an der oder": "Frankfurt an der Oder",
+    "frankfurt am main": "Frankfurt am Main",
     "königstein im taunus": "Königstein im Taunus",
     "ludwigshafen am rhein": "Ludwigshafen am Rhein",
     "mülheim an der ruhr": "Mülheim an der Ruhr",
+    "neustadt an der weinstraße": "Neustadt an der Weinstraße",
     "rüdesheim am rhein": "Rüdesheim am Rhein",
     "halle (saale)": "Halle (Saale)",
     "st. georgen im schwarzwald": "St. Georgen im Schwarzwald",
     "wörth am rhein": "Wörth am Rhein",
 }
+_STREET_COMPOUND_CITY_PATTERN = (
+    r"(?:Brandenburg\s+an\s+der\s+Havel|Frankfurt\s+an\s+der\s+Oder|"
+    r"Frankfurt\s+am\s+Main|Königstein\s+im\s+Taunus|Ludwigshafen\s+am\s+Rhein|"
+    r"Mülheim\s+an\s+der\s+Ruhr|Neustadt\s+an\s+der\s+Weinstraße|"
+    r"Rüdesheim\s+am\s+Rhein|Wörth\s+am\s+Rhein|St\.\s+Georgen\s+im\s+Schwarzwald)"
+)
 _KNOWN_CITY_DISTRICT_BASES = {
     "berlin-mitte": "Berlin",
     "berlin-kreuzberg": "Berlin",
@@ -2042,6 +2050,15 @@ CITY_CHANGE_PATTERNS = (
     ),
 )
 CITY_PATTERNS = (
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:(?:aktuell\w*|momentan\w*|derzeit\w*|inzwischen\w*|weiterhin\w*|jetzt\w*|nun\w*)\s+)?"
+        r"(?:in|bei)\s+"
+        rf"(?P<city>{_STREET_COMPOUND_CITY_PATTERN})\s+(?:in|an|auf|unter)\s+"
+        rf"{_LABELED_STREET_ADDRESS_CORE}"
+        r"(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:(?:aktuell\w*|momentan\w*|derzeit\w*|inzwischen\w*|weiterhin\w*|jetzt\w*|nun\w*)\s+)?"
