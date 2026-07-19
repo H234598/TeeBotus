@@ -9676,7 +9676,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-18-Post-Restart
 
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
-- Seit diesem Restart: `16/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-18: Artikel bei Adresslabels
 
@@ -14736,3 +14736,11 @@ Restart erst bei `20/20`.
 - Konfliktverknüpfung bleibt als Folgefix separat.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Street-Address-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `efd23d0a fix: parse labeled street residence addresses`.
+
+### Folgefix 2026-07-19: Straßenadress-Konflikte
+
+- `Wohnadresse: Musterstraße 5, Berlin; Meldeadresse Hamburg` wird als widersprüchlich verworfen.
+- `Meldeanschrift` und PLZ bei Straßenadressen werden im Konfliktguard berücksichtigt.
+- Gleiche Wohn-/Melde-Stadt bleibt gültig; Arbeitsadresse bleibt davon getrennt.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Street-Address-Conflict-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4f139661 fix: guard street residence address conflicts`.
