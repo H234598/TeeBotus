@@ -17,9 +17,9 @@ Planinhalt bleibt in den verlinkten Teilen erhalten. Kein Teil darf mehr als
 | Teil | Kategorie | Inhalt | Zeilen beim Split |
 | --- | --- | --- | ---: |
 | [[Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-01-Grundlagen-und-Fruehe-Funde]] | Grundlagen | Auftrag, Leitplanken, Akzeptanzkriterien, fruehe Befunde und Fixes | 4800 |
-| [[Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-02-Logikpruefung-Historie-Teil-1]] | Historie 1 | fortlaufende Logikpruefung und Regressionen | 4803 |
+| [[Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-02-Logikpruefung-Historie-Teil-1]] | Historie 1 | fortlaufende Logikpruefung und Regressionen | 4804 |
 | [[Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-03-Logikpruefung-Historie-Teil-2]] | Historie 2 | fortlaufende Logikpruefung und Regressionen | 4804 |
-| [[Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-04-Aktueller-Stand-und-Ledger]] | Aktiv | juengster Stand, Ledger, aktuelle Tests und Commits | 1624 |
+| [[Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-04-Aktueller-Stand-und-Ledger]] | Aktiv | juengster Stand, Ledger, aktuelle Tests und Commits | 1632 |
 
 Split erfolgte verlustfrei an Originalzeilen 1-4800, 4801-9600,
 9601-14400 und 14401-16020. Die Quellkopie liegt unter
@@ -43,10 +43,9 @@ Split erfolgte verlustfrei an Originalzeilen 1-4800, 4801-9600,
 
 ## Aktueller Arbeitsstand
 
-- Nach letztem Service-Restart: `MainPID 929669`, Start
-  `2026-07-19 22:00:21 CEST`.
-- Im aktuellen Fixzyklus sind `11/20` Code-Fixes dokumentiert. Der letzte
-  Plan-Commit erreicht den vereinbarten 20-Commit-Restartpunkt; Restart folgt.
+- Nach planmaessigem Service-Restart: `MainPID 1147780`, Start
+  `2026-07-19 22:49:53 CEST`.
+- Neuer Fixzyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
 - Letzter Code-Commit im Parserlauf:
   `0111779d fix: parse shorthand residence clarifications`.
 - Aktive Tests bleiben providerfrei. Kein Push ohne ausdrueckliche Freigabe.

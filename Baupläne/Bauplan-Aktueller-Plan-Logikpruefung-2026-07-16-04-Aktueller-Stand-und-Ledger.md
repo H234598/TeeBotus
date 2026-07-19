@@ -1622,3 +1622,11 @@
 - Eindeutige Einzelangabe `Ich wohne in Köln.` bleibt unveraendert.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `93e11163 fix: reject neither residence claims`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-6-00
+
+- `systemctl --user restart teebotus.service` erfolgreich.
+- Service aktiv/running, `MainPID 1147780`, Start `2026-07-19 22:49:53 CEST`.
+- Kanonischer Incoming-Vault im Prozess: `Teladi_Programming/incomming`.
+- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+- Plan-Katalog und Teilung: `935919c5 docs: catalog and split active build plans`.
