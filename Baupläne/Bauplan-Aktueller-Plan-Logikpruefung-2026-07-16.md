@@ -15350,3 +15350,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `7/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Country-Statuslabels
+
+- `Wohnhaft: Österreich, Wien, Musterstr. 5` und `Gemeldet: Schweiz, Zürich, Bahnhofstr. 3` nutzen jetzt denselben Country-Adresspfad wie Wohnadressen.
+- Konflikt- und Arbeitsadressschutz wurde im lokalen Guard synchronisiert.
+- Verifikation: `tests/test_weather_context.py` -> `201 passed`, Country-Status-Smokes plus Wohn-/Meldekonflikt und Arbeitsadresse, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `5cdc765d fix: parse country status labels`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-22
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `8/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
