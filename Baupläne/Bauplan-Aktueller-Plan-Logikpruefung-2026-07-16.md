@@ -14915,7 +14915,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-3
 
 - `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
-- Neuer Zyklus seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `19/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Freie Straßenadress-Sätze
 
@@ -15042,3 +15042,10 @@ Restart erst bei `20/20`.
 - Geschäftliche, historische und künftige Statuszusätze bleiben ausgeschlossen.
 - Verifikation: `tests/test_weather_context.py` -> `172 passed`, vier Status-Locality-Type-Smokes plus Negativ-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `ac0de80b fix: parse status locality labels`.
+
+### Folgefix 2026-07-19: Zusammengesetzte Städte vor Straßenadresse
+
+- `Brandenburg an der Havel`, `Frankfurt an der Oder`, `Mülheim an der Ruhr` und `Neustadt an der Weinstraße` bleiben vollständig erhalten.
+- Bekannte Compound-City-Namen werden vor generischer `an der`-Straßeninterpretation priorisiert.
+- Verifikation: `tests/test_weather_context.py` -> `173 passed`, vier Compound-City-Before-Street-Smokes plus kompletter Compound-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d6eb0f87 fix: preserve compound cities before streets`.
