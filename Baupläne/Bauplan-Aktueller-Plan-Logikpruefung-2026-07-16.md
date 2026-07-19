@@ -15495,3 +15495,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `19/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Straße vor Wohnadresslabel
+
+- `Berlin, Musterstr. 5 war meine alte Wohnadresse; Hamburg, Hauptweg 7 ist jetzt meine neue` und `frühere Wohnadresse Berlin, Musterstr. 5 ist vorbei, jetzt Hamburg, Hauptweg 7` werden erkannt.
+- Arbeitsadressen und zusätzliche `Meldeadresse` bleiben ausgeschlossen bzw. konfliktbehaftet.
+- Verifikation: `tests/test_weather_context.py` -> `212 passed`, zwei positive Street-before-Label-Smokes plus Arbeits-/Melde-Negativfälle, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4c52ae80 fix: parse street before residence label changes`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-34
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Zyklus abgeschlossen: `20/20` Code-Fixes. Kein Push. Neuer Zyklus startet ab nächstem Code-Fix mit `1/20`.
