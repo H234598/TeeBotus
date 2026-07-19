@@ -2612,6 +2612,21 @@ def test_extract_residence_city_handles_informal_street_first_moves() -> None:
     ) == ""
 
 
+def test_extract_residence_city_handles_colon_labelled_old_new_addresses() -> None:
+    assert extract_residence_city(
+        "Meine alte Wohnadresse: Berlin, Musterstr. 5. Meine neue: Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Alte Wohnadresse: Berlin, Musterstr. 5; Neue Wohnadresse: Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Meine alte Arbeitsadresse: Berlin, Musterstr. 5. Meine neue: Hamburg, Hauptweg 7."
+    ) == ""
+    assert extract_residence_city(
+        "Meine alte Wohnadresse: Berlin, Musterstr. 5. Meine neue: Hamburg, Hauptweg 7; Meldeadresse München."
+    ) == ""
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
