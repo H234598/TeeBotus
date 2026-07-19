@@ -1678,3 +1678,19 @@
 - Bestehende Strassenadressform `Wohnhaft: Österreich, Wien, Musterstr. 5.` bleibt Wien.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `a4e85011 fix: parse labeled country residence cities`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-7-00
+
+- `systemctl --user restart teebotus.service` erfolgreich.
+- Service aktiv/running, `MainPID 1405994`, Start `2026-07-19 23:53:28 CEST`.
+- Historische und abgeschlossene Baupläne liegen jetzt unter `../Abgeschlossene Baupläne/`; aktive Pläne bleiben in `../Baupläne/`.
+- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix-Batch 2026-07-19: Residence-Kontext und Archivregel
+
+- Residence-Parser erkennt primäre Wohnortangaben, registrierte Wohnsitze, nahe Stadtangaben, Stadtteile und temporäre/zeitliche Ausschlüsse robuster.
+- Mehrdeutige Großraum-, Raum-, Gebiet-, Umland- und Außenbereichsangaben mit mehreren Städten werden verworfen; Arbeits-/Besuchs-/Wochenendkontext bleibt getrennt.
+- `... und Umgebung` bleibt als gültiger Einzel-Ortszusatz erhalten; `... und Umgebung von <zweiter Ort>` bleibt mehrdeutig.
+- Verifikation nach jedem Fix: `tests/test_weather_context.py` -> `234 passed`, `py_compile`, Smoke-Checks und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commits: `6ffb5a6e`, `4cd20aa9`, `f35c40e6`, `d9334ad8`, `7bc32fbc`, `cea65151`, `752acd48`, `b28fd58d`, `f14de223`, `7f0c030f`, `3eceb6c8`, `96f18a74`, `f0f4ce64`.
+- Archiv-/README-Commits: `c4a57c1e`, `9afa480a`, `4e2397d7`.
