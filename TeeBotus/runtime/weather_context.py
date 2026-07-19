@@ -2759,7 +2759,9 @@ CITY_PATTERNS = (
         rf"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+ist\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
-        r"haupt\w*|jetzig\w*|derzeitig\w*|gegenwärtig|gegenwaertig)\s+)?"
+        r"haupt\w*|jetzig\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
+        r"vorübergehend\w*|voruebergehend\w*|zeitweise|temporär\w*|temporaer\w*|"
+        r"befristet\w*|unbefristet\w*|dauerhaft\w*|permanent|vorläufig\w*|vorlaeufig\w*)\s+)?"
         r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift)\b",
         re.IGNORECASE,
     ),
