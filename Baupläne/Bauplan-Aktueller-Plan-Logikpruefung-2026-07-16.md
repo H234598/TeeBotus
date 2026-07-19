@@ -9676,7 +9676,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-18-Post-Restart
 
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
-- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `20/20` Code-Fixes. Restart jetzt fällig; kein Push.
 
 ### Folgefix 2026-07-18: Artikel bei Adresslabels
 
@@ -14758,3 +14758,11 @@ Restart erst bei `20/20`.
 - Direkte Erkennung und Straßenadress-Konfliktguard verwenden dieselbe Variantenlogik.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Compound-House-Number-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `fd28e27c fix: parse compound street house numbers`.
+
+### Folgefix 2026-07-19: Abgekürzte Straßennamen
+
+- `Musterstr. 5, Berlin` und `Hauptstr. 7, Berlin` werden erkannt.
+- `_clean_city` verwirft Straßenfragmente wie `Musterstr. 5` nicht mehr als scheinbare Stadt.
+- Konflikte mit abweichender Meldeadresse bleiben geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Street-Abbreviation-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b9ee8504 fix: support abbreviated street names`.
