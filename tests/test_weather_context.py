@@ -1574,6 +1574,12 @@ def test_extract_residence_city_handles_house_number_words() -> None:
     assert extract_residence_city("Ich wohne in Musterstraße Hs.-Nr. 5, Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_does_not_store_street_details_as_city() -> None:
+    assert extract_residence_city("Ich wohne in Berlin in der Musterstraße 5, Hinterhaus.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Hamburg in der Hauptstraße 7, 2. OG links.") == "Hamburg"
+    assert extract_residence_city("Meine Wohnadresse ist in Köln, Nebenweg 3, Wohnung B.") == "Köln"
+
+
 def test_extract_residence_city_handles_city_before_street_without_comma() -> None:
     assert extract_residence_city("Ich wohne in Berlin in der Musterstraße 5.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin an der Musterstraße Nr. 5.") == "Berlin"

@@ -5359,6 +5359,8 @@ def _clean_city(value: str) -> str:
         "",
         city,
     ).strip()
+    if re.fullmatch(rf"(?i)(?:{_LABELED_STREET_ADDRESS_DETAIL}|links|rechts)", city):
+        return ""
     city = _IRREGULAR_CITY_ADJECTIVE_BASES.get(city.casefold(), city)
     city = _GENITIVE_CITY_REPAIRS.get(city.casefold(), city)
     if not city or len(city) < 2 or len(city) > MAX_CITY_LENGTH:
