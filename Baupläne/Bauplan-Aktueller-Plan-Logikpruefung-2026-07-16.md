@@ -15857,3 +15857,15 @@ Restart erst bei `20/20`.
 - Das gilt auch fuer `befindet sich` und `und`-Verknuepfungen; eine explizite Zweitwohnung ueberschreibt den Hauptort nicht.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `aa10c31c fix: recognize primary home without street address`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-64
+
+- `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
+- Neuer Zyklus seit diesem Restart: `9/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Zeitliche Fremdorte nicht als Konflikt
+
+- Historische Adressen und zukuenftige Wohnorte werden aus Konflikt-/Mehrfachwohnortmengen ausgeschlossen.
+- `Ich wohne in Berlin, meine alte Adresse ist in Hamburg` und `Mein zukuenftiger Wohnort ist Hamburg` behalten Berlin als aktuellen Wohnort.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `992d8cbd fix: ignore temporal residence conflicts`.
