@@ -2477,6 +2477,27 @@ def test_extract_residence_city_does_not_split_compound_residence_labels() -> No
     assert extract_residence_city("Wohnort: Hamburg.") == "Hamburg"
 
 
+def test_extract_residence_city_handles_move_verbs_before_street_addresses() -> None:
+    assert extract_residence_city(
+        "Ich bin aus Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7 umgezogen."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Ich zog von Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Umzug von Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7: neue Wohnadresse."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Von Berlin, Musterstr. 5 bin ich nach Hamburg, Hauptweg 7 gezogen."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Ich bin aus Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7 umgezogen; Meldeadresse München."
+    ) == ""
+    assert extract_residence_city(
+        "Ich bin aus Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7 gefahren."
+    ) == ""
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
