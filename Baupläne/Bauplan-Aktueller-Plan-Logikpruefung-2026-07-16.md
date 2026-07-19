@@ -15649,3 +15649,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `12/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Hauptwohnung vor Zweitwohnung mit `und`
+
+- `Hauptwohnung befindet sich in Berlin, ... und die Zweitwohnung in Hamburg, ...` akzeptiert Anschlusswörter nach der primären Straßenadresse.
+- Primäre `Berlin`-Adresse bleibt erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `224 passed`, Main-before-Secondary-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `cfc84244 fix: preserve main home before secondary home`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-47
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `13/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
