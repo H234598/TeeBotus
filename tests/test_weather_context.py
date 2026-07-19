@@ -115,6 +115,7 @@ def test_extract_residence_city_from_common_german_phrases() -> None:
     assert extract_residence_city("Ich lebe in Köln, genauer: Bonn.") == "Bonn"
     assert extract_residence_city("Ich wohne in Berlin, meine Wohnadresse ist Potsdam.") == ""
     assert extract_residence_city("Meine Adresse ist Hamburg, mein Wohnort Berlin.") == ""
+    assert extract_residence_city("Meine frühere Adresse war Köln, meine aktuelle ist Bonn.") == "Bonn"
     assert extract_residence_city("Ich wohne teilweise in Hamburg und teilweise in Berlin.") == ""
     assert extract_residence_city("Hamburg war mein Wohnort, heute ist es Berlin.") == "Berlin"
     assert extract_residence_city("Hamburg war mein Wohnort, heute bin ich in Berlin.") == "Berlin"
