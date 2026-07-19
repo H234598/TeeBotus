@@ -817,6 +817,13 @@ _HAVE_PRIMARY_HOME_CITY_BEFORE_STREET = re.compile(
     r"(?=\s*[.!?;,]|$)",
     re.IGNORECASE,
 )
+_HAVE_PRIMARY_HOME_CITY = re.compile(
+    r"\b(?:ich|wir)\s+hab(?:e|en)?\s+"
+    r"(?:meine|unsere|eine|ein)\s+hauptwohnung\s+(?:in|bei)\s+"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+    r"(?=\s*(?:und|[,;]|$))",
+    re.IGNORECASE,
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -2636,6 +2643,7 @@ CITY_PATTERNS = (
     _QUALIFIED_RESIDENCE,
     _REGIONAL_PREFIX_RESIDENCE,
     _HAVE_PRIMARY_HOME_CITY_BEFORE_STREET,
+    _HAVE_PRIMARY_HOME_CITY,
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         rf"{_COUNTRY_CITY_BEFORE_STREET}",
