@@ -2398,6 +2398,12 @@ def test_extract_residence_city_handles_district_city_with_abbreviated_street() 
     assert extract_residence_city("Wohnhaft: Musterstr. 5, Berlin (Kreuzberg).") == "Berlin"
 
 
+def test_extract_residence_city_handles_postal_and_status_address_variants() -> None:
+    assert extract_residence_city("Ich wohne in 10115 Berlin, Musterstr. 5.") == "Berlin"
+    assert extract_residence_city("Wohnadresse: 10115 Berlin, Musterstr. 5.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, Musterstr. 5 wohnhaft.") == "Berlin"
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"

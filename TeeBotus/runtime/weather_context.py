@@ -2365,7 +2365,7 @@ CITY_PATTERNS = (
         r"(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
         rf"{_LABELED_STREET_ADDRESS_CORE}"
-        r"(?=\s*[.!?;,]|$)",
+        r"(?=\s*(?:[.!?;,]|wohnhaft|ansässig|ansaessig|gemeldet|registriert|$))",
         re.IGNORECASE,
     ),
     re.compile(
@@ -5200,7 +5200,14 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         rf"(?:{_STREET_COMPOUND_CITY_PATTERN}|[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)"
         rf"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+){_LABELED_STREET_ADDRESS_CORE}"
-        r"(?=\s*[.!?;,]|$)",
+        r"(?=\s*(?:[.!?;,]|wohnhaft|ansässig|ansaessig|gemeldet|registriert|$))",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"{_POSTAL_CITY_BEFORE_STREET}",
         source,
         re.IGNORECASE,
     ):
@@ -5213,6 +5220,16 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         rf"(?:{_STREET_COMPOUND_CITY_PATTERN}|[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)"
         r"(?:\s+\([^)]{1,30}\))?(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
         rf"{_LABELED_STREET_ADDRESS_CORE}(?=\s*[.!?;,]|$)",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
+        r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
+        r"meldesitz)\s*(?::|=|,)\s*(?:(?:in|bei)\s+)?"
+        rf"{_POSTAL_CITY_BEFORE_STREET}",
         source,
         re.IGNORECASE,
     ):
