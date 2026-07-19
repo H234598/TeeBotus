@@ -2477,6 +2477,12 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"(?:^|[.!?;\n]\s*)(?:von|aus)\s+[^,.;!?]{1,80}\s+nach\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+"
+        r"(?:gezogen|umgezogen|gewechselt|weggezogen|übersiedelt|uebergesiedelt)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich\s+)?habe\s+(?:meinen|den)\s+(?:wohnort|wohnsitz)\s+(?:von|aus)\s+"
         r"[^,.;!?]{1,80}\s+nach\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})\s+verlegt\b",
         re.IGNORECASE,

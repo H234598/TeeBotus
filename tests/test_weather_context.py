@@ -602,6 +602,12 @@ def test_extract_residence_city_from_move_phrases() -> None:
     assert extract_residence_city("Ich bin in Berlin nach Hamburg umgezogen.") == "Hamburg"
     assert extract_residence_city("Ich bin von Berlin nach Hamburg umgezogen.") == "Hamburg"
     assert extract_residence_city("Ich bin aus Berlin nach Hamburg umgezogen.") == "Hamburg"
+
+
+def test_extract_residence_city_handles_subjectless_move_fragment() -> None:
+    assert extract_residence_city("Von Hamburg nach Berlin gezogen.") == "Berlin"
+    assert extract_residence_city("Aus Hamburg nach Berlin umgezogen.") == "Berlin"
+    assert extract_residence_city("Sie ist von Hamburg nach Berlin gezogen.") == ""
     assert extract_residence_city("Ich zog von Berlin nach Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich bin von Berlin nach Hamburg gewechselt.") == "Hamburg"
     assert extract_residence_city("Ich bin von Berlin nach Hamburg weggezogen.") == "Hamburg"
