@@ -2498,6 +2498,24 @@ def test_extract_residence_city_handles_move_verbs_before_street_addresses() -> 
     ) == ""
 
 
+def test_extract_residence_city_handles_current_city_first_address_moves() -> None:
+    assert extract_residence_city(
+        "Ich habe jetzt Hamburg, Hauptweg 7 als Wohnadresse statt Berlin, Musterstr. 5."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Meine Wohnanschrift hat sich geändert: Hamburg, Hauptweg 7, früher Berlin, Musterstr. 5."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Die Wohnadresse ist jetzt Hamburg, Hauptweg 7 und nicht mehr Berlin, Musterstr. 5."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Ich habe jetzt Hamburg, Hauptweg 7 als Arbeitsadresse statt Berlin, Musterstr. 5."
+    ) == ""
+    assert extract_residence_city(
+        "Meine Wohnanschrift hat sich geändert: Hamburg, Hauptweg 7, früher Berlin, Musterstr. 5; Meldeadresse München."
+    ) == ""
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
