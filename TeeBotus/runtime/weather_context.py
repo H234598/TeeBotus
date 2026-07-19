@@ -2750,6 +2750,11 @@ CITY_PATTERNS = (
     _COMPOUND_CITY_RESIDENCE,
     _QUALIFIED_RESIDENCE,
     _CURRENT_RESIDENCE_LABEL_CITY,
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
+        rf"\({_PRIMARY_RESIDENCE_LABEL}\)(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
     _TEMPORAL_REGISTERED_CITY,
     _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET,
     _LABELED_COUNTRY_CITY,
