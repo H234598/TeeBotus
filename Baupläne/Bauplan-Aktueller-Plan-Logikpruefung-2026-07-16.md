@@ -14610,7 +14610,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Neuer Zyklus seit diesem Restart: `5/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `6/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Weitere Straßenarten
 
@@ -14646,6 +14646,13 @@ Restart erst bei `20/20`.
 - Historische Statussätze bleiben ausgeschlossen; Arbeitskontext bleibt zulässig.
 - Verifikation: `tests/test_weather_context.py` -> `179 passed`, vier Residence-Verb-Status-Smokes plus Negativ-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `27bf9812 fix: stop residence city before status suffix`.
+
+### Folgefix 2026-07-19: Komma vor Zuhause-Adverb
+
+- `Ich wohne/bin in Berlin, zuhause/zu Hause/daheim` und Pluralvarianten liefern Berlin.
+- Generisches Daheim-Fallback wird für direkte Wohnsätze und den eindeutigen Kommaabschluss nicht als falsche Subjekt-Stadt verwendet; Mehrfachorte bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `180 passed`, vier Comma-Home-Smokes plus zwei Ambiguitäts-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3e29ca30 fix: parse comma home adverb sentences`.
 
 ### Folgefix 2026-07-19: Verbfreie Wohnadress-Labels
 
