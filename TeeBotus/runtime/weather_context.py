@@ -175,6 +175,7 @@ _CITY_AREA_ADJECTIVE_BASES = {
 _KNOWN_COMPOUND_CITY_NAMES = {
     "brandenburg an der havel": "Brandenburg an der Havel",
     "frankfurt an der oder": "Frankfurt an der Oder",
+    "frankfurt (oder)": "Frankfurt (Oder)",
     "frankfurt am main": "Frankfurt am Main",
     "königstein im taunus": "Königstein im Taunus",
     "ludwigshafen am rhein": "Ludwigshafen am Rhein",
@@ -188,6 +189,7 @@ _KNOWN_COMPOUND_CITY_NAMES = {
 }
 _STREET_COMPOUND_CITY_PATTERN = (
     r"(?:Brandenburg\s+an\s+der\s+Havel|Frankfurt\s+an\s+der\s+Oder|"
+    r"Frankfurt\s+\(Oder\)|"
     r"Frankfurt\s+am\s+Main|Königstein\s+im\s+Taunus|Ludwigshafen\s+am\s+Rhein|"
     r"Mülheim\s+an\s+der\s+Ruhr|Neustadt\s+an\s+der\s+Weinstraße|"
     r"Rüdesheim\s+am\s+Rhein|Wörth\s+am\s+Rhein|St\.\s+Georgen\s+im\s+Schwarzwald)"
@@ -4936,6 +4938,13 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
             _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
             _CITY_CHANGE_LABELLED_COLON_SEPARATOR_STREET,
         )
+    ):
+        return False
+    if re.search(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"{_STREET_COMPOUND_CITY_PATTERN}(?=\s*[.!?;,]|$)",
+        source,
+        re.IGNORECASE,
     ):
         return False
     if re.search(
