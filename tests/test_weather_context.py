@@ -1510,6 +1510,13 @@ def test_extract_residence_city_handles_labeled_city_before_street() -> None:
     assert extract_residence_city("Mein Wohnsitz liegt in Frankfurt am Main in der Musterstraße 5.") == "Frankfurt am Main"
 
 
+def test_extract_residence_city_handles_postposed_residence_status() -> None:
+    assert extract_residence_city("Ich bin in Berlin in der Musterstraße 5 wohnhaft.") == "Berlin"
+    assert extract_residence_city("Ich bin in Hamburg, Hauptweg 7 ansässig.") == "Hamburg"
+    assert extract_residence_city("Ich bin in Köln in der Musterstraße 5 gemeldet.") == "Köln"
+    assert extract_residence_city("Ich bin in Frankfurt am Main in der Musterstraße 5 registriert.") == "Frankfurt am Main"
+
+
 def test_extract_residence_city_trims_trailing_evidence_filler() -> None:
     assert extract_residence_city("Wohnort: Berlin laut Meldeadresse.") == "Berlin"
     assert extract_residence_city("Wohnort: Berlin laut Profil.") == "Berlin"
