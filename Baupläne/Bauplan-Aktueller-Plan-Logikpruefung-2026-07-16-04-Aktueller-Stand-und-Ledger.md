@@ -1642,3 +1642,15 @@
 - Eine reine Zweitwohnung bleibt ausgeschlossen; Strassenadress-Varianten bleiben unveraendert.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `259c0fff fix: recognize primary home without street address`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-6-02
+
+- `teebotus.service` aktiv/running, `MainPID 1147780`, Start `2026-07-19 22:49:53 CEST`.
+- Neuer Zyklus seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: City-only-Adresswechsel
+
+- `Meine fruehere Adresse war Koeln, meine aktuelle ist Bonn.` liefert jetzt Bonn.
+- Eine einzelne alte Adresse bleibt ausgeschlossen; der Fix braucht keinen Strassenadress-Parser.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e6f2e37c fix: parse city-only address changes`.
