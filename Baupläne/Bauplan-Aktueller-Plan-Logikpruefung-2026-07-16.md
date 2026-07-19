@@ -15637,3 +15637,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `11/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Hauptwohnung gegenüber Zweitwohnung
+
+- `Meine Hauptwohnung ist in Berlin, ...` wird als Hauptwohnsitz erkannt; `Zweitwohnung` wird nicht fälschlich als Wohnort übernommen.
+- Bei Haupt- und Zweitwohnung gewinnt primäre `Berlin`-Adresse.
+- Verifikation: `tests/test_weather_context.py` -> `224 passed`, drei Main-/Secondary-Home-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3b4fa631 fix: recognize main home street addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-46
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `12/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
