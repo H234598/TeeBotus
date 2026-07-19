@@ -268,7 +268,7 @@ _LABELED_STREET_ADDRESS = (
     r"(?:am|an der|an den|auf der|auf dem|auf den|unter der|unter den|in der|in den|"
     r"im|zum|zur|vom|von der|vor der|hinter der)\s+[^,.;!?]{1,100}?\s+"
     r")"
-    rf"\d+[a-z]?(?:[/-]\s*\d+[a-z]?|\s+[a-z])?(?:,\s*{_LABELED_STREET_ADDRESS_DETAIL})*(?:\s*,\s*|\s+)"
+    rf"(?:Nr\.?\s*)?\d+[a-z]?(?:[/-]\s*\d+[a-z]?|\s+[a-z])?(?:,\s*{_LABELED_STREET_ADDRESS_DETAIL})*(?:\s*,\s*|\s+)"
 )
 
 CITY_CHANGE_PATTERNS = (
@@ -4467,9 +4467,9 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         comma_match = pattern.search(source)
         first = comma_match.groupdict().get("first", "") if comma_match else ""
         if first and re.search(
-            r"(?i)(?:straße|strasse|str\.?|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+\d+[a-z]?\b|"
+            r"(?i)(?:straße|strasse|str\.?|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+(?:Nr\.?\s*)?\d+[a-z]?\b|"
             r"(?:am|an der|an den|auf der|auf dem|auf den|unter der|unter den|in der|in den|"
-            r"im|zum|zur|vom|von der|vor der|hinter der)\s+[^,.;!?]{1,100}?\s+\d+[a-z]?\b",
+            r"im|zum|zur|vom|von der|vor der|hinter der)\s+[^,.;!?]{1,100}?\s+(?:Nr\.?\s*)?\d+[a-z]?\b",
             first,
         ):
             continue
@@ -4712,7 +4712,7 @@ def _ensure_weather_state(state: dict[str, Any]) -> dict[str, Any]:
 def _clean_city(value: str) -> str:
     source = str(value or "")
     if re.search(
-        r"(?i)(?:straße|strasse|str\.?)\s+\d+[a-z]?(?:[/-]\s*\d+[a-z]?|\s+[a-z])?\b",
+        r"(?i)(?:straße|strasse|str\.?)\s+(?:Nr\.?\s*)?\d+[a-z]?(?:[/-]\s*\d+[a-z]?|\s+[a-z])?\b",
         source,
     ):
         return ""
