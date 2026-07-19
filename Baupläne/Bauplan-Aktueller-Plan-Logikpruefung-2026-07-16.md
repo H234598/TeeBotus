@@ -14620,7 +14620,15 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, fünf Address/Origin-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `a6010b83 fix: track verbless residence address labels`.
 
+### Folgefix 2026-07-19: Qualifizierte verbfreie Wohnlabels
+
+- `aktuelle/offizielle/gemeldete Wohnadresse` und `offizieller/gemeldeter Wohnsitz` werden erkannt.
+- Verb-Füller `war/liegt` werden nicht als Stadt übernommen.
+- Wohnadresse/Meldeadresse-Konflikt bleibt leer.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, neun Qualified-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `797aec0b fix: parse qualified verbless residence labels`.
+
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `2/20` Code-Fixes. Kein Push.
