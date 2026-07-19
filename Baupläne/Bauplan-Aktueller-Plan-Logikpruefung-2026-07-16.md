@@ -14610,7 +14610,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Neuer Zyklus seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `2/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Weitere Straßenarten
 
@@ -14618,6 +14618,13 @@ Restart erst bei `20/20`.
 - Straßenparser, Fallbacks, `_clean_city` und Ambiguitätsguard verwenden gemeinsamen `_STREET_TYPE`.
 - Verifikation: `tests/test_weather_context.py` -> `175 passed`, sechs Additional-Street-Type-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `c14d6455 fix: parse additional street types`.
+
+### Folgefix 2026-07-19: Internationale PLZ-Präfixe
+
+- `D-10115`, `DE-10115` und `D 10115` werden in Straßen- und Labeladressen erkannt.
+- Direkte Wohnadresse mit abweichender Meldeadresse bleibt durch Konfliktguard leer.
+- Verifikation: `tests/test_weather_context.py` -> `176 passed`, vier International-Postal-Prefix-Smokes plus Konflikt-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ac20b363 fix: parse international postal prefixes`.
 
 ### Folgefix 2026-07-19: Verbfreie Wohnadress-Labels
 
