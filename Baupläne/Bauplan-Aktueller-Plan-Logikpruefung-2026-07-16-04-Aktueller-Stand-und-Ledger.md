@@ -1749,3 +1749,21 @@
 - Verifikation: `tests/test_weather_context.py` -> `237 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commits: `15780d8b`, `fe41f666`, `2d460dc1`, `f4a7f4d8`, `17c6f332`, `8f7f0b9e`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-02
+
+- `teebotus.service` aktiv/running, `MainPID 1697303`, Start `2026-07-20 01:04:25 CEST`.
+- Neuer Zyklus seit diesem Restart: `10/20` Code-Fixes. Kein Push.
+
+### Folgefix-Batch 2026-07-20: Inverse Zeit- und Jahresendqualifier
+
+- Inverse `ist mein Wohnort`-Formen mit `seit gestern`, `ab sofort` und
+  `bis zum Jahresende` werden erkannt.
+- Zukuenftige und historische Suffixe (`ab morgen`, `gewesen`) werden nicht
+  als aktueller Wohnort gespeichert.
+- Gleiche Zeitfilter gelten fuer `Wohnadresse`, `Hauptadresse` und
+  `Meldeadresse`; direkte `bis zum Jahresende`-Formen funktionieren vor und
+  nach der Stadt.
+- Verifikation: `tests/test_weather_context.py` -> `237 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commits: `641fb901`, `2e90b7b1`, `f00a8c76`, `4a69137a`.
