@@ -15881,3 +15881,9 @@ Restart erst bei `20/20`.
 - Kasus-/Pluralformen wie `meines Arztes`, `meiner Nachbarn` und `meiner Großeltern` ueberschreiben den eigenen Wohnort nicht mehr.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `53d80e86 fix: cover additional foreign residence labels`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-5-00
+
+- `teebotus.service` nach planmaessigem Restart aktiv/running, `MainPID 929669`, Start `2026-07-19 22:00:21 CEST`.
+- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+- Der Prozess laedt jetzt die kanonische Vault-Konfiguration aus `Teladi_Programming`; der alte Vault bleibt EOL und unangetastet.
