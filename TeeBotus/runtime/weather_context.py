@@ -3826,7 +3826,10 @@ def _has_conflicting_direct_residence_labels(source: str) -> bool:
 
 
 def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
-    prefix = source[:pattern_start]
+    prefix_source = source[:pattern_start]
+    if pattern_start < len(source) and source[pattern_start] in ",;":
+        prefix_source += source[pattern_start]
+    prefix = re.split(r"[,;]\s*", prefix_source)[-1]
     if re.search(r"\b(?:dein(?:e)?|euer(?:e)?)\s*$", prefix, re.IGNORECASE) and re.match(
         r"\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\b",
@@ -3839,7 +3842,7 @@ def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
             r"(?:\b(?:dienst\w*|beruf\w*|arbeits[-\s]?\w*|geschäft\w*|geschaeft\w*|büro\w*|buero\w*)\s*|"
             r"\b(?:der|die|das|sein(?:e|en|em|er)?|ihr(?:e|en|em|er)?|deren)\s*|"
             r"\bkein(?:e|en|er|em)?\s+(?:fest(?:e|en|er|em)?\s*)?\s*)$",
-            source[:pattern_start],
+            prefix,
             re.IGNORECASE,
         )
     )
