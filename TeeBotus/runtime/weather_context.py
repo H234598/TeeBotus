@@ -272,10 +272,12 @@ _RESIDENCE_DISTANCE_PREFIX = (
 )
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 _OTHER_PERSON_RESIDENCE_LABEL = (
-    r"(?:freund(?:in)?|partner(?:in)?|eltern|familie|kinder|mutter|vater|"
-    r"tochter|sohn|bruder|schwester|geschwister|frau|mann\w*|ehefrau|"
-    r"ehemann|ehepartner(?:in)?|kolleg(?:e|in|en)|mitbewohner(?:in)?|"
-    r"nachbar(?:in)?|chef\w*|vorgesetz\w*)"
+    r"(?:freund\w*|partner\w*|eltern|familie|kind\w*|mutter\w*|vater\w*|"
+    r"tochter\w*|sohn\w*|bruder\w*|schwester\w*|geschwister|frau\w*|"
+    r"mann\w*|ehefrau\w*|ehemann\w*|ehepartner\w*|kolleg\w*|"
+    r"mitbewohner\w*|nachbar\w*|chef\w*|vorgesetz\w*|oma\w*|opa\w*|"
+    r"großeltern|grosseltern|cousin\w*|lebensgefährt\w*|lebensgefaehrt\w*|"
+    r"betreuer\w*|therapeut\w*|arzt\w*)"
 )
 _OTHER_RESIDENCE_OWNER_LABEL = (
     rf"(?:{_OTHER_PERSON_RESIDENCE_LABEL}|arbeitgeber(?:s)?|firma|unternehmen|"
