@@ -248,6 +248,21 @@ _RESIDENCE_LABEL_DETERMINER = (
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        rf"(?:^|[.!?;,\n]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse|"
+        r"meldeadresse|meldeanschrift|meldesitz)\s+"
+        r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,\s*"
+        r"(?:genauer\s+genommen|genauer\s+gesagt|beziehungsweise|bzw\.?|konkret|"
+        r"nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s*:?\s*"
+        r"(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz)\s*[:=]?\s*"
         r"(?:in\s+)?(?:deutschland|österreich|oesterreich|(?:der\s+)?schweiz)\s*[,;]\s*"
