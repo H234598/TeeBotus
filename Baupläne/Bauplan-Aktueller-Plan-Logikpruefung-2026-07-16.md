@@ -15158,3 +15158,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
 - Neuer Zyklus seit diesem Restart: `11/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: PLZ-Status mit Straßenadresse
+
+- `Ich bin in 10115 Berlin ... wohnhaft`, `Wohnhaft: 10115 Berlin, ...` und Varianten mit Komma/Leerzeichen werden erkannt.
+- PLZ-Status mit abweichender Meldeadresse bleibt mehrdeutig und liefert leer.
+- Verifikation: `tests/test_weather_context.py` -> `186 passed`, vier Status-Positivformen plus Konflikt-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c29f1a6f fix: parse postal status street forms`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-6
+
+- `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
+- Neuer Zyklus seit diesem Restart: `12/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
