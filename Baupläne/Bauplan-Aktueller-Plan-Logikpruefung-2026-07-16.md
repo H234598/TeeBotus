@@ -14610,7 +14610,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Neuer Zyklus seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `5/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Weitere Straßenarten
 
@@ -14639,6 +14639,13 @@ Restart erst bei `20/20`.
 - Breites Daheim-Fallback blockiert jetzt auch `Ich/Wir bin/sind`; historische Negation bleibt ausgeschlossen.
 - Verifikation: `tests/test_weather_context.py` -> `178 passed`, bestehende Home-Smokes plus Plural-Status-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `65472c67 fix: parse plural home status`.
+
+### Folgefix 2026-07-19: Statussuffix nach Wohnverb
+
+- `Ich wohne/lebe in Berlin wohnhaft/ansässig/gemeldet/registriert` liefert Berlin statt Statussuffix im Stadtwert.
+- Historische Statussätze bleiben ausgeschlossen; Arbeitskontext bleibt zulässig.
+- Verifikation: `tests/test_weather_context.py` -> `179 passed`, vier Residence-Verb-Status-Smokes plus Negativ-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `27bf9812 fix: stop residence city before status suffix`.
 
 ### Folgefix 2026-07-19: Verbfreie Wohnadress-Labels
 
