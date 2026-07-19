@@ -15959,3 +15959,15 @@ Restart erst bei `20/20`.
 - Bare `NRW` bleibt wie andere Regionen kein Wohnort; der Alias wird nicht als Stadt gespeichert.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `599f16ab fix: resolve region-prefixed residence cities`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-5-07
+
+- `teebotus.service` aktiv/running, `MainPID 929669`, Start `2026-07-19 22:00:21 CEST`.
+- Neuer Zyklus seit diesem Restart: `7/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Kopula-Suffixe in Negationssaetzen
+
+- `Berlin ist nicht mein Wohnort, aber Hamburg ist es/bleibt es` liefert jetzt nur Hamburg.
+- Generische Treffer schleppen `ist es` oder `bleibt es` nicht mehr in den gespeicherten Stadtnamen.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `36750a8a fix: trim copula residence suffixes`.
