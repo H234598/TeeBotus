@@ -5141,7 +5141,7 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
     return bool(
         re.search(
             r"\b(?:wohne|wohnen|lebe|leben)\b[^.!?;\n]*\b(?:mal|manchmal|teils|teilweise|abwechselnd|zwischen|"
-            r"oder)\b|"
+            r"oder|weder)\b|"
             r"\b(?:wohne|wohnen|lebe|leben)\b[^.!?;\n]*\b(?:beziehungsweise|bzw\.?)"
             r"(?!\s+(?:in|bei)\b)|"
             r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnorte|wohnsitze)\b",
