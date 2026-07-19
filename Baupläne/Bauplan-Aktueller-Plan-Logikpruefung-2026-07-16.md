@@ -15471,3 +15471,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `17/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Erweiterte Pronomen-Übergänge
+
+- Pronomen-Wechsel akzeptieren jetzt `lautet`, `Seitdem`, `bleibt aber`, `die ist jetzt` sowie vorangestelltes `Früher/Zuvor war ...`.
+- Zeit-/Pronomenvarianten bleiben auf Wohnadresswechsel mit zwei vollständigen Straßenadressen begrenzt.
+- Verifikation: `tests/test_weather_context.py` -> `210 passed`, sieben zusätzliche Pronomen-Smokes plus bestehender Melde-Negativfall, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9a726bcd fix: expand pronoun residence transitions`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-32
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `18/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
