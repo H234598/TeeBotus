@@ -282,7 +282,8 @@ _RESIDENCE_TIME_QUALIFIER = (
     rf"dauerhaft|permanent|langfristig|kurzfristig|befristet|unbefristet|vorläufig|vorlaeufig|endgültig|endgueltig|"
     rf"ständig|staendig|wieder|erneut|für\s+{_RESIDENCE_DURATION}|"
     r"zur\s+(?:miete|untermiete|zwischenmiete)|"
-    r"bis\s+(?:auf\s+weiteres|zum\s+ende\s+(?:des\s+)?(?:monats|jahres)|"
+    r"bis\s+(?:heute|morgen|übermorgen|uebermorgen|auf\s+weiteres|"
+    r"zum\s+ende\s+(?:des\s+)?(?:monats|jahres)|"
     r"ende\s+(?:des\s+)?(?:monats|jahres)|(?:monats|jahres)ende|"
     r"(?:zum\s+)?jahresende)|"
     r"vor(?:uebergehend|übergehend))"
@@ -4904,7 +4905,8 @@ CITY_TRAILING_STOP_RE = re.compile(
     r"zur\s+(?:unter|zwischen)miete|nur\s+vor(?:uebergehend|übergehend)|zur\s+miete|"
     r"(?:ist|bleibt)\s+es\b|laut\b.*|"
     r"ab\s+sofort|"
-    r"bis\s+(?:auf\s+weiteres|zum\s+ende\s+(?:des\s+)?(?:monats|jahres)|"
+    r"bis\s+(?:heute|morgen|übermorgen|uebermorgen|auf\s+weiteres|"
+    r"zum\s+ende\s+(?:des\s+)?(?:monats|jahres)|"
     r"ende\s+(?:des\s+)?(?:monats|jahres)|(?:zum\s+)?jahresende)|"
     r"\.|,|;|:|!|\?)(?=\s|[.!?;,]|$).*$",
     re.IGNORECASE,
