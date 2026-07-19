@@ -1489,6 +1489,14 @@ def test_extract_residence_city_handles_numbered_street_labels() -> None:
     assert extract_residence_city("Ich wohne in Hauptweg Nr. 7a, Hamburg.") == "Hamburg"
 
 
+def test_extract_residence_city_handles_house_number_words() -> None:
+    assert extract_residence_city("Ich wohne in Musterstraße Nummer 5, Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Musterstraße Hausnummer 5, Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Musterstraße Hausnr. 5, Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Musterstraße Haus-Nr. 5, Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Musterstraße Hs.-Nr. 5, Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_trims_trailing_evidence_filler() -> None:
     assert extract_residence_city("Wohnort: Berlin laut Meldeadresse.") == "Berlin"
     assert extract_residence_city("Wohnort: Berlin laut Profil.") == "Berlin"

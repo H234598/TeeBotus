@@ -252,6 +252,7 @@ _RESIDENCE_LABEL_CURRENT_QUALIFIER = (
     r"vorlaeufig\w*|befristet\w*|unbefristet\w*|fest\w*|hauptsächlich\w*|"
     r"hauptsaechlich\w*|ständig\w*|staendig\w*|stabil\w*|momentan\w*"
 )
+_STREET_NUMBER_LABEL = r"(?:Nr\.?|Nummer|Hausnummer|Haus[- ]?Nr\.?|Hs\.?-?Nr\.?)"
 _LABELED_STREET_ADDRESS_DETAIL = (
     r"(?:"
     r"(?:hinterhaus|vorderhaus|hinterhof|vorderhof|seitenflügel|seitenfluegel|"
@@ -268,7 +269,7 @@ _LABELED_STREET_ADDRESS = (
     r"(?:am|an der|an den|auf der|auf dem|auf den|unter der|unter den|in der|in den|"
     r"im|zum|zur|vom|von der|vor der|hinter der)\s+[^,.;!?]{1,100}?\s+"
     r")"
-    rf"(?:Nr\.?\s*)?\d+[a-z]?(?:[/-]\s*\d+[a-z]?|\s+[a-z])?(?:,\s*{_LABELED_STREET_ADDRESS_DETAIL})*(?:\s*,\s*|\s+)"
+    rf"(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?(?:[/-]\s*\d+[a-z]?|\s+[a-z])?(?:,\s*{_LABELED_STREET_ADDRESS_DETAIL})*(?:\s*,\s*|\s+)"
 )
 
 CITY_CHANGE_PATTERNS = (
@@ -3116,7 +3117,7 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben))\s+"
         r"[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
-        r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?(?:\d{5}\s+)?"
+        rf"(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?(?:\d{{5}}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -3125,7 +3126,7 @@ CITY_PATTERNS = (
         r"(?:adresse|wohnadresse|wohnanschrift|anschrift|wohnort|wohnsitz)\s+"
         r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
         r"[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
-        r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?(?:\d{5}\s+)?"
+        rf"(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?(?:\d{{5}}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -3133,7 +3134,7 @@ CITY_PATTERNS = (
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+(?:meine|unsere)\s+"
         r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+"
         r"[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
-        r"\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?(?:\d{5}\s+)?"
+        rf"(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?\s*(?:,\s*|\s+)(?:(?:in|bei)\s+)?(?:\d{{5}}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -4467,9 +4468,9 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         comma_match = pattern.search(source)
         first = comma_match.groupdict().get("first", "") if comma_match else ""
         if first and re.search(
-            r"(?i)(?:straße|strasse|str\.?|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+(?:Nr\.?\s*)?\d+[a-z]?\b|"
+            rf"(?i)(?:straße|strasse|str\.?|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?\b|"
             r"(?:am|an der|an den|auf der|auf dem|auf den|unter der|unter den|in der|in den|"
-            r"im|zum|zur|vom|von der|vor der|hinter der)\s+[^,.;!?]{1,100}?\s+(?:Nr\.?\s*)?\d+[a-z]?\b",
+            rf"im|zum|zur|vom|von der|vor der|hinter der)\s+[^,.;!?]{{1,100}}?\s+(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?\b",
             first,
         ):
             continue
@@ -4712,7 +4713,7 @@ def _ensure_weather_state(state: dict[str, Any]) -> dict[str, Any]:
 def _clean_city(value: str) -> str:
     source = str(value or "")
     if re.search(
-        r"(?i)(?:straße|strasse|str\.?)\s+(?:Nr\.?\s*)?\d+[a-z]?(?:[/-]\s*\d+[a-z]?|\s+[a-z])?\b",
+        rf"(?i)(?:straße|strasse|str\.?)\s+(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?(?:[/-]\s*\d+[a-z]?|\s+[a-z])?\b",
         source,
     ):
         return ""
