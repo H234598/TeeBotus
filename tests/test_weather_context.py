@@ -1616,6 +1616,16 @@ def test_extract_residence_city_handles_extended_street_types() -> None:
         assert extract_residence_city(f"Ich wohne am {street_type} 5 in Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_handles_comma_area_street_forms() -> None:
+    assert extract_residence_city("Ich wohne im Bezirk Kreuzberg, Berlin, Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist im Stadtteil Altona, Hamburg, Hauptstraße 7.") == "Hamburg"
+    assert extract_residence_city("Wohnadresse: im Bezirk Mitte, Berlin, Musterstraße 5.") == "Berlin"
+    assert extract_residence_city(
+        "Meine Wohnadresse ist im Bezirk Kreuzberg, Berlin, Musterstraße 5; "
+        "Meldeadresse Hamburg."
+    ) == ""
+
+
 def test_extract_residence_city_handles_city_before_street_without_comma() -> None:
     assert extract_residence_city("Ich wohne in Berlin in der Musterstraße 5.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin an der Musterstraße Nr. 5.") == "Berlin"
