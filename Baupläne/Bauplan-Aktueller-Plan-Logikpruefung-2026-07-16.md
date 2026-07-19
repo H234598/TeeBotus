@@ -15266,3 +15266,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` wird nach diesem 20. Code-Fix neu gestartet; vorheriger Prozess: `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
 - Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes nach erfolgreicher Verifikation. Kein Push.
+
+### Folgefix 2026-07-19: Zusammengesetzter Ortsname in Straßenadressen
+
+- `Halle (Saale)` wird vor der Regex-Auswertung intern in eine parsebare Form überführt und durch `_KNOWN_COMPOUND_CITY_NAMES` wieder vollständig hergestellt.
+- Straßen-, Label-, Melde-, Arbeits- und historische Wechselpfade behalten dadurch den vollständigen Ortsnamen; getrennte Ziele bleiben geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `194 passed`, vier Compound-Adress-Smokes plus Konflikt-/Arbeits-/historischer Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `54e929ee fix: preserve compound city names in addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-15
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `1/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
