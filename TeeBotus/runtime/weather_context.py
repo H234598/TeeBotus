@@ -287,8 +287,13 @@ _LABELED_STREET_ADDRESS_DETAIL = (
 _LABELED_STREET_ADDRESS_CORE = (
     r"(?:"
     rf"[^,.;!?]{{1,100}}?{_STREET_TYPE}\s+|"
-    r"(?:am|an der|an den|auf der|auf dem|auf den|unter der|unter den|in der|in den|"
-    r"im|zum|zur|vom|von der|vor der|hinter der)\s+[^,.;!?]{1,100}?\s+"
+    rf"{_STREET_TYPE}\s+(?:"
+    r"[^,.;!?]{1,100}?\d{1,2}\.\s+[^,.;!?]{1,100}?|"
+    r"[^,.;!?]{1,100}?)\s+|"
+    r"(?:am|an der|an den|auf der|auf dem|auf den|unter der|unter den|in der|in den|der|"
+    r"im|zum|zur|vom|von der|vor der|hinter der)\s+(?:"
+    r"[^,.;!?]{1,100}?\d{1,2}\.\s+[^,.;!?]{1,100}?|"
+    r"[^,.;!?]{1,100}?)\s+"
     r")"
     rf"(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?(?:[/-]\s*\d+[a-z]?|\s+[a-z])?(?:,\s*{_LABELED_STREET_ADDRESS_DETAIL})*"
 )
@@ -2357,7 +2362,7 @@ CITY_PATTERNS = (
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:(?:aktuell\w*|momentan\w*|derzeit\w*|inzwischen\w*|weiterhin\w*|jetzt\w*|nun\w*)\s+)?"
         r"(?:in|bei)\s+"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:in|an|auf|unter)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
         rf"{_LABELED_STREET_ADDRESS_CORE}"
         r"(?=\s*[.!?;,]|$)",
         re.IGNORECASE,
@@ -5168,6 +5173,15 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
     if re.search(_COUNTRY_CITY_BEFORE_STREET, source, re.IGNORECASE):
+        return False
+    if re.search(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"(?:{_STREET_COMPOUND_CITY_PATTERN}|[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)"
+        rf"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+){_LABELED_STREET_ADDRESS_CORE}"
+        r"(?=\s*[.!?;,]|$)",
+        source,
+        re.IGNORECASE,
+    ):
         return False
     if re.search(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben|bin|sind)\s+(?:in|bei)\s+"

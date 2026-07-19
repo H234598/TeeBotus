@@ -2373,6 +2373,13 @@ def test_extract_residence_city_ignores_parenthesized_street_details() -> None:
     assert extract_residence_city("Ich wohne im Bezirk Kreuzberg (Berlin), Musterstraße 5 (Hinterhaus).") == "Berlin"
 
 
+def test_extract_residence_city_handles_comma_city_and_descriptive_streets() -> None:
+    assert extract_residence_city("Ich wohne in Berlin, Musterstr. 5.") == "Berlin"
+    assert extract_residence_city("Ich wohne in der Straße des 17. Juni 5, Berlin.") == "Berlin"
+    assert extract_residence_city("Wohnadresse: Straße des 17. Juni 5, Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Frankfurt am Main, Hauptstr. 5.") == "Frankfurt am Main"
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
