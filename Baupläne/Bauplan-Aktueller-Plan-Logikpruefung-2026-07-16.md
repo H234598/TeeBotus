@@ -15290,3 +15290,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `2/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Stadtteilklammern mit Straßenabkürzung
+
+- Bekannte Formen wie `Berlin (Mitte)` und `Frankfurt am Main (Sachsenhausen)` werden vor der Auswertung auf die Oberstadt normalisiert, wenn danach eine Adresse folgt.
+- `Halle (Saale)` bleibt als zusammengesetzter Ortsname separat erhalten; Wohn-/Melde- und Arbeitsadressschutz bleibt aktiv.
+- Verifikation: `tests/test_weather_context.py` -> `196 passed`, 40 Stadtteil-/Straßenkombinationen plus Konflikt-/Arbeits-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `312dd42a fix: normalize district city address variants`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-17
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `3/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
