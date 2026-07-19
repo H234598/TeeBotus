@@ -2055,7 +2055,8 @@ CITY_PATTERNS = (
         r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
         rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
         r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
-        r"anschrift|adresse|wohnung|unterkunft|bleibe|mietwohnung|wg)\s+"
+        r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
+        r"meldesitz|wohnung|unterkunft|bleibe|mietwohnung|wg)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:in|an|auf|unter)\s+"
         rf"{_LABELED_STREET_ADDRESS_CORE}"
@@ -4220,6 +4221,12 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
         r"(?:\s+\([^)]{1,30}\))?)(?=\s*(?:[,.;!?]|$))"
     )
+    city_before_street_capture = (
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+        rf"{_LABELED_STREET_ADDRESS_CORE}"
+        r"(?=\s*[.!?;,]|$)"
+    )
     street_address_prefix = _LABELED_STREET_ADDRESS
     residence_patterns = (
         re.compile(
@@ -4256,6 +4263,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s+"
             r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
             rf"{street_address_prefix}{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+            r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s+"
+            r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+            rf"{city_before_street_capture}",
             re.IGNORECASE,
         ),
         re.compile(
@@ -4323,6 +4338,17 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         r"(?:(?::|=|,)\s*|(?:ist|lautet|liegt|befindet\s+sich)\s+)?"
         rf"(?:{street_address_prefix}|(?:(?:in|bei)\s+))?"
         rf"{city_capture}",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            registered_address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
+        rf"\b(?:(?:{_RESIDENCE_LABEL_DETERMINER})\s+)?"
+        r"(?:meldeadresse|meldeanschrift|meldesitz)\s*"
+        r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        rf"{city_before_street_capture}",
         source,
         re.IGNORECASE,
     ):
