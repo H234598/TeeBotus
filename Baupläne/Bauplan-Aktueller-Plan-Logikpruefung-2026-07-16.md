@@ -14524,3 +14524,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Klauselgrenzen bei Arbeits-/Wohnorten
+
+- `Berlin ist mein Arbeitsort, Hamburg mein Wohnort` liefert Hamburg statt leer.
+- Nicht-residenter Präfix aus vorheriger Kommaklausel vergiftet Folge-Match nicht mehr.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Work/Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c29b7253 fix: isolate residence clause prefixes`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
