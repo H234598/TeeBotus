@@ -2675,6 +2675,21 @@ def test_extract_residence_city_handles_passive_and_nominal_moves() -> None:
     ) == ""
 
 
+def test_extract_residence_city_handles_colon_separator_moves() -> None:
+    assert extract_residence_city(
+        "Wohnadresse: Berlin, Musterstr. 5 -> Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Wohnadresse: Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Arbeitsadresse: Berlin, Musterstr. 5 -> Hamburg, Hauptweg 7."
+    ) == ""
+    assert extract_residence_city(
+        "Wohnadresse: Berlin, Musterstr. 5 -> Hamburg, Hauptweg 7; Meldeadresse München."
+    ) == ""
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
