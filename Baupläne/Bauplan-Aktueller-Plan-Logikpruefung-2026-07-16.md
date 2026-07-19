@@ -14642,7 +14642,14 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, sechs Multiplikitäts-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `ee52ad80 fix: reject multiple verbless residence targets`.
 
+### Folgefix 2026-07-19: Präzisierung verbfreier Adresslabels
+
+- `Wohnadresse/Meldeadresse Berlin, genauer gesagt Hamburg` liefert den präzisierten aktuellen Ort.
+- Arbeitsadresse und Geburtsstadt nach Komma bleiben nicht-residente Zusätze.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Adresspräzisierungs-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9518c7eb fix: parse residence address clarifications`.
+
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `5/20` Code-Fixes. Kein Push.
