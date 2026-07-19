@@ -59,6 +59,7 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "inzwischen",
         "mittlerweile",
         "seit",
+        "bis",
         "damals",
         "früher",
         "frueher",
@@ -2821,7 +2822,19 @@ CITY_PATTERNS = (
         r"(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
         rf"(?:\s+(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER}))?\s+"
-        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b",
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b"
+        rf"(?:\s+(?:{_RESIDENCE_TIME_QUALIFIER}|ab\s+(?:sofort|jetzt)))?"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?!(?:bei|in)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß.'-]*"
+        r"(?:\s+(?!(?:und|oder|sowie)\b)[\wÄÖÜäöüß.'-]+)*)\s+"
+        r"(?:bin|sind)\s+(?:ich|wir)\s+"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b"
+        rf"(?:\s+(?:{_RESIDENCE_TIME_QUALIFIER}|ab\s+(?:sofort|jetzt)))?"
+        r"(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
     re.compile(
@@ -6305,6 +6318,21 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
+    if re.search(
+        r"(?:\b(?:ich|wir)\s+(?:bin|sind)\s+(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+|"
+        r"(?:^|[.!?;,:]\s*)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:bin|sind)\s+(?:ich|wir)\s+)"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b\s+"
+        r"(?:ab\s+(?:morgen|übermorgen|uebermorgen|nächste\w*|naechste\w*|kommende\w*)\b|"
+        r"ab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
+        r"(?:jahr\w*|monat\w*|woche\w*)\b|"
+        r"ab\s+(?:übermorgen|uebermorgen|morgen|sommer|winter|frühling|fruehling|herbst)\b|"
+        r"ab\s+\d{4}\b|"
+        r"(?:künft\w*|kuenft\w*|zukünft\w*|zukuenftig|geplant\w*|beabsichtig\w*)\b)",
+        source,
+        re.IGNORECASE,
+    ):
+        return True
     if re.search(
         r"(?:^|[.!?;,:]\s*)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+ist\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
