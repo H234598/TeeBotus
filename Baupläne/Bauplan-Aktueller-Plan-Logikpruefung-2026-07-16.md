@@ -9676,7 +9676,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-18-Post-Restart
 
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
-- Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-18: Artikel bei Adresslabels
 
@@ -14744,3 +14744,10 @@ Restart erst bei `20/20`.
 - Gleiche Wohn-/Melde-Stadt bleibt gültig; Arbeitsadresse bleibt davon getrennt.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Street-Address-Conflict-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `4f139661 fix: guard street residence address conflicts`.
+
+### Folgefix 2026-07-19: Separatoren bei Straßenadress-Labels
+
+- Straßenadress-Labels akzeptieren `:`, `=` und Komma als Separator.
+- PLZ, Hausnummer und Stadt werden weiterhin getrennt verarbeitet.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, zwei Separator-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `cea41f95 fix: accept street address label separators`.
