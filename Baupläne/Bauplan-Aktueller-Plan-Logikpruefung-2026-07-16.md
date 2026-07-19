@@ -15899,3 +15899,15 @@ Restart erst bei `20/20`.
 - Das gilt fuer normale Wohnortsaetze und Wohnort plus Strassenadresse.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `0c6fc309 fix: preserve additional compound city names`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-5-02
+
+- `teebotus.service` aktiv/running, `MainPID 929669`, Start `2026-07-19 22:00:21 CEST`.
+- Neuer Zyklus seit diesem Restart: `2/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Vollstaendige Compound-City-Matches priorisieren
+
+- Generische `bei`-/`in`-Patterns schneiden bekannte zusammengesetzte Ortsnamen nicht mehr auf den letzten Teil herunter.
+- `Neustadt bei Coburg` bleibt vollstaendig erhalten; der Schutz gilt fuer alle zentral registrierten Compound-City-Namen und Trailing-Punktuation.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b489756f fix: prioritize full compound city matches`.
