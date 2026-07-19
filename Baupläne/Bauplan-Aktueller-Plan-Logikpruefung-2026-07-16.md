@@ -14915,7 +14915,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-3
 
 - `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
-- Neuer Zyklus seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `13/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Freie Straßenadress-Sätze
 
@@ -15000,3 +15000,10 @@ Restart erst bei `20/20`.
 - Geschäftliche, historische und künftige Statuszusätze bleiben ausgeschlossen; mehrteilige Städte bleiben korrekt.
 - Verifikation: `tests/test_weather_context.py` -> `166 passed`, vier Status-City-Before-Street-Smokes plus Negativ-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `43d0fe3a fix: parse status city before street`.
+
+### Folgefix 2026-07-19: Konfliktguard für registrierte Stadt-vor-Straße
+
+- `Meldeadresse/Meldeanschrift/Privatadresse ist in Stadt in/an der Straße` wird erkannt.
+- Unterschiedliche Wohn- und Meldeadressen mit Straßenangaben bleiben mehrdeutig und liefern leer; Arbeitsadressen bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `167 passed`, drei Registered-City-Before-Street-Smokes plus drei Konflikt-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `07cc0b18 fix: guard registered city street conflicts`.
