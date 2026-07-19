@@ -14511,3 +14511,16 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Unaufgelöste Kontrast-Orte
+
+- `aber/doch/jedoch in <Stadt>` ohne Zeit-/Verbkontext wird nicht als Umzug fehlinterpretiert.
+- Verkürzte Kontrastlabels wie `aber Hamburg mein Wohnort` werden bei mehreren Wohnzielen als Konflikt erkannt.
+- Valide `aber jetzt in ...`-Umzüge und Arbeitsort-Kontraste bleiben erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, acht Contrast-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2b2f7173 fix: guard unresolved residence contrasts`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
