@@ -6325,7 +6325,7 @@ def _clean_city(value: str) -> str:
     if re.search(r"(?i)\b(?:gewesen|worden|geblieben)\b", city):
         return ""
     if re.search(
-        r"(?i)\b(?:arbeit\w*|beruflich|dienstlich|studier\w*|lern\w*|schule\w*|schlaf\w*|mach\w*|komm\w*|bin\w*|"
+        r"(?i)\b(?:arbeit\w*|beruflich|dienstlich|studier\w*|lern\w*|schule\w*|schlaf\w*|mach\w*|komm\w*|bin\b|"
         r"fahr\w*|geh\w*|hab\w*|besuch\w*|verbring\w*|treff\w*|reis\w*|"
         r"pend\w*|seh\w*|übernacht\w*|uebernacht\w*)\b",
         city,

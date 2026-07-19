@@ -1347,6 +1347,11 @@ def test_extract_residence_city_handles_unicode_label_initials() -> None:
         assert extract_residence_city(text) == expected
 
 
+def test_extract_residence_city_accepts_cities_starting_with_bin() -> None:
+    assert extract_residence_city("Ich wohne in Binz.") == "Binz"
+    assert extract_residence_city("Ich wohne in Bingen am Rhein.") == "Bingen"
+
+
 def test_extract_residence_city_rejects_unknown_label_values() -> None:
     assert extract_residence_city("Mein Wohnort ist irgendwo.") == ""
     assert extract_residence_city("Mein Wohnort ist unklar.") == ""
