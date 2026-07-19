@@ -15971,3 +15971,15 @@ Restart erst bei `20/20`.
 - Generische Treffer schleppen `ist es` oder `bleibt es` nicht mehr in den gespeicherten Stadtnamen.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `36750a8a fix: trim copula residence suffixes`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-5-08
+
+- `teebotus.service` aktiv/running, `MainPID 929669`, Start `2026-07-19 22:00:21 CEST`.
+- Neuer Zyklus seit diesem Restart: `8/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Beruflich/dienstlich qualifizierte Wohnorte
+
+- `Ich lebe in Berlin, wohne aber beruflich in Hamburg.` liefert jetzt Hamburg statt des frueheren allgemeinen Berlin-Treffers.
+- `Ich wohne dienstlich in Hamburg.` wird erkannt; `arbeite ... in Hamburg` und `beruflich ... ansaessig` bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b59d495b fix: recognize qualified residence statements`.
