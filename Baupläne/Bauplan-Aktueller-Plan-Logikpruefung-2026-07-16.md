@@ -15745,3 +15745,8 @@ Restart erst bei `20/20`.
 
 - Vor Restart: `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus abgeschlossen: `20/20` Code-Fixes. Restart jetzt erforderlich; kein Push.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-55
+
+- `teebotus.service` nach Zyklusrestart aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
+- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
