@@ -6338,7 +6338,7 @@ def _clean_city(value: str) -> str:
         r"studier(?:e|en|st|t|te|ten|end)?|lern(?:e|en|st|t|te|ten|end)?|"
         r"schule(?:n)?|schlaf(?:e|en|st|t|te|ten|end)?|"
         r"mach(?:e|en|st|t|te|ten|end)?|komm(?:e|en|st|t|te|ten|end)?|bin|"
-        r"fahr(?:e|en|st|t|te|ten|end)?|geh(?:e|en|st|t|te|ten|end)?|"
+        r"fahr(?:e|st|t|te|ten|end)?|geh(?:e|en|st|t|te|ten|end)?|"
         r"hab(?:e|en|st|t|te|ten|end)?|besuch(?:e|en|st|t|te|ten|end|er)?|"
         r"verbring(?:e|en|st|t|te|ten|end)?|treff(?:e|en|st|t|te|ten|end)?|"
         r"reis(?:e|en|t|te|ten|end)?|pend(?:le|eln|elst|elt|elte|elnd)?|"
