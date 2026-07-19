@@ -14610,7 +14610,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Neuer Zyklus seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `3/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Weitere Straßenarten
 
@@ -14625,6 +14625,13 @@ Restart erst bei `20/20`.
 - Direkte Wohnadresse mit abweichender Meldeadresse bleibt durch Konfliktguard leer.
 - Verifikation: `tests/test_weather_context.py` -> `176 passed`, vier International-Postal-Prefix-Smokes plus Konflikt-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `ac20b363 fix: parse international postal prefixes`.
+
+### Folgefix 2026-07-19: Zuhause-Satz ohne falschen Subjekt-Stadtwert
+
+- `Ich wohne/lebe in Berlin zuhause/zu Hause/daheim` liefert Berlin statt fälschlich `Ich wohne`.
+- Breites Daheim-Fallback wird für Subjekt+Wohnverb blockiert; direkter Wohnpfad bleibt zuständig.
+- Verifikation: `tests/test_weather_context.py` -> `178 passed`, drei Home-Adverb-Smokes plus Subjekt-Negativsmoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d84b1fc6 fix: reject residence subject as home city`.
 
 ### Folgefix 2026-07-19: Verbfreie Wohnadress-Labels
 
