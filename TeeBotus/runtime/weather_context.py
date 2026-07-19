@@ -793,6 +793,13 @@ _COMPOUND_CITY_RESIDENCE = re.compile(
     r"(?=\s*(?:[.!?;,]|(?:in|an|auf|unter)\s+|$))",
     re.IGNORECASE,
 )
+_QUALIFIED_RESIDENCE = re.compile(
+    r"\b(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+(?:aber\s+)?"
+    r"(?:beruflich|dienstlich)\s+(?:in|bei)\s+"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+    r"(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _REGIONAL_PREFIX_RESIDENCE = re.compile(
     r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|im)\s+"
     rf"(?:{_REGION_NAME_PATTERN})\s*,\s*(?:in|bei)\s+"
@@ -2626,6 +2633,7 @@ CITY_PATTERNS = (
     _MAIN_RESIDENCE_CITY_BEFORE_STREET,
     _MAIN_RESIDENCE_CITY,
     _COMPOUND_CITY_RESIDENCE,
+    _QUALIFIED_RESIDENCE,
     _REGIONAL_PREFIX_RESIDENCE,
     _HAVE_PRIMARY_HOME_CITY_BEFORE_STREET,
     re.compile(
