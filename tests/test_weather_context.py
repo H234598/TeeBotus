@@ -2445,6 +2445,33 @@ def test_extract_residence_city_handles_formulated_city_before_street_moves() ->
     assert extract_residence_city("Ich bin von Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7 gezogen.") == "Hamburg"
 
 
+def test_extract_residence_city_handles_additional_city_before_street_moves() -> None:
+    assert extract_residence_city(
+        "Meine Wohnadresse ist jetzt Hamburg, Hauptweg 7 statt Berlin, Musterstr. 5."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Meine alte Wohnadresse war Berlin, Musterstr. 5, meine neue ist Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Wohnadresse: vorher Berlin, Musterstr. 5, jetzt Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Wohnadresse geändert: Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Von Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7: neue Wohnadresse."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Meine Wohnadresse ist jetzt Hamburg, Hauptweg 7 statt Berlin, Musterstr. 5; Meldeadresse München."
+    ) == ""
+    assert extract_residence_city(
+        "Meine Arbeitsadresse ist jetzt Hamburg, Hauptweg 7 statt Berlin, Musterstr. 5."
+    ) == ""
+    assert extract_residence_city(
+        "Meine Wohnadresse ist jetzt Hamburg, Hauptweg 7 statt Berlin, Musterstr. 5?"
+    ) == ""
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
