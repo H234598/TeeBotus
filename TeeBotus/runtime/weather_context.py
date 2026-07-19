@@ -287,7 +287,7 @@ _RESIDENCE_TIME_QUALIFIER = (
 )
 _RESIDENCE_LOCATION_ADVERB = (
     r"(?:(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
-    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|irgendwo|dahoam|erst|immer|"
+    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|primär|primaer|irgendwo|dahoam|erst|immer|"
     r"bisher|bislang|vorerst|zeitweise)|"
     r"(?:sicher|wirklich|definitiv|tatsächlich|tatsaechlich))"
 )
