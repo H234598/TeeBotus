@@ -1666,3 +1666,15 @@
 - `Köln lautet mein Wohnort.` liefert nur Köln statt `Köln lautet`.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `d072b166 fix: cover residence label grammar variants`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-6-04
+
+- `teebotus.service` aktiv/running, `MainPID 1147780`, Start `2026-07-19 22:49:53 CEST`.
+- Neuer Zyklus seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Laenderlabel mit Stadtpraezisierung
+
+- `Wohnort: Deutschland, Köln`, `Wohnort: Deutschland, in Köln` und `Wohnort: Deutschland, genauer Köln` liefern jetzt Köln.
+- Bestehende Strassenadressform `Wohnhaft: Österreich, Wien, Musterstr. 5.` bleibt Wien.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a4e85011 fix: parse labeled country residence cities`.
