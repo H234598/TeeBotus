@@ -1396,6 +1396,8 @@ def test_extract_residence_city_ignores_other_person_residence() -> None:
     assert extract_residence_city("Ich wohne in Berlin und Hamburg ist der Wohnort meiner Eltern.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, Hamburg ist der Wohnort meiner Firma.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin und Hamburg ist der Wohnort meines Arbeitgebers.") == "Berlin"
+    for owner in ("von meiner Freundin", "der Freundin", "von meinen Eltern", "dem Arbeitgeber"):
+        assert extract_residence_city(f"Ich wohne in Berlin, Hamburg ist der Wohnort {owner}.") == "Berlin"
 
 
 def test_extract_residence_city_rejects_unknown_label_values() -> None:
