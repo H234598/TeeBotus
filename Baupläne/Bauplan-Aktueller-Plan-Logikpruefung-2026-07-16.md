@@ -15810,3 +15810,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
 - Neuer Zyklus seit diesem Restart: `5/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Grammatische Fremdlabel-Varianten
+
+- Fremde Wohnorte mit `von meiner`, `der`, `dem`, `den` und ähnlichen Präfixen werden nicht als eigener Ort übernommen.
+- Organisationen und Personen bleiben über Kasus-/Artikelvarianten geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `231 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `51565b43 fix: handle inflected foreign residence labels`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-61
+
+- `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
+- Neuer Zyklus seit diesem Restart: `6/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
