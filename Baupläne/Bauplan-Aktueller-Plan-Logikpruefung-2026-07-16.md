@@ -14915,7 +14915,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-3
 
 - `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
-- Neuer Zyklus seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `16/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Freie Straßenadress-Sätze
 
@@ -15021,3 +15021,10 @@ Restart erst bei `20/20`.
 - Unterschiedliche Wohn- und Meldeadressen bleiben auch bei Ortsart und Straßenangabe mehrdeutig und liefern leer.
 - Verifikation: `tests/test_weather_context.py` -> `169 passed`, Ortsart-Positivsmokes und getrennte Konflikt-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `8048f91b fix: guard locality residence conflicts`.
+
+### Folgefix 2026-07-19: Bare Stadt-vor-Straße-Labels
+
+- `Meldeadresse: in Berlin in der Straße`, `Wohnadresse: Hamburg an der Straße` und `Privatadresse = in Köln ...` werden erkannt.
+- Unterschiedliche Wohn-/Meldeadressen bleiben leer; gleiche Stadt und Arbeitsadresse bleiben zulässig.
+- Verifikation: `tests/test_weather_context.py` -> `170 passed`, drei Bare-City-Before-Street-Smokes plus drei Konflikt-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `51e582b1 fix: parse bare city street labels`.
