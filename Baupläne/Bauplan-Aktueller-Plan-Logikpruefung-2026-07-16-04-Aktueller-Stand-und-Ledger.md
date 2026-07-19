@@ -1730,3 +1730,22 @@
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commits: `a2a27015`, `38990e3a`, `e5c24156`, `6dc74c0a`, `af416079`,
   `c9f2be3f`, `d8a8140b`, `a3d8cbde`, `40db7503`, `5b1657ca`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-01
+
+- `teebotus.service` aktiv/running, `MainPID 1697303`, Start `2026-07-20 01:04:25 CEST`.
+- Historische und abgeschlossene Baupläne bleiben unter `../Abgeschlossene Baupläne/`;
+  aktive Pläne bleiben unter `../Baupläne/`.
+- Neuer Zyklus seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+
+### Folgefix-Batch 2026-07-20: Inverse Adress- und Wohnungsformen
+
+- Inverse Haupt-/Wohnadressen werden auch nach Komma und `und` als Konflikt erkannt;
+  Arbeitsadresse bleibt davon getrennt.
+- Inverse `Meldeadresse` wird gegen Wohnort geprüft; gleicher Ort bleibt gültig.
+- Zwei unterschiedliche inverse Wohnlabels (`Wohnung`, `Zuhause`) werden als
+  mehrdeutiger Mehrfachwohnsitz verworfen; alte Wohnung und Fremdpersonen bleiben
+  ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `237 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commits: `15780d8b`, `fe41f666`, `2d460dc1`, `f4a7f4d8`, `17c6f332`, `8f7f0b9e`.
