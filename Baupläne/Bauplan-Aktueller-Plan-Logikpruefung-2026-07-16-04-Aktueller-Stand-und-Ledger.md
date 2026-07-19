@@ -1630,3 +1630,15 @@
 - Kanonischer Incoming-Vault im Prozess: `Teladi_Programming/incomming`.
 - Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
 - Plan-Katalog und Teilung: `935919c5 docs: catalog and split active build plans`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-6-01
+
+- `teebotus.service` aktiv/running, `MainPID 1147780`, Start `2026-07-19 22:49:53 CEST`.
+- Neuer Zyklus seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Hauptwohnung ohne Strassenadresse
+
+- `Ich habe eine Hauptwohnung in Berlin und eine Zweitwohnung in Hamburg.` liefert jetzt Berlin.
+- Eine reine Zweitwohnung bleibt ausgeschlossen; Strassenadress-Varianten bleiben unveraendert.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `259c0fff fix: recognize primary home without street address`.
