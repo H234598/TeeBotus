@@ -253,10 +253,13 @@ _RESIDENCE_LABEL_CURRENT_QUALIFIER = (
     r"hauptsaechlich\w*|ständig\w*|staendig\w*|stabil\w*|momentan\w*"
 )
 _LABELED_STREET_ADDRESS_DETAIL = (
+    r"(?:"
     r"(?:hinterhaus|vorderhaus|hinterhof|vorderhof|seitenflügel|seitenfluegel|"
-    r"links|rechts|(?:\d+\.\s*)?(?:og|eg|dg|ug|stock|ober(?:geschoss)?|"
-    r"erdgeschoss|dachgeschoss|untergeschoss)|"
+    r"(?:\d+\.\s*)?(?:og|eg|dg|ug|stock|ober(?:geschoss)?|erdgeschoss|"
+    r"dachgeschoss|untergeschoss)|"
     r"(?:wohnung|whg\.?|apartment|appartement|einheit)\s*[A-Z0-9-]+)"
+    r"(?:\s+(?:links|rechts))?"
+    r")"
 )
 _LABELED_STREET_ADDRESS = (
     r"(?:"
