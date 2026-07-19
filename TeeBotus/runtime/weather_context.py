@@ -4969,6 +4969,8 @@ def extract_residence_city(text: str) -> str:
                         match.group("city"),
                     ):
                         continue
+                    if re.match(r"(?i)^\s*wei(?:ß|ss)t\s+du\b", match.group("city")):
+                        continue
                     if _has_unresolved_location_separator(source, city_end):
                         continue
                     if _has_future_residence_suffix(source, city_end):
