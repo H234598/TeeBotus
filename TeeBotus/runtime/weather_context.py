@@ -252,6 +252,12 @@ _RESIDENCE_LABEL_CURRENT_QUALIFIER = (
     r"vorlaeufig\w*|befristet\w*|unbefristet\w*|fest\w*|hauptsächlich\w*|"
     r"hauptsaechlich\w*|ständig\w*|staendig\w*|stabil\w*|momentan\w*"
 )
+_LABELED_STREET_ADDRESS_DETAIL = (
+    r"(?:hinterhaus|vorderhaus|hinterhof|vorderhof|seitenflügel|seitenfluegel|"
+    r"links|rechts|(?:\d+\.\s*)?(?:og|eg|dg|ug|stock|ober(?:geschoss)?|"
+    r"erdgeschoss|dachgeschoss|untergeschoss)|"
+    r"(?:wohnung|whg\.?|apartment|appartement|einheit)\s*[A-Z0-9-]+)"
+)
 _LABELED_STREET_ADDRESS = (
     r"(?:"
     r"[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|"
@@ -259,7 +265,7 @@ _LABELED_STREET_ADDRESS = (
     r"(?:am|an der|an den|auf der|auf dem|auf den|unter der|unter den|in der|in den|"
     r"im|zum|zur|vom|von der|vor der|hinter der)\s+[^,.;!?]{1,100}?\s+"
     r")"
-    r"\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?\s*(?:,\s*|\s+)"
+    rf"\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?(?:,\s*{_LABELED_STREET_ADDRESS_DETAIL}\s*,\s*|\s*(?:,\s*|\s+))"
 )
 
 CITY_CHANGE_PATTERNS = (
