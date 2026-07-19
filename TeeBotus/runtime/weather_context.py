@@ -6599,6 +6599,28 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         re.IGNORECASE,
     ):
         return True
+    for match in re.finditer(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)(?=\s*(?:[,;]|\bund\b))\s*"
+        r"(?:[,;]|\bund\b)\s*(?!(?:aber|doch|jedoch|sondern)\b)"
+        rf"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+ist\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"jetzig\w*|derzeitig\w*|gegenwärtig|gegenwaertig)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim|wohnung)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        first = _clean_city(match.group("first"))
+        second = _clean_city(match.group("second"))
+        if (
+            first
+            and second
+            and _city_comparison_key(first) != _city_comparison_key(second)
+            and not _has_historical_residence_suffix(source, match.start("second"))
+            and not _has_other_person_residence_suffix(source, match.end("second"))
+        ):
+            return True
     if re.search(
         rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
         rf"(?:(?:ich\s+)?{residence}\s+)?(?:in|bei)\s+",
