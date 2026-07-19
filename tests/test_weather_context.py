@@ -1441,6 +1441,8 @@ def test_extract_residence_city_rejects_holiday_address_purpose() -> None:
     assert extract_residence_city("Meine Adresse in Berlin ist die meines Arbeitgebers.") == ""
     assert extract_residence_city("Im Urlaub wohne ich in Berlin.") == ""
     assert extract_residence_city("In den Ferien lebe ich in Hamburg.") == ""
+    assert extract_residence_city("Am Wochenende wohne ich in Berlin.") == ""
+    assert extract_residence_city("Unter der Woche lebe ich in Hamburg.") == ""
 
 
 def test_extract_residence_city_ignores_other_person_residence() -> None:

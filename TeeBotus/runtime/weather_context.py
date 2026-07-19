@@ -6487,7 +6487,10 @@ def _has_temporary_residence_prefix(source: str, match_start: int) -> bool:
     return bool(
         re.search(
             r"(?i)(?:\bim|\bin\s+den|\bwährend\s+der|\bwährend\s+meines|\bwaehrend\s+der|"
-            r"\bwaehrend\s+meines)\s+(?:urlaub|ferien)\s*$",
+            r"\bwaehrend\s+meines)\s+(?:urlaub|ferien)\s*$|"
+            r"\b(?:am\s+wochenende|unter\s+der\s+woche|werktags|wochentags|"
+            r"montags?|dienstags?|mittwochs?|donnerstags?|freitags?|samstags?|sonntags?|"
+            r"morgens|vormittags|mittags|nachmittags|abends|nachts|tagsüber|tagsueber)\s*$",
             sentence,
         )
     )
