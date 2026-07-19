@@ -2741,6 +2741,14 @@ def test_extract_residence_city_rejects_temporally_multiple_street_residences() 
     ) == ""
 
 
+def test_extract_residence_city_handles_main_home_label() -> None:
+    assert extract_residence_city("Meine Hauptwohnung ist in Berlin, Musterstr. 5.") == "Berlin"
+    assert extract_residence_city(
+        "Meine Hauptwohnung ist in Berlin, Musterstr. 5, meine Zweitwohnung in Hamburg, Hauptweg 7."
+    ) == "Berlin"
+    assert extract_residence_city("Meine Zweitwohnung ist in Hamburg, Hauptweg 7.") == ""
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"

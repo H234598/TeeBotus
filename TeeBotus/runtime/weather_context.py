@@ -733,6 +733,15 @@ _CITY_CHANGE_LABELLED_COLON_SEPARATOR_STREET = re.compile(
     r"(?=\s*[.!?;,]|$)",
     re.IGNORECASE,
 )
+_MAIN_RESIDENCE_CITY_BEFORE_STREET = re.compile(
+    r"\b(?:meine|unsere|die)\s+hauptwohnung\s+"
+    r"(?:ist|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+    rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
+    r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+    rf"{_LABELED_STREET_ADDRESS_CORE}"
+    r"(?=\s*[.!?;,]|$)",
+    re.IGNORECASE,
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -2546,6 +2555,7 @@ CITY_CHANGE_PATTERNS = (
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
+    _MAIN_RESIDENCE_CITY_BEFORE_STREET,
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         rf"{_COUNTRY_CITY_BEFORE_STREET}",
