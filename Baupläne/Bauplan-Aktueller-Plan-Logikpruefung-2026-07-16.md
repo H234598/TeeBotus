@@ -15733,3 +15733,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `19/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Ortsname `Fahren` gegen Fahrverb
+
+- Der gültige Ortsname `Fahren` wird nicht mehr als Infinitivfragment `fahren` verworfen.
+- Konkrete Fahrformen mit Flexionsendung bleiben im Aktivitätsfilter.
+- Verifikation: `tests/test_weather_context.py` -> `228 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f745a1ef fix: accept fahren residence town`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-54
+
+- Vor Restart: `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus abgeschlossen: `20/20` Code-Fixes. Restart jetzt erforderlich; kein Push.
