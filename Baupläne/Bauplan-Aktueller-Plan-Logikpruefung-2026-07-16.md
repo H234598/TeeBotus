@@ -15302,3 +15302,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `3/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: PLZ- und Statusformen mit Straßenabkürzung
+
+- `10115 Berlin, Musterstr. 5` und `Berlin, Musterstr. 5 wohnhaft` werden als vollständige Adressen akzeptiert.
+- Ambiguitäts-Guard kennt direkte PLZ-/Statusadressen; getrennte Meldeadressen und unsichere Sätze bleiben geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `197 passed`, drei PLZ-/Status-Smokes plus Konflikt-/Unsicherheits-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `488a4938 fix: accept postal status address variants`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-18
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `4/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
