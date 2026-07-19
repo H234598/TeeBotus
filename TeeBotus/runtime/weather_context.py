@@ -6345,8 +6345,11 @@ def _clean_city(value: str) -> str:
 
 def _city_id_token(city: str) -> str:
     normalized = re.sub(r"\s+", "_", city.strip().casefold())
-    normalized = re.sub(r"[^a-z0-9_]+", "", normalized)
-    return normalized[:48] or hashlib.sha256(city.encode("utf-8")).hexdigest()[:16]
+    safe = re.sub(r"[^a-z0-9_]+", "", normalized)
+    if len(normalized) > 48:
+        digest = hashlib.sha256(city.encode("utf-8")).hexdigest()[:16]
+        return f"{safe[:31]}_{digest}"
+    return safe or hashlib.sha256(city.encode("utf-8")).hexdigest()[:16]
 
 
 def _city_comparison_key(city: str) -> str:

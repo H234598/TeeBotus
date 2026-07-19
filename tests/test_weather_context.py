@@ -11,7 +11,12 @@ from TeeBotus.instructions import BotInstructions
 from TeeBotus.runtime.accounts import AccountStore, StaticSecretProvider, signal_identity_key
 from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
-from TeeBotus.runtime.weather_context import extract_residence_city, update_city_and_weather_context, weather_context_text
+from TeeBotus.runtime.weather_context import (
+    _city_id_token,
+    extract_residence_city,
+    update_city_and_weather_context,
+    weather_context_text,
+)
 
 
 def store(tmp_path) -> AccountStore:
@@ -1352,6 +1357,17 @@ def test_extract_residence_city_handles_unicode_label_initials() -> None:
 def test_extract_residence_city_accepts_cities_starting_with_bin() -> None:
     assert extract_residence_city("Ich wohne in Binz.") == "Binz"
     assert extract_residence_city("Ich wohne in Bingen am Rhein.") == "Bingen"
+
+
+def test_city_id_token_keeps_long_city_names_distinct() -> None:
+    first = "A" * 49 + " Berlin"
+    second = "A" * 49 + " Hamburg"
+    first_token = _city_id_token(first)
+    second_token = _city_id_token(second)
+
+    assert first_token != second_token
+    assert len(first_token) <= 48
+    assert len(second_token) <= 48
 
 
 def test_extract_residence_city_rejects_unknown_label_values() -> None:
