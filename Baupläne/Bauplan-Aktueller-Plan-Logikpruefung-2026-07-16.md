@@ -14915,7 +14915,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-3
 
 - `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
-- Neuer Zyklus seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `15/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Freie Straßenadress-Sätze
 
@@ -15014,3 +15014,10 @@ Restart erst bei `20/20`.
 - Arbeitskontexte bleiben ausgeschlossen; bestehende Stadt- und Straßenparser bleiben unverändert.
 - Verifikation: `tests/test_weather_context.py` -> `168 passed`, vier Locality-Type-Before-Street-Smokes plus Negativ-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `45828e45 fix: parse locality type before street`.
+
+### Folgefix 2026-07-19: Konfliktguard für Ortsart-Adressen
+
+- Beschriftete `Wohn-/Meldeadresse` mit `in der Stadt/im Stadtgebiet` werden erkannt.
+- Unterschiedliche Wohn- und Meldeadressen bleiben auch bei Ortsart und Straßenangabe mehrdeutig und liefern leer.
+- Verifikation: `tests/test_weather_context.py` -> `169 passed`, Ortsart-Positivsmokes und getrennte Konflikt-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8048f91b fix: guard locality residence conflicts`.
