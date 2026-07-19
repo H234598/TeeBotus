@@ -14671,7 +14671,15 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Registered-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `a8b6348a fix: detect registered address aliases`.
 
+### Folgefix 2026-07-19: Artikel und Qualifier bei Verb-Adresskonflikten
+
+- `Die Wohnadresse ist ...` und `Die aktuelle Wohnadresse ist ...` werden im Konfliktguard erfasst.
+- Widersprüche zu `Meldeadresse`, `Meldeanschrift`, `Meldesitz` und Arbeitsadresse werden nicht als aktueller Wohnort ausgegeben.
+- Gleiche Wohn-/Melde-Stadt bleibt gültig.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, sechs Verb-Adress-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c9fe1e75 fix: detect article address conflicts`.
+
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
