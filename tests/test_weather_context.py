@@ -2537,6 +2537,18 @@ def test_extract_residence_city_allows_same_city_residence_and_registration() ->
     ) == "Berlin"
 
 
+def test_extract_residence_city_handles_pronoun_address_changes() -> None:
+    assert extract_residence_city(
+        "Meine Wohnadresse war Berlin, Musterstr. 5. Jetzt ist sie Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Meine Wohnadresse war Berlin, Musterstr. 5; nun ist diese Hamburg, Hauptweg 7."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Meine Wohnadresse war Berlin, Musterstr. 5. Jetzt ist sie Hamburg, Hauptweg 7; Meldeadresse München."
+    ) == ""
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
