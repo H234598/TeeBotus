@@ -1331,11 +1331,14 @@ CITY_CHANGE_PATTERNS = (
     re.compile(
         r"(?:^|[.!?;,\n]\s*)(?:im\s+urlaub|in\s+den\s+ferien|"
         r"während\s+der\s+ferien|waehrend\s+der\s+ferien|"
+        r"während\s+(?:der|des|einer|eines|meines|meiner)\s+"
+        r"(?:ferien|urlaubs|reise|dienstreise|aufenthalts)|"
         r"auf\s+(?:dienstreise|reisen)|während\s+(?:einer|der)\s+dienstreise|"
         r"geschäftlich|geschaeftlich|beruflich|am\s+wochenende|unter\s+der\s+woche|"
         r"werktags|wochentags|montags?|dienstags?|mittwochs?|donnerstags?|freitags?|"
         r"samstags?|sonntags?)\s+"
-        r"(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)(?:\s+(?:ich|wir))?\s+(?:in|bei)\s+"
+        r"(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)(?:\s+(?:ich|wir))?\s+)?"
+        r"(?:in|bei)\s+"
         r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,?\s*"
         r"(?:sonst|ansonsten)\s+(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)(?:\s+(?:ich|wir))?\s+)?"
         r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
@@ -6575,6 +6578,8 @@ def _has_temporary_residence_prefix(source: str, match_start: int) -> bool:
         re.search(
             r"(?i)(?:\bim|\bin\s+den|\bwährend\s+der|\bwährend\s+meines|\bwaehrend\s+der|"
             r"\bwaehrend\s+meines)\s+(?:urlaub|ferien)\s*$|"
+            r"\b(?:während|waehrend)\s+(?:der|des|einer|eines|meines|meiner)\s+"
+            r"(?:ferien|urlaubs|reise|dienstreise|aufenthalts)\s*$|"
             r"\b(?:am\s+wochenende|unter\s+der\s+woche|werktags|wochentags|"
             r"montags?|dienstags?|mittwochs?|donnerstags?|freitags?|samstags?|sonntags?|"
             r"morgens|vormittags|mittags|nachmittags|abends|nachts|tagsüber|tagsueber)\s*$",
