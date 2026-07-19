@@ -5718,6 +5718,19 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
+    if re.search(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"{_CITY_CHANGE_CITY_FRAGMENT}(?:\s+\([^)]{{1,30}}\))?\s*,\s*"
+        rf"{_LABELED_STREET_ADDRESS_CORE}\s+und\s+"
+        rf"(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:zeitweise|abwechselnd|teilweise|vorübergehend|voruebergehend)\s+"
+        r"(?:in|bei)\s+"
+        rf"{_CITY_CHANGE_CITY_FRAGMENT}(?:\s+\([^)]{{1,30}}\))?\s*,\s*"
+        rf"{_LABELED_STREET_ADDRESS_CORE}(?=\s*[.!?;,]|$)",
+        source,
+        re.IGNORECASE,
+    ):
+        return True
     if re.search(_COUNTRY_CITY_BEFORE_STREET, source, re.IGNORECASE):
         return False
     if re.search(
