@@ -1515,6 +1515,7 @@ def test_extract_residence_city_handles_home_adverb_after_city() -> None:
 def test_extract_residence_city_rejects_subject_as_home_city() -> None:
     assert extract_residence_city("Ich wohne in Berlin zu Hause.") != "Ich wohne"
     assert extract_residence_city("Wir leben in Hamburg daheim.") == "Hamburg"
+    assert extract_residence_city("Wir sind in Hamburg daheim.") == "Hamburg"
 
 
 def test_extract_residence_city_handles_house_number_words() -> None:
