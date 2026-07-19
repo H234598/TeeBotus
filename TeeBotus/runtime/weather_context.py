@@ -5231,10 +5231,26 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
         return True
     if re.search(
         r"\b(?:wohne|wohnen|lebe|leben|wohnort|wohnsitz)\b[^.!?;\n]*\b(?:im|in\s+der)\s+"
-        r"(?:(?:großraum|grossraum|raum|gebiet|region)\s+(?:von\s+)?"
+        r"(?:(?:großraum|grossraum|raum|gebiet|region|umland|umgebung)\s+(?:von\s+)?"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+und\s+|"
-        r"[A-ZÄÖÜ][\wÄÖÜäöüß'-]+\s+(?:raum|region|gebiet|großraum|grossraum)\s+und\s+)"
-        r"(?!umgebung\b|region\b|nähe\b|naehe\b)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}",
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß'-]+\s+(?:raum|region|gebiet|großraum|grossraum|umland|umgebung)\s+und\s+)"
+        r"(?!(?:ich\s+)?(?:arbeite|arbeitest|arbeiten|studier\w*|lern\w*|schlaf\w*|"
+        r"mach\w*|komm\w*|fahr\w*|geh\w*|zieh\w*|hab\w*|besitz\w*|bin|bist|sind|sein|"
+        r"besuch\w*|verbring\w*|treff\w*|reis\w*|pendl\w*|seh\w*|übernacht\w*|uebernacht\w*)\b|"
+        r"umgebung\b|region\b|nähe\b|naehe\b)(?:(?:in|bei)\s+)?"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß'-]*(?=\s*(?:[.!?;,]|$))",
+        multiplicity_source,
+        re.IGNORECASE,
+    ):
+        return True
+    if re.search(
+        r"\b(?:wohne|wohnen|lebe|leben|wohnort|wohnsitz)\b[^.!?;\n]*\b"
+        r"(?:außerhalb|ausserhalb)\s+(?:der\s+stadt\s+|von\s+)?"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+und\s+"
+        r"(?!(?:ich\s+)?(?:arbeite|arbeitest|arbeiten|studier\w*|lern\w*|schlaf\w*|"
+        r"mach\w*|komm\w*|fahr\w*|geh\w*|zieh\w*|hab\w*|besitz\w*|bin|bist|sind|sein|"
+        r"besuch\w*|verbring\w*|treff\w*|reis\w*|pendl\w*|seh\w*|übernacht\w*|uebernacht\w*)\b)"
+        r"(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß'-]*(?=\s*(?:[.!?;,]|$))",
         multiplicity_source,
         re.IGNORECASE,
     ):
