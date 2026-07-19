@@ -14,7 +14,7 @@ Snapshots. Sie sind kein aktueller Arbeitsauftrag.
 Die übrigen Dateien sind aufeinanderfolgende Arbeitsaufnahmen vom 2026-07-13
 und der Snapshot vom 2026-07-15. Ihre damaligen Statusangaben bleiben zur
 Nachvollziehbarkeit erhalten; maßgeblich ist ausschließlich der aktive Plan in
-`../Abgeschlossene Baupläne/`.
+`../Baupläne/`.
 
 ## Ablageregel
 
