@@ -15056,3 +15056,8 @@ Restart erst bei `20/20`.
 - Konfliktprüfung bleibt aktiv; unterschiedliche Wohn-/Meldeadressen liefern leer.
 - Verifikation: `tests/test_weather_context.py` -> `174 passed`, vier Compound-Labeled-Status-Smokes plus drei Konflikt-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `e0f1fedb fix: preserve compound cities in labels`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4
+
+- `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
+- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
