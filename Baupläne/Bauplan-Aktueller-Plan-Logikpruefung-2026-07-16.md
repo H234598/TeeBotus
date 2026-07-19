@@ -14770,7 +14770,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-2
 
 - `teebotus.service` aktiv/running, `MainPID 434057`, Start `2026-07-19 03:36:33 CEST`.
-- Neuer Zyklus seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `10/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Präpositionale Straßennamen
 
@@ -14834,3 +14834,10 @@ Restart erst bei `20/20`.
 - Altadresse bleibt historisch; nur neue Stadt wird als aktueller Wohnort verwendet.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, ein Street-Address-Change-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `26dbd66c fix: parse street address residence changes`.
+
+### Folgefix 2026-07-19: Straßenadresswechsel mit `auf`
+
+- `Wohnadresse wechselte von Musterstraße 5, Berlin auf Hauptweg 7, Hamburg` liefert Hamburg.
+- Alte Adresse bleibt als Wechselquelle; neuer Ort gewinnt.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, ein Switched-Street-Address-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8247b5f3 fix: parse switched street residence addresses`.
