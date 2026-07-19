@@ -15387,3 +15387,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `10/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Weitere Stadt-vor-Straße-Wechsel
+
+- `Wohnadresse ist jetzt ... statt ...`, `alte Wohnadresse war ..., neue ist ...`, `Wohnadresse: vorher ..., jetzt ...`, `Wohnadresse geändert: ... nach ...` und `von ... nach ...: neue Wohnadresse` werden erkannt.
+- Die Wechselpatterns werden im Konflikt-Guard als ein Wohnadressziel behandelt; separate `Meldeadresse`, `Arbeitsadresse` und unsichere Fragen bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `204 passed`, acht gezielte Positive-/Negativ-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9ae160c2 fix: parse additional street address moves`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-25
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `11/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
