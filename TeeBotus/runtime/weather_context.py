@@ -284,8 +284,10 @@ _OTHER_PERSON_RESIDENCE_LABEL = (
     r"betreuer\w*|therapeut\w*|arzt\w*)"
 )
 _OTHER_RESIDENCE_OWNER_LABEL = (
-    rf"(?:{_OTHER_PERSON_RESIDENCE_LABEL}|arbeitgeber(?:s)?|firma|unternehmen|"
-    r"betrieb|organisation|verein|schule)"
+    rf"(?:{_OTHER_PERSON_RESIDENCE_LABEL}|arbeitgeber\w*|firm\w*|unternehmen\w*|"
+    r"betrieb\w*|organisation\w*|verein\w*|schule\w*|abteilung\w*|praxis\w*|"
+    r"klinik\w*|universit(?:ät|aet)\w*|hochschule\w*|institut\w*|verband\w*|"
+    r"behörde\w*|behoerde\w*|krankenhaus\w*)"
 )
 _RESIDENCE_LABEL_DETERMINER = (
     r"(?:meine|unsere|mein|unser|der|die|das|ein(?:e|en|em|er|es)?)"
