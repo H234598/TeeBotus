@@ -15411,3 +15411,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `12/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Umzugsverben mit Stadt vor Straße
+
+- `Ich bin aus/von ... nach ... umgezogen`, `Ich zog von ... nach ...`, `Von ... bin ich nach ... gezogen` und der abgesicherte `Umzug ...: neue Wohnadresse` werden erkannt.
+- Freie Bewegungsformulierungen ohne Umzugsverb bleiben ungeklärt; zusätzliche `Meldeadresse` und Fahrten werden nicht als Wohnort übernommen.
+- Verifikation: `tests/test_weather_context.py` -> `206 passed`, vier positive Move-Smokes plus Fahrt-/Melde-Negativfälle, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1f6173bc fix: parse move verb street addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-27
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `13/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
