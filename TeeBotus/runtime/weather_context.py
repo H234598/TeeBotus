@@ -5398,6 +5398,14 @@ def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
     if pattern_start < len(source) and source[pattern_start] in ",;":
         prefix_source += source[pattern_start]
     prefix = re.split(r"[,;]\s*", prefix_source)[-1]
+    label_start = re.match(r"\s*(?:\S+\s+){0,3}\S*", source[pattern_start:])
+    secondary_label_context = prefix + " " + (label_start.group(0) if label_start else "")
+    if re.search(
+        rf"(?i)\b(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+        rf"{_SECONDARY_RESIDENCE_LABEL}\b",
+        secondary_label_context,
+    ):
+        return True
     if re.search(r"\b(?:dein(?:e)?|euer(?:e)?)\s*$", prefix, re.IGNORECASE) and re.match(
         r"\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\b",
@@ -6588,7 +6596,9 @@ def _has_non_residential_city_tail(value: str) -> bool:
             r"(?:(?:meinen|meine|den|die|das)\s+)?(?:urlaub|arbeit)\b|"
             r"\s+(?:ist|war|wird)\s+(?:(?:die|der|das)\s+)?"
             r"(?:(?:meines|meiner|meinem|meinen|unseres|unserer|unserem|unseren)\s+)?"
-            r"(?:arbeitgeber\w*|firma\w*|unternehmen\w*|betrieb\w*|organisation\w*|verein\w*)\b",
+            r"(?:arbeitgeber\w*|firma\w*|unternehmen\w*|betrieb\w*|organisation\w*|verein\w*)\b|"
+            r"\s+(?:nebenwohnsitzlich|als\s+(?:zweite\w*\s+)?wohn(?:sitz|ort)|"
+            r"als\s+(?:neben|zweit)wohnung)\b",
             str(value or ""),
         )
     )
