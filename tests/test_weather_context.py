@@ -3132,6 +3132,15 @@ def test_extract_residence_city_handles_temporal_label_forms() -> None:
     assert extract_residence_city("Mein künftiger Wohnort ist Hamburg.") == ""
 
 
+def test_extract_residence_city_handles_have_primary_home_label() -> None:
+    assert extract_residence_city("Ich habe eine Wohnung in Berlin, Musterstr. 5.") == "Berlin"
+    assert extract_residence_city(
+        "Ich habe meine Wohnung in Berlin, Musterstr. 5; meine Zweitwohnung in Hamburg, Hauptweg 7."
+    ) == "Berlin"
+    assert extract_residence_city("Ich habe eine Zweitwohnung in Hamburg, Hauptweg 7.") == ""
+    assert extract_residence_city("Ich habe eine Ferienwohnung in Hamburg, Hauptweg 7.") == ""
+
+
 def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
