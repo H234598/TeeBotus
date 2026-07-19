@@ -4526,6 +4526,14 @@ def _has_future_residence_prefix(source: str, match_start: int, city_start: int 
     prefix_end = city_start if city_start is not None else match_start
     prefix = source[:prefix_end]
     sentence = re.split(r"(?<!\d)(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
+    match_sentence = re.split(
+        r"(?<!\d)(?<!\bSt)[.!?;\n]\s*", source[:match_start], flags=re.IGNORECASE
+    )[-1]
+    if re.search(
+        r"(?i)(?:\bkünft\w*|\bkuenft\w*|\bzukünft\w*|\bzukuenft\w*|\bgeplant\w*)\s*$",
+        match_sentence,
+    ):
+        return True
     clause = re.split(r"[,;]\s*", sentence)[-1]
     return bool(
         re.search(
