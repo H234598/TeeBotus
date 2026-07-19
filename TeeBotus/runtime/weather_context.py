@@ -475,7 +475,8 @@ _CITY_CHANGE_DIRECTIONAL_CITY_BEFORE_STREET = re.compile(
     re.IGNORECASE,
 )
 _CITY_CHANGE_MOVE_FROM_CITY_BEFORE_STREET = re.compile(
-    r"\b(?:(?:ich|wir)\s+(?:bin|sind)\s+)?(?:aus|von)\s+"
+    r"(?<!ziehe\s)(?<!ziehen\s)(?<!ziehe\sgerade\s)(?<!ziehen\sgerade\s)\b"
+    r"(?:(?:ich|wir)\s+(?:bin|sind)\s+)?(?:aus|von)\s+"
     rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
     r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
     rf"{_LABELED_STREET_ADDRESS_CORE}(?:\s+bin\s+ich)?\s+nach\s+"
