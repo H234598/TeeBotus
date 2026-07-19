@@ -15579,3 +15579,14 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `6/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Alternativmarker bei Wohnorten
+
+- `entweder ... oder ...` wird nicht mehr als Stadtfragment gespeichert; alternative Adressziele bleiben ungeklärt.
+- Verifikation: `tests/test_weather_context.py` -> `219 passed`, zwei Alternative-/Frage-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c9596c56 fix: reject either-or residence targets`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-41
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `7/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
