@@ -5158,7 +5158,8 @@ def _has_other_person_residence_suffix(source: str, city_end: int) -> bool:
             r"arbeitsort|arbeitsadresse)\s+"
             r"(?:mein(?:er|es|em|en)?|unser(?:er|es|em|en)?)\s+"
             r"(?:freund(?:in)?|partner(?:in)?|eltern|familie|kinder|mutter|vater|"
-            r"tochter|sohn|geschwister|kolleg(?:e|in|en)|mitbewohner(?:in)?|nachbar(?:in)?)\b",
+            r"tochter|sohn|geschwister|kolleg(?:e|in|en)|mitbewohner(?:in)?|nachbar(?:in)?|"
+            r"arbeitgeber(?:s)?|firma|unternehmen|betrieb|organisation|verein|schule)\b",
             suffix,
         )
     )
@@ -5801,7 +5802,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"arbeitsort|arbeitsadresse)\s+"
         r"(?:mein(?:er|es|em|en)?|unser(?:er|es|em|en)?)\s+"
         r"(?:freund(?:in)?|partner(?:in)?|eltern|familie|kinder|mutter|vater|"
-        r"tochter|sohn|geschwister|kolleg(?:e|in|en)|mitbewohner(?:in)?|nachbar(?:in)?)\b",
+        r"tochter|sohn|geschwister|kolleg(?:e|in|en)|mitbewohner(?:in)?|nachbar(?:in)?|"
+        r"arbeitgeber(?:s)?|firma|unternehmen|betrieb|organisation|verein|schule)\b",
         source,
         re.IGNORECASE,
     ):
