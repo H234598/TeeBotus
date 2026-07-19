@@ -9676,7 +9676,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-18-Post-Restart
 
 - `teebotus.service` aktiv, `MainPID 3246`, Start `2026-07-18 22:44:34 CEST`.
-- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-18: Artikel bei Adresslabels
 
@@ -14751,3 +14751,10 @@ Restart erst bei `20/20`.
 - PLZ, Hausnummer und Stadt werden weiterhin getrennt verarbeitet.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, zwei Separator-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `cea41f95 fix: accept street address label separators`.
+
+### Folgefix 2026-07-19: Zusammengesetzte Hausnummern
+
+- Hausnummern mit Bereich, Schrägstrich oder Buchstabenabstand (`5-7`, `5/7`, `5 b`) werden erkannt.
+- Direkte Erkennung und Straßenadress-Konfliktguard verwenden dieselbe Variantenlogik.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Compound-House-Number-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `fd28e27c fix: parse compound street house numbers`.
