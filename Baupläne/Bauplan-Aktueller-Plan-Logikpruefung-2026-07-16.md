@@ -15134,3 +15134,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
 - Neuer Zyklus seit diesem Restart: `9/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Straßenadressdetails nicht als Stadt
+
+- `Hinterhaus`, `Vorderhaus`, Etagen-, Wohnungs- und einzelne `links/rechts`-Details werden aus späteren Fallback-Kandidaten ausgeschlossen.
+- Stadt-vor-Straßenadresse mit solchen Details behält korrekte Stadt; bestehende Detail- und Konfliktformen bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `184 passed`, drei Street-Detail-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `54447028 fix: reject street details as cities`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-4
+
+- `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
+- Neuer Zyklus seit diesem Restart: `10/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
