@@ -283,7 +283,8 @@ _RESIDENCE_TIME_QUALIFIER = (
     rf"ständig|staendig|wieder|erneut|für\s+{_RESIDENCE_DURATION}|"
     r"zur\s+(?:miete|untermiete|zwischenmiete)|"
     r"bis\s+(?:auf\s+weiteres|zum\s+ende\s+(?:des\s+)?(?:monats|jahres)|"
-    r"ende\s+(?:des\s+)?(?:monats|jahres)|(?:monats|jahres)ende)|"
+    r"ende\s+(?:des\s+)?(?:monats|jahres)|(?:monats|jahres)ende|"
+    r"(?:zum\s+)?jahresende)|"
     r"vor(?:uebergehend|übergehend))"
 )
 _RESIDENCE_LOCATION_ADVERB = (
@@ -4904,7 +4905,7 @@ CITY_TRAILING_STOP_RE = re.compile(
     r"(?:ist|bleibt)\s+es\b|laut\b.*|"
     r"ab\s+sofort|"
     r"bis\s+(?:auf\s+weiteres|zum\s+ende\s+(?:des\s+)?(?:monats|jahres)|"
-    r"ende\s+(?:des\s+)?(?:monats|jahres))|"
+    r"ende\s+(?:des\s+)?(?:monats|jahres)|(?:zum\s+)?jahresende)|"
     r"\.|,|;|:|!|\?)(?=\s|[.!?;,]|$).*$",
     re.IGNORECASE,
 )
