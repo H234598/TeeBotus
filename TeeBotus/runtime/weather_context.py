@@ -6039,7 +6039,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             r"(?!nicht\w*\b|(?:ich\s+)?(?:wohne|lebe)\s+nicht\b|"
             r"bin\b|sein\b|sind\s+(?:beruflich|dienstlich|zum\s+arbeiten)\b|arbeit\w*\b|studier\w*\b|lern\w*\b|zieh\w*\b|"
             r"schlaf\w*\b|mach\w*\b|komm\w*\b|fahr\w*\b|geh\w*\b|"
-            r"hab\w*\b|besitz\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|"
+            r"hab\w*\b|besitz\w*\b|vermiet\w*\b|verkauf\w*\b|verwalt\w*\b|"
+            r"renovier\w*\b|sanier\w*\b|nutz\w*\b|teil\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|"
             r"pend\w*\b|seh\w*\b|übernacht\w*\b|uebernacht\w*\b|"
             r"unser(?:e)?\s+(?:wohnort|wohnsitz|hauptwohnsitz|arbeitsort)\b)[\wÄÖÜäöüß'-]+",
             source,
