@@ -2171,6 +2171,9 @@ def test_extract_residence_city_handles_bare_residence_address_label() -> None:
     assert extract_residence_city(
         "Meine Wohnadresse wechselte von Musterstraße 5, Berlin auf Hauptweg 7, Hamburg."
     ) == "Hamburg"
+    assert extract_residence_city(
+        "Ich bin von Musterstraße 5, Berlin nach Hauptweg 7, Hamburg gezogen."
+    ) == "Hamburg"
     assert extract_residence_city("Ich wohne in Berlin 10115.") == "Berlin"
     assert extract_residence_city("Wohnsitz: Berlin 10115.") == "Berlin"
     assert extract_residence_city("Wohnort: Berlin, Hamburg.") == ""
