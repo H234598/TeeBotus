@@ -15673,3 +15673,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `14/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Städtenamen mit `bin` am Anfang
+
+- `_clean_city` verwirft `Binz` und `Bingen` nicht mehr als vermeintliche `bin...`-Verbfragmente.
+- Verbphrase-Schutz bleibt für das eigenständige Wort `bin` aktiv.
+- Verifikation: `tests/test_weather_context.py` -> `226 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d8369462 fix: accept cities beginning with bin`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-49
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `15/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
