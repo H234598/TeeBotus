@@ -15750,3 +15750,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` nach Zyklusrestart aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
 - Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Wohnort neben besessenem Zweitobjekt
+
+- `Ich wohne in Berlin und besitze ein Haus/eine Wohnung in Hamburg` behält Berlin als Wohnort.
+- Besitzformeln werden nicht als zweites Wohnziel behandelt; echte zweite Wohnformeln bleiben mehrdeutig.
+- Verifikation: `tests/test_weather_context.py` -> `229 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `52e559c1 fix: preserve residence beside owned property`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-56
+
+- `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
+- Neuer Zyklus seit diesem Restart: `1/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
