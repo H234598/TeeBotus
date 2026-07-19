@@ -252,6 +252,15 @@ _RESIDENCE_LABEL_CURRENT_QUALIFIER = (
     r"vorlaeufig\w*|befristet\w*|unbefristet\w*|fest\w*|hauptsächlich\w*|"
     r"hauptsaechlich\w*|ständig\w*|staendig\w*|stabil\w*|momentan\w*"
 )
+_LABELED_STREET_ADDRESS = (
+    r"(?:"
+    r"[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|"
+    r"chaussee|steig|promenade)\s+|"
+    r"(?:am|an der|an den|auf der|auf dem|auf den|unter der|unter den|in der|in den|"
+    r"im|zum|zur|vom|von der|vor der|hinter der)\s+[^,.;!?]{1,100}?\s+"
+    r")"
+    r"\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?\s*,\s*"
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -1105,8 +1114,7 @@ CITY_CHANGE_PATTERNS = (
     ),
     re.compile(
         r"\b(?:wohnort|wohnsitz)\s*:\s*[^,.;!?]{1,100}?"
-        r"(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
-        r"\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?\s*,\s*(?:\d{5}\s+)?"
+        rf"{_LABELED_STREET_ADDRESS}(?:\d{{5}}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -2806,8 +2814,7 @@ CITY_PATTERNS = (
     re.compile(
         rf"\b(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
         r"(?:adresse|wohnadresse|wohnanschrift|anschrift|meldeadresse|meldeanschrift|meldesitz)\s*(?::|=|,)\s*"
-        r"(?:[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
-        r"\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?\s*,\s*)?(?:\d{5}\s+)?"
+        rf"(?:{_LABELED_STREET_ADDRESS})?(?:\d{{5}}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})"
         r"(?=\s*[.!?;,]|$)",
         re.IGNORECASE,
@@ -2819,8 +2826,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:meine\s+|unsere\s+)?(?:adresse|wohnadresse|wohnanschrift|anschrift)\s*:\s*"
-        r"[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade)\s+"
-        r"\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?\s*,\s*(?:\d{5}\s+)?"
+        rf"{_LABELED_STREET_ADDRESS}(?:\d{{5}}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -4012,11 +4018,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
         r"(?:\s+\([^)]{1,30}\))?)(?=\s*(?:[,.;!?]|$))"
     )
-    street_address_prefix = (
-        r"[^,.;!?]{1,100}?(?:straße|strasse|str\.|weg|allee|gasse|platz|ufer|ring|"
-        r"chaussee|steig|promenade)\s+"
-        r"\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?\s*,\s*"
-    )
+    street_address_prefix = _LABELED_STREET_ADDRESS
     residence_patterns = (
         re.compile(
             rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+{city_capture}",
