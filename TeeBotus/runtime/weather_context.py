@@ -1334,6 +1334,7 @@ CITY_CHANGE_PATTERNS = (
         r"während\s+(?:der|des|einer|eines|meines|meiner)\s+"
         r"(?:ferien|urlaubs|reise|dienstreise|aufenthalts)|"
         r"auf\s+(?:dienstreise|reisen)|während\s+(?:einer|der)\s+dienstreise|"
+        r"bei\s+besuch|zu\s+besuch|während\s+(?:des|eines|meines)\s+besuchs|"
         r"geschäftlich|geschaeftlich|beruflich|am\s+wochenende|unter\s+der\s+woche|"
         r"werktags|wochentags|montags?|dienstags?|mittwochs?|donnerstags?|freitags?|"
         r"samstags?|sonntags?)\s+"
@@ -6580,6 +6581,8 @@ def _has_temporary_residence_prefix(source: str, match_start: int) -> bool:
             r"\bwaehrend\s+meines)\s+(?:urlaub|ferien)\s*$|"
             r"\b(?:während|waehrend)\s+(?:der|des|einer|eines|meines|meiner)\s+"
             r"(?:ferien|urlaubs|reise|dienstreise|aufenthalts)\s*$|"
+            r"\b(?:bei|zu)\s+besuch\s*$|"
+            r"\b(?:während|waehrend)\s+(?:des|eines|meines)\s+besuchs\s*$|"
             r"\b(?:am\s+wochenende|unter\s+der\s+woche|werktags|wochentags|"
             r"montags?|dienstags?|mittwochs?|donnerstags?|freitags?|samstags?|sonntags?|"
             r"morgens|vormittags|mittags|nachmittags|abends|nachts|tagsüber|tagsueber)\s*$",
