@@ -140,6 +140,7 @@ _NON_CITY_REGION_NAMES = frozenset(
         "thueringen",
         "thüringen",
         "nordrhein-westfalen",
+        "nrw",
         "baden-württemberg",
         "baden-wuerttemberg",
         "rheinland-pfalz",
@@ -211,6 +212,9 @@ _STREET_COMPOUND_CITY_PATTERN = (
     r"Dillingen\s+an\s+der\s+Donau|Neumarkt\s+in\s+der\s+Oberpfalz|"
     r"Mühlhausen/Thüringen|Muehlhausen/Thueringen|Schwedt/Oder|Wittstock/Dosse|"
     r"St\.\s+Georgen\s+im\s+Schwarzwald)"
+)
+_REGION_NAME_PATTERN = "|".join(
+    re.escape(name) for name in sorted(_NON_CITY_REGION_NAMES, key=len, reverse=True)
 )
 _KNOWN_CITY_DISTRICT_BASES = {
     "berlin-mitte": "Berlin",
@@ -787,6 +791,13 @@ _COMPOUND_CITY_RESIDENCE = re.compile(
     r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
     rf"(?P<city>{_STREET_COMPOUND_CITY_PATTERN})"
     r"(?=\s*(?:[.!?;,]|(?:in|an|auf|unter)\s+|$))",
+    re.IGNORECASE,
+)
+_REGIONAL_PREFIX_RESIDENCE = re.compile(
+    r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|im)\s+"
+    rf"(?:{_REGION_NAME_PATTERN})\s*,\s*(?:in|bei)\s+"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+    r"(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
 _HAVE_PRIMARY_HOME_CITY_BEFORE_STREET = re.compile(
@@ -2615,6 +2626,7 @@ CITY_PATTERNS = (
     _MAIN_RESIDENCE_CITY_BEFORE_STREET,
     _MAIN_RESIDENCE_CITY,
     _COMPOUND_CITY_RESIDENCE,
+    _REGIONAL_PREFIX_RESIDENCE,
     _HAVE_PRIMARY_HOME_CITY_BEFORE_STREET,
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
