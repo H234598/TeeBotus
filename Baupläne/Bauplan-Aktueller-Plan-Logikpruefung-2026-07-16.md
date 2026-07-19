@@ -15146,3 +15146,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
 - Neuer Zyklus seit diesem Restart: `10/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: PLZ vor Stadt bei Straßenadressen
+
+- `10115 Berlin`, `20095 Hamburg` usw. funktionieren jetzt vor Straßenadresse in Direkt-, Wohnort-, Status- und Meldeadressformen.
+- Unterschiedliche PLZ-Wohn- und Meldeadressen bleiben mehrdeutig und liefern leer.
+- Verifikation: `tests/test_weather_context.py` -> `185 passed`, vier PLZ-Positivformen plus Konflikt-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `69e83dc2 fix: parse postal city street residences`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-5
+
+- `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
+- Neuer Zyklus seit diesem Restart: `11/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
