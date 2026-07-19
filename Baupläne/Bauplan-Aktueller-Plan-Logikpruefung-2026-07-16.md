@@ -15786,3 +15786,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
 - Neuer Zyklus seit diesem Restart: `3/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Fremde Wohnortlabels nach eigener Stadt
+
+- `Hamburg ist der Wohnort meiner Freundin/Eltern` wird nicht als eigener Wohnort ausgewertet.
+- Das gilt für Komma- und `und`-Verknüpfung; eigener Wohnort Berlin bleibt erhalten.
+- Verifikation: `tests/test_weather_context.py` -> `231 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8e65bb23 fix: ignore other person residence labels`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-59
+
+- `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
+- Neuer Zyklus seit diesem Restart: `4/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
