@@ -15423,3 +15423,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `13/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Gegenwartsadresse mit Stadt vor Straße
+
+- `Ich habe jetzt ... als Wohnadresse statt ...`, `Wohnanschrift hat sich geändert: neu, früher alt` und `Wohnadresse ist jetzt ... und nicht mehr ...` werden erkannt; Possessiv vor `Wohnadresse` ist optional, `Arbeitsadresse` bleibt ausgeschlossen.
+- Separate `Meldeadresse` bleibt konfliktbehaftet und liefert leer.
+- Verifikation: `tests/test_weather_context.py` -> `207 passed`, drei positive Gegenwarts-Smokes plus Arbeits-/Melde-Negativfälle, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bef9da4f fix: parse current residence address phrasing`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-28
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `14/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
