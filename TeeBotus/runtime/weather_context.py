@@ -267,6 +267,7 @@ _STREET_TYPE = (
     r"winkel|kamp|koppel|dorf|feld|wiesen|park|terrasse|hof|berg|gürtel|guertel)"
 )
 _POSTAL_CODE = r"(?:[A-Z]{1,3}[- ]?)?\d{5}"
+_COUNTRY_POSTAL_CODE = r"(?:[A-Z]{1,3}[- ]?)?\d{4,5}"
 _LABELED_STREET_ADDRESS_DETAIL = (
     r"(?:"
     r"(?:hinterhaus|vorderhaus|hinterhof|vorderhof|seitenflügel|seitenfluegel|"
@@ -321,6 +322,15 @@ _GENITIVE_AREA_BEFORE_STREET_CITY = (
 )
 _POSTAL_CITY_BEFORE_STREET = (
     rf"{_POSTAL_CODE}\s+"
+    rf"(?P<city>(?:{_STREET_COMPOUND_CITY_PATTERN}|"
+    r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?))(?:\s+(?:in|an|auf|unter)\s+|,\s+)"
+    rf"{_LABELED_STREET_ADDRESS_CORE}"
+    r"(?=\s*(?:[.!?;,]|wohnhaft|ansässig|ansaessig|gemeldet|registriert|$))"
+)
+_COUNTRY_CITY_BEFORE_STREET = (
+    r"(?:in\s+(?:der\s+)?)?(?:deutschland|österreich|oesterreich|schweiz)\s*,\s*"
+    r"(?:(?:in|bei)\s+)?"
+    rf"(?:{_COUNTRY_POSTAL_CODE}\s+)?"
     rf"(?P<city>(?:{_STREET_COMPOUND_CITY_PATTERN}|"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?))(?:\s+(?:in|an|auf|unter)\s+|,\s+)"
     rf"{_LABELED_STREET_ADDRESS_CORE}"
@@ -2099,6 +2109,36 @@ CITY_CHANGE_PATTERNS = (
     ),
 )
 CITY_PATTERNS = (
+    re.compile(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        rf"{_COUNTRY_CITY_BEFORE_STREET}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?:mein(?:e)?|unser(?:e)?)\s+"
+        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
+        r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
+        r"meldesitz|wohnung|unterkunft|bleibe|mietwohnung|wg)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        rf"{_COUNTRY_CITY_BEFORE_STREET}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?:(?:ich|wir)\s+(?:bin|sind)\s+)?"
+        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+"
+        rf"{_COUNTRY_CITY_BEFORE_STREET}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
+        r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
+        r"meldesitz|wohnung|unterkunft|bleibe|mietwohnung|wg)\s*(?::|=|,)\s*"
+        rf"{_COUNTRY_CITY_BEFORE_STREET}",
+        re.IGNORECASE,
+    ),
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         rf"{_AREA_BEFORE_STREET_PREFIX}{_AREA_BEFORE_STREET_CITY}",
@@ -4377,6 +4417,16 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
         r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
         r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
         r"meldesitz|wohnung|unterkunft|bleibe|mietwohnung|wg)\s*(?::|=|,)\s*"
+        rf"{_COUNTRY_CITY_BEFORE_STREET}",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
+        r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
+        r"meldesitz|wohnung|unterkunft|bleibe|mietwohnung|wg)\s*(?::|=|,)\s*"
         rf"{_AREA_BEFORE_STREET_PREFIX}{_AREA_BEFORE_STREET_CITY}",
         source,
         re.IGNORECASE,
@@ -4567,12 +4617,18 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     attributive_area_before_street_capture = _ATTRIBUTIVE_AREA_BEFORE_STREET_CITY
     genitive_area_before_street_capture = _GENITIVE_AREA_BEFORE_STREET_CITY
     postal_city_before_street_capture = _POSTAL_CITY_BEFORE_STREET
+    country_city_before_street_capture = _COUNTRY_CITY_BEFORE_STREET
     locality_prefix = (
         r"(?:in|bei|im)\s+(?:der\s+(?:stadt|gemeinde|kommune|ortschaft|landeshauptstadt|"
         r"metropole|großstadt|grossstadt)|stadtgebiet(?:\s+von)?)\s+"
     )
     street_address_prefix = _LABELED_STREET_ADDRESS
     residence_patterns = (
+        re.compile(
+            rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+            rf"{country_city_before_street_capture}",
+            re.IGNORECASE,
+        ),
         re.compile(
             rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
             rf"{area_before_street_capture}",
@@ -4627,6 +4683,13 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             re.IGNORECASE,
         ),
         re.compile(
+            rf"(?:^|[.!?;,:]\s*)(?:(?:ich|wir)\s+(?:bin|sind)\s+)?"
+            rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+            r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+"
+            rf"{country_city_before_street_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
             rf"\b(?:ich|wir)\s+(?:bin|sind)\s+(?:in|bei)\s+"
             rf"{postal_city_before_street_capture}\s+"
             r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b",
@@ -4660,6 +4723,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         ),
     )
     address_patterns = (
+        re.compile(
+            rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+            r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s+"
+            r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
+            rf"{country_city_before_street_capture}",
+            re.IGNORECASE,
+        ),
         re.compile(
             rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
             r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
@@ -4730,6 +4801,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
             r"(?:(?::|=|,)\s*|\s+)"
             rf"{street_address_prefix}{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+            r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
+            r"\s*(?::|=|,)\s*"
+            rf"{country_city_before_street_capture}",
             re.IGNORECASE,
         ),
         re.compile(
@@ -4845,6 +4924,27 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         r"(?:(?::|=|,)\s*|(?:ist|lautet|liegt|befindet\s+sich)\s+)?"
         rf"(?:{street_address_prefix}|(?:(?:in|bei)\s+))?"
         rf"{city_capture}",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            registered_address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
+        rf"\b(?:(?:{_RESIDENCE_LABEL_DETERMINER})\s+)?"
+        r"(?:meldeadresse|meldeanschrift|meldesitz)\s*"
+        r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
+        rf"{country_city_before_street_capture}",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            registered_address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:meldeadresse|meldeanschrift|meldesitz)\s*(?::|=|,)\s*"
+        rf"{country_city_before_street_capture}",
         source,
         re.IGNORECASE,
     ):
@@ -5039,6 +5139,8 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
+    if re.search(_COUNTRY_CITY_BEFORE_STREET, source, re.IGNORECASE):
+        return False
     if re.search(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben|bin|sind)\s+(?:in|bei)\s+"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*,\s*"

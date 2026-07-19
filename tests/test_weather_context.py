@@ -1602,6 +1602,19 @@ def test_extract_residence_city_handles_postal_status_street_forms() -> None:
     ) == ""
 
 
+def test_extract_residence_city_handles_country_address_prefixes() -> None:
+    assert extract_residence_city("Ich wohne in Deutschland, 10115 Berlin, Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Deutschland, Berlin, Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Wohnadresse: Deutschland, 10115 Berlin, Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Wohnhaft in Deutschland, 10115 Berlin, Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Ich lebe in Österreich, 1010 Wien, Hauptstraße 7.") == "Wien"
+    assert extract_residence_city("Meine Wohnadresse ist in der Schweiz, 8001 Zürich, Bahnhofstraße 2.") == "Zürich"
+    assert extract_residence_city(
+        "Meine Wohnadresse ist in Deutschland, 10115 Berlin, Musterstraße 5; "
+        "Meldeadresse Hamburg."
+    ) == ""
+
+
 def test_extract_residence_city_handles_markt_street_type() -> None:
     assert extract_residence_city("Ich wohne am Markt 5 in Berlin.") == "Berlin"
     assert extract_residence_city("Meine Wohnadresse ist am Markt 5, Berlin.") == "Berlin"
