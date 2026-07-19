@@ -242,6 +242,9 @@ _RESIDENCE_DISTANCE_PREFIX = (
     r"(?:km|kilometer)\s+"
 )
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
+_RESIDENCE_LABEL_DETERMINER = (
+    r"(?:meine|unsere|mein|unser|der|die|das|ein(?:e|en|em|er|es)?)"
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -2183,14 +2186,14 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?:^|[.!?;,]\s*)(?:meine|unsere|mein|unser)?\s*"
+        rf"(?:^|[.!?;,]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
         r"(?:meldeadresse|meldeanschrift|meldesitz)\s*(?::|=|,)?\s*"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
         r"(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?:^|[.!?;,:]\s*)(?:meine|unsere)?\s*"
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
         r"(?:meldeadresse|meldeanschrift|meldesitz|privatadresse|privatanschrift)\s*"
         r"(?::|=|,)\s*(?:(?:in|bei)\s+)?"
         r"(?P<city>(?![^.!?;,]*\s+(?:und|oder)\s+)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
@@ -2198,11 +2201,12 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?:^|[.!?;,:]\s*)(?:meine|unsere|mein|unser)?\s*"
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
         r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
         r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
-        r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
+        r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse|"
+        r"meldeadresse|meldeanschrift|meldesitz)"
         r"(?:(?::|=|,)\s*|\s+)"
         r"(?!(?:ist|war|wird|liegt|lautet|befindet\s+sich|bleibt)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
@@ -2210,7 +2214,7 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"(?:^|[.!?;,:]\s*)(?:meine|unsere|mein|unser)?\s*"
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
         r"(?:(?:offiziell\w*|privat\w*|aktuell\w*|amtlich\w*|neu\w*|gemeldet\w*)\s+)?"
         r"(?:meldeadresse|meldeanschrift|meldesitz)\s*"
         r"(?:(?::|=|,)\s*|(?:ist|liegt|lautet|befindet\s+sich)\s+)"
@@ -3940,12 +3944,12 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             re.IGNORECASE,
         ),
         re.compile(
-            r"(?:^|[.!?;,\n]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz)\s+"
+            rf"(?:^|[.!?;,\n]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*(?:wohnort|wohnsitz)\s+"
             rf"(?:ist|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?{city_capture}",
             re.IGNORECASE,
         ),
         re.compile(
-            r"(?:^|[.!?;,\n]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*"
+            rf"(?:^|[.!?;,\n]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
             r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
             r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
             r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
@@ -3962,7 +3966,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             re.IGNORECASE,
         ),
         re.compile(
-            r"(?:^|[.!?;,:]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*"
+            rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
             r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
             r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
             r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
@@ -3997,7 +4001,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     address_cities = collect(address_patterns)
     registered_address_cities: set[str] = set()
     for match in re.finditer(
-        r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?meldeadresse\s*"
+        rf"\b(?:(?:{_RESIDENCE_LABEL_DETERMINER})\s+)?meldeadresse\s*"
         r"(?:(?::|=|,)\s*|(?:ist|lautet|liegt|befindet\s+sich)\s+)?"
         r"(?:(?:in|bei)\s+)?"
         rf"{city_capture}",
