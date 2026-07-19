@@ -172,6 +172,7 @@ _KNOWN_COMPOUND_CITY_NAMES = {
     "neustadt an der weinstraße": "Neustadt an der Weinstraße",
     "rüdesheim am rhein": "Rüdesheim am Rhein",
     "halle (saale)": "Halle (Saale)",
+    "halle saale": "Halle (Saale)",
     "st. georgen im schwarzwald": "St. Georgen im Schwarzwald",
     "wörth am rhein": "Wörth am Rhein",
 }
@@ -4372,6 +4373,7 @@ def extract_residence_city(text: str) -> str:
     source = str(text or "")
     if source.strip().endswith("?"):
         return ""
+    source = re.sub(r"\bhalle\s*\(\s*saale\s*\)", "Halle Saale", source, flags=re.IGNORECASE)
     source = _PARENTHESIZED_STREET_DETAIL.sub(
         lambda match: match.group("address"),
         source,
