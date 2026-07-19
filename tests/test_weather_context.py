@@ -1580,6 +1580,17 @@ def test_extract_residence_city_does_not_store_street_details_as_city() -> None:
     assert extract_residence_city("Meine Wohnadresse ist in Köln, Nebenweg 3, Wohnung B.") == "Köln"
 
 
+def test_extract_residence_city_handles_postal_code_before_city() -> None:
+    assert extract_residence_city("Ich wohne in 10115 Berlin in der Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist 50667 Köln in der Domstraße 3.") == "Köln"
+    assert extract_residence_city("Wohnhaft in 20095 Hamburg an der Hauptstraße 7.") == "Hamburg"
+    assert extract_residence_city("Meldeadresse: 01067 Dresden in der Hauptstraße 9.") == "Dresden"
+    assert extract_residence_city(
+        "Meine Wohnadresse ist 10115 Berlin in der Musterstraße 5; "
+        "Meldeadresse 20095 Hamburg."
+    ) == ""
+
+
 def test_extract_residence_city_handles_city_before_street_without_comma() -> None:
     assert extract_residence_city("Ich wohne in Berlin in der Musterstraße 5.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin an der Musterstraße Nr. 5.") == "Berlin"

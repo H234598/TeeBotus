@@ -318,6 +318,13 @@ _GENITIVE_AREA_BEFORE_STREET_CITY = (
     rf"{_LABELED_STREET_ADDRESS_CORE}"
     r"(?=\s*[.!?;,]|$)"
 )
+_POSTAL_CITY_BEFORE_STREET = (
+    rf"{_POSTAL_CODE}\s+"
+    rf"(?P<city>(?:{_STREET_COMPOUND_CITY_PATTERN}|"
+    r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?))\s+(?:in|an|auf|unter)\s+"
+    rf"{_LABELED_STREET_ADDRESS_CORE}"
+    r"(?=\s*[.!?;,]|$)"
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -2091,6 +2098,36 @@ CITY_CHANGE_PATTERNS = (
     ),
 )
 CITY_PATTERNS = (
+    re.compile(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"{_POSTAL_CITY_BEFORE_STREET}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?:mein(?:e)?|unser(?:e)?)\s+"
+        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
+        r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
+        r"meldesitz|wohnung|unterkunft|bleibe|mietwohnung|wg)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
+        rf"{_POSTAL_CITY_BEFORE_STREET}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?:(?:ich|wir)\s+(?:bin|sind)\s+)?"
+        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+(?:in|bei)\s+"
+        rf"{_POSTAL_CITY_BEFORE_STREET}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
+        r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
+        r"meldesitz|wohnung|unterkunft|bleibe|mietwohnung|wg)\s*(?::|=|,)\s*"
+        rf"(?:(?:in|bei)\s+)?{_POSTAL_CITY_BEFORE_STREET}",
+        re.IGNORECASE,
+    ),
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         rf"(?:im|in\s+der)\s+{_ATTRIBUTIVE_AREA_BEFORE_STREET_CITY}",
@@ -4500,6 +4537,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     area_before_street_capture = rf"{_AREA_BEFORE_STREET_PREFIX}{_AREA_BEFORE_STREET_CITY}"
     attributive_area_before_street_capture = _ATTRIBUTIVE_AREA_BEFORE_STREET_CITY
     genitive_area_before_street_capture = _GENITIVE_AREA_BEFORE_STREET_CITY
+    postal_city_before_street_capture = _POSTAL_CITY_BEFORE_STREET
     locality_prefix = (
         r"(?:in|bei|im)\s+(?:der\s+(?:stadt|gemeinde|kommune|ortschaft|landeshauptstadt|"
         r"metropole|großstadt|grossstadt)|stadtgebiet(?:\s+von)?)\s+"
@@ -4561,6 +4599,18 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             rf"{genitive_area_before_street_capture}",
             re.IGNORECASE,
         ),
+        re.compile(
+            rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+            rf"{postal_city_before_street_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            rf"(?:^|[.!?;,:]\s*)(?:(?:ich|wir)\s+(?:bin|sind)\s+)?"
+            rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+            r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+(?:in|bei)\s+"
+            rf"{postal_city_before_street_capture}",
+            re.IGNORECASE,
+        ),
     )
     address_patterns = (
         re.compile(
@@ -4569,6 +4619,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s+"
             r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
             rf"{street_address_prefix}{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+            r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s+"
+            r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+            rf"{postal_city_before_street_capture}",
             re.IGNORECASE,
         ),
         re.compile(
@@ -4625,6 +4683,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
             r"(?:(?::|=|,)\s*|\s+)"
             rf"{street_address_prefix}{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+            r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
+            r"\s*(?::|=|,)\s*(?:(?:in|bei)\s+)?"
+            rf"{postal_city_before_street_capture}",
             re.IGNORECASE,
         ),
         re.compile(
@@ -4732,6 +4798,28 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         r"(?:(?::|=|,)\s*|(?:ist|lautet|liegt|befindet\s+sich)\s+)?"
         rf"(?:{street_address_prefix}|(?:(?:in|bei)\s+))?"
         rf"{city_capture}",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            registered_address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
+        rf"\b(?:(?:{_RESIDENCE_LABEL_DETERMINER})\s+)?"
+        r"(?:meldeadresse|meldeanschrift|meldesitz)\s*"
+        r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        rf"{postal_city_before_street_capture}",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            registered_address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:meldeadresse|meldeanschrift|meldesitz)\s*(?::|=|,)\s*"
+        r"(?:(?:in|bei)\s+)?"
+        rf"{postal_city_before_street_capture}",
         source,
         re.IGNORECASE,
     ):
