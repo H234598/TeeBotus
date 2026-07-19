@@ -304,7 +304,8 @@ _RESIDENCE_DISTANCE_PREFIX = (
 )
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 _SECONDARY_RESIDENCE_LABEL = (
-    r"(?:zweite\w*\s+(?:wohn(?:sitz|ort)|wohnung)|"
+    r"(?:(?:zweite\w*\s+(?:wohn(?:sitz|ort)|wohnung)|"
+    r"zweit\w*(?:wohn(?:sitz|ort)|wohnung))|"
     r"neben(?:wohn(?:sitz|ort)|wohnung)|ferienwohnung\w*)"
 )
 _OTHER_PERSON_RESIDENCE_LABEL = (
@@ -6597,8 +6598,7 @@ def _has_non_residential_city_tail(value: str) -> bool:
             r"\s+(?:ist|war|wird)\s+(?:(?:die|der|das)\s+)?"
             r"(?:(?:meines|meiner|meinem|meinen|unseres|unserer|unserem|unseren)\s+)?"
             r"(?:arbeitgeber\w*|firma\w*|unternehmen\w*|betrieb\w*|organisation\w*|verein\w*)\b|"
-            r"\s+(?:nebenwohnsitzlich|als\s+(?:zweite\w*\s+)?wohn(?:sitz|ort)|"
-            r"als\s+(?:neben|zweit)wohnung)\b",
+            rf"\s+(?:nebenwohnsitzlich|als\s+{_SECONDARY_RESIDENCE_LABEL})\b",
             str(value or ""),
         )
     )
