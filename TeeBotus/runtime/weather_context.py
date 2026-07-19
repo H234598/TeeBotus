@@ -263,7 +263,7 @@ _RESIDENCE_LABEL_CURRENT_QUALIFIER = (
 _STREET_NUMBER_LABEL = r"(?:Nr\.?|Nummer|Hausnummer|Haus[- ]?Nr\.?|Hs\.?-?Nr\.?)"
 _STREET_TYPE = (
     r"(?:straße|strasse|str\.?|weg|allee|gasse|platz|ufer|ring|chaussee|steig|promenade|"
-    r"damm|kai|deich|hang|höhe|hoehe|park|terrasse|hof|berg|gürtel|guertel)"
+    r"damm|kai|deich|hang|höhe|hoehe|markt|park|terrasse|hof|berg|gürtel|guertel)"
 )
 _POSTAL_CODE = r"(?:[A-Z]{1,3}[- ]?)?\d{5}"
 _LABELED_STREET_ADDRESS_DETAIL = (
