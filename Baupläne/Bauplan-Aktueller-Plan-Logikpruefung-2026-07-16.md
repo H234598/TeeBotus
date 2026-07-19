@@ -15661,3 +15661,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `13/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Primäre Wohnung nach „Ich habe"
+
+- `Ich habe eine/meine Wohnung in Berlin, Musterstr. 5` wird erkannt.
+- `Zweitwohnung` und `Ferienwohnung` bleiben ausgeschlossen; bei primärer Wohnung plus Nebenwohnung gewinnt Berlin.
+- Verifikation: `tests/test_weather_context.py` -> `225 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `93fc9482 fix: recognize primary owned homes`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-48
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `14/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
