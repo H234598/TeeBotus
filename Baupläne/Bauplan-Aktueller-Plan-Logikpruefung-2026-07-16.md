@@ -15206,3 +15206,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
 - Neuer Zyklus seit diesem Restart: `15/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Länderpräfixe vor PLZ und Straßenadresse
+
+- `Deutschland`, `Österreich` und `Schweiz` vor Stadt/Straße werden erkannt; vier- und fünfstellige Länder-PLZ funktionieren.
+- Multiplicity-/Ambiguity-Guards behandeln vollständige Länderadressen als ein Ziel; separate Meldeadresse bleibt konfliktbehaftet.
+- Verifikation: `tests/test_weather_context.py` -> `190 passed`, sechs DE/AT/CH-Smokes plus Konflikt-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d09799d5 fix: parse country postal street addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-10
+
+- `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
+- Neuer Zyklus seit diesem Restart: `16/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
