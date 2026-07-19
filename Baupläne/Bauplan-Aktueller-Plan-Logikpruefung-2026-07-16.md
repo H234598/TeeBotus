@@ -14635,7 +14635,14 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, Artikel-/Konflikt-Smoke gruen, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `b857f7fa fix: handle article residence labels`.
 
+### Folgefix 2026-07-19: Mehrfachziele bei verbfreien Labels
+
+- `Wohnadresse Berlin und Hamburg` sowie Komma-Varianten liefern keinen erfundenen Einzelort.
+- `Umgebung`, Arbeitsadresse und Geburtsstadt bleiben als nicht-residente Zusätze zulässig.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, sechs Multiplikitäts-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ee52ad80 fix: reject multiple verbless residence targets`.
+
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `4/20` Code-Fixes. Kein Push.
