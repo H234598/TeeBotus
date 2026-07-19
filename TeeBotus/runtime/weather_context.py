@@ -306,7 +306,7 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 _SECONDARY_RESIDENCE_LABEL = (
     r"(?:(?:zweite\w*\s+(?:wohn(?:sitz|ort)|wohnung)|"
     r"zweit\w*(?:wohn(?:sitz|ort)|wohnung))|"
-    r"neben(?:wohn(?:sitz|ort)|wohnung)|ferienwohnung\w*)"
+    r"neben(?:wohn(?:sitz|ort)|wohnung)|ferien(?:wohn(?:sitz|ort)|wohnung\w*))"
 )
 _OTHER_PERSON_RESIDENCE_LABEL = (
     r"(?:freund\w*|partner\w*|eltern|familie|kind\w*|mutter\w*|vater\w*|"
@@ -5103,7 +5103,10 @@ def extract_residence_city(text: str) -> str:
                         continue
                     if re.match(r"(?i)^\s*wei(?:ß|ss)t\s+du\b", match.group("city")):
                         continue
-                    if _has_non_residential_city_tail(match.group("city")):
+                    if (
+                        _has_non_residential_city_tail(match.group("city"))
+                        or _has_non_residential_city_suffix(source, city_end)
+                    ):
                         continue
                     if _has_unresolved_location_separator(source, city_end):
                         continue
@@ -5249,6 +5252,10 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
                     r"(?:geburtsort|geburtsstadt|heimat|heimatstadt|herkunftsort|herkunftsstadt|"
                     r"arbeitsort|arbeitsadresse|geschäftsadresse|geschaeftsadresse|"
                     r"dienstadresse|büroadresse|bueroadresse)\b",
+                    second_raw,
+                ) and not re.match(
+                    rf"(?i)^(?:(?:mein(?:e)?|unser(?:e)?)\s+)?{_SECONDARY_RESIDENCE_LABEL}"
+                    r"\s*(?::|=|,|\b(?:ist|liegt|befindet\s+sich|bleibt)\b)",
                     second_raw,
                 ):
                     second = _clean_city(second_raw)
@@ -5820,6 +5827,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
                     or _has_future_residence_suffix(source, city_end)
                     or _has_uncertain_residence_suffix(source, city_end)
                     or _has_non_residential_city_tail(match.group("city"))
+                    or _has_non_residential_city_suffix(source, city_end)
                 ):
                     continue
                 city = _clean_city(match.group("city"))
@@ -6598,8 +6606,19 @@ def _has_non_residential_city_tail(value: str) -> bool:
             r"\s+(?:ist|war|wird)\s+(?:(?:die|der|das)\s+)?"
             r"(?:(?:meines|meiner|meinem|meinen|unseres|unserer|unserem|unseren)\s+)?"
             r"(?:arbeitgeber\w*|firma\w*|unternehmen\w*|betrieb\w*|organisation\w*|verein\w*)\b|"
-            rf"\s+(?:nebenwohnsitzlich|als\s+{_SECONDARY_RESIDENCE_LABEL})\b",
+            rf"\s+(?:nebenwohnsitzlich|als\s+{_SECONDARY_RESIDENCE_LABEL})\b|"
+            rf"\s+\({_SECONDARY_RESIDENCE_LABEL}\)",
             str(value or ""),
+        )
+    )
+
+
+def _has_non_residential_city_suffix(source: str, city_end: int) -> bool:
+    return bool(
+        re.match(
+            rf"(?i)\s*\({_SECONDARY_RESIDENCE_LABEL}\)|"
+            rf"\s*(?:nebenwohnsitzlich|als\s+{_SECONDARY_RESIDENCE_LABEL})\b",
+            source[city_end:],
         )
     )
 
