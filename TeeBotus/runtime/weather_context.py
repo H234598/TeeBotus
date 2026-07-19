@@ -2058,6 +2058,34 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"im\s+(?:nördlichen|noerdlichen|südlichen|suedlichen|östlichen|"
+        r"oestlichen|westlichen|nordöstlichen|nordöstlichen|nordwestlichen|"
+        r"südöstlichen|suedöstlichen|südwestlichen|suedwestlichen)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:in|an|auf|unter)\s+"
+        rf"{_LABELED_STREET_ADDRESS_CORE}"
+        r"(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"im\s+(?:norden|süden|sueden|osten|westen|nordosten|nordwesten|"
+        r"südosten|suedosten|südwesten|suedwesten)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)s\s+(?:in|an|auf|unter)\s+"
+        rf"{_LABELED_STREET_ADDRESS_CORE}"
+        r"(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"im\s+(?:stadtteil|bezirk|stadtviertel|viertel)\s+[^,.;!?]{1,80}?\s+"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:in|an|auf|unter)\s+"
+        rf"{_LABELED_STREET_ADDRESS_CORE}"
+        r"(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben|bin|sind)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
         r"(?:\s*,\s*|\s+)(?:zu\s+hause|zuhause|daheim)\b",

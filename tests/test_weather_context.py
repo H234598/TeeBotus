@@ -1532,6 +1532,13 @@ def test_extract_residence_city_handles_comma_before_home_adverb() -> None:
     assert extract_residence_city("Wir sind in München, zu Hause.") == "München"
 
 
+def test_extract_residence_city_handles_area_qualifier_before_street() -> None:
+    assert extract_residence_city("Ich wohne im nördlichen Berlin in der Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Ich wohne im Norden Berlins in der Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Ich wohne im Bezirk Kreuzberg in Berlin in der Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Ich wohne im Stadtteil Altona in Hamburg an der Hauptstraße 7.") == "Hamburg"
+
+
 def test_extract_residence_city_handles_house_number_words() -> None:
     assert extract_residence_city("Ich wohne in Musterstraße Nummer 5, Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne in Musterstraße Hausnummer 5, Berlin.") == "Berlin"
