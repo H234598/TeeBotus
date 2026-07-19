@@ -4881,6 +4881,8 @@ def extract_residence_city(text: str) -> str:
                         continue
                     if _has_non_residential_label_prefix(source, pattern_start):
                         continue
+                    if _has_other_person_residence_prefix(source, pattern_start):
+                        continue
                     if _has_future_residence_prefix(source, pattern_start, city_start):
                         continue
                     if _has_uncertain_residence_prefix(source, pattern_start):
@@ -5126,6 +5128,20 @@ def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
             r"\bkein(?:e|en|er|em)?\s+(?:fest(?:e|en|er|em)?\s*)?\s*)$",
             prefix,
             re.IGNORECASE,
+        )
+    )
+
+
+def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
+    prefix = source[:pattern_start]
+    segment = re.split(r"[,;]\s*", prefix)[-1]
+    return bool(
+        re.search(
+            r"(?i)\b(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+            r"(?:freund(?:in)?|partner(?:in)?|eltern|familie|kinder|"
+            r"mutter|vater|tochter|sohn|geschwister|kolleg(?:e|in|en)|"
+            r"mitbewohner(?:in)?|nachbar(?:in)?)\s*$",
+            segment,
         )
     )
 
@@ -5748,6 +5764,16 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
+    if re.search(
+        rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
+        r"(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+        r"(?:freund(?:in)?|partner(?:in)?|eltern|familie|kinder|mutter|vater|"
+        r"tochter|sohn|geschwister|kolleg(?:e|in|en)|mitbewohner(?:in)?|nachbar(?:in)?)\s+"
+        r"(?:wohne|wohnen|wohnt|lebe|leben|lebt)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
     if re.search(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         rf"{_CITY_CHANGE_CITY_FRAGMENT}(?:\s+\([^)]{{1,30}}\))?\s*,\s*"
