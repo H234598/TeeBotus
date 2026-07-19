@@ -2359,6 +2359,13 @@ def test_extract_residence_city_normalizes_known_hyphenated_districts() -> None:
     assert extract_residence_city("Ich wohne in Frankfurt am Main (Sachsenhausen), Musterstraße 5.") == "Frankfurt am Main"
 
 
+def test_extract_residence_city_normalizes_parenthesized_area_street_addresses() -> None:
+    assert extract_residence_city("Ich wohne im Bezirk Kreuzberg (Berlin), Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist im Viertel Altona (Hamburg), Hauptstraße 7.") == "Hamburg"
+    assert extract_residence_city("Wohnhaft im Stadtteil Prenzlauer Berg (Berlin), Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Wohnadresse: im Bezirk Mitte (Berlin), Musterstraße 5.") == "Berlin"
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"

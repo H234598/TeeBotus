@@ -343,6 +343,14 @@ _COUNTRY_CITY_BEFORE_STREET = (
     rf"{_LABELED_STREET_ADDRESS_CORE}"
     r"(?=\s*(?:[.!?;,]|wohnhaft|ansässig|ansaessig|gemeldet|registriert|$))"
 )
+_PARENTHESIZED_AREA_STREET_ADDRESS = re.compile(
+    r"\b(?:im|in\s+der)\s+(?:stadtteil|bezirk|stadtviertel|viertel)\s+"
+    r"[^,.;!?()]{1,80}?\(\s*"
+    rf"(?P<city>(?:{_STREET_COMPOUND_CITY_PATTERN}|"
+    r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?))\s*\)"
+    rf"(?=\s*,\s*{_LABELED_STREET_ADDRESS_CORE}(?=\s*[.!?;,]|$))",
+    re.IGNORECASE,
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -4354,6 +4362,10 @@ def extract_residence_city(text: str) -> str:
     source = str(text or "")
     if source.strip().endswith("?"):
         return ""
+    source = _PARENTHESIZED_AREA_STREET_ADDRESS.sub(
+        lambda match: f"in {match.group('city')}",
+        source,
+    )
     if _has_non_residential_companion_context(source):
         return ""
 
