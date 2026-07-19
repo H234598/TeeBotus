@@ -15911,3 +15911,15 @@ Restart erst bei `20/20`.
 - `Neustadt bei Coburg` bleibt vollstaendig erhalten; der Schutz gilt fuer alle zentral registrierten Compound-City-Namen und Trailing-Punktuation.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `b489756f fix: prioritize full compound city matches`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-5-03
+
+- `teebotus.service` aktiv/running, `MainPID 929669`, Start `2026-07-19 22:00:21 CEST`.
+- Neuer Zyklus seit diesem Restart: `3/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Inflektierte Organisations-/Institutionslabels
+
+- `Unternehmen`, `Betriebe`, `Vereine`, Firmenplural sowie Praxis-, Klinik-, Hochschul- und Behördenformen werden als Fremdtraeger erkannt.
+- Solche Orte ueberschreiben den eigenen Wohnort nicht mehr.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1f1562b0 fix: cover inflected organization residence labels`.
