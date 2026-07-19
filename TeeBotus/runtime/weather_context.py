@@ -4722,7 +4722,7 @@ CITY_TRAILING_STOP_RE = re.compile(
     r"frueh|früh|morgens|vormittags|mittags|nachmittags|abends|nachts|"
     r"zuhause|zu\s+hause|daheim|wohnhaft|ansässig|ansaessig|geworden|"
     r"zur\s+(?:unter|zwischen)miete|nur\s+vor(?:uebergehend|übergehend)|zur\s+miete|"
-    r"laut\b.*|"
+    r"(?:ist|bleibt)\s+es\b|laut\b.*|"
     r"ab\s+sofort|"
     r"bis\s+(?:auf\s+weiteres|zum\s+ende\s+(?:des\s+)?(?:monats|jahres)|"
     r"ende\s+(?:des\s+)?(?:monats|jahres))|"
