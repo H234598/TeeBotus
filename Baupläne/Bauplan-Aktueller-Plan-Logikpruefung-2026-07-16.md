@@ -14915,7 +14915,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-3
 
 - `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
-- Neuer Zyklus seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `3/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Freie Straßenadress-Sätze
 
@@ -14930,3 +14930,10 @@ Restart erst bei `20/20`.
 - Aktuelle Zeitqualifier werden unterstützt, Zukunftsqualifier bleiben ausgeschlossen.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, zwei Qualified-Freeform-Street-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `11885dba fix: parse qualified freeform street residences`.
+
+### Folgefix 2026-07-19: Besitz- und Statusformulierungen
+
+- `Ich habe meinen Wohnsitz/meine Bleibe in ...` und `Ich bin wohnhaft/ansässig in ...` werden erkannt.
+- Straßen-, PLZ- und Präpositionsvarianten bleiben gemeinsam nutzbar.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Possession-Status-Street-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `91887ad3 fix: parse possession and residence status sentences`.
