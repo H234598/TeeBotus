@@ -14770,7 +14770,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-2
 
 - `teebotus.service` aktiv/running, `MainPID 434057`, Start `2026-07-19 03:36:33 CEST`.
-- Neuer Zyklus seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `3/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Präpositionale Straßennamen
 
@@ -14785,3 +14785,10 @@ Restart erst bei `20/20`.
 - PLZ bleibt von Stadtwert getrennt; abweichende Meldeadresse löst weiterhin Konflikt aus.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Whitespace-Address-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `4d920905 fix: parse whitespace separated street addresses`.
+
+### Folgefix 2026-07-19: Gebäudedetails in Straßenadressen
+
+- `Hinterhaus`, Etagen (`2. OG`) und Wohnungsangaben werden zwischen Hausnummer und Stadt übersprungen.
+- Direkte Erkennung und Konfliktguard verwenden dieselbe Detailliste.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Building-Detail-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a8e492ab fix: skip street address building details`.
