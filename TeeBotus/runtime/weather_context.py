@@ -268,7 +268,7 @@ _LABELED_STREET_ADDRESS = (
     r"(?:am|an der|an den|auf der|auf dem|auf den|unter der|unter den|in der|in den|"
     r"im|zum|zur|vom|von der|vor der|hinter der)\s+[^,.;!?]{1,100}?\s+"
     r")"
-    rf"\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?(?:,\s*{_LABELED_STREET_ADDRESS_DETAIL}\s*,\s*|\s*(?:,\s*|\s+))"
+    rf"\d+(?:[a-z]|[/-]\s*\d+[a-z]?|\s+[a-z])?(?:,\s*{_LABELED_STREET_ADDRESS_DETAIL})*(?:\s*,\s*|\s+)"
 )
 
 CITY_CHANGE_PATTERNS = (
