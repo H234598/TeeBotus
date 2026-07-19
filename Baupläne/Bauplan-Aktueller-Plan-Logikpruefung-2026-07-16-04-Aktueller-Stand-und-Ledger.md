@@ -1694,3 +1694,16 @@
 - Verifikation nach jedem Fix: `tests/test_weather_context.py` -> `234 passed`, `py_compile`, Smoke-Checks und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commits: `6ffb5a6e`, `4cd20aa9`, `f35c40e6`, `d9334ad8`, `7bc32fbc`, `cea65151`, `752acd48`, `b28fd58d`, `f14de223`, `7f0c030f`, `3eceb6c8`, `96f18a74`, `f0f4ce64`.
 - Archiv-/README-Commits: `c4a57c1e`, `9afa480a`, `4e2397d7`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-7-09
+
+- `teebotus.service` aktiv/running, `MainPID 1405994`, Start `2026-07-19 23:53:28 CEST`.
+- Neuer Zyklus seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+
+### Folgefix-Batch 2026-07-19: Routine- und Besuchskontext
+
+- Routine-Qualifier `normalerweise`, `gewöhnlich`, `in der Regel`, `regulär` und `üblicherweise` werden als Hauptwohnort-Kontext erkannt.
+- Mehrere Städte nach Routine-Qualifiern bleiben mehrdeutig; `... und Umgebung` bleibt zulässiger Einzel-Ortszusatz.
+- Ferien-, Reise-, Dienstreise-, Wochenend-, Wochentag- und Besuchsorte überschreiben Wohnort nicht; mit `sonst/ansonsten` wird Normalort übernommen.
+- Verifikation nach jedem Fix: `tests/test_weather_context.py` -> `235 passed`, `py_compile`, Smoke-Checks und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commits: `f3cd90ab`, `7430434e`, `330fb932`, `d7ea3aae`, `7d5a4ae7`, `ca6aa9a8`, `a473b054`, `71c69f17`, `ed4c482d`.
