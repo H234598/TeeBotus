@@ -14598,3 +14598,16 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Qualifier im Possessiv-Wohnsitz
+
+- `meinen aktuellen/gemeldeten Wohnsitz` und `meinen jetzigen Wohnort` werden erkannt.
+- Historische Wohnsitze und Arbeitsorte bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, fünf Possessive-Qualifier-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d8aa60f7 fix: parse qualified possessive residences`.
+- Restart danach: `teebotus.service` `active/running`, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
+- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
