@@ -303,6 +303,10 @@ _RESIDENCE_DISTANCE_PREFIX = (
     r"(?:km|kilometer)\s+"
 )
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
+_SECONDARY_RESIDENCE_LABEL = (
+    r"(?:zweite\w*\s+(?:wohn(?:sitz|ort)|wohnung)|"
+    r"neben(?:wohn(?:sitz|ort)|wohnung)|ferienwohnung\w*)"
+)
 _OTHER_PERSON_RESIDENCE_LABEL = (
     r"(?:freund\w*|partner\w*|eltern|familie|kind\w*|mutter\w*|vater\w*|"
     r"tochter\w*|sohn\w*|bruder\w*|schwester\w*|geschwister|frau\w*|"
@@ -898,6 +902,13 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     _LABELED_COUNTRY_CITY,
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+        r"(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+        rf"{_SECONDARY_RESIDENCE_LABEL}\b",
+        re.IGNORECASE,
+    ),
     _CITY_CHANGE_CITY_BEFORE_STREET_MOVE,
     _CITY_CHANGE_CITY_BEFORE_STREET_MOVE_FROM,
     _CITY_CHANGE_CURRENT_CITY_BEFORE_STREET,
@@ -6083,6 +6094,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
+    if re.search(
+        rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}[,;]\s*"
+        r"(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+        rf"{_SECONDARY_RESIDENCE_LABEL}\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
     if re.search(
         rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
         rf"(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
