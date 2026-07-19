@@ -14915,7 +14915,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-3
 
 - `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
-- Neuer Zyklus seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `8/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Freie Straßenadress-Sätze
 
@@ -14965,3 +14965,10 @@ Restart erst bei `20/20`.
 - Gemeinsamer Marker-Baustein hält Straßenparser, Fallbacks, `_clean_city` und Ambiguitätsguard synchron.
 - Verifikation: `tests/test_weather_context.py` -> `161 passed`, fünf Written-House-Number-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `a0760401 fix: parse written street number labels`.
+
+### Folgefix 2026-07-19: Stadt vor Straßenadresse ohne Komma
+
+- `Ich wohne in Berlin in der Musterstraße 5` und `an der ...` werden erkannt.
+- Straßenadress-Kern ist vom nachfolgenden Trenner getrennt; mehrteilige Städte wie Frankfurt am Main bleiben korrekt.
+- Verifikation: `tests/test_weather_context.py` -> `162 passed`, drei City-Before-Street-Smokes, Compound-City-Smokes und `py_compile`/`git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f2ff3d79 fix: parse city before street addresses`.
