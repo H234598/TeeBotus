@@ -5230,8 +5230,10 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
     ):
         return True
     if re.search(
-        r"\b(?:wohne|wohnen|lebe|leben)\b[^.!?;\n]*\bim\s+(?:großraum|grossraum)\s+"
-        r"(?:von\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+und\s+"
+        r"\b(?:wohne|wohnen|lebe|leben|wohnort|wohnsitz)\b[^.!?;\n]*\b(?:im|in\s+der)\s+"
+        r"(?:(?:großraum|grossraum|raum|gebiet|region)\s+(?:von\s+)?"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+und\s+|"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß'-]+\s+(?:raum|region|gebiet|großraum|grossraum)\s+und\s+)"
         r"(?!umgebung\b|region\b|nähe\b|naehe\b)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}",
         multiplicity_source,
         re.IGNORECASE,
