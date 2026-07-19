@@ -14915,4 +14915,11 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-3
 
 - `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
-- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Freie Straßenadress-Sätze
+
+- `Wir wohnen in Unter den Linden 5, Berlin`, `Ich wohne in Am Markt 5, Berlin` und `in ... wohnhaft` werden erkannt.
+- Stadtwert bleibt Berlin; Straßenfragmente wie `in` werden nicht gespeichert.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Freeform-Street-Sentence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b2862bfe fix: parse freeform street residence sentences`.
