@@ -18,5 +18,5 @@ Nachvollziehbarkeit erhalten; maßgeblich ist ausschließlich der aktive Plan in
 
 ## Ablageregel
 
-Aktive Arbeit bleibt in `../Abgeschlossene Baupläne/`. Nach Umsetzung, Tests und dokumentierter
+Aktive Arbeit bleibt in `../Baupläne/`. Nach Umsetzung, Tests und dokumentierter
 Abnahme wird der Plan hierher verschoben. Dateien werden nicht gelöscht.
