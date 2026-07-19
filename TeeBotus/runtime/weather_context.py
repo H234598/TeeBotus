@@ -2085,6 +2085,18 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"(?:^|[.!?;,:]\s*)(?:(?:ich|wir)\s+(?:bin|sind)\s+)?"
+        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+(?:in|bei|im)\s+"
+        r"(?:der\s+(?:stadt|gemeinde|kommune|ortschaft|landeshauptstadt|metropole|"
+        r"großstadt|grossstadt)|stadtgebiet(?:\s+von)?)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?:\s+(?:in|an|auf|unter)\s+"
+        rf"{_LABELED_STREET_ADDRESS_CORE}(?=\s*[.!?;,]|$)|"
+        r"(?=\s*[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
         rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
         r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
