@@ -15459,3 +15459,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `16/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Pronomen bei Adresswechsel
+
+- `Wohnadresse war Berlin, ... Jetzt ist sie/diese Hamburg, ...` wird als aktuelles Ziel `Hamburg` erkannt.
+- Separate `Meldeadresse` blockiert weiterhin.
+- Verifikation: `tests/test_weather_context.py` -> `210 passed`, zwei Pronomen-Smokes plus Melde-Negativfall, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `82bd35ee fix: parse pronoun residence address changes`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-31
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `17/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
