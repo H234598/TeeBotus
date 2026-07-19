@@ -739,7 +739,7 @@ _MAIN_RESIDENCE_CITY_BEFORE_STREET = re.compile(
     rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
     r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
     rf"{_LABELED_STREET_ADDRESS_CORE}"
-    r"(?=\s*[.!?;,]|$)",
+    r"(?=\s*(?:[.!?;,]|und\s+(?:die|meine|unsere)\s+))",
     re.IGNORECASE,
 )
 

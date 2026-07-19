@@ -2747,6 +2747,9 @@ def test_extract_residence_city_handles_main_home_label() -> None:
         "Meine Hauptwohnung ist in Berlin, Musterstr. 5, meine Zweitwohnung in Hamburg, Hauptweg 7."
     ) == "Berlin"
     assert extract_residence_city("Meine Zweitwohnung ist in Hamburg, Hauptweg 7.") == ""
+    assert extract_residence_city(
+        "Meine Hauptwohnung befindet sich in Berlin, Musterstr. 5 und die Zweitwohnung in Hamburg, Hauptweg 7."
+    ) == "Berlin"
 
 
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
