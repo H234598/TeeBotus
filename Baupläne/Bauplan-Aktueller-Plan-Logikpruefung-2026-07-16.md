@@ -15507,3 +15507,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Zyklus abgeschlossen: `20/20` Code-Fixes. Kein Push. Neuer Zyklus startet ab nächstem Code-Fix mit `1/20`.
+
+### Folgefix 2026-07-19: Informelle Straßen-vor-Label-Wechsel
+
+- `Berlin, Musterstr. 5 war meine alte Wohnadresse, jetzt Hamburg, Hauptweg 7` und `ist nicht mehr meine Wohnadresse, sondern ...` werden erkannt.
+- Arbeitsadressen sowie zusätzliche `Meldeadresse` bleiben ausgeschlossen bzw. konfliktbehaftet.
+- Verifikation: `tests/test_weather_context.py` -> `213 passed`, zwei positive informelle Move-Smokes plus Arbeits-/Melde-Negativfälle, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9cab7d3a fix: parse informal street first moves`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-35
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `1/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
