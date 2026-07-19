@@ -6315,7 +6315,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"(?:(?:ich|wir)\s+)?komm\w*\b|(?:(?:ich|wir)\s+)?fahr\w*\b|"
         r"(?:(?:ich|wir)\s+)?geh\w*\b|(?:(?:ich|wir)\s+)?zieh\w*\b|"
         r"hab\w*\b|besitz\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|pend\w*\b|"
-        r"seh\w*\b|übernacht\w*\b|uebernacht\w*\b)[\wÄÖÜäöüß'-]+",
+        r"seh\w*\b|übernacht\w*\b|uebernacht\w*\b|"
+        r"(?:umgebung|region|nähe|naehe)(?!\s+von\b)\b)[\wÄÖÜäöüß'-]+",
         source,
         re.IGNORECASE,
     ):

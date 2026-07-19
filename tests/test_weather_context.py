@@ -1142,6 +1142,8 @@ def test_extract_residence_city_removes_daypart_context() -> None:
     assert extract_residence_city("Mein Wohnort liegt im Großraum Berlin und Hamburg.") == ""
     assert extract_residence_city("Mein Wohnort liegt im Berliner Großraum und Hamburg.") == ""
     assert extract_residence_city("Ich wohne im Großraum Berlin und Umgebung.") == "Berlin"
+    assert extract_residence_city("Ich wohne im Raum Berlin und Umgebung.") == "Berlin"
+    assert extract_residence_city("Ich wohne im Raum Berlin und Umgebung von Hamburg.") == ""
     assert extract_residence_city("Ich wohne im Großraum Berlin und arbeite in Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne im Berliner Umland und Hamburg.") == ""
     assert extract_residence_city("Ich wohne außerhalb der Stadt Berlin und Hamburg.") == ""
