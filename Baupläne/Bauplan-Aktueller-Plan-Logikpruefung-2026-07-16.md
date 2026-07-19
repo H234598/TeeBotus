@@ -14915,7 +14915,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-3
 
 - `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
-- Neuer Zyklus seit diesem Restart: `4/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `5/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Freie Straßenadress-Sätze
 
@@ -14944,3 +14944,10 @@ Restart erst bei `20/20`.
 - Vorhandene Current-Qualifier-Gruppe wird wiederverwendet; generische Wohnort-Labels bleiben geschützt.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, sechs Qualified-Possession-Status-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `3a698f04 fix: parse qualified residence status sentences`.
+
+### Folgefix 2026-07-19: Hauptwohnsitz und Lebensmittelpunkt mit Straßenadresse
+
+- Besitzsätze mit `Hauptwohnsitz` oder `Lebensmittelpunkt` plus Straßenadresse liefern die Stadt.
+- Vorhandene Qualifier und bestehende generische Wohnort-Guards bleiben unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `159 passed`, drei Primary-Residence-Street-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `21346a8d fix: parse primary residence street labels`.
