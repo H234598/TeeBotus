@@ -4558,6 +4558,12 @@ def _has_future_residence_prefix(source: str, match_start: int, city_start: int 
 def _has_uncertain_residence_prefix(source: str, match_start: int) -> bool:
     prefix = source[:match_start]
     sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
+    if re.search(
+        r"(?i)(?:möglich\w*|moeglich\w*|wahrscheinlich\w*|vermutlich\w*|"
+        r"potenziell\w*|eventuell\w*)\s*$",
+        sentence,
+    ):
+        return True
     clause = re.split(r"[,;]\s*", sentence)[-1]
     return bool(
         re.search(

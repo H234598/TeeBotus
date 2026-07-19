@@ -1456,6 +1456,8 @@ def test_extract_residence_city_handles_label_confidence_adverbs() -> None:
     assert extract_residence_city("Wohnort ist wohl Berlin.") == ""
     assert extract_residence_city("Wohnort ist sicher Berlin.") == "Berlin"
     assert extract_residence_city("Wohnort: tatsächlich Berlin.") == "Berlin"
+    assert extract_residence_city("Meine mögliche Wohnadresse ist Musterstraße 5, Berlin.") == ""
+    assert extract_residence_city("Meine wahrscheinliche Wohnadresse ist Musterstraße 5, Berlin.") == ""
 
 
 def test_extract_residence_city_trims_trailing_evidence_filler() -> None:
