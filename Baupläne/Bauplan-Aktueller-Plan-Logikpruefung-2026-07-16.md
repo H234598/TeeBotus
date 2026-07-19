@@ -15555,3 +15555,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `4/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Passive und nominale Wohnadresswechsel
+
+- `Wohnadresse wurde von ... nach ... verlegt/geändert` und `Umzug der Wohnadresse von ... nach ... ist erfolgt` werden erkannt.
+- Arbeitsadresse und zusätzliche `Meldeadresse` bleiben ausgeschlossen bzw. konfliktbehaftet.
+- Verifikation: `tests/test_weather_context.py` -> `217 passed`, drei positive Passive-/Nominal-Smokes plus Arbeits-/Melde-Negativfälle, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1472379d fix: parse passive residence address moves`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-39
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `5/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
