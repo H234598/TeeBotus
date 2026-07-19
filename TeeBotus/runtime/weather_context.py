@@ -1939,6 +1939,18 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
+        r"(?:meinen|meine|mein|unseren|unsere|unser|einen|eine|ein|den|die|das)\s+"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"adresse|wohnadresse|wohnanschrift|anschrift)\s+(?:in|bei)\s+"
+        r"(?P<city>(?![^.!?;,]*\s+(?:und|oder)\s+(?!umgebung\b|region\b|nähe\b|naehe\b))"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?!(?:aber|doch|jedoch|sondern|jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+"
         r"(?:(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|gegenwärtig|gegenwaertig)\s+)?"
