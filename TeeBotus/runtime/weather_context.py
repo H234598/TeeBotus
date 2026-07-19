@@ -248,6 +248,22 @@ _RESIDENCE_LABEL_DETERMINER = (
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
+        r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
+        r"(?:meinen|meine|mein|unseren|unsere|unser|einen|eine|ein|den|die|das)\s+"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"adresse|wohnadresse|wohnanschrift|anschrift|meldeadresse|meldeanschrift|meldesitz)"
+        r"\s+(?:in|bei)\s+(?:\d{5}\s+)?"
+        r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?(?:\s+\([^)]{1,30}\))?)\s*,\s*"
+        r"(?:genauer\s+genommen|genauer\s+gesagt|beziehungsweise|bzw\.?|konkret|"
+        r"nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s*:?\s*"
+        r"(?:(?:in|bei)\s+)?(?:\d{5}\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?(?:\s+\([^)]{1,30}\))?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"(?:^|[.!?;,\n]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
         r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
         r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
@@ -255,11 +271,12 @@ CITY_CHANGE_PATTERNS = (
         r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse|"
         r"meldeadresse|meldeanschrift|meldesitz)"
         r"(?:\s*(?::|=|,)\s*|\s+)"
+        r"(?:\d{5}\s+)?"
         r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
         r"(?:\s+\([^)]{1,30}\))?)\s*,\s*"
         r"(?:genauer\s+genommen|genauer\s+gesagt|beziehungsweise|bzw\.?|konkret|"
         r"nämlich|naemlich|und\s+zwar|besser\s+gesagt|sprich)\s*:?\s*"
-        r"(?:(?:in|bei)\s+)?"
+        r"(?:(?:in|bei)\s+)?(?:\d{5}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
         r"(?:\s+\([^)]{1,30}\))?)"
         r"(?=\s*(?:[.!?;,]|$))",
