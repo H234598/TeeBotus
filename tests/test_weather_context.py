@@ -1539,6 +1539,20 @@ def test_extract_residence_city_handles_area_qualifier_before_street() -> None:
     assert extract_residence_city("Ich wohne im Stadtteil Altona in Hamburg an der Hauptstraße 7.") == "Hamburg"
 
 
+def test_extract_residence_city_handles_labeled_area_qualifier_before_street() -> None:
+    assert extract_residence_city("Mein Wohnort ist im nördlichen Berlin in der Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Mein Wohnsitz liegt im Norden Berlins in der Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Meine Wohnadresse ist im Bezirk Kreuzberg in Berlin in der Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Meine Wohnung liegt im Stadtteil Altona in Hamburg an der Hauptstraße 7.") == "Hamburg"
+    assert extract_residence_city("Wohnhaft im nördlichen Berlin in der Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Ich bin wohnhaft im Norden Berlins in der Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Meldeadresse: im Bezirk Kreuzberg in Berlin in der Musterstraße 5.") == "Berlin"
+    assert extract_residence_city(
+        "Meine Wohnadresse ist im Bezirk Kreuzberg in Berlin in der Musterstraße 5; "
+        "Meldeadresse Hamburg."
+    ) == ""
+
+
 def test_extract_residence_city_handles_house_number_words() -> None:
     assert extract_residence_city("Ich wohne in Musterstraße Nummer 5, Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne in Musterstraße Hausnummer 5, Berlin.") == "Berlin"

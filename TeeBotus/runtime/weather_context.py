@@ -284,6 +284,21 @@ _LABELED_STREET_ADDRESS_CORE = (
     rf"(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?(?:[/-]\s*\d+[a-z]?|\s+[a-z])?(?:,\s*{_LABELED_STREET_ADDRESS_DETAIL})*"
 )
 _LABELED_STREET_ADDRESS = rf"{_LABELED_STREET_ADDRESS_CORE}(?:\s*,\s*|\s+)(?:{_POSTAL_CODE}\s+)?"
+_AREA_BEFORE_STREET_PREFIX = (
+    r"(?:im\s+(?:nördlichen|noerdlichen|südlichen|suedlichen|östlichen|"
+    r"oestlichen|westlichen|nordöstlichen|nordoestlichen|nordwestlichen|"
+    r"südöstlichen|suedöstlichen|südwestlichen|suedwestlichen)\s+|"
+    r"im\s+(?:norden|süden|sueden|osten|westen|nordosten|nordwesten|"
+    r"südosten|suedosten|südwesten|suedwesten)\s+|"
+    r"im\s+(?:stadtteil|bezirk|stadtviertel|viertel)\s+[^,.;!?]{1,80}?\s+"
+    r"(?:in|bei)\s+)"
+)
+_AREA_BEFORE_STREET_CITY = (
+    rf"(?P<city>(?:{_STREET_COMPOUND_CITY_PATTERN}|"
+    r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?))s?\s+(?:in|an|auf|unter)\s+"
+    rf"{_LABELED_STREET_ADDRESS_CORE}"
+    r"(?=\s*[.!?;,]|$)"
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -2057,6 +2072,31 @@ CITY_CHANGE_PATTERNS = (
     ),
 )
 CITY_PATTERNS = (
+    re.compile(
+        rf"\b(?:mein(?:e)?|unser(?:e)?)\s+"
+        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
+        r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
+        r"meldesitz|wohnung|unterkunft|bleibe|mietwohnung|wg)\s+"
+        r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        rf"{_AREA_BEFORE_STREET_PREFIX}{_AREA_BEFORE_STREET_CITY}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?:(?:ich|wir)\s+(?:bin|sind)\s+)?"
+        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+"
+        rf"{_AREA_BEFORE_STREET_PREFIX}{_AREA_BEFORE_STREET_CITY}",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
+        r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
+        r"meldesitz|wohnung|unterkunft|bleibe|mietwohnung|wg)\s*(?::|=|,)\s*"
+        rf"{_AREA_BEFORE_STREET_PREFIX}{_AREA_BEFORE_STREET_CITY}",
+        re.IGNORECASE,
+    ),
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
         r"im\s+(?:nördlichen|noerdlichen|südlichen|suedlichen|östlichen|"
@@ -4378,6 +4418,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         rf"{_LABELED_STREET_ADDRESS_CORE}"
         r"(?=\s*[.!?;,]|$)"
     )
+    area_before_street_capture = rf"{_AREA_BEFORE_STREET_PREFIX}{_AREA_BEFORE_STREET_CITY}"
     locality_prefix = (
         r"(?:in|bei|im)\s+(?:der\s+(?:stadt|gemeinde|kommune|ortschaft|landeshauptstadt|"
         r"metropole|großstadt|grossstadt)|stadtgebiet(?:\s+von)?)\s+"
@@ -4429,6 +4470,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
             r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
             r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s+"
+            r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
+            rf"{area_before_street_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+            r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s+"
             r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
             rf"{city_before_street_capture}",
             re.IGNORECASE,
@@ -4455,6 +4504,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
             r"(?:(?::|=|,)\s*|\s+)"
             rf"{street_address_prefix}{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+            r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
+            r"\s*(?::|=|,)\s*"
+            rf"{area_before_street_capture}",
             re.IGNORECASE,
         ),
         re.compile(
@@ -4549,6 +4606,27 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         r"(?:meldeadresse|meldeanschrift|meldesitz)\s*(?::|=|,)\s*"
         r"(?:(?:in|bei)\s+)?"
         rf"{city_before_street_capture}",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            registered_address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
+        rf"\b(?:(?:{_RESIDENCE_LABEL_DETERMINER})\s+)?"
+        r"(?:meldeadresse|meldeanschrift|meldesitz)\s*"
+        r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
+        rf"{area_before_street_capture}",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            registered_address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:meldeadresse|meldeanschrift|meldesitz)\s*(?::|=|,)\s*"
+        rf"{area_before_street_capture}",
         source,
         re.IGNORECASE,
     ):
