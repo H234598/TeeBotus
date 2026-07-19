@@ -189,6 +189,12 @@ _KNOWN_COMPOUND_CITY_NAMES = {
     "weiden in der oberpfalz": "Weiden in der Oberpfalz",
     "weil am rhein": "Weil am Rhein",
     "neustadt bei coburg": "Neustadt bei Coburg",
+    "buchholz in der nordheide": "Buchholz in der Nordheide",
+    "freiburg im breisgau": "Freiburg im Breisgau",
+    "freiberg am neckar": "Freiberg am Neckar",
+    "burg auf fehmarn": "Burg auf Fehmarn",
+    "dillingen an der donau": "Dillingen an der Donau",
+    "neumarkt in der oberpfalz": "Neumarkt in der Oberpfalz",
 }
 _STREET_COMPOUND_CITY_PATTERN = (
     r"(?:Brandenburg\s+an\s+der\s+Havel|Frankfurt\s+an\s+der\s+Oder|"
@@ -196,7 +202,10 @@ _STREET_COMPOUND_CITY_PATTERN = (
     r"Frankfurt\s+am\s+Main|Königstein\s+im\s+Taunus|Ludwigshafen\s+am\s+Rhein|"
     r"Mülheim\s+an\s+der\s+Ruhr|Neustadt\s+an\s+der\s+Weinstraße|"
     r"Rüdesheim\s+am\s+Rhein|Wörth\s+am\s+Rhein|Weiden\s+in\s+der\s+Oberpfalz|"
-    r"Weil\s+am\s+Rhein|Neustadt\s+bei\s+Coburg|St\.\s+Georgen\s+im\s+Schwarzwald)"
+    r"Weil\s+am\s+Rhein|Neustadt\s+bei\s+Coburg|Buchholz\s+in\s+der\s+Nordheide|"
+    r"Freiburg\s+im\s+Breisgau|Freiberg\s+am\s+Neckar|Burg\s+auf\s+Fehmarn|"
+    r"Dillingen\s+an\s+der\s+Donau|Neumarkt\s+in\s+der\s+Oberpfalz|"
+    r"St\.\s+Georgen\s+im\s+Schwarzwald)"
 )
 _KNOWN_CITY_DISTRICT_BASES = {
     "berlin-mitte": "Berlin",

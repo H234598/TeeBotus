@@ -1298,6 +1298,12 @@ def test_extract_residence_city_preserves_compound_city_names() -> None:
     assert extract_residence_city("Ich wohne in Weiden in der Oberpfalz.") == "Weiden in der Oberpfalz"
     assert extract_residence_city("Ich wohne in Weil am Rhein.") == "Weil am Rhein"
     assert extract_residence_city("Ich wohne in Neustadt bei Coburg.") == "Neustadt bei Coburg"
+    assert extract_residence_city("Ich wohne in Buchholz in der Nordheide.") == "Buchholz in der Nordheide"
+    assert extract_residence_city("Ich wohne in Freiburg im Breisgau.") == "Freiburg im Breisgau"
+    assert extract_residence_city("Ich wohne in Freiberg am Neckar.") == "Freiberg am Neckar"
+    assert extract_residence_city("Ich wohne in Burg auf Fehmarn.") == "Burg auf Fehmarn"
+    assert extract_residence_city("Ich wohne in Dillingen an der Donau.") == "Dillingen an der Donau"
+    assert extract_residence_city("Ich wohne in Neumarkt in der Oberpfalz.") == "Neumarkt in der Oberpfalz"
 
 
 def test_extract_residence_city_does_not_split_stopword_prefixes() -> None:
@@ -1320,6 +1326,12 @@ def test_extract_residence_city_preserves_regional_compound_names() -> None:
     assert extract_residence_city("Ich wohne in Weiden in der Oberpfalz in der Musterstraße 5.") == "Weiden in der Oberpfalz"
     assert extract_residence_city("Ich wohne in Weil am Rhein in der Musterstraße 5.") == "Weil am Rhein"
     assert extract_residence_city("Ich wohne in Neustadt bei Coburg in der Musterstraße 5.") == "Neustadt bei Coburg"
+    assert extract_residence_city("Ich wohne in Buchholz in der Nordheide in der Musterstraße 5.") == "Buchholz in der Nordheide"
+    assert extract_residence_city("Ich wohne in Freiburg im Breisgau in der Musterstraße 5.") == "Freiburg im Breisgau"
+    assert extract_residence_city("Ich wohne in Freiberg am Neckar in der Musterstraße 5.") == "Freiberg am Neckar"
+    assert extract_residence_city("Ich wohne in Burg auf Fehmarn in der Musterstraße 5.") == "Burg auf Fehmarn"
+    assert extract_residence_city("Ich wohne in Dillingen an der Donau in der Musterstraße 5.") == "Dillingen an der Donau"
+    assert extract_residence_city("Ich wohne in Neumarkt in der Oberpfalz in der Musterstraße 5.") == "Neumarkt in der Oberpfalz"
 
 
 def test_extract_residence_city_preserves_parenthetical_labels() -> None:
