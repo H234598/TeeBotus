@@ -14536,3 +14536,16 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: PLZ in Meldeadressen
+
+- `10115 Berlin` wird aus Meldeadresse und `in ... gemeldet/registriert` als Berlin extrahiert.
+- PLZ landet nicht im gespeicherten Stadtwert.
+- Arbeits-/Geschäftsadressen mit PLZ bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, sieben Postcode-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `4962d078 fix: parse postal registered addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `15/20` Code-Fixes. Kein Push.
