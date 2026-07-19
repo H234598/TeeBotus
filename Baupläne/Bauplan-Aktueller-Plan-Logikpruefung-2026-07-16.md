@@ -14610,7 +14610,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Neuer Zyklus seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `7/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Weitere Straßenarten
 
@@ -14653,6 +14653,13 @@ Restart erst bei `20/20`.
 - Generisches Daheim-Fallback wird für direkte Wohnsätze und den eindeutigen Kommaabschluss nicht als falsche Subjekt-Stadt verwendet; Mehrfachorte bleiben leer.
 - Verifikation: `tests/test_weather_context.py` -> `180 passed`, vier Comma-Home-Smokes plus zwei Ambiguitäts-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `3e29ca30 fix: parse comma home adverb sentences`.
+
+### Folgefix 2026-07-19: Ortspräzisierung vor Straßenadresse
+
+- `im nördlichen Berlin`, `im Norden Berlins` und `im Bezirk Kreuzberg in Berlin` mit Straßenadresse liefern übergeordneten Ort.
+- Unbekannter Stadtteil ohne übergeordnete Stadt bleibt ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `181 passed`, vier Area-Qualifier-Before-Street-Smokes plus Negativ-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e7896830 fix: parse area qualifiers before streets`.
 
 ### Folgefix 2026-07-19: Verbfreie Wohnadress-Labels
 
