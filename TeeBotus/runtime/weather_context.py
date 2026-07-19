@@ -245,13 +245,19 @@ _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
 _RESIDENCE_LABEL_DETERMINER = (
     r"(?:meine|unsere|mein|unser|der|die|das|ein(?:e|en|em|er|es)?)"
 )
+_RESIDENCE_LABEL_CURRENT_QUALIFIER = (
+    r"aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+    r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*|tatsächlich\w*|"
+    r"tatsaechlich\w*|dauerhaft\w*|permanent\w*|vorübergehend\w*|"
+    r"vorlaeufig\w*|befristet\w*|unbefristet\w*|fest\w*|hauptsächlich\w*|"
+    r"hauptsaechlich\w*|ständig\w*|staendig\w*|stabil\w*|momentan\w*"
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
         r"(?:meinen|meine|mein|unseren|unsere|unser|einen|eine|ein|den|die|das)\s+"
-        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
-        r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
         r"adresse|wohnadresse|wohnanschrift|anschrift|meldeadresse|meldeanschrift|meldesitz)"
         r"\s+(?:in|bei)\s+(?:\d{5}\s+)?"
@@ -2256,8 +2262,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
-        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
-        r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
         r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse|"
         r"meldeadresse|meldeanschrift|meldesitz)"
@@ -4010,8 +4015,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         ),
         re.compile(
             rf"(?:^|[.!?;,\n]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
-            r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
-            r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+            rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
             r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
             r"(?!(?:ist|liegt|befindet\s+sich)\b)"
             rf"{city_capture}",
@@ -4020,8 +4024,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         re.compile(
             r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
             r"(?:meinen|meine|mein|unseren|unsere|unser|einen|eine|ein|den|die|das)\s+"
-            r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
-            r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+            rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
             r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
             r"adresse|wohnadresse|wohnanschrift|anschrift)\s+(?:in|bei)\s+"
             rf"{city_capture}",
@@ -4039,8 +4042,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         ),
         re.compile(
             rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
-            r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
-            r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+            rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
             r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
             r"(?:(?::|=|,)\s*|\s+)"
             r"(?!(?:ist|war|wird|liegt|lautet|befindet\s+sich|bleibt)\b)"
