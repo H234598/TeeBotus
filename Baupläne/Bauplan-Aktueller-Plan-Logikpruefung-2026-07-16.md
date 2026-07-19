@@ -14679,7 +14679,14 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, sechs Verb-Adress-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `c9fe1e75 fix: detect article address conflicts`.
 
+### Folgefix 2026-07-19: First-Person-Adressartikel
+
+- `Ich habe eine Wohnadresse/einen Wohnsitz in Berlin` sowie aktuelle/offizielle Varianten werden erkannt.
+- Arbeitsadresse, historische Adresse und mehrere Wohnziele bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, acht First-Person-Address-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a5e8400a fix: parse first-person residence addresses`.
+
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Seit diesem Restart: `9/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `10/20` Code-Fixes. Kein Push.
