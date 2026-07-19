@@ -15242,3 +15242,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
 - Neuer Zyklus seit diesem Restart: `18/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Geklammerte Straßenadressdetails
+
+- Zusätze wie `(Hinterhaus)`, `(2. OG links)` und `(Wohnung B)` nach der Hausnummer werden vor der bestehenden Stadt-/Straßenanalyse als bekannte Adressdetails behandelt.
+- Ortsklammern wie `Berlin (Kreuzberg)` bleiben davon getrennt; historische Wechsel, Arbeitsadressen und Wohn-/Meldekonflikte bleiben geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `192 passed`, vier Detail-Smokes plus Konflikt-, Arbeits- und historischer Wechsel-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `95771d14 fix: ignore parenthesized street details`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-13
+
+- `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
+- Neuer Zyklus seit diesem Restart: `19/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
