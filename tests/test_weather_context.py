@@ -2415,6 +2415,12 @@ def test_extract_residence_city_keeps_city_before_street_with_area_suffix() -> N
     assert extract_residence_city("Ich wohne in Berlin, Musterstr. 5 und Umgebung von Hamburg.") == ""
 
 
+def test_extract_residence_city_normalizes_city_adjective_area_addresses() -> None:
+    assert extract_residence_city("Ich wohne in der Berliner Umgebung, Musterstr. 5.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Hamburger Region, Musterstraße 5.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Münchner Gegend, Musterstraße 5.") == "München"
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"

@@ -162,6 +162,16 @@ _IRREGULAR_CITY_ADJECTIVE_BASES = {
     "dresdn": "Dresden",
     "münchn": "München",
 }
+_CITY_AREA_ADJECTIVE_BASES = {
+    "berliner": "Berlin",
+    "hamburger": "Hamburg",
+    "dresdner": "Dresden",
+    "münchner": "München",
+    "muenchner": "München",
+    "kölner": "Köln",
+    "koelner": "Köln",
+    "frankfurter": "Frankfurt am Main",
+}
 _KNOWN_COMPOUND_CITY_NAMES = {
     "brandenburg an der havel": "Brandenburg an der Havel",
     "frankfurt an der oder": "Frankfurt an der Oder",
@@ -5718,6 +5728,17 @@ def _clean_city(value: str) -> str:
     known_city_district_base = _KNOWN_CITY_DISTRICT_BASES.get(normalized_source.casefold())
     if known_city_district_base:
         return known_city_district_base
+    city_area_match = re.fullmatch(
+        r"(?i)(?:der\s+)?(?P<adjective>[a-zäöüß-]+)\s+"
+        r"(?:umgebung|region|gegend|nähe|naehe)",
+        normalized_source,
+    )
+    if city_area_match:
+        known_city_area_base = _CITY_AREA_ADJECTIVE_BASES.get(
+            city_area_match.group("adjective").casefold()
+        )
+        if known_city_area_base:
+            return known_city_area_base
     if re.search(r"(?i)\s+(?:oder|sowie|bzw\.?|beziehungsweise)\s+", source):
         return ""
     first_sentence = re.split(r"(?<!\bSt)[.!?;]\s+", source, maxsplit=1, flags=re.IGNORECASE)[0]
