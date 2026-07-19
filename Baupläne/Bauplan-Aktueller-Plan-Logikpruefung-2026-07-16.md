@@ -15326,3 +15326,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `5/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Gebiets-Suffix nach Straßenadresse
+
+- `Berlin, Musterstr. 5 und Umgebung/Region/Nähe` bleibt als Berlin erkennbar.
+- Der Multiplicity-Guard ignoriert den Punkt in `str.`, sodass `Umgebung von Hamburg` nicht fälschlich als Berlin durchrutscht.
+- Verifikation: `tests/test_weather_context.py` -> `199 passed`, positive Suffix-Smokes und Mehrziel-Smokes mit `Musterstr.`/`Musterstraße`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `46bbb02c fix: handle area suffix after street address`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-20
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `6/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
