@@ -1427,6 +1427,10 @@ def test_extract_residence_city_ignores_property_activity() -> None:
         assert extract_residence_city(f"Ich wohne in Berlin und {verb} eine Wohnung in Hamburg.") == "Berlin"
 
 
+def test_extract_residence_city_rejects_holiday_address_purpose() -> None:
+    assert extract_residence_city("Meine Adresse in Berlin ist für meinen Urlaub.") == ""
+
+
 def test_extract_residence_city_ignores_other_person_residence() -> None:
     assert extract_residence_city("Ich wohne in Berlin, meine Freundin wohnt in Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, meine Eltern wohnen in Hamburg.") == "Berlin"

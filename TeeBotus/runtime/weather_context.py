@@ -5032,6 +5032,8 @@ def extract_residence_city(text: str) -> str:
                         continue
                     if re.match(r"(?i)^\s*wei(?:ß|ss)t\s+du\b", match.group("city")):
                         continue
+                    if _has_non_residential_city_tail(match.group("city")):
+                        continue
                     if _has_unresolved_location_separator(source, city_end):
                         continue
                     if _has_future_residence_suffix(source, city_end):
@@ -5678,6 +5680,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
                     or _has_historical_residence_suffix(source, city_end)
                     or _has_future_residence_suffix(source, city_end)
                     or _has_uncertain_residence_suffix(source, city_end)
+                    or _has_non_residential_city_tail(match.group("city"))
                 ):
                     continue
                 city = _clean_city(match.group("city"))
@@ -6433,6 +6436,16 @@ def _has_temporal_residence_suffix_text(value: str) -> bool:
             r"(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*|"
             r"frueher|früher|ehemals|damals|vormalig\w*)\s*\.?$)",
             str(value or "").strip(),
+        )
+    )
+
+
+def _has_non_residential_city_tail(value: str) -> bool:
+    return bool(
+        re.search(
+            r"(?i)\s+(?:ist|war|wird)\s+(?:für|fuer)\s+"
+            r"(?:(?:meinen|meine|den|die|das)\s+)?urlaub\b",
+            str(value or ""),
         )
     )
 
