@@ -15194,3 +15194,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
 - Neuer Zyklus seit diesem Restart: `14/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Kommagetrennte Gebietsadressen
+
+- `im Bezirk Kreuzberg, Berlin, Musterstraße 5` und entsprechende Stadtteil-, Label- und Bare-Formen werden erkannt.
+- Ambiguitäts- und Multiplicity-Guards akzeptieren vollständige Einzeladressen, blockieren aber weiterhin getrennte Wohn-/Meldeorte.
+- Verifikation: `tests/test_weather_context.py` -> `189 passed`, vier Komma-Area-Smokes plus Konfliktfälle, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f091ad33 fix: parse comma separated area addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-9
+
+- `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
+- Neuer Zyklus seit diesem Restart: `15/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
