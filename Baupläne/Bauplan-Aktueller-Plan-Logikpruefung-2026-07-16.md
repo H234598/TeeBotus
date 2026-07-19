@@ -14911,3 +14911,8 @@ Restart erst bei `20/20`.
 - Konfliktguard und `_clean_city` behandeln beide Schreibweisen konsistent.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Unpunctuated-Street-Abbreviation-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `47051e03 fix: accept unpunctuated street abbreviations`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-3
+
+- `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
+- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
