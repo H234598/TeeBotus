@@ -15567,3 +15567,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `5/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Einzeilige Label-Separatoren
+
+- `Wohnadresse: Berlin, ... ->/nach Hamburg, ...` wird als Wechsel erkannt.
+- Arbeitsadresse und zusätzliche `Meldeadresse` bleiben ausgeschlossen bzw. konfliktbehaftet.
+- Verifikation: `tests/test_weather_context.py` -> `218 passed`, zwei positive Separator-Smokes plus Arbeits-/Melde-Negativfälle, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `36be3fd6 fix: parse colon separator address moves`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-40
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `6/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
