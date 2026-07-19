@@ -1323,6 +1323,9 @@ def test_extract_residence_city_prefers_home_outside_temporary_travel() -> None:
     assert extract_residence_city("In den Ferien lebe ich in Berlin, ansonsten in Hamburg.") == "Hamburg"
     assert extract_residence_city("Während der Ferien wohne ich in Köln, sonst lebe ich in Bonn.") == "Bonn"
     assert extract_residence_city("Im Urlaub wohne ich in Berlin.") == ""
+    assert extract_residence_city("Auf Dienstreise wohne ich in Berlin, sonst in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Auf Reisen lebe ich in Berlin, ansonsten in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Während einer Dienstreise wohne ich in Köln, sonst in Bonn.") == "Bonn"
 
 
 def test_extract_residence_city_rejects_person_targets_without_city() -> None:
