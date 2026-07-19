@@ -15278,3 +15278,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `1/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Labeladressen mit Stadt vor abgekürzter Straße
+
+- `Wohnadresse`, `Wohnort` und `Meldeadresse` mit Formen wie `Berlin, Musterstr. 5` werden nicht mehr durch Multiplicity-/Ambiguitäts-Guards blockiert.
+- Separate Meldeadressen bleiben Konfliktfälle; Arbeitsadressen und gleiche Wohn-/Melde-Stadt bleiben korrekt differenziert.
+- Verifikation: `tests/test_weather_context.py` -> `195 passed`, drei Label-Smokes plus Konflikt-/Arbeits-/Unsicherheits-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `29831899 fix: accept labeled city street addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-16
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `2/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
