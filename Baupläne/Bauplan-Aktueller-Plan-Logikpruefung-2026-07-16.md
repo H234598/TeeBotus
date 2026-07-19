@@ -15774,3 +15774,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
 - Neuer Zyklus seit diesem Restart: `2/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Wohnangaben anderer Personen
+
+- `meine Freundin/meine Eltern wohnen in Hamburg` wird nicht als eigener Wohnort übernommen.
+- Eigener Wohnort bleibt bei Komma- und `und`-Satzform in Berlin.
+- Verifikation: `tests/test_weather_context.py` -> `231 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `edc89ca3 fix: ignore other people residence claims`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-58
+
+- `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
+- Neuer Zyklus seit diesem Restart: `3/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
