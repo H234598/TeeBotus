@@ -2690,6 +2690,15 @@ def test_extract_residence_city_handles_colon_separator_moves() -> None:
     ) == ""
 
 
+def test_extract_residence_city_rejects_alternative_residence_targets() -> None:
+    assert extract_residence_city(
+        "Meine Wohnadresse ist entweder Berlin, Musterstr. 5 oder Hamburg, Hauptweg 7."
+    ) == ""
+    assert extract_residence_city(
+        "Wohnadresse: Berlin, Musterstr. 5? Oder Hamburg, Hauptweg 7?"
+    ) == ""
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
