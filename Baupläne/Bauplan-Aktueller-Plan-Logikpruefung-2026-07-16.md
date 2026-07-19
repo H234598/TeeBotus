@@ -15984,6 +15984,18 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `b59d495b fix: recognize qualified residence statements`.
 
+## Aktueller Ledger 2026-07-19-Post-Restart-5-10
+
+- `teebotus.service` aktiv/running, `MainPID 929669`, Start `2026-07-19 22:00:21 CEST`.
+- Neuer Zyklus seit diesem Restart: `10/20` Code-Fixes. Kein Push. Restart erst bei `20/20` Commits.
+
+### Folgefix 2026-07-19: Fragevorspann vor Wohnortantwort
+
+- `Weißt du, wo ich wohne? In Köln.` liefert jetzt Köln statt des Fragevorspanns `Weißt du`.
+- Normale Relativform `Köln, wo ich wohne.` bleibt erkennbar.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `bc2412ea fix: ignore question prefixes as cities`.
+
 ## Aktueller Ledger 2026-07-19-Post-Restart-5-09
 
 - `teebotus.service` aktiv/running, `MainPID 929669`, Start `2026-07-19 22:00:21 CEST`.
