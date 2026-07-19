@@ -2528,6 +2528,15 @@ def test_extract_residence_city_handles_postal_and_parenthesized_move_addresses(
     ) == ""
 
 
+def test_extract_residence_city_allows_same_city_residence_and_registration() -> None:
+    assert extract_residence_city(
+        "Meine Wohnadresse ist Berlin, Musterstr. 5. Meine Meldeadresse ist auch Berlin, Hauptweg 7."
+    ) == "Berlin"
+    assert extract_residence_city(
+        "Wohnadresse: Berlin, Musterstr. 5; Meldeadresse ist auch Berlin, Hauptweg 7."
+    ) == "Berlin"
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"

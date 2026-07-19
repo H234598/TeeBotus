@@ -4908,7 +4908,7 @@ def _has_non_residential_companion_context(source: str) -> bool:
 def _has_conflicting_residence_address_targets(source: str) -> bool:
     city_capture = (
         r"(?:\d{5}\s+)?"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
+        r"(?:auch\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
         r"(?:\s+\([^)]{1,30}\))?)(?=\s*(?:[,.;!?]|$))"
     )
     city_before_street_capture = (
@@ -5997,6 +5997,7 @@ def _clean_city(value: str) -> str:
     ).strip()
     city = re.split(r"(?<!\bSt)[.!?]\s+", city, maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,:;!?")
     city = re.sub(r"(?i)^(?:in|bei)\s+", "", city)
+    city = re.sub(r"(?i)^auch\s+", "", city)
     city = re.sub(r"(?i)(?<!er)(?:[-\s]+)(?:nähe|umgebung)\b$", "", city).strip()
     city = re.sub(
         rf"(?i)[-\s]+(?:{'|'.join(_CITY_AREA_SUFFIXES)})$",
