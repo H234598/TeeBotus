@@ -14770,7 +14770,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-2
 
 - `teebotus.service` aktiv/running, `MainPID 434057`, Start `2026-07-19 03:36:33 CEST`.
-- Neuer Zyklus seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `7/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Präpositionale Straßennamen
 
@@ -14813,3 +14813,10 @@ Restart erst bei `20/20`.
 - Unterschiedliche Meldeadresse bleibt trotz Detailkette Konflikt.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Chained-Building-Detail-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `2128cbf2 fix: parse chained building address details`.
+
+### Folgefix 2026-07-19: Hausnummern mit Buchstabenbereichen
+
+- `5a-5b` und `5a/5b` werden als Hausnummern erkannt.
+- `_clean_city` verwirft solche Straßenfragmente weiterhin als keine Stadt.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Lettered-House-Range-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2dcc52cf fix: parse lettered house number ranges`.
