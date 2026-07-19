@@ -15869,3 +15869,15 @@ Restart erst bei `20/20`.
 - `Ich wohne in Berlin, meine alte Adresse ist in Hamburg` und `Mein zukuenftiger Wohnort ist Hamburg` behalten Berlin als aktuellen Wohnort.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `992d8cbd fix: ignore temporal residence conflicts`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-65
+
+- `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
+- Neuer Zyklus seit diesem Restart: `10/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Weitere Fremdpersonen und Kasusformen
+
+- Familien-, Partner-, Nachbarschafts-, Betreuungs- und medizinische Rollen werden in Fremdwohnortlabels erkannt.
+- Kasus-/Pluralformen wie `meines Arztes`, `meiner Nachbarn` und `meiner Großeltern` ueberschreiben den eigenen Wohnort nicht mehr.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `53d80e86 fix: cover additional foreign residence labels`.
