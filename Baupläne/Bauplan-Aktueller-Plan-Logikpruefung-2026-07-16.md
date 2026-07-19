@@ -14915,7 +14915,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-3
 
 - `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
-- Neuer Zyklus seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `18/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Freie Straßenadress-Sätze
 
@@ -15035,3 +15035,10 @@ Restart erst bei `20/20`.
 - Unterschiedliche Wohn-/Meldeadressen bleiben auch in Ortsartform leer; Arbeitsadressen bleiben zulässig.
 - Verifikation: `tests/test_weather_context.py` -> `171 passed`, drei Bare-Locality-Type-Smokes plus Konflikt-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `8747060d fix: parse bare locality street labels`.
+
+### Folgefix 2026-07-19: Status-Ortsart
+
+- `Wohnhaft/ansässig in der Stadt`, `im Stadtgebiet von` und `in der Gemeinde` werden erkannt, auch mit Straßenadresse.
+- Geschäftliche, historische und künftige Statuszusätze bleiben ausgeschlossen.
+- Verifikation: `tests/test_weather_context.py` -> `172 passed`, vier Status-Locality-Type-Smokes plus Negativ-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ac0de80b fix: parse status locality labels`.
