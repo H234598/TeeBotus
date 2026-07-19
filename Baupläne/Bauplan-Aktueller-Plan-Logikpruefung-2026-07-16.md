@@ -15435,3 +15435,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `14/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Strukturierte Umzugsadressen
+
+- Stadt-vor-Straße-Wechsel mit optionaler Postleitzahl (`10115 Berlin`), Klammerdetails (`Hinterhaus`, `2. OG links`) und bekannten Adressübergängen werden erkannt.
+- Postal-City wird weiterhin durch `_clean_city` normalisiert; zusätzliche `Meldeadresse` bleibt konfliktbehaftet.
+- Verifikation: `tests/test_weather_context.py` -> `208 passed`, Postleitzahl-/Klammer-/Melde-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b48e7f75 fix: parse structured move addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-29
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `15/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
