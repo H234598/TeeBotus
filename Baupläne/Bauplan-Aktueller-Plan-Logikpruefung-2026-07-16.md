@@ -15254,3 +15254,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
 - Neuer Zyklus seit diesem Restart: `19/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Stadt-Kommaform und beschreibende Straßennamen
+
+- `Ich wohne in Berlin, Musterstr. 5` wird als Stadt-vor-Straße-Adresse erkannt; der Ambiguitäts-Guard verwirft vollständige Einzeladressen nicht mehr.
+- Straßennamen wie `Straße des 17. Juni` funktionieren direkt und nach Label; der Punkt in Datumsbestandteil wird nicht als Satzende fehlinterpretiert.
+- Verifikation: `tests/test_weather_context.py` -> `193 passed`, direkte/Label-/Datumsstraßen-Smokes sowie Konflikt-, Arbeits- und historischer Wechsel-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6dc25148 fix: parse comma city and descriptive streets`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-14
+
+- `teebotus.service` wird nach diesem 20. Code-Fix neu gestartet; vorheriger Prozess: `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
+- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes nach erfolgreicher Verifikation. Kein Push.
