@@ -15531,3 +15531,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `2/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Inline-Zeitlabels bei Wohnadressen
+
+- `Wohnadresse alt: ...; Wohnadresse neu: ...`, `Wohnadresse früher ..., heute ...` und `Wohnadresse ..., jetzt ...` werden erkannt.
+- Der Multiplicity-Guard behandelt diese expliziten Zeitpaare als Wechsel; zusätzliche `Meldeadresse` bleibt konfliktbehaftet.
+- Verifikation: `tests/test_weather_context.py` -> `215 passed`, drei positive Inline-Label-Smokes plus Melde-Negativfall, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f815dbcc fix: parse inline labelled residence times`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-37
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `3/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
