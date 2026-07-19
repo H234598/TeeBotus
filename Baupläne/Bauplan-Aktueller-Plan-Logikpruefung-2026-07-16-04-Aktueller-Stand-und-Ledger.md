@@ -1654,3 +1654,15 @@
 - Eine einzelne alte Adresse bleibt ausgeschlossen; der Fix braucht keinen Strassenadress-Parser.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `e6f2e37c fix: parse city-only address changes`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-6-03
+
+- `teebotus.service` aktiv/running, `MainPID 1147780`, Start `2026-07-19 22:49:53 CEST`.
+- Neuer Zyklus seit diesem Restart: `3/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Wohnortlabel-Grammatik
+
+- `Meine Wohnadresse ist jetzt Köln.` und `Seit 2020 bin ich in Köln gemeldet.` werden erkannt.
+- `Köln lautet mein Wohnort.` liefert nur Köln statt `Köln lautet`.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d072b166 fix: cover residence label grammar variants`.

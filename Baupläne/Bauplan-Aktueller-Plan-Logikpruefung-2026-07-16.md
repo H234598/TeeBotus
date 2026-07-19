@@ -45,7 +45,7 @@ Split erfolgte verlustfrei an Originalzeilen 1-4800, 4801-9600,
 
 - Nach planmaessigem Service-Restart: `MainPID 1147780`, Start
   `2026-07-19 22:49:53 CEST`.
-- Neuer Fixzyklus seit diesem Restart: `2/20` Code-Fixes. Kein Push.
+- Neuer Fixzyklus seit diesem Restart: `3/20` Code-Fixes. Kein Push.
 - Letzter Code-Commit im Parserlauf:
   `0111779d fix: parse shorthand residence clarifications`.
 - Aktive Tests bleiben providerfrei. Kein Push ohne ausdrueckliche Freigabe.
