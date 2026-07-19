@@ -1582,6 +1582,13 @@ def test_extract_residence_city_preserves_compound_city_before_street() -> None:
     assert extract_residence_city("Ich wohne in Neustadt an der Weinstraße in der Musterstraße 5.") == "Neustadt an der Weinstraße"
 
 
+def test_extract_residence_city_preserves_compound_city_in_labeled_status() -> None:
+    assert extract_residence_city("Mein Wohnsitz liegt in Frankfurt an der Oder in der Musterstraße 5.") == "Frankfurt an der Oder"
+    assert extract_residence_city("Meine Wohnadresse ist in Mülheim an der Ruhr in der Musterstraße 5.") == "Mülheim an der Ruhr"
+    assert extract_residence_city("Wohnhaft in Neustadt an der Weinstraße in der Musterstraße 5.") == "Neustadt an der Weinstraße"
+    assert extract_residence_city("Meine Meldeadresse ist in Brandenburg an der Havel in der Musterstraße 5.") == "Brandenburg an der Havel"
+
+
 def test_extract_residence_city_trims_trailing_evidence_filler() -> None:
     assert extract_residence_city("Wohnort: Berlin laut Meldeadresse.") == "Berlin"
     assert extract_residence_city("Wohnort: Berlin laut Profil.") == "Berlin"
