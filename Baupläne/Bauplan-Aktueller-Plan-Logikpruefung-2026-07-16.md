@@ -15833,3 +15833,15 @@ Restart erst bei `20/20`.
 - Verifikation: 150 fokussierte Tests gruen, `py_compile` gruen, `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-/Konfigurationscommit: `2a95628f config: switch default Obsidian vault to Teladi Programming`.
 - `teebotus.service` bleibt bis zum planmaessigen `20/20`-Restart unveraendert laufend; neue Umgebung greift beim naechsten Restart.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-62
+
+- `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
+- Neuer Zyklus seit diesem Restart: `7/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Weitere Fremdpersonen bei Wohnortlabels
+
+- `Frau`, `Mann`, `Ehepartner`, `Chef` und `Vorgesetzte` werden bei fremden Wohnortangaben wie Personen behandelt.
+- Die gemeinsame Label-Liste verhindert sowohl falsche Ueberschreibung durch `Hamburg ist der Wohnort meiner Frau` als auch falsche Mehrdeutigkeit bei `Ich wohne in Berlin und meine Frau wohnt in Hamburg`.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `7a14b886 fix: ignore common foreign residence labels`.
