@@ -3185,6 +3185,8 @@ def test_extract_residence_city_handles_temporal_label_forms() -> None:
     assert extract_residence_city("Mein Wohnort ist ab sofort Berlin.") == "Berlin"
     assert extract_residence_city("Ab sofort ist mein Wohnort Berlin.") == "Berlin"
     assert extract_residence_city("Mein künftiger Wohnort ist Hamburg.") == ""
+    assert extract_residence_city("Ich wohne in Berlin. Mein zukünftiger Wohnort ist Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, meine alte Adresse ist in Hamburg.") == "Berlin"
 
 
 def test_extract_residence_city_ignores_common_foreign_person_residence_labels() -> None:

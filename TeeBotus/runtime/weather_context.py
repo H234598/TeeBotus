@@ -5535,6 +5535,18 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         values: set[str] = set()
         for pattern in patterns:
             for match in pattern.finditer(source):
+                pattern_start = match.start()
+                city_start = match.start("city")
+                city_end = match.end("city")
+                if (
+                    _has_historical_residence_prefix(source, pattern_start)
+                    or _has_future_residence_prefix(source, pattern_start, city_start)
+                    or _has_uncertain_residence_prefix(source, pattern_start)
+                    or _has_historical_residence_suffix(source, city_end)
+                    or _has_future_residence_suffix(source, city_end)
+                    or _has_uncertain_residence_suffix(source, city_end)
+                ):
+                    continue
                 city = _clean_city(match.group("city"))
                 if city:
                     values.add(_city_comparison_key(city))
@@ -5552,6 +5564,15 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         source,
         re.IGNORECASE,
     ):
+        if (
+            _has_historical_residence_prefix(source, match.start())
+            or _has_future_residence_prefix(source, match.start(), match.start("city"))
+            or _has_uncertain_residence_prefix(source, match.start())
+            or _has_historical_residence_suffix(source, match.end("city"))
+            or _has_future_residence_suffix(source, match.end("city"))
+            or _has_uncertain_residence_suffix(source, match.end("city"))
+        ):
+            continue
         city = _clean_city(match.group("city"))
         if city:
             registered_address_cities.add(_city_comparison_key(city))
@@ -5563,6 +5584,15 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         source,
         re.IGNORECASE,
     ):
+        if (
+            _has_historical_residence_prefix(source, match.start())
+            or _has_future_residence_prefix(source, match.start(), match.start("city"))
+            or _has_uncertain_residence_prefix(source, match.start())
+            or _has_historical_residence_suffix(source, match.end("city"))
+            or _has_future_residence_suffix(source, match.end("city"))
+            or _has_uncertain_residence_suffix(source, match.end("city"))
+        ):
+            continue
         city = _clean_city(match.group("city"))
         if city:
             registered_address_cities.add(_city_comparison_key(city))
@@ -5972,6 +6002,18 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     )
     for pattern in target_patterns:
         for match in pattern.finditer(source):
+            pattern_start = match.start()
+            city_start = match.start("city")
+            city_end = match.end("city")
+            if (
+                _has_historical_residence_prefix(source, pattern_start)
+                or _has_future_residence_prefix(source, pattern_start, city_start)
+                or _has_uncertain_residence_prefix(source, pattern_start)
+                or _has_historical_residence_suffix(source, city_end)
+                or _has_future_residence_suffix(source, city_end)
+                or _has_uncertain_residence_suffix(source, city_end)
+            ):
+                continue
             city = _clean_city(match.group("city"))
             if city:
                 residence_targets.add(_city_comparison_key(city))
