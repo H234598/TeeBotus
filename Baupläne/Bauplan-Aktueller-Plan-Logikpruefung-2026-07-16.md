@@ -15362,3 +15362,16 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `8/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Aktueller Status und Stadtwechsel mit Straßen
+
+- `Ich bin jetzt in Berlin, Musterstr. 5 wohnhaft` wird erkannt.
+- `Ich wohne nicht mehr in Berlin, Musterstr. 5, sondern in Hamburg, Hauptweg 7` liefert das neue Ziel.
+- Der Konflikt-Guard übernimmt nur den neuen spezifischen Wechselmatch; historische Standardfälle bleiben unverändert und zusätzliche Meldeadressen blockieren.
+- Verifikation: `tests/test_weather_context.py` -> `202 passed`, Current-/Change-Smokes plus Unsicherheit, Meldekonflikt und Regressionen, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `609343df fix: parse current and changed street residences`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-23
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `9/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
