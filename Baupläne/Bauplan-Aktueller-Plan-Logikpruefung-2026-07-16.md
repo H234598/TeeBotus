@@ -15614,3 +15614,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `9/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Straßenfragment im Mehrziel-Guard
+
+- Bei `Ich wohne in Berlin, Musterstr. 5 und besuche Hamburg, Hauptweg 7` wird `Musterstr` nicht mehr als zweite Stadt interpretiert.
+- Besuchs-/Reisezielschutz bleibt aktiv.
+- Verifikation: `tests/test_weather_context.py` -> `222 passed`, zwei Residence-before-Visit-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `935f4866 fix: ignore street fragments in residence ambiguity`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-44
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `10/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
