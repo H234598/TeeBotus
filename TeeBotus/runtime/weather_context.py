@@ -2755,6 +2755,14 @@ CITY_PATTERNS = (
         rf"\({_PRIMARY_RESIDENCE_LABEL}\)(?=\s*(?:[.!?;,]|\b(?:und|sowie)\b|$))",
         re.IGNORECASE,
     ),
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+ist\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"haupt\w*|jetzig\w*|derzeitig\w*|gegenwärtig|gegenwaertig)\s+)?"
+        r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift)\b",
+        re.IGNORECASE,
+    ),
     _TEMPORAL_REGISTERED_CITY,
     _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET,
     _LABELED_COUNTRY_CITY,
@@ -5878,6 +5886,32 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 
     residence_cities = collect(residence_patterns)
     address_cities = collect(address_patterns)
+    for match in re.finditer(
+        rf"\b(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"haupt\w*|jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+        r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|privatanschrift|"
+        r"anschrift)\s*(?::|=|,|\s+(?:ist|lautet|liegt|befindet\s+sich)\s+)"
+        rf"(?:(?:in|bei)\s+)?(?:(?:auch|ebenfalls)\s+)?{city_capture}",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
+        rf"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
+        r"ist\s+(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"haupt\w*|jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+        r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|privatanschrift|"
+        r"anschrift)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            address_cities.add(_city_comparison_key(city))
     registered_address_cities: set[str] = set()
     for match in re.finditer(
         rf"\b(?:(?:{_RESIDENCE_LABEL_DETERMINER})\s+)?"
@@ -6486,11 +6520,21 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         re.IGNORECASE,
     ):
         return True
+    if re.search(
+        rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+ist\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:arbeitsort|arbeitsadresse|geschäftsadresse|geschaeftsadresse|"
+        r"dienstadresse|büroadresse|bueroadresse)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
     return bool(
         re.search(
             rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
             r"(?!nicht\w*\b|(?:ich\s+)?(?:wohne|lebe)\s+nicht\b|"
-            r"bin\b|sein\b|sind\s+(?:beruflich|dienstlich|zum\s+arbeiten)\b|arbeit\w*\b|studier\w*\b|lern\w*\b|zieh\w*\b|"
+            r"bin\b|war\w*\b|sein\b|sind\s+(?:beruflich|dienstlich|zum\s+arbeiten)\b|arbeit\w*\b|studier\w*\b|lern\w*\b|zieh\w*\b|"
             r"schlaf\w*\b|mach\w*\b|komm\w*\b|fahr\w*\b|geh\w*\b|"
             r"hab\w*\b|besitz\w*\b|vermiet\w*\b|verkauf\w*\b|verwalt\w*\b|"
             r"renovier\w*\b|sanier\w*\b|nutz\w*\b|teil\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|"
@@ -6791,7 +6835,7 @@ def _clean_city(value: str) -> str:
     ).strip()
     city = re.split(r"(?<!\bSt)[.!?]\s+", city, maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,:;!?")
     city = re.sub(r"(?i)^(?:in|bei)\s+", "", city)
-    city = re.sub(r"(?i)^auch\s+", "", city)
+    city = re.sub(r"(?i)^(?:auch|ebenfalls)\s+", "", city)
     city = re.sub(r"(?i)(?<!er)(?:[-\s]+)(?:nähe|umgebung)\b$", "", city).strip()
     city = re.sub(
         rf"(?i)[-\s]+(?:{'|'.join(_CITY_AREA_SUFFIXES)})$",
