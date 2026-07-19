@@ -15399,3 +15399,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `11/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Compound-Label nicht als Stadt lesen
+
+- Das allgemeine Residence-Label-Pattern verlangt jetzt Wortgrenze nach `Wohnort`/`Wohnsitz`/ähnlichen Labels. `Wohnortwechsel` wird nicht mehr als Stadt `wechsel` extrahiert.
+- Ein echtes `Wohnort: Hamburg` bleibt unverändert.
+- Verifikation: `tests/test_weather_context.py` -> `205 passed`, Regression für `Wohnortwechsel` und `Wohnort: Hamburg`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `b092d613 fix: reject compound residence label matches`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-26
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `12/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
