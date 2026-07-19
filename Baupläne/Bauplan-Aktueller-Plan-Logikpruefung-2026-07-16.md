@@ -15122,3 +15122,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
 - Neuer Zyklus seit diesem Restart: `8/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Attributive Gebietspräzisierung vor Straßenadresse
+
+- `Berliner/Hamburger/Münchner` vor `Bezirk`, `Stadtteil`, `Innenstadt`, `Zentrum` und ähnlichen Ortsarten mit Straßenadresse werden erkannt.
+- Genitive Formen wie `Innenstadt Berlins` werden normalisiert; Wohn-/Meldeadresskonflikte bleiben mehrdeutig und liefern leer.
+- Verifikation: `tests/test_weather_context.py` -> `183 passed`, sieben attributive/genitive Gebiet- und Konflikt-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3264fa36 fix: parse attributive area street residences`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-3
+
+- `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
+- Neuer Zyklus seit diesem Restart: `9/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
