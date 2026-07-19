@@ -15762,3 +15762,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
 - Neuer Zyklus seit diesem Restart: `1/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Wohnort neben Objektverwaltung
+
+- `vermiete`, `verkaufe`, `verwalte`, `renoviere`, `saniere` und `nutze` werden in Anschluss an einen Wohnsatz nicht als zweites Wohnziel behandelt.
+- `miete` bleibt bewusst mehrdeutig, weil es eine echte Wohnungsanmietung sein kann.
+- Verifikation: `tests/test_weather_context.py` -> `230 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0c50f48e fix: preserve residence beside property activity`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-57
+
+- `teebotus.service` aktiv/running, `MainPID 747309`, Start `2026-07-19 21:20:05 CEST`.
+- Neuer Zyklus seit diesem Restart: `2/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
