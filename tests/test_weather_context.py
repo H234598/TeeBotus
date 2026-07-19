@@ -841,6 +841,8 @@ def test_extract_residence_city_handles_current_city_after_residence_change() ->
     assert extract_residence_city("Ich wohne in Berlin, aber arbeite jetzt in Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, aber arbeite inzwischen in Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin; aber arbeite jetzt in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne mit meiner Ausbildung in Köln.") == ""
+    assert extract_residence_city("Ich wohne bei meiner Firma in Berlin.") == ""
     assert extract_residence_city("Ich wohne nicht in Berlin; aber arbeite jetzt in Hamburg.") == ""
     assert extract_residence_city("Ich wohne in Berlin, aber arbeite seit 2020 in Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne zwar in Berlin, aber aktuell in Hamburg.") == "Hamburg"

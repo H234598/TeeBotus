@@ -3676,6 +3676,8 @@ def extract_residence_city(text: str) -> str:
     source = str(text or "")
     if source.strip().endswith("?"):
         return ""
+    if _has_non_residential_companion_context(source):
+        return ""
 
     def latest_match(patterns: tuple[re.Pattern[str], ...]) -> str:
         candidates: list[tuple[int, str]] = []
@@ -3888,6 +3890,23 @@ def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
             re.IGNORECASE,
         )
     )
+
+
+def _has_non_residential_companion_context(source: str) -> bool:
+    companion_pattern = re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:mit|bei)\s+"
+        r"(?P<companion>[^,.;!?]{1,80})\s+(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    )
+    for match in companion_pattern.finditer(source):
+        if re.search(
+            r"\b(?:ausbild\w*|firma|unternehmen\w*|betrieb\w*|geschäft\w*|geschaeft\w*)\b",
+            match.group("companion"),
+            re.IGNORECASE,
+        ):
+            return True
+    return False
 
 
 def _has_conflicting_residence_address_targets(source: str) -> bool:
