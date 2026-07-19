@@ -2421,6 +2421,12 @@ def test_extract_residence_city_normalizes_city_adjective_area_addresses() -> No
     assert extract_residence_city("Ich wohne in Münchner Gegend, Musterstraße 5.") == "München"
 
 
+def test_extract_residence_city_handles_country_status_label_separator() -> None:
+    assert extract_residence_city("Wohnhaft: Österreich, Wien, Musterstr. 5.") == "Wien"
+    assert extract_residence_city("Gemeldet: Schweiz, Zürich, Bahnhofstr. 3.") == "Zürich"
+    assert extract_residence_city("Wohnhaft: Österreich, Wien, Musterstr. 5; Meldeadresse Hamburg.") == ""
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"

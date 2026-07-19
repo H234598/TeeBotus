@@ -2172,7 +2172,7 @@ CITY_PATTERNS = (
     re.compile(
         rf"(?:^|[.!?;,:]\s*)(?:(?:ich|wir)\s+(?:bin|sind)\s+)?"
         rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
-        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)(?:\s+|\s*[:=,]\s*)"
         rf"{_COUNTRY_CITY_BEFORE_STREET}",
         re.IGNORECASE,
     ),
@@ -4790,7 +4790,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         re.compile(
             rf"(?:^|[.!?;,:]\s*)(?:(?:ich|wir)\s+(?:bin|sind)\s+)?"
             rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
-            r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+"
+            r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)(?:\s+|\s*[:=,]\s*)"
             rf"{country_city_before_street_capture}",
             re.IGNORECASE,
         ),
