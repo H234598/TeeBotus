@@ -1295,6 +1295,8 @@ def test_extract_residence_city_preserves_compound_city_names() -> None:
     assert extract_residence_city("Ich wohne in Frankfurt (Oder).") == "Frankfurt (Oder)"
     assert extract_residence_city("Ich wohne in neustadt an der weinstraße.") == "Neustadt an der Weinstraße"
     assert extract_residence_city("Ich wohne in Neustadt an der Weinstraße.") == "Neustadt an der Weinstraße"
+    assert extract_residence_city("Ich wohne in Weiden in der Oberpfalz.") == "Weiden in der Oberpfalz"
+    assert extract_residence_city("Ich wohne in Weil am Rhein.") == "Weil am Rhein"
 
 
 def test_extract_residence_city_does_not_split_stopword_prefixes() -> None:
@@ -1314,6 +1316,8 @@ def test_extract_residence_city_preserves_regional_compound_names() -> None:
     assert extract_residence_city("Ich wohne in Rüdesheim am Rhein.") == "Rüdesheim am Rhein"
     assert extract_residence_city("Ich wohne in St. Georgen im Schwarzwald.") == "St. Georgen im Schwarzwald"
     assert extract_residence_city("Ich wohne in Königstein im Taunus.") == "Königstein im Taunus"
+    assert extract_residence_city("Ich wohne in Weiden in der Oberpfalz in der Musterstraße 5.") == "Weiden in der Oberpfalz"
+    assert extract_residence_city("Ich wohne in Weil am Rhein in der Musterstraße 5.") == "Weil am Rhein"
 
 
 def test_extract_residence_city_preserves_parenthetical_labels() -> None:

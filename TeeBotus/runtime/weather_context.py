@@ -186,13 +186,16 @@ _KNOWN_COMPOUND_CITY_NAMES = {
     "halle saale": "Halle (Saale)",
     "st. georgen im schwarzwald": "St. Georgen im Schwarzwald",
     "wörth am rhein": "Wörth am Rhein",
+    "weiden in der oberpfalz": "Weiden in der Oberpfalz",
+    "weil am rhein": "Weil am Rhein",
 }
 _STREET_COMPOUND_CITY_PATTERN = (
     r"(?:Brandenburg\s+an\s+der\s+Havel|Frankfurt\s+an\s+der\s+Oder|"
     r"Frankfurt\s+\(Oder\)|"
     r"Frankfurt\s+am\s+Main|Königstein\s+im\s+Taunus|Ludwigshafen\s+am\s+Rhein|"
     r"Mülheim\s+an\s+der\s+Ruhr|Neustadt\s+an\s+der\s+Weinstraße|"
-    r"Rüdesheim\s+am\s+Rhein|Wörth\s+am\s+Rhein|St\.\s+Georgen\s+im\s+Schwarzwald)"
+    r"Rüdesheim\s+am\s+Rhein|Wörth\s+am\s+Rhein|Weiden\s+in\s+der\s+Oberpfalz|"
+    r"Weil\s+am\s+Rhein|St\.\s+Georgen\s+im\s+Schwarzwald)"
 )
 _KNOWN_CITY_DISTRICT_BASES = {
     "berlin-mitte": "Berlin",
