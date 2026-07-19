@@ -1707,3 +1707,26 @@
 - Ferien-, Reise-, Dienstreise-, Wochenend-, Wochentag- und Besuchsorte überschreiben Wohnort nicht; mit `sonst/ansonsten` wird Normalort übernommen.
 - Verifikation nach jedem Fix: `tests/test_weather_context.py` -> `235 passed`, `py_compile`, Smoke-Checks und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commits: `f3cd90ab`, `7430434e`, `330fb932`, `d7ea3aae`, `7d5a4ae7`, `ca6aa9a8`, `a473b054`, `71c69f17`, `ed4c482d`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-00
+
+- `systemctl --user restart teebotus.service` erfolgreich.
+- Service aktiv/running, `MainPID 1697303`, Start `2026-07-20 01:04:25 CEST`.
+- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+- Aktive Planstruktur bleibt unter `../Baupläne/`; historische und abgeschlossene
+  Planaufnahmen bleiben unter `../Abgeschlossene Baupläne/`.
+
+### Folgefix-Batch 2026-07-20: Sekundaer- und parenthetische Wohnsitzlabels
+
+- Sekundaerwohnsitz ohne Hauptwohnsitz wird auch bei `Zweitwohnsitz`,
+  `Nebenwohnsitz`, `Ferienwohnsitz`, `als ... gemeldet` und Klammerlabels
+  verworfen.
+- Bare Hauptwohnsitzlabels und Umkehrformen wie `Berlin (Hauptwohnsitz)`
+  werden erkannt; Hauptwohnsitz plus Arbeitsort bleibt gueltig.
+- Zwei echte parenthetische Wohnsitzstaedte bleiben mehrdeutig; sekundäre,
+  historische und Arbeitsort-Zusätze werden nicht als zweiter Hauptwohnsitz
+  bewertet.
+- Verifikation: `tests/test_weather_context.py` -> `237 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commits: `a2a27015`, `38990e3a`, `e5c24156`, `6dc74c0a`, `af416079`,
+  `c9f2be3f`, `d8a8140b`, `a3d8cbde`, `40db7503`, `5b1657ca`.
