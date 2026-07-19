@@ -195,6 +195,10 @@ _KNOWN_COMPOUND_CITY_NAMES = {
     "burg auf fehmarn": "Burg auf Fehmarn",
     "dillingen an der donau": "Dillingen an der Donau",
     "neumarkt in der oberpfalz": "Neumarkt in der Oberpfalz",
+    "mühlhausen/thüringen": "Mühlhausen/Thüringen",
+    "muehlhausen/thueringen": "Mühlhausen/Thüringen",
+    "schwedt/oder": "Schwedt/Oder",
+    "wittstock/dosse": "Wittstock/Dosse",
 }
 _STREET_COMPOUND_CITY_PATTERN = (
     r"(?:Brandenburg\s+an\s+der\s+Havel|Frankfurt\s+an\s+der\s+Oder|"
@@ -205,6 +209,7 @@ _STREET_COMPOUND_CITY_PATTERN = (
     r"Weil\s+am\s+Rhein|Neustadt\s+bei\s+Coburg|Buchholz\s+in\s+der\s+Nordheide|"
     r"Freiburg\s+im\s+Breisgau|Freiberg\s+am\s+Neckar|Burg\s+auf\s+Fehmarn|"
     r"Dillingen\s+an\s+der\s+Donau|Neumarkt\s+in\s+der\s+Oberpfalz|"
+    r"Mühlhausen/Thüringen|Muehlhausen/Thueringen|Schwedt/Oder|Wittstock/Dosse|"
     r"St\.\s+Georgen\s+im\s+Schwarzwald)"
 )
 _KNOWN_CITY_DISTRICT_BASES = {
@@ -781,7 +786,7 @@ _MAIN_RESIDENCE_CITY = re.compile(
 _COMPOUND_CITY_RESIDENCE = re.compile(
     r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
     rf"(?P<city>{_STREET_COMPOUND_CITY_PATTERN})"
-    r"(?=\s*(?:[.!?;,]|$))",
+    r"(?=\s*(?:[.!?;,]|(?:in|an|auf|unter)\s+|$))",
     re.IGNORECASE,
 )
 _HAVE_PRIMARY_HOME_CITY_BEFORE_STREET = re.compile(
@@ -5002,6 +5007,7 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
             _CITY_CHANGE_LABELLED_ALT_NEW_COLON_STREET,
             _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
             _CITY_CHANGE_LABELLED_COLON_SEPARATOR_STREET,
+            _COMPOUND_CITY_RESIDENCE,
         )
     ):
         return False

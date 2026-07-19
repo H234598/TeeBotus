@@ -1304,6 +1304,9 @@ def test_extract_residence_city_preserves_compound_city_names() -> None:
     assert extract_residence_city("Ich wohne in Burg auf Fehmarn.") == "Burg auf Fehmarn"
     assert extract_residence_city("Ich wohne in Dillingen an der Donau.") == "Dillingen an der Donau"
     assert extract_residence_city("Ich wohne in Neumarkt in der Oberpfalz.") == "Neumarkt in der Oberpfalz"
+    assert extract_residence_city("Ich wohne in Mühlhausen/Thüringen.") == "Mühlhausen/Thüringen"
+    assert extract_residence_city("Ich wohne in Schwedt/Oder.") == "Schwedt/Oder"
+    assert extract_residence_city("Ich wohne in Wittstock/Dosse.") == "Wittstock/Dosse"
 
 
 def test_extract_residence_city_does_not_split_stopword_prefixes() -> None:
@@ -1332,6 +1335,9 @@ def test_extract_residence_city_preserves_regional_compound_names() -> None:
     assert extract_residence_city("Ich wohne in Burg auf Fehmarn in der Musterstraße 5.") == "Burg auf Fehmarn"
     assert extract_residence_city("Ich wohne in Dillingen an der Donau in der Musterstraße 5.") == "Dillingen an der Donau"
     assert extract_residence_city("Ich wohne in Neumarkt in der Oberpfalz in der Musterstraße 5.") == "Neumarkt in der Oberpfalz"
+    assert extract_residence_city("Ich wohne in Mühlhausen/Thüringen in der Musterstraße 5.") == "Mühlhausen/Thüringen"
+    assert extract_residence_city("Ich wohne in Schwedt/Oder in der Musterstraße 5.") == "Schwedt/Oder"
+    assert extract_residence_city("Ich wohne in Wittstock/Dosse in der Musterstraße 5.") == "Wittstock/Dosse"
 
 
 def test_extract_residence_city_preserves_parenthetical_labels() -> None:
