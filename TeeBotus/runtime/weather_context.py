@@ -834,6 +834,19 @@ _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET = re.compile(
     r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b",
     re.IGNORECASE,
 )
+_LABELED_COUNTRY_CITY = re.compile(
+    rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"adresse|wohnadresse|wohnanschrift|anschrift)\s*"
+    r"(?::|=|,)\s*(?:in\s+)?"
+    r"(?:deutschland|österreich|oesterreich|(?:der\s+)?schweiz)\s*[,;]\s*"
+    r"(?:(?:genauer(?:\s+gesagt)?|konkret|nämlich|naemlich|und\s+zwar|"
+    r"besser\s+gesagt|sprich)\s*:?[ \t]+)?"
+    r"(?:(?:in|bei)\s+)?"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+    r"(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _REGIONAL_PREFIX_RESIDENCE = re.compile(
     r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|im)\s+"
     rf"(?:{_REGION_NAME_PATTERN})\s*,\s*(?:in|bei)\s+"
@@ -872,6 +885,7 @@ CITY_CHANGE_PATTERNS = (
         r"(?=\s*[.!?;,]|$)",
         re.IGNORECASE,
     ),
+    _LABELED_COUNTRY_CITY,
     _CITY_CHANGE_CITY_BEFORE_STREET_MOVE,
     _CITY_CHANGE_CITY_BEFORE_STREET_MOVE_FROM,
     _CITY_CHANGE_CURRENT_CITY_BEFORE_STREET,
@@ -2679,6 +2693,7 @@ CITY_PATTERNS = (
     _CURRENT_RESIDENCE_LABEL_CITY,
     _TEMPORAL_REGISTERED_CITY,
     _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET,
+    _LABELED_COUNTRY_CITY,
     _REGIONAL_PREFIX_RESIDENCE,
     _HAVE_PRIMARY_HOME_CITY_BEFORE_STREET,
     _HAVE_PRIMARY_HOME_CITY,
@@ -5076,6 +5091,7 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
             _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
             _CITY_CHANGE_LABELLED_COLON_SEPARATOR_STREET,
             _COMPOUND_CITY_RESIDENCE,
+            _LABELED_COUNTRY_CITY,
         )
     ):
         return False
