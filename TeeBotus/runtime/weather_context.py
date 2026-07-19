@@ -684,6 +684,18 @@ _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY = re.compile(
     r"(?=\s*[.!?;,]|$)",
     re.IGNORECASE,
 )
+_CITY_CHANGE_LABELLED_FROM_TO_STREET = re.compile(
+    r"\b(?:wohnadresse|wohnanschrift|anschrift|adresse)\s+von\s+"
+    rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
+    r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+    rf"{_LABELED_STREET_ADDRESS_CORE}\s+(?:zu|nach|auf)\s+"
+    rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
+    r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+    rf"{_LABELED_STREET_ADDRESS_CORE}\s+"
+    r"(?:geändert|geaendert|verlegt|verlagert|umgemeldet|aktualisiert)\b"
+    r"(?=\s*[.!?;,]|$)",
+    re.IGNORECASE,
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -721,6 +733,7 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_COLON_LABELLED_OLD_NEW_STREET,
     _CITY_CHANGE_LABELLED_ALT_NEW_COLON_STREET,
     _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
+    _CITY_CHANGE_LABELLED_FROM_TO_STREET,
     re.compile(
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
         r"(?:meine|unsere)\s+(?:wohnadresse|wohnanschrift|adresse)\s+von\s+"
@@ -5111,6 +5124,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         _CITY_CHANGE_COLON_LABELLED_OLD_NEW_STREET,
         _CITY_CHANGE_LABELLED_ALT_NEW_COLON_STREET,
         _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
+        _CITY_CHANGE_LABELLED_FROM_TO_STREET,
         re.compile(
             rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
             rf"{country_city_before_street_capture}",
@@ -5621,6 +5635,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             _CITY_CHANGE_COLON_LABELLED_OLD_NEW_STREET,
             _CITY_CHANGE_LABELLED_ALT_NEW_COLON_STREET,
             _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
+            _CITY_CHANGE_LABELLED_FROM_TO_STREET,
         )
     ) and not registered_address_cities:
         return False
