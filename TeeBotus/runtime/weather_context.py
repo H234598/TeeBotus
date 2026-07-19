@@ -577,6 +577,18 @@ _CITY_CHANGE_LEADING_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET = re.compile(
     r"(?=\s*[.!?;,]|$)",
     re.IGNORECASE,
 )
+_CITY_CHANGE_CITY_BEFORE_RESIDENCE_LABEL = re.compile(
+    r"\b"
+    rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?\s+"
+    r"war\s+(?:meine|unsere)\s+(?:alte|ehemalige|frühere|fruehere)\s+"
+    r"(?:wohnadresse|wohnanschrift|adresse)\s*[,;]\s*"
+    rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?\s+"
+    r"ist\s+(?:jetzt|nun|aktuell|derzeit|inzwischen)\s+"
+    r"(?:meine|unsere)\s+(?:neue|aktuelle|jetzige)\s+"
+    r"(?:wohnadresse|wohnanschrift|adresse)\b"
+    r"(?=\s*[.!?;,]|$)",
+    re.IGNORECASE,
+)
 
 CITY_CHANGE_PATTERNS = (
     re.compile(
@@ -606,6 +618,7 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_CURRENT_NOT_MORE_CITY_BEFORE_STREET,
     _CITY_CHANGE_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET,
     _CITY_CHANGE_LEADING_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET,
+    _CITY_CHANGE_CITY_BEFORE_RESIDENCE_LABEL,
     re.compile(
         r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
         r"(?:meine|unsere)\s+(?:wohnadresse|wohnanschrift|adresse)\s+von\s+"
@@ -4979,6 +4992,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         _CITY_CHANGE_CURRENT_NOT_MORE_CITY_BEFORE_STREET,
         _CITY_CHANGE_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET,
         _CITY_CHANGE_LEADING_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET,
+        _CITY_CHANGE_CITY_BEFORE_RESIDENCE_LABEL,
         re.compile(
             rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
             rf"{country_city_before_street_capture}",
@@ -5481,6 +5495,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             _CITY_CHANGE_CURRENT_NOT_MORE_CITY_BEFORE_STREET,
             _CITY_CHANGE_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET,
             _CITY_CHANGE_LEADING_OLD_PRONOUN_CURRENT_CITY_BEFORE_STREET,
+            _CITY_CHANGE_CITY_BEFORE_RESIDENCE_LABEL,
         )
     ) and not registered_address_cities:
         return False

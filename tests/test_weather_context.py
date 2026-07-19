@@ -2567,6 +2567,21 @@ def test_extract_residence_city_handles_pronoun_address_changes() -> None:
     ) == ""
 
 
+def test_extract_residence_city_handles_city_before_residence_labels() -> None:
+    assert extract_residence_city(
+        "Berlin war meine alte Wohnadresse, Hamburg ist jetzt meine neue Wohnadresse."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Berlin war meine frühere Wohnanschrift; Hamburg ist nun meine aktuelle Wohnanschrift."
+    ) == "Hamburg"
+    assert extract_residence_city(
+        "Berlin war meine alte Arbeitsadresse, Hamburg ist jetzt meine neue Arbeitsadresse."
+    ) == ""
+    assert extract_residence_city(
+        "Berlin war meine alte Wohnadresse, Hamburg ist jetzt meine neue Wohnadresse; Meldeadresse München."
+    ) == ""
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
