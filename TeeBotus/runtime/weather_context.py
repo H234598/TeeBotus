@@ -3664,7 +3664,7 @@ CITY_PATTERNS = (
     re.compile(
         r"(?:^|[.!?;\n]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:(?:aktuell(?:er|e)?|jetzig(?:er|e)|derzeitig(?:er|e)?|gegenwärtig(?:er|e)?)\s+)?"
-        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\b\s*"
         r"(?:(?:bitte|aktuell|derzeitig|derzeit|gegenwärtig)\s*)?"
         r"(?::|=|,)?\s*(?!(?:ist|war|w(?:äre|urde)|liegt|befindet|bleibt|nicht)\b)"
         r"(?:(?:bitte|aktuell|derzeitig|derzeit|gegenwärtig)\s*)?"

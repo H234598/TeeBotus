@@ -2472,6 +2472,11 @@ def test_extract_residence_city_handles_additional_city_before_street_moves() ->
     ) == ""
 
 
+def test_extract_residence_city_does_not_split_compound_residence_labels() -> None:
+    assert extract_residence_city("Wohnortwechsel: Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7.") == ""
+    assert extract_residence_city("Wohnort: Hamburg.") == "Hamburg"
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
