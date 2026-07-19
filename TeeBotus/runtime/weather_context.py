@@ -6042,7 +6042,7 @@ def _has_future_residence_prefix(source: str, match_start: int, city_start: int 
         r"(?<!\d)(?<!\bSt)[.!?;\n]\s*", source[:match_start], flags=re.IGNORECASE
     )[-1]
     if re.search(
-        r"(?i)(?:\bkünft\w*|\bkuenft\w*|\bzukünft\w*|\bzukuenft\w*|\bgeplant\w*)\s*$",
+        r"(?i)(?:\bkünft\w*|\bkuenft\w*|\bzukünft\w*|\bzukuenft\w*|\bgeplant\w*|\bplan\w*|\bbeabsichtig\w*|\bvorhab\w*)\s*$",
         match_sentence,
     ):
         return True
@@ -6061,7 +6061,7 @@ def _has_future_residence_prefix(source: str, match_start: int, city_start: int 
             r"sommer|winter|frühling|fruehling|herbst)\b|\bzu\s+(?:weihnachten|ostern|neujahr)\b|"
             r"\bseit\s+(?:morgen|uebermorgen|übermorgen)\b|\b(?:demnächst|demnaechst)\b|\bbald\b|"
             r"\b(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*\b|\bin\s+zukunft\b|"
-            r"\b(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*)\b)",
+            r"\b(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*|plan\w*|beabsichtig\w*|vorhab\w*)\b)",
             clause,
         )
     )

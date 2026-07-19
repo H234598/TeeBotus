@@ -2711,6 +2711,18 @@ def test_extract_residence_city_rejects_unfinished_street_moves() -> None:
     ) == "Hamburg"
 
 
+def test_extract_residence_city_rejects_planned_address_moves() -> None:
+    assert extract_residence_city(
+        "Ich plane, meine Wohnadresse von Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7 zu verlegen."
+    ) == ""
+    assert extract_residence_city(
+        "Ich beabsichtige, meine Wohnadresse von Berlin, Musterstr. 5 nach Hamburg, Hauptweg 7 zu verlegen."
+    ) == ""
+    assert extract_residence_city(
+        "Ich wohne aktuell in Berlin, Musterstr. 5; ich plane den Umzug nach Hamburg, Hauptweg 7."
+    ) == "Berlin"
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"
