@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
 
+from TeeBotus.artifact_outputs import DEFAULT_OBSIDIAN_VAULT_DIR
 from TeeBotus.runtime.accounts import INSTANCE_STATE_ACCOUNT_ID, AccountStore, AccountStoreError
 
 CODEX_COMMAND = "/codex"
@@ -18,7 +19,7 @@ CODEX_OUTPUT_LIMIT = 3600
 CODEX_STATUS_SESSION_LIMIT = 12
 CODEX_SPAWN_GOAL = "Entwickle und finde Logikfehler. Bleibe moeglichst bei einer Datei bzw. einem Thema um Token zu sparen."
 CODEX_SPAWN_PLAN_DIR = Path(
-    "/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/Projekte/TeeBotus/Bauplaene!"
+    DEFAULT_OBSIDIAN_VAULT_DIR / "Projekte" / "TeeBotus" / "Bauplaene!"
 )
 
 

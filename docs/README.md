@@ -1,6 +1,6 @@
 # TeeBotus Docs
 
-Diese Ablage enthaelt die lokal gepflegten Plan- und Betriebsdokumente. Dateien aus `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming` (oder `TEEBOTUS_OBSIDIAN_INCOMING_DIR`) werden nicht blind ueberschrieben, sondern mit Repo-Statuskoepfen integriert, damit historische Planstaende und aktueller Umsetzungsstand getrennt bleiben.
+Diese Ablage enthaelt die lokal gepflegten Plan- und Betriebsdokumente. Dateien aus `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Programming/incomming` (oder `TEEBOTUS_OBSIDIAN_INCOMING_DIR`) werden nicht blind ueberschrieben, sondern mit Repo-Statuskoepfen integriert, damit historische Planstaende und aktueller Umsetzungsstand getrennt bleiben.
 
 ## Integrierte Plaene
 

@@ -4,17 +4,19 @@ import os
 from pathlib import Path
 
 
+DEFAULT_OBSIDIAN_VAULT_DIR = (
+    Path.home()
+    / "Dokumente"
+    / "Obsidian_Vaults"
+    / "Teladi_Programming"
+)
+
+
 def _default_incoming_dir() -> Path:
     configured = os.environ.get("TEEBOTUS_OBSIDIAN_INCOMING_DIR", "").strip()
     if configured:
         return Path(configured).expanduser()
-    return (
-        Path.home()
-        / "Dokumente"
-        / "Obsidian_Vaults"
-        / "Teladi_Def_Obs_Vault"
-        / "incomming"
-    )
+    return DEFAULT_OBSIDIAN_VAULT_DIR / "incomming"
 
 
 DEFAULT_OBSIDIAN_INCOMING_DIR = _default_incoming_dir()

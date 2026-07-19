@@ -14,7 +14,7 @@ Stand: 2026-06-19
 
 Quelle:
 
-- `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/Plan3.md` ist in `docs/Plan3.md` integriert.
+- `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Programming/incomming/Plan3.md` ist in `docs/Plan3.md` integriert.
 - Download-SHA256: `86a7832047b1de63c50fb5776d7e98f3c54d277054cf518267e03be000fb8553`
 - Der Dokumentkoerper folgt dem aktuellen Download-Stand; dieser Kopf fuehrt den Repo-Status analog zu `docs/Codex_Outbox_History_Plan.md`.
 
@@ -1829,7 +1829,7 @@ Livebenchmarks optional.
 - AccountStore bleibt verschlüsselter Wahrheitsspeicher.
 - BibliothekarService behält LocalBackend und HaystackBackend.
 - LlamaIndexBackend ist optionaler Doc-Chat-Pilot.
-- Benchmarks liefern Markdown + JSON nach /home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming und der Quick-CLI-Lauf sendet den Markdown-Bericht an Admin-Accounts.
+- Benchmarks liefern Markdown + JSON nach /home/teladi/Dokumente/Obsidian_Vaults/Teladi_Programming/incomming und der Quick-CLI-Lauf sendet den Markdown-Bericht an Admin-Accounts.
 - Keine Secrets im Repo oder Benchmarkoutput.
 ```
 

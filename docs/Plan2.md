@@ -14,7 +14,7 @@ Stand: 2026-06-19
 
 Quelle:
 
-- `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/Plan2.md` ist in `docs/Plan2.md` integriert.
+- `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Programming/incomming/Plan2.md` ist in `docs/Plan2.md` integriert.
 - Download-SHA256: `b0e429bef5398e6cf067693f5390486ccb137f3ebef9770cb0509c585cd832f0`
 - Der Dokumentkoerper folgt dem aktuellen Download-Stand; dieser Kopf fuehrt den Repo-Status analog zu `docs/Codex_Outbox_History_Plan.md`.
 
@@ -1999,7 +1999,7 @@ Benchmarkregeln:
 - Keine echten API-Kosten in Standard-Benchmarks.
 - Netzwerk/Provider in den Messungen nur hinter explizitem Override; der Quick-CLI-Lauf darf den fertigen Bericht danach an Admin-Accounts senden.
 - Fixtures muessen klein, versioniert und reproduzierbar sein.
-- Ausgabe als Markdown und JSON standardmaessig nach `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming`.
+- Ausgabe als Markdown und JSON standardmaessig nach `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Programming/incomming`.
 - `python3 scripts/run_benchmarks.py --quick` verschickt den Markdown-Bericht zusaetzlich messenger-agnostisch an die Admin-Accounts; trockene Laeufe nutzen `--no-admin-notify` und bei Bedarf `--no-obsidian`.
 - Jeder Benchmark nennt Hardware-/Python-/Dependency-Kontext.
 - Jeder Benchmark misst mindestens Laufzeit, Durchsatz, Fehlerzahl und relevante Payload-/Indexgroessen.

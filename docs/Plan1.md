@@ -12,7 +12,7 @@ Stand: 2026-06-19
 
 Quelle:
 
-- `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Def_Obs_Vault/incomming/Plan1.md` ist in `docs/Plan1.md` integriert.
+- `/home/teladi/Dokumente/Obsidian_Vaults/Teladi_Programming/incomming/Plan1.md` ist in `docs/Plan1.md` integriert.
 - Download-SHA256: `c96dec8df17fc404731d9952e16b4994a9e13de1b1db7712067786fd7d3836b6`
 - Der Dokumentkoerper folgt dem aktuellen Download-Stand; dieser Kopf fuehrt den Repo-Status analog zu `docs/Codex_Outbox_History_Plan.md`.
 
