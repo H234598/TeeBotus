@@ -2353,6 +2353,10 @@ def test_extract_residence_city_normalizes_known_hyphenated_districts() -> None:
     assert extract_residence_city("Mein Wohnort ist Köln-Deutz.") == "Köln"
     assert extract_residence_city("Ich wohne in Berlin (Deutschland).") == "Berlin"
     assert extract_residence_city("Ich wohne in Halle (Saale).") == "Halle (Saale)"
+    assert extract_residence_city("Ich wohne in Berlin (Kreuzberg), Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Meine Wohnadresse ist in Berlin (Mitte), Musterstraße 5.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Hamburg (Altona), Hauptstraße 7.") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Frankfurt am Main (Sachsenhausen), Musterstraße 5.") == "Frankfurt am Main"
 
 
 def test_extract_residence_city_handles_labeled_center_relations() -> None:

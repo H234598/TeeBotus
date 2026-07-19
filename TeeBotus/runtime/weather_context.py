@@ -184,8 +184,15 @@ _STREET_COMPOUND_CITY_PATTERN = (
 _KNOWN_CITY_DISTRICT_BASES = {
     "berlin-mitte": "Berlin",
     "berlin-kreuzberg": "Berlin",
+    "berlin (mitte)": "Berlin",
+    "berlin (kreuzberg)": "Berlin",
+    "berlin (prenzlauer berg)": "Berlin",
+    "berlin kreuzberg": "Berlin",
     "hamburg-altona": "Hamburg",
+    "hamburg (altona)": "Hamburg",
     "köln-deutz": "Köln",
+    "köln (deutz)": "Köln",
+    "frankfurt am main (sachsenhausen)": "Frankfurt am Main",
 }
 _GENITIVE_CITY_REPAIRS = {
     "pari": "Paris",
