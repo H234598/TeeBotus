@@ -15887,3 +15887,15 @@ Restart erst bei `20/20`.
 - `teebotus.service` nach planmaessigem Restart aktiv/running, `MainPID 929669`, Start `2026-07-19 22:00:21 CEST`.
 - Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
 - Der Prozess laedt jetzt die kanonische Vault-Konfiguration aus `Teladi_Programming`; der alte Vault bleibt EOL und unangetastet.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-5-01
+
+- `teebotus.service` aktiv/running, `MainPID 929669`, Start `2026-07-19 22:00:21 CEST`.
+- Neuer Zyklus seit diesem Restart: `1/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Weitere zusammengesetzte Stadtnamen
+
+- `Weiden in der Oberpfalz` und `Weil am Rhein` bleiben vollstaendig erhalten.
+- Das gilt fuer normale Wohnortsaetze und Wohnort plus Strassenadresse.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0c6fc309 fix: preserve additional compound city names`.
