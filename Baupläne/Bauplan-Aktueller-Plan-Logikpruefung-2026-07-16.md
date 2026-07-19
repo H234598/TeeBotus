@@ -15230,3 +15230,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
 - Neuer Zyklus seit diesem Restart: `17/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Klammerform bei Gebiets-Straßenadressen
+
+- Formen wie `im Bezirk Kreuzberg (Berlin), Musterstraße 5` werden intern in die bestehende Stadt-vor-Straße-Form normalisiert.
+- Wohn-, Label-, Arbeitsadress- und Konfliktprüfungen bleiben auf demselben Parserpfad; historische und konkurrierende Adressen bleiben leer.
+- Verifikation: `tests/test_weather_context.py` -> `191 passed`, vier Klammer-Gebiets-Smokes plus Konflikt-/Arbeits-/historischer Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ec9d97b8 fix: normalize parenthesized area addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-12
+
+- `teebotus.service` aktiv/running, `MainPID 3949354`, Start `2026-07-19 17:38:55 CEST`.
+- Neuer Zyklus seit diesem Restart: `18/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
