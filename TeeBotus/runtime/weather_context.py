@@ -5943,12 +5943,13 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     ):
         comma_match = pattern.search(source)
         first = comma_match.groupdict().get("first", "") if comma_match else ""
+        second = comma_match.group("second") if comma_match else ""
         if first and re.search(
             rf"(?i){_STREET_TYPE}\s+(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?\b|"
             r"(?:am|an der|an den|auf der|auf dem|auf den|unter der|unter den|in der|in den|"
             rf"im|zum|zur|vom|von der|vor der|hinter der)\s+[^,.;!?]{{1,100}}?\s+(?:{_STREET_NUMBER_LABEL}\s*)?\d+[a-z]?\b",
             first,
-        ):
+        ) or re.search(rf"(?i){_STREET_TYPE}$", second.strip()):
             continue
         if comma_match and comma_match.group("second").casefold() not in (
             _NON_CITY_RESIDENCE_NAMES | _NON_CITY_REGION_NAMES
