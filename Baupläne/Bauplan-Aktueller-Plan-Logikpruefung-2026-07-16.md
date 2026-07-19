@@ -14574,3 +14574,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
 - Seit diesem Restart: `17/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Nicht-residente Begleitkontexte
+
+- `mit meiner Ausbildung` und `bei meiner Firma` werden nicht mehr als Wohnortkontext gespeichert.
+- Familie, Eltern und Partner bleiben als Wohnkontext gültig.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, fünf Companion-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `1b4dbaf7 fix: reject nonresidential companion contexts`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 2292239`, Start `2026-07-19 01:09:27 CEST`.
+- Seit diesem Restart: `18/20` Code-Fixes. Kein Push.
