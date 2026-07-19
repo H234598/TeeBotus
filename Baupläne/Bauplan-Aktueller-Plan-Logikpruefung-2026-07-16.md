@@ -15947,3 +15947,15 @@ Restart erst bei `20/20`.
 - Der Slash loest dort keine falsche Mehrfachwohnortregel aus; Plaintext und Strassenadresse bleiben stabil.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `38c8955b fix: preserve slash-qualified city names`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-5-06
+
+- `teebotus.service` aktiv/running, `MainPID 929669`, Start `2026-07-19 22:00:21 CEST`.
+- Neuer Zyklus seit diesem Restart: `6/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Region-zu-Stadt-Aufloesung
+
+- `Bayern, in München`, `Nordrhein-Westfalen, in Köln` und `NRW, in Köln` liefern jetzt die Stadt.
+- Bare `NRW` bleibt wie andere Regionen kein Wohnort; der Alias wird nicht als Stadt gespeichert.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `599f16ab fix: resolve region-prefixed residence cities`.
