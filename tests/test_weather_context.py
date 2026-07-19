@@ -1626,6 +1626,8 @@ def test_extract_residence_city_handles_status_after_residence_verb() -> None:
     assert extract_residence_city("Ich lebe in Hamburg ansässig.") == "Hamburg"
     assert extract_residence_city("Ich wohne in Köln gemeldet.") == "Köln"
     assert extract_residence_city("Ich lebe in München registriert.") == "München"
+    assert extract_residence_city("Ich bin amtlich in Berlin gemeldet.") == "Berlin"
+    assert extract_residence_city("Ich bin in Hamburg offiziell gemeldet.") == "Hamburg"
 
 
 def test_extract_residence_city_handles_comma_before_home_adverb() -> None:
