@@ -14915,7 +14915,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-3
 
 - `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
-- Neuer Zyklus seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `7/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Freie Straßenadress-Sätze
 
@@ -14958,3 +14958,10 @@ Restart erst bei `20/20`.
 - `_clean_city` und Ambiguitätsguard behandeln `Nr`-Adressen konsistent; Straßenfragmente werden nicht als Stadt gespeichert.
 - Verifikation: `tests/test_weather_context.py` -> `160 passed`, drei Numbered-Street-Address-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `5b5e888c fix: parse numbered street addresses`.
+
+### Folgefix 2026-07-19: Ausgeschriebene Hausnummernmarker
+
+- `Nummer`, `Hausnummer`, `Hausnr.`, `Haus-Nr.` und `Hs.-Nr.` vor Hausnummer werden erkannt.
+- Gemeinsamer Marker-Baustein hält Straßenparser, Fallbacks, `_clean_city` und Ambiguitätsguard synchron.
+- Verifikation: `tests/test_weather_context.py` -> `161 passed`, fünf Written-House-Number-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a0760401 fix: parse written street number labels`.
