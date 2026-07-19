@@ -14610,7 +14610,14 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `1/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Weitere Straßenarten
+
+- `Damm`, `Kai`, `Deich`, `Höhe`, `Park` und `Gürtel` werden als Straßenarten erkannt.
+- Straßenparser, Fallbacks, `_clean_city` und Ambiguitätsguard verwenden gemeinsamen `_STREET_TYPE`.
+- Verifikation: `tests/test_weather_context.py` -> `175 passed`, sechs Additional-Street-Type-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c14d6455 fix: parse additional street types`.
 
 ### Folgefix 2026-07-19: Verbfreie Wohnadress-Labels
 
