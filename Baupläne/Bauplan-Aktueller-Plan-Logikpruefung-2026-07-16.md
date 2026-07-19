@@ -14694,7 +14694,15 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier First-Person-Conflict-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `a37a0952 fix: guard first-person address conflicts`.
 
+### Folgefix 2026-07-19: Postleitzahlen vor Wohnorten
+
+- `10115 Berlin` wird in First-Person-, verbfreien und `wohnhaft`-Formen erkannt.
+- Gespeicherter Stadtwert bleibt `Berlin`, nicht die Postleitzahl.
+- Konflikte und Mehrfachziele mit PLZ bleiben geschützt.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, sechs Postal-Residence-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c0f3c357 fix: parse postal residence locations`.
+
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Seit diesem Restart: `11/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `12/20` Code-Fixes. Kein Push.
