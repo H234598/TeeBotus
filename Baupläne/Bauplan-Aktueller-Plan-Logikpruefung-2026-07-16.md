@@ -15709,3 +15709,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
 - Neuer Zyklus seit diesem Restart: `17/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Kollision langer Wohnort-Memory-IDs
+
+- `_city_id_token` hängt bei abgeschnittenen Städtenamen Hash-Suffix an.
+- Unterschiedliche lange Städte mit identischem 48-Zeichen-Präfix überschreiben sich nicht mehr; kurze bestehende IDs bleiben stabil.
+- Verifikation: `tests/test_weather_context.py` -> `227 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `80689ded fix: prevent long city memory id collisions`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-52
+
+- `teebotus.service` aktiv/running, `MainPID 450172`, Start `2026-07-19 20:13:41 CEST`.
+- Neuer Zyklus seit diesem Restart: `18/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
