@@ -15935,3 +15935,15 @@ Restart erst bei `20/20`.
 - Plaintext- und Strassenadressformen nutzen denselben zentralen Compound-Schutz.
 - Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `9bfc037e fix: preserve regional compound city names`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-5-05
+
+- `teebotus.service` aktiv/running, `MainPID 929669`, Start `2026-07-19 22:00:21 CEST`.
+- Neuer Zyklus seit diesem Restart: `5/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Slash-qualifizierte Stadtnamen
+
+- `Mühlhausen/Thüringen`, `Schwedt/Oder` und `Wittstock/Dosse` werden als offizielle Compound-Cities erkannt.
+- Der Slash loest dort keine falsche Mehrfachwohnortregel aus; Plaintext und Strassenadresse bleiben stabil.
+- Verifikation: `tests/test_weather_context.py` -> `232 passed`, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `38c8955b fix: preserve slash-qualified city names`.
