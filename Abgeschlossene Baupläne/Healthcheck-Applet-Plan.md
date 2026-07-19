@@ -222,4 +222,4 @@ Der Bauplan gilt erst als abgeschlossen, wenn:
 - Runtime-Versionen und Commit-IDs im Plan aktualisiert sind
 - die Nachweise im Plan eingetragen sind
 
-Bis dahin bleibt dieser Plan unter `Baupläne/` aktiv und wird nicht in ein Archiv verschoben.
+Bis dahin bleibt dieser Plan unter `Abgeschlossene Baupläne/` aktiv und wird nicht in ein Archiv verschoben.

@@ -709,4 +709,4 @@ Der Bauplan bleibt aktiv, bis:
 - das Applet die echten Healthdaten nach einem erforderlichen Reload anzeigt,
 - Version, Commit und alle Nachweise im Plan aktualisiert sind.
 
-Bis dahin bleibt dieser Plan unter `Baupläne/` aktiv.
+Bis dahin bleibt dieser Plan unter `Abgeschlossene Baupläne/` aktiv.

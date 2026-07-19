@@ -1,10 +1,10 @@
-# Bauplan: Aktueller Plan fuer Logikfehler, Healthcheck, Applet und Codex-History
+# Bauplan: Aktueller Plan fuer Healthcheck, Applet und Codex-History
 
 **Stand:** 2026-07-13
 
-**Status:** Aktiv, neue Momentaufnahme; noch nicht abgeschlossen
+**Status:** Aktiv, noch nicht abgeschlossen; aktueller Snapshot
 
-**Quellstand:** TeeBotus `1.9.489`, lokaler Stand nach dem Bridge-Route-Preflight-Fix, dem Applet-Queue-Anzeigepatch, dem Watcher-Ressourcenfix, dem Mixed-Route-Dispatchfix, dem Stale-Recipient-Fix und dem Mehrfach-Queue-Report-Fix. Der Funktionscommit ist `d412df5d`.
+**Quellstand:** TeeBotus `1.9.486`, lokaler Stand nach dem Bridge-Route-Preflight-Fix, dem Applet-Queue-Anzeigepatch und dem Watcher-Ressourcenfix
 
 **Geltungsbereich:** Runtime-Healthcheck, TeeBotus-Cinnamon-Applet, TBL-Adminstatus, Codex-History-Bridge und Collector-Performance
 
@@ -21,20 +21,17 @@ Der uebergeordnete Arbeitsauftrag lautet:
 > Entwickle und finde Logikfehler. Bleibe moeglichst bei einer Datei bzw. einem
 > Thema, um Token zu sparen.
 
-Dieser Bauplan ist die neue kanonische Arbeitskopie des aktuellen Planstands fuer
-die Logikfehlerpruefung.
+Dieser Bauplan ist die neue kanonische Arbeitskopie des aktuellen Planstands.
 Vorherige Detailplaene bleiben als Historie und Nachweis erhalten:
 
-- `Baupläne/Bauplan-Aktueller-Healthcheck-Warnungsabbau-und-Codex-History-Reconciliation-2026-07-13.md`
-- `Baupläne/Bauplan-Aktueller-Planstand-Healthcheck-Warnungen-2026-07-13.md`
-- `Baupläne/Bauplan-Healthcheck-Applet-Aktuelle-Logikpruefung-2026-07-13.md`
-- `Baupläne/Bauplan-Aktueller-Arbeitsstand-Logikpruefung-Codex-History-2026-07-13.md`
-- `Baupläne/Bauplan-Aktueller-Plan-Healthcheck-Codex-History-2026-07-13.md`
+- `Abgeschlossene Baupläne/Bauplan-Aktueller-Healthcheck-Warnungsabbau-und-Codex-History-Reconciliation-2026-07-13.md`
+- `Abgeschlossene Baupläne/Bauplan-Aktueller-Planstand-Healthcheck-Warnungen-2026-07-13.md`
+- `Abgeschlossene Baupläne/Bauplan-Healthcheck-Applet-Aktuelle-Logikpruefung-2026-07-13.md`
+- `Abgeschlossene Baupläne/Bauplan-Aktueller-Arbeitsstand-Logikpruefung-Codex-History-2026-07-13.md`
+- `Abgeschlossene Baupläne/Bauplan-Aktueller-Plan-Healthcheck-Codex-History-2026-07-13.md`
 
-Der vorherige kanonische Snapshot
-`Baupläne/Bauplan-Aktueller-Plan-Healthcheck-Applet-und-Codex-History-2026-07-13.md`
-bleibt unveraendert als Vergleichspunkt erhalten. Neue Nachweise werden ab
-jetzt in diesem Bauplan fortgeschrieben.
+Der vorherige kanonische Snapshot bleibt unveraendert als Vergleichspunkt
+erhalten. Neue Nachweise werden ab jetzt in diesem Bauplan fortgeschrieben.
 
 ## Leitplanken
 
@@ -198,31 +195,6 @@ Offen ist, welche lokalen Zeilen historische Legacy-/Spiegelreste sind und
 welche noch nachweislich zugestellt werden muessen. Eine pauschale Requeue-
 oder Loeschaktion ist nicht zulaessig.
 
-### Laufzeit-/Quellstand-Abgleich
-
-Eine schreibfreie Systemd-Pruefung am 2026-07-13 bestaetigte:
-
-- `teebotus-codex-history-collector.service` ist aktiv, MainPID `1014623`,
-  Startzeit `2026-07-13 06:41:32 CEST`.
-- `teebotus.service` ist aktiv, MainPID `1014664`, Startzeit ebenfalls
-  `2026-07-13 06:41:32 CEST`.
-- Der Quellstand ist inzwischen `1.9.489`; die laufenden Prozesse wurden vor
-  den letzten Watcher-/Sessionroot- und Bridge-Route-Fixes gestartet und
-  enthalten diese deshalb noch nicht. Das Journal bestaetigt den alten
-  Laufzeitstand mit einer Versionsmeldung fuer `1.9.404`.
-- `INVOCATION_ID` ist in beiden laufenden Units vorhanden. Das schliesst die
-  bisher vermutete fehlende Systemd-Umgebungsvariable als Ursache aus.
-- `data/runtime/teebotus-runtime-version.json` fehlt aktuell. Das passt zum
-  alten Prozessstand, der den aktuellen Marker-Lifecycle noch nicht enthaelt;
-  das Applet darf daraus nur `marker_missing` ableiten, nicht stillschweigend
-  eine falsche Version behaupten.
-
-Der Marker-Befund ist damit als aktueller Produktionsfehler nicht reproduziert:
-Die aktuelle Quelle schreibt den Marker waehrend des normalen `main()`-
-Lebenszyklus und entfernt ihn erst beim Prozessende; die bestehenden Tests
-decken Schreiben, Unit-Matching und Cleanup ab. Die Live-Wirkung bleibt bis zum
-naechsten erlaubten Restart unbestaetigt.
-
 ### Collector-Performance
 
 Der Follow-Collector war zuletzt aktiv, aber ressourcenauffaellig: etwa
@@ -310,9 +282,6 @@ Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
 
 - [ ] Lokale TBL-Outbox, lokale Dispatch-Results und zentrale
   `history_items`/`recipient_results` ueber Item-ID und Dedupe-Key abgleichen.
-- [x] Aktuellen Bridge-Dry-Run mit dem Quellstand `1.9.488` schreibfrei
-  ausfuehren: `155` lokale Zeilen `would_mirror`, `4` terminale zentrale
-  Treffer `would_sync`, `ok=true`; keine Mutation und kein Provideraufruf.
 - [ ] Jede lokale `queued`-Zeile als zentral nicht vorhanden, zentral terminal,
   zentral weiterhin queued oder lokale Legacy-Zeile klassifizieren.
 - [ ] Jeden `no_private_route`-Skip gegen die zum Skip-Zeitpunkt gueltige
@@ -332,54 +301,6 @@ Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
 - [ ] Keine pauschale Requeue-Aktion fuer alte `queued`-Zeilen.
 - [ ] Applet-Health so erweitern, dass zentrale Queue `0` und lokale
   historische Spiegelreste getrennt benannt werden.
-
-### B1. Mixed-Route-Dispatch
-
-- [x] Logikfehler reproduzieren: Der Bridge-Pfad berechnete zwar
-  `routable_account_ids`, versandte danach aber an alle
-  `candidate_account_ids`.
-- [x] Versand auf die bereits vorgepruefte routbare Teilmenge begrenzen.
-- [x] Regression fuer einen routbaren und einen nicht routbaren Admin-
-  Empfaenger ergaenzen; nur die routbare ID wird an den Sender und an
-  `dispatch.complete` weitergegeben.
-- [x] `pytest -q tests/test_codex_history.py tests/test_pyproject_metadata.py`:
-  `164 passed in 6.95s`; Compileall und `git diff --check` sauber.
-- [x] Patchversion auf `1.9.487` bumpen und als `5c6992dc` committen.
-- [ ] Live-Nachweis nach Restart: gemischte Adminroute mit einer tatsaechlich
-  nicht routbaren ID pruefen.
-
-### B2. Stale-Recipient-Status
-
-- [x] Logikfehler reproduzieren: Ein alter `failed`-Empfaenger ausserhalb der
-  aktuellen routbaren Adminmenge konnte eine neue erfolgreiche Zustellung im
-  zentralen Dispatcher weiterhin als `failed`/`queued` blockieren.
-- [x] Vorhandene alte Fehlereintraege bei einem neuen Retry als terminalen
-  `skipped`-Status mit `reason=recipient_not_routable` melden. Die bestehende
-  Empfaenger-ID und die Auditdaten bleiben erhalten; es wird kein neuer
-  Empfaenger erfunden.
-- [x] Regression bestaetigt, dass `dispatch.complete` den alten Empfaenger
-  als Skip und den aktuellen Empfaenger als Erfolg uebergibt.
-- [x] `pytest -q tests/test_codex_history.py`:
-  `158 passed in 7.17s`; History-/Metadaten-Suite:
-  `164 passed in 6.80s`; Compileall und `git diff --check` sauber.
-- [x] Patchversion auf `1.9.488` bumpen und als `d49262ac` committen.
-- [ ] Live-Nachweis mit einem realen historischen Fehlereintrag und einer
-  aktuell routbaren Adminroute nach Restart pruefen.
-
-### B3. Mehrfach-Queue ohne Route
-
-- [x] Logikfehler reproduzieren: Im `not routable`-Pfad wurde bei mehreren
-  zentralen `queued`-Items nur das erste als `deferred` gemeldet.
-- [x] Alle zentralen wartenden Items ausgeben, wenn `limit=0` gilt; ein
-  positives Limit wird auf die gemeldete Menge angewendet.
-- [x] Regression fuer drei wartende Items mit `limit=0` und `limit=2`
-  ergaenzen; es gibt weiterhin keinen `dispatch.claim`-/`complete`-Aufruf.
-- [x] `pytest -q tests/test_codex_history.py`:
-  `160 passed in 7.45s`; History-/Metadaten-Suite:
-  `166 passed in 6.89s`; Compileall und `git diff --check` sauber.
-- [x] Patchversion auf `1.9.489` bumpen und als `d412df5d` committen.
-- [ ] Live-Nachweis mit mehreren zentral wartenden Items ohne private Route
-  nach Restart ausfuehren.
 
 ### C. Collector-Ressourcen begrenzen
 
@@ -415,24 +336,10 @@ Lesen und Export bleiben nach Aktivierung des Fixes als Nachmessung offen.
 - [ ] Code erst nach Messung aendern; danach Collector nur im Restart-Fenster
   neu starten.
 
-### Snapshot-Update: Runtime-Version-Marker
-
-- [x] Laufende Units, MainPIDs und Startzeit schreibfrei erfasst.
-- [x] Abweichung zwischen aktuellem Quellstand `1.9.488` und dem vor dem Fix
-  gestarteten Live-Prozess dokumentiert.
-- [x] Fehlenden Marker als `marker_missing` im Appletstatus bestaetigt.
-- [x] Marker-Lifecycle in `TeeBotus/runtime/version_marker.py` und
-  `TeeBotus/bot.py` gegen den vorhandenen Start-/Stop-Teststand pruefen; kein
-  reproduzierbarer Quellfehler gefunden.
-- [ ] Nach dem naechsten erlaubten Restart Marker, PID/Invocation und
-  Quellversion live abgleichen.
-
 ### D. Weitere actionable Befunde
 
-- [x] Nicht verknuepfte optionale Signal-Identitaet von `Depressionsbot` als
-  sichtbaren Hinweis statt Top-Level-Healthfehler klassifizieren; explizites
-  Linking bleibt ausschliesslich ueber den bestaetigten Account-Linking-Flow
-  erlaubt.
+- [ ] Nicht verknuepfte optionale Signal-Identitaet von `Depressionsbot` nur
+  ueber den bestaetigten Account-Linking-Flow pruefen.
 - [ ] Fehlende Provider-Keys nur dann actionable ausweisen, wenn die Route
   aktiviert ist und kein gesunder Fallback wirkt.
 - [ ] Matrix-/optionale Slots ohne Credentials als Konfigurationshinweise,
@@ -626,49 +533,3 @@ Der Plan ist erst abgeschlossen, wenn:
   `163 passed in 7.46s`; Compileall und `git diff --check` sauber. Live-
   Restart und Ressourcen-Nachmessung bleiben offen. Der Funktionsstand ist
   als `1fced73f` committed.
-- 2026-07-13: Neue Plan-Momentaufnahme fuer die Logikfehlerpruefung erstellt.
-  Read-only Systemd-Pruefung bestaetigte, dass beide laufenden Units noch seit
-  `06:41:32 CEST` auf dem Prozessstand vor `1.9.486` laufen. Der Runtime-
-  Versionsmarker fehlt; Lifecycle-Pruefung und Live-Nachmessung bleiben deshalb
-  offen. Es wurde kein Restart und kein Push ausgeloest.
-- 2026-07-13: Marker-Ursache weiter eingegrenzt: `INVOCATION_ID` ist in beiden
-  Units gesetzt, das Journal meldet aber noch den alten Runtime-/Notification-
-  Stand `1.9.404`. `marker_missing` ist deshalb erwarteter Versionsdrift und
-  kein belegter Fehler des aktuellen Marker-Lifecycles. Live-Matching nach
-  Restart bleibt als Nachweis offen.
-- 2026-07-13: Bridge-Logikfehler im Mixed-Route-Fall behoben: Obwohl der
-  Preflight `routable_account_ids` berechnete, wurde zuvor die vollstaendige
-  Kandidatenliste versendet. `1.9.487` verwendet jetzt nur die routbare
-  Teilmenge. Regression und History-/Metadaten-Suite liefen mit `164 passed in
-  6.95s`; Commit `5c6992dc`. Kein Restart und kein Push ausgeloest.
-- 2026-07-13: Bridge-Logikfehler bei stale Recipient-Results behoben: Ein
-  alter `failed`-Empfaenger ausserhalb der aktuellen routbaren Menge wird beim
-  naechsten Retry als `skipped/recipient_not_routable` weitergegeben, damit
-  eine erfolgreiche aktuelle Route nicht global als `failed`/`queued` blockiert
-  bleibt. Version `1.9.488`, Commit `d49262ac`; `158` History-Tests und `164`
-  History-/Metadaten-Tests gruen. Kein Restart und kein Push ausgeloest.
-- 2026-07-13: Bridge-Logikfehler im `no_private_route`-Mehrfachfall behoben:
-  Der Pfad meldet jetzt alle wartenden zentralen Items bei `limit=0` und
-  respektiert ein positives Limit, statt nur das erste Item zu zeigen. Version
-  `1.9.489`, Commit `d412df5d`; `160` History-Tests und `166`
-  History-/Metadaten-Tests gruen. Kein Restart und kein Push ausgeloest.
-- 2026-07-13: Eine konfigurierte, aber noch nicht sicher verknuepfte
-  Signal-Identitaet wird als `account_identity_notice` statt als actionable
-  Top-Level-Warnung gemeldet. Die Quellprobe ergab `health.status=ok`,
-  `actionable_problem_count=0` und eine sichtbare Notice. Automatisches
-  Linking bleibt aus Sicherheitsgruenden verboten; der bestaetigte
-  `/login`-Flow bleibt die einzige Aktion.
-- 2026-07-15: Live-Healthcheck reproduzierte einen echten, aber operativen
-  Befund: `teebotus.service` war seit 21:06 CEST sauber mit `SIGTERM` beendet
-  (`Result=success`), nicht abgestuerzt. Deshalb waren die Signal-Service- und
-  Signal-Account-Probes `unreachable`/`unavailable`; `Restart=on-failure` darf
-  einen absichtlichen Stop nicht selbststaendig aufheben. Dienst wurde wieder
-  gestartet. Neue Applet-Probe: `health.status=ok`, `command_ok=true`,
-  `actionable_problem_count=0`, `total_problem_count=0`, Qdrant-Fehler `0`,
-  Unit `active/running`.
-- Die verbleibenden `20` Hinweise sind nicht-actionable und nachvollziehbar:
-  Gemini-Limitquelle nutzt konservative Defaults (`1`), zwei optionale
-  fehlende Provider-Keys, drei partielle Offload-Zustaende, sieben erklaerte
-  Fallback-/Pool-Hinweise und sieben bekannte Codex-Usage-/History-Hinweise.
-  Der Applet-Header darf sie als Hinweise zeigen, aber nicht als `Health
-  defekt` bewerten. Keine Applet-Codeaenderung war dafuer erforderlich.

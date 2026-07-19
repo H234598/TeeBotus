@@ -1,7 +1,7 @@
 # Bauplan: Aktueller Planstand Healthcheck-Applet und Statusaggregation
 
 > Dieser Bauplan ist der aktuelle Arbeitsstand des aktiven Healthcheck-Plans,
-> als neue Kopie unter `Baupläne/` abgelegt am 2026-07-13.
+> als neue Kopie unter `Abgeschlossene Baupläne/` abgelegt am 2026-07-13.
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  

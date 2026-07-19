@@ -5,7 +5,7 @@
 **Status:** Abgeschlossen fuer Dispatcher-Teilfehler, Journal und Offset-Commit
 
 **Parent-Plan:**
-`Baupläne/Bauplan-Aktueller-Plan-Logikpruefung-Telegram-Runtime-2026-07-13.md`
+`Abgeschlossene Baupläne/Bauplan-Aktueller-Plan-Logikpruefung-Telegram-Runtime-2026-07-13.md`
 
 **Quellstand:** TeeBotus `1.9.498`, Dispatcher-Journal-Fix dieses Abschnitts
 

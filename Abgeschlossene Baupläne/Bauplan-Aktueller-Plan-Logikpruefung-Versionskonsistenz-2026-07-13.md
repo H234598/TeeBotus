@@ -4,7 +4,7 @@
 **Status:** Versionsaudit abgeschlossen; uebergeordneter Logikpruefungs-Goal aktiv
 **Quellstand:** TeeBotus `1.9.498`; History-Dispatcher `0.2.14`  
 **Arbeitsbereich:** `/home/teladi/TeeBotus` und `/home/teladi/History-Dispatcher`  
-**Vorgaenger:** `Baupläne/Bauplan-Aktueller-Arbeitsstand-Healthcheck-TBL-Statussemantik-2026-07-13.md`
+**Vorgaenger:** `Abgeschlossene Baupläne/Bauplan-Aktueller-Arbeitsstand-Healthcheck-TBL-Statussemantik-2026-07-13.md`
 
 ## Auftrag
 

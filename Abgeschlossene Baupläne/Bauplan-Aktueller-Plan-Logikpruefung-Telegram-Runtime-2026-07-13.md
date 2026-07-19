@@ -10,7 +10,7 @@
 
 **Arbeitsbereich:** `/home/teladi/TeeBotus` und `/home/teladi/History-Dispatcher`
 
-**Arbeitskopie:** Neu angelegt am 2026-07-13 aus `Baupläne/Bauplan-Aktueller-Arbeitsstand-Healthcheck-TBL-Statussemantik-2026-07-13.md`; die vorherigen Plaene bleiben als Historie erhalten.
+**Arbeitskopie:** Neu angelegt am 2026-07-13 aus `Abgeschlossene Baupläne/Bauplan-Aktueller-Arbeitsstand-Healthcheck-TBL-Statussemantik-2026-07-13.md`; die vorherigen Plaene bleiben als Historie erhalten.
 
 ## Auftrag
 
@@ -31,10 +31,10 @@ Der uebergeordnete Arbeitsauftrag lautet:
 Dieser Bauplan ist eine neue, datierte Arbeitskopie. Aeltere Plaene bleiben als
 Historie erhalten, insbesondere:
 
-- `Baupläne/Bauplan-Aktueller-Plan-Logikfehler-Healthcheck-Applet-Codex-History-2026-07-13.md`
-- `Baupläne/Bauplan-Aktueller-Healthcheck-Warnungsabbau-und-Codex-History-Reconciliation-2026-07-13.md`
-- `Baupläne/Bauplan-Aktueller-Planstand-Healthcheck-Applet-2026-07-13.md`
-- `Baupläne/Bauplan-Fortsetzung-Healthcheck-TBL-Reconciliation-2026-07-13.md`
+- `Abgeschlossene Baupläne/Bauplan-Aktueller-Plan-Logikfehler-Healthcheck-Applet-Codex-History-2026-07-13.md`
+- `Abgeschlossene Baupläne/Bauplan-Aktueller-Healthcheck-Warnungsabbau-und-Codex-History-Reconciliation-2026-07-13.md`
+- `Abgeschlossene Baupläne/Bauplan-Aktueller-Planstand-Healthcheck-Applet-2026-07-13.md`
+- `Abgeschlossene Baupläne/Bauplan-Fortsetzung-Healthcheck-TBL-Reconciliation-2026-07-13.md`
 
 ## Leitplanken
 

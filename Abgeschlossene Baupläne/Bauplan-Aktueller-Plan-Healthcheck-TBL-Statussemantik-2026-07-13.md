@@ -29,10 +29,10 @@ Der uebergeordnete Arbeitsauftrag lautet:
 Dieser Bauplan ist eine neue, datierte Arbeitskopie. Aeltere Plaene bleiben als
 Historie erhalten, insbesondere:
 
-- `Baupläne/Bauplan-Aktueller-Plan-Logikfehler-Healthcheck-Applet-Codex-History-2026-07-13.md`
-- `Baupläne/Bauplan-Aktueller-Healthcheck-Warnungsabbau-und-Codex-History-Reconciliation-2026-07-13.md`
-- `Baupläne/Bauplan-Aktueller-Planstand-Healthcheck-Applet-2026-07-13.md`
-- `Baupläne/Bauplan-Fortsetzung-Healthcheck-TBL-Reconciliation-2026-07-13.md`
+- `Abgeschlossene Baupläne/Bauplan-Aktueller-Plan-Logikfehler-Healthcheck-Applet-Codex-History-2026-07-13.md`
+- `Abgeschlossene Baupläne/Bauplan-Aktueller-Healthcheck-Warnungsabbau-und-Codex-History-Reconciliation-2026-07-13.md`
+- `Abgeschlossene Baupläne/Bauplan-Aktueller-Planstand-Healthcheck-Applet-2026-07-13.md`
+- `Abgeschlossene Baupläne/Bauplan-Fortsetzung-Healthcheck-TBL-Reconciliation-2026-07-13.md`
 
 ## Leitplanken
 

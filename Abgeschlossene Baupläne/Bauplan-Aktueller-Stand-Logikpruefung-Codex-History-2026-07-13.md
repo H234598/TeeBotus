@@ -2,7 +2,7 @@
 
 **Stand:** 2026-07-13  
 **Status:** Aktiv, noch nicht abgeschlossen  
-**Bezug:** `Baupläne/Healthcheck-Applet-Plan.md`  
+**Bezug:** `Abgeschlossene Baupläne/Healthcheck-Applet-Plan.md`
 **Geltungsbereich:** Codex-History-Collector, SQL-Outbox, Dispatcher, `/status`, Healthcheck und TeeBotus-Cinnamon-Applet
 
 ## Ziel
@@ -456,4 +456,4 @@ Der Plan ist erst abgeschlossen, wenn:
 - Kein Push ohne ausdrueckliche Aufforderung.
 - Bot-/Service-Restart nur nach der vereinbarten Commit-Grenze oder ausdruecklich angefordert.
 - Secrets, Tokens und private Nachrichten gehoeren nicht in diesen Plan.
-- Der Plan bleibt unter `Baupläne/`, bis Umsetzung, Tests und Nachweise vollstaendig sind.
+- Der Plan bleibt unter `Abgeschlossene Baupläne/`, bis Umsetzung, Tests und Nachweise vollstaendig sind.

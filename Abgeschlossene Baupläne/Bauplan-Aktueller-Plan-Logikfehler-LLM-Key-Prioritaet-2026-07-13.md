@@ -257,4 +257,4 @@ Der Plan ist erst abgeschlossen, wenn:
 - SemVer, Commit und Testergebnisse in diesem Plan stehen,
 - keine unbeabsichtigten Benutzerdateien staged oder veraendert wurden.
 
-Bis dahin bleibt dieser Bauplan unter `Baupläne/` aktiv.
+Bis dahin bleibt dieser Bauplan unter `Abgeschlossene Baupläne/` aktiv.

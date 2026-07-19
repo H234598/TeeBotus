@@ -1855,7 +1855,7 @@ ausgeloest. Naechster Restart nach 14 weiteren Commits.
 ## Bezug
 
 - Vorheriger Plan:
-  `Baupläne/Bauplan-Aktueller-Plan-Logikpruefung-2026-07-15.md`
+  `Abgeschlossene Baupläne/Bauplan-Aktueller-Plan-Logikpruefung-2026-07-15.md`
 - Aktueller Arbeitsbaum: `/home/teladi/TeeBotus`
 
 ### Admin-Status-Remote-IDs-nicht-als-lokal-anlegen
