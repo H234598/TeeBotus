@@ -1320,7 +1320,8 @@ CITY_CHANGE_PATTERNS = (
         r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,\s*"
         r"(?:meistens|hauptsächlich|hauptsaechlich|überwiegend|ueberwiegend|"
         r"vorwiegend|mehrheitlich|primär|primaer|normalerweise|in\s+der\s+regel)\s+"
-        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})"
+        r"(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
     re.compile(
@@ -5258,6 +5259,34 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
         r"besuch\w*|verbring\w*|treff\w*|reis\w*|pendl\w*|seh\w*|übernacht\w*|uebernacht\w*)\b|"
         r"umgebung\b|region\b|nähe\b|naehe\b)(?:(?:in|bei)\s+)?"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß'-]*(?=\s*(?:[.!?;,]|$))",
+        multiplicity_source,
+        re.IGNORECASE,
+    ):
+        return True
+    if re.search(
+        r"\b(?:wohne|wohnen|lebe|leben)\b\s+"
+        r"(?:(?:meistens|hauptsächlich|hauptsaechlich|überwiegend|ueberwiegend|"
+        r"vorwiegend|mehrheitlich|primär|primaer|normalerweise|in\s+der\s+regel)\s+)?"
+        r"(?:in|bei)\s+[^,.;!?]{1,80}\s+und\s+"
+        r"(?!(?:ich\s+)?(?:wohne|wohnen|lebe|leben|arbeite|arbeitest|arbeiten|studier\w*|"
+        r"lern\w*|schlaf\w*|mach\w*|komm\w*|fahr\w*|geh\w*|zieh\w*|hab\w*|bin|bist|"
+        r"sind|sein|besuch\w*|verbring\w*|treff\w*|reis\w*|pendl\w*|seh\w*|übernacht\w*|"
+        r"uebernacht\w*)\b|(?:umgebung|region|nähe|naehe)\b(?!\s+von\b))"
+        r"(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß'-]*(?=\s*(?:[.!?;,]|$))",
+        multiplicity_source,
+        re.IGNORECASE,
+    ):
+        return True
+    if re.search(
+        r"\b(?:wohne|wohnen|lebe|leben)\b\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
+        r"(?:meistens|hauptsächlich|hauptsaechlich|überwiegend|ueberwiegend|"
+        r"vorwiegend|mehrheitlich|primär|primaer|normalerweise|in\s+der\s+regel)\s+"
+        r"(?:in|bei)\s+[^,.;!?]{1,80}\s+und\s+"
+        r"(?!(?:ich\s+)?(?:wohne|wohnen|lebe|leben|arbeite|arbeitest|arbeiten|studier\w*|"
+        r"lern\w*|schlaf\w*|mach\w*|komm\w*|fahr\w*|geh\w*|zieh\w*|hab\w*|bin|bist|"
+        r"sind|sein|besuch\w*|verbring\w*|treff\w*|reis\w*|pendl\w*|seh\w*|übernacht\w*|"
+        r"uebernacht\w*)\b|(?:umgebung|region|nähe|naehe)\b(?!\s+von\b))"
+        r"(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß'-]*(?=\s*(?:[.!?;,]|$))",
         multiplicity_source,
         re.IGNORECASE,
     ):

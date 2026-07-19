@@ -1316,6 +1316,10 @@ def test_extract_residence_city_handles_frequency_qualifiers() -> None:
     assert extract_residence_city("Ich wohne in Berlin, meistens in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne normalerweise in Berlin, im Urlaub in Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, normalerweise in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne normalerweise in Berlin und Hamburg.") == ""
+    assert extract_residence_city("Ich wohne meistens in Berlin und Hamburg.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, normalerweise in Hamburg und Köln.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, meistens in Hamburg und Köln.") == ""
 
 
 def test_extract_residence_city_prefers_home_outside_temporary_travel() -> None:
