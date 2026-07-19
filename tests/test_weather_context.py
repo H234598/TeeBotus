@@ -1608,6 +1608,14 @@ def test_extract_residence_city_handles_markt_street_type() -> None:
     assert extract_residence_city("Wohnadresse: Markt 7, Hamburg.") == "Hamburg"
 
 
+def test_extract_residence_city_handles_extended_street_types() -> None:
+    for street_type in (
+        "Wall", "Tor", "Brücke", "Bruecke", "Bogen", "Zeile", "Stein", "Winkel",
+        "Kamp", "Koppel", "Dorf", "Feld", "Wiesen",
+    ):
+        assert extract_residence_city(f"Ich wohne am {street_type} 5 in Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_handles_city_before_street_without_comma() -> None:
     assert extract_residence_city("Ich wohne in Berlin in der Musterstraße 5.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin an der Musterstraße Nr. 5.") == "Berlin"
