@@ -2387,6 +2387,12 @@ def test_extract_residence_city_preserves_parenthesized_compound_city() -> None:
     assert extract_residence_city("Wohnhaft: Musterstraße 5, Halle (Saale).") == "Halle (Saale)"
 
 
+def test_extract_residence_city_handles_labeled_city_before_street_abbreviations() -> None:
+    assert extract_residence_city("Wohnadresse: Berlin, Musterstr. 5.") == "Berlin"
+    assert extract_residence_city("Wohnort: Frankfurt am Main, Musterstr. 5.") == "Frankfurt am Main"
+    assert extract_residence_city("Meldeadresse: Brandenburg an der Havel, Musterstr. 5.") == "Brandenburg an der Havel"
+
+
 def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Berliner Innenstadt.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Innenstadt Berlins.") == "Berlin"

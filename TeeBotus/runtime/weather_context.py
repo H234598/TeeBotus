@@ -4467,6 +4467,18 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
         re.IGNORECASE,
     ):
         return False
+    if re.search(
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
+        r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
+        r"meldesitz)\s*(?::|=|,)\s*(?:(?:in|bei)\s+)?"
+        rf"(?:{_STREET_COMPOUND_CITY_PATTERN}|[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)"
+        r"(?:\s+\([^)]{1,30}\))?(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+        rf"{_LABELED_STREET_ADDRESS_CORE}(?=\s*[.!?;,]|$)",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
     question_answer = re.search(
         r"(?:\bwo\s+(?:(?:genau|eigentlich)\s+)?(?:wohnst|lebst)\s+du(?:\s+(?:genau|eigentlich|denn))?|"
         r"\bwo\s+in\s+(?:deutschland|österreich|oesterreich|schweiz)\s+"
@@ -5181,6 +5193,18 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         rf"(?:{_STREET_COMPOUND_CITY_PATTERN}|[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)"
         rf"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+){_LABELED_STREET_ADDRESS_CORE}"
         r"(?=\s*[.!?;,]|$)",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|wohnadresse|wohnanschrift|"
+        r"anschrift|adresse|privatadresse|privatanschrift|meldeadresse|meldeanschrift|"
+        r"meldesitz)\s*(?::|=|,)\s*(?:(?:in|bei)\s+)?"
+        rf"(?:{_STREET_COMPOUND_CITY_PATTERN}|[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)"
+        r"(?:\s+\([^)]{1,30}\))?(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
+        rf"{_LABELED_STREET_ADDRESS_CORE}(?=\s*[.!?;,]|$)",
         source,
         re.IGNORECASE,
     ):
