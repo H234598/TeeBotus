@@ -14664,7 +14664,14 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Parenthesized-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `2cb779b0 fix: preserve parenthesized residence cities`.
 
+### Folgefix 2026-07-19: Registrierte Adress-Aliase im Konfliktguard
+
+- `Meldeanschrift` und `Meldesitz` werden bei widersprüchlichen Wohnzielen wie `Meldeadresse` behandelt.
+- Arbeitsadressen lösen weiterhin keinen Wohnortkonflikt aus.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Registered-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a8b6348a fix: detect registered address aliases`.
+
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `8/20` Code-Fixes. Kein Push.
