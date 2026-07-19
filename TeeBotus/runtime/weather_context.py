@@ -4023,7 +4023,8 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     address_cities = collect(address_patterns)
     registered_address_cities: set[str] = set()
     for match in re.finditer(
-        rf"\b(?:(?:{_RESIDENCE_LABEL_DETERMINER})\s+)?meldeadresse\s*"
+        rf"\b(?:(?:{_RESIDENCE_LABEL_DETERMINER})\s+)?"
+        r"(?:meldeadresse|meldeanschrift|meldesitz)\s*"
         r"(?:(?::|=|,)\s*|(?:ist|lautet|liegt|befindet\s+sich)\s+)?"
         r"(?:(?:in|bei)\s+)?"
         rf"{city_capture}",
