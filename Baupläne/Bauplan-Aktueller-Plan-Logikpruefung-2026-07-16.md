@@ -15314,3 +15314,15 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
 - Neuer Zyklus seit diesem Restart: `4/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-19: Genitiv-Gebietsadressen mit Komma
+
+- Formen wie `im Bezirk Mitte Berlins, Musterstr. 5` werden als Berlin erkannt, statt Gebietsname und Stadt zu verkleben.
+- Bekannter Bezirk `Kreuzberg` wird als Berlin normalisiert; nicht eindeutig bekannte Ortsteile bleiben ungeklärt.
+- Verifikation: `tests/test_weather_context.py` -> `198 passed`, direkte/Label-/Genitiv-Smokes plus Konflikt- und unbekannter-Ortsteil-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `65c514cb fix: parse genitive area street addresses`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart-4-19
+
+- `teebotus.service` aktiv/running, `MainPID 113726`, Start `2026-07-19 18:58:24 CEST`.
+- Neuer Zyklus seit diesem Restart: `5/20` Code-Fixes. Kein Push. Restart erst bei `20/20`.
