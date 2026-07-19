@@ -14611,3 +14611,16 @@ Restart erst bei `20/20`.
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
 - Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+
+### Folgefix 2026-07-19: Verbfreie Wohnadress-Labels
+
+- `Wohnadresse Berlin` wird erkannt; `Geburtsort` wird nicht als Wohnziel gewertet.
+- Wohnadresse/Meldeadresse-Konflikte werden auch ohne Verb erkannt.
+- Arbeitsadresse bleibt als nicht-residenter Kontext zulässig.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, fünf Address/Origin-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `a6010b83 fix: track verbless residence address labels`.
+
+## Aktueller Ledger 2026-07-19-Post-Restart
+
+- `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
+- Seit diesem Restart: `1/20` Code-Fixes. Kein Push.
