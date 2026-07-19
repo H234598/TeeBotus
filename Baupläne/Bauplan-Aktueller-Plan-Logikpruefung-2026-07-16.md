@@ -14915,7 +14915,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-3
 
 - `teebotus.service` aktiv/running, `MainPID 3691691`, Start `2026-07-19 16:41:08 CEST`.
-- Neuer Zyklus seit diesem Restart: `19/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `20/20` Code-Fixes. Restart jetzt fällig; kein Push.
 
 ### Folgefix 2026-07-19: Freie Straßenadress-Sätze
 
@@ -15049,3 +15049,10 @@ Restart erst bei `20/20`.
 - Bekannte Compound-City-Namen werden vor generischer `an der`-Straßeninterpretation priorisiert.
 - Verifikation: `tests/test_weather_context.py` -> `173 passed`, vier Compound-City-Before-Street-Smokes plus kompletter Compound-Smoke, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `d6eb0f87 fix: preserve compound cities before streets`.
+
+### Folgefix 2026-07-19: Compound-City in Labels und Status
+
+- Compound-City-Priorität gilt jetzt auch für Wohn-/Meldeadressen und Statussätze vor Straßenadresse.
+- Konfliktprüfung bleibt aktiv; unterschiedliche Wohn-/Meldeadressen liefern leer.
+- Verifikation: `tests/test_weather_context.py` -> `174 passed`, vier Compound-Labeled-Status-Smokes plus drei Konflikt-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e0f1fedb fix: preserve compound cities in labels`.
