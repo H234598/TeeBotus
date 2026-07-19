@@ -2199,8 +2199,13 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"(?:^|[.!?;,:]\s*)(?:meine|unsere|mein|unser)?\s*"
-        r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s*"
-        r"(?::|=|,)?\s*(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
+        r"(?:(?::|=|,)\s*|\s+)"
+        r"(?!(?:ist|war|wird|liegt|lautet|befindet\s+sich|bleibt)\b)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
         r"(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
@@ -3940,7 +3945,10 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             re.IGNORECASE,
         ),
         re.compile(
-            r"(?:^|[.!?;,\n]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz)\s+"
+            r"(?:^|[.!?;,\n]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*"
+            r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+            r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
             r"(?!(?:ist|liegt|befindet\s+sich)\b)"
             rf"{city_capture}",
             re.IGNORECASE,
@@ -3955,8 +3963,11 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         ),
         re.compile(
             r"(?:^|[.!?;,:]\s*)(?:mein(?:e)?|unser(?:e)?)?\s*"
-            r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s*"
-            r"(?::|=|,)?\s*"
+            r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+            r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+            r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
+            r"(?:(?::|=|,)\s*|\s+)"
+            r"(?!(?:ist|war|wird|liegt|lautet|befindet\s+sich|bleibt)\b)"
             rf"{city_capture}",
             re.IGNORECASE,
         ),
