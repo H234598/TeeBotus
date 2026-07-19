@@ -255,9 +255,9 @@ _RESIDENCE_LABEL_CURRENT_QUALIFIER = (
 _LABELED_STREET_ADDRESS_DETAIL = (
     r"(?:"
     r"(?:hinterhaus|vorderhaus|hinterhof|vorderhof|seitenflügel|seitenfluegel|"
-    r"(?:\d+\.\s*)?(?:og|eg|dg|ug|stock|ober(?:geschoss)?|erdgeschoss|"
-    r"dachgeschoss|untergeschoss)|"
-    r"(?:wohnung|whg\.?|apartment|appartement|einheit)\s*[A-Z0-9-]+)"
+    r"(?:\d+\.\s*)?(?:og|eg|dg|ug|stock|etage|ober(?:geschoss)?|erdgeschoss|"
+    r"dachgeschoss|untergeschoss|souterrain)|"
+    r"(?:wohnung|whg\.?|apartment|appartement|einheit|aufgang|haus)\s*[A-Z0-9-]+)"
     r"(?:\s+(?:links|rechts))?"
     r")"
 )
