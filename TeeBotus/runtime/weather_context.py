@@ -6816,7 +6816,8 @@ def _clean_city(value: str) -> str:
         return ""
     city = re.sub(
         r"(?i)^(?:(?:nur|rein|bloß|bloss)\s+)?"
-        r"(?:vorübergehend|voruebergehend|zeitweise|temporär|temporaer|"
+        r"(?:seit\s+(?:gestern|heute|vorgestern)|ab\s+(?:sofort|jetzt)|"
+        r"bis\s+auf\s+weiteres|vorübergehend|voruebergehend|zeitweise|temporär|temporaer|"
         r"befristet|unbefristet|dauerhaft|permanent|kurzfristig|langfristig|"
         r"vorläufig|vorlaeufig)\s+(?:in|bei)\s+",
         "",

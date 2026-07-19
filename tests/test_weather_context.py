@@ -2497,6 +2497,9 @@ def test_extract_residence_city_handles_temporal_location_adverbs() -> None:
     assert extract_residence_city("Ich wohne nicht mehr in Berlin, sondern vorübergehend in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne jetzt nicht mehr in Berlin, sondern nur vorübergehend in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne nicht mehr in Berlin, sondern dauerhaft in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne nicht mehr in Berlin, sondern bis auf Weiteres in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne nicht mehr in Berlin, sondern seit gestern in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne nicht mehr in Berlin, sondern ab sofort in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne fast in Berlin.") == ""
     assert extract_residence_city("Ich wohne beinahe in Berlin.") == ""
 
