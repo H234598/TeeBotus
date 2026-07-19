@@ -14709,7 +14709,14 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, zwei Postal-Change-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `67433899 fix: parse postal residence changes`.
 
+### Folgefix 2026-07-19: PLZ-Mehrfachziele
+
+- `10115 Berlin und 20095 Hamburg` wird bei verbfreien und First-Person-Labels als mehrdeutig verworfen.
+- `Umgebung`, Region/Nähe sowie Arbeits- und Geburtsortzusätze bleiben zulässig.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Postal-Multiplicity-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `3b7dbce0 fix: reject postal residence multiplicity`.
+
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Seit diesem Restart: `13/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `14/20` Code-Fixes. Kein Push.
