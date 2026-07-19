@@ -271,6 +271,16 @@ _RESIDENCE_DISTANCE_PREFIX = (
     r"(?:km|kilometer)\s+"
 )
 _PRIMARY_RESIDENCE_LABEL = r"(?:lebensmittelpunkt|hauptwohnsitz)"
+_OTHER_PERSON_RESIDENCE_LABEL = (
+    r"(?:freund(?:in)?|partner(?:in)?|eltern|familie|kinder|mutter|vater|"
+    r"tochter|sohn|bruder|schwester|geschwister|frau|mann\w*|ehefrau|"
+    r"ehemann|ehepartner(?:in)?|kolleg(?:e|in|en)|mitbewohner(?:in)?|"
+    r"nachbar(?:in)?|chef\w*|vorgesetz\w*)"
+)
+_OTHER_RESIDENCE_OWNER_LABEL = (
+    rf"(?:{_OTHER_PERSON_RESIDENCE_LABEL}|arbeitgeber(?:s)?|firma|unternehmen|"
+    r"betrieb|organisation|verein|schule)"
+)
 _RESIDENCE_LABEL_DETERMINER = (
     r"(?:meine|unsere|mein|unser|der|die|das|ein(?:e|en|em|er|es)?)"
 )
@@ -5139,10 +5149,8 @@ def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
     segment = re.split(r"[,;]\s*", prefix)[-1]
     return bool(
         re.search(
-            r"(?i)\b(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
-            r"(?:freund(?:in)?|partner(?:in)?|eltern|familie|kinder|"
-            r"mutter|vater|tochter|sohn|geschwister|kolleg(?:e|in|en)|"
-            r"mitbewohner(?:in)?|nachbar(?:in)?)\s*$",
+            rf"(?i)\b(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+            rf"{_OTHER_PERSON_RESIDENCE_LABEL}\s*$",
             segment,
         )
     )
@@ -5158,9 +5166,7 @@ def _has_other_person_residence_suffix(source: str, city_end: int) -> bool:
             r"arbeitsort|arbeitsadresse)\s+"
             r"(?:(?:von)\s+)?(?:mein(?:er|es|em|en)?|unser(?:er|es|em|en)?|"
             r"der|die|das|dem|den|des|ein(?:er|es|em|en)?)\s+"
-            r"(?:freund(?:in)?|partner(?:in)?|eltern|familie|kinder|mutter|vater|"
-            r"tochter|sohn|geschwister|kolleg(?:e|in|en)|mitbewohner(?:in)?|nachbar(?:in)?|"
-            r"arbeitgeber(?:s)?|firma|unternehmen|betrieb|organisation|verein|schule)\b",
+            rf"{_OTHER_RESIDENCE_OWNER_LABEL}\b",
             suffix,
         )
     )
@@ -5786,9 +5792,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     residence_targets: set[str] = set()
     if re.search(
         rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
-        r"(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
-        r"(?:freund(?:in)?|partner(?:in)?|eltern|familie|kinder|mutter|vater|"
-        r"tochter|sohn|geschwister|kolleg(?:e|in|en)|mitbewohner(?:in)?|nachbar(?:in)?)\s+"
+        rf"(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
         r"(?:wohne|wohnen|wohnt|lebe|leben|lebt)\b",
         source,
         re.IGNORECASE,
@@ -5803,9 +5807,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"arbeitsort|arbeitsadresse)\s+"
         r"(?:(?:von)\s+)?(?:mein(?:er|es|em|en)?|unser(?:er|es|em|en)?|"
         r"der|die|das|dem|den|des|ein(?:er|es|em|en)?)\s+"
-        r"(?:freund(?:in)?|partner(?:in)?|eltern|familie|kinder|mutter|vater|"
-        r"tochter|sohn|geschwister|kolleg(?:e|in|en)|mitbewohner(?:in)?|nachbar(?:in)?|"
-        r"arbeitgeber(?:s)?|firma|unternehmen|betrieb|organisation|verein|schule)\b",
+        rf"{_OTHER_RESIDENCE_OWNER_LABEL}\b",
         source,
         re.IGNORECASE,
     ):

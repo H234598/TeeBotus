@@ -3185,6 +3185,20 @@ def test_extract_residence_city_handles_temporal_label_forms() -> None:
     assert extract_residence_city("Mein künftiger Wohnort ist Hamburg.") == ""
 
 
+def test_extract_residence_city_ignores_common_foreign_person_residence_labels() -> None:
+    cases = (
+        "Ich wohne in Berlin, Hamburg ist der Wohnort meiner Frau.",
+        "Ich wohne in Berlin, Hamburg ist der Wohnort meines Mannes.",
+        "Ich wohne in Berlin, Hamburg ist der Wohnort meines Chefs.",
+        "Ich wohne in Berlin, Hamburg ist der Wohnort meines Vorgesetzten.",
+        "Ich wohne in Berlin und meine Frau wohnt in Hamburg.",
+        "Ich wohne in Berlin und mein Mann wohnt in Hamburg.",
+        "Ich wohne in Berlin und mein Chef wohnt in Hamburg.",
+    )
+    for text in cases:
+        assert extract_residence_city(text) == "Berlin"
+
+
 def test_extract_residence_city_handles_have_primary_home_label() -> None:
     assert extract_residence_city("Ich habe eine Wohnung in Berlin, Musterstr. 5.") == "Berlin"
     assert extract_residence_city(
