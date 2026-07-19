@@ -4151,6 +4151,19 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         re.IGNORECASE,
     ):
         return False
+    if re.search(
+        r"\b(?:ich|wir)\s+hab(?:e|en)?['’]?\s+"
+        r"(?:meinen|meine|mein|unseren|unsere|unser|einen|eine|ein|den|die|das)\s+"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"adresse|wohnadresse|wohnanschrift|anschrift)\s+(?:in|bei)\s+"
+        r"(?:\d{5}\s+)?[^,.;!?]{1,80}\s+und\s+"
+        r"(?!(?:umgebung|region|nähe|naehe)\b)(?:\d{5}\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}",
+        source,
+        re.IGNORECASE,
+    ):
+        return True
     target_patterns = (
         re.compile(
             rf"\b(?:ich|wir)\s+{residence}\s+(?:in|bei)\s+"
@@ -4200,7 +4213,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
         r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse|"
         r"meldeadresse|meldeanschrift|meldesitz|zuhause|zu\s+hause|daheim)\s*"
-        r"(?::|=|,)?\s*(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*(?:[,;]|\bund\b)\s*"
+        r"(?::|=|,)?\s*(?:\d{5}\s+)?(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*"
+        r"(?:[,;]|\bund\b)\s*(?:\d{5}\s+)?"
         r"(?!(?:aber|doch|jedoch|genauer\b|konkret\b|nämlich\b|naemlich\b|und\s+zwar\b|"
         r"umgebung\b|region\b|nähe\b|naehe\b|"
         r"(?:mein(?:e)?|unser(?:e)?)?\s*(?:geburtsort|geburtsstadt|heimat|heimatstadt|"
