@@ -1912,6 +1912,12 @@ CITY_CHANGE_PATTERNS = (
 )
 CITY_PATTERNS = (
     re.compile(
+        r"\b(?:ich|wir)\s+(?:bin|sind)\s+(?:in|bei)\s+(?:\d{5}\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:wohnhaft|ansässig|ansaessig)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?P<city>(?:Frankfurt\s+an\s+der\s+Oder|Ludwigshafen\s+am\s+Rhein)|"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,70}\s+\([^)]{1,30}\))"
@@ -1945,6 +1951,7 @@ CITY_PATTERNS = (
         r"jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
         r"adresse|wohnadresse|wohnanschrift|anschrift)\s+(?:in|bei)\s+"
+        r"(?:\d{5}\s+)?"
         r"(?P<city>(?![^.!?;,]*\s+(?:und|oder)\s+(?!umgebung\b|region\b|nähe\b|naehe\b))"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
         r"(?=\s*(?:[.!?;,]|$))",
@@ -2239,6 +2246,7 @@ CITY_PATTERNS = (
         r"meldeadresse|meldeanschrift|meldesitz)"
         r"(?:(?::|=|,)\s*|\s+)"
         r"(?!(?:ist|war|wird|liegt|lautet|befindet\s+sich|bleibt)\b)"
+        r"(?:\d{5}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
         r"(?:\s+\([^)]{1,30}\))?)"
         r"(?=\s*(?:[.!?;,]|$))",
@@ -3969,6 +3977,7 @@ def _has_non_residential_companion_context(source: str) -> bool:
 
 def _has_conflicting_residence_address_targets(source: str) -> bool:
     city_capture = (
+        r"(?:\d{5}\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
         r"(?:\s+\([^)]{1,30}\))?)(?=\s*(?:[,.;!?]|$))"
     )
