@@ -287,7 +287,7 @@ _RESIDENCE_TIME_QUALIFIER = (
 )
 _RESIDENCE_LOCATION_ADVERB = (
     r"(?:(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
-    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|primär|primaer|irgendwo|dahoam|erst|immer|"
+    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|primär|primaer|normalerweise|irgendwo|dahoam|erst|immer|"
     r"bisher|bislang|vorerst|zeitweise)|"
     r"(?:sicher|wirklich|definitiv|tatsächlich|tatsaechlich))"
 )
@@ -1313,6 +1313,14 @@ CITY_CHANGE_PATTERNS = (
         r"(?:meist\w*|hauptsächlich|hauptsaechlich|überwiegend|ueberwiegend|"
         r"vorwiegend|mehrheitlich|in\s+der\s+regel)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,\s*"
+        r"(?:meistens|hauptsächlich|hauptsaechlich|überwiegend|ueberwiegend|"
+        r"vorwiegend|mehrheitlich|primär|primaer|normalerweise|in\s+der\s+regel)\s+"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
     re.compile(
