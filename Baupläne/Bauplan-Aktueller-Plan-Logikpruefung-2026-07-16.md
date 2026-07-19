@@ -14656,7 +14656,15 @@ Restart erst bei `20/20`.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, zwei Separator-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `7e2ff63e fix: accept separator variants in address changes`.
 
+### Folgefix 2026-07-19: Klammerzusätze bei verbfreien Wohnlabels
+
+- `Halle (Saale)` bleibt als bekannte zusammengesetzte Stadt erhalten.
+- Länderzusätze wie `Berlin (Deutschland)` werden zu `Berlin` normalisiert.
+- Konflikt- und Präzisierungslogik berücksichtigt Klammerzusätze ebenfalls.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, vier Parenthesized-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `2cb779b0 fix: preserve parenthesized residence cities`.
+
 ## Aktueller Ledger 2026-07-19-Post-Restart
 
 - `teebotus.service` aktiv/running, `MainPID 3403613`, Start `2026-07-19 02:19:35 CEST`.
-- Seit diesem Restart: `6/20` Code-Fixes. Kein Push.
+- Seit diesem Restart: `7/20` Code-Fixes. Kein Push.
