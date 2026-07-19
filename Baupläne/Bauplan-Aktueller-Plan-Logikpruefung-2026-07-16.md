@@ -14770,7 +14770,7 @@ Restart erst bei `20/20`.
 ## Aktueller Ledger 2026-07-19-Post-Restart-2
 
 - `teebotus.service` aktiv/running, `MainPID 434057`, Start `2026-07-19 03:36:33 CEST`.
-- Neuer Zyklus seit diesem Restart: `7/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `8/20` Code-Fixes. Kein Push.
 
 ### Folgefix 2026-07-19: Präpositionale Straßennamen
 
@@ -14820,3 +14820,10 @@ Restart erst bei `20/20`.
 - `_clean_city` verwirft solche Straßenfragmente weiterhin als keine Stadt.
 - Verifikation: `tests/test_weather_context.py` -> `158 passed`, drei Lettered-House-Range-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `2dcc52cf fix: parse lettered house number ranges`.
+
+### Folgefix 2026-07-19: Verbale Straßenadress-Labels
+
+- `Wohnadresse ist ...`, `Wohnadresse lautet ...`, `Meldeadresse befindet sich in ...` und `Wohnsitz liegt in ...` werden erkannt.
+- Präpositionale Straßenadressen werden im Ambiguitätsguard nicht mehr als zwei Wohnziele gewertet.
+- Verifikation: `tests/test_weather_context.py` -> `158 passed`, sechs Verbal-Street-Label-Smokes, `py_compile` und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `71285c5d fix: parse verbal street residence labels`.
