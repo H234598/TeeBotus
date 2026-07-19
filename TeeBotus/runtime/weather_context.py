@@ -2776,6 +2776,21 @@ CITY_PATTERNS = (
         r"(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+ist\s+"
+        rf"(?:(?:{_RESIDENCE_TIME_QUALIFIER}|ab\s+(?:sofort|jetzt)|"
+        r"bis\s+(?:zum\s+)?jahresende)\s+)?"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"haupt\w*|jetzig\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
+        r"vorübergehend\w*|voruebergehend\w*|zeitweise|temporär\w*|temporaer\w*|"
+        r"befristet\w*|unbefristet\w*|dauerhaft\w*|permanent|vorläufig\w*|vorlaeufig\w*)\s+)?"
+        r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|privatanschrift|"
+        r"anschrift|meldeadresse|meldeanschrift|meldesitz)\b"
+        rf"(?:\s+(?:{_RESIDENCE_TIME_QUALIFIER}|ab\s+(?:sofort|jetzt)))?"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
     _TEMPORAL_REGISTERED_CITY,
     _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET,
     _LABELED_COUNTRY_CITY,
@@ -6290,6 +6305,22 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
         r"zuhause|zu\s+hause|daheim)\b\s+"
+        r"(?:ab\s+(?:morgen|übermorgen|uebermorgen|nächste\w*|naechste\w*|kommende\w*)\b|"
+        r"ab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
+        r"(?:jahr\w*|monat\w*|woche\w*)\b|"
+        r"ab\s+(?:übermorgen|uebermorgen|morgen|sommer|winter|frühling|fruehling|herbst)\b|"
+        r"ab\s+\d{4}\b|"
+        r"(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*|beabsichtig\w*)\b|"
+        r"(?:gewesen|worden|ehemals|damals|vormalig\w*|früher|frueher)\b)",
+        source,
+        re.IGNORECASE,
+    ):
+        return True
+    if re.search(
+        r"(?:^|[.!?;,:]\s*)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+ist\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|privatanschrift|"
+        r"anschrift|meldeadresse|meldeanschrift|meldesitz)\b\s+"
         r"(?:ab\s+(?:morgen|übermorgen|uebermorgen|nächste\w*|naechste\w*|kommende\w*)\b|"
         r"ab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
         r"(?:jahr\w*|monat\w*|woche\w*)\b|"
