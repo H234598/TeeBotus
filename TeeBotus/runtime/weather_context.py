@@ -287,7 +287,9 @@ _RESIDENCE_TIME_QUALIFIER = (
 )
 _RESIDENCE_LOCATION_ADVERB = (
     r"(?:(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
-    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|primär|primaer|normalerweise|irgendwo|dahoam|erst|immer|"
+    r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|primär|primaer|normalerweise|"
+    r"gewöhnlich|gewoehnlich|regulär|regulaer|üblicherweise|ueblicherweise|in\s+der\s+regel|"
+    r"irgendwo|dahoam|erst|immer|"
     r"bisher|bislang|vorerst|zeitweise)|"
     r"(?:sicher|wirklich|definitiv|tatsächlich|tatsaechlich))"
 )
@@ -1311,7 +1313,8 @@ CITY_CHANGE_PATTERNS = (
         r"(?:manchmal|gelegentlich|oft|häufig|haeufig|selten)\s+(?:in|bei)\s+"
         r"[^,.;!?]{1,80},\s*(?:aber\s+)?"
         r"(?:meist\w*|hauptsächlich|hauptsaechlich|überwiegend|ueberwiegend|"
-        r"vorwiegend|mehrheitlich|in\s+der\s+regel)\s+(?:in|bei)\s+"
+        r"vorwiegend|mehrheitlich|primär|primaer|normalerweise|gewöhnlich|gewoehnlich|"
+        r"regulär|regulaer|üblicherweise|ueblicherweise|in\s+der\s+regel)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
@@ -1319,7 +1322,8 @@ CITY_CHANGE_PATTERNS = (
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,\s*"
         r"(?:meistens|hauptsächlich|hauptsaechlich|überwiegend|ueberwiegend|"
-        r"vorwiegend|mehrheitlich|primär|primaer|normalerweise|in\s+der\s+regel)\s+"
+        r"vorwiegend|mehrheitlich|primär|primaer|normalerweise|gewöhnlich|gewoehnlich|"
+        r"regulär|regulaer|üblicherweise|ueblicherweise|in\s+der\s+regel)\s+"
         r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})"
         r"(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
@@ -5237,7 +5241,8 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
     )
     if re.search(r"\bmanchmal\b", source, re.IGNORECASE) and re.search(
         r"\b(?:hauptsächlich|hauptsaechlich|überwiegend|ueberwiegend|vorwiegend|meistens|mehrheitlich|"
-        r"primaer|primär|in\s+der\s+regel)\b",
+        r"primaer|primär|normalerweise|gewöhnlich|gewoehnlich|regulär|regulaer|"
+        r"üblicherweise|ueblicherweise|in\s+der\s+regel)\b",
         source,
         re.IGNORECASE,
     ):
@@ -5267,7 +5272,8 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
     if re.search(
         r"\b(?:wohne|wohnen|lebe|leben)\b\s+"
         r"(?:(?:meistens|hauptsächlich|hauptsaechlich|überwiegend|ueberwiegend|"
-        r"vorwiegend|mehrheitlich|primär|primaer|normalerweise|in\s+der\s+regel)\s+)?"
+        r"vorwiegend|mehrheitlich|primär|primaer|normalerweise|gewöhnlich|gewoehnlich|"
+        r"regulär|regulaer|üblicherweise|ueblicherweise|in\s+der\s+regel)\s+)?"
         r"(?:in|bei)\s+[^,.;!?]{1,80}\s+und\s+"
         r"(?!(?:ich\s+)?(?:arbeite|arbeitest|arbeiten|studier\w*|"
         r"lern\w*|schlaf\w*|mach\w*|komm\w*|fahr\w*|geh\w*|zieh\w*|hab\w*|bin|bist|"
@@ -5282,7 +5288,8 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
     if re.search(
         r"\b(?:wohne|wohnen|lebe|leben)\b\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
         r"(?:meistens|hauptsächlich|hauptsaechlich|überwiegend|ueberwiegend|"
-        r"vorwiegend|mehrheitlich|primär|primaer|normalerweise|in\s+der\s+regel)\s+"
+        r"vorwiegend|mehrheitlich|primär|primaer|normalerweise|gewöhnlich|gewoehnlich|"
+        r"regulär|regulaer|üblicherweise|ueblicherweise|in\s+der\s+regel)\s+"
         r"(?:in|bei)\s+[^,.;!?]{1,80}\s+und\s+"
         r"(?!(?:ich\s+)?(?:arbeite|arbeitest|arbeiten|studier\w*|"
         r"lern\w*|schlaf\w*|mach\w*|komm\w*|fahr\w*|geh\w*|zieh\w*|hab\w*|bin|bist|"
