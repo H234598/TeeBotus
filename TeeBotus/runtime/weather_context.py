@@ -1182,6 +1182,13 @@ _DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR = re.compile(
     r"(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE = re.compile(
+    r"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,\s*"
+    r"wo\s+(?:ich|wir)\s+"
+    r"(?:jetzt|heute|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+"
+    r"(?:wohne|wohnen|lebe|leben)\b",
+    re.IGNORECASE,
+)
 _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET = re.compile(
     r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+lautet\s+"
     r"(?:mein(?:e)?|unser(?:e)?)\s+"
@@ -3281,6 +3288,7 @@ CITY_CHANGE_PATTERNS = (
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
     _DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR,
+    _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE,
     re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
