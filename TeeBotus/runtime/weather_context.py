@@ -299,7 +299,8 @@ _RESIDENCE_DURATION = (
 )
 _RESIDENCE_TIME_QUALIFIER = (
     rf"(?:(?:(?:schon|bereits)\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|schon\s+immer|seitdem|"
-    r"(?:schon\s+)?seit\s+(?:gestern|heute|vorgestern)|jetzt|nun|nunmehr|aktuell|derzeit|gegenwärtig|gegenwaertig|gerade|grad|momentan|inzwischen|mittlerweile|zurzeit|zur\s+zeit|"
+    r"(?:schon\s+)?seit\s+(?:gestern|heute|vorgestern)|jetzt|nun|nunmehr|aktuell|derzeit|gegenwärtig|gegenwaertig|"
+    r"ab\s+(?:sofort|jetzt)|gerade|grad|momentan|inzwischen|mittlerweile|zurzeit|zur\s+zeit|"
     r"weiterhin|nach\s+wie\s+vor|noch\s+immer|immer\s+noch|"
     rf"dauerhaft|permanent|langfristig|kurzfristig|befristet|unbefristet|vorläufig|vorlaeufig|endgültig|endgueltig|"
     rf"ständig|staendig|wieder|erneut|für\s+{_RESIDENCE_DURATION}|"
