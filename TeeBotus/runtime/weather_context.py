@@ -960,6 +960,33 @@ _INVERTED_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
     rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_DIRECT_RESIDENCE_BEFORE_TEMPORARY_LABEL = (
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"(?P<first>{_CITY_CHANGE_CITY_FRAGMENT})\s*[.!?]\s*"
+        rf"(?P<second>{_CITY_CHANGE_CITY_FRAGMENT})\s+ist\s+"
+        rf"(?:{_TEMPORARY_RESIDENCE_QUALIFIER})\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|adresse|anschrift|"
+        r"meldeadresse|meldeanschrift|meldesitz|zuhause|zu\s+hause|daheim)"
+        r"(?=\s*[.!?]\s*$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"(?P<first>{_CITY_CHANGE_CITY_FRAGMENT})\s*[.!?]\s*"
+        rf"(?P<second>{_CITY_CHANGE_CITY_FRAGMENT})\s+ist\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|adresse|anschrift|"
+        r"meldeadresse|meldeanschrift|meldesitz|zuhause|zu\s+hause|daheim)"
+        r"\s*[,;]\s*(?:aber|doch|jedoch)?\s*"
+        rf"{_TEMPORARY_RESIDENCE_QUALIFIER}"
+        r"(?=\s*[.!?]\s*$)",
+        re.IGNORECASE,
+    ),
+)
 
 
 def _has_primary_temporary_residence(source: str) -> bool:
@@ -971,6 +998,22 @@ def _has_primary_temporary_residence(source: str) -> bool:
             _INVERTED_PRIMARY_TEMPORARY_RESIDENCE,
         )
     )
+
+
+def _direct_residence_before_temporary_label(source: str) -> str:
+    for pattern in _DIRECT_RESIDENCE_BEFORE_TEMPORARY_LABEL:
+        match = pattern.search(source)
+        if not match:
+            continue
+        first = _clean_city(match.group("first"))
+        second = _clean_city(match.group("second"))
+        if (
+            first
+            and second
+            and _city_comparison_key(first) != _city_comparison_key(second)
+        ):
+            return first
+    return ""
 _CITY_CHANGE_LABELLED_FROM_TO_STREET = re.compile(
     r"\b(?:wohnadresse|wohnanschrift|anschrift|adresse)\s+von\s+"
     rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
@@ -6265,6 +6308,9 @@ def extract_residence_city(text: str) -> str:
             return max(candidates, key=lambda candidate: candidate[0])[1]
         return ""
 
+    direct_residence_before_temporary_label = _direct_residence_before_temporary_label(source)
+    if direct_residence_before_temporary_label:
+        return direct_residence_before_temporary_label
     if (
         _has_conflicting_residence_address_targets(source)
         or _has_explicit_residence_multiplicity(source)
