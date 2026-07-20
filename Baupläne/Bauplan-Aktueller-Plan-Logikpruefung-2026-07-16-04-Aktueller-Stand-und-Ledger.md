@@ -2627,3 +2627,17 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `ae42c958`.
 - Neuer Zyklusstand: `8/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Gleichstadt bei nachgestelltem Adresslabel
+
+- `Ich wohne in Berlin und Berlin ist meine Meldeadresse` wurde als mehrdeutig
+  verworfen, obwohl beide Angaben denselben Ort bestätigen.
+- Ein enger Same-City-Guard im Ambiguitätsfilter lässt gleiche Städte bei
+  nachgestelltem Melde-/Wohnsitzlabel durch. Unterschiedliche Städte bleiben
+  durch die bestehende Konfliktprüfung leer.
+- Regressionen decken `wohne ... Meldeadresse` und `lebe ... Wohnsitz` ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `250 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `af383a3d`.
+- Neuer Zyklusstand: `10/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
