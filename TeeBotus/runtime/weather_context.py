@@ -312,6 +312,14 @@ _RESIDENCE_TIME_QUALIFIER = (
     r"während\s+(?:(?:dieser|der|des)\s+)?(?:woche|wochen|monats|monate|monaten|zeit)|"
     r"vor(?:uebergehend|übergehend))"
 )
+_TEMPORARY_RESIDENCE_QUALIFIER = (
+    r"(?:nur\s+)?(?:vorübergehend|voruebergehend|zeitweise|temporär|temporaer|"
+    r"befristet|kurzfristig|vorläufig|vorlaeufig|bis\s+auf\s+weiteres|"
+    r"bis\s+(?:heute|morgen|übermorgen|uebermorgen)|"
+    rf"für\s+(?:{_RESIDENCE_DURATION}|(?:den\s+)?urlaub)|"
+    r"am\s+wochenende|unter\s+der\s+woche|tagsüber|tagsueber|"
+    r"(?:bei|zu|auf)\s+besuch|gelegentlich|manchmal)"
+)
 _RESIDENCE_LOCATION_ADVERB = (
     r"(?:(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
     r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|primär|primaer|normalerweise|"
@@ -909,8 +917,7 @@ _LABELLED_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
     r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
     r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*[:=]?\s*"
     r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)\s*[,;.!?]\s*"
-    r"(?:nur\s+)?(?:vorübergehend|voruebergehend|zeitweise|temporär|temporaer|"
-    r"befristet|kurzfristig|vorläufig|vorlaeufig|bis\s+auf\s+weiteres)\s+"
+    rf"{_TEMPORARY_RESIDENCE_QUALIFIER}\s+"
     r"(?:(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+)?"
     r"(?:(?:in|bei)\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
@@ -9170,8 +9177,9 @@ def _has_transient_location_fragment(source: str, city_start: int, city_end: int
 
 def _has_temporary_residence_prefix(source: str, match_start: int) -> bool:
     if re.match(
-        r"(?i)(?:nur\s+)?(?:vorübergehend|voruebergehend|zeitweise|temporär|temporaer|"
-        r"befristet|kurzfristig|vorläufig|vorlaeufig|bis\s+auf\s+weiteres)\b",
+        rf"(?i){_TEMPORARY_RESIDENCE_QUALIFIER}\s+"
+        r"(?:(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+)?"
+        r"(?:(?:in|bei)\s+)?(?-i:[A-ZÄÖÜ])",
         source[match_start:],
     ):
         return True
