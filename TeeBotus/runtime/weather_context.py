@@ -1227,6 +1227,7 @@ _CITY_BEFORE_RESIDENCE_REGISTRATION_HAVE = re.compile(
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
     r"(?:habe|haben)\s+(?:ich|wir)\s+"
     r"(?:meine|meinen|mein|unsere|unseren|unser)\s+"
+    rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
     r"(?:meldeadresse|meldeanschrift|meldesitz)\b",
     re.IGNORECASE,
 )
