@@ -1352,6 +1352,9 @@ def test_extract_residence_city_handles_punctuated_clarifications() -> None:
     assert extract_residence_city("Ich wohne in Berlin, genauer gesagt: Potsdam.") == "Potsdam"
     assert extract_residence_city("Ich wohne in Deutschland; genauer gesagt in Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist Berlin; konkret: Potsdam.") == "Potsdam"
+    assert extract_residence_city("Ich wohne in Berlin, Hamburg und Köln.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, Hamburg sowie Köln.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, Hamburg und arbeite in Köln.") == "Berlin"
 
 
 def test_extract_residence_city_rejects_bare_label_conflicts() -> None:
