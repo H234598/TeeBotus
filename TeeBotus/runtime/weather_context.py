@@ -356,6 +356,11 @@ _OTHER_RESIDENCE_OWNER_LABEL = (
     r"klinik\w*|universit(?:ät|aet)\w*|hochschule\w*|institut\w*|verband\w*|"
     r"behörde\w*|behoerde\w*|krankenhaus\w*)"
 )
+_OTHER_PERSON_RESIDENCE_OWNER_REFERENCE = (
+    rf"(?:{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}|"
+    rf"von\s+(?:{_OTHER_PERSON_REFERENCE}\s+)?{_OTHER_RESIDENCE_OWNER_LABEL}|"
+    r"von\s+(?:frau|herr|herrn|dr\.?|prof\.?)\s+[A-ZÄÖÜ][\wÄÖÜäöüß.'-]{1,60})"
+)
 _OTHER_PERSON_FOREIGN_MARKER = (
     rf"(?:{_OTHER_PERSON_NON_SELF_REFERENCE}\s+{_OTHER_PERSON_LOCATION_LABEL}|"
     rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL}|"
@@ -954,7 +959,7 @@ _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_CITY = re.compile(
 _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_CITY = re.compile(
     rf"\b(?:der|die|das|ein(?:e|en|em|er|es)?)?\s*"
     rf"{_OTHER_PERSON_LOCATION_LABEL}\s+"
-    rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}"
+    rf"{_OTHER_PERSON_RESIDENCE_OWNER_REFERENCE}"
     r"(?:\s+(?:ist|liegt|bleibt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?|"
     r"\s*[:=]\s*(?:(?:in|bei)\s+)?)"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
@@ -978,7 +983,7 @@ _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_PRONOUN_CITY = re.compile(
 _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_POSSESSIVE_CITY = re.compile(
     rf"\b(?:der|die|das|ein(?:e|en|em|er|es)?)?\s*"
     rf"{_OTHER_PERSON_LOCATION_LABEL}\s+"
-    rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}"
+    rf"{_OTHER_PERSON_RESIDENCE_OWNER_REFERENCE}"
     r"(?:\s+(?:ist|liegt|bleibt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?|"
     r"\s*[:=]\s*(?:(?:in|bei)\s+)?)"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
