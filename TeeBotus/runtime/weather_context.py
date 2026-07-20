@@ -3753,7 +3753,7 @@ CITY_CHANGE_PATTERNS = (
         rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
         rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
-        r"zuhause|zu\s+hause|daheim)\s*[,;]\s*"
+        r"zuhause|zu\s+hause|daheim)\s*(?:[,;]|\bund\s+)\s*"
         r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|heute)\s+"
         r"(?!(?:arbeite|arbeitest|arbeiten|studier|studierst|studieren|lern|lernst|"
         r"schlaf|schläf|schlaef|pendl|reis|besuch|übernacht|uebernacht|fahr|geh|komm|mach)\w*\b)"
