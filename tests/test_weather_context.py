@@ -1544,6 +1544,7 @@ def test_extract_residence_city_ignores_other_person_residence() -> None:
     assert extract_residence_city("Ich wohne in Berlin und Hamburg ist der Wohnort meiner Eltern.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, Hamburg ist der Wohnort meiner Firma.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin und Hamburg ist der Wohnort meines Arbeitgebers.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin sowie Hamburg ist der Wohnort meines Arbeitgebers.") == "Berlin"
     for owner in ("von meiner Freundin", "der Freundin", "von meinen Eltern", "dem Arbeitgeber"):
         assert extract_residence_city(f"Ich wohne in Berlin, Hamburg ist der Wohnort {owner}.") == "Berlin"
 
@@ -3507,6 +3508,8 @@ def test_extract_residence_city_ignores_common_foreign_person_residence_labels()
     assert extract_residence_city("Berlin ist meine Wohnadresse, Hamburg gehört als Wohnort meiner Frau.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, Hamburg gehört als Wohnort meiner Frau.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, Hamburg gilt meiner Frau als Wohnort.") == "Berlin"
+    assert extract_residence_city("ihr Wohnsitz ist Hamburg und Ich wohne in Berlin.") == "Berlin"
+    assert extract_residence_city("der Wohnort ihrer Frau liegt in Hamburg. Ich wohne in Berlin.") == "Berlin"
     assert extract_residence_city("Meine Frau lebt in Hamburg, während ich in Berlin wohne.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin und in Hamburg arbeite ich.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin und in Hamburg studiere ich.") == "Berlin"

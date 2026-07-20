@@ -334,19 +334,21 @@ _OTHER_PERSON_LOCATION_LABEL = (
     r"zuhause|zu\s+hause|daheim|wohnadresse|wohnanschrift|meldeadresse|"
     r"meldeanschrift|meldesitz|adresse|anschrift|wohnung|unterkunft)"
 )
+_OTHER_RESIDENCE_OWNER_LABEL = (
+    rf"(?:{_OTHER_PERSON_RESIDENCE_LABEL}|arbeitgeber\w*|firm\w*|unternehmen\w*|"
+    r"betrieb\w*|organisation\w*|verein\w*|schule\w*|abteilung\w*|praxis\w*|"
+    r"klinik\w*|universit(?:ät|aet)\w*|hochschule\w*|institut\w*|verband\w*|"
+    r"behörde\w*|behoerde\w*|krankenhaus\w*)"
+)
 _OTHER_PERSON_FOREIGN_MARKER = (
     rf"(?:{_OTHER_PERSON_NON_SELF_REFERENCE}\s+{_OTHER_PERSON_LOCATION_LABEL}|"
     rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL}|"
     rf"{_OTHER_PERSON_LOCATION_LABEL}\s+von\s+{_OTHER_PERSON_RESIDENCE_LABEL}|"
     rf"(?:der|die|das|ein(?:e|en|em|er|es)?)?\s*"
     rf"{_OTHER_PERSON_LOCATION_LABEL}\s+(?:von\s+)?"
-    rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL})"
-)
-_OTHER_RESIDENCE_OWNER_LABEL = (
-    rf"(?:{_OTHER_PERSON_RESIDENCE_LABEL}|arbeitgeber\w*|firm\w*|unternehmen\w*|"
-    r"betrieb\w*|organisation\w*|verein\w*|schule\w*|abteilung\w*|praxis\w*|"
-    r"klinik\w*|universit(?:ät|aet)\w*|hochschule\w*|institut\w*|verband\w*|"
-    r"behörde\w*|behoerde\w*|krankenhaus\w*)"
+    rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL}|"
+    rf"{_OTHER_PERSON_LOCATION_LABEL}\s+(?:von\s+)?"
+    rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL})"
 )
 _RESIDENCE_LABEL_DETERMINER = (
     r"(?:meine|unsere|mein|unser|der|die|das|ein(?:e|en|em|er|es)?)"
@@ -2830,7 +2832,7 @@ CITY_PATTERNS = (
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]?\s*"
-        r"(?:und|aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
+        r"(?:und|sowie|aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
         r"(?:"
         r"(?:arbeite\w*|studier\w*|lern\w*|schlaf\w*|pendl\w*|reis\w*|"
@@ -5683,7 +5685,7 @@ def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
     if boundary:
         prefix += " " + boundary.group(0)
     segment = re.split(
-        r"(?:[,;]|\b(?:und|sowie|oder|aber|doch|jedoch|sondern)\b)\s*",
+        r"(?:[.!?\n]|[,;]|\b(?:und|sowie|oder|aber|doch|jedoch|sondern|während|waehrend)\b)\s*",
         prefix,
         flags=re.IGNORECASE,
     )[-1]
@@ -7001,6 +7003,10 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
                 or _has_historical_residence_suffix(source, city_end)
                 or _has_future_residence_suffix(source, city_end)
                 or _has_uncertain_residence_suffix(source, city_end)
+                or _has_other_person_residence_candidate(match.group("city"))
+                or _has_other_person_residence_prefix(source, pattern_start)
+                or _has_other_person_residence_prefix(source, city_start)
+                or _has_other_person_residence_prefix(source, city_end)
             ):
                 continue
             city = _clean_city(match.group("city"))
@@ -7025,7 +7031,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         re.IGNORECASE,
     )
     if bare_label_conflict:
-        first = _clean_city(bare_label_conflict.group("first"))
+        first_raw = bare_label_conflict.group("first").strip()
+        first = _clean_city(first_raw)
         second_raw = bare_label_conflict.group("second").strip()
         second = _clean_city(bare_label_conflict.group("second"))
         if (
@@ -7039,6 +7046,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
                 second_raw,
             )
         ):
+            if _has_other_person_residence_candidate(first_raw) or _has_other_person_residence_candidate(second_raw):
+                return False
             return True
     if re.search(
         rf"\b{residence}\s+(?:mal|teils|teilweise)\s+(?:in|bei)\s+[^,.;!?]+,\s*"
@@ -7127,13 +7136,17 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         re.IGNORECASE,
     ):
         return True
-    if re.search(
+    ambiguous_label_match = re.search(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+[^,.;!?]{1,80}\s+und\s+"
         r"(?!(?:(?:ich|wir)\s+)?(?:arbeit|studier|lern|schlaf|mach|komm|fahr|geh|zieh|hab|besuch|verbring|treff|reis|pendl|seh|übernacht|uebernacht)\w*\b)"
         r"(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß'-]*",
         source,
         re.IGNORECASE,
+    )
+    if ambiguous_label_match and not re.search(
+        rf"(?i)\b{_OTHER_PERSON_NON_SELF_REFERENCE}\s*$",
+        source[: ambiguous_label_match.start()],
     ):
         return True
     for match in re.finditer(
