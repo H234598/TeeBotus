@@ -1851,3 +1851,21 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `e12a06c9`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-07
+
+- `teebotus.service` aktiv/running, `MainPID 2038659`, Start `2026-07-20 02:24:52 CEST`.
+- Fremdpersonen-Ortsangaben in Subjektform werden vor allgemeiner
+  Mehrdeutigkeitsprüfung erkannt.
+- Nach Codefix und diesem Ledger-Commit: `18/20` Commits seit Restart. Kein
+  Push. Restart erst bei 20/20.
+
+### Folgefix 2026-07-20: Fremdperson-Ortsangaben in Subjektform
+
+- `Meine Frau ist in Hamburg gemeldet`, `ist zuhause` und `hat ihr Zuhause`
+  werden nicht als eigener Wohnort neben Berlin bewertet.
+- Filter prüft sowohl Pattern- als auch tatsächlichen City-Start; Präpositionen
+  und possessive Wohnlabels bleiben konsistent.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `6ec29491`.
