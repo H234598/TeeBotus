@@ -8124,7 +8124,11 @@ def _has_historical_residence_suffix(source: str, city_end: int) -> bool:
     return bool(
         re.match(
             r"(?i)\s+(?:(?:wohnhaft|ansässig|ansaessig)\s+)?(?:gewesen|worden|frueher|frühere?\b|"
-            r"ehemals|damals|vormalig\w*)\b",
+            r"ehemals|damals|vormalig\w*)\b|"
+            r"\s+ist\s+(?:die\s+stadt|der\s+ort)\s*,?\s*"
+            r"(?:in\s+(?:der|dem)|an\s+(?:der|dem)|wo)\s+(?:ich|wir)\s+"
+            r"(?:wohne|wohnen|lebe|leben)\b\s*,?\s*(?:aber|doch|jedoch)\s+"
+            r"(?:nicht\s+(?:mehr|l(?:änger|aenger))|früh\w*|frueh\w*|ehemals|damals|vormalig\w*)\b",
             sentence,
         )
     )
