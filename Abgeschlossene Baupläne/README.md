@@ -11,10 +11,10 @@ Snapshots. Sie sind kein aktueller Arbeitsauftrag.
 
 ## Historische, ersetzte Snapshots
 
-Die übrigen Dateien sind aufeinanderfolgende Arbeitsaufnahmen vom 2026-07-13
-und der Snapshot vom 2026-07-15. Ihre damaligen Statusangaben bleiben zur
-Nachvollziehbarkeit erhalten; maßgeblich ist ausschließlich der aktive Plan in
-`../Baupläne/`.
+Die übrigen Dateien sind aufeinanderfolgende Arbeitsaufnahmen vom 2026-07-13,
+der Snapshot vom 2026-07-15 und die historischen Splitteile des Plans vom
+2026-07-16. Ihre damaligen Statusangaben bleiben zur Nachvollziehbarkeit
+erhalten; maßgeblich ist ausschließlich der aktive Plan in `../Baupläne/`.
 
 ## Ablageregel
 

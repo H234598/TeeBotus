@@ -16,14 +16,18 @@ Planinhalt bleibt in den verlinkten Teilen erhalten. Kein Teil darf mehr als
 
 | Teil | Kategorie | Inhalt | Zeilen beim Split |
 | --- | --- | --- | ---: |
-| [[Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-01-Grundlagen-und-Fruehe-Funde]] | Grundlagen | Auftrag, Leitplanken, Akzeptanzkriterien, fruehe Befunde und Fixes | 4800 |
-| [[Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-02-Logikpruefung-Historie-Teil-1]] | Historie 1 | fortlaufende Logikpruefung und Regressionen | 4804 |
-| [[Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-03-Logikpruefung-Historie-Teil-2]] | Historie 2 | fortlaufende Logikpruefung und Regressionen | 4804 |
+| [Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-01-Grundlagen-und-Fruehe-Funde](<../Abgeschlossene Baupläne/Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-01-Grundlagen-und-Fruehe-Funde.md>) | Historie/Grundlagen | Auftrag, Leitplanken, Akzeptanzkriterien, fruehe Befunde und Fixes | 4800 |
+| [Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-02-Logikpruefung-Historie-Teil-1](<../Abgeschlossene Baupläne/Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-02-Logikpruefung-Historie-Teil-1.md>) | Historie 1 | fortlaufende Logikpruefung und Regressionen | 4804 |
+| [Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-03-Logikpruefung-Historie-Teil-2](<../Abgeschlossene Baupläne/Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-03-Logikpruefung-Historie-Teil-2.md>) | Historie 2 | fortlaufende Logikpruefung und Regressionen | 4804 |
 | [[Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16-04-Aktueller-Stand-und-Ledger]] | Aktiv | juengster Stand, Ledger, aktuelle Tests und Commits | 1632 |
 
 Split erfolgte verlustfrei an Originalzeilen 1-4800, 4801-9600,
 9601-14400 und 14401-16020. Die Quellkopie liegt unter
 `Teladi_Programming/Projekte/TeeBotus/Archiv/`.
+
+Die ersten drei Teile sind abgeschlossene Historie und liegen deshalb unter
+`../Abgeschlossene Baupläne/`. Nur Katalog und aktueller Ledger bleiben in der
+aktiven Ablage.
 
 ## Themenkatalog
 

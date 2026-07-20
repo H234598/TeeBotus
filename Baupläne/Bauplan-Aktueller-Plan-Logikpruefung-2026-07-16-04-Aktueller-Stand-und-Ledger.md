@@ -1797,4 +1797,21 @@
 - Code-Commits: `4cf5651c`, `3add3997`, `edba51af`, `bcd33669`.
 - Danach planmaessiger User-Service-Restart: `MainPID 2038659`, Start
   `2026-07-20 02:24:52 CEST`, aktiv/running.
-- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
+- Neuer Zyklus seit diesem Restart: `11/20` Commits. Kein Push.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-04
+
+- `teebotus.service` aktiv/running, `MainPID 2038659`, Start `2026-07-20 02:24:52 CEST`.
+- Historische Splitteile liegen jetzt unter `../Abgeschlossene Baupläne/`;
+  aktive Katalog-, Ledger- und SQL-Pläne bleiben unter `../Baupläne/`.
+- Archivschritt zählt als Commit 12/20. Kein Push. Restart erst bei 20/20.
+
+### Folgefix 2026-07-20: Companion-Aufenthalte nach aktueller Wohnstadt
+
+- `Ich wohne in Berlin und lebe zeitweise bei meiner Frau in Hamburg` sowie
+  Komma-/Aktuellvarianten behalten Berlin als Wohnstadt.
+- Gültige direkte Formen wie `Ich wohne bei meinen Eltern in Berlin` bleiben
+  erhalten; Companion-Erkennung greift nur nach einer echten Klauselgrenze.
+- Verifikation: `tests/test_weather_context.py` -> `237 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `87260e24`.

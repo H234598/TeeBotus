@@ -6,7 +6,7 @@ neueren Plan ersetzte Aufnahmen liegen in `../Abgeschlossene Baupläne/`.
 ## Aktuelle Pläne
 
 - `Bauplan-Aktueller-Plan-Logikpruefung-2026-07-16.md` — Katalog und aktiver
-  Prüfstand; die vier verlinkten Teile gehören dazu.
+  Prüfstand; historische Teile sind aus dem aktiven Ordner verlinkt.
 - `Bauplan-SQL-Fallback-und-Migrationsschutz-2026-07-16.md` — laufender
   SQL-/Fallback-Prüfauftrag.
 
