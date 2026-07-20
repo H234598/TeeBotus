@@ -1985,6 +1985,11 @@ def test_extract_residence_city_handles_question_answer_forms() -> None:
     assert extract_residence_city("Wohnst du in Hamburg?") == ""
     assert extract_residence_city("Wo wohnst du?") == ""
     assert extract_residence_city("Ist dein Wohnort Berlin?") == ""
+    assert extract_residence_city("Ich wohne in Berlin, oder?") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, richtig?") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist Berlin, stimmt das?") == "Berlin"
+    assert extract_residence_city("Ich lebe in Hamburg, weißt du?") == "Hamburg"
+    assert extract_residence_city("Ich wohne aktuell in Köln?") == ""
 
 
 def test_extract_residence_city_skips_label_fillers() -> None:

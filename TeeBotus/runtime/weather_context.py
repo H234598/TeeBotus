@@ -6432,8 +6432,30 @@ def weather_context_text(account_store: AccountStore, account_id: str) -> str:
 
 def extract_residence_city(text: str) -> str:
     source = str(text or "")
-    if source.strip().endswith("?"):
-        return ""
+    stripped_source = source.strip()
+    if stripped_source.endswith("?"):
+        tag_question = re.search(
+            r"(?i)(?:,\s*|\s+)(?:oder|richtig|stimmt(?:\s+das)?|"
+            r"wei(?:ß|ss)t\s+du|nicht\s+wahr)\s*\?$",
+            stripped_source,
+        )
+        claim_prefix = stripped_source[: tag_question.start()] if tag_question else ""
+        has_personal_claim = bool(
+            re.search(
+                r"(?i)\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\b|"
+                r"\b(?:ich|wir)\s+(?:bin|sind)\s+(?:in|bei)\s+[^.!?;]+\s+"
+                r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b|"
+                r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
+                r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+                r"zuhause|zu\s+hause|daheim|wohnadresse|wohnanschrift|"
+                r"meldeadresse|meldeanschrift|meldesitz|adresse|anschrift)\s+"
+                r"(?:ist|liegt|lautet|befindet\s+sich)\b",
+                claim_prefix,
+            )
+        )
+        if not has_personal_claim:
+            return ""
+        source = claim_prefix.rstrip(" ,")
     for district_name, base_city in _KNOWN_CITY_DISTRICT_BASES.items():
         if "(" in district_name:
             source = re.sub(
