@@ -812,6 +812,16 @@ _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY = re.compile(
     r"(?=\s*[.!?;,]|$)",
     re.IGNORECASE,
 )
+_CITY_CHANGE_LABELLED_CURRENT_HISTORICAL = re.compile(
+    r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
+    r"(?:(?:aktuell\w*|jetzig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*:\s*"
+    r"(?:(?:in|bei)\s+)?"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+    r"(?=\s*[,;]\s*(?:(?:war\s+)?(?:vorher|früher|frueher|gestern|vorgestern|damals|ehemals)|"
+    r"(?:vorher|früher|frueher|gestern|vorgestern|damals|ehemals)\s+war)\b)",
+    re.IGNORECASE,
+)
 _CITY_CHANGE_LABELLED_FROM_TO_STREET = re.compile(
     r"\b(?:wohnadresse|wohnanschrift|anschrift|adresse)\s+von\s+"
     rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
@@ -3106,6 +3116,7 @@ CITY_CHANGE_PATTERNS = (
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
+    _CITY_CHANGE_LABELLED_CURRENT_HISTORICAL,
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
@@ -5857,6 +5868,7 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
             _CITY_CHANGE_COLON_LABELLED_OLD_NEW_STREET,
             _CITY_CHANGE_LABELLED_ALT_NEW_COLON_STREET,
             _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
+            _CITY_CHANGE_LABELLED_CURRENT_HISTORICAL,
             _CITY_CHANGE_LABELLED_COLON_SEPARATOR_STREET,
             _COMPOUND_CITY_RESIDENCE,
             _COMPOUND_CITY_CONTRAST_RESIDENCE,
