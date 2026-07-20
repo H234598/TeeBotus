@@ -4798,6 +4798,36 @@ def test_city_memory_rollback_failure_is_not_hidden(tmp_path) -> None:
                 )
 
 
+def test_initial_city_memory_rollback_failure_is_not_hidden(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    original_append = account_store.append_structured_memory_entry
+    original_write_index = account_store.write_memory_index
+    append_finished = False
+
+    def append_then_fail(write_account_id: str, entry: dict[str, object], **kwargs: object) -> str:
+        nonlocal append_finished
+        memory_id = original_append(write_account_id, entry, **kwargs)
+        append_finished = True
+        raise OSError("residence append failed after persist")
+
+    def fail_index_rollback(write_account_id: str, index: dict[str, object]) -> None:
+        if append_finished:
+            raise OSError("residence index rollback failed")
+        original_write_index(write_account_id, index)
+
+    with patch.object(account_store, "append_structured_memory_entry", side_effect=append_then_fail):
+        with patch.object(account_store, "write_memory_index", side_effect=fail_index_rollback):
+            with pytest.raises(RuntimeError, match="residence memory rollback failed"):
+                update_city_and_weather_context(
+                    account_store,
+                    account_id,
+                    "Ich wohne in Potsdam.",
+                    now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+                    provider=lambda city: f"{city}: 12 C",
+                )
+
+
 def test_weather_provider_error_does_not_expose_stale_summary(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
