@@ -7852,7 +7852,7 @@ def _clean_city(value: str) -> str:
         source = re.sub(r"[.!?;,]+$", "", source).rstrip(")").rstrip()
     normalized_source = re.sub(r"\s+", " ", source).strip(" .,:;!?")
     if re.search(
-        r"(?i)\b(?:vielleicht|vermutlich|wahrscheinlich|möglicherweise|moeglicherweise|"
+        r"(?i)\b(?:mag|vielleicht|vermutlich|wahrscheinlich|möglicherweise|moeglicherweise|"
         r"eventuell|wohl|angeblich|anscheinend|scheinbar|voraussichtlich|womöglich|"
         r"womoeglich|mutmaßlich|mutmasslich|theoretisch|hypothetisch|potenziell|potentiell)\b",
         normalized_source,
