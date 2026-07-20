@@ -2334,3 +2334,15 @@
 - Code-Commit: `b87bd79e`.
 - Neuer Zyklus: `10/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Weitere unsichere Wohnortbehauptungen
+
+- `mutmaßlich`, `womöglich`, `theoretisch`, `hypothetisch`, `potenziell` und
+  Schreibvarianten wurden nicht als Unsicherheit erkannt. Solche Aussagen
+  konnten als sichere Wohnstadt gespeichert werden.
+- Markergruppe im bestehenden Unsicherheitsfilter ergänzt.
+- Regression deckt acht deutsche/ASCII-Schreibweisen ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`. Code-Commit: `6b25178d`.
+- Neuer Zyklus: `12/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
