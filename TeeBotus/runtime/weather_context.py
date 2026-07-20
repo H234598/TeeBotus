@@ -5602,6 +5602,27 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
         re.IGNORECASE,
     ):
         return True
+    residence_with_owned_domicile = re.search(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:und|,|;)\s+"
+        r"(?:habe|haben)\s+"
+        r"(?:(?:meinen|meine|mein|unseren|unsere|unser|einen|eine|ein|den|die|das)\s+)?"
+        r"(?:(?:fest|dauerhaft|aktuell|offiziell)\w*\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
+        r"(?:in|bei)\s+"
+        r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+        multiplicity_source,
+        re.IGNORECASE,
+    )
+    if residence_with_owned_domicile:
+        first = _clean_city(residence_with_owned_domicile.group("first"))
+        second = _clean_city(residence_with_owned_domicile.group("second"))
+        if (
+            first
+            and second
+            and _city_comparison_key(first) != _city_comparison_key(second)
+        ):
+            return True
     if re.search(
         r"\b(?:wohne|wohnen|lebe|leben|wohnort|wohnsitz)\b[^.!?;\n]*\b(?:im|in\s+der)\s+"
         r"(?:(?:großraum|grossraum|raum|gebiet|region|umland|umgebung)\s+(?:von\s+)?"
