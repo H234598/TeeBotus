@@ -2689,3 +2689,17 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `dd5cb02d`.
 - Neuer Zyklusstand: `16/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Wohnadressreferenzen und Relativsatz
+
+- Genitivische Angaben für `Wohnung`, `Zuhause` und `Wohnsitz` werden erkannt,
+  inklusive `Der Ort meines Wohnsitzes ist ...`.
+- `Ich wohne dort, wo meine Meldeadresse in Berlin ist` wird als Berlin
+  erkannt.
+- Wiederholungen wie `Mein Wohnort ist Berlin und die Adresse meines Wohnorts
+  ist ebenfalls Berlin` bleiben gültig; verschiedene Städte bleiben leer.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `253 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `e67e80a4`.
+- Neuer Zyklusstand: `18/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
