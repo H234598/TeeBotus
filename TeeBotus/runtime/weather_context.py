@@ -6349,6 +6349,27 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
                 ):
                     return True
                 break
+    sentence_current_label_pair = re.search(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"(?P<first>{_CITY_CHANGE_CITY_FRAGMENT})\s*[.!?]\s*"
+        rf"(?P<second>{_CITY_CHANGE_CITY_FRAGMENT})\s+ist\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|adresse|anschrift|"
+        r"meldeadresse|meldeanschrift|meldesitz|zuhause|zu\s+hause|daheim)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        multiplicity_source,
+        re.IGNORECASE,
+    )
+    if sentence_current_label_pair:
+        first = _clean_city(sentence_current_label_pair.group("first"))
+        second = _clean_city(sentence_current_label_pair.group("second"))
+        if (
+            first
+            and second
+            and _city_comparison_key(first) != _city_comparison_key(second)
+        ):
+            return True
     status_pair = re.search(
         rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*[:=,]?\s*"
