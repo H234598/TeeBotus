@@ -7012,7 +7012,10 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
         r"\s*[:=]\s*"
         rf"{_LABELED_STREET_ADDRESS_CORE}\s*,\s*"
-        r"(?P<address>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+        r"(?P<address>(?:(?:[A-Z]{1,3}[- ]?)?\d{5}\s+)?"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?:\s+\((?:deutschland|österreich|oesterreich|schweiz)\))?"
+        r"(?=\s*(?:[.!?;,]|$))",
         source,
         re.IGNORECASE,
     ):
