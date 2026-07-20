@@ -1949,3 +1949,22 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `952dab8d`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-13
+
+- `teebotus.service` aktiv/running, `MainPID 2292168`, Start `2026-07-20 03:25:05 CEST`.
+- Weitere Fremdpersonenformen mit `sowie`, `dessen` und `von Frau ...` sind
+  vor der eigenen Wohnortentscheidung abgefangen.
+- Eigene Haushaltsform `unsere Wohnung` bleibt absichtlich mehrdeutig.
+- Neuer Zyklus: `8/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei 20/20.
+
+### Folgefix 2026-07-20: Weitere Fremdpersonen-Referenzen
+
+- Erkannt: `sowie die Wohnung meiner Frau`, `dessen Wohnort`, `Wohnadresse
+  von Frau Müller` und `Hamburg ist der Wohnort von Frau Müller`.
+- Referenzmarker unterscheiden possessive Fremdpersonenbezüge von neutralen
+  Artikeln in eigenen Labels wie `die Meldeanschrift`.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8eaa5a7d`.
