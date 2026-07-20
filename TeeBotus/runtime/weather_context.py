@@ -1868,7 +1868,9 @@ CITY_CHANGE_PATTERNS = (
         r"\b(?:(?:früher|frueher|ehemals|damals)\s+war\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?|"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+war)\s+"
         r"(?:mein(?:e)?|unser(?:e)?)?\s*"
-        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim|lebensmittelpunkt)\s*"
+        r"(?:(?:alt\w*|ehemalig\w*|früh\w*|frueh\w*)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|wohnadresse|wohnanschrift|adresse|anschrift|"
+        r"zuhause|zu\s+hause|daheim|lebensmittelpunkt)\s*"
         r"(?:,|;|[-–—]|[.!?])\s*(?:jetzt|heute|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+"
         r"(?:(?:ist|liegt|befindet\s+sich|bleibt)(?:\s+(?:er|sie|es))?\s+)?"
         r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
