@@ -3185,6 +3185,14 @@ def test_extract_residence_city_handles_same_city_reference_labels() -> None:
     assert extract_residence_city("Ich wohne dort, wo meine Meldeadresse in Berlin ist. Ich wohne in Berlin.") == "Berlin"
 
 
+def test_extract_residence_city_handles_inverted_relative_residence_references() -> None:
+    assert extract_residence_city("Wo ich gemeldet bin, da wohne ich: in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne dort, wo ich meinen Wohnsitz habe: in Berlin.") == "Berlin"
+    assert extract_residence_city("Wo ich registriert bin, dort lebe ich: bei Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich lebe da, wo ich meinen Hauptwohnsitz habe: in Dresden.") == "Dresden"
+    assert extract_residence_city("Wo ich gemeldet bin, da wohne ich: in Berlin, meine Meldeadresse Hamburg.") == ""
+
+
 def test_extract_residence_city_handles_labeled_area_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Region um Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Berliner Region.") == "Berlin"
