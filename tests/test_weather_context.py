@@ -1688,7 +1688,7 @@ def test_city_id_token_disambiguates_lossy_ascii_normalization() -> None:
         [],
     ),
 )
-def test_fetch_weather_summary_handles_incomplete_provider_payload(payload) -> None:
+def test_fetch_weather_summary_rejects_incomplete_provider_payload(payload) -> None:
     class Response:
         def __enter__(self):
             return self
@@ -1700,7 +1700,7 @@ def test_fetch_weather_summary_handles_incomplete_provider_payload(payload) -> N
             return json.dumps(payload).encode("utf-8")
 
     with patch("TeeBotus.runtime.weather_context.urllib.request.urlopen", return_value=Response()):
-        assert fetch_weather_summary("Berlin") == "Berlin"
+        assert fetch_weather_summary("Berlin") == ""
 
 
 @pytest.mark.parametrize("payload", ({"error": "unknown location"}, {"errors": [{"value": "offline"}]}))
@@ -5080,6 +5080,33 @@ def test_empty_weather_provider_result_is_an_error(tmp_path) -> None:
     weather_state = account_store.read_agent_state(account_id)["weather_context"]
     assert weather_state["summary"] == ""
     assert weather_state["last_error"] == "empty weather summary"
+
+
+def test_incomplete_weather_payload_does_not_enter_context(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def read(self):
+            return json.dumps([]).encode("utf-8")
+
+    with patch("TeeBotus.runtime.weather_context.urllib.request.urlopen", return_value=Response()):
+        result = update_city_and_weather_context(
+            account_store,
+            account_id,
+            "Ich wohne in Berlin.",
+            now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        )
+
+    assert result.checked is True
+    assert result.skipped_reason == "weather_error"
+    assert weather_context_text(account_store, account_id) == ""
 
 
 def test_weather_state_timestamps_use_supplied_now(tmp_path) -> None:

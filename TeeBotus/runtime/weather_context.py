@@ -9957,7 +9957,7 @@ def fetch_weather_summary(city: str) -> str:
     with urllib.request.urlopen(request, timeout=WEATHER_TIMEOUT_SECONDS) as response:
         payload = json.loads(response.read().decode("utf-8"))
     if not isinstance(payload, Mapping):
-        return str(city or "").strip()
+        return ""
     if "error" in payload or "errors" in payload:
         return ""
     current_values = payload.get("current_condition")
@@ -9968,6 +9968,8 @@ def fetch_weather_summary(city: str) -> str:
         current = {}
     if not isinstance(area, Mapping):
         area = {}
+    if not current:
+        return ""
     name = _area_name(area) or city
     temp_value = current.get("temp_C")
     feels_value = current.get("FeelsLikeC")
