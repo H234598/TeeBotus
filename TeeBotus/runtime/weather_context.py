@@ -8844,6 +8844,11 @@ def _clean_city(value: str) -> str:
         "",
         source,
     ).strip()
+    city = re.sub(
+        r"(?i)\s*\((?:früher|frueher|vorher|zuvor|davor|ehemals|damals)\s+[^)]{1,80}\)\s*$",
+        "",
+        city,
+    ).strip()
     city = re.sub(r"(?i)^(?:(?:auch|ebenfalls|ebenso|gleichfalls)\s+)?(?:in|bei)\s+", "", city)
     city = re.sub(r"(?i)^(?:auch|ebenfalls|ebenso|gleichfalls)\s+", "", city)
     city = CITY_TRAILING_STOP_RE.sub("", city).strip(" .,:;!?")
