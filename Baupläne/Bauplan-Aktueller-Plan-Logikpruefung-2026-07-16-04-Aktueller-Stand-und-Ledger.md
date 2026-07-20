@@ -2403,3 +2403,11 @@
   gruen. Code-Commit: `b4f1e057`.
 - Neuer Zyklus: `20/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart jetzt erforderlich.
+
+### Zyklusabschluss 2026-07-20: Service-Restart
+
+- Nach `20/20` Commits wurde `teebotus.service` als User-Service neu gestartet.
+- Verifikation: `ActiveState=active`, `SubState=running`, `MainPID 3063268`,
+  `ActiveEnterTimestamp=2026-07-20 06:31:50 CEST`.
+- Neuer Zyklus: `1/20` Commits seit diesem Restart (dieser Ledgercommit
+  eingerechnet). Kein Push. Restart erst bei `20/20`.
