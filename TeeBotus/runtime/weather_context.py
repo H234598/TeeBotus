@@ -353,7 +353,13 @@ _OTHER_PERSON_FOREIGN_MARKER = (
     r"(?:hat|haben)\s+(?:"
     rf"{_OTHER_PERSON_REFERENCE}\s+)?{_OTHER_PERSON_LOCATION_LABEL}|"
     rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}\s+"
-    r"(?:ist|liegt|bleibt|befindet\s+sich)\s+(?:in|bei))"
+    r"(?:ist|liegt|bleibt|befindet\s+sich)\s+(?:in|bei)|"
+    rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}\s+"
+    r"(?:ist|liegt|bleibt|befindet\s+sich)\s+"
+    r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert|zuhause|zu\s+hause|daheim)\s+(?:in|bei)|"
+    rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}\s+hat\s+"
+    r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+als\s+"
+    rf"{_OTHER_PERSON_LOCATION_LABEL})"
 )
 _RESIDENCE_LABEL_DETERMINER = (
     r"(?:meine|unsere|mein|unser|der|die|das|ein(?:e|en|em|er|es)?)"
@@ -5775,6 +5781,13 @@ def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
     ) or re.search(
         rf"(?i)\b{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}\s+"
         r"(?:ist|liegt|bleibt|befindet\s+sich)\s+(?:in|bei)\s*$",
+        segment,
+    ):
+        return True
+    if re.search(
+        rf"(?i)\b{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}\s+"
+        r"(?:ist|liegt|bleibt|befindet\s+sich)\s+"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert|zuhause|zu\s+hause|daheim)\s+(?:in|bei)\s*$",
         segment,
     ):
         return True
