@@ -4201,6 +4201,8 @@ def test_extract_residence_city_ignores_common_foreign_person_residence_labels()
         "Ich wohne in Berlin, Hamburg ist der Wohnort meiner Praxis.",
         "Ich wohne in Berlin, Hamburg ist der Wohnort meiner Klinik.",
         "Ich wohne in Berlin, Hamburg ist der Wohnort meiner Universität.",
+        "Ich wohne in Berlin. Hamburg ist der Wohnort von Anna.",
+        "Ich wohne in Berlin. Hamburg ist der Wohnort von Anna Müller.",
     )
     for text in cases:
         assert extract_residence_city(text) == "Berlin"

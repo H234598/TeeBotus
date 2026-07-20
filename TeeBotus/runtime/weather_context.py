@@ -7318,6 +7318,20 @@ def _has_other_person_residence_suffix(source: str, city_end: int) -> bool:
         suffix,
     ):
         return True
+    named_owner_label = re.match(
+        r"(?i)\s+(?:ist|war|bleibt|liegt|befindet\s+sich)\s+"
+        r"(?:(?:der|die|das|ein(?:e|en|em|er|es)?)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"zuhause|zu\s+hause|daheim|wohnadresse|wohnanschrift|meldeadresse|"
+        r"meldeanschrift|meldesitz|adresse|anschrift|wohnung|unterkunft)\s+von\s+",
+        suffix,
+    )
+    if named_owner_label and re.match(
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß.'-]{1,60}(?:\s+[A-ZÄÖÜ][\wÄÖÜäöüß.'-]{1,60}){0,2}"
+        r"\s*[.!?;,]?\s*$",
+        suffix[named_owner_label.end() :],
+    ):
+        return True
     return bool(
         re.match(
             rf"(?i)\s+(?:wohnt|wohnen|lebt|leben)\s+{_OTHER_PERSON_REFERENCE}\s+"
