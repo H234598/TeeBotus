@@ -5206,6 +5206,8 @@ def extract_residence_city(text: str) -> str:
                         source, city_start
                     ):
                         continue
+                    if _has_other_person_as_residence_label(source, city_start, city_end):
+                        continue
                     if _has_transient_location_fragment(source, city_start, city_end):
                         continue
                     if _has_temporary_residence_prefix(source, pattern_start):
@@ -5694,6 +5696,32 @@ def _has_other_person_residence_suffix(source: str, city_end: int) -> bool:
             r"der|die|das|dem|den|des|ein(?:er|es|em|en)?)\s+"
             rf"{_OTHER_RESIDENCE_OWNER_LABEL}\b",
             suffix,
+        )
+    )
+
+
+def _has_other_person_as_residence_label(source: str, city_start: int, city_end: int) -> bool:
+    prefix = source[:city_start]
+    segment = re.split(
+        r"(?:[,;]|\b(?:und|sowie|oder|aber|doch|jedoch|sondern)\b)\s*",
+        prefix,
+        flags=re.IGNORECASE,
+    )[-1]
+    if not re.search(
+        rf"(?i)\b(?:mein(?:e|en|em|er|es)?|unser(?:e|en|em|er|es)?)\s+"
+        rf"{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
+        r"(?:hat|nennt|bezeichnet|betrachtet)\s*$",
+        segment,
+    ):
+        return False
+    return bool(
+        re.match(
+            r"(?i)\s+(?:als\s+)?"
+            r"(?:(?:ihr(?:e|en|em|er)?|sein(?:e|en|em|er)?|deren|den|einen?)\s+)?"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+            r"zuhause|zu\s+hause|daheim|wohnadresse|wohnanschrift|meldeadresse|"
+            r"meldeanschrift|meldesitz|adresse|anschrift|wohnung|unterkunft)\b",
+            source[city_end:],
         )
     )
 
@@ -6524,6 +6552,22 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"meldeanschrift|meldesitz|adresse|anschrift|wohnung|unterkunft)\s+"
         r")"
         r"(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
+        rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s*[,;]?\s*"
+        r"(?:und|aber|doch|jedoch)\s+"
+        rf"(?:mein(?:e|en|em|er|es)?|unser(?:e|en|em|er|es)?)\s+"
+        rf"{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
+        r"(?:hat|nennt|bezeichnet|betrachtet)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}\s+"
+        r"(?:als\s+)?"
+        r"(?:(?:ihr(?:e|en|em|er)?|sein(?:e|en|em|er)?|deren|den|einen?)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"zuhause|zu\s+hause|daheim|wohnadresse|wohnanschrift|meldeadresse|"
+        r"meldeanschrift|meldesitz|adresse|anschrift|wohnung|unterkunft)\b",
         source,
         re.IGNORECASE,
     ):
