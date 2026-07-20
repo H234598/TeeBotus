@@ -2548,3 +2548,36 @@
   gruen. Code-Commit: `607d287e`.
 - Neuer Zyklus: `3/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
+
+## Kanonischer Chronologieindex 2026-07-20
+
+Die Detailblöcke dieses append-only Ledgers wurden historisch teilweise an
+früheren Einfügepositionen ergänzt. Dieser Index ist die verbindliche
+chronologische Reihenfolge der Commits seit dem vorherigen Service-Restart;
+die Detailblöcke bleiben unverändert als Nachweis erhalten.
+
+1. `607d287e` — Wunschform `möchte wohnen`
+2. `0ed5e9aa` — Dokumentation Wunschform
+3. `cf7a231d` — Unsichere Wissensform
+4. `53605158` — Dokumentation Wissensform
+5. `06feec25` — Modalmarker `mag`
+6. `67e8b19f` — Dokumentation Modalmarker
+7. `e97752b1` — Invertierte Registrierungsangaben
+8. `834d84fb` — Dokumentation invertierte Registrierung
+9. `7f0a428b` — Bindestrich bei Adresslabels
+10. `4036c991` — Dokumentation Adresslabels
+11. `33f2f9ba` — Registrierungsstatuswörter
+12. `4f806ff7` — Dokumentation Statuswörter
+13. `25fc128b` — Invertierte Adverb-Klauseln
+14. `3fc72599` — Dokumentation Adverb-Klauseln
+15. `b931b2c3` — Bekannte Slash-Stadt im Labelpfad
+16. `7bb43e52` — Dokumentation Slash-Stadt
+17. `e903440a` — Compound-City im Kontrastsatz
+18. `214bd241` — Dokumentation Compound-City
+19. `393fdf10` — Direkte invertierte Registrierung mit Doppelpunkt
+20. `95627ce8` — Dokumentation und Restart-Markierung
+
+- Aktueller Servicezustand: `teebotus.service` User-Service aktiv/running.
+- Aktueller Zyklusstand: `2/20` seit dem Restart um `07:10:45 CEST`.
+- Kein Push. Nächster Restart erst bei `20/20`; Push-Regel bleibt bei
+  `100/100` Commits.
