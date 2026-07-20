@@ -2731,6 +2731,31 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
 - Neuer Zyklusstand: `19/20` Commits seit dem Restart. Kein Push. Restart erst
   bei `20/20`.
 
+### Folgefix 2026-07-20: Bindestrich-Distrikt `Köln-Ehrenfeld`
+
+- Die bestehende Distrikt-Normalisierung kannte `Köln Ehrenfeld`, aber nicht
+  die gleichbedeutende Bindestrichform `Köln-Ehrenfeld`.
+- Der Alias wird jetzt wie `Köln-Deutz`, `Berlin-Mitte` und andere bekannte
+  Stadtteilformen zu `Köln` normalisiert.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `268 passed`;
+  Telegram-Wettertest -> `1 passed`; Distriktmatrix, `py_compile` und
+  `git diff --check` grün. Code-Commit: `8178d7a6`.
+- Neuer Zyklusstand: `1/20` Commits seit dem Restart. Kein Push. Restart erst
+  bei `20/20`.
+
+### Folgefix 2026-07-20: Qualifier `eigentlich` im direkten Wohnsatz
+
+- `Ich wohne eigentlich in Berlin` und `Ich lebe eigentlich in Hamburg`
+  wurden bisher als `eigentlich` statt als Stadt gelesen.
+- Der generische Wohnsatz konsumiert `eigentlich` jetzt vor dem Stadtmatch;
+  der allgemeine Nicht-Stadt-Kontextfilter verwirft das Wort zusätzlich als
+  Fallback-Schutz.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `268 passed`;
+  Telegram-Wettertest -> `1 passed`; Parsermatrix, `py_compile` und
+  `git diff --check` grün. Code-Commit: `c4bd7eca`.
+- Neuer Zyklusstand: `2/20` Commits seit dem Restart. Kein Push. Restart erst
+  bei `20/20`.
+
 ### Folgefix 2026-07-20: Wohnadressreferenzen und Relativsatz
 
 - Genitivische Angaben für `Wohnung`, `Zuhause` und `Wohnsitz` werden erkannt,
