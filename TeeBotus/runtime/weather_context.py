@@ -1316,6 +1316,14 @@ _CITY_CHANGE_CURRENT_ADVERB_BEFORE_HISTORICAL = re.compile(
     r"(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_CITY_CHANGE_LABELLED_SHORT_CURRENT = re.compile(
+    r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*[:=]\s*"
+    r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[.!?;]\s*"
+    r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|heute)\s*[:=]\s*"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET = re.compile(
     r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+lautet\s+"
     r"(?:mein(?:e)?|unser(?:e)?)\s+"
@@ -3415,6 +3423,7 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_LABELLED_OLD_NEW_ADDRESS,
     _CITY_CHANGE_CURRENT_RESIDENCE_BEFORE_HISTORICAL,
     _CITY_CHANGE_CURRENT_ADVERB_BEFORE_HISTORICAL,
+    _CITY_CHANGE_LABELLED_SHORT_CURRENT,
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
