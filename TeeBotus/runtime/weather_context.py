@@ -336,6 +336,14 @@ _CURRENT_RESIDENCE_TRANSITION_SUFFIX = (
     r"gegenwaertig\w*|inzwischen|mittlerweile|dauerhaft\w*|permanent\w*|"
     r"weiterhin|nach\s+wie\s+vor|geworden)"
 )
+_CURRENT_RESIDENCE_FORWARD_QUALIFIER = (
+    r"(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+    r"jetzig\w*|derzeitig\w*|momentan\w*|gegenwärtig\w*|gegenwaertig\w*|"
+    r"tatsächlich\w*|tatsaechlich\w*|jetzt|nun|dauerhaft\w*|permanent\w*|"
+    r"fest\w*|hauptsächlich\w*|hauptsaechlich\w*|ständig\w*|staendig\w*|"
+    r"stabil\w*|inzwischen|mittlerweile|weiterhin|nach\s+wie\s+vor|"
+    r"seit\s+(?:heute|gestern|vorgestern)|ab\s+(?:sofort|jetzt))"
+)
 _RESIDENCE_LOCATION_ADVERB = (
     r"(?:(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
     r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|primär|primaer|normalerweise|"
@@ -1027,6 +1035,56 @@ _DIRECT_RESIDENCE_BEFORE_CURRENT_LABEL = re.compile(
     r"(?=\s*[.!?]\s*$)",
     re.IGNORECASE,
 )
+_DIRECT_RESIDENCE_BEFORE_CURRENT_FORWARD_LABEL = (
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"(?P<first>{_CITY_CHANGE_CITY_FRAGMENT})\s*[.!?]\s*"
+        rf"(?:mein(?:e)?|unser(?:e)?)\s+{_CURRENT_RESIDENCE_FORWARD_QUALIFIER}\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|adresse|anschrift|"
+        r"meldeadresse|meldeanschrift|meldesitz|zuhause|zu\s+hause|daheim)\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
+        rf"(?P<second>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*[.!?]\s*$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"(?P<first>{_CITY_CHANGE_CITY_FRAGMENT})\s*[.!?]\s*"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|adresse|anschrift|"
+        r"meldeadresse|meldeanschrift|meldesitz|zuhause|zu\s+hause|daheim)\s+"
+        rf"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+{_CURRENT_RESIDENCE_FORWARD_QUALIFIER}\s+"
+        rf"(?:(?:in|bei)\s+)?(?P<second>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*[.!?]\s*$)",
+        re.IGNORECASE,
+    ),
+)
+_DIRECT_RESIDENCE_BEFORE_TEMPORARY_FORWARD_LABEL = (
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"(?P<first>{_CITY_CHANGE_CITY_FRAGMENT})\s*[.!?]\s*"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        rf"(?:{_TEMPORARY_RESIDENCE_ADJECTIVE})\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|adresse|anschrift|"
+        r"meldeadresse|meldeanschrift|meldesitz|zuhause|zu\s+hause|daheim)\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
+        rf"(?P<second>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*[.!?]\s*$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        rf"(?P<first>{_CITY_CHANGE_CITY_FRAGMENT})\s*[.!?]\s*"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|adresse|anschrift|"
+        r"meldeadresse|meldeanschrift|meldesitz|zuhause|zu\s+hause|daheim)\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+"
+        rf"(?:{_TEMPORARY_RESIDENCE_ADJECTIVE})\s+(?:(?:in|bei)\s+)?"
+        rf"(?P<second>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*[.!?]\s*$)",
+        re.IGNORECASE,
+    ),
+)
 
 
 def _has_primary_temporary_residence(source: str) -> bool:
@@ -1068,6 +1126,38 @@ def _direct_residence_before_current_label(source: str) -> str:
         and _city_comparison_key(first) != _city_comparison_key(second)
     ):
         return second
+    return ""
+
+
+def _direct_residence_before_current_forward_label(source: str) -> str:
+    for pattern in _DIRECT_RESIDENCE_BEFORE_CURRENT_FORWARD_LABEL:
+        match = pattern.search(source)
+        if not match:
+            continue
+        first = _clean_city(match.group("first"))
+        second = _clean_city(match.group("second"))
+        if (
+            first
+            and second
+            and _city_comparison_key(first) != _city_comparison_key(second)
+        ):
+            return second
+    return ""
+
+
+def _direct_residence_before_temporary_forward_label(source: str) -> str:
+    for pattern in _DIRECT_RESIDENCE_BEFORE_TEMPORARY_FORWARD_LABEL:
+        match = pattern.search(source)
+        if not match:
+            continue
+        first = _clean_city(match.group("first"))
+        second = _clean_city(match.group("second"))
+        if (
+            first
+            and second
+            and _city_comparison_key(first) != _city_comparison_key(second)
+        ):
+            return first
     return ""
 _CITY_CHANGE_LABELLED_FROM_TO_STREET = re.compile(
     r"\b(?:wohnadresse|wohnanschrift|anschrift|adresse)\s+von\s+"
@@ -6369,6 +6459,12 @@ def extract_residence_city(text: str) -> str:
     direct_residence_before_current_label = _direct_residence_before_current_label(source)
     if direct_residence_before_current_label:
         return direct_residence_before_current_label
+    direct_residence_before_current_forward_label = _direct_residence_before_current_forward_label(source)
+    if direct_residence_before_current_forward_label:
+        return direct_residence_before_current_forward_label
+    direct_residence_before_temporary_forward_label = _direct_residence_before_temporary_forward_label(source)
+    if direct_residence_before_temporary_forward_label:
+        return direct_residence_before_temporary_forward_label
     if (
         _has_conflicting_residence_address_targets(source)
         or _has_explicit_residence_multiplicity(source)
