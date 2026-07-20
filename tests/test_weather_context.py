@@ -2009,6 +2009,10 @@ def test_extract_residence_city_handles_question_answer_forms() -> None:
     assert extract_residence_city("Ich wohne in Berlin, richtig?") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist Berlin, stimmt das?") == "Berlin"
     assert extract_residence_city("Ich lebe in Hamburg, weißt du?") == "Hamburg"
+    assert extract_residence_city("Ich wohne in Berlin, stimmt's?") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, stimmts?") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, oder nicht?") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, ja?") == "Berlin"
     assert extract_residence_city("Ich wohne aktuell in Köln?") == ""
 
 

@@ -6435,7 +6435,8 @@ def extract_residence_city(text: str) -> str:
     stripped_source = source.strip()
     if stripped_source.endswith("?"):
         tag_question = re.search(
-            r"(?i)(?:,\s*|\s+)(?:oder|richtig|stimmt(?:\s+das)?|"
+            r"(?i)(?:,\s*|\s+)(?:oder(?:\s+nicht)?|richtig|"
+            r"stimmt(?:\s+das|['’]?s)?|ja|"
             r"wei(?:ß|ss)t\s+du|nicht\s+wahr)\s*\?$",
             stripped_source,
         )
