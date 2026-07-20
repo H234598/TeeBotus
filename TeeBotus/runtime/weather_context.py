@@ -1212,9 +1212,18 @@ _CITY_CHANGE_LABELLED_OLD_NEW_ADDRESS = re.compile(
     re.IGNORECASE,
 )
 _CITY_CHANGE_CURRENT_RESIDENCE_BEFORE_HISTORICAL = re.compile(
-    r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+    r"\b(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
     r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s*[,;]\s*"
-    r"davor\s+(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
+    r"(?:vorher|zuvor|davor|früher|frueher|ehemals|damals)\s+"
+    r"(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
+    r"(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
+_CITY_CHANGE_CURRENT_ADVERB_BEFORE_HISTORICAL = re.compile(
+    r"(?:^|[.!?;,:]\s*)(?:aktuell|jetzt|heute|nun|derzeit|inzwischen|mittlerweile)\s+"
+    r"(?:(?:in|bei)\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+    r"(?:vorher|zuvor|davor|früher|frueher|ehemals|damals)\s+"
+    r"(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
     r"(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
@@ -3316,6 +3325,7 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_LABELLED_CURRENT_NEW_RESIDENCE,
     _CITY_CHANGE_LABELLED_OLD_NEW_ADDRESS,
     _CITY_CHANGE_CURRENT_RESIDENCE_BEFORE_HISTORICAL,
+    _CITY_CHANGE_CURRENT_ADVERB_BEFORE_HISTORICAL,
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
