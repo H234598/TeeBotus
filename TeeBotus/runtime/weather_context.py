@@ -894,8 +894,9 @@ _QUALIFIED_RESIDENCE = re.compile(
 )
 _QUALIFIED_DIRECT_RESIDENCE = re.compile(
     r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
-    r"(?:nur\s+noch|nur)\s+"
-    r"(?:(?:zuhause|zu\s+hause|daheim)\s*,?\s+)?(?:in|bei)\s+"
+    r"(?:(?:nur\s+noch|nur)\s+(?:(?:zuhause|zu\s+hause|daheim)\s*,?\s+)?|"
+    rf"(?:{_RESIDENCE_TIME_QUALIFIER})\s+(?:zuhause|zu\s+hause|daheim)\s*,?\s+)"
+    r"(?:in|bei)\s+"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
     r"(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
@@ -1132,7 +1133,7 @@ CITY_CHANGE_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
-        r"[^.!?;\n]{1,120}?\s*[,;]\s*"
+        r"[^.!?;\n]{1,120}?\s*(?:[,;]|[-–—])\s*"
         r"(?:aber|doch|jedoch|sondern)?\s*"
         rf"(?:{_RESIDENCE_TIME_QUALIFIER})\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"

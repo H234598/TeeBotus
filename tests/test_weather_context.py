@@ -71,6 +71,7 @@ def test_extract_residence_city_from_common_german_phrases() -> None:
     assert extract_residence_city("Ich wohne seit dem Einzug in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne seit Beginn meines Studiums in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne seit dem ersten Tag in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne seit 2020 zuhause in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne seit Beginn meiner Ausbildung in Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne seit Ende meiner Ausbildung in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne seit Abschluss meiner Ausbildung in Potsdam.") == "Potsdam"
@@ -918,6 +919,7 @@ def test_extract_residence_city_handles_current_city_after_residence_change() ->
     assert extract_residence_city("Ich wohne zuhause in Berlin, aber aktuell in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne nur noch zuhause in Berlin, aber aktuell in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne nur noch in Berlin, aber aktuell in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne zuhause in Berlin – aber aktuell in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne nur noch zuhause in Berlin.") == "Berlin"
 
 
