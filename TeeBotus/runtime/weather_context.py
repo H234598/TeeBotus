@@ -978,6 +978,18 @@ _INVERTED_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
     rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_DIRECT_TEMPORARY_RESIDENCE_BEFORE_PRIMARY_LABEL = re.compile(
+    r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+    rf"(?:{_TEMPORARY_RESIDENCE_QUALIFIER})\s+(?:in|bei)\s+"
+    rf"(?P<temporary>{_CITY_CHANGE_CITY_FRAGMENT})\s*[,;]\s*"
+    r"(?:(?:aber|doch|jedoch)\s+)?"
+    r"(?:mein(?:e)?|unser(?:e)?)\s+"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"zuhause|zu\s+hause|daheim)\s+"
+    r"(?:ist|liegt|lautet|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
+    rf"(?P<primary>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*[.!?;,]|$)",
+    re.IGNORECASE,
+)
 _DIRECT_RESIDENCE_BEFORE_TEMPORARY_LABEL = (
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
@@ -6623,6 +6635,11 @@ def extract_residence_city(text: str) -> str:
     direct_residence_before_temporary_forward_label = _direct_residence_before_temporary_forward_label(source)
     if direct_residence_before_temporary_forward_label:
         return direct_residence_before_temporary_forward_label
+    temporary_before_primary = _DIRECT_TEMPORARY_RESIDENCE_BEFORE_PRIMARY_LABEL.search(source)
+    if temporary_before_primary:
+        primary_city = _clean_city(temporary_before_primary.group("primary"))
+        if primary_city:
+            return primary_city
     if (
         _has_explicit_residence_multiplicity(source)
         or _has_conflicting_direct_residence_labels(source)
