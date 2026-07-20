@@ -2771,6 +2771,17 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        rf"\b(?:und|sowie)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
+        r"(?:ist\s+)?(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
+        r"haupt\w*|jetzig\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
+        r"überwiegend|ueberwiegend|hauptsächlich|hauptsaechlich|vorwiegend|meistens|"
+        r"normalerweise|gewöhnlich|gewoehnlich|üblicherweise|ueblicherweise)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"zuhause|zu\s+hause|daheim)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+ist\s+"
         rf"(?:(?:{_RESIDENCE_TIME_QUALIFIER}|ab\s+(?:sofort|jetzt)|"
         r"bis\s+(?:zum\s+)?jahresende|"
@@ -5504,7 +5515,14 @@ def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
     prefix_source = source[:pattern_start]
     if pattern_start < len(source) and source[pattern_start] in ",;":
         prefix_source += source[pattern_start]
-    prefix = re.split(r"[,;]\s*", prefix_source)[-1]
+    boundary = re.match(r"(?i)(?:und|sowie|oder)\b", source[pattern_start:])
+    if boundary:
+        prefix_source += " " + boundary.group(0)
+    prefix = re.split(
+        r"(?:[,;]|\b(?:und|sowie|oder)\b)\s*",
+        prefix_source,
+        flags=re.IGNORECASE,
+    )[-1]
     label_start = re.match(r"\s*(?:\S+\s+){0,3}\S*", source[pattern_start:])
     secondary_label_context = prefix + " " + (label_start.group(0) if label_start else "")
     if re.search(

@@ -2974,6 +2974,10 @@ def test_extract_residence_city_keeps_primary_home_with_secondary_residence() ->
     assert extract_residence_city("Ich wohne in Berlin, mein zweiter Wohnsitz ist Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, meine Nebenwohnung ist Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, mein Wohnsitz ist Hamburg.") == ""
+    assert extract_residence_city("Berlin ist mein Zweitwohnsitz und Hamburg mein Wohnort.") == "Hamburg"
+    assert extract_residence_city("Berlin ist meine Ferienwohnung und Hamburg mein Wohnort.") == "Hamburg"
+    assert extract_residence_city("Berlin ist mein Zweitwohnsitz und Hamburg ist mein Wohnort.") == "Hamburg"
+    assert extract_residence_city("Berlin ist mein Zweitwohnsitz sowie Hamburg mein Wohnort.") == "Hamburg"
 
 
 def test_extract_residence_city_rejects_secondary_residence_without_primary() -> None:
