@@ -3056,6 +3056,22 @@ CITY_CHANGE_PATTERNS = (
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+heute\s+"
+        r"(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*[,;]\s*(?:gestern|vorgestern|früher|frueher|damals|ehemals)\b)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+heute\s+"
+        r"(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*[,;]\s*(?:gestern|vorgestern|früher|frueher|damals|ehemals)\b)",
+        re.IGNORECASE,
+    ),
     _MAIN_RESIDENCE_CITY_BEFORE_STREET,
     _MAIN_RESIDENCE_CITY,
     _COMPOUND_CITY_RESIDENCE,
@@ -8374,6 +8390,8 @@ def _clean_city(value: str) -> str:
     if source.count(")") > source.count("("):
         source = re.sub(r"[.!?;,]+$", "", source).rstrip(")").rstrip()
     normalized_source = re.sub(r"\s+", " ", source).strip(" .,:;!?")
+    if re.match(r"(?i)^heute(?:\s|$)", normalized_source):
+        return ""
     if re.search(
         r"(?i)\b(?:mag|vielleicht|vermutlich|wahrscheinlich|möglicherweise|moeglicherweise|"
         r"eventuell|wohl|angeblich|anscheinend|scheinbar|voraussichtlich|womöglich|"

@@ -1306,6 +1306,8 @@ def test_extract_residence_city_removes_daypart_context() -> None:
     assert extract_residence_city("Ich bin von Berlin nach Hamburg gezogen, wohne aber jetzt in Köln.") == "Köln"
     assert extract_residence_city("Ich zog von Berlin nach Hamburg, lebe aber inzwischen in Köln.") == "Köln"
     assert extract_residence_city("Ich bin von Berlin nach Hamburg gezogen, wohne aber jetzt arbeite in Köln.") == "Hamburg"
+    assert extract_residence_city("Mein Wohnort ist heute Hamburg, gestern war es Berlin.") == "Hamburg"
+    assert extract_residence_city("Ich wohne heute in Hamburg, gestern noch in Berlin.") == "Hamburg"
     assert extract_residence_city("Ich wohne in Berlin. Jetzt in Hamburg auf Besuch.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin. Jetzt in Hamburg im Urlaub.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin. Jetzt in Hamburg zum Urlaub.") == "Berlin"
