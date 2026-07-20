@@ -1000,6 +1000,25 @@ _DIRECT_RESIDENCE_LABEL_CITY = re.compile(
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_NAMED_RESIDENCE_LABEL_CITY = re.compile(
+    rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
+    r"(?:heißt|heisst)\s*:?[ \t]*(?:(?:in|bei)\s+)?"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
+_INVERTED_BESITZEN_RESIDENCE_CITY = re.compile(
+    r"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+    r"bewohn(?:e|en)\s+(?:ich|wir)\b"
+    r"(?:\s+(?:jetzt|nun|aktuell|derzeit|momentan|gegenwärtig|gegenwaertig))?"
+    r"(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
+_DIRECT_BESITZEN_RESIDENCE_CITY = re.compile(
+    r"\b(?:ich|wir)\s+bewohn(?:e|en)\s+(?:in|bei\s+)?"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _LABELED_COMPOUND_RESIDENCE_CITY = re.compile(
     r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
     r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
@@ -3402,6 +3421,9 @@ CITY_PATTERNS = (
     _DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR,
     _CITY_BEFORE_RESIDENCE_ADDRESS_HAVE,
     _CITY_WITH_PARENTHETICAL_RESIDENCE_LABEL,
+    _NAMED_RESIDENCE_LABEL_CITY,
+    _INVERTED_BESITZEN_RESIDENCE_CITY,
+    _DIRECT_BESITZEN_RESIDENCE_CITY,
     _CITY_BEFORE_RELATIVE_RESIDENCE_LABEL,
     _CITY_BEFORE_RELATIVE_COMPANION_RESIDENCE,
     _CITY_BEFORE_PLAIN_RELATIVE_RESIDENCE,
@@ -8234,6 +8256,9 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[,.;!?]|$|\b(?:und|aber|doch|jedoch)\b))",
             re.IGNORECASE,
         ),
+        _NAMED_RESIDENCE_LABEL_CITY,
+        _INVERTED_BESITZEN_RESIDENCE_CITY,
+        _DIRECT_BESITZEN_RESIDENCE_CITY,
         _CITY_BEFORE_PLAIN_RELATIVE_RESIDENCE,
         _CITY_WITH_PLAIN_RELATIVE_RESIDENCE,
         _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE,
