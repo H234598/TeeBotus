@@ -5086,7 +5086,7 @@ CITY_PATTERNS = (
     re.compile(
         r"\b(?:ich\s+)?(?:wohne|wohnen|lebe|leben)\b\s*"
         r"(?:(?::|=|,)\s*(?:(?:in|bei)\s+)?|(?:in|bei)\s+)"
-        r"(?!(?:ich|wir|ist|war|w(?:äre|urde)|nicht|künft\w*|kuenft\w*|"
+        r"(?!(?:ich|wir|ist|war|und|sowie|aber|doch|jedoch|sondern|w(?:äre|urde)|nicht|künft\w*|kuenft\w*|"
         r"zukünft\w*|zukuenft\w*|bald|morgen|nächste\w*|naechste\w*)\b)"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
@@ -6096,6 +6096,8 @@ def extract_residence_city(text: str) -> str:
                     if _has_transient_location_fragment(source, city_start, city_end):
                         continue
                     if _has_temporary_residence_prefix(source, pattern_start):
+                        continue
+                    if _has_temporary_residence_suffix(source, city_end):
                         continue
                     if _has_other_person_residence_suffix(source, city_end):
                         continue
@@ -8634,6 +8636,15 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
 def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
     tail = source[city_end:]
     if re.match(
+        r"(?i)\s*[,;]\s*(?:(?:aber|doch|jedoch)\s+)?(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\s+"
+        r"(?:(?:nur|lediglich)\s+)?(?:vorübergehend|voruebergehend|zeitweise|"
+        r"gelegentlich|manchmal|am\s+wochenende|unter\s+der\s+woche)\b",
+        tail,
+    ):
+        return False
+    if re.match(
         r"(?i)\s*[,;]\s*(?:aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
         r"(?:arbeite\w*|studier\w*|lern\w*|schlaf\w*|pendl\w*|reis\w*|"
@@ -8909,6 +8920,21 @@ def _has_temporary_residence_prefix(source: str, match_start: int) -> bool:
             r"\b(?:am\s+wochenende|unter\s+der\s+woche|werktags|wochentags|"
             r"montags?|dienstags?|mittwochs?|donnerstags?|freitags?|samstags?|sonntags?|"
             r"morgens|vormittags|mittags|nachmittags|abends|nachts|tagsüber|tagsueber)\s*$",
+            sentence,
+        )
+    )
+
+
+def _has_temporary_residence_suffix(source: str, city_end: int) -> bool:
+    tail = source[city_end:]
+    sentence = re.split(r"(?<!\bSt)[.!?;\n]", tail, maxsplit=1, flags=re.IGNORECASE)[0]
+    return bool(
+        re.match(
+            r"(?i)\s+(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\s+"
+            r"(?:(?:nur|lediglich)\s+)?(?:vorübergehend|voruebergehend|zeitweise|"
+            r"gelegentlich|manchmal|am\s+wochenende|unter\s+der\s+woche)\b|"
+            r"\s+(?:bin|sind)\s+(?:ich|wir)\s+(?:(?:nur|lediglich)\s+)?"
+            r"(?:vorübergehend|voruebergehend|zeitweise|gelegentlich|manchmal)\b",
             sentence,
         )
     )
