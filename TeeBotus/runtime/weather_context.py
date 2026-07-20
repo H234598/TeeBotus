@@ -9996,6 +9996,8 @@ def fetch_weather_summary(city: str) -> str:
         parts.append(f"Luftfeuchte {humidity}%")
     if wind:
         parts.append(f"Wind {wind} km/h")
+    if len(parts) == 1:
+        return ""
     return ", ".join(parts)
 
 

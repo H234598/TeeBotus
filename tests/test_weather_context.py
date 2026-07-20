@@ -1685,6 +1685,7 @@ def test_city_id_token_disambiguates_lossy_ascii_normalization() -> None:
         {"current_condition": [], "nearest_area": []},
         {"current_condition": [], "nearest_area": [{"areaName": [{"value": "Berlin"}]}]},
         {"current_condition": [{}], "nearest_area": []},
+        {"current_condition": [{"unexpected": "value"}], "nearest_area": [{"areaName": [{"value": "Berlin"}]}]},
         [],
     ),
 )
