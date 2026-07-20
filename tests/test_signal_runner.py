@@ -5,6 +5,7 @@ import json
 import logging
 import re
 import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -199,6 +200,51 @@ def test_signal_command_routes_private_account_commands(tmp_path) -> None:
 
     assert context.sent
     assert "Deine TeeBotus-Account-ID" in context.sent[0]
+
+
+def test_signal_engine_processing_does_not_block_event_loop(tmp_path) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    entered = threading.Event()
+
+    def slow_process(event):
+        entered.set()
+        time.sleep(0.05)
+        return EngineResult(event.account_id, [SendText(event.chat_id, "ok")], handled=True)
+
+    command.engine.process_result = slow_process  # type: ignore[method-assign]
+    heartbeat = asyncio.Event()
+
+    async def heartbeat_loop() -> None:
+        while True:
+            heartbeat.set()
+            await asyncio.sleep(0)
+
+    async def run() -> None:
+        heartbeat_task = asyncio.create_task(heartbeat_loop())
+        await asyncio.sleep(0)
+        heartbeat.clear()
+        try:
+            await command.handle(FakeSignalContext())
+        finally:
+            heartbeat_task.cancel()
+            await asyncio.gather(heartbeat_task, return_exceptions=True)
+
+    asyncio.run(run())
+
+    assert entered.is_set()
+    assert heartbeat.is_set()
 
 
 def test_signal_command_logs_sent_message_tracking_errors(tmp_path, caplog) -> None:

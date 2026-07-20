@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -119,6 +120,54 @@ def test_matrix_bridge_routes_private_account_commands(tmp_path) -> None:
 
     assert client.sent
     assert "Deine TeeBotus-Account-ID" in client.sent[0]["content"]["body"]
+
+
+def test_matrix_engine_processing_does_not_block_event_loop(tmp_path) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    entered = threading.Event()
+
+    def slow_process(event):
+        entered.set()
+        time.sleep(0.05)
+        return EngineResult(event.account_id, [SendText(event.chat_id, "ok")], handled=True)
+
+    bridge.engine.process_result = slow_process  # type: ignore[method-assign]
+    heartbeat = asyncio.Event()
+
+    async def heartbeat_loop() -> None:
+        while True:
+            heartbeat.set()
+            await asyncio.sleep(0)
+
+    async def run() -> None:
+        heartbeat_task = asyncio.create_task(heartbeat_loop())
+        await asyncio.sleep(0)
+        heartbeat.clear()
+        try:
+            await bridge.handle_message(FakeMatrixRoom(), FakeMatrixMessage())
+        finally:
+            heartbeat_task.cancel()
+            await asyncio.gather(heartbeat_task, return_exceptions=True)
+
+    asyncio.run(run())
+
+    assert entered.is_set()
+    assert heartbeat.is_set()
 
 
 def test_matrix_bridge_logs_sent_message_tracking_errors(tmp_path, caplog) -> None:

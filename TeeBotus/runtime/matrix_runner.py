@@ -179,7 +179,7 @@ class MatrixRuntimeBridge:
         event = event.with_account(account_id)
         self._record_codex_history_reply(event)
         try:
-            engine_result = _process_engine_result(self.engine, event)
+            engine_result = await asyncio.to_thread(_process_engine_result, self.engine, event)
         except (AccountStoreError, OSError, ValueError, AttributeError):
             LOGGER.exception(
                 "Matrix engine processing failed instance=%s room_id=%s event_id=%s.",
