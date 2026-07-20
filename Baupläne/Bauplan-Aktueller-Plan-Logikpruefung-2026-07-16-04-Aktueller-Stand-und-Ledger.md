@@ -2885,3 +2885,15 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `1df57d65`.
 - Neuer Zyklusstand: `7/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Zeitdauer im Kurzsatz
+
+- `Mein Partner wohnt in Hamburg, ich seit 2020 in Berlin` sowie
+  `ich vorübergehend in Berlin` wurden bisher nicht erkannt.
+- Kurzsatz-Matcher verwenden jetzt den bestehenden `_RESIDENCE_TIME_QUALIFIER`.
+  Tätigkeitsmarker bleiben durch die vorhandenen Filter ausgeschlossen.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `265 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `272692e2`.
+- Neuer Zyklusstand: `9/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
