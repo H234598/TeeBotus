@@ -2391,6 +2391,25 @@
 - Neuer Zyklus: `19/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
 
+### Folgefix 2026-07-20: Direkte invertierte Registrierung mit Doppelpunkt
+
+- `Gemeldet bin ich: Hamburg` und `Registriert sind wir: Potsdam` wurden nicht
+  als direkte Registrierungsangabe erkannt.
+- Der invertierte Registrierungsparser ist jetzt ein gemeinsamer Matcher für
+  City- und Konfliktpfad; er akzeptiert `:` sowie `in/bei`.
+- Regressionen decken direkte Doppelpunktform und abweichenden Wohnortkonflikt
+  ab. Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `393fdf10`.
+
+### Zyklusabschluss 2026-07-20: Service-Restart
+
+- Nach `20/20` Commits wurde `teebotus.service` als User-Service neu gestartet.
+- Verifikation: `ActiveState=active`, `SubState=running`, `MainPID 3223208`,
+  `ActiveEnterTimestamp=2026-07-20 07:10:45 CEST`.
+- Neuer Zyklus: `1/20` Commits seit diesem Restart (dieser Ledgercommit
+  eingerechnet). Kein Push. Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-20: Verkürzte Registrierungsformulierungen
 
 - Varianten wie `bin in Hamburg gemeldet`, `offiziell gemeldet in Hamburg`,
