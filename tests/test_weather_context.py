@@ -3479,6 +3479,12 @@ def test_extract_residence_city_handles_implicit_same_city_aliases() -> None:
     assert extract_residence_city("Wohnort Auch.") == "Auch"
 
 
+def test_extract_residence_city_rejects_label_conflict_with_postposed_contrast() -> None:
+    assert extract_residence_city("Meine Meldeadresse ist Berlin, mein Wohnort aber Hamburg.") == ""
+    assert extract_residence_city("Meine Meldeadresse ist Berlin, mein Wohnort Hamburg.") == ""
+    assert extract_residence_city("Meine Meldeadresse ist Berlin, mein Wohnort aber Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_rejects_distinct_residence_and_registration_status() -> None:
     assert extract_residence_city("Ich wohne bei Berlin und bin in Hamburg gemeldet.") == ""
     assert extract_residence_city("Ich wohne in Berlin, gemeldet bin ich in Hamburg.") == ""

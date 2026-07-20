@@ -1442,12 +1442,15 @@ _DIRECT_RESIDENCE_REGISTRATION_LABEL_PAIR = re.compile(
     r"(?P<first_label>wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
     r"meldeadresse|meldeanschrift|meldesitz)"
     r"\s*(?::|=|,|\s+)\s*(?:(?:in|bei)\s+)?"
+    r"(?:(?:ist|liegt|lautet|befindet\s+sich|bleibt)\s+)?"
     r"(?P<first_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
     r"(?:(?:aber|doch|jedoch|sondern)\s+)?"
     rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
     r"(?P<second_label>wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
     r"meldeadresse|meldeanschrift|meldesitz)"
     r"\s*(?::|=|,|\s+)\s*(?:(?:in|bei)\s+)?"
+    r"(?:(?:ist|liegt|lautet|befindet\s+sich|bleibt)\s+)?"
+    r"(?:(?:aber|doch|jedoch|sondern)\s+)?"
     r"(?P<second_city>(?!(?:auch|ebenfalls|ebenso|gleichfalls)(?=\s*(?:[.!?;,]|$)))"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
