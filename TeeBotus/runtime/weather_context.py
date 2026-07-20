@@ -6140,6 +6140,43 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         r"metropole|großstadt|grossstadt)|stadtgebiet(?:\s+von)?)\s+"
     )
     street_address_prefix = _LABELED_STREET_ADDRESS
+    short_residence_cities: set[str] = set()
+    for match in re.finditer(
+        r"\b(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:(?:aber|doch|jedoch)\s+)?(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+        source,
+        re.IGNORECASE,
+    ):
+        if _has_other_person_residence_prefix(source, match.start("city")):
+            continue
+        city = _clean_city(match.group("city"))
+        if city:
+            short_residence_cities.add(_city_comparison_key(city))
+    short_registered_cities: set[str] = set()
+    for pattern in (
+        re.compile(
+            r"(?:^|[.!?;,:]\s*)(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|"
+            r"dauerhaft\w*|aktuell\w*)\s+)?(?:gemeldet|registriert)\s+"
+            r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?:^|[.!?;,:]\s*)(?:in|bei)\s+"
+            r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:gemeldet|registriert)\b",
+            re.IGNORECASE,
+        ),
+    ):
+        for match in pattern.finditer(source):
+            if _has_other_person_residence_prefix(source, match.start("city")):
+                continue
+            city = _clean_city(match.group("city"))
+            if city:
+                short_registered_cities.add(_city_comparison_key(city))
+    if short_residence_cities and short_registered_cities and short_residence_cities.isdisjoint(
+        short_registered_cities
+    ):
+        return True
     residence_patterns = (
         _CITY_CHANGE_CITY_BEFORE_STREET,
         _CITY_CHANGE_CITY_BEFORE_STREET_MOVE,
