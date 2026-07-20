@@ -840,8 +840,8 @@ _CITY_CHANGE_LABELLED_CURRENT_HISTORICAL = re.compile(
     r"(?:(?:ist|lautet|liegt|befindet\s+sich)\s+)?[:=]?\s*"
     r"(?:(?:in|bei)\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
-    r"(?=\s*[,;]\s*(?:(?:war\s+)?(?:vorher|zuvor|früher|frueher|gestern|vorgestern|damals|ehemals)|"
-    r"(?:vorher|zuvor|früher|frueher|gestern|vorgestern|damals|ehemals)\s+war)\b)",
+    r"(?=\s*[,;]\s*(?:(?:war\s+)?(?:vorher|zuvor|davor|früher|frueher|gestern|vorgestern|damals|ehemals)|"
+    r"(?:vorher|zuvor|davor|früher|frueher|gestern|vorgestern|damals|ehemals)\s+war)\b)",
     re.IGNORECASE,
 )
 _CITY_CHANGE_LABELLED_OLD_CURRENT = re.compile(
@@ -1209,6 +1209,13 @@ _CITY_CHANGE_LABELLED_OLD_NEW_ADDRESS = re.compile(
     r"(?:neu\w*|aktuell\w*|jetzig\w*)\s+"
     r"(?:wohnadresse|wohnanschrift|adresse|anschrift)\s*:?[ \t]*"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
+_CITY_CHANGE_CURRENT_RESIDENCE_BEFORE_HISTORICAL = re.compile(
+    r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+    r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s*[,;]\s*"
+    r"davor\s+(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
+    r"(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
 _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET = re.compile(
@@ -3308,6 +3315,7 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY,
     _CITY_CHANGE_LABELLED_CURRENT_NEW_RESIDENCE,
     _CITY_CHANGE_LABELLED_OLD_NEW_ADDRESS,
+    _CITY_CHANGE_CURRENT_RESIDENCE_BEFORE_HISTORICAL,
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
@@ -8775,7 +8783,7 @@ def _clean_city(value: str) -> str:
         source = re.sub(r"[.!?;,]+$", "", source).rstrip(")").rstrip()
     normalized_source = re.sub(r"\s+", " ", source).strip(" .,:;!?")
     if re.match(
-        r"(?i)^(?:heute|gestern|vorgestern|früher|frueher|damals|ehemals)(?:\s|$)",
+        r"(?i)^(?:heute|gestern|vorgestern|früher|frueher|davor|damals|ehemals)(?:\s|$)",
         normalized_source,
     ):
         return ""
