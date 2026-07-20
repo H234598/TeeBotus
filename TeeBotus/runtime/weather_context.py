@@ -144,7 +144,7 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "gemeinsam",
     }
 )
-_RESIDENCE_ALIAS_WORDS = frozenset({"auch", "ebenfalls", "ebenso"})
+_RESIDENCE_ALIAS_WORDS = frozenset({"auch", "ebenfalls", "ebenso", "gleichfalls"})
 _NON_CITY_REGION_NAMES = frozenset(
     {
         "brandenburg",
@@ -241,6 +241,8 @@ _KNOWN_CITY_DISTRICT_BASES = {
     "berlin mitte": "Berlin",
     "berlin prenzlauer berg": "Berlin",
     "kreuzberg": "Berlin",
+    "im prenzlauer berg": "Berlin",
+    "prenzlauer berg": "Berlin",
     "hamburg-altona": "Hamburg",
     "hamburg (altona)": "Hamburg",
     "hamburg altona": "Hamburg",
@@ -927,11 +929,12 @@ _DIRECT_RESIDENCE_REGISTRATION_LABEL_PAIR = re.compile(
     r"meldeadresse|meldeanschrift|meldesitz)"
     r"\s*(?::|=|,|\s+)\s*(?:(?:in|bei)\s+)?"
     r"(?P<first_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+    r"(?:(?:aber|doch|jedoch|sondern)\s+)?"
     rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
     r"(?P<second_label>wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
     r"meldeadresse|meldeanschrift|meldesitz)"
     r"\s*(?::|=|,|\s+)\s*(?:(?:in|bei)\s+)?"
-    r"(?P<second_city>(?!(?:auch|ebenfalls|ebenso)(?=\s*(?:[.!?;,]|$)))"
+    r"(?P<second_city>(?!(?:auch|ebenfalls|ebenso|gleichfalls)(?=\s*(?:[.!?;,]|$)))"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
@@ -941,10 +944,11 @@ _DIRECT_RESIDENCE_REGISTRATION_LABEL_ALIAS_PAIR = re.compile(
     r"meldeadresse|meldeanschrift|meldesitz)"
     r"\s*(?::|=|,|\s+)\s*(?:(?:in|bei)\s+)?"
     r"(?P<first_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+    r"(?:(?:aber|doch|jedoch|sondern)\s+)?"
     rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
     r"(?P<second_label>wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
     r"meldeadresse|meldeanschrift|meldesitz)"
-    r"\s*(?::|=|,|\s+)\s*(?:auch|ebenfalls|ebenso)(?=\s*(?:[.!?;,]|$))",
+    r"\s*(?::|=|,|\s+)\s*(?:auch|ebenfalls|ebenso|gleichfalls)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
 _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET = re.compile(
@@ -6188,7 +6192,7 @@ def _standalone_residence_aliases(source: str) -> set[str]:
         r"\b(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
         r"wohnadresse|wohnanschrift|meldeadresse|meldeanschrift|meldesitz|"
         r"adresse|anschrift|zuhause|zu\s+hause|daheim)\s+"
-        r"(?P<alias>auch|ebenfalls|ebenso)(?=\s*(?:[,.;!?]|$))",
+        r"(?P<alias>auch|ebenfalls|ebenso|gleichfalls)(?=\s*(?:[,.;!?]|$))",
         source,
         re.IGNORECASE,
     ):
@@ -6608,7 +6612,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         r"haupt\w*|jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
         r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|privatanschrift|"
         r"anschrift)\s*(?::|=|,|\s+(?:ist|lautet|liegt|befindet\s+sich)\s+)"
-        rf"(?:(?:in|bei)\s+)?(?:(?:auch|ebenfalls|ebenso)\s+)?{city_capture}",
+        rf"(?:(?:in|bei)\s+)?(?:(?:auch|ebenfalls|ebenso|gleichfalls)\s+)?{city_capture}",
         source,
         re.IGNORECASE,
     ):
@@ -7087,6 +7091,20 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         second = _clean_city(same_city_residence_label.group("second"))
         if first and second and _city_comparison_key(first) == _city_comparison_key(second):
             return False
+    same_city_reference_label = re.search(
+        r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+und\s+"
+        r"(?:dort|da|hier)\s+(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+        r"(?:auch\s+)?(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:meldeadresse|meldeanschrift|meldesitz|wohnadresse|wohnanschrift|"
+        r"adresse|anschrift|wohnsitz)\b(?=\s*(?:[.!?;]|$))",
+        source,
+        re.IGNORECASE,
+    )
+    if same_city_reference_label and _clean_city(same_city_reference_label.group("city")):
+        return False
     if re.search(
         r"(?:\b(?:ich|wir)\s+(?:bin|sind)\s+(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+|"
         r"(?:^|[.!?;,:]\s*)[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
@@ -8099,8 +8117,8 @@ def _clean_city(value: str) -> str:
         "",
         source,
     ).strip()
-    city = re.sub(r"(?i)^(?:(?:auch|ebenfalls|ebenso)\s+)?(?:in|bei)\s+", "", city)
-    city = re.sub(r"(?i)^(?:auch|ebenfalls|ebenso)\s+", "", city)
+    city = re.sub(r"(?i)^(?:(?:auch|ebenfalls|ebenso|gleichfalls)\s+)?(?:in|bei)\s+", "", city)
+    city = re.sub(r"(?i)^(?:auch|ebenfalls|ebenso|gleichfalls)\s+", "", city)
     city = CITY_TRAILING_STOP_RE.sub("", city).strip(" .,:;!?")
     city = re.sub(r"\s+", " ", city)
     city = re.sub(
@@ -8121,8 +8139,8 @@ def _clean_city(value: str) -> str:
         city,
     ).strip()
     city = re.split(r"(?<!\bSt)[.!?]\s+", city, maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,:;!?")
-    city = re.sub(r"(?i)^(?:(?:auch|ebenfalls|ebenso)\s+)?(?:in|bei)\s+", "", city)
-    city = re.sub(r"(?i)^(?:auch|ebenfalls|ebenso)\s+", "", city)
+    city = re.sub(r"(?i)^(?:(?:auch|ebenfalls|ebenso|gleichfalls)\s+)?(?:in|bei)\s+", "", city)
+    city = re.sub(r"(?i)^(?:auch|ebenfalls|ebenso|gleichfalls)\s+", "", city)
     city = re.sub(r"(?i)(?<!er)(?:[-\s]+)(?:nähe|umgebung)\b$", "", city).strip()
     city = re.sub(
         rf"(?i)[-\s]+(?:{'|'.join(_CITY_AREA_SUFFIXES)})$",

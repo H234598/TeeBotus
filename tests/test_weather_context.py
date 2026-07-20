@@ -2626,6 +2626,7 @@ def test_extract_residence_city_handles_remaining_label_relations() -> None:
 def test_extract_residence_city_handles_labeled_local_districts() -> None:
     assert extract_residence_city("Mein Wohnort ist im Berliner Stadtteil Prenzlauer Berg.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist im Stadtteil Prenzlauer Berg in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne im Prenzlauer Berg.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist im Bezirk Mitte in Berlin.") == "Berlin"
     assert extract_residence_city("Mein Zuhause ist in der Altstadt von Dresden.") == "Dresden"
     assert extract_residence_city("Mein Wohnort ist im Viertel Altona in Hamburg.") == "Hamburg"
@@ -3153,11 +3154,19 @@ def test_extract_residence_city_handles_direct_residence_registration_label_pair
 
 
 def test_extract_residence_city_handles_direct_residence_registration_aliases() -> None:
-    for alias in ("auch", "ebenfalls", "ebenso"):
+    for alias in ("auch", "ebenfalls", "ebenso", "gleichfalls"):
         assert extract_residence_city(f"Wohnort: Berlin, Meldeadresse {alias}.") == "Berlin"
         assert extract_residence_city(f"Meldeadresse: Berlin, Wohnort {alias}.") == "Berlin"
         assert extract_residence_city(f"Meine Meldeadresse: Berlin, mein Wohnort {alias}.") == "Berlin"
+    assert extract_residence_city("Wohnort: Berlin, aber Meldeadresse: Berlin.") == "Berlin"
+    assert extract_residence_city("Wohnort: Berlin, aber Meldeadresse: Hamburg.") == ""
     assert extract_residence_city("Wohnort: Berlin, Meldeadresse ebenfalls Hamburg.") == ""
+
+
+def test_extract_residence_city_handles_same_city_reference_labels() -> None:
+    assert extract_residence_city("Mein Wohnort ist Berlin und dort ist auch meine Meldeadresse.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist Berlin und dort ist meine Meldeadresse.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist Berlin und dort ist auch meine Meldeadresse in Hamburg.") == ""
 
 
 def test_extract_residence_city_handles_labeled_area_relations() -> None:
