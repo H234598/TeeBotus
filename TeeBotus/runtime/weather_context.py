@@ -348,7 +348,7 @@ _RESIDENCE_LOCATION_ADVERB = (
     r"(?:(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
     r"hauptsächlich|hauptsaechlich|vorwiegend|meistens|primär|primaer|normalerweise|"
     r"gewöhnlich|gewoehnlich|regulär|regulaer|üblicherweise|ueblicherweise|in\s+der\s+regel|"
-    r"irgendwo|dahoam|erst|immer|"
+    r"irgendwo|dahoam|mitten|ganz|tief|oben|unten|zentral|erst|immer|"
     r"bisher|bislang|vorerst|zeitweise)|"
     r"(?:sicher|wirklich|definitiv|tatsächlich|tatsaechlich))"
 )
