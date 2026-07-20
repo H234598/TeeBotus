@@ -319,7 +319,10 @@ _TEMPORARY_RESIDENCE_QUALIFIER = (
     r"bis\s+(?:heute|morgen|übermorgen|uebermorgen)|"
     rf"für\s+(?:{_RESIDENCE_DURATION}|(?:den\s+)?urlaub)|"
     r"am\s+wochenende|unter\s+der\s+woche|tagsüber|tagsueber|"
-    r"(?:bei|zu|auf)\s+besuch|gelegentlich|manchmal)"
+    r"werktags|wochentags|montags?|dienstags?|mittwochs?|donnerstags?|"
+    r"freitags?|samstags?|sonntags?|morgens|vormittags|mittags|nachmittags|"
+    r"abends|nachts|(?:bei|zu|auf)\s+besuch|gelegentlich|manchmal|"
+    r"regelmäßig|regelmaessig|selten)"
 )
 _RESIDENCE_LOCATION_ADVERB = (
     r"(?:(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
