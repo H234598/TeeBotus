@@ -922,8 +922,11 @@ _CITY_CHANGE_LABELLED_OLD_CURRENT_SHORT = re.compile(
 _LABELLED_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
     r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
     r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
-    r"zuhause|zu\s+hause|daheim)\s*[:=]?\s*"
-    r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)\s*[,;.!?]\s*"
+    r"zuhause|zu\s+hause|daheim)"
+    r"(?:\s*(?::|=)\s*|\s+(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+"
+    rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?(?:(?:in|bei)\s+)?|\s+)"
+    r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)\s*[,;.!?\-–—]\s*"
+    r"(?:(?:aber|doch|jedoch)\s+)?"
     rf"{_TEMPORARY_RESIDENCE_QUALIFIER}\s+"
     r"(?:(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+)?"
     r"(?:(?:in|bei)\s+)?"
@@ -931,15 +934,41 @@ _LABELLED_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
     re.IGNORECASE,
 )
 _DIRECT_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
-    r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+    r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+    rf"(?:(?:{_RESIDENCE_TIME_QUALIFIER})\s+)?(?:in|bei)\s+"
     rf"(?P<first>{_CITY_CHANGE_CITY_FRAGMENT})\s*"
-    r"(?:[,;]\s*(?:(?:aber|doch|jedoch)\s+)?|\s+(?:aber|doch|jedoch|und)\s+)"
+    r"(?:[,;\-–—]\s*(?:(?:aber|doch|jedoch)\s+)?|\s+(?:aber|doch|jedoch|und)\s+)"
+    r"(?!(?:nur\s+)?(?:gelegentlich|manchmal|regelmäßig|regelmaessig|selten|"
+    r"geschäftlich|geschaeftlich|projektbedingt)\s+)"
     rf"{_TEMPORARY_RESIDENCE_QUALIFIER}\s+"
     r"(?:(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+)?"
     r"(?:(?:in|bei)\s+)?"
     rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_INVERTED_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
+    rf"\b(?P<first>{_CITY_CHANGE_CITY_FRAGMENT})\s+ist\s+"
+    r"(?:mein(?:e)?|unser(?:e)?)\s+"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"zuhause|zu\s+hause|daheim)\s*"
+    r"(?:[,;\-–—]\s*(?:(?:aber|doch|jedoch)\s+)?|\s+(?:aber|doch|jedoch|und)\s+)"
+    rf"{_TEMPORARY_RESIDENCE_QUALIFIER}\s+"
+    r"(?:(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+)?"
+    r"(?:(?:in|bei)\s+)?"
+    rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
+
+
+def _has_primary_temporary_residence(source: str) -> bool:
+    return any(
+        pattern.search(source)
+        for pattern in (
+            _LABELLED_PRIMARY_TEMPORARY_RESIDENCE,
+            _DIRECT_PRIMARY_TEMPORARY_RESIDENCE,
+            _INVERTED_PRIMARY_TEMPORARY_RESIDENCE,
+        )
+    )
 _CITY_CHANGE_LABELLED_FROM_TO_STREET = re.compile(
     r"\b(?:wohnadresse|wohnanschrift|anschrift|adresse)\s+von\s+"
     rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
@@ -6238,9 +6267,7 @@ def extract_residence_city(text: str) -> str:
         or _has_conflicting_parenthetical_residence_labels(source)
     ):
         return ""
-    has_direct_primary_temporary_residence = bool(
-        _DIRECT_PRIMARY_TEMPORARY_RESIDENCE.search(source)
-    )
+    has_direct_primary_temporary_residence = _has_primary_temporary_residence(source)
     if not has_direct_primary_temporary_residence:
         city = latest_match(CITY_CHANGE_PATTERNS)
         if city:
@@ -6257,7 +6284,7 @@ def extract_residence_city(text: str) -> str:
 
 def _has_explicit_residence_multiplicity(source: str) -> bool:
     multiplicity_source = re.sub(r"(?i)str\.(?=\s)", "str", source)
-    if _LABELLED_PRIMARY_TEMPORARY_RESIDENCE.search(multiplicity_source):
+    if _has_primary_temporary_residence(multiplicity_source):
         return False
     direct_status_pair = re.search(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
@@ -8168,7 +8195,7 @@ def _has_conflicting_current_relative_residence(source: str) -> bool:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
-    if _LABELLED_PRIMARY_TEMPORARY_RESIDENCE.search(source):
+    if _has_primary_temporary_residence(source):
         return False
     if _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY.search(source):
         return False
