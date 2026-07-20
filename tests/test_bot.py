@@ -4319,7 +4319,11 @@ class BotTests(unittest.TestCase):
                 account_id=account_id,
             )
 
-            context = _prepare_weather_context(memory_store, user_memory, "Ich wohne in Berlin.")
+            with patch(
+                "TeeBotus.runtime.weather_context.fetch_weather_summary",
+                return_value="Berlin: 18 C, leicht bewoelkt",
+            ):
+                context = _prepare_weather_context(memory_store, user_memory, "Ich wohne in Berlin.")
 
         self.assertIn("Stadt/Wohnort: Berlin", context)
 
