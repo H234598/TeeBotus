@@ -18,6 +18,7 @@ from TeeBotus.decisions import (
     build_router_pydantic_ai_model_runner,
     decide_bibliothekar_query,
     decide_intent,
+    decide_residence,
     parse_bibliothekar_query_decision,
     parse_memory_candidate,
     parse_reminder_decision,
@@ -93,6 +94,19 @@ def test_low_confidence_model_intent_falls_back_to_unknown() -> None:
     assert decision.intent == "unknown"
     assert decision.confidence == 0.42
     assert decision.source == "fallback"
+
+
+def test_model_decision_source_is_orchestrator_provenance() -> None:
+    def runner(_prompt, schema):
+        if schema is IntentDecision:
+            return {"intent": "chat", "confidence": 0.9, "reason_short": "ok", "source": "fallback"}
+        if schema is BibliothekarQueryDecision:
+            return {"should_search": True, "query": "Schlaf", "confidence": 0.9, "reason_short": "ok", "source": "classic"}
+        return {"kind": "primary", "city": "Berlin", "confidence": 0.9, "reason_short": "ok", "source": "fallback"}
+
+    assert decide_intent("Erzähl mir etwas", model_runner=runner).source == "model"
+    assert decide_bibliothekar_query("Kannst du das einordnen?", model_runner=runner).source == "model"
+    assert decide_residence("Ich wohne in Berlin", model_runner=runner).source == "model"
 
 
 def test_bibliothekar_query_decision_classic_and_model_runner_paths() -> None:

@@ -50,7 +50,7 @@ def decide_intent(text: str, *, model_runner: ModelRunner | None = None) -> Inte
                     reason_short="Model intent below confidence threshold",
                     source="fallback",
                 )
-            return model_decision
+            return model_decision.model_copy(update={"source": "model"})
         except (TypeError, ValueError, ValidationError, json.JSONDecodeError):
             pass
     return IntentDecision(intent="unknown", confidence=0.0, reason_short="No deterministic intent matched", source="fallback")
@@ -102,7 +102,7 @@ def decide_bibliothekar_query(text: str, *, model_runner: ModelRunner | None = N
                     reason_short="Model bibliothekar decision below confidence threshold",
                     source="model",
                 )
-            return model_decision
+            return model_decision.model_copy(update={"source": "model"})
         except (TypeError, ValueError, ValidationError, json.JSONDecodeError):
             return BibliothekarQueryDecision(
                 should_search=False,
@@ -139,7 +139,7 @@ def decide_residence(text: str, *, model_runner: ModelRunner | None = None) -> R
                 reason_short="Model residence decision below confidence threshold",
                 source="fallback",
             )
-        return model_decision
+        return model_decision.model_copy(update={"source": "model"})
     except (TypeError, ValueError, ValidationError, json.JSONDecodeError):
         return ResidenceDecision(
             kind="ambiguous",
