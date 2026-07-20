@@ -6204,6 +6204,54 @@ def extract_residence_city(text: str) -> str:
 
 def _has_explicit_residence_multiplicity(source: str) -> bool:
     multiplicity_source = re.sub(r"(?i)str\.(?=\s)", "str", source)
+    direct_status_pair = re.search(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)\s*[,;]\s*"
+        r"(?P<tail>[^.!?\n]{1,160}?)(?=\s*[.!?]|$)",
+        multiplicity_source,
+        re.IGNORECASE,
+    )
+    if direct_status_pair:
+        status_tail = re.sub(
+            r"(?i)^(?:aber|doch|jedoch)\s+",
+            "",
+            direct_status_pair.group("tail").strip(),
+        )
+        if not re.match(
+            r"(?i)^(?:jetzt|nun|aktuell\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
+            r"inzwischen|mittlerweile|seit\s+[^\s,;.!?]+|ab\s+(?:sofort|jetzt))\b",
+            status_tail,
+        ):
+            for pattern in (
+                re.compile(
+                    r"(?i)^(?:(?:ich|wir)\s+)?(?:bin|sind)\s+(?:(?:in|bei)\s+)?"
+                    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+                    r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)$"
+                ),
+                re.compile(
+                    r"(?i)^(?:(?:in|bei)\s+)?"
+                    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+                    r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)$"
+                ),
+                re.compile(
+                    r"(?i)^(?:(?:dauerhaft\w*|offiziell\w*|amtlich\w*|polizeilich\w*|stabil\w*)\s+)?"
+                    r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+"
+                    r"(?:(?:in|bei)\s+)?"
+                    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)$"
+                ),
+            ):
+                status_match = pattern.fullmatch(status_tail)
+                if not status_match:
+                    continue
+                first = _clean_city(direct_status_pair.group("first"))
+                second = _clean_city(status_match.group("city"))
+                if (
+                    first
+                    and second
+                    and _city_comparison_key(first) != _city_comparison_key(second)
+                ):
+                    return True
+                break
     status_pair = re.search(
         rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*[:=,]?\s*"
