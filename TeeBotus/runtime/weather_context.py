@@ -2777,6 +2777,24 @@ CITY_PATTERNS = (
     _QUALIFIED_RESIDENCE,
     _CURRENT_RESIDENCE_LABEL_CITY,
     re.compile(
+        rf"\b(?:mein(?:e)?|unser(?:e)?)?\s*{_OTHER_PERSON_LOCATION_LABEL}\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s|[,;.!?]|$)\s*[,;]?\s*"
+        r"(?:und|sowie|aber|doch|jedoch|oder|sondern|während|waehrend)?\s*"
+        rf"(?=[^.!?;,\n]{{0,160}}\b{_OTHER_PERSON_FOREIGN_MARKER}\b)"
+        r"[^.!?;,\n]+",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:ist\s+)?"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        rf"{_OTHER_PERSON_LOCATION_LABEL}\s*[,;]?\s*"
+        r"(?:und|sowie|aber|doch|jedoch|oder|sondern|während|waehrend)?\s*"
+        rf"(?=[^.!?;,\n]{{0,160}}\b{_OTHER_PERSON_FOREIGN_MARKER}\b)"
+        r"[^.!?;,\n]+",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
         r"(?:wohne|wohnen|lebe|leben)(?:\s+(?:ich|wir))?"
         r"(?=\s*(?:[.!?;,]|$|\b(?:und|sowie|aber|doch|jedoch|während|waehrend)\b))",
@@ -2785,7 +2803,7 @@ CITY_PATTERNS = (
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]?\s*"
-        r"(?:und|sowie|aber|doch|jedoch|oder|sondern)\s+"
+        r"(?:und|sowie|aber|doch|jedoch|oder|sondern|während|waehrend)?\s*"
         r"(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:zeitweise|vorübergehend|voruebergehend|gelegentlich|derzeit|aktuell|momentan)\s+)?"
         r"(?:bei|mit)\s+(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
@@ -2795,8 +2813,8 @@ CITY_PATTERNS = (
     ),
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]?\s*"
-        r"(?:und|sowie|aber|doch|jedoch|oder|sondern)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s|[,;.!?]|$)\s*[,;]?\s*"
+        r"(?:und|sowie|aber|doch|jedoch|oder|sondern|während|waehrend)?\s*"
         rf"(?=[^.!?;,\n]{{0,160}}\b{_OTHER_PERSON_FOREIGN_MARKER}\b)"
         r"[^.!?;,\n]+",
         re.IGNORECASE,
@@ -5253,6 +5271,8 @@ def extract_residence_city(text: str) -> str:
                         continue
                     if _has_uncertain_residence_prefix(source, pattern_start):
                         continue
+                    if _has_other_person_residence_candidate(match.group("city")):
+                        continue
                     if re.match(
                         r"(?i)^\s*(?:vielleicht|vermutlich|möglicherweise|moeglicherweise|eventuell|"
                         r"wahrscheinlich|wohl|angeblich|anscheinend|scheinbar)\b|"
@@ -5790,6 +5810,14 @@ def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
     )
 
 
+def _has_other_person_residence_candidate(value: str) -> bool:
+    candidate = str(value or "")
+    return bool(
+        re.search(rf"(?i)\b{_OTHER_PERSON_FOREIGN_MARKER}\b", candidate)
+        or re.search(rf"(?i)\bvon\s+{_OTHER_PERSON_RESIDENCE_LABEL}\b", candidate)
+    )
+
+
 def _has_other_person_residence_suffix(source: str, city_end: int) -> bool:
     suffix = source[city_end:]
     if re.match(
@@ -6221,6 +6249,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
                     or _has_historical_residence_suffix(source, city_end)
                     or _has_future_residence_suffix(source, city_end)
                     or _has_uncertain_residence_suffix(source, city_end)
+                    or _has_other_person_residence_candidate(match.group("city"))
                     or _has_other_person_residence_prefix(source, pattern_start)
                     or _has_other_person_residence_prefix(source, city_start)
                     or _has_other_person_residence_prefix(source, city_end)
@@ -6672,7 +6701,25 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         return True
     if re.search(
         rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s*[,;]?\s*"
-        r"(?:und|aber|doch|jedoch)\s+"
+        r"(?:(?:und|sowie|aber|doch|jedoch|oder|sondern|während|waehrend)\s+)?"
+        rf"[^.!?;,\n]{{0,160}}\b{_OTHER_PERSON_FOREIGN_MARKER}\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
+        rf"\b(?:mein(?:e)?|unser(?:e)?)?\s*{_OTHER_PERSON_LOCATION_LABEL}\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*[,;]?\s*"
+        r"(?:und|sowie|aber|doch|jedoch|oder|sondern|während|waehrend)?\s*"
+        rf"[^.!?;,\n]{{0,160}}\b{_OTHER_PERSON_FOREIGN_MARKER}\b",
+        source,
+        re.IGNORECASE,
+    ) or re.search(
+        r"\b[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+(?:ist\s+)?"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        rf"{_OTHER_PERSON_LOCATION_LABEL}\s*[,;]?\s*"
+        r"(?:und|sowie|aber|doch|jedoch|oder|sondern|während|waehrend)?\s*"
         rf"[^.!?;,\n]{{0,160}}\b{_OTHER_PERSON_FOREIGN_MARKER}\b",
         source,
         re.IGNORECASE,
