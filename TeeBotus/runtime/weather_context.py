@@ -317,6 +317,7 @@ _TEMPORARY_RESIDENCE_QUALIFIER = (
     r"(?:nur\s+)?(?:vorübergehend|voruebergehend|zeitweise|temporär|temporaer|"
     r"befristet|kurzfristig|vorläufig|vorlaeufig|bis\s+auf\s+weiteres|"
     r"bis\s+(?:heute|morgen|übermorgen|uebermorgen)|"
+    r"bis\s+(?:(?:zum\s+)?jahresende|(?:zum\s+)?ende\s+(?:der\s+woche|des\s+monats|des\s+jahres))|"
     rf"für\s+(?:{_RESIDENCE_DURATION}|(?:den\s+)?urlaub)|"
     r"am\s+wochenende|unter\s+der\s+woche|tagsüber|tagsueber|"
     r"werktags|wochentags|montags?|dienstags?|mittwochs?|donnerstags?|"
