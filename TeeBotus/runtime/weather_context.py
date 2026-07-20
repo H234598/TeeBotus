@@ -2927,7 +2927,8 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:ich\s+)?(?:wohne|lebe|wohnen|leben)\s+(?:aber|doch|jedoch)\s+(?:in|bei)\s+"
+        r"\b(?:ich\s+)?(?:wohne|lebe|wohnen|leben)\s+(?:aber|doch|jedoch)\s+"
+        r"(?:(?:jetzt|heute|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
         re.IGNORECASE,
     ),
