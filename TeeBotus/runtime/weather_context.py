@@ -5679,6 +5679,11 @@ def _has_companion_residence_prefix(source: str, city_start: int) -> bool:
 
 def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
     prefix = source[:pattern_start]
+    if re.search(
+        rf"(?i)\b{_OTHER_PERSON_NON_SELF_REFERENCE}\s*$",
+        prefix.rstrip(),
+    ):
+        return True
     if pattern_start < len(source) and source[pattern_start] in ",;":
         prefix += source[pattern_start]
     boundary = re.match(r"(?i)(?:und|sowie|oder|aber|doch|jedoch|sondern)\b", source[pattern_start:])
@@ -5746,6 +5751,14 @@ def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
         rf"(?i)\b{_OTHER_PERSON_NON_SELF_REFERENCE}\s+{_OTHER_PERSON_LOCATION_LABEL}\s+"
         r"(?:wohnt|wohnen|lebt|leben|ist|liegt|befindet\s+sich)\s+"
         r"(?:(?:zuhause|zu\s+hause|daheim)\s+)?(?:in|bei)\s*$",
+        segment,
+    ):
+        return True
+    if re.search(
+        rf"(?i)\b{_OTHER_PERSON_LOCATION_LABEL}\s+(?:von\s+)?"
+        rf"(?:{_OTHER_PERSON_REFERENCE}\s+)?{_OTHER_RESIDENCE_OWNER_LABEL}\b"
+        r"[^.!?;,\n]{0,80}\b(?:ist|lautet|bleibt|liegt|befindet\s+sich)\s+"
+        r"(?:in|bei)\s*$",
         segment,
     ):
         return True
@@ -6582,6 +6595,11 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         city = _clean_city(match.group("city"))
         if city:
             registered_address_cities.add(_city_comparison_key(city))
+    registered_address_cities = {
+        city
+        for city in registered_address_cities
+        if not _has_other_person_residence_candidate(city)
+    }
     residence_address_cities = residence_cities | address_cities
     if (
         residence_address_cities
