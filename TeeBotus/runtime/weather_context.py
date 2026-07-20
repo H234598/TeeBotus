@@ -889,6 +889,16 @@ _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY = re.compile(
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_CITY_CHANGE_LABELLED_OLD_CURRENT_SHORT = re.compile(
+    r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
+    r"(?:alt\w*|ehemalig\w*|früh\w*|frueh\w*)\s+"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*[:=]?\s*"
+    r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+    r"(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
+    r"(?:neu\w*|aktuell\w*|jetzig\w*|gegenwärtig\w*|gegenwaertig\w*)\s*[:=]\s*"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _CITY_CHANGE_LABELLED_FROM_TO_STREET = re.compile(
     r"\b(?:wohnadresse|wohnanschrift|anschrift|adresse)\s+von\s+"
     rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
@@ -3419,6 +3429,7 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_OLD_RESIDENCE_LABEL_CURRENT_CITY,
     _CITY_CHANGE_OLD_RESIDENCE_LABEL_BARE_CURRENT_CITY,
     _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY,
+    _CITY_CHANGE_LABELLED_OLD_CURRENT_SHORT,
     _CITY_CHANGE_LABELLED_CURRENT_NEW_RESIDENCE,
     _CITY_CHANGE_LABELLED_OLD_NEW_ADDRESS,
     _CITY_CHANGE_CURRENT_RESIDENCE_BEFORE_HISTORICAL,
