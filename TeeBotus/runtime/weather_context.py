@@ -1603,6 +1603,30 @@ _CITY_CHANGE_ELLIPTICAL_CURRENT_LABEL = re.compile(
     rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_CITY_CHANGE_HISTORICAL_CITY_PRONOUN_CURRENT = re.compile(
+    rf"(?:^|[.!?;,:]\s*)(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})\s+"
+    r"(?:war|ist)\s+(?:(?:früher|frueher|ehemals|vormalig|damals|vorher|zuvor|alt)\s+)?"
+    rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"wohnadresse|wohnanschrift|adresse|anschrift|zuhause|zu\s+hause|daheim)\s*[,;]\s*"
+    r"(?:jetzt|heute|nunmehr|nun|aktuell\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
+    r"inzwischen|mittlerweile|momentan)\s+"
+    r"(?:ist|bleibt|liegt|befindet\s+sich)\s+(?:es|er|sie)\s+(?:(?:in|bei)\s+)?"
+    rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
+_CITY_CHANGE_HISTORICAL_LABEL_PRONOUN_CURRENT = re.compile(
+    rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    r"(?:früher\w*|frueher\w*|ehemalig\w*|vormalig\w*|damalig\w*|alt\w*|vorher|zuvor)\s+"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"wohnadresse|wohnanschrift|adresse|anschrift|zuhause|zu\s+hause|daheim)\s+"
+    r"(?:war|ist)\s+(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+    r"(?:jetzt|heute|nunmehr|nun|aktuell\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
+    r"inzwischen|mittlerweile|momentan)\s+"
+    r"(?:ist|bleibt|liegt|befindet\s+sich)\s+(?:es|er|sie)\s+(?:(?:in|bei)\s+)?"
+    rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET = re.compile(
     r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+lautet\s+"
     r"(?:mein(?:e)?|unser(?:e)?)\s+"
@@ -3705,6 +3729,8 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_CURRENT_ADVERB_BEFORE_HISTORICAL,
     _CITY_CHANGE_LABELLED_SHORT_CURRENT,
     _CITY_CHANGE_ELLIPTICAL_CURRENT_LABEL,
+    _CITY_CHANGE_HISTORICAL_CITY_PRONOUN_CURRENT,
+    _CITY_CHANGE_HISTORICAL_LABEL_PRONOUN_CURRENT,
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
