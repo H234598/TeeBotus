@@ -2598,6 +2598,19 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
 - Neuer Zyklusstand: `4/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
 
+### Folgefix 2026-07-20: Widersprüchlicher Meldestatus und Negation
+
+- `Ich bin in Hamburg gemeldet, wohne aber in Berlin` wird jetzt wie die
+  umgekehrte Form als widersprüchlich verworfen.
+- Aussagen wie `Ich wohne in Berlin und habe dort keinen Wohnsitz` werden nicht
+  mehr als Berlin gespeichert. Adjektive wie `keinen festen Wohnsitz` sind
+  ebenfalls abgedeckt; positive Wohnadressangaben bleiben gültig.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `254 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `3229ed7b`.
+- Neuer Zyklusstand: `6/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-20: Kurze Registrierungsstatus-Konflikte
 
 - Formen wie `Wohne in Berlin, gemeldet in Hamburg` und die umgekehrte
