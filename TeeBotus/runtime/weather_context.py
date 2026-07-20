@@ -7849,6 +7849,13 @@ def _clean_city(value: str) -> str:
     if source.count(")") > source.count("("):
         source = re.sub(r"[.!?;,]+$", "", source).rstrip(")").rstrip()
     normalized_source = re.sub(r"\s+", " ", source).strip(" .,:;!?")
+    if re.search(
+        r"(?i)\b(?:vielleicht|vermutlich|wahrscheinlich|möglicherweise|moeglicherweise|"
+        r"eventuell|wohl|angeblich|anscheinend|scheinbar|voraussichtlich|womöglich|"
+        r"womoeglich|mutmaßlich|mutmasslich|theoretisch|hypothetisch|potenziell|potentiell)\b",
+        normalized_source,
+    ):
+        return ""
     normalized_source = re.sub(
         rf"(?i)\s+\({_PRIMARY_RESIDENCE_LABEL}\)$",
         "",

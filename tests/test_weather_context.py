@@ -3544,6 +3544,8 @@ def test_extract_residence_city_ignores_common_foreign_person_residence_labels()
     assert extract_residence_city("Berlin ist mein Wohnort, Hamburg war früher mein Wohnort.") == "Berlin"
     assert extract_residence_city("Berlin ist mein Wohnort, Hamburg ist künftig mein Wohnort.") == "Berlin"
     assert extract_residence_city("Berlin ist mein Wohnort, Hamburg ist vielleicht mein Wohnort.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, aber Hamburg ist vielleicht mein Wohnort.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, aber Hamburg ist vermutlich mein Wohnort.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin und Hamburg ist das Zuhause meiner Frau.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin und Hamburg ist die Wohnadresse meiner Frau.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin und Hamburg ist die Meldeadresse meiner Frau.") == "Berlin"
