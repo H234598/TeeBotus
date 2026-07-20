@@ -5997,6 +5997,14 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
     ):
         return True
     if re.search(
+        r"\b(?:wohne|wohnen|lebe|leben)\b\s+(?:in|bei)\s+[^,.;!?]{1,80},\s*"
+        r"(?:aber\s+)?auch\s+(?:in|bei)\s+[^,.;!?]{1,80}\s+"
+        r"(?:zur\s+arbeit|zum\s+arbeiten|beruflich|dienstlich)\b",
+        multiplicity_source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
         r"\b(?:wohne|wohnen|lebe|leben)\b\s+sowohl\s+(?:in|bei)\s+[^,.;!?]{1,80}?\s+"
         r"als\s+auch\s+(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}(?=\s*(?:[.!?;,]|$))|"
         r"\b(?:wohne|wohnen|lebe|leben)\b\s+(?:in|bei)\s+[^,.;!?]{1,80}?"
