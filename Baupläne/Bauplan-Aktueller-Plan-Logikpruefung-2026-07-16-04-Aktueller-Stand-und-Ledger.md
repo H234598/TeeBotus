@@ -1771,7 +1771,7 @@
 ## Aktueller Ledger 2026-07-20-Post-Restart-8-03
 
 - `teebotus.service` aktiv/running, `MainPID 1697303`, Start `2026-07-20 01:04:25 CEST`.
-- Neuer Zyklus seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+- Neuer Zyklus vor dem planmaessigen Restart: `20/20` Code-Fixes. Kein Push.
 
 ### Folgefix-Batch 2026-07-20: Kurzzeit-, Registrierungs- und Routineformen
 
@@ -1784,3 +1784,17 @@
 - Verifikation: `tests/test_weather_context.py` -> `237 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commits: `b8f36692`, `082b3d7c`, `9d760ace`, `fe93357c`, `8459102a`.
+
+### Folgefix-Batch 2026-07-20: Klauselgrenzen und aktuelle Wohnorte
+
+- Fremdpersonen-, historische, zukuenftige und unsichere Wohnortklauseln vor
+  einem aktuellen Eigen-Wohnort ueberschreiben diesen nicht.
+- Kontrastformen nach Komma (`aber`, `doch`, `sondern`) werden als eigene
+  aktuelle Klausel erkannt; alte Klauseln nach aktuellem Wohnort bleiben ohne
+  Einfluss.
+- Verifikation: `tests/test_weather_context.py` -> `237 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commits: `4cf5651c`, `3add3997`, `edba51af`, `bcd33669`.
+- Danach planmaessiger User-Service-Restart: `MainPID 2038659`, Start
+  `2026-07-20 02:24:52 CEST`, aktiv/running.
+- Neuer Zyklus seit diesem Restart: `0/20` Code-Fixes. Kein Push.
