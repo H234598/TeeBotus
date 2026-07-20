@@ -2910,3 +2910,15 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `a0fa150f`.
 - Neuer Zyklusstand: `11/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Komma zwischen Home-Marker und Stadt
+
+- Schreibweisen wie `bei mir, in Berlin` und `ich zu Hause, in Berlin` wurden
+  in elliptischen Kontrasten bisher nicht erkannt.
+- Der gemeinsame Home-Ortspräfix erlaubt jetzt ein optionales Komma vor
+  `in/bei`; der Arbeitskontext bleibt ausgeschlossen.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `267 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `2bd4daf0`.
+- Neuer Zyklusstand: `13/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
