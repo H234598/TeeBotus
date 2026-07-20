@@ -4053,6 +4053,8 @@ def test_extract_residence_city_handles_temporal_label_forms() -> None:
     assert extract_residence_city("Ich wohne in Berlin, aber in Hamburg plane ich zu wohnen.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, aber in Hamburg habe ich vor zu wohnen.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, aber in Hamburg könnte ich wohnen.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, aber in Hamburg ziehe ich ein.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, aber in Hamburg ziehe ich um.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, aber vorübergehend in Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, aber befristet in Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, aber für zwei Wochen in Hamburg.") == "Berlin"

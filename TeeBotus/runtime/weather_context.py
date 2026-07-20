@@ -9214,6 +9214,7 @@ def _has_temporal_residence_suffix_text(value: str) -> bool:
             r"(?:werde\w*|würde\w*|moechte\w*|möchte\w*|soll\w*|will\w*|"
             r"könnte\w*|koennte\w*|dürfte\w*|duerfte\w*|müsste\w*|muesste\w*|"
             r"plane\w*|beabsichtig\w*)\b|"
+            r"zieh\w*\s+(?:ich|wir)\b|"
             r"(?:habe|hat)\s+(?:ich|wir)\s+vor\b|"
             r"(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|bald|später|spaeter|"
             r"nächste\w*|naechste\w*)\b)",
