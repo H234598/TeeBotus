@@ -2777,6 +2777,12 @@ CITY_PATTERNS = (
     _QUALIFIED_RESIDENCE,
     _CURRENT_RESIDENCE_LABEL_CITY,
     re.compile(
+        r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:wohne|wohnen|lebe|leben)(?:\s+(?:ich|wir))?"
+        r"(?=\s*(?:[.!?;,]|$|\b(?:und|sowie|aber|doch|jedoch|während|waehrend)\b))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]?\s*"
         r"(?:und|sowie|aber|doch|jedoch|oder|sondern)\s+"
