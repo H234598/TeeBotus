@@ -3161,6 +3161,14 @@ CITY_PATTERNS = (
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
+    re.compile(
+        r"(?:^|[.!?;,:]\s*)"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\s+"
+        r"(?:jetzt|nun|aktuell|derzeit|momentan|gegenwärtig|gegenwaertig|inzwischen|mittlerweile)\b"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
     _MAIN_RESIDENCE_CITY_BEFORE_STREET,
     _MAIN_RESIDENCE_CITY,
     _COMPOUND_CITY_RESIDENCE,
