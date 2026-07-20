@@ -8896,6 +8896,8 @@ def _has_historical_residence_suffix(source: str, city_end: int) -> bool:
         re.match(
             r"(?i)\s+(?:(?:wohnhaft|ansässig|ansaessig)\s+)?(?:gewesen|worden|frueher|frühere?\b|"
             r"ehemals|damals|vormalig\w*)\b|"
+            r"\s+(?:wohne|wohnen|lebe|leben|wohnte|lebte)\s+(?:ich|wir)\s+"
+            r"(?:früher|frueher|vorher|zuvor|davor|ehemals|damals|vormalig\w*)\b|"
             r"\s+ist\s+(?:die\s+stadt|der\s+ort)\s*,?\s*"
             r"(?:in\s+(?:der|dem)|an\s+(?:der|dem)|wo)\s+(?:ich|wir)\s+"
             r"(?:wohne|wohnen|lebe|leben)\b\s*,?\s*(?:aber|doch|jedoch)\s+"
@@ -8927,7 +8929,12 @@ def _has_future_residence_suffix(source: str, city_end: int) -> bool:
             r"(?i)\s+(?:ab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
             r"(?:jahr\w*|monat\w*|woche\w*)\b|ab\s+(?:morgen|uebermorgen|übermorgen|"
             r"sommer|winter|frühling|fruehling|herbst)|ab\s+\d{4}\b|"
-            r"(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*)\b)",
+            r"(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*|später|spaeter)\b|"
+            r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\s+"
+            r"(?:ab\s+(?:dem\s+)?(?:nächste\w*|naechste\w*|kommende\w*)\s+"
+            r"(?:jahr\w*|monat\w*|woche\w*)\b|ab\s+(?:morgen|uebermorgen|übermorgen)|"
+            r"ab\s+\d{4}\b|künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|"
+            r"geplant\w*|später|spaeter)\b)",
             sentence,
         )
     )
