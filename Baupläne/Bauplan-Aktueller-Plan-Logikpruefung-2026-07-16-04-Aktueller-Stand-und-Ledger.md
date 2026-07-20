@@ -2299,6 +2299,18 @@
 - Neuer Zyklus: `5/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
 
+### Folgefix 2026-07-20: Modalmarker `mag` im City-Kandidaten
+
+- `Hamburg mag mein Wohnort sein` wurde als `Hamburg mag` erkannt.
+- `mag` wird jetzt wie andere Unsicherheitsmarker aus generischen City-
+  Kandidaten entfernt; echte Städte wie `Magdeburg` bleiben gültig.
+- Regression deckt die Modalform und den ähnlich beginnenden echten Ortsnamen ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `06feec25`.
+- Neuer Zyklus: `7/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-20: Verkürzte Registrierungsformulierungen
 
 - Varianten wie `bin in Hamburg gemeldet`, `offiziell gemeldet in Hamburg`,
