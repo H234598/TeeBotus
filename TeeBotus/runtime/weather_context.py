@@ -884,7 +884,7 @@ _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY = re.compile(
     r"(?:(?:alt\w*|ehemalig\w*|früh\w*|frueh\w*|vorher|zuvor)\s*:?\s*)?"
     r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
     r"(?:neu\w*|jetzt|heute|nun|aktuell\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*|"
-    r"inzwischen|mittlerweile)\s+(?:(?:in|bei)\s+)?"
+    r"inzwischen|mittlerweile)\s*:?\s*(?:(?:in|bei)\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
@@ -6396,6 +6396,16 @@ def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
     prefix_source = source[:pattern_start]
     if pattern_start < len(source) and source[pattern_start] in ",;":
         prefix_source += source[pattern_start]
+    if re.search(
+        r"(?i)\b(?:wohnort|wohnsitz|wohnstadt|wohnadresse|wohnanschrift|adresse|anschrift)\s+"
+        r"(?:alt\w*|ehemalig\w*|früh\w*|frueh\w*|vorher|zuvor)\s*:?[ \t]*"
+        r"[^,.;!?]{1,80}[,;]\s*(?:neu\w*|jetzt|heute|nun|aktuell\w*|derzeitig\w*|"
+        r"gegenwärtig\w*|gegenwaertig\w*|inzwischen|mittlerweile)\s*:?[ \t]*"
+        r"(?:arbeite|arbeitest|arbeiten|studier|lern|schlaf|pendl|reis|besuch|"
+        r"übernacht|uebernacht|fahr|geh|komm|mach)\w*\b",
+        source[pattern_start:],
+    ):
+        return True
     boundary = re.match(r"(?i)(?:und|sowie|oder|aber|doch|jedoch|sondern)\b", source[pattern_start:])
     if boundary:
         prefix_source += " " + boundary.group(0)
