@@ -1187,8 +1187,8 @@ _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE = re.compile(
     r"(?:wo|in\s+(?:der|dem|welcher)|worin)\s+(?:ich|wir)\s+"
     rf"(?:(?:heute|polizeilich|{_RESIDENCE_TIME_QUALIFIER}|{_RESIDENCE_LABEL_CURRENT_QUALIFIER}|{_RESIDENCE_LOCATION_ADVERB})\s+(?:wohne|wohnen|lebe|leben)\b|"
     rf"(?:(?:heute|polizeilich|{_RESIDENCE_TIME_QUALIFIER}|{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
-    r"(?:bin(?:d)?\s+(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert|zu\s+hause|zuhause|daheim)|"
-    r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert|zu\s+hause|zuhause|daheim)\s+bin(?:d)?)\b)",
+    r"(?:bin(?:d)?\s+(?:wohnhaft|ansässig|ansaessig|beheimatet|gemeldet|registriert|zu\s+hause|zuhause|daheim)|"
+    r"(?:wohnhaft|ansässig|ansaessig|beheimatet|gemeldet|registriert|zu\s+hause|zuhause|daheim)\s+bin(?:d)?)\b)",
     re.IGNORECASE,
 )
 _CITY_BEFORE_RELATIVE_RESIDENCE_LABEL = re.compile(
@@ -8923,6 +8923,7 @@ def _clean_city(value: str) -> str:
         r"(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*|"
         r"künftig|kuenftig|zukünftig|zukuenftig|"
         r"aktuell|derzeit|momentan|gerade|jetzt|nun|inzwischen|mittlerweile|unklar|egal|entweder|"
+        r"wohne|wohnen|lebe|leben|wohnte|lebte|"
         r"nimmer|werktags|wochentags|wo|hier|dort|da|sondern|liegt|befindet|"
         r"vielleicht|vermutlich|wahrscheinlich|wohl|angeblich|laut|derzeitig|ist|sind|bin|lautet|heißt|heisst|nennt|genannt|keineswegs|keinesfalls|niemals|nirgendwo|nirgends|nie|fast|beinahe|"
         r"möglicherweise|moeglicherweise|könnte|koennte|wäre|waere|würde|wuerde|"
