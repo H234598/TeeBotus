@@ -2771,7 +2771,7 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        rf"\b(?:und|sowie)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
+        rf"\b(?:und|sowie|aber|doch|jedoch|sondern)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
         r"(?:ist\s+)?(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
         r"haupt\w*|jetzig\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
@@ -5515,11 +5515,11 @@ def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
     prefix_source = source[:pattern_start]
     if pattern_start < len(source) and source[pattern_start] in ",;":
         prefix_source += source[pattern_start]
-    boundary = re.match(r"(?i)(?:und|sowie|oder)\b", source[pattern_start:])
+    boundary = re.match(r"(?i)(?:und|sowie|oder|aber|doch|jedoch|sondern)\b", source[pattern_start:])
     if boundary:
         prefix_source += " " + boundary.group(0)
     prefix = re.split(
-        r"(?:[,;]|\b(?:und|sowie|oder)\b)\s*",
+        r"(?:[,;]|\b(?:und|sowie|oder|aber|doch|jedoch|sondern)\b)\s*",
         prefix_source,
         flags=re.IGNORECASE,
     )[-1]
@@ -5551,11 +5551,13 @@ def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
 
 def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
     prefix = source[:pattern_start]
-    boundary = re.match(r"(?i)(?:und|sowie|oder)\b", source[pattern_start:])
+    if pattern_start < len(source) and source[pattern_start] in ",;":
+        prefix += source[pattern_start]
+    boundary = re.match(r"(?i)(?:und|sowie|oder|aber|doch|jedoch|sondern)\b", source[pattern_start:])
     if boundary:
         prefix += " " + boundary.group(0)
     segment = re.split(
-        r"(?:[,;]|\b(?:und|sowie|oder)\b)\s*",
+        r"(?:[,;]|\b(?:und|sowie|oder|aber|doch|jedoch|sondern)\b)\s*",
         prefix,
         flags=re.IGNORECASE,
     )[-1]
@@ -6776,9 +6778,19 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         source,
         re.IGNORECASE,
     ):
+        first_raw = match.group("first")
         first = _clean_city(match.group("first"))
         second = _clean_city(match.group("second"))
-        if first and second and _city_comparison_key(first) != _city_comparison_key(second):
+        if (
+            first
+            and second
+            and _city_comparison_key(first) != _city_comparison_key(second)
+            and not re.search(
+                r"(?i)\b(?:war|waren|ehemalig\w*|ehemals|frueh\w*|früh\w*|"
+                r"einstig\w*|vormalig\w*|damalig\w*|alt\w*|vorherig\w*)\b",
+                first_raw,
+            )
+        ):
             return True
     return bool(
         re.search(
@@ -6816,14 +6828,24 @@ def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
 
 def _has_historical_residence_prefix(source: str, match_start: int) -> bool:
     prefix = source[:match_start]
+    if match_start < len(source) and source[match_start] in ",;":
+        prefix += source[match_start]
+    boundary = re.match(r"(?i)(?:und|sowie|oder|aber|doch|jedoch|sondern)\b", source[match_start:])
+    if boundary:
+        prefix += " " + boundary.group(0)
     sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
+    clause = re.split(
+        r"(?:[,;]|\b(?:und|sowie|oder|aber|doch|jedoch|sondern)\b)\s*",
+        sentence,
+        flags=re.IGNORECASE,
+    )[-1]
     return bool(
         re.search(
             r"(?i)\b(?:ehemalig\w*|ehemals\b|frueh\w*|früh\w*|einstig\w*|vormalig\w*|damalig\w*|"
             r"alt\w*|vorherig\w*)\s*$",
-            sentence,
+            clause,
         )
-    ) or bool(re.search(r"(?i)\bwar(?:en)?(?:\s+\w+){0,3}\s*$", sentence))
+    ) or bool(re.search(r"(?i)\bwar(?:en)?(?:\s+\w+){0,3}\s*$", clause))
 
 
 def _has_future_residence_prefix(source: str, match_start: int, city_start: int | None = None) -> bool:
