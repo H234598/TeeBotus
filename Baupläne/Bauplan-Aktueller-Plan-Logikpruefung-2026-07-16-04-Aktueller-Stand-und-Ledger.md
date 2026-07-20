@@ -2253,3 +2253,19 @@
   gruen. Code-Commit: `4b5e30b5`.
 - Neuer Zyklus: `19/20` Commits seit diesem Restart. Kein Push. Restart erst
   bei `20/20`.
+
+### Folgefix 2026-07-20: Verbform bei bare `Meldeadresse`
+
+- `Meldeadresse ist Berlin` und `Meldeadresse liegt in Berlin` wurden ohne
+  Determiner nicht erkannt; ein anschließendes Alias konnte dadurch keinen
+  gültigen ersten Wohnort liefern.
+- Fokussierter Pattern-Zweig für `ist`, `liegt`, `lautet` und `befindet sich`
+  ergänzt.
+- Regression deckt bare Verbform, Aliasfolge und echten abweichenden Ort ab.
+- Verifikation vor und nach Restart: komplette `tests/test_weather_context.py`
+  -> `248 passed`; Telegram-Wettertest -> `1 passed`.
+- Code-Commit: `8ddefcd5`.
+- `teebotus.service` nach `20/20`-Commitregel neu gestartet: aktiv,
+  `MainPID 2868684`, `ActiveEnterTimestamp=2026-07-20 05:44:22 CEST`.
+- Neuer Zyklus: `1/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
