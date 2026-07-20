@@ -6823,8 +6823,10 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
                 if not re.match(
                     r"(?i)^(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
                     r"(?:geburtsort|geburtsstadt|heimat|heimatstadt|herkunftsort|herkunftsstadt|"
-                    r"arbeitsort|arbeitsadresse|geschäftsadresse|geschaeftsadresse|"
-                    r"dienstadresse|büroadresse|bueroadresse)\b",
+                    r"arbeitsort|arbeitsadresse|arbeitsanschrift|geschäftsadresse|geschaeftsadresse|"
+                    r"dienstadresse|büroadresse|bueroadresse|adresse|wohnadresse|wohnanschrift|"
+                    r"privatadresse|privatanschrift|anschrift|meldeadresse|meldeanschrift|"
+                    r"meldesitz|postadresse|postanschrift|zustelladresse|zustellanschrift)\b",
                     second_raw,
                 ) and not re.match(
                     rf"(?i)^(?:(?:mein(?:e)?|unser(?:e)?)\s+)?{_SECONDARY_RESIDENCE_LABEL}"
