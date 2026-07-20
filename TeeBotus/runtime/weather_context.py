@@ -6787,7 +6787,10 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             and _city_comparison_key(first) != _city_comparison_key(second)
             and not re.search(
                 r"(?i)\b(?:war|waren|ehemalig\w*|ehemals|frueh\w*|früh\w*|"
-                r"einstig\w*|vormalig\w*|damalig\w*|alt\w*|vorherig\w*)\b",
+                r"einstig\w*|vormalig\w*|damalig\w*|alt\w*|vorherig\w*|"
+                r"künftig\w*|kuenftig\w*|zukünftig\w*|zukuenftig|geplant\w*|"
+                r"beabsichtig\w*|vielleicht|vermutlich|möglicherweise|moeglicherweise|"
+                r"eventuell|wahrscheinlich|angeblich|anscheinend|scheinbar)\b",
                 first_raw,
             )
         ):
