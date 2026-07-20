@@ -3163,6 +3163,14 @@ def test_extract_residence_city_handles_direct_residence_registration_aliases() 
     assert extract_residence_city("Wohnort: Berlin, Meldeadresse ebenfalls Hamburg.") == ""
 
 
+def test_extract_residence_city_handles_genitive_residence_addresses() -> None:
+    assert extract_residence_city("Die Adresse meines Wohnorts ist Berlin.") == "Berlin"
+    assert extract_residence_city("Die Adresse unseres Wohnsitzes liegt in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Die Wohnanschrift meines Hauptwohnsitzes befindet sich in Dresden.") == "Dresden"
+    assert extract_residence_city("Die Adresse eines Wohnorts ist Berlin.") == ""
+    assert extract_residence_city("Die Adresse meines Wohnorts ist Berlin, meine Meldeadresse Hamburg.") == ""
+
+
 def test_extract_residence_city_handles_same_city_reference_labels() -> None:
     assert extract_residence_city("Mein Wohnort ist Berlin und dort ist auch meine Meldeadresse.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist Berlin und dort ist meine Meldeadresse.") == "Berlin"

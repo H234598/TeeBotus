@@ -907,6 +907,17 @@ _LABELED_COMPOUND_RESIDENCE_CITY = re.compile(
     r"(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_GENITIVE_RESIDENCE_ADDRESS_CITY = re.compile(
+    r"\b(?:die|eine|meine|unsere)?\s*"
+    r"(?:adresse|wohnadresse|wohnanschrift|anschrift)\s+"
+    r"(?:meines|unseres)\s+"
+    r"(?:wohnort(?:s|es)?|wohnsitz(?:es)?|hauptwohnsitz(?:es)?|"
+    r"lebensmittelpunkt(?:s|es)?)\s+"
+    r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
+    r"(?:(?:in|bei)\s+)?"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _TEMPORAL_REGISTERED_CITY = re.compile(
     rf"\b(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}\s+"
     r"(?:(?:ich|wir)\s+(?:bin|sind)|(?:bin|sind)\s+(?:ich|wir))\s+(?:in|bei)\s+"
@@ -2861,6 +2872,7 @@ CITY_PATTERNS = (
     _CURRENT_RESIDENCE_LABEL_CITY,
     _LABELED_COMPOUND_RESIDENCE_CITY,
     _INVERTED_REGISTERED_CITY,
+    _GENITIVE_RESIDENCE_ADDRESS_CITY,
     re.compile(
         rf"\b(?:mein(?:e)?|unser(?:e)?)?\s*{_OTHER_PERSON_LOCATION_LABEL}\s+"
         r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
@@ -6389,6 +6401,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         ),
     )
     address_patterns = (
+        _GENITIVE_RESIDENCE_ADDRESS_CITY,
         re.compile(
             rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
             r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
@@ -8183,8 +8196,8 @@ def _clean_city(value: str) -> str:
     ):
         return ""
     if re.search(
-        r"(?i)\b(?:nicht(?:\s+mehr)?|kein(?:e|er|em|en)?|mein(?:e|er|em|en)?|"
-        r"unser(?:e|er|em|en)?|ein(?:e|er|em|en)?|könnte|koennte|wäre|waere|"
+        r"(?i)\b(?:nicht(?:\s+mehr)?|kein(?:e|er|em|en|es)?|mein(?:e|er|em|en|es)?|"
+        r"unser(?:e|er|em|en|es)?|ein(?:e|er|em|en|es)?|könnte|koennte|wäre|waere|"
         r"würde|wuerde|soll|sollte|dürfte|duerfte|muss|müsste|muesste)\b",
         city,
     ):
