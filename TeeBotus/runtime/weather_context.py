@@ -885,6 +885,7 @@ _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY = re.compile(
     r"(?:(?:alt\w*|ehemalig\w*|früh\w*|frueh\w*|vorher|zuvor)\s*:?\s*)?"
     r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
     r"(?:neu\w*|jetzt|heute|nun|aktuell\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*|"
+    rf"seit\s+{_RESIDENCE_DURATION}\b|"
     r"seit\s+(?:heute|gestern|vorgestern)|ab\s+(?:sofort|jetzt)|"
     r"inzwischen|mittlerweile)\s*:?\s*(?:(?:in|bei)\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
@@ -6246,6 +6247,7 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
             _CITY_CHANGE_LABELLED_ALT_NEW_COLON_STREET,
             _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
             _CITY_CHANGE_LABELLED_CURRENT_HISTORICAL,
+            _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY,
             _CITY_CHANGE_LABELLED_CURRENT_NEW_RESIDENCE,
             _CITY_CHANGE_LABELLED_OLD_NEW_ADDRESS,
             _CITY_CHANGE_LABELLED_COLON_SEPARATOR_STREET,
@@ -8011,6 +8013,8 @@ def _has_conflicting_current_relative_residence(source: str) -> bool:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
+    if _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY.search(source):
+        return False
     if re.search(
         rf"\b(?:ich|wir)\s+{residence}\s+(?:in|bei)\s+"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*[,;]?\s*"
