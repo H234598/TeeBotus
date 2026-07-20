@@ -2950,10 +2950,30 @@ CITY_CHANGE_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
-        r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|gegend)\s+von|nahe|unweit\s+von|im\s+umland(?:\s+von)?)\s+"
+        r"(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|gegend)\s+von|nahe|unweit\s+von|"
+        r"im\s+umland(?:\s+von)?|im\s+(?:[A-ZÄÖÜ][\wÄÖÜäöüß'-]+\s+)?raum(?:\s+von)?)\s+"
         r"[^,.;!?]{1,80},\s*"
         r"(?:genauer(?:\s+gesagt)?|konkret|nämlich|naemlich|und\s+zwar|"
         r"besser\s+gesagt|sprich)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"im\s+(?:[A-ZÄÖÜ][\wÄÖÜäöüß'-]+\s+)?raum\s*,\s*"
+        r"(?:genauer(?:\s+gesagt)?|konkret|nämlich|naemlich|und\s+zwar|"
+        r"besser\s+gesagt|sprich)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt)\s*:\s*"
+        r"[^,.;!?]{1,80},\s*"
+        r"(?:genauer(?:\s+gesagt)?|konkret|nämlich|naemlich|und\s+zwar|"
+        r"besser\s+gesagt|sprich)\s*:?[\s]*(?:(?:in|bei)\s+)?"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
         r"(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
