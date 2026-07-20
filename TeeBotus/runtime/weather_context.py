@@ -5852,8 +5852,8 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
         return True
     residence_with_owned_domicile = re.search(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
-        r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:und|,|;)\s+"
-        r"(?:habe|haben)\s+"
+        r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*(?:und\s+|,\s*|;\s*)"
+        r"(?:habe|haben)\s+(?:(?:aber|doch|jedoch)\s+)?"
         r"(?:(?:meinen|meine|mein|unseren|unsere|unser|einen|eine|ein|den|die|das)\s+)?"
         r"(?:(?:fest|dauerhaft|aktuell|offiziell)\w*\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
