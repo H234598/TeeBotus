@@ -1929,3 +1929,23 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `f55c6ea7`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-12
+
+- `teebotus.service` aktiv/running, `MainPID 2292168`, Start `2026-07-20 03:25:05 CEST`.
+- Fremdpersonen-Wohnformen mit wechselnden Referenzen, possessiven Labels,
+  inversen Labels und Zuweisungsverben werden aus der eigenen Wohnortwahl
+  herausgehalten.
+- Neuer Zyklus: `6/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei 20/20.
+
+### Folgefix 2026-07-20: Breite Fremdpersonen-Referenzen
+
+- Erkannt: `führt/sieht ... als Wohnort`, `ihr Wohnsitz`, `ihre Wohnung`,
+  `die Wohnadresse der Frau`, `in Hamburg wohnt die Frau` und verwandte Formen.
+- Generische Wohnortmuster übernehmen bei Fremdpersonenklauseln nur die
+  vorherige eigene Stadt; `mein/unser Wohnort` bleibt eigener Kontext.
+- Adress-/Wohnort-Konfliktprüfung nutzt dieselben Fremdpersonenfilter.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `952dab8d`.
