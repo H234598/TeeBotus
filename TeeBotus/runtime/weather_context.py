@@ -6256,6 +6256,9 @@ def extract_residence_city(text: str) -> str:
                         candidates.append((city_start, city))
 
         collect_matches(source, 0)
+        first_boundary = re.search(r"(?<!\bSt)[.!?;]\s+", source, re.IGNORECASE)
+        if first_boundary:
+            collect_matches(source[: first_boundary.start()], 0)
         for boundary in re.finditer(r"(?<!\bSt)[.!?;]\s+", source, re.IGNORECASE):
             collect_matches(source[boundary.end() :], boundary.end())
         if candidates:
