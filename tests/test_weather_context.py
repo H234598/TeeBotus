@@ -3130,6 +3130,7 @@ def test_extract_residence_city_rejects_distinct_residence_and_registration_stat
     assert extract_residence_city("Wohne in Berlin, gemeldet in Hamburg.") == ""
     assert extract_residence_city("Gemeldet in Hamburg, wohne in Berlin.") == ""
     assert extract_residence_city("Offiziell gemeldet in Hamburg, wohne aber in Berlin.") == ""
+    assert extract_residence_city("Ich bin in Hamburg gemeldet, wohne aber in Berlin.") == ""
     assert extract_residence_city("Ich wohne in Berlin, offiziell gemeldet bin ich in Hamburg.") == ""
     assert extract_residence_city("Gemeldet bin ich in Hamburg.") == "Hamburg"
     assert extract_residence_city("Gemeldet bin ich: Hamburg.") == "Hamburg"
@@ -3140,6 +3141,8 @@ def test_extract_residence_city_rejects_distinct_residence_and_registration_stat
     assert extract_residence_city("Ich wohne in Berlin, bei Hamburg gemeldet.") == ""
     assert extract_residence_city("Ich wohne in Berlin, meine offizielle Meldung ist Hamburg.") == ""
     assert extract_residence_city("Ich wohne in Berlin, bin aber in Hamburg gemeldet.") == ""
+    assert extract_residence_city("Ich wohne in Berlin und habe dort keinen Wohnsitz.") == ""
+    assert extract_residence_city("Ich wohne in Berlin und habe dort keinen festen Wohnsitz.") == ""
     assert extract_residence_city("Ich wohne in Berlin, bin amtlich in Hamburg registriert.") == ""
     assert extract_residence_city("Ich wohne in Berlin und bei Hamburg bin ich gemeldet.") == ""
 

@@ -6240,6 +6240,16 @@ def _standalone_residence_aliases(source: str) -> set[str]:
 
 
 def _has_conflicting_residence_address_targets(source: str) -> bool:
+    if re.search(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"[^.!?;\n]{1,80}\s+(?:und|,)\s+(?:habe|haben)\s+"
+        r"(?:dort|da|hier)\s+(?:keinen|keine|kein)\s+"
+        r"(?:(?:fest\w*|dauerhaft\w*|eigen\w*|ständig\w*|staendig\w*)\s+)?"
+        r"(?:wohnort|wohnsitz|wohnadresse|wohnanschrift|anschrift|adresse)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return True
     city_capture = (
         r"(?:\d{5}\s+)?"
         r"(?:auch\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?"
@@ -7045,6 +7055,12 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             foreign_registered_city_keys.add(_city_comparison_key(city))
     registered_address_cities.difference_update(foreign_registered_city_keys)
     registered_address_cities.difference_update(_standalone_residence_aliases(source))
+    if (
+        short_residence_cities
+        and registered_address_cities
+        and short_residence_cities.isdisjoint(registered_address_cities)
+    ):
+        return True
     residence_address_cities = residence_cities | address_cities
     if (
         residence_address_cities
