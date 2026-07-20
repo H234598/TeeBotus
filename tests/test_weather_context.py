@@ -3467,6 +3467,10 @@ def test_extract_residence_city_ignores_common_foreign_person_residence_labels()
     assert extract_residence_city("Ich wohne in Berlin und Hamburg ist meine Schule.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, aber in Hamburg bin ich beruflich.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, doch in Hamburg bin ich dienstlich.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, aber gerade in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich wohne aktuell in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich lebe derzeit in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich bin gerade in Hamburg wohnhaft.") == "Hamburg"
 
 
 def test_extract_residence_city_handles_have_primary_home_label() -> None:

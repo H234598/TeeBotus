@@ -5183,6 +5183,8 @@ def extract_residence_city(text: str) -> str:
                         continue
                     if _has_other_person_residence_prefix(source, pattern_start):
                         continue
+                    if _has_transient_location_fragment(source, city_start, city_end):
+                        continue
                     if _has_temporary_residence_prefix(source, pattern_start):
                         continue
                     if _has_other_person_residence_suffix(source, city_end):
@@ -7074,6 +7076,24 @@ def _has_non_residential_city_suffix(source: str, city_end: int) -> bool:
             source[city_end:],
         )
     )
+
+
+def _has_transient_location_fragment(source: str, city_start: int, city_end: int) -> bool:
+    prefix = source[:city_start]
+    sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
+    clause = re.split(r"[,;]\s*", sentence)[-1]
+    if not re.match(
+        r"(?i)^\s*(?:(?:aber|doch|jedoch)\s+)?gerade\s+(?:in|bei)\s*$",
+        clause,
+    ):
+        return False
+    if re.match(
+        r"(?i)\s+(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert|"
+        r"zuhause|zu\s+hause|daheim)\b",
+        source[city_end:],
+    ):
+        return False
+    return True
 
 
 def _has_temporary_residence_prefix(source: str, match_start: int) -> bool:
