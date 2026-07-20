@@ -1911,3 +1911,21 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `c9dfa08a`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-11
+
+- `teebotus.service` aktiv/running, `MainPID 2292168`, Start `2026-07-20 03:25:05 CEST`.
+- Fremdperson-Zuweisungen mit `hat/nennt/bezeichnet ... als/ihren Wohnort`
+  werden über die tatsächliche City-Spanne gefiltert.
+- Neuer Zyklus: `5/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei 20/20.
+
+### Folgefix 2026-07-20: Fremdperson-Zuweisungen
+
+- `Meine Frau hat Hamburg als Wohnort` und `nennt Hamburg ihren Wohnort`
+  erzeugen neben Berlin keinen falschen Mehrfachwohnsitz.
+- Eigene Formen bleiben unverändert, weil Filter Personenlabel und Verbkontext
+  gemeinsam verlangen.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f55c6ea7`.
