@@ -7569,6 +7569,32 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             and _city_comparison_key(residence) != _city_comparison_key(registered)
         ):
             return True
+    bare_city_address = re.compile(
+        r"(?:^|[.!?;,:]\s*)(?P<residence>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)\s*,\s*"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+        r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|"
+        r"privatanschrift|anschrift|meldeadresse|meldeanschrift|meldesitz)\s+"
+        r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
+        r"(?:(?:in|bei)\s+)?"
+        r"(?P<address>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    )
+    for match in bare_city_address.finditer(source):
+        if re.search(
+            r"(?i)\b(?:ich|wir|mein(?:e)?|unser(?:e)?|wohne\w*|wohnen\w*|"
+            r"lebe\w*|leben\w*|wohnort|wohnsitz)\b",
+            match.group("residence"),
+        ):
+            continue
+        residence = _clean_city(match.group("residence"))
+        address = _clean_city(match.group("address"))
+        if (
+            residence
+            and address
+            and _city_comparison_key(residence) != _city_comparison_key(address)
+        ):
+            return True
     for match in re.finditer(
         r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*[:=]\s*"
