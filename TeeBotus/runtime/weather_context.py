@@ -954,8 +954,9 @@ _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_CITY = re.compile(
 _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_CITY = re.compile(
     rf"\b(?:der|die|das|ein(?:e|en|em|er|es)?)?\s*"
     rf"{_OTHER_PERSON_LOCATION_LABEL}\s+"
-    rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}\s+"
-    r"(?:ist|liegt|bleibt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+    rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}"
+    r"(?:\s+(?:ist|liegt|bleibt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?|"
+    r"\s*[:=]\s*(?:(?:in|bei)\s+)?)"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
     r"(?:(?:[,;]\s*(?:und|sowie|aber|doch|jedoch|während|waehrend)?|"
     r"(?:und|sowie|aber|doch|jedoch|während|waehrend))\s*)"
