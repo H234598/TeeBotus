@@ -6019,14 +6019,15 @@ def _has_non_residential_companion_context(source: str) -> bool:
 
 
 def _is_implicit_residence_alias_fragment(source: str, city_start: int, city_end: int) -> bool:
-    if source[city_start:city_end].strip() not in _RESIDENCE_ALIAS_WORDS:
+    candidate = source[city_start:city_end].strip(" .,:;!?")
+    if candidate not in _RESIDENCE_ALIAS_WORDS:
         return False
     return bool(
         re.search(
             r"\b(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
             r"wohnadresse|wohnanschrift|meldeadresse|meldeanschrift|meldesitz|"
             r"adresse|anschrift|zuhause|zu\s+hause|daheim)\s*"
-            r"(?:(?:ist|liegt|lautet|befindet\s+sich)\s+)?$",
+            r"(?:(?:ist|liegt|lautet|befindet\s+sich)\s*)?$",
             source[:city_start].rstrip(),
             re.IGNORECASE,
         )

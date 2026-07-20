@@ -3094,6 +3094,9 @@ def test_extract_residence_city_handles_implicit_same_city_aliases() -> None:
     assert extract_residence_city("Ich wohne auch in Berlin") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, meine Meldeadresse auch in Berlin") == "Berlin"
     assert extract_residence_city("Meine Meldeadresse ist in Berlin, mein Wohnort Hamburg.") == ""
+    assert extract_residence_city("Wohnort auch.") == ""
+    assert extract_residence_city("Mein Wohnort ist auch.") == ""
+    assert extract_residence_city("Wohnort Auch.") == "Auch"
 
 
 def test_extract_residence_city_rejects_distinct_residence_and_registration_status() -> None:
