@@ -7859,7 +7859,8 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             re.IGNORECASE,
         ),
         re.compile(
-            rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+            rf"(?:^|[.!?;,:]\s*)(?:(?:aber|doch|jedoch|und)\s+)?"
+            rf"(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
             rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
             r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)"
             r"(?:(?::|=|,)\s*|\s+)"

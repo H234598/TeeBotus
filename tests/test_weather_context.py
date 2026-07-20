@@ -867,6 +867,13 @@ def test_extract_residence_city_rejects_conflicting_private_addresses() -> None:
     assert extract_residence_city("Mein Wohnort ist Berlin, meine Adresse ist Hamburg.") == ""
     assert extract_residence_city("Ich lebe in Berlin, mein Wohnsitz ist Hamburg.") == ""
     assert extract_residence_city("Ich wohne in Berlin, meine Wohnadresse ist Hamburg.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, aber meine Adresse Hamburg.") == ""
+    assert extract_residence_city(
+        "Hamburg war früher mein Wohnort, jetzt ist es Berlin, aber meine Adresse Potsdam."
+    ) == ""
+    assert extract_residence_city(
+        "Hamburg war früher mein Wohnort, jetzt ist es Berlin, doch meine Wohnadresse Potsdam."
+    ) == ""
     assert extract_residence_city("Meine Adresse ist Hamburg, ich wohne in Berlin.") == ""
     assert extract_residence_city("Ich wohne in Berlin, meine Arbeitsadresse ist Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, meine Geschäftsadresse ist Hamburg.") == "Berlin"
