@@ -1617,7 +1617,11 @@ def test_extract_residence_city_handles_short_self_clause_after_other_person() -
     assert extract_residence_city("Meine Freundin lebt in Hamburg, ich in Berlin.") == "Berlin"
     assert extract_residence_city("Meine Eltern wohnen in Hamburg, wir in Berlin.") == "Berlin"
     assert extract_residence_city("Mein Partner ist in Hamburg, ich bei Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Partner wohnt in Hamburg und ich in Berlin.") == "Berlin"
+    assert extract_residence_city("Meine Freundin lebt in Hamburg, aber ich in Berlin.") == "Berlin"
+    assert extract_residence_city("Meine Eltern wohnen in Hamburg, während wir in Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, meine Freundin in Hamburg.") == "Berlin"
+    assert extract_residence_city("Mein Partner wohnt in Hamburg und du in Berlin.") == ""
 
 
 def test_extract_residence_city_rejects_unknown_label_values() -> None:
