@@ -3232,6 +3232,14 @@ CITY_PATTERNS = (
         r"(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
+    re.compile(
+        r"(?:^|[.!?;,:]\s*)(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:neu\w*|jetzig\w*|aktuell\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|wohnadresse|wohnanschrift|adresse|anschrift|"
+        r"zuhause|zu\s+hause|daheim)\s*(?::|=|,)?\s*"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
     _MAIN_RESIDENCE_CITY_BEFORE_STREET,
     _MAIN_RESIDENCE_CITY,
     _COMPOUND_CITY_RESIDENCE,
