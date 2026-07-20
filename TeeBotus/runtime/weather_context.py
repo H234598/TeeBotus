@@ -6010,7 +6010,7 @@ def _has_non_residential_companion_context(source: str) -> bool:
 
 
 def _is_implicit_residence_alias_fragment(source: str, city_start: int, city_end: int) -> bool:
-    if source[city_start:city_end].strip().casefold() not in {"auch", "ebenfalls"}:
+    if source[city_start:city_end].strip().casefold() not in {"auch", "ebenfalls", "ebenso"}:
         return False
     return bool(
         re.search(
@@ -6397,7 +6397,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         r"haupt\w*|jetzig\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
         r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|privatanschrift|"
         r"anschrift)\s*(?::|=|,|\s+(?:ist|lautet|liegt|befindet\s+sich)\s+)"
-        rf"(?:(?:in|bei)\s+)?(?:(?:auch|ebenfalls)\s+)?{city_capture}",
+        rf"(?:(?:in|bei)\s+)?(?:(?:auch|ebenfalls|ebenso)\s+)?{city_capture}",
         source,
         re.IGNORECASE,
     ):
@@ -7798,7 +7798,7 @@ def _clean_city(value: str) -> str:
     ).strip()
     city = re.split(r"(?<!\bSt)[.!?]\s+", city, maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,:;!?")
     city = re.sub(r"(?i)^(?:in|bei)\s+", "", city)
-    city = re.sub(r"(?i)^(?:auch|ebenfalls)\s+", "", city)
+    city = re.sub(r"(?i)^(?:auch|ebenfalls|ebenso)\s+", "", city)
     city = re.sub(r"(?i)(?<!er)(?:[-\s]+)(?:nähe|umgebung)\b$", "", city).strip()
     city = re.sub(
         rf"(?i)[-\s]+(?:{'|'.join(_CITY_AREA_SUFFIXES)})$",

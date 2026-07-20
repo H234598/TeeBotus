@@ -3085,6 +3085,7 @@ def test_extract_residence_city_handles_labeled_center_relations() -> None:
 def test_extract_residence_city_handles_implicit_same_city_aliases() -> None:
     assert extract_residence_city("Meine Meldeadresse ist in Berlin, mein Wohnort auch.") == "Berlin"
     assert extract_residence_city("Meine Meldeadresse ist in Berlin, mein Wohnort ebenfalls.") == "Berlin"
+    assert extract_residence_city("Mein Wohnort ist ebenso Berlin.") == "Berlin"
     assert extract_residence_city("Meine Meldeadresse ist in Berlin, mein Wohnort Hamburg.") == ""
 
 
@@ -3639,6 +3640,28 @@ def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> 
     assert "Berlin: 12 C" in weather_context_text(account_store, account_id)
     memories = account_store.read_memory_entries(account_id)
     assert any(entry.get("kind") == "biographical_fact" and "Berlin" in str(entry.get("user_text")) for entry in memories)
+
+
+def test_weather_context_stores_clean_city_after_implicit_alias(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    calls: list[str] = []
+
+    def provider(city: str) -> str:
+        calls.append(city)
+        return f"{city}: 12 C, trocken"
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Mein Wohnort ist ebenso Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=provider,
+    )
+
+    assert result.city == "Berlin"
+    assert calls == ["Berlin"]
+    assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "Berlin"
 
 
 def test_city_memory_append_is_retried_after_transient_failure(tmp_path) -> None:
