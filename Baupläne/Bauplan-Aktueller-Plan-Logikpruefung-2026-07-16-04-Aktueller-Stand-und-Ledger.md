@@ -1815,3 +1815,21 @@
 - Verifikation: `tests/test_weather_context.py` -> `237 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `87260e24`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-05
+
+- `teebotus.service` aktiv/running, `MainPID 2038659`, Start `2026-07-20 02:24:52 CEST`.
+- Institutionelle Companion-Aufenthalte werden nicht als Wohnstadt gespeichert;
+  Familien- und Partnerformen bleiben gültig.
+- Nach Codefix und diesem Ledger-Commit: `14/20` Commits seit Restart. Kein
+  Push. Restart erst bei 20/20.
+
+### Folgefix 2026-07-20: Institutionelle Companion-Kontexte
+
+- `Schule`, `Universität`, `Hochschule`, `Klinik`, `Praxis` und weitere
+  institutionelle Begleiter werden in `bei/mit ... in Stadt` als
+  Nicht-Wohnkontext verworfen.
+- Personen- und Familienbegleiter bleiben normale Wohnortangaben.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `feeb44b8`.
