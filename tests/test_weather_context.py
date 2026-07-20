@@ -3103,6 +3103,9 @@ def test_extract_residence_city_rejects_distinct_residence_and_registration_stat
     assert extract_residence_city("Ich wohne in Berlin, offiziell gemeldet in Hamburg.") == ""
     assert extract_residence_city("Ich wohne in Berlin, bei Hamburg gemeldet.") == ""
     assert extract_residence_city("Ich wohne in Berlin, meine offizielle Meldung ist Hamburg.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, bin aber in Hamburg gemeldet.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, bin amtlich in Hamburg registriert.") == ""
+    assert extract_residence_city("Ich wohne in Berlin und bei Hamburg bin ich gemeldet.") == ""
 
 
 def test_extract_residence_city_handles_labeled_area_relations() -> None:

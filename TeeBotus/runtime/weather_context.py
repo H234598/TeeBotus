@@ -6560,9 +6560,12 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     registration_patterns = (
         re.compile(
             r"(?:^|[.!?;,:]\s*|\bund\s+)"
+            r"(?:(?:aber|doch|jedoch)\s+)?"
             r"(?:(?:ich|wir)\s+)?"
             r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
-            r"(?:bin|sind)\s+(?:in|bei)\s+"
+            r"(?:bin|sind)\s+(?:(?:aber|doch|jedoch)\s+)?"
+            r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
+            r"(?:in|bei)\s+"
             r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
             r"(?:gemeldet|registriert)\b",
             re.IGNORECASE,
@@ -6570,7 +6573,9 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         re.compile(
             r"(?:^|[.!?;,:]\s*|\bund\s+)"
             r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
-            r"(?:ich|wir)\s+(?:bin|sind)\s+(?:in|bei)\s+"
+            r"(?:ich|wir)\s+(?:bin|sind)\s+"
+            r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
+            r"(?:in|bei)\s+"
             r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
             r"(?:gemeldet|registriert)\b",
             re.IGNORECASE,
@@ -6583,7 +6588,8 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             re.IGNORECASE,
         ),
         re.compile(
-            r"(?:^|[.!?;,:]\s*|\bund\s+)(?:in|bei)\s+"
+            r"(?:^|[.!?;,:]\s*|\bund\s+)"
+            r"(?:(?:aber|doch|jedoch)\s+)?(?:in|bei)\s+"
             r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
             r"(?:gemeldet|registriert)\b",
             re.IGNORECASE,
@@ -6594,6 +6600,12 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             r"(?:meldung|registrierung)\s+(?:ist|lautet|liegt)\s+"
             r"(?:(?:in|bei)\s+)?"
             r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?:^|[.!?;,:]\s*|\bund\s+)(?:in|bei)\s+"
+            r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+            r"(?:bin|sind)\s+(?:ich|wir)\s+(?:gemeldet|registriert)\b",
             re.IGNORECASE,
         ),
     )
