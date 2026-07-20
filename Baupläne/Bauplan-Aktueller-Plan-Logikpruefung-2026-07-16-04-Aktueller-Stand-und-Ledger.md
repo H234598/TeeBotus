@@ -1869,3 +1869,21 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `6ec29491`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-08
+
+- `teebotus.service` bleibt bis zum planmaessigen Restart aktiv/running.
+- Inverse Fremdpersonen-Wohnlabels (`Wohnsitz meiner Frau liegt in ...`) werden
+  vor der Mehrdeutigkeitsprüfung erkannt.
+- Dieser Ledger-Commit ist `20/20` seit dem letzten Restart. Kein Push.
+- User-Service-Restart folgt jetzt nach der 20-Commit-Regel.
+
+### Folgefix 2026-07-20: Inverse Fremdpersonen-Wohnlabels
+
+- `Ich wohne in Berlin und der Wohnsitz meiner Frau liegt in Hamburg` bleibt
+  bei Berlin; die inverse Stadt wird nicht als eigener Wohnort bewertet.
+- Der Filter erkennt Personenlabel nach `Wohnsitz`, `Wohnadresse`, `Wohnort`
+  und verwandten Labels, inklusive `ist/liegt/befindet sich`.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `62b47989`.
