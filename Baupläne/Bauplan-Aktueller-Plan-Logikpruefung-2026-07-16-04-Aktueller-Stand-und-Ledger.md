@@ -2177,3 +2177,14 @@
 - Code-Commit: `8daab7b5`.
 - Neuer Zyklus: `10/20` Commits seit diesem Restart. Kein Push. Restart erst
   bei `20/20`.
+
+### Testhärtung 2026-07-20: Wettertest ohne Netzwerk
+
+- Der Telegram-Wettertest stubbt `fetch_weather_summary()` jetzt lokal.
+- Damit ruft die Wettertest-Suite keinen externen Wetteranbieter auf und bleibt
+  deterministisch.
+- Verifikation: `tests/test_weather_context.py` -> `241 passed`; Telegram-
+  Account-ID-Wettertest -> `1 passed`; `git diff --check` gruen.
+- Code-Commit: `8b28817d`.
+- Neuer Zyklus: `12/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei `20/20`.
