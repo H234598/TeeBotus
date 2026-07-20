@@ -61,6 +61,21 @@ def test_fake_decision_model_accepts_json_payloads_for_bibliothekar_decisions() 
     assert model_decision.source == "model"
 
 
+def test_structured_decisions_accept_fenced_json_from_model_runner() -> None:
+    def runner(_prompt, schema):
+        if schema is IntentDecision:
+            return 'Vorlauf\n```json\n{"intent":"chat","confidence":0.88,"reason_short":"smalltalk","source":"model"}\n```\nNachlauf'
+        return 'Vorlauf {"should_search":true,"query":"Schlaf","confidence":0.81,"reason_short":"source question","source":"model"} Nachlauf'
+
+    intent = decide_intent("Bitte ordne das ein", model_runner=runner)
+    bibliothekar = decide_bibliothekar_query("Kannst du das einordnen?", model_runner=runner)
+
+    assert intent.intent == "chat"
+    assert intent.source == "model"
+    assert bibliothekar.should_search is True
+    assert bibliothekar.query == "Schlaf"
+
+
 def test_fake_decision_model_missing_schema_response_is_explicit() -> None:
     model = FakeDecisionModel({})
 

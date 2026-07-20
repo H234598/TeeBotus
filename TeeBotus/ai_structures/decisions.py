@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from TeeBotus.ai_structures.schemas import BibliothekarQueryDecision, IntentDecision, MemoryCandidate, ReminderDecision, ResidenceDecision
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent
 from TeeBotus.core.youtube import YOUTUBE_TRANSCRIPT_COMMANDS, _has_youtube_transcript_intent
+from TeeBotus.decisions.parsing import coerce_decision_payload
 from TeeBotus.runtime.reminder_intent import parse_reminder_intent
 
 ModelRunner = Callable[[str, type[Any]], Any]
@@ -184,13 +185,7 @@ def _classic_registration_intent(action: RegistrationAction) -> IntentDecision:
 
 
 def _coerce_model_payload(payload: object, schema: type[Any]) -> Any:
-    if isinstance(payload, schema):
-        return payload
-    if isinstance(payload, str):
-        payload = json.loads(payload)
-    if hasattr(schema, "model_validate"):
-        return schema.model_validate(payload)
-    raise TypeError(f"Unsupported schema: {schema!r}")
+    return coerce_decision_payload(payload, schema)
 
 
 def _intent_prompt(text: str) -> str:
