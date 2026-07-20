@@ -3386,6 +3386,7 @@ def test_extract_residence_city_handles_inverted_relative_residence_references()
     assert extract_residence_city("Ich wohne in Berlin, aber inzwischen Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne in Berlin, jetzt wohnhaft in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne in Berlin, aktuell ansässig in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne nicht mehr in Berlin, inzwischen wohnhaft in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne in Berlin, jetzt arbeite ich in Hamburg.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin, habe aber meinen Hauptwohnsitz in Hamburg.") == ""
     assert extract_residence_city("Wir leben bei Berlin, haben jedoch unseren Wohnsitz in Potsdam.") == ""

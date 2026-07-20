@@ -2791,7 +2791,8 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:ich\s+wohne|ich\s+lebe)\s+(?:in|bei)\s+[^,.;!?]{1,80}?"
+        r"\b(?:ich\s+wohne|ich\s+lebe)\s+"
+        r"(?:(?:nicht\s+(?:mehr|l(?:aenger|änger))?|nicht)\s+)?(?:in|bei)\s+[^,.;!?]{1,80}?"
         r"(?:,|;|[-–—])\s*(?:(?:sondern|aber|doch|jedoch)\s+)?"
         r"(?:jetzt|nun|heute|aktuell|derzeit|inzwischen|mittlerweile)\s+"
         r"(?!(?:ist|bleibt|arbeite|arbeitest|arbeiten|studier|lern|schlaf|pendl|reis|besuch|"
@@ -2800,7 +2801,8 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
-        r"\b(?:ich\s+wohne|ich\s+lebe)\s+(?:in|bei)\s+[^,.;!?]{1,80}?"
+        r"\b(?:ich\s+wohne|ich\s+lebe)\s+"
+        r"(?:(?:nicht\s+(?:mehr|l(?:aenger|änger))?|nicht)\s+)?(?:in|bei)\s+[^,.;!?]{1,80}?"
         r"(?:,|;|[-–—])\s*(?:(?:sondern|aber|doch|jedoch)\s+)?"
         r"(?:jetzt|nun|heute|aktuell|derzeit|inzwischen|mittlerweile)\s+"
         r"(?:wohnhaft|ansässig|ansaessig)\s+(?:in|bei)\s+"
