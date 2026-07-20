@@ -4553,6 +4553,108 @@ def test_weather_context_stores_city_memory_and_rate_limits_checks(tmp_path) -> 
     assert any(entry.get("kind") == "biographical_fact" and "Berlin" in str(entry.get("user_text")) for entry in memories)
 
 
+def test_weather_context_uses_structured_residence_route_for_ambiguous_text(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    calls: list[str] = []
+    decision_calls: list[tuple[str, type[object]]] = []
+
+    def decision_runner(prompt: str, schema: type[object]) -> object:
+        decision_calls.append((prompt, schema))
+        return {"kind": "primary", "city": "Hamburg", "confidence": 0.94}
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Meine Adresse ist Berlin, mein Wohnort ist Hamburg.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: calls.append(city) or f"{city}: 12 C",
+        structured_decision_runner=decision_runner,
+    )
+
+    assert result.city == "Hamburg"
+    assert calls == ["Hamburg"]
+    assert len(decision_calls) == 1
+    assert decision_calls[0][1].__name__ == "ResidenceDecision"
+
+
+def test_weather_context_rejects_model_place_not_present_in_message(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    calls: list[str] = []
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Meine Adresse ist Berlin, mein Wohnort ist Hamburg.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: calls.append(city) or f"{city}: 12 C",
+        structured_decision_runner=lambda _prompt, _schema: {
+            "kind": "primary",
+            "city": "München",
+            "confidence": 0.99,
+        },
+    )
+
+    assert result.skipped_reason == "no_city"
+    assert calls == []
+
+
+def test_weather_context_does_not_route_temporary_place_to_primary_weather(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    calls: list[str] = []
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Mein Wohnort ist Berlin, aber dort bin ich nur vorübergehend.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: calls.append(city) or f"{city}: 12 C",
+        structured_decision_runner=lambda _prompt, _schema: {
+            "kind": "temporary",
+            "city": "Berlin",
+            "confidence": 0.95,
+        },
+    )
+
+    assert result.skipped_reason == "no_city"
+    assert calls == []
+
+
+def test_weather_context_does_not_call_decision_runner_for_clear_text(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    decision_calls: list[str] = []
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: f"{city}: 12 C",
+        structured_decision_runner=lambda prompt, _schema: decision_calls.append(prompt),
+    )
+
+    assert result.city == "Berlin"
+    assert decision_calls == []
+
+
+def test_weather_context_does_not_guess_conflict_without_decision_runner(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Berlin ist mein Zuhause, aber nur am Wochenende.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: f"{city}: 12 C",
+    )
+
+    assert result.skipped_reason == "no_city"
+
+
 def test_weather_context_stores_clean_city_after_implicit_alias(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

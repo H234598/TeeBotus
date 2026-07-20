@@ -7,6 +7,7 @@ from TeeBotus.ai_structures.schemas import (
     MemoryCandidate,
     ProactiveToolCallDecision,
     ReminderDecision,
+    ResidenceDecision,
     SourceQualityDecision,
     ToolSafetyDecision,
     YouTubeOptionsDecision,
@@ -19,14 +20,17 @@ __all__ = [
     "MemoryCandidate",
     "ProactiveToolCallDecision",
     "ReminderDecision",
+    "ResidenceDecision",
     "SourceQualityDecision",
     "ToolSafetyDecision",
     "YouTubeOptionsDecision",
     "decide_bibliothekar_query",
     "decide_intent",
+    "decide_residence",
     "parse_bibliothekar_query_decision",
     "parse_memory_candidate",
     "parse_reminder_decision",
+    "parse_residence_decision",
     "PydanticAIUnavailableError",
     "build_pydantic_ai_model_runner",
     "build_router_pydantic_ai_model_runner",
@@ -35,7 +39,7 @@ __all__ = [
 
 
 def __getattr__(name: str):
-    if name in {"decide_bibliothekar_query", "decide_intent", "parse_bibliothekar_query_decision", "parse_memory_candidate", "parse_reminder_decision"}:
+    if name in {"decide_bibliothekar_query", "decide_intent", "decide_residence", "parse_bibliothekar_query_decision", "parse_memory_candidate", "parse_reminder_decision", "parse_residence_decision"}:
         from TeeBotus.ai_structures import decisions
 
         return getattr(decisions, name)

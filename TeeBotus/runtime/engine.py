@@ -311,7 +311,12 @@ class TeeBotusEngine:
                 LOGGER.exception("Account activity update failed instance=%s account=%s", event.instance, result.account_id)
         if result.account_id:
             try:
-                update_city_and_weather_context(self.account_store, result.account_id, event.text)
+                update_city_and_weather_context(
+                    self.account_store,
+                    result.account_id,
+                    event.text,
+                    structured_decision_runner=self.structured_decision_runner,
+                )
             except (AccountStoreError, OSError, ValueError):
                 pass
             except Exception:  # noqa: BLE001 - weather observation must not block the user message.

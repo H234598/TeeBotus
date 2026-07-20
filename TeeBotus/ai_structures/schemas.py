@@ -46,6 +46,34 @@ class IntentDecision(BaseModel):
         return str(value or "").strip()
 
 
+ResidenceKind = Literal[
+    "primary",
+    "temporary",
+    "secondary",
+    "historical",
+    "registration",
+    "work",
+    "travel",
+    "none",
+    "ambiguous",
+]
+
+
+class ResidenceDecision(BaseModel):
+    """Route a location claim without allowing it to invent a place."""
+
+    kind: ResidenceKind
+    city: str = Field(default="", max_length=80)
+    confidence: float = Field(ge=0.0, le=1.0)
+    reason_short: str = Field(default="", max_length=240)
+    source: Literal["classic", "model", "fallback"] = "model"
+
+    @field_validator("city", "reason_short")
+    @classmethod
+    def _strip_text(cls, value: str) -> str:
+        return str(value or "").strip()
+
+
 class MemoryCandidate(BaseModel):
     should_store: bool
     memory_type: str = Field(max_length=80)

@@ -6,7 +6,7 @@ from typing import Any
 
 from pydantic import ValidationError
 
-from TeeBotus.ai_structures.schemas import BibliothekarQueryDecision, IntentDecision, MemoryCandidate, ReminderDecision
+from TeeBotus.ai_structures.schemas import BibliothekarQueryDecision, IntentDecision, MemoryCandidate, ReminderDecision, ResidenceDecision
 from TeeBotus.core.registration import RegistrationAction, parse_registration_intent
 from TeeBotus.core.youtube import YOUTUBE_TRANSCRIPT_COMMANDS, _has_youtube_transcript_intent
 from TeeBotus.runtime.reminder_intent import parse_reminder_intent
@@ -117,6 +117,42 @@ def parse_bibliothekar_query_decision(payload: object) -> BibliothekarQueryDecis
     return _coerce_model_payload(payload, BibliothekarQueryDecision)
 
 
+def decide_residence(text: str, *, model_runner: ModelRunner | None = None) -> ResidenceDecision:
+    value = str(text or "").strip()
+    if not value or model_runner is None:
+        return ResidenceDecision(
+            kind="none",
+            city="",
+            confidence=0.0,
+            reason_short="No residence decision runner available",
+            source="fallback",
+        )
+    try:
+        decision = model_runner(_residence_prompt(value), ResidenceDecision)
+        model_decision = _coerce_model_payload(decision, ResidenceDecision)
+        if model_decision.confidence < 0.75:
+            return ResidenceDecision(
+                kind="ambiguous",
+                city="",
+                confidence=model_decision.confidence,
+                reason_short="Model residence decision below confidence threshold",
+                source="fallback",
+            )
+        return model_decision
+    except (TypeError, ValueError, ValidationError, json.JSONDecodeError):
+        return ResidenceDecision(
+            kind="ambiguous",
+            city="",
+            confidence=0.0,
+            reason_short="Structured residence decision unavailable",
+            source="fallback",
+        )
+
+
+def parse_residence_decision(payload: object) -> ResidenceDecision:
+    return _coerce_model_payload(payload, ResidenceDecision)
+
+
 def _classic_command_intent(command: str) -> IntentDecision:
     if command in YOUTUBE_TRANSCRIPT_COMMANDS:
         return IntentDecision(intent="youtube_transcript", confidence=1.0, reason_short=f"Slash command {command}", source="classic")
@@ -171,6 +207,19 @@ def _bibliothekar_query_prompt(text: str) -> str:
         "Antworte nur als JSON fuer BibliothekarQueryDecision. should_search ist true bei Fragen nach Buechern, Dokumenten, Quellen, Zitaten, Literatur oder gespeichertem Bibliothekswissen. "
         "Wenn true, normalisiere query auf eine knappe Suchfrage. Wenn false, lasse query leer.\n\n"
         f"Nachricht:\n{text.strip()}"
+    )
+
+
+def _residence_prompt(text: str) -> str:
+    return (
+        "Ordne ausschliesslich Orts-/Wohnortangaben dieser Nachricht. Antworte nur als JSON fuer ResidenceDecision. "
+        "kind muss genau eines sein: primary (dauerhafter eigener Wohnort), temporary (zeitweiliger Aufenthalt), "
+        "secondary (Nebenwohnsitz), historical (frueherer Wohnort), registration (Melde-/Registrierungsadresse), "
+        "work (Arbeitsort), travel (Reiseort), none oder ambiguous. "
+        "Nur primary darf Wetter-Wohnort aktualisieren. Bei mehreren konkurrierenden Orten oder unklarer Zeit-/Beziehungslage: ambiguous. "
+        "city darf nur ein Ort sein, der woertlich in der Nachricht steht; nichts erfinden. Bei none/ambiguous city leer lassen. "
+        "confidence zwischen 0 und 1.\n\n"
+        f"Nachricht:\n{text}"
     )
 
 

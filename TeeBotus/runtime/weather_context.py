@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping
 
+from TeeBotus.decisions.residence import decide_residence
 from TeeBotus.runtime.accounts import AccountStore
 
 WEATHER_CONTEXT_SCHEMA_VERSION = 1
@@ -6198,7 +6199,39 @@ class WeatherContextResult:
 
 
 WeatherProvider = Callable[[str], str]
+StructuredDecisionRunner = Callable[[str, type[Any]], Any]
 CityMemorySnapshot = tuple[list[dict[str, Any]], dict[str, Any]]
+RESIDENCE_DECISION_MIN_CONFIDENCE = 0.75
+_RESIDENCE_SIGNAL_RE = re.compile(
+    r"\b(?:wohn\w*|lebe\w*|lebensmittelpunkt|zuhause|zu\s+hause|daheim|"
+    r"adresse|anschrift|melde\w*|registriert\w*|ansässig\w*|ansaessig\w*)\b",
+    re.IGNORECASE,
+)
+_RESIDENCE_LABEL_RE = re.compile(
+    r"\b(?:wohnort\w*|wohnsitz\w*|wohnstadt\w*|hauptwohnsitz\w*|"
+    r"lebensmittelpunkt|zuhause|zu\s+hause|daheim|adresse\w*|anschrift\w*|"
+    r"melde\w*|registriert\w*|ansässig\w*|ansaessig\w*)\b",
+    re.IGNORECASE,
+)
+_RESIDENCE_CONFLICT_MARKERS = frozenset(
+    {
+        "aber",
+        "doch",
+        "jedoch",
+        "sondern",
+        "oder",
+        "beziehungsweise",
+        "teilweise",
+        "sowohl",
+        "ehemals",
+        "früher",
+        "frueher",
+        "vorübergehend",
+        "voruebergehend",
+        "zeitweise",
+        "gelegentlich",
+    }
+)
 
 
 class _ResidenceMemoryRollbackError(RuntimeError):
@@ -6212,14 +6245,17 @@ def update_city_and_weather_context(
     *,
     now: datetime | None = None,
     provider: WeatherProvider | None = None,
+    structured_decision_runner: StructuredDecisionRunner | None = None,
 ) -> WeatherContextResult:
     if not account_id:
         return WeatherContextResult(skipped_reason="missing_account")
+    # Keep optional model latency outside the account-memory lock.
+    resolved_city = _resolve_residence_city(text, structured_decision_runner)
     with account_store.account_memory_lock(account_id):
         return _update_city_and_weather_context_unlocked(
             account_store,
             account_id,
-            text,
+            city=resolved_city,
             now=now,
             provider=provider,
         )
@@ -6228,8 +6264,8 @@ def update_city_and_weather_context(
 def _update_city_and_weather_context_unlocked(
     account_store: AccountStore,
     account_id: str,
-    text: str,
     *,
+    city: str,
     now: datetime | None = None,
     provider: WeatherProvider | None = None,
 ) -> WeatherContextResult:
@@ -6237,7 +6273,6 @@ def _update_city_and_weather_context_unlocked(
     state = account_store.read_agent_state(account_id)
     previous_state = deepcopy(state)
     weather_state = _ensure_weather_state(state)
-    city = extract_residence_city(text)
     city_changed = False
     city_memory_snapshot: CityMemorySnapshot | None = None
     if city:
@@ -6297,6 +6332,36 @@ def _update_city_and_weather_context_unlocked(
     weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
     _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
     return WeatherContextResult(city=current_city, weather_text=weather_state["summary"], checked=True)
+
+
+def _resolve_residence_city(
+    text: str,
+    structured_decision_runner: StructuredDecisionRunner | None,
+) -> str:
+    source = str(text or "").strip()
+    if not source or not _RESIDENCE_SIGNAL_RE.search(source):
+        return ""
+
+    tokens = {
+        token.strip(".,;:!?()[]{}\"'").casefold()
+        for token in source.split()
+        if token.strip(".,;:!?()[]{}\"'")
+    }
+    conflict = bool(tokens & _RESIDENCE_CONFLICT_MARKERS) or len(_RESIDENCE_LABEL_RE.findall(source)) > 1
+    if not conflict:
+        deterministic_city = extract_residence_city(source)
+        if deterministic_city:
+            return deterministic_city
+    if structured_decision_runner is None:
+        return ""
+
+    decision = decide_residence(source, model_runner=structured_decision_runner)
+    if decision.kind != "primary" or decision.confidence < RESIDENCE_DECISION_MIN_CONFIDENCE:
+        return ""
+    candidate = re.sub(r"\s+", " ", str(decision.city or "")).strip(" .,:;!?")
+    if not candidate or candidate.casefold() not in source.casefold():
+        return ""
+    return candidate
 
 
 def _write_weather_state(
