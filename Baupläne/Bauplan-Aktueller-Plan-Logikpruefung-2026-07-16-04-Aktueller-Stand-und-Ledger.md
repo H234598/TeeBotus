@@ -2078,3 +2078,27 @@
 - Restart nach abgeschlossenem Zyklus `20/20` ausgeführt.
 - `teebotus.service` ist `active/running`, neuer `MainPID 2585598`.
 - Neuer Zyklus: `1/20` Commits seit diesem Restart. Kein Push.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-03
+
+- `teebotus.service` aktiv/running, `MainPID 2585598`.
+- Benannte Fremdpersonen, Organisationen und pronominale Ortslabels werden
+  auch bei `liegt`, `lautet`, `Zuhause`, `Meldeadresse` und Satzwechseln
+  erkannt.
+- Registeradress-Konfliktprüfung filtert rohe Fremdtextfragmente vor dem
+  Vergleich; echte eigene Registrierungsadressen bleiben wirksam.
+- Varianten-Sweep mit 238 Kombinationen: `238/238` korrekt.
+- Neuer Zyklus: `3/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei `20/20`.
+
+### Folgefix 2026-07-20: Fremde Adressfragmente
+
+- Unmittelbare Pronomen vor Ortslabels (`ihr Zuhause`) blockieren keine
+  eigene Wohnstadt mehr.
+- Prefixfilter deckt benannte Personen und Organisationsbesitzer nach `von`
+  ab.
+- `registered_address_cities` entfernt nur Kandidaten, die als Fremdbezug
+  klassifiziert sind.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `ef269e20`.
