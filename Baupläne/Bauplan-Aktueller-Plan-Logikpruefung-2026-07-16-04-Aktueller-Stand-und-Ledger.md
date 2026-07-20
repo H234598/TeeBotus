@@ -2353,6 +2353,18 @@
 - Neuer Zyklus: `13/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
 
+### Folgefix 2026-07-20: Invertierte Adverb-Klauseln
+
+- `Dort/Hier/Da, in Berlin, wohne/lebe ich` wurde nicht erkannt.
+- Der Wohnortparser erkennt diese Klauselform jetzt einschließlich optionalem
+  Komma und mehrteiliger Städte.
+- Regressionen decken alle drei Adverbien und `lebe` ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `25fc128b`.
+- Neuer Zyklus: `15/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-20: Verkürzte Registrierungsformulierungen
 
 - Varianten wie `bin in Hamburg gemeldet`, `offiziell gemeldet in Hamburg`,
