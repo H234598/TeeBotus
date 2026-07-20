@@ -554,7 +554,7 @@ _CITY_CHANGE_OLD_NEW_CITY_BEFORE_STREET = re.compile(
 )
 _CITY_CHANGE_FORMER_ADDRESS_CURRENT_CITY = re.compile(
     r"\b(?:meine|unsere)\s+(?:alte|ehemalige|frühere|fruehere)\s+"
-    r"(?:adresse|anschrift)\s+war\s+"
+    r"(?:wohnadresse|wohnanschrift|adresse|anschrift)\s+(?:war|ist)\s+"
     r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
     r"(?:meine|unsere)\s+(?:neue|aktuelle|jetzige|derzeitige)\s+"
     r"(?:(?:adresse|anschrift)\s+)?(?:ist|lautet)\s+"
