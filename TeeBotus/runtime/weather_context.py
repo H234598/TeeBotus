@@ -6425,9 +6425,9 @@ def weather_context_text(account_store: AccountStore, account_id: str) -> str:
     summary = str(weather_state.get("summary") or "").strip()
     checked_at = str(weather_state.get("last_checked_at") or "").strip()
     last_error = str(weather_state.get("last_error") or "").strip()
-    if not city or not summary or last_error:
+    if not city or not summary or not checked_at or _parse_datetime(checked_at) is None or last_error:
         return ""
-    return f"Stadt/Wohnort: {city}\nLetzter Wettercheck: {checked_at or 'unbekannt'}\nKurz-Wetter: {summary}"
+    return f"Stadt/Wohnort: {city}\nLetzter Wettercheck: {checked_at}\nKurz-Wetter: {summary}"
 
 
 def extract_residence_city(text: str) -> str:

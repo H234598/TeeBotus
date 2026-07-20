@@ -5148,6 +5148,22 @@ def test_weather_state_timestamps_use_supplied_now(tmp_path) -> None:
     assert second_state["updated_at"] == expected_second
 
 
+@pytest.mark.parametrize("checked_at", ["", "not-a-date"])
+def test_weather_context_text_rejects_missing_or_invalid_check_timestamp(tmp_path, checked_at: str) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    state = account_store.read_agent_state(account_id)
+    state["weather_context"] = {
+        "city": "Berlin",
+        "summary": "old weather",
+        "last_checked_at": checked_at,
+        "last_error": "",
+    }
+    account_store.write_agent_state(account_id, state)
+
+    assert weather_context_text(account_store, account_id) == ""
+
+
 def test_future_weather_check_timestamp_does_not_block_recheck(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
