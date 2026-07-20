@@ -3099,6 +3099,10 @@ def test_extract_residence_city_handles_implicit_same_city_aliases() -> None:
 def test_extract_residence_city_rejects_distinct_residence_and_registration_status() -> None:
     assert extract_residence_city("Ich wohne bei Berlin und bin in Hamburg gemeldet.") == ""
     assert extract_residence_city("Ich wohne bei Berlin und bin in Berlin gemeldet.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, bin in Hamburg gemeldet.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, offiziell gemeldet in Hamburg.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, bei Hamburg gemeldet.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, meine offizielle Meldung ist Hamburg.") == ""
 
 
 def test_extract_residence_city_handles_labeled_area_relations() -> None:

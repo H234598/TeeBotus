@@ -6557,17 +6557,58 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         city = _clean_city(match.group("city"))
         if city:
             registered_address_cities.add(_city_comparison_key(city))
-    for match in re.finditer(
-        r"\b(?:(?:ich|wir)\s+|und\s+)(?:bin|sind)\s+"
-        r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
-        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
-        r"(?:gemeldet|registriert)\b",
-        source,
-        re.IGNORECASE,
-    ):
-        city = _clean_city(match.group("city"))
-        if city:
-            registered_address_cities.add(_city_comparison_key(city))
+    registration_patterns = (
+        re.compile(
+            r"(?:^|[.!?;,:]\s*|\bund\s+)"
+            r"(?:(?:ich|wir)\s+)?"
+            r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
+            r"(?:bin|sind)\s+(?:in|bei)\s+"
+            r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+            r"(?:gemeldet|registriert)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?:^|[.!?;,:]\s*|\bund\s+)"
+            r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
+            r"(?:ich|wir)\s+(?:bin|sind)\s+(?:in|bei)\s+"
+            r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+            r"(?:gemeldet|registriert)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?:^|[.!?;,:]\s*|\bund\s+)"
+            r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
+            r"(?:gemeldet|registriert)\s+(?:in|bei)\s+"
+            r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"(?:^|[.!?;,:]\s*|\bund\s+)(?:in|bei)\s+"
+            r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+            r"(?:gemeldet|registriert)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\b(?:meine|unsere|mein|unser)\s+"
+            r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|aktuell\w*)\s+)?"
+            r"(?:meldung|registrierung)\s+(?:ist|lautet|liegt)\s+"
+            r"(?:(?:in|bei)\s+)?"
+            r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+            re.IGNORECASE,
+        ),
+    )
+    for pattern in registration_patterns:
+        for match in pattern.finditer(source):
+            if (
+                _has_historical_residence_prefix(source, match.start())
+                or _has_future_residence_prefix(source, match.start(), match.start("city"))
+                or _has_uncertain_residence_prefix(source, match.start())
+                or _has_temporary_residence_prefix(source, match.start())
+            ):
+                continue
+            city = _clean_city(match.group("city"))
+            if city:
+                registered_address_cities.add(_city_comparison_key(city))
     for match in re.finditer(
         rf"\b(?:(?:{_RESIDENCE_LABEL_DETERMINER})\s+)?"
         r"(?:meldeadresse|meldeanschrift|meldesitz)\s*"
