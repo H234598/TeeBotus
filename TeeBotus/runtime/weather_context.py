@@ -6779,6 +6779,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         re.IGNORECASE,
     ):
         first_raw = match.group("first")
+        second_raw = match.group("second")
         first = _clean_city(match.group("first"))
         second = _clean_city(match.group("second"))
         if (
@@ -6791,7 +6792,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
                 r"künftig\w*|kuenftig\w*|zukünftig\w*|zukuenftig|geplant\w*|"
                 r"beabsichtig\w*|vielleicht|vermutlich|möglicherweise|moeglicherweise|"
                 r"eventuell|wahrscheinlich|angeblich|anscheinend|scheinbar)\b",
-                first_raw,
+                f"{first_raw} {second_raw}",
             )
         ):
             return True
