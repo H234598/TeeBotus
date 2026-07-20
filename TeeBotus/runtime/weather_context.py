@@ -323,7 +323,7 @@ _TEMPORARY_RESIDENCE_QUALIFIER = (
     r"freitags?|samstags?|sonntags?|morgens|vormittags|mittags|nachmittags|"
     r"abends|nachts|(?:zu|an)\s+(?:weihnachten|ostern)|über\s+(?:die\s+)?feiertage|"
     r"(?:bei|zu|auf)\s+besuch|gelegentlich|manchmal|"
-    r"regelmäßig|regelmaessig|selten)"
+    r"regelmäßig|regelmaessig|selten|geschäftlich|geschaeftlich|projektbedingt)"
 )
 _RESIDENCE_LOCATION_ADVERB = (
     r"(?:(?:hier|dort|da|direkt|nur|allein|überwiegend|ueberwiegend|"
