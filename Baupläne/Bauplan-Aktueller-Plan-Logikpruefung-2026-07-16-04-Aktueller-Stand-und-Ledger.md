@@ -3007,3 +3007,16 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `b9a36ec2`.
 - Neuer Zyklusstand: `15/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Präziser Ort nach `nahe`/`unweit`
+
+- `Ich wohne nahe Berlin, genauer gesagt in Potsdam` und die `unweit von`-
+  Variante wurden bisher auf Berlin verkürzt.
+- Ein enger Präzisierungsmatcher priorisiert jetzt den nach `genauer gesagt`,
+  `konkret`, `nämlich` oder verwandten Markern genannten Ort. Unklare
+  Mehrfachwohnorte ohne Präzisierung bleiben unverändert.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `268 passed`;
+  Telegram-Wettertest -> `1 passed`; Parsermatrix, `py_compile` und
+  `git diff --check` grün. Code-Commit: `181df379`.
+- Neuer Zyklusstand: `4/20` Commits seit dem Restart. Kein Push. Restart erst
+  bei `20/20`.
