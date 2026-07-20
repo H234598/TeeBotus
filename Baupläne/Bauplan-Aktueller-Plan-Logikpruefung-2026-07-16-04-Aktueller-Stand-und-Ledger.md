@@ -2269,3 +2269,19 @@
   `MainPID 2868684`, `ActiveEnterTimestamp=2026-07-20 05:44:22 CEST`.
 - Neuer Zyklus: `1/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Konflikt zwischen Wohnort und Registrierungsstatus
+
+- `Ich wohne bei Berlin und bin in Hamburg gemeldet` wurde bisher als Hamburg
+  übernommen; der offizielle Registrierungsstatus wurde nicht in den
+  Adresskonfliktvergleich aufgenommen.
+- Eigene `ich/wir bin/sind in/bei CITY gemeldet|registriert`-Formen werden jetzt
+  als registrierte Adresse gesammelt. Gleiches CITY bleibt gültig, ein anderer
+  Ort wird konservativ verworfen.
+- `wohnhaft` bleibt getrennte aktuelle Wohnstatuslogik, damit zeitliche
+  Wohnortwechsel nicht als reine Meldeadresskonflikte fehlklassifiziert werden.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `adef402d`.
+- Neuer Zyklus: `3/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
