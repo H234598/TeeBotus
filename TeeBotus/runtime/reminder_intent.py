@@ -320,7 +320,8 @@ def _structured_reminder_intent(
     if not decision.should_create or decision.confidence < 0.7:
         return ReminderIntent(False)
     subject = decision.text.strip() or "deinen Termin"
-    recurrence = str(decision.recurrence or "").strip()
+    raw_recurrence = str(decision.recurrence or "").strip()
+    recurrence = _parse_recurrence(raw_recurrence) or raw_recurrence
     anchor_day, anchor_end_of_month = _recurrence_anchor_from_text(raw, recurrence, fallback=resolved_now)
     if not decision.datetime_iso:
         interval_due = _initial_interval_due(resolved_now, recurrence)

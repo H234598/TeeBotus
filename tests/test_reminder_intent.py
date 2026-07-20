@@ -671,6 +671,34 @@ def test_structured_interval_recurrence_can_start_without_absolute_time(tmp_path
     assert queued[0]["recurrence"] == "every 2 hours"
 
 
+def test_structured_interval_recurrence_normalizes_german_alias(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
+    account_store = store(tmp_path)
+    identity = signal_identity_key(source_uuid="structured-reminder-interval-alias")
+    account_id = account_store.resolve_or_create_account(identity)
+    account_store.update_identity_route(identity, channel="signal", chat_id="+491", chat_type="private", adapter_slot=1)
+
+    reply = maybe_queue_natural_reminder(
+        account_store=account_store,
+        account_id=account_id,
+        instance_name="Depressionsbot",
+        text="Kannst du mich alle 2 Stunden wegen Wasser anstupsen?",
+        now=fixed_now(),
+        structured_decision_runner=lambda _prompt, _schema: {
+            "should_create": True,
+            "text": "Wasser trinken",
+            "datetime_iso": None,
+            "recurrence": "alle 2 Stunden",
+            "confidence": 0.91,
+        },
+    )
+
+    assert reply == "Okay, ich erinnere dich am 15.06.2026 um 14:00: Wasser trinken"
+    queued = account_store.read_proactive_outbox(account_id)
+    assert queued[0]["due_at"] == "2026-06-15T14:00:00+00:00"
+    assert queued[0]["recurrence"] == "every 2 hours"
+
+
 def test_structured_reminder_classifier_failure_fails_open(tmp_path, monkeypatch) -> None:
     monkeypatch.setenv("TEEBOTUS_PROACTIVE_AGENT_INSTANCES", "Depressionsbot")
     account_store = store(tmp_path)
