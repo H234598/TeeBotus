@@ -3072,6 +3072,23 @@ CITY_PATTERNS = (
         r"(?=\s*[,;]\s*(?:gestern|vorgestern|früher|frueher|damals|ehemals)\b)",
         re.IGNORECASE,
     ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*:\s*heute\s+"
+        r"(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*[,;]\s*(?:gestern|vorgestern|früher|frueher|damals|ehemals)\b)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*:\s*"
+        r"(?:gestern|vorgestern|früher|frueher|damals|ehemals)\s+[^,.;!?]{1,80}\s*[,;]\s*"
+        r"(?:heute|jetzt|nun|aktuell|derzeit|inzwischen)\s+"
+        r"(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
     _MAIN_RESIDENCE_CITY_BEFORE_STREET,
     _MAIN_RESIDENCE_CITY,
     _COMPOUND_CITY_RESIDENCE,
@@ -5833,6 +5850,15 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
         re.IGNORECASE,
     ):
         return False
+    if re.search(
+        r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*:\s*heute\s+"
+        r"[^,.;!?]{1,80}\s*[,;]\s*"
+        r"(?:gestern|vorgestern|früher|frueher|damals|ehemals)\b",
+        multiplicity_source,
+        re.IGNORECASE,
+    ):
+        return False
     question_answer = re.search(
         r"(?:\bwo\s+(?:(?:genau|eigentlich)\s+)?(?:wohnst|lebst)\s+du(?:\s+(?:genau|eigentlich|denn))?|"
         r"\bwo\s+in\s+(?:deutschland|österreich|oesterreich|schweiz)\s+"
@@ -8426,7 +8452,10 @@ def _clean_city(value: str) -> str:
     if source.count(")") > source.count("("):
         source = re.sub(r"[.!?;,]+$", "", source).rstrip(")").rstrip()
     normalized_source = re.sub(r"\s+", " ", source).strip(" .,:;!?")
-    if re.match(r"(?i)^heute(?:\s|$)", normalized_source):
+    if re.match(
+        r"(?i)^(?:heute|gestern|vorgestern|früher|frueher|damals|ehemals)(?:\s|$)",
+        normalized_source,
+    ):
         return ""
     if re.search(
         r"(?i)\b(?:mag|vielleicht|vermutlich|wahrscheinlich|möglicherweise|moeglicherweise|"
