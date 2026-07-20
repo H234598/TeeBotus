@@ -9453,6 +9453,11 @@ def _clean_city(value: str) -> str:
         "",
         source,
     ).strip()
+    city = re.sub(
+        r"(?i)^(?:nur|rein|bloß|bloss|ausschließlich|ausschliesslich)\s+(?=(?:in|bei)\s+)",
+        "",
+        city,
+    )
     city = re.sub(r"(?i)^(?:ausschließlich|ausschliesslich)\s+", "", city)
     city = re.sub(
         r"(?i)\s*\((?:früher|frueher|vorher|zuvor|davor|ehemals|damals)\s+[^)]{1,80}\)\s*$",
