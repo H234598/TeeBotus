@@ -2312,3 +2312,25 @@
   Telegram-Wettertest -> `1 passed`. Code-Commit: `281aee36`.
 - Neuer Zyklus: `7/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Satzzeichen bei Aliasfragmenten
+
+- Regex-Varianten zogen den Satzpunkt in den City-Span. Dadurch wurde
+  `Wohnort auch.` als Stadt `auch` übernommen, obwohl `Auch` als echter
+  Ortsname gültig bleiben muss.
+- Aliasfilter trimmt jetzt Satzzeichen vor der Kontextprüfung. Kleingeschriebene
+  Aliaswörter werden verworfen, großgeschriebenes `Auch` bleibt gültig.
+- Regressionen decken `Wohnort auch`, `Mein Wohnort ist auch` und `Wohnort
+  Auch` ab. Code-Commit: `ecb50305`.
+
+### Folgefix 2026-07-20: Unsicherheitsmarker `voraussichtlich`
+
+- `Voraussichtlich wohne ich in Hamburg` wurde als sicherer Wohnort erkannt.
+- Der Marker wird jetzt wie `vielleicht` und `wahrscheinlich` als unsicher
+  verworfen.
+- Regression ergänzt. Verifikation für beide Folgefixes: komplette
+  `tests/test_weather_context.py` -> `249 passed`; Telegram-Wettertest ->
+  `1 passed`; `py_compile` und `git diff --check` gruen.
+- Code-Commit: `b87bd79e`.
+- Neuer Zyklus: `10/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
