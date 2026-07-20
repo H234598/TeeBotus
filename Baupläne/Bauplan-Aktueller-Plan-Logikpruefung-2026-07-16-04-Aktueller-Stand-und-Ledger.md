@@ -2755,3 +2755,16 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `348e414c`.
 - Neuer Zyklusstand: `4/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Verkürzte eigene Wohnortangabe nach Fremdperson
+
+- Formen wie `Mein Partner wohnt in Hamburg, ich in Berlin` und `Meine Eltern
+  wohnen in Hamburg, wir in Berlin` werden jetzt erkannt.
+- Der neue Matcher akzeptiert nur Fremdpersonenlabel mit Wohnverb und danach
+  eine verkürzte eigene `ich/wir in/bei Stadt`-Angabe. Die Fremdstadt wird nicht
+  als eigener Wohnort übernommen; die umgekehrte Form bleibt unverändert.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `255 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `4dbe0e6f`.
+- Neuer Zyklusstand: `8/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
