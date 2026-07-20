@@ -241,6 +241,8 @@ _KNOWN_CITY_DISTRICT_BASES = {
     "berlin kreuzberg": "Berlin",
     "berlin mitte": "Berlin",
     "berlin prenzlauer berg": "Berlin",
+    "berlin-neukölln": "Berlin",
+    "berlin-neukoelln": "Berlin",
     "kreuzberg": "Berlin",
     "im prenzlauer berg": "Berlin",
     "prenzlauer berg": "Berlin",
