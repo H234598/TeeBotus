@@ -8766,6 +8766,8 @@ def _has_unresolved_parenthetical_city_suffix(source: str, city_end: int) -> boo
         label,
     ):
         return False
+    if label.casefold() in _NON_CITY_REGION_NAMES:
+        return False
     if re.match(r"(?i)^(?:früher|frueher|vorher|zuvor|davor|ehemals|damals)\b", label):
         return False
     return True
@@ -8957,6 +8959,9 @@ def _clean_city(value: str) -> str:
         "",
         city,
     ).strip()
+    parenthetical_region = re.search(r"(?i)\s+\((?P<region>[^)]{1,80})\)$", city)
+    if parenthetical_region and parenthetical_region.group("region").strip().casefold() in _NON_CITY_REGION_NAMES:
+        city = city[: parenthetical_region.start()].strip()
     city = re.split(r"(?<!\bSt)[.!?]\s+", city, maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,:;!?")
     city = re.sub(r"(?i)^(?:(?:auch|ebenfalls|ebenso|gleichfalls)\s+)?(?:in|bei)\s+", "", city)
     city = re.sub(r"(?i)^(?:auch|ebenfalls|ebenso|gleichfalls)\s+", "", city)
