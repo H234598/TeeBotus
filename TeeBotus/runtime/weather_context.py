@@ -1191,6 +1191,20 @@ _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE = re.compile(
     r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert|zu\s+hause|zuhause|daheim)\s+bin(?:d)?)\b)",
     re.IGNORECASE,
 )
+_CITY_BEFORE_RELATIVE_RESIDENCE_LABEL = re.compile(
+    r"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*(?:,|;|:|[-–—])\s*"
+    r"(?:wo|in\s+(?:der|dem|welcher)|worin)\s+"
+    r"(?:"
+    r"(?:ich|wir)\s+(?:meinen|meine|meinem|unseren|unsere|unserem)\s+"
+    r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|wohnung)\s+(?:habe|haben)|"
+    r"(?:mein|meine|meinem|unser|unsere|unserem)\s+"
+    r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|wohnung)\s+"
+    r"(?:ist|liegt|befindet\s+sich)|"
+    r"sich\s+(?:mein|meine|meinem|unser|unsere|unserem)\s+"
+    r"(?:wohnort|wohnsitz|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|wohnung)\s+befindet"
+    r")",
+    re.IGNORECASE,
+)
 _CITY_CHANGE_LABELLED_CURRENT_NEW_RESIDENCE = re.compile(
     r"\b(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*"
     r"(?:[:=,]\s*|\s+)"
@@ -3332,6 +3346,7 @@ CITY_CHANGE_PATTERNS = (
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
     _DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR,
+    _CITY_BEFORE_RELATIVE_RESIDENCE_LABEL,
     _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE,
     re.compile(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*"
