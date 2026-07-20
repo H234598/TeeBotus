@@ -2807,3 +2807,15 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `6b38a4f1`.
 - Neuer Zyklusstand: `15/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Possessivform als verkürzter Eigenort
+
+- `Der Wohnort meiner Frau ist Hamburg; meiner ist Berlin` wurde bisher nicht
+  erkannt, obwohl `meiner` den eigenen Wohnort eindeutig ersetzt.
+- Der Label-first-Matcher akzeptiert jetzt auch eigene Possessivformen wie
+  `meiner`, `meine`, `meins`, `unserer` und `unsere` vor `ist/liegt`.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `259 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `a9b99c99`.
+- Neuer Zyklusstand: `17/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
