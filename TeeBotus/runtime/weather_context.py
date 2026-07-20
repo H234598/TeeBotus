@@ -7944,6 +7944,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             rf"(?:ist|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?{city_capture}",
             re.IGNORECASE,
         ),
+        re.compile(
+            rf"(?:[.!?;,:]\s*|\bund\s+)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
+            r"(?:mein(?:e)?|unser(?:e)?)\s+"
+            rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+            r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|"
+            r"privatanschrift|anschrift)\b",
+            re.IGNORECASE,
+        ),
     )
 
     def collect(patterns: tuple[re.Pattern[str], ...]) -> set[str]:
