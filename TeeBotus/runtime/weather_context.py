@@ -7540,10 +7540,10 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     ):
         for match in pattern.finditer(source):
             current_city = _clean_city(match.group("city"))
-            if current_city and any(
-                registered_city != _city_comparison_key(current_city)
-                for registered_city in registered_address_cities
-            ):
+            if current_city and registered_address_cities:
+                current_key = _city_comparison_key(current_city)
+                if registered_address_cities == {current_key}:
+                    return False
                 return True
     if (
         short_residence_cities
