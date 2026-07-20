@@ -1509,6 +1509,15 @@ def test_city_id_token_keeps_long_city_names_distinct() -> None:
     assert len(second_token) <= 48
 
 
+def test_city_id_token_keeps_unicode_city_names_distinct() -> None:
+    first_token = _city_id_token("Évry")
+    second_token = _city_id_token("Vry")
+
+    assert first_token != second_token
+    assert first_token == _city_id_token("évry")
+    assert len(first_token) <= 48
+
+
 @pytest.mark.parametrize(
     "payload",
     (

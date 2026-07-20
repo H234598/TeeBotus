@@ -7850,6 +7850,9 @@ def _clean_city(value: str) -> str:
 def _city_id_token(city: str) -> str:
     normalized = re.sub(r"\s+", "_", city.strip().casefold())
     safe = re.sub(r"[^a-z0-9_]+", "", normalized)
+    if any(ord(char) > 127 for char in normalized):
+        digest = hashlib.sha256(normalized.encode("utf-8")).hexdigest()[:16]
+        return f"{safe[:31]}_{digest}" if safe else digest
     if len(normalized) > 48:
         digest = hashlib.sha256(city.encode("utf-8")).hexdigest()[:16]
         return f"{safe[:31]}_{digest}"
