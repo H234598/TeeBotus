@@ -1986,3 +1986,21 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `f1c64444`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-15
+
+- `teebotus.service` aktiv/running, `MainPID 2292168`, Start `2026-07-20 03:25:05 CEST`.
+- Pronominale und elliptische Fremdpersonenlabels werden vor generischen
+  Wohnortmustern herausgefiltert.
+- Neuer Zyklus: `12/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei 20/20.
+
+### Folgefix 2026-07-20: Pronominale Fremdpersonen-Wohnlabels
+
+- Erkannt: `der Wohnort ihrer Frau`, `der Wohnort von ihr` und
+  `Hamburg gehört/gilt ... als Wohnort`.
+- Filter wird auch bei Kandidaten angewandt, deren Regex-Stadtgruppe bereits
+  mit Personen-/Verbtext beginnt.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c7720dbb`.
