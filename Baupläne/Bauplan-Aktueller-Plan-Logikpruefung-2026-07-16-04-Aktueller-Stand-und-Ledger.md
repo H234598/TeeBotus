@@ -2718,3 +2718,15 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `d7a05461`.
 - Neuer Zyklusstand: `20/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart jetzt fällig; Push bleibt bei `100/100`.
+
+### Folgefix 2026-07-20: Invertierte Wohnort-Relativsätze
+
+- Formen wie `Wo ich gemeldet bin, da wohne ich: in Berlin` und `Ich wohne
+  dort, wo ich meinen Wohnsitz habe: in Berlin` werden jetzt erkannt.
+- Die Matcher laufen auch durch den bestehenden Konfliktpfad; ein zusätzlicher
+  abweichender Meldeadressort bleibt ungültig.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `254 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `a0b76038`.
+- Neuer Zyklusstand: `2/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
