@@ -6596,6 +6596,15 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             re.IGNORECASE,
         ),
         re.compile(
+            r"(?:^|[.!?;,:]\s*)"
+            r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
+            r"(?:gemeldet|registriert)\s+(?:bin|sind)\s+(?:ich|wir)\s+"
+            r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
+            r"(?:in|bei)\s+"
+            r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+            re.IGNORECASE,
+        ),
+        re.compile(
             r"\b(?:meine|unsere|mein|unser)\s+"
             r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|aktuell\w*)\s+)?"
             r"(?:meldung|registrierung)\s+(?:ist|lautet|liegt)\s+"
