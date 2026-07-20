@@ -2756,6 +2756,7 @@ def test_extract_residence_city_normalizes_known_hyphenated_districts() -> None:
     assert extract_residence_city("Ich wohne in München-Schwabing.") == "München"
     assert extract_residence_city("Mein Wohnort ist Köln-Deutz.") == "Köln"
     assert extract_residence_city("Ich wohne in Köln Ehrenfeld.") == "Köln"
+    assert extract_residence_city("Ich wohne in Köln-Ehrenfeld.") == "Köln"
     assert extract_residence_city("Ich wohne in München Schwabing.") == "München"
     assert extract_residence_city("Ich wohne in Berlin (Deutschland).") == "Berlin"
     assert extract_residence_city("Ich wohne in Halle (Saale).") == "Halle (Saale)"

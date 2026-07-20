@@ -250,6 +250,7 @@ _KNOWN_CITY_DISTRICT_BASES = {
     "köln (deutz)": "Köln",
     "köln deutz": "Köln",
     "köln ehrenfeld": "Köln",
+    "köln-ehrenfeld": "Köln",
     "münchen-schwabing": "München",
     "münchen schwabing": "München",
     "frankfurt am main (sachsenhausen)": "Frankfurt am Main",
