@@ -8862,6 +8862,12 @@ def _has_historical_residence_prefix(source: str, match_start: int) -> bool:
             r"alt\w*|vorherig\w*|vorher|zuvor|davor|gestern|vorgestern)\s*$",
             clause,
         )
+    ) or bool(
+        re.search(
+            r"(?i)\bnicht\s+mehr(?:\s+(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+"
+            r"(?:in|bei))?\s*$",
+            clause,
+        )
     ) or bool(re.search(r"(?i)\bwar(?:en)?(?:\s+\w+){0,3}\s*$", clause))
 
 
