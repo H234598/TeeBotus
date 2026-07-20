@@ -881,10 +881,11 @@ _CITY_CHANGE_OLD_RESIDENCE_LABEL_BARE_CURRENT_CITY = re.compile(
 )
 _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY = re.compile(
     r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
-    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|wohnadresse|wohnanschrift|adresse|anschrift)\s+"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|wohnadresse|wohnanschrift|adresse|anschrift)\s*[:=]?\s*"
     r"(?:(?:alt\w*|ehemalig\w*|früh\w*|frueh\w*|vorher|zuvor)\s*:?\s*)?"
     r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
     r"(?:neu\w*|jetzt|heute|nun|aktuell\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*|"
+    r"seit\s+(?:heute|gestern|vorgestern)|ab\s+(?:sofort|jetzt)|"
     r"inzwischen|mittlerweile)\s*:?\s*(?:(?:in|bei)\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
@@ -6360,6 +6361,10 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
                     r"alt\w*)\s+(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|"
                     r"lebensmittelpunkt|wohnadresse|wohnanschrift|adresse|anschrift)\b",
                     second_raw,
+                ) and not re.match(
+                    r"(?i)^(?:seit\s+(?:heute|gestern|vorgestern)|ab\s+(?:sofort|jetzt)|"
+                    r"jetzt|nun|heute|aktuell\w*|derzeitig\w*|inzwischen|mittlerweile)\b",
+                    second_raw,
                 ):
                     second = _clean_city(second_raw)
                     if second and second.casefold() not in (_NON_CITY_RESIDENCE_NAMES | _NON_CITY_REGION_NAMES):
@@ -8505,6 +8510,11 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
                 r"(?=\s|[:=,]|$)",
                 second_raw,
             )
+            and not re.match(
+                r"(?i)^(?:seit\s+(?:heute|gestern|vorgestern)|ab\s+(?:sofort|jetzt)|"
+                r"jetzt|nun|heute|aktuell\w*|derzeitig\w*|inzwischen|mittlerweile)\b",
+                second_raw,
+            )
         ):
             if _has_other_person_residence_candidate(first_raw) or _has_other_person_residence_candidate(second_raw):
                 return False
@@ -8749,6 +8759,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             and not re.search(
                 r"(?i)\b(?:war|waren|ehemalig\w*|ehemals|frueh\w*|früh\w*|"
                 r"einstig\w*|vormalig\w*|damalig\w*|alt\w*|vorherig\w*|"
+                r"seit\s+(?:heute|gestern|vorgestern)|ab\s+(?:sofort|jetzt)|"
+                r"jetzt|nun|heute|aktuell\w*|derzeitig\w*|inzwischen|mittlerweile|"
                 r"künftig\w*|kuenftig\w*|zukünftig\w*|zukuenftig|geplant\w*|"
                 r"beabsichtig\w*|vielleicht|vermutlich|möglicherweise|moeglicherweise|"
                 r"eventuell|wahrscheinlich|angeblich|anscheinend|scheinbar)\b",
