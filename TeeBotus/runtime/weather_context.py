@@ -6583,6 +6583,8 @@ def extract_residence_city(text: str) -> str:
             return max(candidates, key=lambda candidate: candidate[0])[1]
         return ""
 
+    if _has_conflicting_residence_address_targets(source):
+        return ""
     direct_residence_before_temporary_label = _direct_residence_before_temporary_label(source)
     if direct_residence_before_temporary_label:
         return direct_residence_before_temporary_label
@@ -6596,8 +6598,7 @@ def extract_residence_city(text: str) -> str:
     if direct_residence_before_temporary_forward_label:
         return direct_residence_before_temporary_forward_label
     if (
-        _has_conflicting_residence_address_targets(source)
-        or _has_explicit_residence_multiplicity(source)
+        _has_explicit_residence_multiplicity(source)
         or _has_conflicting_direct_residence_labels(source)
         or _has_conflicting_parenthetical_residence_labels(source)
     ):
