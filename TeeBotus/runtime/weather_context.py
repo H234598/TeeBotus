@@ -7929,7 +7929,18 @@ def _has_conflicting_current_relative_residence(source: str) -> bool:
                 match.group("city").strip(),
             ):
                 continue
-            if pattern is not direct_pattern and _has_temporary_residence_suffix(source, match.end("city")):
+            if (
+                pattern is not direct_pattern
+                and (
+                    _has_historical_residence_prefix(source, match.start())
+                    or _has_future_residence_prefix(source, match.start(), match.start("city"))
+                    or _has_uncertain_residence_prefix(source, match.start())
+                    or _has_historical_residence_suffix(source, match.end("city"))
+                    or _has_future_residence_suffix(source, match.end("city"))
+                    or _has_uncertain_residence_suffix(source, match.end("city"))
+                    or _has_temporary_residence_suffix(source, match.end("city"))
+                )
+            ):
                 continue
             city = _clean_city(match.group("city"))
             if city:
@@ -7944,7 +7955,7 @@ def _has_conflicting_current_relative_residence(source: str) -> bool:
         return False
     transition = re.compile(
         r"(?i)^(?:jetzt|nun|nunmehr|aktuell|derzeit|momentan|inzwischen|mittlerweile|"
-        r"seitdem|heute|zurzeit|zur\s+zeit|wieder|erneut|gegenwärtig|gegenwaertig)\b"
+        r"seit\w*|heute|zurzeit|zur\s+zeit|wieder|erneut|gegenwärtig|gegenwaertig)\b"
     )
     boundaries = tuple(re.finditer(r"(?<!\bSt)[.!?]", source, flags=re.IGNORECASE))
     for sentence_index in sorted(current_targets)[1:]:
@@ -8792,7 +8803,7 @@ def _has_historical_residence_prefix(source: str, match_start: int) -> bool:
     return bool(
         re.search(
             r"(?i)\b(?:ehemalig\w*|ehemals\b|frueh\w*|früh\w*|einstig\w*|vormalig\w*|damalig\w*|"
-            r"alt\w*|vorherig\w*)\s*$",
+            r"alt\w*|vorherig\w*|vorher|zuvor|davor|gestern|vorgestern)\s*$",
             clause,
         )
     ) or bool(re.search(r"(?i)\bwar(?:en)?(?:\s+\w+){0,3}\s*$", clause))
@@ -8806,7 +8817,7 @@ def _has_future_residence_prefix(source: str, match_start: int, city_start: int 
         r"(?<!\d)(?<!\bSt)[.!?;\n]\s*", source[:match_start], flags=re.IGNORECASE
     )[-1]
     if re.search(
-        r"(?i)(?:\bkünft\w*|\bkuenft\w*|\bzukünft\w*|\bzukuenft\w*|\bgeplant\w*|\bplan\w*|\bbeabsichtig\w*|\bvorhab\w*)\s*[,;]?\s*$",
+        r"(?i)(?:\bkünft\w*|\bkuenft\w*|\bzukünft\w*|\bzukuenft\w*|\bgeplant\w*|\bplan\w*|\bbeabsichtig\w*|\bvorhab\w*|\bspäter|\bspaeter)\s*[,;]?\s*$",
         match_sentence,
     ):
         return True
@@ -8900,7 +8911,9 @@ def _has_uncertain_residence_suffix(source: str, city_end: int) -> bool:
     return bool(
         re.match(
             r"(?i)\s*,?\s*(?:glaube|denke|vermute)\s+ich\b|"
-            r"\s*,?\s*(?:nehme\s+ich\s+an|soweit\s+ich\s+weiß|soweit\s+ich\s+weiss)\b",
+            r"\s*,?\s*(?:nehme\s+ich\s+an|soweit\s+ich\s+weiß|soweit\s+ich\s+weiss)\b|"
+            r"\s+(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\s+"
+            r"(?:vielleicht|vermutlich|möglicherweise|moeglicherweise|eventuell|wahrscheinlich)\b",
             sentence,
         )
     )
@@ -9229,7 +9242,7 @@ def _clean_city(value: str) -> str:
         r"unbestimmt\w*|ab|wird|soll|geplant\w*|voraussichtlich|"
         r"(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*|"
         r"künftig|kuenftig|zukünftig|zukuenftig|"
-        r"aktuell|derzeit|momentan|gerade|jetzt|nun|inzwischen|mittlerweile|unklar|egal|entweder|"
+        r"aktuell|derzeit|momentan|gerade|jetzt|nun|inzwischen|mittlerweile|später|spaeter|unklar|egal|entweder|"
         r"wohne|wohnen|lebe|leben|wohnte|lebte|"
         r"nimmer|werktags|wochentags|wo|hier|dort|da|sondern|liegt|befindet|"
         r"vielleicht|vermutlich|wahrscheinlich|wohl|angeblich|laut|derzeitig|ist|sind|bin|lautet|heißt|heisst|nennt|genannt|keineswegs|keinesfalls|niemals|nirgendwo|nirgends|nie|fast|beinahe|"
