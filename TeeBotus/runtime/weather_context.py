@@ -6060,6 +6060,7 @@ def extract_residence_city(text: str) -> str:
                     if (
                         _has_non_residential_city_tail(match.group("city"))
                         or _has_non_residential_city_suffix(source, city_end)
+                        or _has_unresolved_parenthetical_city_suffix(source, city_end)
                     ):
                         continue
                     if _has_unresolved_location_separator(source, city_end):
@@ -8742,6 +8743,26 @@ def _has_non_residential_city_suffix(source: str, city_end: int) -> bool:
     )
 
 
+def _has_unresolved_parenthetical_city_suffix(source: str, city_end: int) -> bool:
+    match = re.match(r"(?i)\s*\((?P<label>[^)]{1,80})\)", source[city_end:])
+    if not match:
+        return False
+    label = match.group("label").strip()
+    if re.fullmatch(r"(?i)(?:deutschland|österreich|oesterreich|schweiz)", label):
+        return False
+    if re.fullmatch(rf"(?i){_PRIMARY_RESIDENCE_LABEL}|{_SECONDARY_RESIDENCE_LABEL}", label):
+        return False
+    if re.fullmatch(
+        r"(?i)(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|meldeadresse|meldeanschrift|meldesitz|adresse|anschrift)",
+        label,
+    ):
+        return False
+    if re.match(r"(?i)^(?:früher|frueher|vorher|zuvor|davor|ehemals|damals)\b", label):
+        return False
+    return True
+
+
 def _has_transient_location_fragment(source: str, city_start: int, city_end: int) -> bool:
     prefix = source[:city_start]
     sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
@@ -8931,6 +8952,8 @@ def _clean_city(value: str) -> str:
         "",
         city,
     ).strip()
+    if "(" in city or ")" in city:
+        return ""
     if re.fullmatch(rf"(?i)(?:{_LABELED_STREET_ADDRESS_DETAIL}|links|rechts)", city):
         return ""
     city = _IRREGULAR_CITY_ADJECTIVE_BASES.get(city.casefold(), city)
