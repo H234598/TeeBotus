@@ -2641,3 +2641,18 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `af383a3d`.
 - Neuer Zyklusstand: `10/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Direkte Gleichstadt-Aliase
+
+- `Wohnort: Berlin, Meldeadresse ebenfalls/auch/ebenso` wurde als ungültige
+  Mehrfachangabe verworfen.
+- Direkte Wohnort-/Meldeadresspaare erkennen diese Aliaswörter jetzt als
+  Bestätigung der ersten Stadt. Eine nachfolgende explizite zweite Stadt bleibt
+  ein Konflikt und wird verworfen.
+- Regressionen decken beide Labelreihenfolgen, alle drei Aliaswörter und den
+  Alias-mit-zweiter-Stadt-Fall ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `251 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `b3d9afab`.
+- Neuer Zyklusstand: `12/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
