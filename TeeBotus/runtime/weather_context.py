@@ -3341,7 +3341,7 @@ CITY_CHANGE_PATTERNS = (
     ),
     re.compile(
         rf"(?:^|[.!?;,:]\s+)(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|seitdem)\s+(?:in|bei)\s+"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$)|\s+(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\b)",
         re.IGNORECASE,
     ),
     re.compile(
@@ -7937,7 +7937,21 @@ def _has_conflicting_current_relative_residence(source: str) -> bool:
                     re.findall(r"(?<!\bSt)[.!?]", source[: match.start("city")], flags=re.IGNORECASE)
                 )
                 current_targets.setdefault(sentence_index, set()).add(_city_comparison_key(city))
-    return any(len(targets) > 1 for targets in current_targets.values())
+    if any(len(targets) > 1 for targets in current_targets.values()):
+        return True
+    all_targets = set().union(*current_targets.values()) if current_targets else set()
+    if len(all_targets) <= 1:
+        return False
+    transition = re.compile(
+        r"(?i)^(?:jetzt|nun|nunmehr|aktuell|derzeit|momentan|inzwischen|mittlerweile|"
+        r"seitdem|heute|zurzeit|zur\s+zeit|wieder|erneut|gegenwärtig|gegenwaertig)\b"
+    )
+    boundaries = tuple(re.finditer(r"(?<!\bSt)[.!?]", source, flags=re.IGNORECASE))
+    for sentence_index in sorted(current_targets)[1:]:
+        sentence_start = boundaries[sentence_index - 1].end() if sentence_index <= len(boundaries) else 0
+        if transition.match(source[sentence_start:].strip()) is None:
+            return True
+    return False
 
 
 def _has_ambiguous_residence_targets(source: str) -> bool:
