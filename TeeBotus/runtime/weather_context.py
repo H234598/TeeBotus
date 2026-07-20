@@ -5585,6 +5585,17 @@ def extract_residence_city(text: str) -> str:
         lambda match: f"in {match.group('city')}",
         source,
     )
+    for district_name, base_city in _KNOWN_CITY_DISTRICT_BASES.items():
+        if "(" in district_name:
+            continue
+        source = re.sub(
+            rf"(?<!\w)(?<!Stadtteil\s)(?<!Bezirk\s)(?<!Viertel\s)(?<!Ortsteil\s)"
+            rf"{re.escape(district_name)}\s*"
+            rf"(?:\(\s*{re.escape(base_city)}\s*\)|(?:in|bei)\s+{re.escape(base_city)})(?!\w)",
+            base_city,
+            source,
+            flags=re.IGNORECASE,
+        )
     if _has_non_residential_companion_context(source):
         return ""
 
