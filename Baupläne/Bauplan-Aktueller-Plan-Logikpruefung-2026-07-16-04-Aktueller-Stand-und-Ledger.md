@@ -2411,3 +2411,16 @@
   `ActiveEnterTimestamp=2026-07-20 06:31:50 CEST`.
 - Neuer Zyklus: `1/20` Commits seit diesem Restart (dieser Ledgercommit
   eingerechnet). Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Wunschform `möchte wohnen`
+
+- `Ich möchte in Hamburg wohnen` und die ASCII-Variante wurden als aktueller
+  Wohnort erkannt, obwohl sie nur einen Wunsch ausdrücken.
+- `möchte/moechte` wird jetzt im bestehenden Zukunfts-/Modalfilter verworfen.
+  Ein aktueller Zusatz wie `derzeit in Berlin` bleibt auswertbar.
+- Regressionen decken beide Schreibweisen und den Klauselkonflikt ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `607d287e`.
+- Neuer Zyklus: `3/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
