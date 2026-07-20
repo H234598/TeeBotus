@@ -954,14 +954,15 @@ _SHORT_RESIDENCE_SELF_QUALIFIER = rf"(?:(?:{_RESIDENCE_TIME_QUALIFIER})\s+)?"
 _SHORT_RESIDENCE_HOME_MARKER = (
     r"(?:bei\s+mir(?:\s+(?:zu\s+hause|zuhause|daheim))?|zu\s+hause|zuhause|daheim)"
 )
+_SHORT_RESIDENCE_HOME_LOCATION = rf"{_SHORT_RESIDENCE_HOME_MARKER}\s*,?\s*(?:in|bei)\s+"
 _SHORT_RESIDENCE_SELF_CLAUSE = (
     rf"(?:(?:ich|wir)\s+{_SHORT_RESIDENCE_SELF_QUALIFIER}"
-    rf"(?:{_SHORT_RESIDENCE_HOME_MARKER}\s+(?:in|bei)\s+|(?:in|bei)\s+)|"
-    rf"{_SHORT_RESIDENCE_HOME_MARKER}\s+(?:in|bei)\s+)"
+    rf"(?:{_SHORT_RESIDENCE_HOME_LOCATION}|(?:in|bei)\s+)|"
+    rf"{_SHORT_RESIDENCE_HOME_LOCATION})"
 )
 _SHORT_RESIDENCE_SELF_FIRST_CLAUSE = (
     rf"\b(?:ich|wir)\s+{_SHORT_RESIDENCE_SELF_QUALIFIER}"
-    rf"(?:{_SHORT_RESIDENCE_HOME_MARKER}\s+(?:in|bei)\s+|(?:in|bei)\s+)"
+    rf"(?:{_SHORT_RESIDENCE_HOME_LOCATION}|(?:in|bei)\s+)"
 )
 _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_CITY = re.compile(
     rf"\b{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL}\s+"

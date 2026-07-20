@@ -1707,6 +1707,14 @@ def test_extract_residence_city_handles_home_marker_short_self_clause() -> None:
     assert extract_residence_city("Ich arbeite bei mir in Berlin, mein Partner wohnt in Hamburg.") == ""
 
 
+def test_extract_residence_city_handles_comma_home_marker_short_clause() -> None:
+    assert extract_residence_city("Mein Partner wohnt in Hamburg, bei mir, in Berlin.") == "Berlin"
+    assert extract_residence_city("Mein Partner wohnt in Hamburg, bei mir, bei Berlin.") == "Berlin"
+    assert extract_residence_city("Meine Freundin lebt in Hamburg, ich zu Hause, in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich bei mir, in Berlin, mein Partner in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich arbeite bei mir, in Berlin, mein Partner wohnt in Hamburg.") == ""
+
+
 def test_extract_residence_city_rejects_unknown_label_values() -> None:
     assert extract_residence_city("Mein Wohnort ist irgendwo.") == ""
     assert extract_residence_city("Mein Wohnort ist unklar.") == ""
