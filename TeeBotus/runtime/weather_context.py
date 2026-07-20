@@ -1704,7 +1704,7 @@ CITY_CHANGE_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
-        r"[^.!?;\n]{1,120}?\s*(?:[,;]|[-–—])\s*"
+        r"[^.!?;\n]{1,120}?\s*(?:[,;]|\bund\s+|[-–—])\s*"
         r"(?:aber|doch|jedoch|sondern)?\s*"
         rf"(?:{_RESIDENCE_TIME_QUALIFIER})\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
