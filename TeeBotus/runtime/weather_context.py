@@ -871,6 +871,13 @@ _COMPOUND_CITY_RESIDENCE = re.compile(
     r"(?=\s*(?:[.!?;,]|(?:in|an|auf|unter)\s+|$))",
     re.IGNORECASE,
 )
+_COMPOUND_CITY_CONTRAST_RESIDENCE = re.compile(
+    r"\b(?:(?:aber|doch|jedoch)\s+)?(?:(?:ich|wir)\s+)?"
+    r"(?:wohne|wohnen|lebe|leben)\s+(?:aber\s+)?(?:in|bei)\s+"
+    rf"(?P<city>{_STREET_COMPOUND_CITY_PATTERN})"
+    r"(?=\s*(?:[.!?;,]|(?:in|an|auf|unter)\s+|$))",
+    re.IGNORECASE,
+)
 _QUALIFIED_RESIDENCE = re.compile(
     r"\b(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+(?:aber\s+)?"
     r"(?:beruflich|dienstlich)\s+(?:in|bei)\s+"
@@ -2810,6 +2817,7 @@ CITY_PATTERNS = (
     _MAIN_RESIDENCE_CITY_BEFORE_STREET,
     _MAIN_RESIDENCE_CITY,
     _COMPOUND_CITY_RESIDENCE,
+    _COMPOUND_CITY_CONTRAST_RESIDENCE,
     _QUALIFIED_RESIDENCE,
     _CURRENT_RESIDENCE_LABEL_CITY,
     _LABELED_COMPOUND_RESIDENCE_CITY,
@@ -5461,6 +5469,7 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
             _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
             _CITY_CHANGE_LABELLED_COLON_SEPARATOR_STREET,
             _COMPOUND_CITY_RESIDENCE,
+            _COMPOUND_CITY_CONTRAST_RESIDENCE,
             _LABELED_COUNTRY_CITY,
         )
     ):
