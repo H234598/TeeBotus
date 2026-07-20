@@ -121,6 +121,8 @@ class MatrixRuntimeBridge:
         )
         self._dispatch_loop: asyncio.AbstractEventLoop | None = None
         self._dispatch_loop_thread_id: int | None = None
+        self._account_dispatch_locks: dict[str, asyncio.Lock] = {}
+        self._account_dispatch_locks_guard = threading.Lock()
 
     def proactive_sender(self):
         return matrix_proactive_sender({self.run_config.slot: self.client})
@@ -177,6 +179,18 @@ class MatrixRuntimeBridge:
             await self._send_memory_error(event)
             return
         event = event.with_account(account_id)
+        dispatch_lock = self._account_dispatch_lock(account_id)
+        await dispatch_lock.acquire()
+        try:
+            await self._process_account_event(event)
+        finally:
+            dispatch_lock.release()
+
+    def _account_dispatch_lock(self, account_id: str) -> asyncio.Lock:
+        with self._account_dispatch_locks_guard:
+            return self._account_dispatch_locks.setdefault(account_id, asyncio.Lock())
+
+    async def _process_account_event(self, event: IncomingEvent) -> None:
         self._record_codex_history_reply(event)
         try:
             engine_result = await asyncio.to_thread(_process_engine_result, self.engine, event)

@@ -247,6 +247,61 @@ def test_signal_engine_processing_does_not_block_event_loop(tmp_path) -> None:
     assert heartbeat.is_set()
 
 
+def test_signal_same_account_keeps_engine_and_dispatch_order(tmp_path, monkeypatch) -> None:
+    command = TeeBotusSignalCommand(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="signal",
+            slot=1,
+            label="signal:1",
+            openai_api_key="",
+            signal_service="http://127.0.0.1:8080",
+            signal_phone_number="+491234",
+        ),
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    first_context = FakeSignalContext()
+    first_context.message.text = "first"
+    first_context.message.timestamp = 1
+    second_context = FakeSignalContext()
+    second_context.message.text = "second"
+    second_context.message.timestamp = 2
+    engine_order: list[str] = []
+    dispatch_order: list[str] = []
+    first_dispatch_started = asyncio.Event()
+    release_first_dispatch = asyncio.Event()
+
+    def process(event):
+        engine_order.append(event.text)
+        return EngineResult(event.account_id, [SendText(event.chat_id, event.text)], handled=True)
+
+    async def send(_context, actions, **_kwargs):
+        text = actions[0].text
+        if text == "first":
+            first_dispatch_started.set()
+            await release_first_dispatch.wait()
+        dispatch_order.append(text)
+        return [987654]
+
+    command.engine.process_result = process  # type: ignore[method-assign]
+    monkeypatch.setattr("TeeBotus.runtime.signal_runner._send_signal_actions_with_retry", send)
+
+    async def run() -> None:
+        first_task = asyncio.create_task(command.handle(first_context))
+        await asyncio.wait_for(first_dispatch_started.wait(), timeout=1)
+        second_task = asyncio.create_task(command.handle(second_context))
+        await asyncio.sleep(0.01)
+        assert engine_order == ["first"]
+        release_first_dispatch.set()
+        await asyncio.gather(first_task, second_task)
+
+    asyncio.run(run())
+
+    assert engine_order == ["first", "second"]
+    assert dispatch_order == ["first", "second"]
+
+
 def test_signal_command_logs_sent_message_tracking_errors(tmp_path, caplog) -> None:
     command = TeeBotusSignalCommand(
         run_config=AccountRunConfig(

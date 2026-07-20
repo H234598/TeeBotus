@@ -165,6 +165,8 @@ class TeeBotusSignalCommand(_SignalBotCommand):
         self.bot: Any | None = None
         self._dispatch_loop: asyncio.AbstractEventLoop | None = None
         self._dispatch_loop_thread_id: int | None = None
+        self._account_dispatch_locks: dict[str, asyncio.Lock] = {}
+        self._account_dispatch_locks_guard = threading.Lock()
 
     def setup(self) -> None:
         return None
@@ -225,76 +227,88 @@ class TeeBotusSignalCommand(_SignalBotCommand):
                 await self._send_memory_error(context, event)
                 return
             event = event.with_account(account_id)
-            self._record_codex_history_reply(event)
+            dispatch_lock = self._account_dispatch_lock(account_id)
+            await dispatch_lock.acquire()
             try:
-                engine_result = await asyncio.to_thread(_process_engine_result, self.engine, event)
-            except (AccountStoreError, OSError, ValueError, AttributeError):
-                LOGGER.exception(
-                    "Signal engine processing failed instance=%s recipient=%s message_ref=%s.",
-                    self.run_config.instance_name,
-                    event.chat_id,
-                    event.message_ref,
-                )
-                await self._send_memory_error(context, event)
-                return
-            event = event.with_account(engine_result.account_id)
-            actions = _with_signal_reply_context(engine_result.actions, event)
-            pending_actions: list[Any] = []
-
-            def record_sent_action(action: Any, sent_ref: Any) -> None:
-                if sent_ref is None:
-                    return
-                if isinstance(action, ExportFile):
-                    should_track = True
-                else:
-                    should_track = isinstance(action, (SendText, SendAttachment, SendEdit, SendPoll)) and action.track
-                if not should_track:
-                    return
-                self._record_sent_ref(
-                    SentMessageRef(
-                        channel="signal",
-                        instance_name=event.instance,
-                        account_id=event.account_id,
-                        chat_id=event.chat_id,
-                        message_ref=str(sent_ref),
-                        ref_kind="signal_timestamp",
-                    ),
-                    context="action",
-                )
-
-            async def flush_pending() -> bool:
-                if not pending_actions:
-                    return True
-                batch = list(pending_actions)
-                pending_actions.clear()
-                try:
-                    await _send_signal_actions_with_retry(context, batch, on_action_sent=record_sent_action)
-                except Exception:
-                    LOGGER.exception(
-                        "Signal action dispatch failed instance=%s recipient=%s message_ref=%s actions=%s.",
-                        event.instance,
-                        event.chat_id,
-                        event.message_ref,
-                        tuple(type(action).__name__ for action in batch),
-                    )
-                    return False
-                return True
-
-            for action in actions:
-                if isinstance(action, NotifyLinkedIdentity):
-                    if not await flush_pending():
-                        return
-                    await self._notify_linked_identities([action])
-                    continue
-                if isinstance(action, DeleteTrackedMessages):
-                    if not await flush_pending():
-                        return
-                    await self._delete_tracked_messages(context, event, [action])
-                    continue
-                pending_actions.append(action)
-            await flush_pending()
+                await self._process_account_event(context, event)
+            finally:
+                dispatch_lock.release()
         finally:
             await self._delete_local_attachments(context)
+
+    def _account_dispatch_lock(self, account_id: str) -> asyncio.Lock:
+        with self._account_dispatch_locks_guard:
+            return self._account_dispatch_locks.setdefault(account_id, asyncio.Lock())
+
+    async def _process_account_event(self, context: Any, event: Any) -> None:
+        self._record_codex_history_reply(event)
+        try:
+            engine_result = await asyncio.to_thread(_process_engine_result, self.engine, event)
+        except (AccountStoreError, OSError, ValueError, AttributeError):
+            LOGGER.exception(
+                "Signal engine processing failed instance=%s recipient=%s message_ref=%s.",
+                self.run_config.instance_name,
+                event.chat_id,
+                event.message_ref,
+            )
+            await self._send_memory_error(context, event)
+            return
+        event = event.with_account(engine_result.account_id)
+        actions = _with_signal_reply_context(engine_result.actions, event)
+        pending_actions: list[Any] = []
+
+        def record_sent_action(action: Any, sent_ref: Any) -> None:
+            if sent_ref is None:
+                return
+            if isinstance(action, ExportFile):
+                should_track = True
+            else:
+                should_track = isinstance(action, (SendText, SendAttachment, SendEdit, SendPoll)) and action.track
+            if not should_track:
+                return
+            self._record_sent_ref(
+                SentMessageRef(
+                    channel="signal",
+                    instance_name=event.instance,
+                    account_id=event.account_id,
+                    chat_id=event.chat_id,
+                    message_ref=str(sent_ref),
+                    ref_kind="signal_timestamp",
+                ),
+                context="action",
+            )
+
+        async def flush_pending() -> bool:
+            if not pending_actions:
+                return True
+            batch = list(pending_actions)
+            pending_actions.clear()
+            try:
+                await _send_signal_actions_with_retry(context, batch, on_action_sent=record_sent_action)
+            except Exception:
+                LOGGER.exception(
+                    "Signal action dispatch failed instance=%s recipient=%s message_ref=%s actions=%s.",
+                    event.instance,
+                    event.chat_id,
+                    event.message_ref,
+                    tuple(type(action).__name__ for action in batch),
+                )
+                return False
+            return True
+
+        for action in actions:
+            if isinstance(action, NotifyLinkedIdentity):
+                if not await flush_pending():
+                    return
+                await self._notify_linked_identities([action])
+                continue
+            if isinstance(action, DeleteTrackedMessages):
+                if not await flush_pending():
+                    return
+                await self._delete_tracked_messages(context, event, [action])
+                continue
+            pending_actions.append(action)
+        await flush_pending()
 
     async def _send_memory_error(self, context: Any, event: Any) -> None:
         try:

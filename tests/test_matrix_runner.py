@@ -170,6 +170,64 @@ def test_matrix_engine_processing_does_not_block_event_loop(tmp_path) -> None:
     assert heartbeat.is_set()
 
 
+def test_matrix_same_account_keeps_engine_and_dispatch_order(tmp_path, monkeypatch) -> None:
+    client = FakeMatrixClient()
+    bridge = MatrixRuntimeBridge(
+        run_config=AccountRunConfig(
+            instance_name="Demo",
+            channel="matrix",
+            slot=1,
+            label="matrix:1",
+            openai_api_key="",
+            matrix_homeserver="https://matrix.example",
+            matrix_user_id="@bot:example",
+            matrix_access_token="matrix-token",
+        ),
+        client=client,
+        instances_dir=tmp_path,
+        secret_provider=StaticSecretProvider(b"x" * 32),
+    )
+    first_message = FakeMatrixMessage()
+    first_message.body = "first"
+    first_message.event_id = "$first"
+    second_message = FakeMatrixMessage()
+    second_message.body = "second"
+    second_message.event_id = "$second"
+    engine_order: list[str] = []
+    dispatch_order: list[str] = []
+    first_dispatch_started = asyncio.Event()
+    release_first_dispatch = asyncio.Event()
+
+    def process(event):
+        engine_order.append(event.text)
+        return EngineResult(event.account_id, [SendText(event.chat_id, event.text)], handled=True)
+
+    async def send(_client, actions, **_kwargs):
+        text = actions[0].text
+        if text == "first":
+            first_dispatch_started.set()
+            await release_first_dispatch.wait()
+        dispatch_order.append(text)
+        return [f"${text}"]
+
+    bridge.engine.process_result = process  # type: ignore[method-assign]
+    monkeypatch.setattr("TeeBotus.runtime.matrix_runner.send_matrix_actions", send)
+
+    async def run() -> None:
+        first_task = asyncio.create_task(bridge.handle_message(FakeMatrixRoom(), first_message))
+        await asyncio.wait_for(first_dispatch_started.wait(), timeout=1)
+        second_task = asyncio.create_task(bridge.handle_message(FakeMatrixRoom(), second_message))
+        await asyncio.sleep(0.01)
+        assert engine_order == ["first"]
+        release_first_dispatch.set()
+        await asyncio.gather(first_task, second_task)
+
+    asyncio.run(run())
+
+    assert engine_order == ["first", "second"]
+    assert dispatch_order == ["first", "second"]
+
+
 def test_matrix_bridge_logs_sent_message_tracking_errors(tmp_path, caplog) -> None:
     client = FakeMatrixClient()
     bridge = MatrixRuntimeBridge(
