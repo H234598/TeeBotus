@@ -8915,7 +8915,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         return True
     target_patterns = (
         re.compile(
-            rf"\b(?:ich|wir)\s+{residence}\s+(?:in|bei)\s+"
+            rf"\b(?:ich|wir)\s+{residence}\s+(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
             r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[,.;!?]|$|\b(?:und|aber|doch|jedoch)\b))",
             re.IGNORECASE,
         ),
@@ -8956,7 +8956,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         ),
         re.compile(
             r"(?:^|[.!?;,\n]\s*)(?:aber|doch|jedoch|sondern)?\s*"
-            r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+            r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)\s+"
             r"ist\s+(?:mein(?:e)?|unser(?:e)?)\s+"
             r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|zuhause|zu\s+hause|daheim)\b",
             re.IGNORECASE,
