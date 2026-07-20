@@ -2375,3 +2375,17 @@
   gruen. Code-Commit: `56037659`.
 - Neuer Zyklus: `16/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Großgeschriebene Aliasfragmente
+
+- `Mein Wohnort Ebenso` und `Mein Wohnort Ebenfalls` wurden wegen eines
+  case-sensitiven Vergleichs als Städte übernommen.
+- Aliasprüfung vergleicht jetzt case-insensitiv; der bestehende Sonderfall
+  `Wohnort Auch` bleibt als möglicher echter Ortsname gültig.
+- Regressionen decken beide großgeschriebenen Aliasformen und den `Auch`-
+  Kompatibilitätsfall ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `e886a2bc`.
+- Neuer Zyklus: `18/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
