@@ -672,6 +672,8 @@ def test_extract_residence_city_handles_subjectless_move_fragment() -> None:
     assert extract_residence_city("Ich werde in Hamburg wohnen.") == ""
     assert extract_residence_city("Ich soll in Hamburg wohnen.") == ""
     assert extract_residence_city("Ich könnte in Hamburg wohnen.") == ""
+    assert extract_residence_city("Ich möchte in Hamburg wohnen.") == ""
+    assert extract_residence_city("Ich moechte in Hamburg wohnen.") == ""
     assert extract_residence_city("Ich plane, in Hamburg zu wohnen.") == ""
     assert extract_residence_city("Ich beabsichtige, in Hamburg zu wohnen.") == ""
     assert extract_residence_city("Ich habe vor, in Hamburg zu wohnen.") == ""

@@ -7630,6 +7630,7 @@ def _has_future_residence_prefix(source: str, match_start: int, city_start: int 
         return True
     if re.search(
         r"(?i)\b(?:werd(?:e|en|et|est)?|soll(?:e|en|t|te|ten)?|"
+        r"möchte|moechte|"
         r"müsste|muesste|könnte|koennte|dürfte|duerfte|würde|wuerde)\b"
         r"[^.!?;\n]*$",
         clause,
