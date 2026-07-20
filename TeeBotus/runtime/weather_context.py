@@ -8793,7 +8793,8 @@ def _clean_city(value: str) -> str:
         source = re.sub(r"[.!?;,]+$", "", source).rstrip(")").rstrip()
     normalized_source = re.sub(r"\s+", " ", source).strip(" .,:;!?")
     if re.match(
-        r"(?i)^(?:heute|gestern|vorgestern|früher|frueher|davor|damals|ehemals)(?:\s|$)",
+        r"(?i)^(?:heute|gestern|vorgestern|früher|frueher|vorher|zuvor|davor|damals|ehemals|"
+        r"aber|doch|jedoch|sondern)(?:\s|$)",
         normalized_source,
     ):
         return ""
