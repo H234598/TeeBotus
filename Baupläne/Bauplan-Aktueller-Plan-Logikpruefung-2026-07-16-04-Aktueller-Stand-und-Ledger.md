@@ -2326,6 +2326,19 @@
 - Neuer Zyklus: `9/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
 
+### Folgefix 2026-07-20: Bindestrich bei Adresslabels
+
+- `Meldeadresse - Berlin` und die typografische Variante mit Gedankenstrich
+  wurden nicht erkannt.
+- Der allgemeine Adresslabel-Parser akzeptiert jetzt `-`, `–` und `—` neben
+  den bisherigen Trennzeichen.
+- Regressionen decken ASCII- und typografischen Gedankenstrich ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `7f0a428b`.
+- Neuer Zyklus: `11/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-20: Verkürzte Registrierungsformulierungen
 
 - Varianten wie `bin in Hamburg gemeldet`, `offiziell gemeldet in Hamburg`,
