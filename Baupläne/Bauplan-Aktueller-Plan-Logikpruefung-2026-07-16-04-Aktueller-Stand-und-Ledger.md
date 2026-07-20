@@ -2300,3 +2300,15 @@
   gruen. Code-Commit: `e592c61d`.
 - Neuer Zyklus: `5/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Verkürzte Registrierungsstatus-Syntax
+
+- Varianten mit eingeschobenem `aber`/`amtlich`, Statusbeginn bei `Jetzt` sowie
+  `bei CITY bin ich gemeldet` wurden nicht zuverlässig als eigene
+  Registrierungsadresse erkannt.
+- Bestehender Collector deckt diese Syntaxvarianten jetzt ab, ohne
+  Fremdpersonen- oder Arbeitskontexte zu übernehmen.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`. Code-Commit: `281aee36`.
+- Neuer Zyklus: `7/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
