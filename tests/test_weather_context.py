@@ -2381,6 +2381,14 @@ def test_extract_residence_city_keeps_companion_residence_before_activity_contex
     assert extract_residence_city("Ich wohne bei meiner Arbeit in Berlin und studiere in Hamburg.") == ""
 
 
+def test_extract_residence_city_rejects_institutional_companion_context() -> None:
+    assert extract_residence_city("Ich wohne bei meiner Schule in Berlin.") == ""
+    assert extract_residence_city("Ich wohne bei meiner Universität in Berlin.") == ""
+    assert extract_residence_city("Ich wohne bei meiner Klinik in Berlin.") == ""
+    assert extract_residence_city("Ich wohne bei meiner Familie in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne mit meinem Partner in Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_handles_comma_companion_before_activity() -> None:
     assert extract_residence_city("Ich wohne bei meinen Eltern, in Berlin und arbeite in Hamburg.") == "Berlin"
     assert extract_residence_city("Ich lebe mit meiner Familie, in Berlin und studiere in Hamburg.") == "Berlin"

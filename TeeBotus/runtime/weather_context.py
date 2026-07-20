@@ -5665,7 +5665,10 @@ def _has_non_residential_companion_context(source: str) -> bool:
     for match in companion_pattern.finditer(source):
         if re.search(
             r"\b(?:ausbild\w*|firma|unternehmen\w*|betrieb\w*|geschäft\w*|geschaeft\w*|"
-            r"chef\w*|vorgesetz\w*|arbeitgeber\w*)\b",
+            r"chef\w*|vorgesetz\w*|arbeitgeber\w*|schule\w*|uni\b|"
+            r"universit(?:ät|aet)\w*|hochschule\w*|institut\w*|verband\w*|"
+            r"behörde\w*|behoerde\w*|krankenhaus\w*|klinik\w*|praxis\w*|"
+            r"abteilung\w*|organisation\w*|verein\w*)\b",
             match.group("companion"),
             re.IGNORECASE,
         ):
