@@ -878,6 +878,16 @@ _CITY_CHANGE_OLD_RESIDENCE_LABEL_BARE_CURRENT_CITY = re.compile(
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_CITY_CHANGE_LABELLED_OLD_CURRENT_CITY = re.compile(
+    r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|wohnadresse|wohnanschrift|adresse|anschrift)\s+"
+    r"(?:(?:alt\w*|ehemalig\w*|früh\w*|frueh\w*|vorher|zuvor)\s*:?\s*)?"
+    r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+    r"(?:neu\w*|jetzt|heute|nun|aktuell\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*|"
+    r"inzwischen|mittlerweile)\s+(?:(?:in|bei)\s+)?"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _CITY_CHANGE_LABELLED_FROM_TO_STREET = re.compile(
     r"\b(?:wohnadresse|wohnanschrift|anschrift|adresse)\s+von\s+"
     rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
@@ -3212,6 +3222,7 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_LABELLED_OLD_CURRENT,
     _CITY_CHANGE_OLD_RESIDENCE_LABEL_CURRENT_CITY,
     _CITY_CHANGE_OLD_RESIDENCE_LABEL_BARE_CURRENT_CITY,
+    _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY,
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
@@ -7525,6 +7536,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         _CITY_CHANGE_CITY_BEFORE_OLD_NEW_RESIDENCE_LABEL_BARE,
         _CITY_CHANGE_OLD_RESIDENCE_LABEL_CURRENT_CITY,
         _CITY_CHANGE_OLD_RESIDENCE_LABEL_BARE_CURRENT_CITY,
+        _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY,
     ):
         for match in pattern.finditer(source):
             current_city = _clean_city(match.group("city"))
@@ -7577,6 +7589,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             _CITY_CHANGE_CITY_BEFORE_OLD_NEW_RESIDENCE_LABEL_BARE,
             _CITY_CHANGE_OLD_RESIDENCE_LABEL_CURRENT_CITY,
             _CITY_CHANGE_OLD_RESIDENCE_LABEL_BARE_CURRENT_CITY,
+            _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY,
             _CITY_CHANGE_LABELLED_FROM_TO_STREET,
             _CITY_CHANGE_PASSIVE_LABELLED_FROM_TO_STREET,
             _CITY_CHANGE_NOMINAL_MOVE_LABELLED_STREET,
