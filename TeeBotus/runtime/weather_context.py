@@ -1185,8 +1185,10 @@ _DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR = re.compile(
 _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE = re.compile(
     r"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*(?:,|;|:|[-–—])\s*"
     r"(?:wo|in\s+(?:der|dem))\s+(?:ich|wir)\s+"
-    rf"(?:heute|{_RESIDENCE_TIME_QUALIFIER})\s+"
-    r"(?:wohne|wohnen|lebe|leben)\b",
+    rf"(?:(?:heute|{_RESIDENCE_TIME_QUALIFIER})\s+(?:wohne|wohnen|lebe|leben)\b|"
+    rf"(?:(?:heute|{_RESIDENCE_TIME_QUALIFIER})\s+)?"
+    r"(?:bin(?:d)?\s+(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert|zu\s+hause|zuhause|daheim)|"
+    r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert|zu\s+hause|zuhause|daheim)\s+bin(?:d)?)\b)",
     re.IGNORECASE,
 )
 _CITY_CHANGE_LABELLED_CURRENT_NEW_RESIDENCE = re.compile(
