@@ -288,7 +288,7 @@ def test_reminder_decision_schema_rejects_invalid_datetime_iso() -> None:
         )
 
 
-def test_reminder_decision_schema_requires_actionable_fields_for_creation() -> None:
+def test_reminder_decision_schema_requires_text_but_allows_follow_up_for_missing_time() -> None:
     with pytest.raises(ValidationError, match="text must be non-empty"):
         parse_reminder_decision(
             {
@@ -300,16 +300,19 @@ def test_reminder_decision_schema_requires_actionable_fields_for_creation() -> N
             }
         )
 
-    with pytest.raises(ValidationError, match="datetime_iso or recurrence is required"):
-        parse_reminder_decision(
-            {
-                "should_create": True,
-                "text": "Termin",
-                "datetime_iso": None,
-                "recurrence": None,
-                "confidence": 0.91,
-            }
-        )
+    follow_up = parse_reminder_decision(
+        {
+            "should_create": True,
+            "text": "Termin",
+            "datetime_iso": None,
+            "recurrence": None,
+            "confidence": 0.91,
+        }
+    )
+
+    assert follow_up.should_create is True
+    assert follow_up.datetime_iso is None
+    assert follow_up.recurrence is None
 
     skipped = parse_reminder_decision(
         {

@@ -131,8 +131,6 @@ class ReminderDecision(BaseModel):
     def _require_actionable_reminder_fields(self) -> "ReminderDecision":
         if self.should_create and not self.text:
             raise ValueError("text must be non-empty when should_create is true")
-        if self.should_create and not (self.datetime_iso or self.recurrence):
-            raise ValueError("datetime_iso or recurrence is required when should_create is true")
         return self
 
 
