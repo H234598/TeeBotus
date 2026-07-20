@@ -2703,6 +2703,34 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
 - Neuer Zyklusstand: `16/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
 
+### Folgefix 2026-07-20: Qualifizierter Home-Ort und Gedankenstrich-Kontrast
+
+- `seit 2020 zuhause in Hamburg` wurde durch den allgemeinen Fallback bisher
+  nicht als Wohnort erkannt. Der enge Direktmatcher akzeptiert Zeitqualifier
+  vor `zuhause/zu Hause/daheim`, ohne normale Orts- und Straßenmatcher zu
+  überstimmen.
+- Kontraste wie `Ich wohne zuhause in Berlin – aber aktuell in Hamburg` werden
+  jetzt wie Komma-/Semikolonformen auf den aktuellen Wohnort aufgelöst.
+  `gerade in Hamburg` bleibt als vorübergehender Aufenthalt ausgeschlossen.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `268 passed`;
+  Telegram-Wettertest -> `1 passed`; Parser-Matrix, `py_compile` und
+  `git diff --check` grün. Code-Commit: `0e462f42`.
+- Neuer Zyklusstand: `18/20` Commits seit dem Restart. Kein Push. Restart erst
+  bei `20/20`.
+
+### Folgefix 2026-07-20: `bereits seit` als Zeitqualifier
+
+- `Ich wohne bereits seit fünf Jahren in Hamburg` wurde bisher als `bereits`
+  gelesen, weil `_RESIDENCE_TIME_QUALIFIER` nur `seit` und `schon seit`
+  kannte.
+- `bereits` ist jetzt optionaler Präfix von `seit`; das vorhandene `seit ...`
+  Verhalten bleibt erhalten.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `268 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `30da0189`.
+- Neuer Zyklusstand: `19/20` Commits seit dem Restart. Kein Push. Restart erst
+  bei `20/20`.
+
 ### Folgefix 2026-07-20: Wohnadressreferenzen und Relativsatz
 
 - Genitivische Angaben für `Wohnung`, `Zuhause` und `Wohnsitz` werden erkannt,
