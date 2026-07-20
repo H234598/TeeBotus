@@ -2188,3 +2188,42 @@
 - Code-Commit: `8b28817d`.
 - Neuer Zyklus: `12/20` Commits seit diesem Restart. Kein Push. Restart erst
   bei `20/20`.
+
+### Folgefix 2026-07-20: Unvollständige Wetter-Provider-Payloads
+
+- `fetch_weather_summary()` behandelte leere oder falsch typisierte
+  `current_condition`-/`nearest_area`-Listen nicht defensiv; gültige
+  Fehlerpayloads konnten `IndexError` auslösen.
+- Provider-Payload wird jetzt vor dem Zugriff auf Element `0` als Mapping und
+  Liste geprüft; bei fehlenden Daten bleibt der Stadtnamen-Fallback erhalten.
+- Regressionen decken leere Listen, leere Elemente und Nicht-Mapping-Payloads
+  ab. Kein Wetteranbieter wird im Testnetzwerk aufgerufen.
+- Verifikation: vier neue Fälle bestanden; komplette
+  `tests/test_weather_context.py` -> `247 passed`; Telegram-Wettertest ->
+  `1 passed`; `py_compile` und `git diff --check` gruen.
+- Code-Commit: `3c51352b`.
+
+### Folgefix 2026-07-20: Unicode-Wohnstadt-Memory-IDs
+
+- `_city_id_token()` entfernte bisher Nicht-ASCII-Zeichen vollständig.
+  Dadurch kollidierten z. B. `Évry` und `Vry`.
+- Unicode-Städte bekommen jetzt stabilen, normalisierten Hash-Suffix; bestehende
+  ASCII-Tokens bleiben unverändert.
+- Regression prüft Kollisionsfreiheit, Casefold-Stabilität und Tokenlänge.
+- Code-Commit: `bd1bcd88`.
+
+### Folgefix 2026-07-20: Implizite Aliaswörter im Wohnortparser
+
+- `auch`/`ebenfalls` wurden hinter Wohn- oder Melde-Labels als Stadt erkannt.
+  Das erzeugte falsche Konflikte, z. B. bei `Meldeadresse Berlin, Wohnort
+  auch`.
+- Aliasfragmente werden jetzt nur in diesem Labelkontext als Nicht-Stadt
+  verworfen; die echte Stadt `Auch` außerhalb dieses Kontexts bleibt möglich.
+- Regressionen decken gleichen impliziten Wohnort und echten abweichenden
+  Wohnort ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `247 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen.
+- Code-Commit: `7c2fc4e4`.
+- Neuer Zyklus: `16/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei `20/20`.
