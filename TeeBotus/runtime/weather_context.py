@@ -5749,6 +5749,18 @@ def extract_residence_city(text: str) -> str:
             source,
             flags=re.IGNORECASE,
         )
+    source = re.sub(
+        r"\bfrankfurt\s+a\.\s*m\.(?=\s|[!?;,]|$)",
+        "Frankfurt am Main",
+        source,
+        flags=re.IGNORECASE,
+    )
+    source = re.sub(
+        r"\bmülheim\s+a\.\s+d\.\s+ruhr\b",
+        "Mülheim an der Ruhr",
+        source,
+        flags=re.IGNORECASE,
+    )
     if _has_non_residential_companion_context(source):
         return ""
 
