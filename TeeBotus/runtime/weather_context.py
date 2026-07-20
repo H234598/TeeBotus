@@ -8607,6 +8607,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
                 or _has_future_residence_suffix(source, city_end)
                 or _has_uncertain_residence_suffix(source, city_end)
                 or _has_other_person_residence_candidate(match.group("city"))
+                or _has_temporal_residence_suffix_text(match.group("city"))
                 or _has_other_person_residence_prefix(source, pattern_start)
                 or _has_other_person_residence_prefix(source, city_start)
                 or _has_other_person_residence_prefix(source, city_end)
@@ -8958,6 +8959,14 @@ def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
     ):
         return False
     if re.match(
+        r"(?i)\s*[,;]\s*(?:aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:werde\w*|würde\w*|moechte\w*|möchte\w*|soll\w*|will\w*)"
+        r"(?:\s+(?:ich|wir))?\s+(?:wohne|wohnen|lebe|leben)\b",
+        tail,
+    ):
+        return False
+    if re.match(
         rf"(?i)\s*[,;]\s*(?:aber|doch|jedoch)\s+(?:derzeit|aktuell|momentan|gerade)?\s*"
         r"(?:bei|mit)\s+(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
         rf"{_OTHER_PERSON_RESIDENCE_LABEL}\s+(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}",
@@ -9155,7 +9164,9 @@ def _has_temporal_residence_suffix_text(value: str) -> bool:
             r"(?:jahr\w*|monat\w*|woche\w*)|ab\s+(?:morgen|uebermorgen|übermorgen|"
             r"sommer|winter|frühling|fruehling|herbst)|ab\s+\d{4}|"
             r"(?:künft\w*|kuenft\w*|zukünft\w*|zukuenft\w*|geplant\w*|"
-            r"frueher|früher|ehemals|damals|vormalig\w*)\s*\.?$)",
+            r"frueher|früher|ehemals|damals|vormalig\w*)\s*\.?$|"
+            r"(?:werde\w*|würde\w*|moechte\w*|möchte\w*|soll\w*|will\w*)"
+            r"(?:\s+(?:ich|wir))?\s*$)",
             str(value or "").strip(),
         )
     )
