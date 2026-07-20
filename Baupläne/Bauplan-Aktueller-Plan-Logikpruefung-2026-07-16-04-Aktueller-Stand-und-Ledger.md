@@ -2004,3 +2004,26 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `c7720dbb`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-16
+
+- `teebotus.service` aktiv/running, `MainPID 2292168`, Start `2026-07-20 03:25:05 CEST`.
+- Label- und Satzformen fremder Wohnorte werden jetzt auch bei Komma,
+  Semikolon, `während` und invertierten Klauseln sauber getrennt.
+- Kandidatenfilter verhindert, dass generische Muster komplette Fremdsätze
+  wie `Hamburg ist ihr Wohnort` als eigene Stadt übernehmen.
+- Parser-Sweep mit 280 Kombinationen aus fünf eigenen Formen, acht
+  Fremdformen und sieben Konnektoren: `280/280` korrekt.
+- Neuer Zyklus: `15/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei `20/20`.
+
+### Folgefix 2026-07-20: Labelierte Fremdpersonen-Klauseln
+
+- Wortgrenze verhindert Stadtcaptures mitten in `Berlin` (`Be`).
+- Adress-/Wohnort-Konfliktprüfung verwirft Fremdpersonen-Kandidaten vor dem
+  Mehrfachwohnsitz-Check.
+- Regressionen für `die Wohnadresse von Frau Müller`, `ihr Wohnsitz`,
+  `Hamburg gehört als Wohnort` und `während` ergänzt.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `d85a2fb5`.
