@@ -2339,6 +2339,20 @@
 - Neuer Zyklus: `11/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
 
+### Folgefix 2026-07-20: Einzelne Registrierungsstatuswörter
+
+- `Ich bin in Berlin gemeldet, offiziell` und ähnliche Satzenden wurden als
+  `offiziell`/`amtlich`/`privat` erkannt und verdrängten Berlin.
+- Statuswörter werden jetzt als Nicht-Orte behandelt. Der echte City-Kandidat
+  davor bleibt erhalten; eine direkte Angabe wie `Gemeldet bin ich in Hamburg`
+  bleibt gültig.
+- Regressionen decken Statusmarker nach `gemeldet` und `registriert` ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `33f2f9ba`.
+- Neuer Zyklus: `13/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-20: Verkürzte Registrierungsformulierungen
 
 - Varianten wie `bin in Hamburg gemeldet`, `offiziell gemeldet in Hamburg`,
