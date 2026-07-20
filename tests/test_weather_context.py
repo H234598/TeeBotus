@@ -3183,6 +3183,10 @@ def test_extract_residence_city_handles_same_city_reference_labels() -> None:
     assert extract_residence_city("Mein Wohnort ist Berlin und die Adresse meines Wohnorts ist ebenfalls Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist Berlin und die Adresse meines Wohnorts ist Hamburg.") == ""
     assert extract_residence_city("Ich wohne dort, wo meine Meldeadresse in Berlin ist. Ich wohne in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, wo mein Wohnsitz ist.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin, wo sich mein Wohnsitz befindet.") == "Berlin"
+    assert extract_residence_city("Ich lebe in Berlin, wo mein Wohnsitz liegt.") == "Berlin"
+    assert extract_residence_city("Ich lebe in Berlin, wo sich mein Wohnsitz befindet.") == "Berlin"
 
 
 def test_extract_residence_city_handles_inverted_relative_residence_references() -> None:

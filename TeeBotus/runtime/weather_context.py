@@ -8236,7 +8236,7 @@ def _clean_city(value: str) -> str:
         r"(?:nächste\w*|naechste\w*|kommende\w*)\s+jahr\w*|"
         r"künftig|kuenftig|zukünftig|zukuenftig|"
         r"aktuell|derzeit|momentan|gerade|jetzt|nun|inzwischen|mittlerweile|unklar|egal|entweder|"
-        r"nimmer|werktags|wochentags|hier|dort|da|sondern|liegt|befindet|"
+        r"nimmer|werktags|wochentags|wo|hier|dort|da|sondern|liegt|befindet|"
         r"vielleicht|vermutlich|wahrscheinlich|wohl|angeblich|laut|derzeitig|ist|sind|bin|lautet|heißt|heisst|nennt|genannt|keineswegs|keinesfalls|niemals|nirgendwo|nirgends|nie|fast|beinahe|"
         r"möglicherweise|moeglicherweise|könnte|koennte|wäre|waere|würde|wuerde|"
         r"sollte|dürfte|duerfte|muss|müsste|muesste|nördlich|südlich|östlich|westlich|"
