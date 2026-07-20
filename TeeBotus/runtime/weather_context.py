@@ -6629,6 +6629,9 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 
     residence_cities = collect(residence_patterns)
     address_cities = collect(address_patterns)
+    genitive_address_cities = collect((_GENITIVE_RESIDENCE_ADDRESS_CITY,))
+    if len(genitive_address_cities) > 1:
+        return True
     for match in re.finditer(
         rf"\b(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:(?:aktuell\w*|offiziell\w*|privat\w*|gemeldet\w*|amtlich\w*|neu\w*|"
@@ -8164,6 +8167,11 @@ def _clean_city(value: str) -> str:
     city = re.sub(r"(?i)^(?:(?:auch|ebenfalls|ebenso|gleichfalls)\s+)?(?:in|bei)\s+", "", city)
     city = re.sub(r"(?i)^(?:auch|ebenfalls|ebenso|gleichfalls)\s+", "", city)
     city = CITY_TRAILING_STOP_RE.sub("", city).strip(" .,:;!?")
+    city = re.sub(
+        r"(?i)\s+(?:ist|war|wird|liegt|lautet|bleibt|befindet\s+sich)$",
+        "",
+        city,
+    ).strip()
     city = re.sub(r"\s+", " ", city)
     city = re.sub(
         rf"(?i)\s+\({_PRIMARY_RESIDENCE_LABEL}\)$",

@@ -3172,6 +3172,7 @@ def test_extract_residence_city_handles_genitive_residence_addresses() -> None:
     assert extract_residence_city("Der Ort meines Wohnsitzes ist Berlin.") == "Berlin"
     assert extract_residence_city("Die Adresse eines Wohnorts ist Berlin.") == ""
     assert extract_residence_city("Die Adresse meines Wohnorts ist Berlin, meine Meldeadresse Hamburg.") == ""
+    assert extract_residence_city("Die Adresse meines Wohnorts ist Berlin, die Adresse meiner Wohnung ist Hamburg.") == ""
 
 
 def test_extract_residence_city_handles_same_city_reference_labels() -> None:
@@ -3181,6 +3182,7 @@ def test_extract_residence_city_handles_same_city_reference_labels() -> None:
     assert extract_residence_city("Ich wohne dort, wo meine Meldeadresse in Berlin ist.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist Berlin und die Adresse meines Wohnorts ist ebenfalls Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist Berlin und die Adresse meines Wohnorts ist Hamburg.") == ""
+    assert extract_residence_city("Ich wohne dort, wo meine Meldeadresse in Berlin ist. Ich wohne in Berlin.") == "Berlin"
 
 
 def test_extract_residence_city_handles_labeled_area_relations() -> None:
