@@ -993,6 +993,13 @@ _CURRENT_RESIDENCE_LABEL_CITY = re.compile(
     r"(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_DIRECT_RESIDENCE_LABEL_CITY = re.compile(
+    rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*"
+    r"(?::|=|,)\s*(?:(?:in|bei)\s+)?"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _LABELED_COMPOUND_RESIDENCE_CITY = re.compile(
     r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
     r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
@@ -6980,6 +6987,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     ):
         return True
     residence_patterns = (
+        _DIRECT_RESIDENCE_LABEL_CITY,
         _INVERTED_RELATIVE_RESIDENCE_CITY,
         _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_CITY,
         _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_CITY,
@@ -7797,6 +7805,8 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         )
     ) and not registered_address_cities:
         return False
+    if residence_cities and address_cities and residence_cities.isdisjoint(address_cities):
+        return True
     work_address_cities: set[str] = set()
     for match in re.finditer(
         r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
