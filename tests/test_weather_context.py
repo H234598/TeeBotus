@@ -1674,6 +1674,13 @@ def test_extract_residence_city_handles_self_first_short_person_clause() -> None
     assert extract_residence_city("Ich in Berlin, mein Partner arbeitet in Hamburg.") == ""
 
 
+def test_extract_residence_city_handles_colon_possessive_short_self_clause() -> None:
+    assert extract_residence_city("Wohnort meiner Frau: Hamburg; meiner: Berlin.") == "Berlin"
+    assert extract_residence_city("Der Wohnort meiner Frau: Hamburg; meine = Berlin.") == "Berlin"
+    assert extract_residence_city("Der Wohnsitz meiner Eltern: Hamburg; unserer: Berlin.") == "Berlin"
+    assert extract_residence_city("Wohnort meiner Frau: Hamburg; deiner: Berlin.") == ""
+
+
 def test_extract_residence_city_rejects_unknown_label_values() -> None:
     assert extract_residence_city("Mein Wohnort ist irgendwo.") == ""
     assert extract_residence_city("Mein Wohnort ist unklar.") == ""

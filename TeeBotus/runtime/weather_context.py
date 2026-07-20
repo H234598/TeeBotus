@@ -989,8 +989,9 @@ _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_POSSESSIVE_CITY = re.compile(
     r"\s*[:=]\s*(?:(?:in|bei)\s+)?)"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
     rf"{_SHORT_RESIDENCE_CLAUSE_SEPARATOR}"
-    r"(?:meiner|meine|meines|meins|unserer|unsere|unseres|unsers)\s+"
-    r"(?:ist|liegt|bleibt|lautet)\s+(?:(?:in|bei)\s+)?"
+    r"(?:meiner|meine|meines|meins|unserer|unsere|unseres|unsers)\s*"
+    r"(?:(?:ist|liegt|bleibt|lautet)\s+(?:(?:in|bei)\s+)?|"
+    r"\s*[:=]\s*(?:(?:in|bei)\s+)?)"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
