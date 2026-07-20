@@ -2808,6 +2808,26 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
 - Neuer Zyklusstand: `15/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
 
+### Folgefix 2026-07-20: Aktueller Ort nach Home-Kontrast
+
+- `Ich wohne zuhause in Berlin, aber aktuell in Hamburg` sowie Varianten mit
+  `nur noch zuhause` und `nur noch in` wurden bisher als alter oder falscher
+  Wohnort gelesen.
+- Ein enger Kontrastmatcher liest den aktuellen Ort nach `aktuell/derzeit/...`
+  nur bei direktem `in/bei`-Ortsanschluss. `aktuell arbeite in Hamburg` bleibt
+  damit Arbeitsort und liefert weiter Berlin.
+- Ein enger Direktmatcher deckt `nur`/`nur noch` vor `in/bei` und optionalen
+  Home-Markern ab. Der generische Matcher akzeptiert diese Präfixe nicht mehr
+  als Stadtfragment.
+- Der neue CITY_CHANGE-Matcher bleibt hinter `CITY_CHANGE_PATTERNS[0]`, weil
+  dieser Index als `_CITY_CHANGE_CITY_BEFORE_STREET` stabiler Alias verwendet
+  wird. Alias- und Konfliktprüfung sind damit unverändert.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `268 passed`;
+  Telegram-Wettertest -> `1 passed`; Parser-Matrix, `py_compile` und
+  `git diff --check` grün. Code-Commit: `9d0df82e`.
+- Neuer Zyklusstand: `16/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-20: Possessivform als verkürzter Eigenort
 
 - `Der Wohnort meiner Frau ist Hamburg; meiner ist Berlin` wurde bisher nicht
