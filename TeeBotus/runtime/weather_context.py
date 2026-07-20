@@ -5817,6 +5817,7 @@ def _has_other_person_residence_candidate(value: str) -> bool:
     return bool(
         re.search(rf"(?i)\b{_OTHER_PERSON_FOREIGN_MARKER}\b", candidate)
         or re.search(rf"(?i)\bvon\s+{_OTHER_PERSON_RESIDENCE_LABEL}\b", candidate)
+        or re.search(rf"(?i)\b{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}\b", candidate)
     )
 
 
@@ -5824,7 +5825,7 @@ def _has_other_person_residence_suffix(source: str, city_end: int) -> bool:
     suffix = source[city_end:]
     if re.match(
         rf"(?i)\s+(?:als\s+)?{_OTHER_PERSON_LOCATION_LABEL}\s+(?:von\s+)?"
-        rf"(?:{_OTHER_PERSON_REFERENCE}\s+)?{_OTHER_PERSON_RESIDENCE_LABEL}\b",
+        rf"(?:{_OTHER_PERSON_REFERENCE}\s+)?{_OTHER_RESIDENCE_OWNER_LABEL}\b",
         suffix,
     ):
         return True
