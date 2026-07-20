@@ -910,7 +910,7 @@ _LABELLED_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
     r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*[:=]?\s*"
     r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)\s*[,;.!?]\s*"
     r"(?:nur\s+)?(?:vorübergehend|voruebergehend|zeitweise|temporär|temporaer|"
-    r"befristet|kurzfristig)\s+"
+    r"befristet|kurzfristig|vorläufig|vorlaeufig|bis\s+auf\s+weiteres)\s+"
     r"(?:(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+)?"
     r"(?:(?:in|bei)\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
@@ -9171,7 +9171,7 @@ def _has_transient_location_fragment(source: str, city_start: int, city_end: int
 def _has_temporary_residence_prefix(source: str, match_start: int) -> bool:
     if re.match(
         r"(?i)(?:nur\s+)?(?:vorübergehend|voruebergehend|zeitweise|temporär|temporaer|"
-        r"befristet|kurzfristig)\b",
+        r"befristet|kurzfristig|vorläufig|vorlaeufig|bis\s+auf\s+weiteres)\b",
         source[match_start:],
     ):
         return True
