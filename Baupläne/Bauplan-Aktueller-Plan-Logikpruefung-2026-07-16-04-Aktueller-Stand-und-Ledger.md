@@ -2612,3 +2612,18 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `25cab49e`.
 - Neuer Zyklusstand: `6/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Direkte Wohnort-/Meldeadress-Labelpaare
+
+- `Wohnort: Berlin; Meldeadresse: Hamburg` wurde ohne Konfliktprüfung als
+  Hamburg übernommen. Gleichstadtpaare wurden teils durch den generischen
+  Multiplicity-Guard verworfen.
+- Ein gemeinsamer enger Matcher vergleicht direkte Wohnort-/Meldeadresspaare in
+  beiden Reihenfolgen. Verschiedene Städte werden verworfen; gleiche Städte
+  bleiben gültig.
+- Regressionen decken beide Reihenfolgen sowie `;`- und `,`-Trenner ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `250 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `ae42c958`.
+- Neuer Zyklusstand: `8/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
