@@ -3381,6 +3381,8 @@ def test_extract_residence_city_handles_direct_residence_registration_label_pair
     assert extract_residence_city("Wohnort: Berlin; Meldeadresse: Berlin.") == "Berlin"
     assert extract_residence_city("Wohnort: Berlin, Meldeadresse: Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin und Berlin ist meine Meldeadresse.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin und Berlin ist meine aktuelle Meldeadresse.") == "Berlin"
+    assert extract_residence_city("Ich wohne in Berlin und Hamburg ist meine aktuelle Meldeadresse.") == ""
     assert extract_residence_city("Ich lebe in Berlin und Berlin ist mein Wohnsitz.") == "Berlin"
 
 

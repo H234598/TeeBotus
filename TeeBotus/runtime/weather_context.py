@@ -8604,6 +8604,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:und|,)\s+"
         r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
         r"(?:meldeadresse|meldeanschrift|meldesitz|wohnadresse|wohnanschrift|"
         r"adresse|anschrift|wohnsitz)\b",
         source,
