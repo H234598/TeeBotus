@@ -7113,6 +7113,26 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         re.IGNORECASE,
     ):
         return True
+    direct_residence_registration = re.search(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<residence>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:und|aber|doch|jedoch)\s+"
+        r"(?:(?:ich|wir)\s+)?(?:bin|sind)\s+"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
+        r"(?P<registered>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:gemeldet|registriert)\b",
+        source,
+        re.IGNORECASE,
+    )
+    if direct_residence_registration:
+        residence = _clean_city(direct_residence_registration.group("residence"))
+        registered = _clean_city(direct_residence_registration.group("registered"))
+        if (
+            residence
+            and registered
+            and _city_comparison_key(residence) != _city_comparison_key(registered)
+        ):
+            return True
     for match in re.finditer(
         r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*[:=]\s*"

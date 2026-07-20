@@ -3329,6 +3329,10 @@ def test_extract_residence_city_rejects_distinct_residence_and_registration_stat
     assert extract_residence_city("Ich wohne in Berlin, bin in Hamburg gemeldet.") == ""
     assert extract_residence_city("Ich wohne in Berlin, offiziell gemeldet in Hamburg.") == ""
     assert extract_residence_city("Ich wohne in Berlin, bei Hamburg gemeldet.") == ""
+    for qualifier in ("aktuell", "derzeit", "jetzt", "nunmehr", "gegenwärtig", "seit 2024"):
+        assert extract_residence_city(
+            f"Ich wohne in Berlin und bin {qualifier} in Hamburg gemeldet."
+        ) == ""
     assert extract_residence_city("Ich wohne in Berlin, meine offizielle Meldung ist Hamburg.") == ""
     assert extract_residence_city("Ich wohne in Berlin, bin aber in Hamburg gemeldet.") == ""
     assert extract_residence_city("Ich wohne in Berlin und habe dort keinen Wohnsitz.") == ""
