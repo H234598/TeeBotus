@@ -280,7 +280,7 @@ _CITY_AREA_SUFFIXES = (
 _RESIDENCE_DURATION = (
     r"(?:(?:mehr\s+als|über|ueber|knapp|gut|etwa|ungefähr|ungefaehr|"
     r"fast|circa|ca\.|rund|mindestens|hoechstens|höchstens)\s+)?"
-    r"(?:\d{4}|kurzem|kurzer\s+zeit|einiger\s+zeit|jeher|"
+    r"(?:\d{4}|kurzem|kurzer\s+zeit|einiger\s+zeit|langer\s+zeit|geraumer\s+zeit|jeher|"
     r"(?:dem\s+)?(?:letzten|letztem|vergangenen|vergangenem|aktuellen|aktuellem|diesem)\s+(?:jahr|sommer|winter)|"
     r"(?:meiner\s+)?(?:kindheit|jugend|geburt)|(?:dem|meinem|meiner)\s+"
     r"(?:(?:letzten|letztem|vergangenen|vergangenem|ersten)\s+)?"
