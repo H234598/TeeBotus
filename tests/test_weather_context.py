@@ -883,6 +883,8 @@ def test_extract_residence_city_rejects_conflicting_private_addresses() -> None:
     assert extract_residence_city("Mein aktueller Wohnort ist Berlin. Meine Adresse ist Hamburg.") == ""
     assert extract_residence_city("Berlin ist mein aktueller Wohnort. Meine Adresse ist Hamburg.") == ""
     assert extract_residence_city("Aktuell wohnhaft in Berlin. Meine Adresse ist Hamburg.") == ""
+    assert extract_residence_city("Aktuell gemeldet in Berlin. Meldeadresse Hamburg.") == ""
+    assert extract_residence_city("Aktuell gemeldet in Berlin. Meldeadresse Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist Berlin, meine Adresse ist Hamburg.") == ""
     assert extract_residence_city("Ich lebe in Berlin, mein Wohnsitz ist Hamburg.") == ""
     assert extract_residence_city("Ich wohne in Berlin, meine Wohnadresse ist Hamburg.") == ""

@@ -8359,7 +8359,12 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         ):
             continue
         city = _clean_city(match.group("city"))
-        if city:
+        if city and not re.search(
+            r"(?i)\b(?:ich|wir|mein(?:e|en|em|er)?|unser(?:e|en|em|er)?|"
+            r"wohnort|wohnsitz|wohnstadt|wohne\w*|wohnen\w*|lebe\w*|leben\w*|"
+            r"gemeldet\w*|registriert\w*)\b",
+            city,
+        ):
             registered_address_cities.add(_city_comparison_key(city))
     registered_address_cities = {
         city
@@ -8380,6 +8385,8 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             foreign_registered_city_keys.add(_city_comparison_key(city))
     registered_address_cities.difference_update(foreign_registered_city_keys)
     registered_address_cities.difference_update(_standalone_residence_aliases(source))
+    if len(registered_address_cities) > 1:
+        return True
     for pattern in (
         _CITY_CHANGE_CITY_BEFORE_OLD_NEW_RESIDENCE_LABEL,
         _CITY_CHANGE_CITY_BEFORE_OLD_NEW_RESIDENCE_LABEL_BARE,
