@@ -2730,3 +2730,15 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `a0b76038`.
 - Neuer Zyklusstand: `2/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Relativpronomen nicht als Städte
+
+- In Sätzen wie `Ich wohne in Berlin, wo mein Wohnsitz ist` wurde `wo` oder
+  `wo sich` als späterer Stadt-Kandidat gewählt und überschieb Berlin.
+- `wo` ist jetzt im bestehenden Nicht-Stadt-Präfixfilter. Explizite Ortsangaben
+  bleiben unverändert und gewinnen korrekt.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `254 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `348e414c`.
+- Neuer Zyklusstand: `4/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
