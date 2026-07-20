@@ -6492,6 +6492,20 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
         re.IGNORECASE,
     ):
         return False
+    if re.search(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*[,;]?\s*"
+        r"(?:und|aber|doch|jedoch)?\s*"
+        r"(?:schlaf\w*|übernacht\w*|uebernacht\w*|verbring\w*)\s+"
+        r"(?:(?:ich|wir)\s+)?"
+        r"(?:(?:nur|lediglich|gelegentlich|manchmal|zeitweise|am\s+wochenende|"
+        r"unter\s+der\s+woche|nachts|tagsüber|tagsueber)\s+)*"
+        r"(?:nächte?\s+|naechte?\s+)?(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\b",
+        multiplicity_source,
+        re.IGNORECASE,
+    ):
+        return False
     return bool(
         re.search(
             r"\b(?:wohne|wohnen|lebe|leben)\b[^.!?;\n]*\b(?:mal|manchmal|teils|teilweise|abwechselnd|zwischen|"
@@ -7924,8 +7938,23 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         rf"\b(?:ich|wir)\s+{residence}\s+(?:in|bei)\s+"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*[,;]?\s*"
         r"(?:und|aber|doch|jedoch)?\s*halte(?:n)?\s+mich\s+"
-        r"(?:beruflich|geschäftlich|geschaeftlich|dienstlich|arbeitsbedingt)\s+"
+        r"(?:(?:tagsüber|tagsueber|morgens|vormittags|mittags|nachmittags|abends|nachts)\s+)?"
+        r"(?:(?:beruflich|geschäftlich|geschaeftlich|dienstlich|arbeitsbedingt)\s+)?"
         r"(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+auf\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*[,;]?\s*"
+        r"(?:und|aber|doch|jedoch)?\s*"
+        r"(?:schlaf\w*|übernacht\w*|uebernacht\w*|verbring\w*)\s+"
+        r"(?:(?:ich|wir)\s+)?"
+        r"(?:(?:nur|lediglich|gelegentlich|manchmal|zeitweise|am\s+wochenende|"
+        r"unter\s+der\s+woche|nachts|tagsüber|tagsueber)\s+)*"
+        r"(?:nächte?\s+|naechte?\s+)?(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\b",
         source,
         re.IGNORECASE,
     ):
