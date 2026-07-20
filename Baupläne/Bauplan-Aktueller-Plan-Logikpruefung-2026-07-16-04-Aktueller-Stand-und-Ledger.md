@@ -2731,6 +2731,40 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
 - Neuer Zyklusstand: `19/20` Commits seit dem Restart. Kein Push. Restart erst
   bei `20/20`.
 
+### Folgefix-Zyklus 2026-07-20: Aktuelle Wohnortformen und Planarchiv
+
+- `7a544e5e`: Aktueller Wohnort nach Umzug gewinnt gegen alten Ortsbezug.
+- `c13ef6ff`: Archivregel verbindlich gemacht; Historisches und Abgeschlossenes
+  gehört nach `../Abgeschlossene Baupläne/`.
+- `e4e7bc23`: Qualifizierte Bezirks-/Stadtteilangaben werden auf Basisstadt
+  normalisiert.
+- `99654d43`: Präziser Folgeort nach Raum-/Näheangabe gewinnt.
+- `eb745480`: Aktueller Ort nach Heute-/Gestern-Vergleich wird erkannt.
+- `a952fd78`: `gemeldet` und `registriert` werden als Adresssuffixe bereinigt.
+- `b942f65a`: Elliptische alte/neue Wohnadresse wird erkannt.
+- `abcbb28a`: Possessive Kurzform `meiner ist ...` wird erkannt.
+- `7388fa85`: Listen mehrerer Wohnorte bleiben konservativ leer.
+- `0956c7cc`: Arbeitsort nach Area-Wohnangabe wird ignoriert.
+- `ca70c70a`: Arbeitskontext wird von konkurrierendem Wohnort getrennt.
+- `178ba406`: Zeitlabel `heute`/`gestern` wird nur im Vergleichspfad
+  ausgewertet.
+- `4ef999d1`: Elliptische aktuelle Ziele nach `nicht mehr` werden erkannt.
+- `922a0fc8`: Elliptische aktuelle Ziele ohne Präposition werden erkannt.
+- `4503938e`: Spätere aktuelle Wohnangabe gewinnt gegen früheres Umzugsziel.
+- `b99258e7`: Wiederholtes Wohnverb nach Negationswechsel wird korrekt gelesen.
+- `a1f651aa`: Historische `war ... wohnhaft`-Form bleibt historisch.
+- `56db6ec8`: Elliptische neue Wohnanschrift wird erkannt.
+- `c0a10dfa`: `Berlin-Neukölln` wird zu Berlin normalisiert.
+- `cb4abd73`: Temporale Wohnortlabels mit `war vorher`/`vorher war` werden
+  korrekt auf aktuellen Ort reduziert.
+- Verifikation für Codefixes: vollständige `tests/test_weather_context.py`
+  -> `268 passed`; Telegram-Wettertest -> `1 passed`; `py_compile` und
+  `git diff --check` grün. Kein Provider/API-Aufruf.
+- Service-Neustart nach `20/20` Commits: `teebotus.service` aktiv, MainPID
+  `290559`, Start `2026-07-20 12:17:39 CEST`. Kein Push.
+- Neuer Zyklusstand nach dem Restart: `0/20` Codecommits. Dieser Ledger-Eintrag
+  zählt als erster Dokumentationscommit des neuen Zyklus.
+
 ### Folgefix 2026-07-20: Bindestrich-Distrikt `Köln-Ehrenfeld`
 
 - Die bestehende Distrikt-Normalisierung kannte `Köln Ehrenfeld`, aber nicht
