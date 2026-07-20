@@ -2597,3 +2597,18 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `49abb0b5`.
 - Neuer Zyklusstand: `4/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Kurze Registrierungsstatus-Konflikte
+
+- Formen wie `Wohne in Berlin, gemeldet in Hamburg` und die umgekehrte
+  Reihenfolge wurden nicht gemeinsam als Wohn-/Meldeadresskonflikt gesammelt.
+- Der Konfliktcollector erkennt jetzt kurze eigene Wohnverb- und
+  Registrierungsstatusformen, inklusive `wohne aber` und Statuspräfixen.
+  Fremdpersonenpfade bleiben ausgeschlossen; gleiche Stadt bleibt gültig.
+- Regressionen decken beide Wortstellungen, `offiziell gemeldet` und den
+  Gleichstadtfall ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `25cab49e`.
+- Neuer Zyklusstand: `6/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
