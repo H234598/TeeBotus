@@ -327,7 +327,7 @@ _OTHER_PERSON_REFERENCE = (
     r"der|die|das|ein(?:e|en|em|er|es)?)"
 )
 _OTHER_PERSON_NON_SELF_REFERENCE = (
-    r"(?:sein(?:e|en|em|er|es)?|ihr(?:e|en|em|er|es)?|deren)"
+    r"(?:sein(?:e|en|em|er|es)?|ihr(?:e|en|em|er|es)?|deren|dessen)"
 )
 _OTHER_PERSON_LOCATION_LABEL = (
     r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
@@ -337,6 +337,7 @@ _OTHER_PERSON_LOCATION_LABEL = (
 _OTHER_PERSON_FOREIGN_MARKER = (
     rf"(?:{_OTHER_PERSON_NON_SELF_REFERENCE}\s+{_OTHER_PERSON_LOCATION_LABEL}|"
     rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL}|"
+    rf"{_OTHER_PERSON_LOCATION_LABEL}\s+von\s+{_OTHER_PERSON_RESIDENCE_LABEL}|"
     rf"(?:der|die|das|ein(?:e|en|em|er|es)?)?\s*"
     rf"{_OTHER_PERSON_LOCATION_LABEL}\s+(?:von\s+)?"
     rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL})"
@@ -2778,7 +2779,7 @@ CITY_PATTERNS = (
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]?\s*"
-        r"(?:und|aber|doch|jedoch)\s+"
+        r"(?:und|sowie|aber|doch|jedoch|oder|sondern)\s+"
         r"(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
         r"(?:zeitweise|vorübergehend|voruebergehend|gelegentlich|derzeit|aktuell|momentan)\s+)?"
         r"(?:bei|mit)\s+(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
@@ -2789,7 +2790,7 @@ CITY_PATTERNS = (
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]?\s*"
-        r"(?:und|aber|doch|jedoch)\s+"
+        r"(?:und|sowie|aber|doch|jedoch|oder|sondern)\s+"
         rf"(?=[^.!?;,\n]{{0,160}}\b{_OTHER_PERSON_FOREIGN_MARKER}\b)"
         r"[^.!?;,\n]+",
         re.IGNORECASE,
@@ -5739,7 +5740,7 @@ def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
         r"zuhause|zu\s+hause|daheim|wohnadresse|wohnanschrift|meldeadresse|"
         r"meldeanschrift|meldesitz|adresse|anschrift|wohnung|unterkunft)\s+"
         r"(?:(?:von)\s+)?"
-        rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
+        rf"(?:{_OTHER_PERSON_REFERENCE}\s+)?{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
         r"(?:ist|lautet|bleibt|liegt|befindet\s+sich)\s+(?:in|bei)\s*$",
         segment,
     ):
@@ -5750,7 +5751,7 @@ def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
         r"zuhause|zu\s+hause|daheim|wohnadresse|wohnanschrift|meldeadresse|"
         r"meldeanschrift|meldesitz|adresse|anschrift|wohnung|unterkunft)\s+"
         r"(?:(?:von)\s+)?"
-        rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
+        rf"(?:{_OTHER_PERSON_REFERENCE}\s+)?{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
         r"(?:ist|lautet|bleibt|liegt|befindet\s+sich)\s*$",
         segment,
     ):
