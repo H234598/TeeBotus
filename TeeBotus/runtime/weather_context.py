@@ -1877,6 +1877,26 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:mein(?:e)?|unser(?:e)?)\s+(?:alt\w*|ehemalig\w*|früh\w*|frueh\w*)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|wohnadresse|wohnanschrift|adresse|anschrift|"
+        r"zuhause|zu\s+hause|daheim)\s+(?:war|ist)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+(?:neu\w*|aktuell\w*|jetzig\w*)\s+"
+        r"(?:(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|wohnadresse|wohnanschrift|adresse|anschrift|"
+        r"zuhause|zu\s+hause|daheim)\s+)?(?:ist|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:war|ist)\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+(?:alte|ehemalige|frühere|fruehere)\s+"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|wohnadresse|wohnanschrift|adresse|anschrift|"
+        r"zuhause|zu\s+hause|daheim)\s*[,;]\s*"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:ist|liegt|befindet\s+sich)\s+"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+(?:neue|aktuelle|jetzige)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich|wir)\s+war(?:en)?\s+(?:in|bei)\s+[^,.;!?]{1,80}\s+"
         r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s*,\s*"
         r"(?:jetzt|heute|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+(?:in|bei)\s+"
