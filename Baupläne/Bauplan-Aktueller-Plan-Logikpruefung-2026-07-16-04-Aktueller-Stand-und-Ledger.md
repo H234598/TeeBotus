@@ -2656,3 +2656,21 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `b3d9afab`.
 - Neuer Zyklusstand: `12/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Gleichfalls, Kontrastlabel und Bezirksalias
+
+- `gleichfalls` wird jetzt wie `auch`, `ebenfalls` und `ebenso` als Bestätigung
+  eines bereits genannten Wohnorts behandelt.
+- Direkte Labelpaare mit Kontrastwort, etwa `Wohnort: Berlin, aber
+  Meldeadresse: Hamburg`, werden als Konflikt verworfen. Gleichstadt bleibt
+  gültig.
+- Eine Form wie `Mein Wohnort ist Berlin und dort ist auch meine Meldeadresse`
+  wird als Gleichstadtbestätigung erkannt. Eine explizite abweichende Stadt
+  bleibt ungültig.
+- `Ich wohne im Prenzlauer Berg` wird auf Berlin normalisiert. Der bestehende
+  unbestimmte `Ortsteil Prenzlauer Berg`-Fall bleibt verworfen.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `252 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `a0a4b778`.
+- Neuer Zyklusstand: `14/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
