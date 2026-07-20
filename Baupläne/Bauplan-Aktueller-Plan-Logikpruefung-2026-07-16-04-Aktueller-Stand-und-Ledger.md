@@ -2027,3 +2027,27 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `d85a2fb5`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-17
+
+- `teebotus.service` aktiv/running, `MainPID 2292168`, Start `2026-07-20 03:25:05 CEST`.
+- Fremde Wohnortlabels vor oder nach eigener Wohnortangabe werden über
+  Satzgrenzen und Konnektoren getrennt; Organisationsbesitz wie
+  `Wohnort meines Arbeitgebers` bleibt Fremdkontext.
+- Ambiguitätsprüfung zählt pronominale Fremdlabels wie `ihr Wohnsitz` nicht
+  mehr als eigene Zielstadt.
+- Erweiterter Sweep mit 143 Kombinationen aus elf Fremdformen, sieben
+  Konnektoren und beiden Satzrichtungen: `143/143` korrekt.
+- Neuer Zyklus: `17/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei `20/20`.
+
+### Folgefix 2026-07-20: Fremdlabels über Satzgrenzen
+
+- Prefix-Split berücksichtigt `.`, `!`, `?`, Zeilenumbruch und `während`.
+- Generische Ambiguitätsmuster prüfen den direkt vorangestellten
+  Fremdpronomenkontext.
+- Regressionen für `ihr Wohnsitz ... und Ich wohne`, Arbeitgeberlabel mit
+  `sowie` und Fremdsatz vor eigener Wohnangabe ergänzt.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `9e0dc0e4`.
