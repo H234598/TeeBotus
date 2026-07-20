@@ -288,6 +288,7 @@ _RESIDENCE_TIME_QUALIFIER = (
     r"zum\s+ende\s+(?:des\s+)?(?:monats|jahres)|"
     r"ende\s+(?:des\s+)?(?:monats|jahres)|(?:monats|jahres)ende|"
     r"(?:zum\s+)?jahresende)|"
+    r"während\s+(?:(?:dieser|der|des)\s+)?(?:woche|wochen|monats|monate|monaten|zeit)|"
     r"vor(?:uebergehend|übergehend))"
 )
 _RESIDENCE_LOCATION_ADVERB = (

@@ -367,6 +367,8 @@ def test_extract_residence_city_from_profile_address_and_study_forms() -> None:
     assert extract_residence_city("Ich wohne in Berlin bis morgen.") == "Berlin"
     assert extract_residence_city("Ich wohne bis Ende der Woche in Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne in Berlin bis Ende der Woche.") == "Berlin"
+    assert extract_residence_city("Ich wohne während dieser Woche in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich wohne während des Monats in Berlin.") == "Berlin"
     assert extract_residence_city("Ich wohne in Leipzig bis auf Weiteres.") == "Leipzig"
     assert extract_residence_city("Ich arbeite während der Ausbildung in Berlin.") == ""
     assert extract_residence_city("Ich wohne bei meiner Arbeit in Berlin.") == ""
