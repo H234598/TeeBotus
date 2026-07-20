@@ -2311,6 +2311,21 @@
 - Neuer Zyklus: `7/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
 
+### Folgefix 2026-07-20: Invertierte Registrierungsangaben
+
+- `Ich wohne in Berlin, gemeldet bin ich in Hamburg` wurde nicht als
+  Meldeadresskonflikt erkannt und lieferte Hamburg.
+- Der Registrierungscollector erkennt jetzt `gemeldet/registriert bin/sind
+  ich/wir in/bei CITY`; abweichender aktueller Wohnort blockiert die Auswahl.
+- Direkte Aussagen ohne Wohnortkonflikt bleiben auswertbar.
+- Regressionen decken deutsche Zusatzmarker, direkte Form und bestehende
+  Registrierungsformen ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `e97752b1`.
+- Neuer Zyklus: `9/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-20: Verkürzte Registrierungsformulierungen
 
 - Varianten wie `bin in Hamburg gemeldet`, `offiziell gemeldet in Hamburg`,
