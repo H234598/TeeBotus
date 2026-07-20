@@ -1158,6 +1158,17 @@ CITY_CHANGE_PATTERNS = (
         r"(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
+    re.compile(
+        r"\b(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+"
+        r"(?:die\s+stadt|der\s+ort)\s*,?\s*"
+        r"(?:in\s+(?:der|dem)|an\s+(?:der|dem)|wo)\s+(?:ich|wir)\s+"
+        r"(?:wohne|wohnen|lebe|leben)\b\s*,?\s*(?:aber|doch|jedoch)\s+"
+        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|heute)\s+"
+        r"(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
     _LABELED_COUNTRY_CITY,
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
