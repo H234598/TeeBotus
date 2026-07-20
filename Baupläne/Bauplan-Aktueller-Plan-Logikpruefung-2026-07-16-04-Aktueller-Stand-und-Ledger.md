@@ -2861,3 +2861,15 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `4b11fde3`.
 - Neuer Zyklusstand: `3/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Doppelpunkt bei possessivem Eigenort
+
+- `Wohnort meiner Frau: Hamburg; meiner: Berlin` wurde trotz vorhandener
+  Possessivlogik nicht erkannt.
+- Possessivformen des Eigenorts dürfen jetzt auch direkt mit `:` oder `=` auf
+  die Stadt zeigen; `deiner` bleibt ausgeschlossen.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `263 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `60ad5c92`.
+- Neuer Zyklusstand: `5/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
