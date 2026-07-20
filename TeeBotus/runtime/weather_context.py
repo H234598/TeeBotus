@@ -8638,7 +8638,8 @@ def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
     if re.match(
         r"(?i)\s*[,;]\s*(?:(?:aber|doch|jedoch)\s+)?(?:in|bei)\s+"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
-        r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\s+"
+        r"(?:(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)|"
+        r"(?:bin|sind)\s+(?:ich|wir))\s+"
         r"(?:(?:nur|lediglich)\s+)?(?:vorübergehend|voruebergehend|zeitweise|"
         r"gelegentlich|manchmal|am\s+wochenende|unter\s+der\s+woche)\b",
         tail,
@@ -8934,7 +8935,8 @@ def _has_temporary_residence_suffix(source: str, city_end: int) -> bool:
             r"(?:(?:nur|lediglich)\s+)?(?:vorübergehend|voruebergehend|zeitweise|"
             r"gelegentlich|manchmal|am\s+wochenende|unter\s+der\s+woche)\b|"
             r"\s+(?:bin|sind)\s+(?:ich|wir)\s+(?:(?:nur|lediglich)\s+)?"
-            r"(?:vorübergehend|voruebergehend|zeitweise|gelegentlich|manchmal)\b",
+            r"(?:vorübergehend|voruebergehend|zeitweise|gelegentlich|manchmal|"
+            r"am\s+wochenende|unter\s+der\s+woche)\b",
             sentence,
         )
     )
