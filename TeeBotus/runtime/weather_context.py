@@ -2724,6 +2724,14 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|lebe)\s+(?:nicht\s+(?:mehr|l(?:aenger|änger))?|nicht)\s+"
+        r"(?:in|bei)\s+[^,.;!?]{1,80}?\s*(?:,|;|[-–—])\s*"
+        r"(?:sondern|aber|doch|jedoch)\s+(?:wohne|lebe)\s+"
+        r"(?:jetzt|nun|heute|aktuell|derzeit|inzwischen|mittlerweile)?\s*(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80})",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?:ich\s+wohne|ich\s+lebe)\s+"
         rf"(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:nicht\s+(?:mehr|l(?:aenger|änger))?|nicht)\s+(?:in|bei)\s+[^,.;!?]{{1,80}}?"
         r"(?:,|;|[-–—])\s*(?:(?:sondern|aber)\s+)?"
