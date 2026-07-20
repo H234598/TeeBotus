@@ -6206,7 +6206,8 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
     multiplicity_source = re.sub(r"(?i)str\.(?=\s)", "str", source)
     direct_status_pair = re.search(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
-        r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)\s*[,;]\s*"
+        r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)\s*"
+        r"(?:[,;]\s*|\s+(?:und|aber|doch|jedoch)\s+)"
         r"(?P<tail>[^.!?\n]{1,160}?)(?=\s*[.!?]|$)",
         multiplicity_source,
         re.IGNORECASE,
