@@ -147,6 +147,43 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
     }
 )
 _RESIDENCE_ALIAS_WORDS = frozenset({"auch", "ebenfalls", "ebenso", "gleichfalls"})
+_NON_CITY_FRAGMENT_TOKENS = frozenset(
+    {
+        "hier",
+        "dort",
+        "da",
+        "gern",
+        "nur",
+        "wochenende",
+        "woche",
+        "tagsüber",
+        "tagsueber",
+        "morgens",
+        "vormittags",
+        "mittags",
+        "nachmittags",
+        "abends",
+        "nachts",
+        "adresse",
+        "anschrift",
+        "wohnort",
+        "wohnsitz",
+        "wohnstadt",
+        "hauptwohnsitz",
+        "lebensmittelpunkt",
+        "zuhause",
+        "daheim",
+        "mein",
+        "meine",
+        "meinen",
+        "meiner",
+        "ist",
+        "und",
+        "oder",
+        "aber",
+        "sondern",
+    }
+)
 _NON_CITY_REGION_NAMES = frozenset(
     {
         "brandenburg",
@@ -6213,23 +6250,22 @@ _RESIDENCE_LABEL_RE = re.compile(
     r"melde\w*|registriert\w*|ansässig\w*|ansaessig\w*)\b",
     re.IGNORECASE,
 )
-_RESIDENCE_CONFLICT_MARKERS = frozenset(
+_RESIDENCE_CONTRAST_MARKERS = frozenset({"aber", "doch", "jedoch", "sondern"})
+_RESIDENCE_TEMPORAL_MARKERS = frozenset(
     {
-        "aber",
-        "doch",
-        "jedoch",
-        "sondern",
-        "oder",
-        "beziehungsweise",
-        "teilweise",
-        "sowohl",
-        "ehemals",
-        "früher",
-        "frueher",
         "vorübergehend",
         "voruebergehend",
         "zeitweise",
         "gelegentlich",
+        "wochenende",
+        "werktags",
+        "wochentags",
+        "morgens",
+        "vormittags",
+        "mittags",
+        "nachmittags",
+        "abends",
+        "nachts",
     }
 )
 
@@ -6342,16 +6378,16 @@ def _resolve_residence_city(
     if not source or not _RESIDENCE_SIGNAL_RE.search(source):
         return ""
 
+    deterministic_city = extract_residence_city(source)
     tokens = {
         token.strip(".,;:!?()[]{}\"'").casefold()
         for token in source.split()
         if token.strip(".,;:!?()[]{}\"'")
     }
-    conflict = bool(tokens & _RESIDENCE_CONFLICT_MARKERS) or len(_RESIDENCE_LABEL_RE.findall(source)) > 1
-    if not conflict:
-        deterministic_city = extract_residence_city(source)
-        if deterministic_city:
-            return deterministic_city
+    temporal_conflict = bool(tokens & _RESIDENCE_CONTRAST_MARKERS) and bool(tokens & _RESIDENCE_TEMPORAL_MARKERS)
+    competing_labels = len(_RESIDENCE_LABEL_RE.findall(source)) > 1 or temporal_conflict
+    if deterministic_city and _is_safe_city_candidate(deterministic_city) and not competing_labels:
+        return deterministic_city
     if structured_decision_runner is None:
         return ""
 
@@ -6359,9 +6395,24 @@ def _resolve_residence_city(
     if decision.kind != "primary" or decision.confidence < RESIDENCE_DECISION_MIN_CONFIDENCE:
         return ""
     candidate = re.sub(r"\s+", " ", str(decision.city or "")).strip(" .,:;!?")
-    if not candidate or candidate.casefold() not in source.casefold():
+    if not candidate or not _is_safe_city_candidate(candidate) or candidate.casefold() not in source.casefold():
         return ""
     return candidate
+
+
+def _is_safe_city_candidate(city: str) -> bool:
+    value = str(city or "").strip()
+    if any(mark in value for mark in ",;:!?"):
+        return False
+    tokens = {
+        token.strip(".()[]{}\"'")
+        for token in value.casefold().split()
+        if token.strip(".()[]{}\"'")
+    }
+    return bool(tokens) and not any(
+        token in _NON_CITY_CONTEXT_TOKENS or token in _NON_CITY_FRAGMENT_TOKENS
+        for token in tokens
+    )
 
 
 def _write_weather_state(

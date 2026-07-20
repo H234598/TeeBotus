@@ -14,6 +14,7 @@ from TeeBotus.runtime.engine import TeeBotusEngine
 from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.weather_context import (
     _city_id_token,
+    _resolve_residence_city,
     extract_residence_city,
     fetch_weather_summary,
     update_city_and_weather_context,
@@ -99,6 +100,11 @@ def test_extract_residence_city_from_common_german_phrases() -> None:
     assert extract_residence_city("Ich lebe aus familiären Gründen bei Potsdam.") == "Potsdam"
     assert extract_residence_city("Ich arbeite aus beruflichen Gründen in Hamburg.") == ""
     assert extract_residence_city("Ich arbeite wegen der Arbeit in Hamburg.") == ""
+
+
+def test_residence_resolution_rejects_deictic_non_city_clause() -> None:
+    assert _resolve_residence_city("Ich wohne gern hier.", None) == ""
+    assert extract_residence_city("Ich wohne hier in Berlin.") == "Berlin"
     assert extract_residence_city("Hamburg ist der Ort, in dem ich lebe.") == "Hamburg"
     assert extract_residence_city("Der Ort, in dem ich lebe, ist Hamburg.") == "Hamburg"
     assert extract_residence_city("Weißt du, wo ich wohne? In Köln.") == "Köln"
@@ -4598,6 +4604,51 @@ def test_weather_context_rejects_model_place_not_present_in_message(tmp_path) ->
 
     assert result.skipped_reason == "no_city"
     assert calls == []
+
+
+def test_weather_context_rejects_structural_model_place(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Meine Adresse ist Berlin, mein Wohnort ist Hamburg.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: f"{city}: 12 C",
+        structured_decision_runner=lambda _prompt, _schema: {
+            "kind": "primary",
+            "city": "Adresse",
+            "confidence": 0.99,
+        },
+    )
+
+    assert result.skipped_reason == "no_city"
+
+
+def test_weather_context_keeps_clear_work_location_local(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    decision_calls: list[str] = []
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin, aber in Hamburg arbeite ich.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: f"{city}: 12 C",
+        structured_decision_runner=lambda prompt, _schema: decision_calls.append(prompt),
+    )
+
+    assert result.city == "Berlin"
+    assert decision_calls == []
+
+
+def test_weather_context_keeps_primary_home_after_temporary_location() -> None:
+    assert _resolve_residence_city(
+        "Ich wohne vorübergehend in Berlin, mein Zuhause ist Hamburg.",
+        None,
+    ) == "Hamburg"
 
 
 def test_weather_context_does_not_route_temporary_place_to_primary_weather(tmp_path) -> None:
