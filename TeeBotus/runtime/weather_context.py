@@ -53,6 +53,7 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "morgen",
         "jetzt",
         "nun",
+        "eigentlich",
         "aktuell",
         "derzeit",
         "momentan",
@@ -4599,6 +4600,7 @@ CITY_PATTERNS = (
     ),
     re.compile(
         r"\b(?:ich\s+)?(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:eigentlich\s+)?"
         r"(?!(?:ich|wir|tue|tun|mal|teils|abwechselnd|aber|doch|jedoch|zwischen|irgendwo|mit|auf|aus|von|nach|für|fuer|ab|bis|seit|"
         r"nur\s+am\s+wochenende|am\s+wochenende|"
         r"nur\s+(?:noch|in|zuhause|zu\s+hause|daheim)|"
