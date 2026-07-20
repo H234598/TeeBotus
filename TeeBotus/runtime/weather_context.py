@@ -1232,6 +1232,13 @@ _CITY_BEFORE_RESIDENCE_ADDRESS_HAVE = re.compile(
     r"privatanschrift|adresse|anschrift)\b",
     re.IGNORECASE,
 )
+_CITY_WITH_PARENTHETICAL_RESIDENCE_LABEL = re.compile(
+    r"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+    r"\((?:wohnort|wohnsitz|wohnstadt|lebensmittelpunkt|wohnadresse|wohnanschrift|"
+    r"meldeadresse|meldeanschrift|meldesitz|adresse|anschrift)\)"
+    r"(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _CITY_CHANGE_LABELLED_CURRENT_NEW_RESIDENCE = re.compile(
     r"\b(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*"
     r"(?:[:=,]\s*|\s+)"
@@ -3374,6 +3381,7 @@ _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
     _DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR,
     _CITY_BEFORE_RESIDENCE_ADDRESS_HAVE,
+    _CITY_WITH_PARENTHETICAL_RESIDENCE_LABEL,
     _CITY_BEFORE_RELATIVE_RESIDENCE_LABEL,
     _CITY_BEFORE_RELATIVE_COMPANION_RESIDENCE,
     _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE,
@@ -8928,6 +8936,12 @@ def _clean_city(value: str) -> str:
     city = re.sub(r"\s+", " ", city)
     city = re.sub(
         rf"(?i)\s+\({_PRIMARY_RESIDENCE_LABEL}\)$",
+        "",
+        city,
+    ).strip()
+    city = re.sub(
+        r"(?i)\s+\((?:wohnort|wohnsitz|wohnstadt|lebensmittelpunkt|wohnadresse|"
+        r"wohnanschrift|meldeadresse|meldeanschrift|meldesitz|adresse|anschrift)\)$",
         "",
         city,
     ).strip()
