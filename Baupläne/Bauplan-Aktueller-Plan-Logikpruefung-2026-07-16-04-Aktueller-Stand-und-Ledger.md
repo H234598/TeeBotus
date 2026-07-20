@@ -2146,3 +2146,19 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `660b46a9`.
+
+## Folgefix 2026-07-20: Wohnort-Memory und Wetter-State atomarer halten
+
+- City-Wechsel räumte Wohnort-Memory bisher vor dem separaten Agent-State-Write
+  um. Bei einem fehlgeschlagenen State-Write konnten Memory und Wetter-State
+  unterschiedliche Städte enthalten.
+- `_append_city_memory()` liefert bei einer echten Mutation Snapshot von
+  Entries und Index zurück.
+- Der nachfolgende Wetter-State-Write stellt diesen Snapshot bei Fehler wieder
+  her; Rollbackfehler werden sichtbar gemeldet.
+- Regressionstest deckt neuen Wohnort plus fehlgeschlagenen State-Write ab.
+- Verifikation: `tests/test_weather_context.py` -> `239 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `0a58c842`.
+- Neuer Zyklus: `8/20` Commits seit diesem Restart. Kein Push. Restart erst bei
+  `20/20`.
