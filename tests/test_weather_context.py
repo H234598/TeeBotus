@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
+import json
 import time
 from unittest.mock import patch
 
@@ -14,6 +15,7 @@ from TeeBotus.runtime.events import IncomingEvent
 from TeeBotus.runtime.weather_context import (
     _city_id_token,
     extract_residence_city,
+    fetch_weather_summary,
     update_city_and_weather_context,
     weather_context_text,
 )
@@ -1505,6 +1507,30 @@ def test_city_id_token_keeps_long_city_names_distinct() -> None:
     assert first_token != second_token
     assert len(first_token) <= 48
     assert len(second_token) <= 48
+
+
+@pytest.mark.parametrize(
+    "payload",
+    (
+        {"current_condition": [], "nearest_area": []},
+        {"current_condition": [], "nearest_area": [{"areaName": [{"value": "Berlin"}]}]},
+        {"current_condition": [{}], "nearest_area": []},
+        [],
+    ),
+)
+def test_fetch_weather_summary_handles_incomplete_provider_payload(payload) -> None:
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def read(self):
+            return json.dumps(payload).encode("utf-8")
+
+    with patch("TeeBotus.runtime.weather_context.urllib.request.urlopen", return_value=Response()):
+        assert fetch_weather_summary("Berlin") == "Berlin"
 
 
 def test_extract_residence_city_accepts_activity_prefix_city_names() -> None:

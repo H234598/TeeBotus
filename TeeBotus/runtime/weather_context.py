@@ -7667,8 +7667,16 @@ def fetch_weather_summary(city: str) -> str:
     request = urllib.request.Request(url, headers={"User-Agent": "TeeBotus/1 weather context"})
     with urllib.request.urlopen(request, timeout=WEATHER_TIMEOUT_SECONDS) as response:
         payload = json.loads(response.read().decode("utf-8"))
-    current = payload.get("current_condition", [{}])[0]
-    area = payload.get("nearest_area", [{}])[0]
+    if not isinstance(payload, Mapping):
+        return str(city or "").strip()
+    current_values = payload.get("current_condition")
+    area_values = payload.get("nearest_area")
+    current = current_values[0] if isinstance(current_values, list) and current_values else {}
+    area = area_values[0] if isinstance(area_values, list) and area_values else {}
+    if not isinstance(current, Mapping):
+        current = {}
+    if not isinstance(area, Mapping):
+        area = {}
     name = _area_name(area) or city
     temp = str(current.get("temp_C") or "").strip()
     feels = str(current.get("FeelsLikeC") or "").strip()
