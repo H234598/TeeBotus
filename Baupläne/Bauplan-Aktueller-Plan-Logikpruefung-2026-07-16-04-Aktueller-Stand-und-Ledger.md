@@ -2361,3 +2361,17 @@
   gruen. Code-Commit: `f39af1b4`.
 - Neuer Zyklus: `14/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Unsichere Formulierungen `es scheint` und `nach meinem Wissen`
+
+- `Es scheint, ich wohne in Hamburg`, `Es scheint, dass ich in Hamburg wohne`
+  und `Nach meinem Wissen wohne ich in Hamburg` wurden als sichere Wohnorte
+  erkannt.
+- Der bestehende Unsicherheitsfilter verwirft diese Präfixe jetzt ebenfalls;
+  eindeutige Aussagen wie `Ich wohne in Hamburg` bleiben gültig.
+- Regressionen decken beide `es scheint`-Varianten und die Wissen-Form ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `56037659`.
+- Neuer Zyklus: `16/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
