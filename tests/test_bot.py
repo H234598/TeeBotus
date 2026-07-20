@@ -2111,6 +2111,71 @@ class BotTests(unittest.TestCase):
         self.assertIn("Nachrichten in diesem Chat auf laut", api.sent_messages[10][1])
         self.assertIsNotNone(account_id)
 
+    def test_modern_telegram_path_uses_structured_memory_decision(self) -> None:
+        class InstructionBox:
+            def get(self):
+                return BotInstructions(openai_enabled=True, user_memory_enabled=True)
+
+        class FakeLLMClient:
+            def create_reply(self, *_args, **_kwargs):
+                return OpenAIResponse("Antwort.", "resp-telegram-memory", None)
+
+        def structured_runner(_prompt, schema):
+            if schema.__name__ == "MemoryCandidate":
+                return {
+                    "should_store": True,
+                    "memory_type": "preference",
+                    "text": "User bevorzugt kurze Antworten.",
+                    "sensitivity": "low",
+                    "confidence": 0.95,
+                }
+            if schema.__name__ == "BibliothekarQueryDecision":
+                return {"should_search": False, "query": "", "confidence": 0.95, "reason_short": "keine Quellenfrage"}
+            raise AssertionError(f"unexpected structured schema: {schema.__name__}")
+
+        api = FakeAPI()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            account_store = AccountStore(root / "accounts", "Demo", StaticSecretProvider(b"e" * 32))
+            context = build_telegram_runtime_context(
+                api=api,
+                instance_name="Demo",
+                adapter_slot=1,
+                instruction_store=InstructionBox(),
+                account_store=account_store,
+                state_store=RuntimeStateStore(root / "data", instance_name="Demo", secret_provider=StaticSecretProvider(b"e" * 32)),
+                message_tracker=MessageTracker(root / "runtime" / "Sent_Message_Refs.json"),
+                openai_client=None,
+                llm_client=FakeLLMClient(),
+                working_memory_store=None,
+                bibliothekar_store=None,
+                youtube_job_runner=None,
+                bot_identity=BotIdentity(first_name="Mondbot", username="MondBot"),
+                structured_decision_runner=structured_runner,
+            )
+
+            handle_update(
+                api,
+                {
+                    "update_id": 99,
+                    "message": {
+                        "message_id": 1,
+                        "text": "Ich mag kurze Antworten.",
+                        "chat": {"id": 123, "type": "private"},
+                        "from": {"id": 456},
+                    },
+                },
+                chat_state=ChatState(),
+                runtime_context=context,
+            )
+
+            account_id = account_store.get_account_for_identity(telegram_identity_key("456"))
+            assert account_id is not None
+            entries = account_store.read_memory_entries(account_id)
+            assert entries
+            assert entries[-1]["structured_decision"]["schema"] == "MemoryCandidate"
+            assert entries[-1]["kind"] == "preference"
+
     def test_modern_group_reply_to_bot_reaches_engine_before_account_resolution(self) -> None:
         from TeeBotus.runtime.actions import SendText
         from TeeBotus.runtime.engine import EngineResult

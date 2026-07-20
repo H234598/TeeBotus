@@ -1057,7 +1057,6 @@ def build_telegram_runtime_context(
         bibliothekar_store=bibliothekar_store,
         youtube_job_runner=youtube_job_runner,
         structured_decision_runner=structured_decision_runner,
-        skip_memory_candidate_structured_decision=True,
         background_action_dispatcher=lambda event, actions: _dispatch_modern_telegram_actions(
             api,
             message_tracker,
