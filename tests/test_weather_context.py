@@ -3862,6 +3862,46 @@ def test_city_memory_is_not_duplicated_when_state_write_fails_after_append(tmp_p
     assert city_memories[0]["id"] == "mem_residence_city_berlin"
 
 
+def test_city_change_rolls_back_memory_when_weather_state_write_fails(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    provider = lambda city: f"{city}: 9 C"
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=provider,
+    )
+    original_write_agent_state = account_store.write_agent_state
+    failed = False
+
+    def fail_on_city_change(write_account_id: str, state: dict[str, object]) -> None:
+        nonlocal failed
+        weather_state = state.get("weather_context")
+        if not failed and isinstance(weather_state, dict) and weather_state.get("city") == "Potsdam":
+            failed = True
+            raise OSError("weather state write failed")
+        original_write_agent_state(write_account_id, state)
+
+    with patch.object(account_store, "write_agent_state", side_effect=fail_on_city_change):
+        with pytest.raises(OSError, match="weather state write failed"):
+            update_city_and_weather_context(
+                account_store,
+                account_id,
+                "Ich wohne in Potsdam.",
+                now=datetime(2026, 6, 15, 9, 30, tzinfo=timezone.utc),
+                provider=provider,
+            )
+
+    assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "Berlin"
+    assert [
+        entry["id"]
+        for entry in account_store.read_memory_entries(account_id)
+        if str(entry.get("id") or "").startswith("mem_residence_city_")
+    ] == ["mem_residence_city_berlin"]
+
+
 def test_weather_provider_error_does_not_expose_stale_summary(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

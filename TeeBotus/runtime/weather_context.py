@@ -5,6 +5,7 @@ import hashlib
 import re
 import urllib.parse
 import urllib.request
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Mapping
@@ -5061,6 +5062,7 @@ class WeatherContextResult:
 
 
 WeatherProvider = Callable[[str], str]
+CityMemorySnapshot = tuple[list[dict[str, Any]], dict[str, Any]]
 
 
 def update_city_and_weather_context(
@@ -5096,12 +5098,14 @@ def _update_city_and_weather_context_unlocked(
     weather_state = _ensure_weather_state(state)
     city = extract_residence_city(text)
     city_changed = False
+    city_memory_snapshot: CityMemorySnapshot | None = None
     if city:
         previous_city = str(weather_state.get("city") or "").strip()
         city_changed = _city_comparison_key(city) != _city_comparison_key(previous_city)
         if not city_changed:
             city = previous_city
-        if not _append_city_memory(account_store, account_id, city, resolved_now):
+        memory_ok, city_memory_snapshot = _append_city_memory(account_store, account_id, city, resolved_now)
+        if not memory_ok:
             return WeatherContextResult(
                 city=previous_city,
                 weather_text=str(weather_state.get("summary") or "").strip(),
@@ -5116,13 +5120,14 @@ def _update_city_and_weather_context_unlocked(
             weather_state["last_error"] = ""
     current_city = str(weather_state.get("city") or "").strip()
     if not current_city:
-        account_store.write_agent_state(account_id, state) if city else None
+        if city:
+            _write_weather_state(account_store, account_id, state, city_memory_snapshot)
         return WeatherContextResult(skipped_reason="no_city")
     last_checked = _parse_datetime(str(weather_state.get("last_checked_at") or ""))
     elapsed_since_check = resolved_now - last_checked if last_checked is not None else None
     if not city_changed and elapsed_since_check is not None and timedelta(0) <= elapsed_since_check < WEATHER_CHECK_INTERVAL:
         if city:
-            account_store.write_agent_state(account_id, state)
+            _write_weather_state(account_store, account_id, state, city_memory_snapshot)
         return WeatherContextResult(
             city=current_city,
             weather_text=str(weather_state.get("summary") or "").strip(),
@@ -5136,17 +5141,48 @@ def _update_city_and_weather_context_unlocked(
         weather_state["last_error"] = f"{type(exc).__name__}: {exc}"[:240]
         weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
         weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
-        account_store.write_agent_state(account_id, state)
+        _write_weather_state(account_store, account_id, state, city_memory_snapshot)
         return WeatherContextResult(city=current_city, checked=True, skipped_reason="weather_error")
     weather_state["summary"] = summary[:500]
     weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
     weather_state["last_error"] = ""
     weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
-    account_store.write_agent_state(account_id, state)
+    _write_weather_state(account_store, account_id, state, city_memory_snapshot)
     return WeatherContextResult(city=current_city, weather_text=weather_state["summary"], checked=True)
 
 
-def _append_city_memory(account_store: AccountStore, account_id: str, city: str, now: datetime) -> bool:
+def _write_weather_state(
+    account_store: AccountStore,
+    account_id: str,
+    state: dict[str, Any],
+    city_memory_snapshot: CityMemorySnapshot | None,
+) -> None:
+    try:
+        account_store.write_agent_state(account_id, state)
+    except Exception:
+        if city_memory_snapshot is None:
+            raise
+        previous_rows, previous_index = city_memory_snapshot
+        rollback_errors: list[Exception] = []
+        for restore in (
+            lambda: account_store.write_memory_entries(account_id, previous_rows),
+            lambda: account_store.write_memory_index(account_id, previous_index),
+        ):
+            try:
+                restore()
+            except Exception as rollback_exc:  # noqa: BLE001 - preserve failure visibility.
+                rollback_errors.append(rollback_exc)
+        if rollback_errors:
+            raise RuntimeError("weather state write rollback failed; residence memory may be inconsistent") from rollback_errors[0]
+        raise
+
+
+def _append_city_memory(
+    account_store: AccountStore,
+    account_id: str,
+    city: str,
+    now: datetime,
+) -> tuple[bool, CityMemorySnapshot | None]:
     memory_id = f"mem_residence_city_{_city_id_token(city)}"
     try:
         rows = account_store.read_memory_entries(account_id)
@@ -5180,9 +5216,10 @@ def _append_city_memory(account_store: AccountStore, account_id: str, city: str,
         ]
         if not obsolete_rows and current_memory_count < 2:
             if has_current_memory:
-                return True
+                return True, None
+            previous_index = account_store.read_memory_index(account_id)
             account_store.append_structured_memory_entry(account_id, entry)
-            return True
+            return True, ([dict(row) for row in rows if isinstance(row, Mapping)], deepcopy(previous_index))
         previous_rows = [dict(row) for row in rows if isinstance(row, Mapping)]
         previous_index = account_store.read_memory_index(account_id)
         retained_rows: list[dict[str, Any]] = []
@@ -5201,13 +5238,13 @@ def _append_city_memory(account_store: AccountStore, account_id: str, city: str,
             account_store.rebuild_structured_memory_index(account_id)
             if not has_current_memory:
                 account_store.append_structured_memory_entry(account_id, entry)
-            return True
+            return True, (previous_rows, deepcopy(previous_index))
         except Exception:
             account_store.write_memory_entries(account_id, previous_rows)
             account_store.write_memory_index(account_id, previous_index)
             raise
     except Exception:
-        return False
+        return False, None
 
 
 def weather_context_text(account_store: AccountStore, account_id: str) -> str:
