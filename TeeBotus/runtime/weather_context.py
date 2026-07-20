@@ -6204,6 +6204,26 @@ def extract_residence_city(text: str) -> str:
 
 def _has_explicit_residence_multiplicity(source: str) -> bool:
     multiplicity_source = re.sub(r"(?i)str\.(?=\s)", "str", source)
+    status_pair = re.search(
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*[:=,]?\s*"
+        r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[.!?;,:]\s*"
+        r"(?:(?:dauerhaft\w*|offiziell\w*|amtlich\w*|polizeilich\w*|stabil\w*)\s+)?"
+        r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+"
+        r"(?:(?:in|bei)\s+)?"
+        r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+        multiplicity_source,
+        re.IGNORECASE,
+    )
+    if status_pair:
+        first = _clean_city(status_pair.group("first"))
+        second = _clean_city(status_pair.group("second"))
+        if (
+            first
+            and second
+            and _city_comparison_key(first) != _city_comparison_key(second)
+        ):
+            return True
     for pair in _DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR.finditer(multiplicity_source):
         first = _clean_city(pair.group("first_city"))
         second = _clean_city(pair.group("city"))
