@@ -950,12 +950,16 @@ _SHORT_RESIDENCE_CLAUSE_SEPARATOR = (
     r"(?:[.!?]\s+|[,;]\s*(?:und|sowie|aber|doch|jedoch|während|waehrend)?\s*|"
     r"(?:und|sowie|aber|doch|jedoch|während|waehrend)\s+)"
 )
+_SHORT_RESIDENCE_CURRENT_QUALIFIER = (
+    r"(?:(?:aktuell|derzeit|momentan|gegenwärtig|gegenwaertig|jetzt|heute|nun|"
+    r"gerade|grad|zurzeit|zur\s+zeit)\s+)?"
+)
 _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_CITY = re.compile(
     rf"\b{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
     r"(?:wohnt|wohnen|lebt|leben|ist|sind)\s+(?:in|bei)\s+"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
     rf"{_SHORT_RESIDENCE_CLAUSE_SEPARATOR}"
-    r"(?:ich|wir)\s+(?:in|bei)\s+"
+    rf"(?:ich|wir)\s+{_SHORT_RESIDENCE_CURRENT_QUALIFIER}(?:in|bei)\s+"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:wohne|wohnen|lebe|leben)\b|[.!?;,]|$)",
     re.IGNORECASE,
 )
@@ -967,7 +971,7 @@ _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_CITY = re.compile(
     r"\s*[:=]\s*(?:(?:in|bei)\s+)?)"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
     rf"{_SHORT_RESIDENCE_CLAUSE_SEPARATOR}"
-    r"(?:ich|wir)\s+(?:in|bei)\s+"
+    rf"(?:ich|wir)\s+{_SHORT_RESIDENCE_CURRENT_QUALIFIER}(?:in|bei)\s+"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:wohne|wohnen|lebe|leben)\b|[.!?;,]|$)",
     re.IGNORECASE,
 )
@@ -977,7 +981,7 @@ _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_PRONOUN_CITY = re.compile(
     r"\s*[:=]\s*(?:(?:in|bei)\s+)?)"
     r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*"
     rf"{_SHORT_RESIDENCE_CLAUSE_SEPARATOR}"
-    r"(?:ich|wir)\s+(?:in|bei)\s+"
+    rf"(?:ich|wir)\s+{_SHORT_RESIDENCE_CURRENT_QUALIFIER}(?:in|bei)\s+"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:wohne|wohnen|lebe|leben)\b|[.!?;,]|$)",
     re.IGNORECASE,
 )
@@ -996,7 +1000,7 @@ _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_POSSESSIVE_CITY = re.compile(
     re.IGNORECASE,
 )
 _SHORT_SELF_RESIDENCE_BEFORE_OTHER_PERSON_CITY = re.compile(
-    r"\b(?:ich|wir)\s+(?:in|bei)\s+"
+    rf"\b(?:ich|wir)\s+{_SHORT_RESIDENCE_CURRENT_QUALIFIER}(?:in|bei)\s+"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*"
     rf"{_SHORT_RESIDENCE_CLAUSE_SEPARATOR}"
     rf"{_OTHER_PERSON_RESIDENCE_OWNER_REFERENCE}\s+"
