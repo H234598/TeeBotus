@@ -7377,6 +7377,16 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
+    if re.search(
+        rf"\b(?:ich|wir)\s+{residence}\s+"
+        r"(?:in\s+der\s+(?:nähe|naehe|umgebung|gegend)\s+von|nahe|unweit\s+von|"
+        r"im\s+umland(?:\s+von)?)\s+[^,.;!?]{1,80}?\s+(?:und|,)\s+"
+        r"(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:arbeite\w*|studier\w*|lern\w*)\s+(?:ich|wir)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
     same_city_residence_label = re.search(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:und|,)\s+"
