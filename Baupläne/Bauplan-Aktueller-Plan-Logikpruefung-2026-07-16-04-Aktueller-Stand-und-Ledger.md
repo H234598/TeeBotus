@@ -2072,3 +2072,9 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `f6418555`.
+
+## Service-Restart 2026-07-20
+
+- Restart nach abgeschlossenem Zyklus `20/20` ausgeführt.
+- `teebotus.service` ist `active/running`, neuer `MainPID 2585598`.
+- Neuer Zyklus: `1/20` Commits seit diesem Restart. Kein Push.
