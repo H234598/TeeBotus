@@ -1689,6 +1689,38 @@ _HAVE_PRIMARY_HOME_CITY = re.compile(
     re.IGNORECASE,
 )
 
+_CITY_CHANGE_SENTENCE_LABEL_CURRENT_CITY = re.compile(
+    rf"(?:^|[.!?;,:]\s*)(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+ist\s+"
+    rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"zuhause|zu\s+hause|daheim)\s*(?:[,;]|\bund\s+)\s*"
+    r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|heute)\s+"
+    r"(?!(?:arbeite|arbeitest|arbeiten|studier|studierst|studieren|lern|lernst|"
+    r"schlaf|schläf|schlaef|pendl|reis|besuch|übernacht|uebernacht|fahr|geh|komm|mach)\w*\b)"
+    r"(?:(?:in|bei)\s+)?"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
+_CITY_CHANGE_SENTENCE_LABEL_CURRENT_STATUS_CITY = re.compile(
+    rf"(?:^|[.!?;,:]\s*)(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+ist\s+"
+    rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"zuhause|zu\s+hause|daheim)\s*[.!?]\s*"
+    r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|heute|"
+    r"ab\s+(?:sofort|jetzt|heute)|seit\s+heute)\s+"
+    r"(?!(?:arbeite|arbeitest|arbeiten|studier|studierst|studieren|lern|lernst|"
+    r"schlaf|schläf|schlaef|pendl|reis|besuch|übernacht|uebernacht|fahr|geh|komm|mach)\w*\b)"
+    r"(?:(?:in|bei)\s+)?"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
+_CITY_CHANGE_SENTENCE_LABEL_PATTERNS = (
+    _CITY_CHANGE_SENTENCE_LABEL_CURRENT_CITY,
+    _CITY_CHANGE_SENTENCE_LABEL_CURRENT_STATUS_CITY,
+)
+
 CITY_CHANGE_PATTERNS = (
     re.compile(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+nicht\s+mehr\s+(?:in|bei)\s+"
@@ -3748,33 +3780,8 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_HISTORICAL_CITY_PRONOUN_CURRENT,
     _CITY_CHANGE_HISTORICAL_LABEL_PRONOUN_CURRENT,
     _CITY_CHANGE_CITY_IS_HISTORICAL_LABEL_PRONOUN_CURRENT,
-    re.compile(
-        rf"(?:^|[.!?;,:]\s*)(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+ist\s+"
-        rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
-        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
-        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
-        r"zuhause|zu\s+hause|daheim)\s*(?:[,;]|\bund\s+)\s*"
-        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|heute)\s+"
-        r"(?!(?:arbeite|arbeitest|arbeiten|studier|studierst|studieren|lern|lernst|"
-        r"schlaf|schläf|schlaef|pendl|reis|besuch|übernacht|uebernacht|fahr|geh|komm|mach)\w*\b)"
-        r"(?:(?:in|bei)\s+)?"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
-        re.IGNORECASE,
-    ),
-    re.compile(
-        rf"(?:^|[.!?;,:]\s*)(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+ist\s+"
-        rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
-        rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
-        r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
-        r"zuhause|zu\s+hause|daheim)\s*[.!?]\s*"
-        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|heute|"
-        r"ab\s+(?:sofort|jetzt|heute)|seit\s+heute)\s+"
-        r"(?!(?:arbeite|arbeitest|arbeiten|studier|studierst|studieren|lern|lernst|"
-        r"schlaf|schläf|schlaef|pendl|reis|besuch|übernacht|uebernacht|fahr|geh|komm|mach)\w*\b)"
-        r"(?:(?:in|bei)\s+)?"
-        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
-        re.IGNORECASE,
-    ),
+    _CITY_CHANGE_SENTENCE_LABEL_CURRENT_CITY,
+    _CITY_CHANGE_SENTENCE_LABEL_CURRENT_STATUS_CITY,
     re.compile(
         rf"(?:^|[.!?;,:]\s*)(?:heute|jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|"
         r"ab\s+(?:sofort|jetzt|heute)|seit\s+heute)\s+"
@@ -6531,6 +6538,10 @@ def extract_residence_city(text: str) -> str:
                     if (
                         _has_non_residential_city_tail(match.group("city"))
                         or _has_non_residential_city_suffix(source, city_end)
+                        or (
+                            pattern in _CITY_CHANGE_SENTENCE_LABEL_PATTERNS
+                            and _has_non_residential_city_change_suffix(source, city_end)
+                        )
                         or _has_unresolved_parenthetical_city_suffix(source, city_end)
                     ):
                         continue
@@ -9751,6 +9762,18 @@ def _has_non_residential_city_suffix(source: str, city_end: int) -> bool:
         re.match(
             rf"(?i)\s*\({_SECONDARY_RESIDENCE_LABEL}\)|"
             rf"\s*(?:nebenwohnsitzlich|als\s+{_SECONDARY_RESIDENCE_LABEL})\b",
+            source[city_end:],
+        )
+    )
+
+
+def _has_non_residential_city_change_suffix(source: str, city_end: int) -> bool:
+    return bool(
+        re.match(
+            r"(?i)\s*,?\s*(?:aber\s+)?(?:arbeite|studier|lern|schlaf|pendel|reise|besuch)\w*\b|"
+            r"\s*,?\s*(?:dort|hier)\s+(?:arbeite|studier|lern|schlaf|pendel|reise|besuch)\w*\b|"
+            r"\s*,?\s*wo\s+ich\s+(?:arbeite|studier|lern|schlaf|pendel|reise|besuch)\w*\b|"
+            r"\s*,?\s*um\s+dort\s+zu\s+(?:arbeite|studier|lern|schlaf|pendel|reise|besuch)\w*\b",
             source[city_end:],
         )
     )
