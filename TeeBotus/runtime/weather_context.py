@@ -6240,6 +6240,14 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
             "",
             direct_status_pair.group("tail").strip(),
         )
+        if re.match(
+            r"(?i)^(?:(?:ich|wir)\s+)?(?:bin|sind)\s+"
+            r"(?:jetzt|nun(?:mehr)?|aktuell\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
+            r"inzwischen|mittlerweile|seit\s+[^\s,;.!?]+|ab\s+(?:sofort|jetzt)|"
+            r"künftig\w*|kuenftig\w*|zukünftig\w*|zukuenftig)\b",
+            status_tail,
+        ):
+            return False
         if not re.match(
             r"(?i)^(?:jetzt|nun|aktuell\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
             r"inzwischen|mittlerweile|seit\s+[^\s,;.!?]+|ab\s+(?:sofort|jetzt))\b",
@@ -8872,7 +8880,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
             r"(?!nicht\w*\b|(?:ich\s+)?(?:wohne|lebe)\s+nicht\b|"
             r"bin\b|war\w*\b|sein\b|sind\s+(?:beruflich|dienstlich|zum\s+arbeiten)\b|"
-            r"sind\s+(?:(?:jetzt|nunmehr?|aktuell\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
+            r"sind\s+(?:(?:jetzt|nun(?:mehr)?|aktuell\w*|derzeit\w*|gegenwärtig|gegenwaertig|"
             r"inzwischen|mittlerweile|seit\s+[^\s,;.!?]+|ab\s+(?:sofort|jetzt)|"
             r"künftig\w*|kuenftig\w*|zukünftig\w*|zukuenftig)\b)|"
             r"arbeit\w*\b|studier\w*\b|lern\w*\b|zieh\w*\b|"
