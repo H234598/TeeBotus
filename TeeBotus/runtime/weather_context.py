@@ -2773,7 +2773,10 @@ CITY_PATTERNS = (
     re.compile(
         rf"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+ist\s+"
         rf"(?:(?:{_RESIDENCE_TIME_QUALIFIER}|ab\s+(?:sofort|jetzt)|"
-        r"bis\s+(?:zum\s+)?jahresende)\s+)?"
+        r"bis\s+(?:zum\s+)?jahresende|"
+        r"überwiegend|ueberwiegend|hauptsächlich|hauptsaechlich|vorwiegend|meistens|"
+        r"primär|primaer|normalerweise|gewöhnlich|gewoehnlich|regulär|regulaer|"
+        r"üblicherweise|ueblicherweise|in\s+der\s+regel)\s+)?"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
         r"zuhause|zu\s+hause|daheim)\b"
