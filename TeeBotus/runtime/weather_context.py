@@ -7563,7 +7563,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     short_residence_cities: set[str] = set()
     for match in re.finditer(
         r"\b(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
-        r"(?:(?:aber|doch|jedoch)\s+)?(?:in|bei)\s+"
+        rf"(?:(?:aber|doch|jedoch)\s+)?(?:{_RESIDENCE_TIME_QUALIFIER}\s+)?(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
         source,
         re.IGNORECASE,
@@ -8371,7 +8371,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         and short_residence_cities.isdisjoint(registered_address_cities)
     ):
         return True
-    residence_address_cities = residence_cities | address_cities
+    residence_address_cities = residence_cities | short_residence_cities | address_cities
     if (
         residence_address_cities
         and registered_address_cities
@@ -8415,9 +8415,10 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             _CITY_CHANGE_NOMINAL_MOVE_LABELLED_STREET,
             _CITY_CHANGE_LABELLED_COLON_SEPARATOR_STREET,
         )
-    ) and not registered_address_cities:
+    ) and not registered_address_cities and not (short_residence_cities and address_cities):
         return False
-    if residence_cities and address_cities and residence_cities.isdisjoint(address_cities):
+    residence_targets = residence_cities | short_residence_cities
+    if residence_targets and address_cities and residence_targets.isdisjoint(address_cities):
         return True
     work_address_cities: set[str] = set()
     for match in re.finditer(
@@ -8445,7 +8446,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             work_address_cities.add(_city_comparison_key(city))
     if address_cities and work_address_cities and address_cities.isdisjoint(work_address_cities):
         return True
-    return bool(residence_cities and address_cities and residence_cities.isdisjoint(address_cities))
+    return bool(residence_targets and address_cities and residence_targets.isdisjoint(address_cities))
 
 
 def _has_conflicting_current_relative_residence(source: str) -> bool:
