@@ -9138,7 +9138,15 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     ambiguous_label_match = re.search(
         r"\b(?:mein(?:e)?|unser(?:e)?)?\s*(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|zuhause|zu\s+hause|daheim)\s+"
         r"(?:ist|liegt|befindet\s+sich|bleibt)\s+[^,.;!?]{1,80}\s+und\s+"
-        r"(?!(?:(?:ich|wir)\s+)?(?:arbeit|studier|lern|schlaf|mach|komm|fahr|geh|zieh|hab|besuch|verbring|treff|reis|pendl|seh|übernacht|uebernacht)\w*\b)"
+        r"(?!(?:(?:ich|wir)\s+)?(?:arbeit|studier|lern|schlaf|mach|komm|fahr|geh|zieh|hab|besuch|verbring|treff|reis|pendl|seh|übernacht|uebernacht)\w*\b|"
+        r"(?:mein(?:e)?|unser(?:e)?)\s+"
+        r"(?:adresse|wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|"
+        r"meldeadresse|meldeanschrift|meldesitz|arbeitsadresse|arbeitsanschrift|"
+        r"geschäftsadresse|geschaeftsadresse|dienstadresse|büroadresse|bueroadresse|"
+        r"postadresse|postanschrift|zustelladresse|zustellanschrift)\b"
+        r"(?:\s*(?::|=|,)|\s+(?:ist|lautet|liegt|befindet\s+sich|in|bei)\b)?\s*"
+        r"(?:(?:auch|ebenfalls|ebenso|gleichfalls)\s+)?"
+        r")"
         r"(?:(?:in|bei)\s+)?[A-ZÄÖÜ][\wÄÖÜäöüß'-]*",
         source,
         re.IGNORECASE,
