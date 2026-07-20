@@ -1950,6 +1950,7 @@ def handle_update(
     bibliothekar_store: BibliothekarService | BibliothekarStore | None = None,
     runtime_context: TelegramRuntimeContext | None = None,
     llm_client: object | None = None,
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> None:
     instructions = instructions or BotInstructions()
     chat_state = chat_state or ChatState()
@@ -2037,6 +2038,7 @@ def handle_update(
             bot_identity,
             working_memory_store,
             instance_name,
+            structured_decision_runner=structured_decision_runner,
         )
         return
 
@@ -2064,7 +2066,14 @@ def handle_update(
         )
         return
 
-    user_memory = _prepare_user_memory(user_memory_store, message, instructions, text, api)
+    user_memory = _prepare_user_memory(
+        user_memory_store,
+        message,
+        instructions,
+        text,
+        api,
+        structured_decision_runner=structured_decision_runner,
+    )
     if user_memory_store is not None and user_memory is not None:
         _record_codex_history_telegram_reply_for_account(
             user_memory_store,
@@ -2093,6 +2102,7 @@ def handle_update(
         youtube_job_runner,
         instance_name,
         bibliothekar_store,
+        structured_decision_runner=structured_decision_runner,
     )
 
 
@@ -2113,6 +2123,7 @@ def _process_text_message(
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
     instance_name: str = "",
     bibliothekar_store: BibliothekarService | BibliothekarStore | None = None,
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> None:
     chat_state.mark_sender_seen(_telegram_sender_state_key(message))
     bot_identity = bot_identity or BotIdentity()
@@ -2177,6 +2188,7 @@ def _process_text_message(
         working_memory_store,
         youtube_job_runner,
         instance_name,
+        structured_decision_runner=structured_decision_runner,
     ):
         return
 
@@ -2197,6 +2209,7 @@ def _process_text_message(
             working_memory_store,
             instance_name,
             youtube_job_runner,
+            structured_decision_runner=structured_decision_runner,
         )
         return
 
@@ -2264,7 +2277,12 @@ def _process_text_message(
         try:
             api.send_chat_action(chat_id, "typing")
             working_memory = _prepare_working_memory(working_memory_store, text)
-            weather_text = _prepare_weather_context(user_memory_store, user_memory, text)
+            weather_text = _prepare_weather_context(
+                user_memory_store,
+                user_memory,
+                text,
+                structured_decision_runner=structured_decision_runner,
+            )
             library_text = _prepare_bibliothekar_context(bibliothekar_store, instructions, text)
             llm_response = create_reply(
                 _build_openai_user_input(
@@ -2340,6 +2358,7 @@ def _handle_incoming_voice_message(
     bot_identity: BotIdentity | None = None,
     working_memory_store: WorkingMemoryStore | None = None,
     instance_name: str = "",
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> None:
     bot_identity = bot_identity or BotIdentity()
     if not instructions.openai_transcription_enabled:
@@ -2410,7 +2429,14 @@ def _handle_incoming_voice_message(
         )
         return
     _record_tts_voice_style_from_message(user_memory_store, transcribed_message, transcribed_text, voice)
-    user_memory = _prepare_user_memory(user_memory_store, transcribed_message, instructions, transcribed_text, api)
+    user_memory = _prepare_user_memory(
+        user_memory_store,
+        transcribed_message,
+        instructions,
+        transcribed_text,
+        api,
+        structured_decision_runner=structured_decision_runner,
+    )
     _process_text_message(
         api,
         chat_state,
@@ -2426,6 +2452,7 @@ def _handle_incoming_voice_message(
         first_contact,
         working_memory_store,
         instance_name=instance_name,
+        structured_decision_runner=structured_decision_runner,
     )
 
 
@@ -3013,6 +3040,8 @@ def _prepare_user_memory(
     instructions: BotInstructions,
     query_text: str,
     api: TelegramAPI | None = None,
+    *,
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> UserMemoryRecord | None:
     if not instructions.user_memory_enabled:
         return None
@@ -3038,7 +3067,12 @@ def _prepare_user_memory(
             adapter_slot=_telegram_api_adapter_slot(api),
         )
         try:
-            update_city_and_weather_context(user_memory_store, account_id, query_text)
+            update_city_and_weather_context(
+                user_memory_store,
+                account_id,
+                query_text,
+                structured_decision_runner=structured_decision_runner,
+            )
         except (AccountStoreError, OSError, ValueError):
             LOGGER.exception("Failed to update Telegram weather context.")
         selection = user_memory_store.select_structured_memory(
@@ -3295,14 +3329,25 @@ def _prepare_bibliothekar_context(
         return ""
 
 
-def _prepare_weather_context(user_memory_store: AccountStore | None, user_memory: UserMemoryRecord | None, text: str) -> str:
+def _prepare_weather_context(
+    user_memory_store: AccountStore | None,
+    user_memory: UserMemoryRecord | None,
+    text: str,
+    *,
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
+) -> str:
     if user_memory_store is None or user_memory is None:
         return ""
     account_id = _account_id_from_user_memory(user_memory)
     if not account_id:
         return ""
     try:
-        update_city_and_weather_context(user_memory_store, account_id, text)
+        update_city_and_weather_context(
+            user_memory_store,
+            account_id,
+            text,
+            structured_decision_runner=structured_decision_runner,
+        )
         return weather_context_text(user_memory_store, account_id)
     except (AccountStoreError, OSError, ValueError):
         LOGGER.exception("Failed to prepare weather context.")
@@ -5116,6 +5161,7 @@ def _handle_youtube_transcript_request(
     working_memory_store: WorkingMemoryStore | None,
     instance_name: str,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> None:
     youtube_key = _telegram_account_state_key(user_memory_store, message, create=True)
     url = _extract_youtube_url(text)
@@ -5167,6 +5213,7 @@ def _handle_youtube_transcript_request(
                 working_memory_store,
                 youtube_job_runner,
                 instance_name,
+                structured_decision_runner=structured_decision_runner,
             )
             return
         reply = f"YouTube-Transkript fehlgeschlagen: {exc}"
@@ -5197,6 +5244,7 @@ def _handle_youtube_transcript_request(
             bot_identity,
             first_contact,
             working_memory_store,
+            structured_decision_runner=structured_decision_runner,
         )
         return
 
@@ -5225,6 +5273,7 @@ def _handle_pending_youtube_local_options(
     working_memory_store: WorkingMemoryStore | None,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
     instance_name: str = "",
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> bool:
     youtube_key = _telegram_account_state_key(user_memory_store, message, create=False)
     url = chat_state.get_pending_youtube_local_options(chat_id, youtube_key)
@@ -5264,6 +5313,7 @@ def _handle_pending_youtube_local_options(
         working_memory_store,
         youtube_job_runner,
         instance_name,
+        structured_decision_runner=structured_decision_runner,
     )
     return True
 
@@ -5287,6 +5337,7 @@ def _start_youtube_local_transcription(
     working_memory_store: WorkingMemoryStore | None,
     youtube_job_runner: YouTubeTranscriptionJobRunner | None = None,
     instance_name: str = "",
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> None:
     if youtube_job_runner is not None:
         youtube_job_runner.submit(
@@ -5308,6 +5359,7 @@ def _start_youtube_local_transcription(
                 working_memory_store,
                 instance_name,
                 llm_client,
+                structured_decision_runner,
             )
         )
         reply = "Lokale YouTube-Transkription gestartet. Ich melde mich, sobald sie fertig ist."
@@ -5335,6 +5387,7 @@ def _start_youtube_local_transcription(
         working_memory_store,
         instance_name,
         llm_client,
+        structured_decision_runner,
     )
 
 
@@ -5356,6 +5409,7 @@ def _run_youtube_local_transcription_job(
     working_memory_store: WorkingMemoryStore | None,
     instance_name: str = "",
     llm_client: object | None = None,
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> None:
     try:
         api.send_chat_action(chat_id, "typing")
@@ -5397,6 +5451,7 @@ def _run_youtube_local_transcription_job(
             bot_identity,
             first_contact,
             working_memory_store,
+            structured_decision_runner=structured_decision_runner,
         )
         return
 
@@ -5479,6 +5534,7 @@ def _send_youtube_transcript_to_llm_pipeline(
     bot_identity: BotIdentity,
     first_contact: bool,
     working_memory_store: WorkingMemoryStore | None,
+    structured_decision_runner: Callable[[str, type[Any]], Any] | None = None,
 ) -> None:
     pipeline_text = _build_youtube_pipeline_text(user_text, transcript, source, url)
     response_scope = _account_id_from_user_memory(user_memory) or _telegram_sender_state_key(message)
@@ -5491,7 +5547,12 @@ def _send_youtube_transcript_to_llm_pipeline(
     try:
         api.send_chat_action(chat_id, "typing")
         working_memory = _prepare_working_memory(working_memory_store, pipeline_text)
-        weather_text = _prepare_weather_context(user_memory_store, user_memory, user_text)
+        weather_text = _prepare_weather_context(
+            user_memory_store,
+            user_memory,
+            user_text,
+            structured_decision_runner=structured_decision_runner,
+        )
         llm_response = create_reply(
             _build_openai_user_input(
                 message,

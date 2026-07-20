@@ -4327,6 +4327,44 @@ class BotTests(unittest.TestCase):
 
         self.assertIn("Stadt/Wohnort: Berlin", context)
 
+    def test_legacy_weather_helpers_forward_structured_residence_runner(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            memory_store = AccountStore(Path(directory) / "accounts", "Depressionsbot", StaticSecretProvider(b"x" * 32))
+            instructions = BotInstructions(user_memory_enabled=True)
+            message = {
+                "message_id": 1,
+                "text": "Meine Adresse ist Berlin, mein Wohnort ist Hamburg.",
+                "chat": {"id": 123, "type": "private"},
+                "from": {"id": 456, "first_name": "Ada"},
+            }
+            decision_calls: list[str] = []
+
+            def decision_runner(prompt: str, _schema: type[object]) -> object:
+                decision_calls.append(prompt)
+                return {"kind": "primary", "city": "Hamburg", "confidence": 0.95}
+
+            with patch(
+                "TeeBotus.runtime.weather_context.fetch_weather_summary",
+                return_value="Hamburg: 12 C, leicht bewoelkt",
+            ):
+                record = _prepare_user_memory(
+                    memory_store,
+                    message,
+                    instructions,
+                    message["text"],
+                    structured_decision_runner=decision_runner,
+                )
+                context = _prepare_weather_context(
+                    memory_store,
+                    record,
+                    message["text"],
+                    structured_decision_runner=decision_runner,
+                )
+
+            self.assertIsNotNone(record)
+            self.assertEqual(len(decision_calls), 2)
+            self.assertIn("Stadt/Wohnort: Hamburg", context)
+
     def test_voice_model_command_persists_openai_voice_alias(self) -> None:
         api = FakeAPI()
         openai_client = FakeOpenAIClient()
