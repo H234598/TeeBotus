@@ -3824,6 +3824,8 @@ def test_extract_residence_city_handles_direct_home_relationships() -> None:
 
 def test_extract_residence_city_handles_temporal_label_forms() -> None:
     assert extract_residence_city("Mein Wohnort ist gegenwärtig Berlin.") == "Berlin"
+    assert extract_residence_city("Berlin ist meine Adresse. Jetzt mein Wohnort Hamburg.") == "Hamburg"
+    assert extract_residence_city("Berlin ist meine Adresse. Nun mein Wohnsitz Hamburg.") == "Hamburg"
     assert extract_residence_city("Hamburg wohne ich aktuell.") == "Hamburg"
     assert extract_residence_city("Hamburg lebe ich derzeit.") == "Hamburg"
     assert extract_residence_city("Hamburg wohnte ich früher.") == ""
@@ -4783,6 +4785,34 @@ def test_weather_provider_error_does_not_expose_stale_summary(tmp_path) -> None:
     weather_state = account_store.read_agent_state(account_id)["weather_context"]
     assert weather_state["summary"] == ""
     assert "offline" in weather_state["last_error"]
+
+
+def test_empty_weather_provider_result_is_an_error(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+
+    update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Ich wohne in Berlin.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: f"{city}: 12 C",
+    )
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Hallo.",
+        now=datetime(2026, 6, 15, 11, 1, tzinfo=timezone.utc),
+        provider=lambda _city: "",
+    )
+
+    assert result.checked is True
+    assert result.skipped_reason == "weather_error"
+    assert weather_context_text(account_store, account_id) == ""
+    weather_state = account_store.read_agent_state(account_id)["weather_context"]
+    assert weather_state["summary"] == ""
+    assert weather_state["last_error"] == "empty weather summary"
 
 
 def test_weather_state_timestamps_use_supplied_now(tmp_path) -> None:

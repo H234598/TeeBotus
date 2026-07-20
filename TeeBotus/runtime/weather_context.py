@@ -1594,6 +1594,15 @@ _CITY_CHANGE_LABELLED_SHORT_CURRENT = re.compile(
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_CITY_CHANGE_ELLIPTICAL_CURRENT_LABEL = re.compile(
+    rf"(?:^|[.!?;,\n]\s*)(?:{_CURRENT_RESIDENCE_FORWARD_QUALIFIER})\s+"
+    r"(?:(?:ist|bleibt)\s+)?"
+    rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|adresse|anschrift)\s+"
+    rf"(?P<city>{_CITY_CHANGE_CITY_FRAGMENT})(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET = re.compile(
     r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+lautet\s+"
     r"(?:mein(?:e)?|unser(?:e)?)\s+"
@@ -3695,6 +3704,7 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_CURRENT_RESIDENCE_BEFORE_HISTORICAL,
     _CITY_CHANGE_CURRENT_ADVERB_BEFORE_HISTORICAL,
     _CITY_CHANGE_LABELLED_SHORT_CURRENT,
+    _CITY_CHANGE_ELLIPTICAL_CURRENT_LABEL,
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
@@ -6163,6 +6173,13 @@ def _update_city_and_weather_context_unlocked(
     except Exception as exc:
         weather_state["summary"] = ""
         weather_state["last_error"] = f"{type(exc).__name__}: {exc}"[:240]
+        weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
+        weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
+        _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
+        return WeatherContextResult(city=current_city, checked=True, skipped_reason="weather_error")
+    if not summary:
+        weather_state["summary"] = ""
+        weather_state["last_error"] = "empty weather summary"
         weather_state["last_checked_at"] = resolved_now.isoformat(timespec="seconds")
         weather_state["updated_at"] = resolved_now.isoformat(timespec="seconds")
         _write_weather_state(account_store, account_id, state, previous_state, city_memory_snapshot)
