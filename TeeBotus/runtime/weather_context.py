@@ -348,7 +348,12 @@ _OTHER_PERSON_FOREIGN_MARKER = (
     rf"{_OTHER_PERSON_LOCATION_LABEL}\s+(?:von\s+)?"
     rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL}|"
     rf"{_OTHER_PERSON_LOCATION_LABEL}\s+(?:von\s+)?"
-    rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL})"
+    rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}|"
+    rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}\s+"
+    r"(?:hat|haben)\s+(?:"
+    rf"{_OTHER_PERSON_REFERENCE}\s+)?{_OTHER_PERSON_LOCATION_LABEL}|"
+    rf"{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}\s+"
+    r"(?:ist|liegt|bleibt|befindet\s+sich)\s+(?:in|bei))"
 )
 _RESIDENCE_LABEL_DETERMINER = (
     r"(?:meine|unsere|mein|unser|der|die|das|ein(?:e|en|em|er|es)?)"
@@ -5763,6 +5768,17 @@ def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
     ):
         return True
     if re.search(
+        rf"(?i)\b{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}\s+"
+        rf"(?:hat|haben)\s+(?:{_OTHER_PERSON_REFERENCE}\s+)?"
+        rf"{_OTHER_PERSON_LOCATION_LABEL}\s+(?:in|bei)\s*$",
+        segment,
+    ) or re.search(
+        rf"(?i)\b{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}\s+"
+        r"(?:ist|liegt|bleibt|befindet\s+sich)\s+(?:in|bei)\s*$",
+        segment,
+    ):
+        return True
+    if re.search(
         rf"(?i)\b{_OTHER_PERSON_REFERENCE}\s+{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
         rf"{_OTHER_PERSON_LOCATION_LABEL}\s+"
         r"(?:ist|lautet|bleibt|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?$",
@@ -6600,6 +6616,19 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         for city in registered_address_cities
         if not _has_other_person_residence_candidate(city)
     }
+    foreign_registered_city_keys: set[str] = set()
+    for match in re.finditer(
+        rf"(?i)\b{_OTHER_PERSON_REFERENCE}\s+{_OTHER_RESIDENCE_OWNER_LABEL}\s+"
+        r"(?:hat|haben)\s+"
+        rf"(?:{_OTHER_PERSON_REFERENCE}\s+)?{_OTHER_PERSON_LOCATION_LABEL}\s+"
+        r"(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*[.!?;,]|\s*$)",
+        source,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            foreign_registered_city_keys.add(_city_comparison_key(city))
+    registered_address_cities.difference_update(foreign_registered_city_keys)
     residence_address_cities = residence_cities | address_cities
     if (
         residence_address_cities
