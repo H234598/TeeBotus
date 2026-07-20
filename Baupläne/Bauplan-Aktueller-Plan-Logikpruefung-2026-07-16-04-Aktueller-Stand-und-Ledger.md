@@ -2897,3 +2897,16 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `272692e2`.
 - Neuer Zyklusstand: `9/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Zusammengesetzter Home-Marker
+
+- `Mein Partner wohnt in Hamburg, bei mir zuhause in Berlin` und die Variante
+  `bei mir daheim` wurden bisher nicht erkannt.
+- Home-Marker sind jetzt gemeinsam definiert; `bei mir`, `bei mir zuhause`,
+  `bei mir daheim`, `zu Hause`, `zuhause` und `daheim` werden im engen
+  Kontrastmatcher unterstützt. Arbeitskontext bleibt ausgeschlossen.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `266 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `a0fa150f`.
+- Neuer Zyklusstand: `11/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
