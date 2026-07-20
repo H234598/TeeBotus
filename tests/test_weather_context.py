@@ -1703,6 +1703,22 @@ def test_fetch_weather_summary_handles_incomplete_provider_payload(payload) -> N
         assert fetch_weather_summary("Berlin") == "Berlin"
 
 
+@pytest.mark.parametrize("payload", ({"error": "unknown location"}, {"errors": [{"value": "offline"}]}))
+def test_fetch_weather_summary_rejects_provider_error_payload(payload) -> None:
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def read(self):
+            return json.dumps(payload).encode("utf-8")
+
+    with patch("TeeBotus.runtime.weather_context.urllib.request.urlopen", return_value=Response()):
+        assert fetch_weather_summary("Berlin") == ""
+
+
 def test_extract_residence_city_accepts_activity_prefix_city_names() -> None:
     for city in ("Fahren", "Gehrden", "Reiskirchen", "Machern", "Sehnde", "Treffurt"):
         assert extract_residence_city(f"Ich wohne in {city}.") == city

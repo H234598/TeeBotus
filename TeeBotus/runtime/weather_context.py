@@ -9936,6 +9936,8 @@ def fetch_weather_summary(city: str) -> str:
         payload = json.loads(response.read().decode("utf-8"))
     if not isinstance(payload, Mapping):
         return str(city or "").strip()
+    if "error" in payload or "errors" in payload:
+        return ""
     current_values = payload.get("current_condition")
     area_values = payload.get("nearest_area")
     current = current_values[0] if isinstance(current_values, list) and current_values else {}
