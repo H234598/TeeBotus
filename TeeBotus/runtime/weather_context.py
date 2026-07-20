@@ -6395,9 +6395,20 @@ def _resolve_residence_city(
     if decision.kind != "primary" or decision.confidence < RESIDENCE_DECISION_MIN_CONFIDENCE:
         return ""
     candidate = re.sub(r"\s+", " ", str(decision.city or "")).strip(" .,:;!?")
-    if not candidate or not _is_safe_city_candidate(candidate) or candidate.casefold() not in source.casefold():
+    if not candidate or not _is_safe_city_candidate(candidate) or not _contains_source_phrase(source, candidate):
         return ""
     return candidate
+
+
+def _contains_source_phrase(source: str, candidate: str) -> bool:
+    """Accept model places only when they occur as complete normalized tokens."""
+
+    def normalize(value: str) -> str:
+        return re.sub(r"[^\w]+", " ", str(value).casefold()).strip()
+
+    source_tokens = normalize(source)
+    candidate_tokens = normalize(candidate)
+    return bool(candidate_tokens) and f" {candidate_tokens} " in f" {source_tokens} "
 
 
 def _is_safe_city_candidate(city: str) -> bool:

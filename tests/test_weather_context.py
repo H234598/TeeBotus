@@ -4626,6 +4626,28 @@ def test_weather_context_rejects_structural_model_place(tmp_path) -> None:
     assert result.skipped_reason == "no_city"
 
 
+def test_weather_context_rejects_substring_model_place(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    calls: list[str] = []
+
+    result = update_city_and_weather_context(
+        account_store,
+        account_id,
+        "Meine Adresse ist Berlin, mein Wohnort ist Hamburg.",
+        now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+        provider=lambda city: calls.append(city) or f"{city}: 12 C",
+        structured_decision_runner=lambda _prompt, _schema: {
+            "kind": "primary",
+            "city": "lin",
+            "confidence": 0.99,
+        },
+    )
+
+    assert result.skipped_reason == "no_city"
+    assert calls == []
+
+
 def test_weather_context_keeps_clear_work_location_local(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
