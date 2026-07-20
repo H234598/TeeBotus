@@ -4533,6 +4533,39 @@ def test_weather_context_stores_clean_city_after_implicit_alias(tmp_path) -> Non
     assert account_store.read_agent_state(account_id)["weather_context"]["city"] == "Berlin"
 
 
+def test_weather_context_honors_falsey_provider(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+
+    class FalseyProvider:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        def __bool__(self) -> bool:
+            return False
+
+        def __call__(self, city: str) -> str:
+            self.calls.append(city)
+            return "custom weather"
+
+    provider = FalseyProvider()
+    with patch(
+        "TeeBotus.runtime.weather_context.fetch_weather_summary",
+        return_value="fallback weather",
+    ) as fallback:
+        result = update_city_and_weather_context(
+            account_store,
+            account_id,
+            "Ich wohne in Berlin.",
+            now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+            provider=provider,
+        )
+
+    assert result.weather_text == "custom weather"
+    assert provider.calls == ["Berlin"]
+    fallback.assert_not_called()
+
+
 def test_city_memory_append_is_retried_after_transient_failure(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)

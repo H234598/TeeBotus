@@ -6259,7 +6259,7 @@ def _update_city_and_weather_context_unlocked(
             weather_text=str(weather_state.get("summary") or "").strip(),
             skipped_reason="rate_limited",
         )
-    weather_provider = provider or fetch_weather_summary
+    weather_provider = provider if provider is not None else fetch_weather_summary
     try:
         summary = weather_provider(current_city).strip()
     except Exception as exc:
