@@ -1159,6 +1159,16 @@ CITY_CHANGE_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:in\s+der\s+(?:nähe|naehe|umgebung|gegend)\s+von|nahe|unweit\s+von|"
+        r"im\s+umland(?:\s+von)?)\s+[^,.;!?]{1,80}?\s*"
+        r"(?:und|,|;|aber|doch|jedoch)\s+"
+        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|heute)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"\b(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+"
         r"(?:die\s+stadt|der\s+ort)\s*,?\s*"
         r"(?:in\s+(?:der|dem)|an\s+(?:der|dem)|wo)\s+(?:ich|wir)\s+"
@@ -7801,6 +7811,18 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
             _NON_CITY_RESIDENCE_NAMES | _NON_CITY_REGION_NAMES
         ):
             return True
+    if re.search(
+        rf"\b{residence}\s+(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung|gegend)\s+von|"
+        r"nahe|unweit(?:\s+von)?|im\s+umland(?:\s+von)?)\s+[^,.;!?]{1,80}\s+"
+        r"(?:und|,|;|aber|doch|jedoch)\s+"
+        r"(?:jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile|heute)\s+(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:arbeite\w*|studier\w*|lern\w*|schlaf\w*|besuch\w*|reise\w*|pendl\w*|"
+        r"fahr\w*|geh\w*|komm\w*|übernacht\w*|uebernacht\w*)\s+(?:ich|wir)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
     if re.search(
         rf"\b{residence}\s+(?:in\s+der\s+(?:naehe|n(?:ä|ae)he|umgebung)(?:\s+von)?|im\s+raum|"
         r"rund\s+um|nahe|unweit(?:\s+von)?|nicht\s+weit\s+(?:entfernt\s+)?von|"
