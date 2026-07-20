@@ -3071,3 +3071,96 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   `git diff --check` grün. Code-Commit: `050a33c6`.
 - Neuer Zyklusstand: `10/20` Commits seit dem Restart. Kein Push. Restart erst
   bei `20/20`.
+
+### Folgefix 2026-07-20: Aktueller Ort nach historischem Relativsatz
+
+- Historische Marker gelten im Relativsatz nur am Ende. Berlin ... wohne,
+  aber früher war ich in Hamburg behält Berlin als aktuellen Wohnort.
+- nicht mehr mit optionalem dort/hier/da bleibt historisch.
+- Regressionen: vollständige tests/test_weather_context.py -> 268 passed;
+  Telegram-Wettertest -> 1 passed; Parsermatrix, py_compile und
+  git diff --check grün. Code-Commit: f6acef51.
+- Neuer Zyklusstand: 12/20 Commits seit dem Restart. Kein Push. Restart erst
+  bei 20/20.
+
+### Folgefix 2026-07-20: Aktueller Ort nach Relativsatzwechsel
+
+- Berlin ist die Stadt, in der ich wohne, aber jetzt in Hamburg und
+  inzwischen bei Potsdam liefern den aktuellen Zielort.
+- Arbeitsformulierungen wie aber jetzt arbeite in Hamburg bleiben bei Berlin.
+- Regressionen: vollständige tests/test_weather_context.py -> 268 passed;
+  Telegram-Wettertest -> 1 passed; Parsermatrix, py_compile und
+  git diff --check grün. Code-Commit: 9e8650b8.
+- Neuer Zyklusstand: 13/20 Commits seit dem Restart. Kein Push. Restart erst
+  bei 20/20.
+
+### Folgefix 2026-07-20: Widersprüchlicher Hauptwohnsitz
+
+- Der Multiplicity-Check erkennt wohne in Berlin, habe aber meinen
+  Hauptwohnsitz in Hamburg trotz Kontrastwort und normalem Komma.
+- Gleiche Stadt bleibt gültig; separate Wohnung wird nicht als Konflikt
+  gewertet.
+- Regressionen: vollständige tests/test_weather_context.py -> 268 passed;
+  Telegram-Wettertest -> 1 passed; Parsermatrix, py_compile und
+  git diff --check grün. Code-Commit: 64af65a4.
+- Neuer Zyklusstand: 14/20 Commits seit dem Restart. Kein Push. Restart erst
+  bei 20/20.
+
+### Folgefix 2026-07-20: heute im expliziten Wohnortwechsel
+
+- Ich wohne nicht mehr in Berlin, heute in Hamburg wird als aktueller
+  Zielort Hamburg erkannt.
+- heute gilt nur im expliziten Negations-/Wechselpfad; Tagesaufenthalt und
+  Arbeitsort werden nicht global zu Wohnorten.
+- Regressionen: vollständige tests/test_weather_context.py -> 268 passed;
+  Telegram-Wettertest -> 1 passed; Parsermatrix, py_compile und
+  git diff --check grün. Code-Commit: 24755b09.
+- Neuer Zyklusstand: 15/20 Commits seit dem Restart. Kein Push. Restart erst
+  bei 20/20.
+
+### Folgefix 2026-07-20: Umland-Präzisierung
+
+- Ich wohne im Umland Berlins, genauer in Potsdam und die von-Variante
+  bevorzugen Potsdam statt des groben Bezugsorts Berlin.
+- Unpräzisierte Umlandangaben bleiben beim Bezugsort; Arbeitsorte bleiben
+  ausgeschlossen.
+- Regressionen: vollständige tests/test_weather_context.py -> 268 passed;
+  Telegram-Wettertest -> 1 passed; Parsermatrix, py_compile und
+  git diff --check grün. Code-Commit: 766d0b68.
+- Neuer Zyklusstand: 16/20 Commits seit dem Restart. Kein Push. Restart erst
+  bei 20/20.
+
+### Folgefix 2026-07-20: Aktueller Ort nach Nähe-/Umlandbezug
+
+- Nähe, Unweit, Umgebung und Umland mit anschließendem jetzt/inzwischen
+  in/bei liefern den neuen Wohnort.
+- Arbeits-, Studien- und Reiseanschlüsse bleiben beim ursprünglichen Wohnort
+  oder werden konservativ verworfen.
+- Regressionen: vollständige tests/test_weather_context.py -> 268 passed;
+  Telegram-Wettertest -> 1 passed; Parsermatrix, py_compile und
+  git diff --check grün. Code-Commit: e5bc5258.
+- Neuer Zyklusstand: 17/20 Commits seit dem Restart. Kein Push. Restart erst
+  bei 20/20.
+
+### Folgefix 2026-07-20: Negierter Wechsel mit Area-Ziel
+
+- nicht mehr in Berlin, sondern nahe/in der Nähe von Potsdam sowie unweit
+  und Umland werden als Wechsel nach Potsdam erkannt.
+- Arbeitsanschlüsse wie nahe Potsdam arbeite ich werden nicht übernommen.
+- Regressionen: vollständige tests/test_weather_context.py -> 268 passed;
+  Telegram-Wettertest -> 1 passed; Parsermatrix, py_compile und
+  git diff --check grün. Code-Commit: 185f46ef.
+- Neuer Zyklusstand: 18/20 Commits seit dem Restart. Kein Push. Restart erst
+  bei 20/20.
+
+### Folgefix 2026-07-20: Additive Mehrfachwohnsitze
+
+- sowohl in Berlin als auch in Hamburg und Berlin, aber auch in Hamburg
+  werden als widersprüchliche Mehrfachwohnsitze verworfen.
+- aber auch meine Frau und Arbeitskontext bleiben dem eigenen Wohnort
+  zugeordnet.
+- Regressionen: vollständige tests/test_weather_context.py -> 268 passed;
+  Telegram-Wettertest -> 1 passed; Parsermatrix, py_compile und
+  git diff --check grün. Code-Commit: 2f78f9c9.
+- Neuer Zyklusstand: 19/20 Commits seit dem Restart. Kein Push. Restart erst
+  bei 20/20.
