@@ -3033,3 +3033,41 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   `git diff --check` grün. Code-Commit: `4b467de8`.
 - Neuer Zyklusstand: `6/20` Commits seit dem Restart. Kein Push. Restart erst
   bei `20/20`.
+
+### Folgefix 2026-07-20: Inverse Status- und Wohnsitzformen erweitern
+
+- Inverse Relativsätze mit `offiziell`, `amtlich` oder `polizeilich` vor
+  `gemeldet`/`registriert` sowie Formen wie `Wo ich meinen Wohnsitz habe, da
+  wohne ich` wurden ergänzt.
+- Dadurch werden Status- und Besitzformen mit anschließendem Ort einheitlich
+  erkannt; fremde Personen- und Arbeitsortangaben bleiben ausgeschlossen.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `268 passed`;
+  Telegram-Wettertest -> `1 passed`; Parsermatrix, `py_compile` und
+  `git diff --check` grün. Code-Commit: `183708fa`.
+- Neuer Zyklusstand: `8/20` Commits seit dem Restart. Kein Push. Restart erst
+  bei `20/20`.
+
+### Folgefix 2026-07-20: Qualifizierter inverser Wohnsitzbesitz
+
+- Auch `Wo mein offizieller Wohnsitz ist, da wohne ich` und entsprechende
+  Formen mit `meinen`/`unseren` werden jetzt erkannt.
+- Die Qualifikation wird nur innerhalb des bekannten Wohnsitzlabels akzeptiert;
+  allgemeine Orts- oder Fremdpersonenangaben werden nicht erweitert.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `268 passed`;
+  Telegram-Wettertest -> `1 passed`; Parsermatrix, `py_compile` und
+  `git diff --check` grün. Code-Commit: `4a709926`.
+- Neuer Zyklusstand: `9/20` Commits seit dem Restart. Kein Push. Restart erst
+  bei `20/20`.
+
+### Folgefix 2026-07-20: Verneinter historischer Relativsatz
+
+- `Berlin ist die Stadt, in der ich wohne, aber nicht mehr` wurde bisher fälschlich
+  als aktueller Wohnort `Berlin` erkannt.
+- Der bestehende historische Suffixcheck erkennt jetzt auch Relativsätze mit
+  `in/an der|dem` und nachfolgender Negation oder Vergangenheit
+  (`nicht mehr`, `nicht länger`, `früher`). Positive Relativsätze bleiben gültig.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `268 passed`;
+  Telegram-Wettertest -> `1 passed`; Parsermatrix, `py_compile` und
+  `git diff --check` grün. Code-Commit: `050a33c6`.
+- Neuer Zyklusstand: `10/20` Commits seit dem Restart. Kein Push. Restart erst
+  bei `20/20`.
