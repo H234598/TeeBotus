@@ -8871,7 +8871,11 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         re.search(
             rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
             r"(?!nicht\w*\b|(?:ich\s+)?(?:wohne|lebe)\s+nicht\b|"
-            r"bin\b|war\w*\b|sein\b|sind\s+(?:beruflich|dienstlich|zum\s+arbeiten)\b|arbeit\w*\b|studier\w*\b|lern\w*\b|zieh\w*\b|"
+            r"bin\b|war\w*\b|sein\b|sind\s+(?:beruflich|dienstlich|zum\s+arbeiten)\b|"
+            r"sind\s+(?:(?:jetzt|nunmehr?|aktuell\w*|derzeitig\w*|gegenwärtig|gegenwaertig|"
+            r"inzwischen|mittlerweile|seit\s+[^\s,;.!?]+|ab\s+(?:sofort|jetzt)|"
+            r"künftig\w*|kuenftig\w*|zukünftig\w*|zukuenftig)\b)|"
+            r"arbeit\w*\b|studier\w*\b|lern\w*\b|zieh\w*\b|"
             r"schlaf\w*\b|mach\w*\b|komm\w*\b|fahr\w*\b|geh\w*\b|"
             r"hab\w*\b|besitz\w*\b|vermiet\w*\b|verkauf\w*\b|verwalt\w*\b|"
             r"renovier\w*\b|sanier\w*\b|nutz\w*\b|teil\w*\b|besuch\w*\b|verbring\w*\b|treff\w*\b|reis\w*\b|"
