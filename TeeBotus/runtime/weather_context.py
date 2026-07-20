@@ -2758,6 +2758,17 @@ CITY_PATTERNS = (
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]?\s*"
+        r"(?:und|aber|doch|jedoch)\s+"
+        r"(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:zeitweise|vorübergehend|voruebergehend|gelegentlich|derzeit|aktuell|momentan)\s+)?"
+        r"(?:bei|mit)\s+(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+        rf"{_OTHER_PERSON_RESIDENCE_LABEL}\s+(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]?\s*"
         r"(?:und|aber|doch|jedoch)\s+(?:(?:ich|wir)\s+)?(?:bin|sind)\s+"
         r"(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
         r"(?:zu\s+besuch|auf\s+besuch)\b",
@@ -5187,6 +5198,8 @@ def extract_residence_city(text: str) -> str:
                     city_end = offset + match.end("city")
                     if _has_historical_residence_prefix(source, pattern_start):
                         continue
+                    if _has_companion_residence_prefix(source, city_start):
+                        continue
                     if _has_non_residential_label_prefix(source, pattern_start):
                         continue
                     if _has_other_person_residence_prefix(source, pattern_start):
@@ -5579,6 +5592,26 @@ def _has_non_residential_label_prefix(source: str, pattern_start: int) -> bool:
             r"\bkein(?:e|en|er|em)?\s+(?:fest(?:e|en|er|em)?\s*)?\s*)$",
             prefix,
             re.IGNORECASE,
+        )
+    )
+
+
+def _has_companion_residence_prefix(source: str, city_start: int) -> bool:
+    prefix = source[:city_start]
+    separators = tuple(
+        re.finditer(r"[,;]|\b(?:und|aber|doch|jedoch)\b", prefix, flags=re.IGNORECASE)
+    )
+    if not separators:
+        return False
+    clause = prefix[separators[-1].end() :]
+    return bool(
+        re.fullmatch(
+            rf"(?i)\s*(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
+            r"(?:(?:zeitweise|vorübergehend|voruebergehend|gelegentlich|derzeit|aktuell|momentan|gerade)\s+)?|"
+            r"(?:zeitweise|vorübergehend|voruebergehend|gelegentlich|derzeit|aktuell|momentan|gerade)\s+)?"
+            rf"(?:bei|mit)\s+(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+            rf"{_OTHER_RESIDENCE_OWNER_LABEL}\s+(?:in|bei)\s*",
+            clause,
         )
     )
 
@@ -6827,6 +6860,17 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     ):
         return False
     if re.search(
+        rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s*[,;]?\s*"
+        r"(?:und|aber|doch|jedoch)\s+"
+        r"(?:(?:(?:ich|wir)\s+)?(?:wohne|wohnen|lebe|leben)\s+"
+        r"(?:zeitweise|vorübergehend|voruebergehend|gelegentlich|derzeit|aktuell|momentan)\s+)?"
+        r"(?:bei|mit)\s+(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+        rf"{_OTHER_PERSON_RESIDENCE_LABEL}\s+(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
+    if re.search(
         rf"\b{residence}\s+(?:in|bei)\s+[^,.;!?]{{1,80}}\s+und\s+"
         rf"(?:(?:ich\s+)?{residence}\s+)?(?:in|bei)\s+",
         source,
@@ -6900,6 +6944,13 @@ def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
         r"(?:arbeite\w*|studier\w*|lern\w*|schlaf\w*|pendl\w*|reis\w*|"
         r"besuch\w*|übernacht\w*|uebernacht\w*)\b",
+        tail,
+    ):
+        return False
+    if re.match(
+        rf"(?i)\s*[,;]\s*(?:aber|doch|jedoch)\s+(?:derzeit|aktuell|momentan|gerade)?\s*"
+        r"(?:bei|mit)\s+(?:mein(?:e|en|em|er)?|unser(?:e|en|em|er)?)\s+"
+        rf"{_OTHER_PERSON_RESIDENCE_LABEL}\s+(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}",
         tail,
     ):
         return False
