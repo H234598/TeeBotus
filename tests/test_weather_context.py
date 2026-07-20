@@ -1719,6 +1719,29 @@ def test_fetch_weather_summary_rejects_provider_error_payload(payload) -> None:
         assert fetch_weather_summary("Berlin") == ""
 
 
+def test_fetch_weather_summary_escapes_city_path_separators() -> None:
+    requests: list[str] = []
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def read(self):
+            return json.dumps({"current_condition": [], "nearest_area": []}).encode("utf-8")
+
+    def open_url(request, timeout):
+        requests.append(request.full_url)
+        return Response()
+
+    with patch("TeeBotus.runtime.weather_context.urllib.request.urlopen", side_effect=open_url):
+        fetch_weather_summary("A/B")
+
+    assert requests == ["https://wttr.in/A%2FB?format=j1"]
+
+
 def test_extract_residence_city_accepts_activity_prefix_city_names() -> None:
     for city in ("Fahren", "Gehrden", "Reiskirchen", "Machern", "Sehnde", "Treffurt"):
         assert extract_residence_city(f"Ich wohne in {city}.") == city

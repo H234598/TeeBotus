@@ -9927,7 +9927,7 @@ def _has_temporary_residence_suffix(source: str, city_end: int) -> bool:
 
 
 def fetch_weather_summary(city: str) -> str:
-    query = urllib.parse.quote(str(city or "").strip())
+    query = urllib.parse.quote(str(city or "").strip(), safe="")
     if not query:
         return ""
     url = f"https://wttr.in/{query}?format=j1"
