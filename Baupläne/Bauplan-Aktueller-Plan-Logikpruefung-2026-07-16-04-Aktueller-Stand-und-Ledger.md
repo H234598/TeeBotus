@@ -1767,3 +1767,20 @@
 - Verifikation: `tests/test_weather_context.py` -> `237 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commits: `641fb901`, `2e90b7b1`, `f00a8c76`, `4a69137a`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-03
+
+- `teebotus.service` aktiv/running, `MainPID 1697303`, Start `2026-07-20 01:04:25 CEST`.
+- Neuer Zyklus seit diesem Restart: `15/20` Code-Fixes. Kein Push.
+
+### Folgefix-Batch 2026-07-20: Kurzzeit-, Registrierungs- und Routineformen
+
+- `bis morgen`, `bis Ende der Woche`, Kalenderzeiträume und inverse Routineformen
+  werden konsistent erkannt.
+- `wohnhaft/gemeldet/ansässig` mit aktuellem `bis`-Suffix bleibt gültig;
+  `ab morgen` und historische Formen werden verworfen.
+- Vollsuite fing eine Regression bei `Bei Berlin und Hamburg bin ich gemeldet`
+  ab; die Inversionsregex akzeptiert jetzt keine Präfix- oder Mehrfachstadt mehr.
+- Verifikation: `tests/test_weather_context.py` -> `237 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commits: `b8f36692`, `082b3d7c`, `9d760ace`, `fe93357c`, `8459102a`.
