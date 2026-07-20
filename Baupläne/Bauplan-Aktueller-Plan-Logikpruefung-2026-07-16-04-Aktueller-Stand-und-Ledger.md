@@ -2578,6 +2578,22 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
 20. `95627ce8` — Dokumentation und Restart-Markierung
 
 - Aktueller Servicezustand: `teebotus.service` User-Service aktiv/running.
-- Aktueller Zyklusstand: `2/20` seit dem Restart um `07:10:45 CEST`.
+- Aktueller Zyklusstand: `4/20` seit dem Restart um `07:10:45 CEST`.
 - Kein Push. Nächster Restart erst bei `20/20`; Push-Regel bleibt bei
   `100/100` Commits.
+
+### Folgefix 2026-07-20: Konflikt bei `habe ... Wohnsitz`
+
+- `Ich wohne in Berlin und habe meinen Wohnsitz in Hamburg` wurde als Hamburg
+  übernommen. Der Parser behandelte den zweiten eigenen Wohnsitz wie einen
+  nicht-residentiellen Besitz-/Aktivitätskontext.
+- Ein fokussierter Multiplicity-Guard vergleicht jetzt beide eigenen
+  Wohnsitzziele. Unterschiedliche Städte werden konservativ verworfen; gleiche
+  Stadt bleibt gültig.
+- Regressionen decken `meinen Wohnsitz` in unterschiedlicher und gleicher Stadt
+  ab. Nebenwohnung bleibt unverändert separat behandelt.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `49abb0b5`.
+- Neuer Zyklusstand: `4/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
