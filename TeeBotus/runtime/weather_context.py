@@ -892,6 +892,14 @@ _QUALIFIED_RESIDENCE = re.compile(
     r"(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_QUALIFIED_DIRECT_RESIDENCE = re.compile(
+    r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+    r"(?:nur\s+noch|nur)\s+"
+    r"(?:(?:zuhause|zu\s+hause|daheim)\s*,?\s+)?(?:in|bei)\s+"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+    r"(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _CURRENT_RESIDENCE_LABEL_CITY = re.compile(
     r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
     r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|adresse|"
@@ -1120,6 +1128,15 @@ CITY_CHANGE_PATTERNS = (
         r"(?:\s*,\s*|\s+(?:in|an|auf|unter)\s+)"
         rf"{_LABELED_STREET_ADDRESS_CORE}"
         r"(?=\s*[.!?;,]|$)",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+        r"[^.!?;\n]{1,120}?\s*[,;]\s*"
+        r"(?:aber|doch|jedoch|sondern)?\s*"
+        rf"(?:{_RESIDENCE_TIME_QUALIFIER})\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
     _LABELED_COUNTRY_CITY,
@@ -2981,6 +2998,7 @@ CITY_PATTERNS = (
     _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_PRONOUN_CITY,
     _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_POSSESSIVE_CITY,
     _SHORT_SELF_RESIDENCE_BEFORE_OTHER_PERSON_CITY,
+    _QUALIFIED_DIRECT_RESIDENCE,
     re.compile(
         rf"\b(?:mein(?:e)?|unser(?:e)?)?\s*{_OTHER_PERSON_LOCATION_LABEL}\s+"
         r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
@@ -4581,6 +4599,7 @@ CITY_PATTERNS = (
         r"\b(?:ich\s+)?(?:wohne|wohnen|lebe|leben)\s+"
         r"(?!(?:ich|wir|tue|tun|mal|teils|abwechselnd|aber|doch|jedoch|zwischen|irgendwo|mit|auf|aus|von|nach|für|fuer|ab|bis|seit|"
         r"nur\s+am\s+wochenende|am\s+wochenende|"
+        r"nur\s+(?:noch|in|zuhause|zu\s+hause|daheim)|"
         r"während|waehrend|montags?|dienstags?|mittwochs?|donnerstags?|freitags?|samstags?|sonntags?|"
         r"morgens|vormittags|mittags|nachmittags|abends|nachts|täglich|taeglich|wöchentlich|woechentlich|"
         r"monatlich|jährlich|jaehrlich|tagsüber|tagsueber|jeden|jede|jedes|alle|an|jetzt|inzwischen|aktuell|derzeit|nun|"
