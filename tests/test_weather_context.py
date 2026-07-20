@@ -887,6 +887,9 @@ def test_extract_residence_city_prefers_explicit_current_residence_after_origin(
 def test_extract_residence_city_handles_current_city_after_residence_change() -> None:
     assert extract_residence_city("Ich wohne nicht mehr in Berlin, sondern in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne nicht mehr in Berlin, heute in Hamburg.") == "Hamburg"
+    assert extract_residence_city("Ich wohne nicht mehr in Berlin, sondern nahe Potsdam.") == "Potsdam"
+    assert extract_residence_city("Ich wohne nicht mehr in Berlin, sondern in der Nähe von Potsdam.") == "Potsdam"
+    assert extract_residence_city("Ich wohne nicht mehr in Berlin, sondern nahe Potsdam arbeite ich.") == ""
     assert extract_residence_city("Ich wohne in Berlin nicht mehr, jetzt in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne nicht mehr bei meiner Mutter, jetzt in Hamburg.") == "Hamburg"
     assert extract_residence_city("Ich wohne in Berlin, aber jetzt in Hamburg.") == "Hamburg"
