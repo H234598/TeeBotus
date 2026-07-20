@@ -889,6 +889,15 @@ _CURRENT_RESIDENCE_LABEL_CITY = re.compile(
     r"(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_LABELED_COMPOUND_RESIDENCE_CITY = re.compile(
+    r"\b(?:mein(?:e)?|unser(?:e)?)\s+"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"adresse|wohnadresse|wohnanschrift|anschrift)\s+"
+    r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
+    rf"(?P<city>{_STREET_COMPOUND_CITY_PATTERN})"
+    r"(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _TEMPORAL_REGISTERED_CITY = re.compile(
     rf"\b(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}\s+"
     r"(?:(?:ich|wir)\s+(?:bin|sind)|(?:bin|sind)\s+(?:ich|wir))\s+(?:in|bei)\s+"
@@ -2803,6 +2812,7 @@ CITY_PATTERNS = (
     _COMPOUND_CITY_RESIDENCE,
     _QUALIFIED_RESIDENCE,
     _CURRENT_RESIDENCE_LABEL_CITY,
+    _LABELED_COMPOUND_RESIDENCE_CITY,
     re.compile(
         rf"\b(?:mein(?:e)?|unser(?:e)?)?\s*{_OTHER_PERSON_LOCATION_LABEL}\s+"
         r"(?:ist|lautet|liegt|befindet\s+sich|bleibt)\s+(?:(?:in|bei)\s+)?"
