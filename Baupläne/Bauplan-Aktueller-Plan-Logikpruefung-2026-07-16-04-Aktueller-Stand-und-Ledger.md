@@ -3020,3 +3020,16 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   `git diff --check` grün. Code-Commit: `181df379`.
 - Neuer Zyklusstand: `4/20` Commits seit dem Restart. Kein Push. Restart erst
   bei `20/20`.
+
+### Folgefix 2026-07-20: Inverser Relativsatz mit Registrierungsstatus
+
+- `Ich wohne dort, wo ich gemeldet bin, in Berlin` und die Variante mit
+  `registriert bin` wurden bisher nicht erkannt, obwohl die analoge Form mit
+  `meinen Wohnsitz habe` bereits unterstützt wurde.
+- Der inverse Relativmatcher akzeptiert jetzt direkte Statusformen
+  (`gemeldet`, `registriert`, `wohnhaft`, `ansässig`) mit `bin/sind`.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `268 passed`;
+  Telegram-Wettertest -> `1 passed`; Parsermatrix, `py_compile` und
+  `git diff --check` grün. Code-Commit: `4b467de8`.
+- Neuer Zyklusstand: `6/20` Commits seit dem Restart. Kein Push. Restart erst
+  bei `20/20`.
