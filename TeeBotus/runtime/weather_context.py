@@ -6477,8 +6477,10 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
     ):
         return True
     if re.search(
-        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
-        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*[,;]\s*"
+        r"(?:\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?|"
+        r"\b(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir))\s*[,;]\s*"
         r"(?:(?:aber|doch|jedoch)\s+)?(?:in|bei)\s+"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
         r"(?:bin|sind|schlaf\w*|übernacht\w*|uebernacht\w*)\s+(?:ich|wir)\s+"
@@ -7918,6 +7920,16 @@ def _has_conflicting_current_relative_residence(source: str) -> bool:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
+    if re.search(
+        rf"\b(?:ich|wir)\s+{residence}\s+(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*[,;]?\s*"
+        r"(?:und|aber|doch|jedoch)?\s*halte(?:n)?\s+mich\s+"
+        r"(?:beruflich|geschäftlich|geschaeftlich|dienstlich|arbeitsbedingt)\s+"
+        r"(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+auf\b",
+        source,
+        re.IGNORECASE,
+    ):
+        return False
     if re.search(
         rf"\b(?:ich|wir)\s+{residence}\s+"
         r"(?:in\s+der\s+(?:nähe|naehe|umgebung|gegend)\s+von|nahe|unweit\s+von|"
