@@ -3471,6 +3471,8 @@ def test_extract_residence_city_handles_direct_home_relationships() -> None:
     assert extract_residence_city("Hamburg wäre mein Wohnort.") == ""
     assert extract_residence_city("Vielleicht wohne ich in Hamburg.") == ""
     assert extract_residence_city("Voraussichtlich wohne ich in Hamburg.") == ""
+    for marker in ("mutmaßlich", "mutmasslich", "theoretisch", "hypothetisch", "potenziell", "potentiell", "womöglich", "womoeglich"):
+        assert extract_residence_city(f"{marker.capitalize()} wohne ich in Hamburg.") == ""
     assert extract_residence_city("Die Wohnadresse ist Hamburg.") == "Hamburg"
     assert extract_residence_city("Die Meldeadresse lautet Hamburg.") == "Hamburg"
     assert extract_residence_city("Die Anschrift befindet sich in Hamburg.") == "Hamburg"

@@ -7645,7 +7645,9 @@ def _has_uncertain_residence_prefix(source: str, match_start: int) -> bool:
         re.search(
             r"(?i)(?:\bvielleicht\b|\bvermutlich\b|\bmöglicherweise\b|\bmoeglicherweise\b|"
             r"\beventuell\b|\bwahrscheinlich\b|\bwohl\b|\bangeblich\b|\banscheinend\b|"
-            r"\bscheinbar\b|\bvoraussichtlich\b)\s*$",
+            r"\bscheinbar\b|\bvoraussichtlich\b|\bwomöglich\b|\bwomoeglich\b|"
+            r"\bmutmaßlich\b|\bmutmasslich\b|\btheoretisch\b|\bhypothetisch\b|"
+            r"\bpotenziell\b|\bpotentiell\b)\s*$",
             clause,
         )
     ) or bool(
