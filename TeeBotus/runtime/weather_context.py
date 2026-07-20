@@ -3774,6 +3774,14 @@ CITY_CHANGE_PATTERNS = (
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
+    re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?:heute|jetzt|nun|aktuell|derzeit|inzwischen|mittlerweile)\s+"
+        r"(?:(?:ich|wir)\s+)?(?:bin|sind)\s+(?:(?:ich|wir)\s+)?"
+        r"(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:gemeldet|registriert|wohnhaft|ansässig|ansaessig)\b",
+        re.IGNORECASE,
+    ),
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
