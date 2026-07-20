@@ -936,6 +936,7 @@ _LABELLED_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
 )
 _DIRECT_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
     r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+"
+    rf"(?:(?:nur\s+noch|ausschließlich|ausschliesslich|{_RESIDENCE_LOCATION_ADVERB})\s+)?"
     rf"(?:(?:{_RESIDENCE_TIME_QUALIFIER})\s+)?(?:in|bei)\s+"
     rf"(?P<first>{_CITY_CHANGE_CITY_FRAGMENT})\s*"
     r"(?:[,;\-–—]\s*(?:(?:aber|doch|jedoch)\s+)?|\s+(?:aber|doch|jedoch|und)\s+)"
@@ -9451,6 +9452,7 @@ def _clean_city(value: str) -> str:
         "",
         source,
     ).strip()
+    city = re.sub(r"(?i)^(?:ausschließlich|ausschliesslich)\s+", "", city)
     city = re.sub(
         r"(?i)\s*\((?:früher|frueher|vorher|zuvor|davor|ehemals|damals)\s+[^)]{1,80}\)\s*$",
         "",
