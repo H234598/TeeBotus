@@ -2286,6 +2286,19 @@
 - Neuer Zyklus: `3/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
 
+### Folgefix 2026-07-20: Unsichere Wissensform
+
+- `Nach allem, was ich weiß/weiss, wohne ich in Hamburg` wurde als sicherer
+  Wohnort erkannt.
+- Diese Form ist jetzt im bestehenden Unsicherheitsfilter abgedeckt.
+- Regressionen decken deutsche und ASCII-Schreibweise ab; eindeutige Aussagen
+  bleiben gültig.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `cf7a231d`.
+- Neuer Zyklus: `5/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-20: Verkürzte Registrierungsformulierungen
 
 - Varianten wie `bin in Hamburg gemeldet`, `offiziell gemeldet in Hamburg`,
