@@ -815,11 +815,12 @@ _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY = re.compile(
 _CITY_CHANGE_LABELLED_CURRENT_HISTORICAL = re.compile(
     r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
     r"(?:(?:aktuell\w*|jetzig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+)?"
-    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*:\s*"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"wohnadresse|wohnanschrift|adresse|anschrift)\s*:\s*"
     r"(?:(?:in|bei)\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
-    r"(?=\s*[,;]\s*(?:(?:war\s+)?(?:vorher|früher|frueher|gestern|vorgestern|damals|ehemals)|"
-    r"(?:vorher|früher|frueher|gestern|vorgestern|damals|ehemals)\s+war)\b)",
+    r"(?=\s*[,;]\s*(?:(?:war\s+)?(?:vorher|zuvor|früher|frueher|gestern|vorgestern|damals|ehemals)|"
+    r"(?:vorher|zuvor|früher|frueher|gestern|vorgestern|damals|ehemals)\s+war)\b)",
     re.IGNORECASE,
 )
 _CITY_CHANGE_LABELLED_FROM_TO_STREET = re.compile(
