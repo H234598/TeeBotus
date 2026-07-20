@@ -3693,6 +3693,14 @@ CITY_PATTERNS = (
         re.IGNORECASE,
     ),
     re.compile(
+        rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+        r"(?:meldeadresse|meldeanschrift|meldesitz)\s+"
+        r"(?:ist|liegt|lautet|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
+        r"(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
+    re.compile(
         rf"(?:^|[.!?;,]\s*)(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
         r"(?:meldeadresse|meldeanschrift|meldesitz)\s*(?::|=|,)?\s*"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)"
