@@ -2160,5 +2160,20 @@
 - Verifikation: `tests/test_weather_context.py` -> `239 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `0a58c842`.
-- Neuer Zyklus: `8/20` Commits seit diesem Restart. Kein Push. Restart erst bei
-  `20/20`.
+
+### Folgefix 2026-07-20: Wetter-State-Rollback nach Teil-Write
+
+- Ein fehlgeschlagener `write_agent_state()` kann den State bereits persistiert
+  haben. Vorher wurde dann nur das Wohnort-Memory zurückgesetzt.
+- Der Wetterpfad nimmt jetzt vor jeder Mutation Snapshot des Agent-States und
+  stellt bei Write-Fehlern State sowie betroffene Memory-Entries und Index
+  gemeinsam wieder her.
+- Fehler beim Memory-Rollback werden nicht mehr als normales `memory_error`
+  verschluckt; sie bleiben als Inkonsistenzfehler sichtbar.
+- Regressionen decken Pre-Write-Fehler, Teil-Write-Fehler und fehlgeschlagenes
+  Index-Rollback ab.
+- Verifikation: `tests/test_weather_context.py` -> `241 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `8daab7b5`.
+- Neuer Zyklus: `10/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei `20/20`.
