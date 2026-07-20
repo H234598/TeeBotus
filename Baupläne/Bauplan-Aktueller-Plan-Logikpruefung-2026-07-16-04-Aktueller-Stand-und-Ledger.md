@@ -2819,3 +2819,17 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `a9b99c99`.
 - Neuer Zyklusstand: `17/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Fremdperson mit `von`-Besitzerangabe
+
+- Formen wie `Der Wohnort von meiner Frau ist Hamburg und ich in Berlin` und
+  `Die Wohnadresse von Frau Müller liegt bei Hamburg; wir in Berlin` wurden
+  bisher nicht erkannt.
+- Der Owner-Matcher akzeptiert jetzt bekannte Personenlabels sowie eng
+  begrenzte Titel-/Namensformen (`Frau`, `Herr`, `Dr.`, `Prof.`). Ortsnamen wie
+  `von Hamburg` bleiben ausgeschlossen.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `260 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `14edbcd9`.
+- Neuer Zyklusstand: `19/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
