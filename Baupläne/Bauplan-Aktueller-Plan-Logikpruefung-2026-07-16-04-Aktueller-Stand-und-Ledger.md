@@ -2833,3 +2833,18 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `14edbcd9`.
 - Neuer Zyklusstand: `19/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Elliptischer Eigenort nach Satzgrenze
+
+- Formen wie `Mein Partner wohnt in Hamburg. Ich in Berlin` wurden bisher
+  nicht erkannt; Komma-, Semikolon- und Konjunktionsformen funktionierten
+  bereits.
+- Der gemeinsame Kurzsatz-Trenner akzeptiert jetzt auch `.`, `!` und `?` mit
+  folgendem Leerraum. Fremdstadt bleibt Fremdstadt, Eigenort wird aus dem
+  zweiten Satz gelesen.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `261 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `0a36f118`.
+- Code-Commit erreichte `20/20`; `teebotus.service` danach neu gestartet,
+  Status `active/running`, neue PID `3706892`. Dieser Ledger-Commit startet
+  neuen Zyklus mit `1/20`. Kein Push.
