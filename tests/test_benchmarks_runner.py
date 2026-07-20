@@ -544,6 +544,16 @@ def test_quick_benchmark_suite_covers_plan_core_categories() -> None:
     assert mcp_tools["details"]["network_calls"] == 0
 
 
+def test_gemini_free_tier_benchmark_is_repeatable() -> None:
+    first = llm_routing.benchmark_gemini_free_tier_guard(iterations=1)
+    second = llm_routing.benchmark_gemini_free_tier_guard(iterations=1)
+
+    assert first["ok"] is True
+    assert second["ok"] is True
+    assert first["details"]["rotation_after_limit_ok"] is True
+    assert second["details"]["rotation_after_limit_ok"] is True
+
+
 def test_benchmark_markdown_contains_comparison_table() -> None:
     suite = run_benchmarks(entries=1, iterations=1, quick=True)
 

@@ -169,7 +169,7 @@ def benchmark_gemini_free_tier_guard(*, iterations: int) -> BenchmarkResult:
         cached_limits = cached_gemini_free_tier_limit_values(env, model="gemini/gemini-2.5-flash")
         limits = resolve_gemini_free_tier_limits(env, provider="litellm", model="gemini/gemini-2.5-flash")
         ring_keys = resolve_gemini_api_key_ring(env)
-        ring = RotatingAPIKeyRing(ring_keys, name="benchmark-gemini-free-tier")
+        ring = RotatingAPIKeyRing(ring_keys, name=f"benchmark-gemini-free-tier:{cache_path}")
         if ring_keys:
             ring.mark_success(ring_keys[0])
         reset_gemini_free_tier_budget_state()
