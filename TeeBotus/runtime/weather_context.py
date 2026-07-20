@@ -5577,7 +5577,7 @@ def _has_other_person_residence_suffix(source: str, city_end: int) -> bool:
             r"(?i)\s+(?:ist|war|bleibt|liegt|befindet\s+sich)\s+"
             r"(?:(?:der|die|das|ein(?:e|en|em|er|es)?)\s+)?"
             r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
-            r"arbeitsort|arbeitsadresse)\s+"
+            r"zuhause|zu\s+hause|daheim|arbeitsort|arbeitsadresse)\s+"
             r"(?:(?:von)\s+)?(?:mein(?:er|es|em|en)?|unser(?:er|es|em|en)?|"
             r"der|die|das|dem|den|des|ein(?:er|es|em|en)?)\s+"
             rf"{_OTHER_RESIDENCE_OWNER_LABEL}\b",
@@ -6418,7 +6418,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"(?:ist|war|bleibt|liegt|befindet\s+sich)\s+"
         r"(?:(?:der|die|das|ein(?:e|en|em|er|es)?)\s+)?"
         r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
-        r"arbeitsort|arbeitsadresse)\s+"
+        r"zuhause|zu\s+hause|daheim|arbeitsort|arbeitsadresse)\s+"
         r"(?:(?:von)\s+)?(?:mein(?:er|es|em|en)?|unser(?:er|es|em|en)?|"
         r"der|die|das|dem|den|des|ein(?:er|es|em|en)?)\s+"
         rf"{_OTHER_RESIDENCE_OWNER_LABEL}\b",
