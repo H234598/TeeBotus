@@ -2760,8 +2760,12 @@ CITY_PATTERNS = (
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]?\s*"
         r"(?:und|aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:"
         r"(?:arbeite\w*|studier\w*|lern\w*|schlaf\w*|pendl\w*|reis\w*|"
-        r"besuch\w*|übernacht\w*|uebernacht\w*)\s+(?:ich|wir)\b",
+        r"besuch\w*|übernacht\w*|uebernacht\w*|fahr\w*|geh\w*|komm\w*)\s+(?:ich|wir)\b|"
+        r"bin\s+(?:ich|wir)\s+(?:beruflich|dienstlich|zum\s+arbeiten|zur\s+arbeit|"
+        r"zum\s+studieren|heute|gerade|nur\s+unterwegs)\b|"
+        r"mach\w*\s+(?:ich|wir)\s+(?:eine\s+)?ausbildung\b)",
         re.IGNORECASE,
     ),
     re.compile(
@@ -2771,7 +2775,8 @@ CITY_PATTERNS = (
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+ist\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:geburtsort|geburtsstadt|heimat|heimatstadt|herkunftsort|herkunftsstadt|"
-        r"studienort|universität|universitaet|uni)\b",
+        r"studienort|universität|universitaet|uni|ausbildungsort|arbeitsstelle|"
+        r"dienststelle|schule|arbeitsplatz)\b",
         re.IGNORECASE,
     ),
     re.compile(
@@ -6791,7 +6796,10 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"(?:und|aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
         r"(?:arbeite\w*|studier\w*|lern\w*|schlaf\w*|pendl\w*|reis\w*|"
-        r"besuch\w*|übernacht\w*|uebernacht\w*)\s+(?:ich|wir)\b",
+        r"besuch\w*|übernacht\w*|uebernacht\w*|fahr\w*|geh\w*|komm\w*)\s+(?:ich|wir)\b|"
+        r"bin\s+(?:ich|wir)\s+(?:beruflich|dienstlich|zum\s+arbeiten|zur\s+arbeit|"
+        r"zum\s+studieren|heute|gerade|nur\s+unterwegs)\b|"
+        r"mach\w*\s+(?:ich|wir)\s+(?:eine\s+)?ausbildung\b",
         source,
         re.IGNORECASE,
     ):
@@ -6802,7 +6810,8 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+ist\s+"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
         r"(?:geburtsort|geburtsstadt|heimat|heimatstadt|herkunftsort|herkunftsstadt|"
-        r"studienort|universität|universitaet|uni)\b",
+        r"studienort|universität|universitaet|uni|ausbildungsort|arbeitsstelle|"
+        r"dienststelle|schule|arbeitsplatz)\b",
         source,
         re.IGNORECASE,
     ):
