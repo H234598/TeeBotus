@@ -5239,7 +5239,7 @@ def extract_residence_city(text: str) -> str:
                         continue
                     if _has_other_person_residence_prefix(source, pattern_start) or _has_other_person_residence_prefix(
                         source, city_start
-                    ):
+                    ) or _has_other_person_residence_prefix(source, city_end):
                         continue
                     if _has_other_person_as_residence_label(source, city_start, city_end):
                         continue
@@ -5762,6 +5762,20 @@ def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
         segment,
     ):
         return True
+    if re.search(
+        rf"(?i)\b{_OTHER_PERSON_LOCATION_LABEL}\s+(?:von\s+)?"
+        rf"(?:{_OTHER_PERSON_REFERENCE}\s+)?{_OTHER_PERSON_RESIDENCE_LABEL}\s+"
+        r"(?:ist|lautet|bleibt|liegt|befindet\s+sich)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}(?=\s*[.!?;,]|\s*$)",
+        segment,
+    ) or re.search(
+        rf"(?i)\b{_OTHER_PERSON_LOCATION_LABEL}\s+von\s+"
+        rf"{_OTHER_PERSON_NON_SELF_REFERENCE}\s+"
+        r"(?:ist|lautet|bleibt|liegt|befindet\s+sich)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}(?=\s*[.!?;,]|\s*$)",
+        segment,
+    ):
+        return True
     return bool(
         re.search(
             rf"(?i)\b(?:der|die|das|ein(?:e|en|em|er|es)?)?\s*"
@@ -5778,6 +5792,12 @@ def _has_other_person_residence_prefix(source: str, pattern_start: int) -> bool:
 
 def _has_other_person_residence_suffix(source: str, city_end: int) -> bool:
     suffix = source[city_end:]
+    if re.match(
+        rf"(?i)\s+(?:als\s+)?{_OTHER_PERSON_LOCATION_LABEL}\s+(?:von\s+)?"
+        rf"(?:{_OTHER_PERSON_REFERENCE}\s+)?{_OTHER_PERSON_RESIDENCE_LABEL}\b",
+        suffix,
+    ):
+        return True
     if re.match(
         rf"(?i)\s+(?:ist|war|bleibt|liegt|befindet\s+sich)\s+"
         rf"{_OTHER_PERSON_NON_SELF_REFERENCE}\s+{_OTHER_PERSON_LOCATION_LABEL}\b",
@@ -6203,6 +6223,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
                     or _has_uncertain_residence_suffix(source, city_end)
                     or _has_other_person_residence_prefix(source, pattern_start)
                     or _has_other_person_residence_prefix(source, city_start)
+                    or _has_other_person_residence_prefix(source, city_end)
                     or _has_other_person_as_residence_label(source, city_start, city_end)
                     or _has_other_person_residence_suffix(source, city_end)
                     or _has_non_residential_city_tail(match.group("city"))
