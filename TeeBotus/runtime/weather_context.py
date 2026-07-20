@@ -6172,7 +6172,10 @@ def extract_residence_city(text: str) -> str:
         return city
     if _has_ambiguous_residence_targets(source):
         return ""
-    return latest_match(CITY_PATTERNS)
+    city = latest_match(CITY_PATTERNS)
+    if city and _has_conflicting_current_relative_residence(source):
+        return ""
+    return city
 
 
 def _has_explicit_residence_multiplicity(source: str) -> bool:
@@ -6473,6 +6476,20 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
         re.IGNORECASE,
     ):
         return True
+    if re.search(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s*[,;]\s*"
+        r"(?:(?:aber|doch|jedoch)\s+)?(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:bin|sind|schlaf\w*|übernacht\w*|uebernacht\w*)\s+(?:ich|wir)\s+"
+        r"(?:(?:nur|lediglich)\s+)?(?:vorübergehend|voruebergehend|zeitweise|"
+        r"gelegentlich|manchmal|am\s+wochenende|unter\s+der\s+woche|tagsüber|"
+        r"tagsueber|morgens|vormittags|mittags|nachmittags|abends|nachts|"
+        r"(?:bei|zu|auf)\s+besuch)\b",
+        multiplicity_source,
+        re.IGNORECASE,
+    ):
+        return False
     return bool(
         re.search(
             r"\b(?:wohne|wohnen|lebe|leben)\b[^.!?;\n]*\b(?:mal|manchmal|teils|teilweise|abwechselnd|zwischen|"
@@ -7873,15 +7890,24 @@ def _has_conflicting_current_relative_residence(source: str) -> bool:
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[,.;!?]|$))",
         re.IGNORECASE,
     )
+    home_pattern = re.compile(
+        r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:bin|sind)\s+(?:ich|wir)\s+"
+        r"(?:zuhause|zu\s+hause|daheim|wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b",
+        re.IGNORECASE,
+    )
     relative_matches = tuple(relative_pattern.finditer(source))
-    if not relative_matches:
+    home_matches = tuple(home_pattern.finditer(source))
+    if not relative_matches and not home_matches:
         return False
-    for pattern in (direct_pattern, relative_pattern):
+    for pattern in (direct_pattern, relative_pattern, home_pattern):
         for match in pattern.finditer(source):
-            if pattern is relative_pattern and re.match(
+            if pattern is not direct_pattern and re.match(
                 r"(?i)^(?:ich|wir)\b",
                 match.group("city").strip(),
             ):
+                continue
+            if pattern is not direct_pattern and _has_temporary_residence_suffix(source, match.end("city")):
                 continue
             city = _clean_city(match.group("city"))
             if city:
@@ -8639,9 +8665,11 @@ def _has_unresolved_location_separator(source: str, city_end: int) -> bool:
         r"(?i)\s*[,;]\s*(?:(?:aber|doch|jedoch)\s+)?(?:in|bei)\s+"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
         r"(?:(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)|"
-        r"(?:bin|sind)\s+(?:ich|wir))\s+"
+        r"(?:bin|sind|schlaf\w*|übernacht\w*|uebernacht\w*)\s+(?:ich|wir))\s+"
         r"(?:(?:nur|lediglich)\s+)?(?:vorübergehend|voruebergehend|zeitweise|"
-        r"gelegentlich|manchmal|am\s+wochenende|unter\s+der\s+woche)\b",
+        r"gelegentlich|manchmal|am\s+wochenende|unter\s+der\s+woche|"
+        r"tagsüber|tagsueber|morgens|vormittags|mittags|nachmittags|abends|nachts|"
+        r"(?:bei|zu|auf)\s+besuch)\b",
         tail,
     ):
         return False
@@ -8933,10 +8961,18 @@ def _has_temporary_residence_suffix(source: str, city_end: int) -> bool:
         re.match(
             r"(?i)\s+(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\s+"
             r"(?:(?:nur|lediglich)\s+)?(?:vorübergehend|voruebergehend|zeitweise|"
-            r"gelegentlich|manchmal|am\s+wochenende|unter\s+der\s+woche)\b|"
+            r"gelegentlich|manchmal|am\s+wochenende|unter\s+der\s+woche|"
+            r"tagsüber|tagsueber|morgens|vormittags|mittags|nachmittags|abends|nachts|"
+            r"(?:bei|zu|auf)\s+besuch)\b|"
             r"\s+(?:bin|sind)\s+(?:ich|wir)\s+(?:(?:nur|lediglich)\s+)?"
             r"(?:vorübergehend|voruebergehend|zeitweise|gelegentlich|manchmal|"
-            r"am\s+wochenende|unter\s+der\s+woche)\b",
+            r"am\s+wochenende|unter\s+der\s+woche|tagsüber|tagsueber|morgens|"
+            r"vormittags|mittags|nachmittags|abends|nachts|(?:bei|zu|auf)\s+besuch)\b|"
+            r"\s+(?:schlaf\w*|übernacht\w*|uebernacht\w*)\s+(?:ich|wir)\s+"
+            r"(?:(?:nur|lediglich)\s+)?(?:vorübergehend|voruebergehend|zeitweise|"
+            r"gelegentlich|manchmal|am\s+wochenende|unter\s+der\s+woche|"
+            r"tagsüber|tagsueber|morgens|vormittags|mittags|nachmittags|abends|nachts|"
+            r"(?:bei|zu|auf)\s+besuch)\b",
             sentence,
         )
     )
