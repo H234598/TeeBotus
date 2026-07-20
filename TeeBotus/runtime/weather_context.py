@@ -7598,6 +7598,35 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     ):
         return True
     residence_patterns = (
+        re.compile(
+            rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+            rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s+"
+            r"(?:ist|liegt|befindet\s+sich|bleibt)\s+"
+            rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+            rf"(?:(?:in|bei)\s+)?{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            rf"\b{city_capture}\s+(?:ist|bleibt)\s+"
+            rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+            rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+            r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+            r"(?:bin|sind|bleibe|bleiben)\s+"
+            rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+            r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            rf"(?:^|[.!?;,:]\s*)(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+"
+            r"(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+(?:in|bei)\s+"
+            rf"{city_capture}",
+            re.IGNORECASE,
+        ),
         _DIRECT_RESIDENCE_LABEL_CITY,
         _INVERTED_RELATIVE_RESIDENCE_CITY,
         _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_CITY,
