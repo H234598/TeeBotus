@@ -2227,3 +2227,29 @@
 - Code-Commit: `7c2fc4e4`.
 - Neuer Zyklus: `16/20` Commits seit diesem Restart. Kein Push. Restart erst
   bei `20/20`.
+
+### Folgefix 2026-07-20: `ebenso` als Aliaswort
+
+- `Mein Wohnort ist ebenso Berlin` wurde bisher als Stadt `ebenso Berlin`
+  gespeichert und an den Wetteranbieter weitergegeben.
+- Aliasbereinigung erkennt jetzt auch `ebenso` in Parser und Wohnort-Memory-
+  ID-Pfad.
+- Regression deckt Extraktion und persistierten `weather_context.city`-Wert
+  ab. Code-Commit: `3057b8b6`.
+
+### Folgefix 2026-07-20: Aliaspräpositionen und Ambiguitätsregex
+
+- `auch in Berlin` wurde vor der Bereinigung durch den Trailing-Stop zu
+  `auch` verkürzt.
+- Spezielle Meldeadresse-Collector konnten ein alleinstehendes Aliaswort als
+  registrierte Stadt sammeln.
+- Ambiguitätsprüfung interpretierte `Meldeadresse` nach einem Komma als zweite
+  Stadt. Prefix-Reihenfolge, Aliasfilter und Label-Ausschluss korrigiert.
+- Kleingeschriebene Aliasfälle sowie `auch in Berlin` werden erkannt; echter
+  Konflikt `Wohnort Berlin, Meldeadresse Hamburg` bleibt leer. Großgeschriebenes
+  `Auch` bleibt als echter Ortsname möglich.
+- Verifikation: komplette `tests/test_weather_context.py` -> `248 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `4b5e30b5`.
+- Neuer Zyklus: `19/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei `20/20`.
