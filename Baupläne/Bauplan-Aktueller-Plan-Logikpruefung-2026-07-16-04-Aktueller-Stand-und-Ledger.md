@@ -2703,3 +2703,18 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `e67e80a4`.
 - Neuer Zyklusstand: `18/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Konflikte zwischen Wohnadressreferenzen
+
+- Zwei verschiedene genitivische Wohnadressen werden jetzt als Konflikt
+  verworfen; gleiche Stadt bleibt gültig.
+- Relative Meldeadressangaben wie `Meldeadresse in Berlin ist` werden nicht
+  mehr als Stadtname `Berlin ist` gespeichert. Dadurch bleibt eine zweite
+  gleichlautende Wohnangabe gültig.
+- Der Konfliktcheck wertet dafür nur den spezifischen Genitivmatcher aus;
+  Straßenadress-Patterns erzeugen keine falschen Mehrfachkonflikte.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `253 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `d7a05461`.
+- Neuer Zyklusstand: `20/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart jetzt fällig; Push bleibt bei `100/100`.
