@@ -8011,6 +8011,15 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             r"privatanschrift|anschrift)\b",
             re.IGNORECASE,
         ),
+        re.compile(
+            rf"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{{1,80}}?)\s*,?\s+"
+            r"wo\s+(?:mein(?:e)?|unser(?:e)?)\s+"
+            rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
+            r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|"
+            r"privatanschrift|anschrift|meldeadresse|meldeanschrift|meldesitz)\s+"
+            r"(?:ist|lautet|liegt|befindet\s+sich)\b",
+            re.IGNORECASE,
+        ),
     )
 
     def collect(patterns: tuple[re.Pattern[str], ...]) -> set[str]:
