@@ -1189,6 +1189,17 @@ _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE = re.compile(
     r"(?:wohne|wohnen|lebe|leben)\b",
     re.IGNORECASE,
 )
+_CITY_CHANGE_LABELLED_CURRENT_NEW_RESIDENCE = re.compile(
+    r"\b(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*"
+    r"(?:[:=,]\s*|\s+)"
+    r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+    r"(?:neu\w*|aktuell\w*|jetzig\w*|gegenwärtig\w*|gegenwaertig\w*)\s+"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*:?[ \t]*"
+    r"(?!(?:arbeite|arbeitest|arbeiten|studier|lern|schlaf|pendl|reis|besuch|"
+    r"übernacht|uebernacht|fahr|geh|komm|mach)\w*\b)"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET = re.compile(
     r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+lautet\s+"
     r"(?:mein(?:e)?|unser(?:e)?)\s+"
@@ -3284,6 +3295,7 @@ CITY_CHANGE_PATTERNS = (
     _CITY_CHANGE_OLD_RESIDENCE_LABEL_CURRENT_CITY,
     _CITY_CHANGE_OLD_RESIDENCE_LABEL_BARE_CURRENT_CITY,
     _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY,
+    _CITY_CHANGE_LABELLED_CURRENT_NEW_RESIDENCE,
 )
 _CITY_CHANGE_CITY_BEFORE_STREET = CITY_CHANGE_PATTERNS[0]
 CITY_PATTERNS = (
@@ -6071,6 +6083,7 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
             _CITY_CHANGE_LABELLED_ALT_NEW_COLON_STREET,
             _CITY_CHANGE_LABELLED_TEMPORAL_INLINE_CITY,
             _CITY_CHANGE_LABELLED_CURRENT_HISTORICAL,
+            _CITY_CHANGE_LABELLED_CURRENT_NEW_RESIDENCE,
             _CITY_CHANGE_LABELLED_COLON_SEPARATOR_STREET,
             _COMPOUND_CITY_RESIDENCE,
             _COMPOUND_CITY_CONTRAST_RESIDENCE,
