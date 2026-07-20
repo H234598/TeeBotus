@@ -2793,3 +2793,17 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `2b6dad61`.
 - Neuer Zyklusstand: `13/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Pronomen-first-Fremdperson mit Eigenort
+
+- `Ihr Wohnort ist Hamburg und ich in Berlin` wurde trotz eindeutigem
+  Eigenort nicht erkannt; der Multiplicity-Guard behandelte `Ihr Wohnort` als
+  eigenen Labelkonflikt.
+- Pronomen-first-Labels (`sein/ihr/deren/dessen`) werden jetzt mit verkürzter
+  `ich/wir in/bei Stadt`-Angabe erkannt. Der Multiplicity-Guard ignoriert den
+  vorangestellten Fremdlabel-Kontext; isolierte Fremdlabels bleiben leer.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `258 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `6b38a4f1`.
+- Neuer Zyklusstand: `15/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
