@@ -6122,6 +6122,8 @@ def extract_residence_city(text: str) -> str:
         return ""
     city = latest_match(CITY_CHANGE_PATTERNS)
     if city:
+        if _has_conflicting_current_relative_residence(source):
+            return ""
         return city
     if _has_ambiguous_residence_targets(source):
         return ""
@@ -7810,6 +7812,34 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
     return bool(residence_cities and address_cities and residence_cities.isdisjoint(address_cities))
 
 
+def _has_conflicting_current_relative_residence(source: str) -> bool:
+    current_targets: set[str] = set()
+    relative_pattern = re.compile(
+        r"\b(?:es\s+ist\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,?\s+"
+        r"wo\s+(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\b",
+        re.IGNORECASE,
+    )
+    direct_pattern = re.compile(
+        r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[,.;!?]|$))",
+        re.IGNORECASE,
+    )
+    relative_matches = tuple(relative_pattern.finditer(source))
+    if not relative_matches:
+        return False
+    for pattern in (direct_pattern, relative_pattern):
+        for match in pattern.finditer(source):
+            if pattern is relative_pattern and re.match(
+                r"(?i)^(?:ich|wir)\b",
+                match.group("city").strip(),
+            ):
+                continue
+            city = _clean_city(match.group("city"))
+            if city:
+                current_targets.add(_city_comparison_key(city))
+    return len(current_targets) > 1
+
+
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
@@ -8177,6 +8207,12 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         re.compile(
             rf"\b(?:ich|wir)\s+{residence}\s+(?:in|bei)\s+"
             r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[,.;!?]|$|\b(?:und|aber|doch|jedoch)\b))",
+            re.IGNORECASE,
+        ),
+        _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE,
+        re.compile(
+            r"\b(?:es\s+ist\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,?\s+"
+            r"wo\s+(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\b",
             re.IGNORECASE,
         ),
         re.compile(
@@ -8934,6 +8970,7 @@ def _clean_city(value: str) -> str:
         "",
         city,
     ).strip()
+    city = re.sub(r"(?i)^(?:(?:und|sowie|oder)\s+)+", "", city)
     city = re.sub(r"(?i)^(?:(?:auch|ebenfalls|ebenso|gleichfalls)\s+)?(?:in|bei)\s+", "", city)
     city = re.sub(r"(?i)^(?:auch|ebenfalls|ebenso|gleichfalls)\s+", "", city)
     city = CITY_TRAILING_STOP_RE.sub("", city).strip(" .,:;!?")
@@ -8970,6 +9007,7 @@ def _clean_city(value: str) -> str:
     if parenthetical_region and parenthetical_region.group("region").strip().casefold() in _NON_CITY_REGION_NAMES:
         city = city[: parenthetical_region.start()].strip()
     city = re.split(r"(?<!\bSt)[.!?]\s+", city, maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,:;!?")
+    city = re.sub(r"(?i)^(?:(?:und|sowie|oder)\s+)+", "", city)
     city = re.sub(r"(?i)^(?:(?:auch|ebenfalls|ebenso|gleichfalls)\s+)?(?:in|bei)\s+", "", city)
     city = re.sub(r"(?i)^(?:auch|ebenfalls|ebenso|gleichfalls)\s+", "", city)
     city = re.sub(r"(?i)(?<!er)(?:[-\s]+)(?:nähe|umgebung)\b$", "", city).strip()
