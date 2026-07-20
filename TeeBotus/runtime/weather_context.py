@@ -905,6 +905,17 @@ _CITY_CHANGE_LABELLED_OLD_CURRENT_SHORT = re.compile(
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_LABELLED_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
+    r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*[:=]?\s*"
+    r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)\s*[,;.!?]\s*"
+    r"(?:nur\s+)?(?:vorübergehend|voruebergehend|zeitweise|temporär|temporaer|"
+    r"befristet|kurzfristig)\s+"
+    r"(?:(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+)?"
+    r"(?:(?:in|bei)\s+)?"
+    r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _CITY_CHANGE_LABELLED_FROM_TO_STREET = re.compile(
     r"\b(?:wohnadresse|wohnanschrift|anschrift|adresse)\s+von\s+"
     rf"(?P<old_city>{_CITY_CHANGE_CITY_FRAGMENT})(?:\s+\([^)]{{1,30}}\))?"
@@ -6206,6 +6217,8 @@ def extract_residence_city(text: str) -> str:
 
 def _has_explicit_residence_multiplicity(source: str) -> bool:
     multiplicity_source = re.sub(r"(?i)str\.(?=\s)", "str", source)
+    if _LABELLED_PRIMARY_TEMPORARY_RESIDENCE.search(multiplicity_source):
+        return False
     direct_status_pair = re.search(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)\s*"
@@ -8086,6 +8099,8 @@ def _has_conflicting_current_relative_residence(source: str) -> bool:
 def _has_ambiguous_residence_targets(source: str) -> bool:
     residence = r"(?:wohne|wohnen|lebe|leben|wohn|leb|gemeldet|registriert)"
     residence_targets: set[str] = set()
+    if _LABELLED_PRIMARY_TEMPORARY_RESIDENCE.search(source):
+        return False
     if _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY.search(source):
         return False
     if re.search(
@@ -9154,6 +9169,12 @@ def _has_transient_location_fragment(source: str, city_start: int, city_end: int
 
 
 def _has_temporary_residence_prefix(source: str, match_start: int) -> bool:
+    if re.match(
+        r"(?i)(?:nur\s+)?(?:vorübergehend|voruebergehend|zeitweise|temporär|temporaer|"
+        r"befristet|kurzfristig)\b",
+        source[match_start:],
+    ):
+        return True
     prefix = source[:match_start]
     sentence = re.split(r"(?<!\bSt)[.!?;\n]\s*", prefix, flags=re.IGNORECASE)[-1]
     return bool(
