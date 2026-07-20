@@ -3088,6 +3088,12 @@ CITY_PATTERNS = (
     _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_PRONOUN_CITY,
     _SHORT_SELF_RESIDENCE_AFTER_OTHER_PERSON_LABEL_POSSESSIVE_CITY,
     _SHORT_SELF_RESIDENCE_BEFORE_OTHER_PERSON_CITY,
+    re.compile(
+        r"(?:^|[,;]\s*)(?:meiner|meins|unserer|unsers|unseres)\s+"
+        r"(?:ist|liegt|bleibt|lautet)\s+(?:(?:in|bei)\s+)?"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+        re.IGNORECASE,
+    ),
     _QUALIFIED_DIRECT_RESIDENCE,
     re.compile(
         rf"\b(?:mein(?:e)?|unser(?:e)?)?\s*{_OTHER_PERSON_LOCATION_LABEL}\s+"
