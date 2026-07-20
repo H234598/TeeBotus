@@ -7670,6 +7670,7 @@ def _has_uncertain_residence_prefix(source: str, match_start: int) -> bool:
             r"(?:^|[,;]\s*)soweit\s+ich\s+wei(?:ß|ss)\b[^.!?;\n]*$|"
             r"(?:^|[,;]\s*)es\s+scheint\b[^.!?;\n]*$|"
             r"(?:^|[,;]\s*)nach\s+meinem\s+wissen\b[^.!?;\n]*$|"
+            r"(?:^|[,;]\s*)nach\s+allem,\s+was\s+ich\s+wei(?:ß|ss)\b[^.!?;\n]*$|"
             r"(?:^|[,;]\s*)(?:ich|wir)?\s*(?:könnte|koennte|soll(?:e|en|t|te|ten)?|"
             r"müsste|muesste|dürfte|duerfte|würde|wuerde)\b[^.!?;\n]*$",
             sentence,
