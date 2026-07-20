@@ -199,6 +199,7 @@ PLAN2_TEST_PATTERNS: tuple[str, ...] = (
     "tests/test_signal_runner.py",
     "tests/test_sqlite_backup_sync.py",
     "tests/test_systemd.py",
+    "tests/test_telegram_dispatch_journal.py",
     "tests/test_telegram_runner.py",
     "tests/test_tts_dialect.py",
     "tests/test_version_notifications.py",
