@@ -3143,6 +3143,13 @@ def test_extract_residence_city_rejects_distinct_residence_and_registration_stat
     assert extract_residence_city("Ich wohne in Berlin und bei Hamburg bin ich gemeldet.") == ""
 
 
+def test_extract_residence_city_handles_direct_residence_registration_label_pairs() -> None:
+    assert extract_residence_city("Wohnort: Berlin; Meldeadresse: Hamburg.") == ""
+    assert extract_residence_city("Meldeadresse: Hamburg; Wohnort: Berlin.") == ""
+    assert extract_residence_city("Wohnort: Berlin; Meldeadresse: Berlin.") == "Berlin"
+    assert extract_residence_city("Wohnort: Berlin, Meldeadresse: Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_handles_labeled_area_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Region um Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Berliner Region.") == "Berlin"

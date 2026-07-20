@@ -921,6 +921,19 @@ _INVERTED_REGISTERED_CITY = re.compile(
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
+_DIRECT_RESIDENCE_REGISTRATION_LABEL_PAIR = re.compile(
+    rf"(?:^|[.!?;\n]\s*)(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    r"(?P<first_label>wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"meldeadresse|meldeanschrift|meldesitz)"
+    r"\s*(?::|=|,|\s+)\s*(?:(?:in|bei)\s+)?"
+    r"(?P<first_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+    rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    r"(?P<second_label>wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"meldeadresse|meldeanschrift|meldesitz)"
+    r"\s*(?::|=|,|\s+)\s*(?:(?:in|bei)\s+)?"
+    r"(?P<second_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
 _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET = re.compile(
     r"\b(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+lautet\s+"
     r"(?:mein(?:e)?|unser(?:e)?)\s+"
@@ -5471,6 +5484,26 @@ def extract_residence_city(text: str) -> str:
 
 def _has_explicit_residence_multiplicity(source: str) -> bool:
     multiplicity_source = re.sub(r"(?i)str\.(?=\s)", "str", source)
+    for pair in _DIRECT_RESIDENCE_REGISTRATION_LABEL_PAIR.finditer(multiplicity_source):
+        first_is_registration = pair.group("first_label").casefold() in {
+            "meldeadresse",
+            "meldeanschrift",
+            "meldesitz",
+        }
+        second_is_registration = pair.group("second_label").casefold() in {
+            "meldeadresse",
+            "meldeanschrift",
+            "meldesitz",
+        }
+        first = _clean_city(pair.group("first_city"))
+        second = _clean_city(pair.group("second_city"))
+        if (
+            first_is_registration != second_is_registration
+            and first
+            and second
+            and _city_comparison_key(first) == _city_comparison_key(second)
+        ):
+            return False
     if any(
         pattern.search(source)
         for pattern in (
@@ -5696,6 +5729,27 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
 
 def _has_conflicting_direct_residence_labels(source: str) -> bool:
     cities: set[str] = set()
+    for pair in _DIRECT_RESIDENCE_REGISTRATION_LABEL_PAIR.finditer(source):
+        first_is_registration = pair.group("first_label").casefold() in {
+            "meldeadresse",
+            "meldeanschrift",
+            "meldesitz",
+        }
+        second_is_registration = pair.group("second_label").casefold() in {
+            "meldeadresse",
+            "meldeanschrift",
+            "meldesitz",
+        }
+        if first_is_registration == second_is_registration:
+            continue
+        first = _clean_city(pair.group("first_city"))
+        second = _clean_city(pair.group("second_city"))
+        if (
+            first
+            and second
+            and _city_comparison_key(first) != _city_comparison_key(second)
+        ):
+            return True
     pattern = re.compile(
         r"(?:^|[.!?;,\n]\s*)(?:aber|doch|jedoch|sondern|jetzt|nun|aktuell|derzeit)?\s*"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+"
