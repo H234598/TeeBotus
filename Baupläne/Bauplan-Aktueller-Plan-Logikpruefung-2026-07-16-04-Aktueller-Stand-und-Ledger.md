@@ -2389,3 +2389,17 @@
   gruen. Code-Commit: `e886a2bc`.
 - Neuer Zyklus: `18/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Unsichere Wörter im generischen City-Span
+
+- `Ich wohne in Berlin, aber Hamburg ist vielleicht mein Wohnort` wurde als
+  `Hamburg ist vielleicht` erkannt und verdrängte den sicheren Wohnort Berlin.
+- `_clean_city` verwirft unsichere Marker innerhalb eines generischen
+  Kandidaten-Spans. Sichere aktuelle Kandidaten bleiben unverändert.
+- Regressionen decken `vielleicht` und `vermutlich` im `aber`-Konflikt ab;
+  bestehende historische/unsichere Wohnorttests bleiben grün.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `b4f1e057`.
+- Neuer Zyklus: `20/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart jetzt erforderlich.
