@@ -6098,7 +6098,11 @@ CITY_PATTERNS = (
         r"zu\s+hause|daheim))"
         r"(?:\s+(?:ist|lautet))?\s*(?:eigentlich|genau|aktuell|derzeit)?\s*[?:]\s*"
         r"(?:(?:antwort\s+(?:ist|lautet)|antwort)\s*(?::|=)?\s*)?"
+        r"(?:(?:aktuell|derzeit|momentan|jetzt|nun|gerade|inzwischen|mittlerweile)\s+)?"
         r"(?:(?:in|bei)\s+)?"
+        r"(?!(?:ab\s+)?(?:morgen|uebermorgen|übermorgen|bald|später|spaeter|"
+        r"demnächst|demnaechst|künftig\w*|kuenftig\w*|zukünftig\w*|zukuenftig\w*|"
+        r"geplant\w*|nächste\w*|naechste\w*|kommende\w*)\b)"
         r"(?P<city>[^\W\d_][\wÄÖÜäöüß .'-]{1,80})(?=\s*(?:[.!?;,]|$))",
         re.IGNORECASE,
     ),
