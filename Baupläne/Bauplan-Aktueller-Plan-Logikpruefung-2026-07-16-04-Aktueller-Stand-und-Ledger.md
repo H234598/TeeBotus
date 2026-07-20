@@ -1893,3 +1893,21 @@
 - `systemctl --user restart teebotus.service` erfolgreich.
 - Service aktiv/running, `MainPID 2292168`, Start `2026-07-20 03:25:05 CEST`.
 - Neuer Zyklus: `1/20` Commit seit diesem Restart. Kein Push.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-10
+
+- `teebotus.service` aktiv/running, `MainPID 2292168`, Start `2026-07-20 03:25:05 CEST`.
+- Kopulalose inverse Fremdpersonen-Wohnlabels bleiben aus eigener Wohnstadt
+  ausgeschlossen.
+- Neuer Zyklus: `3/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei 20/20.
+
+### Folgefix 2026-07-20: Kopulalose inverse Fremdpersonen-Wohnlabels
+
+- `Der Wohnort meiner Frau ist Hamburg`, `Wohnadresse ... lautet Hamburg`
+  und `Wohnung meines Mannes bleibt Hamburg` werden nicht als eigener
+  Wohnort neben Berlin bewertet.
+- City-Start-Filter und Ambiguitätsausnahme verwenden dasselbe Personenlabel.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `c9dfa08a`.
