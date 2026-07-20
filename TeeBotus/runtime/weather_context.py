@@ -884,10 +884,11 @@ _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY = re.compile(
     r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|wohnadresse|wohnanschrift|adresse|anschrift)\s*[:=]?\s*"
     r"(?:(?:alt\w*|ehemalig\w*|früh\w*|frueh\w*|vorher|zuvor)\s*:?\s*)?"
     r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
-    r"(?:neu\w*|jetzt|heute|nun|aktuell\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*|"
+    r"(?:neu\w*|jetzt|heute|nunmehr|nun|aktuell\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*|"
     rf"seit\s+{_RESIDENCE_DURATION}\b|"
     r"seit\s+(?:heute|gestern|vorgestern)|ab\s+(?:sofort|jetzt)|"
-    r"inzwischen|mittlerweile)\s*[:=]?\s*"
+    r"inzwischen|mittlerweile|momentan|weiterhin|nach\s+wie\s+vor|noch\s+immer|"
+    r"immer\s+noch|zurzeit|zur\s+zeit|seitdem)\b\s*[:=]?\s*"
     r"(?:(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+)?"
     r"(?:(?:in|bei)\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
