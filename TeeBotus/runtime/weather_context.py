@@ -887,7 +887,9 @@ _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY = re.compile(
     r"(?:neu\w*|jetzt|heute|nun|aktuell\w*|derzeitig\w*|gegenwärtig\w*|gegenwaertig\w*|"
     rf"seit\s+{_RESIDENCE_DURATION}\b|"
     r"seit\s+(?:heute|gestern|vorgestern)|ab\s+(?:sofort|jetzt)|"
-    r"inzwischen|mittlerweile)\s*:?\s*(?:(?:in|bei)\s+)?"
+    r"inzwischen|mittlerweile)\s*[:=]?\s*"
+    r"(?:(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+)?"
+    r"(?:(?:in|bei)\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )

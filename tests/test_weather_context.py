@@ -3990,6 +3990,8 @@ def test_extract_residence_city_handles_temporal_label_forms() -> None:
     assert extract_residence_city("Wohnort: Berlin, neuer Wohnort: Hamburg.") == "Hamburg"
     assert extract_residence_city("Wohnort: Berlin. Jetzt: Hamburg.") == "Hamburg"
     assert extract_residence_city("Mein Wohnsitz: Berlin. Aktuell: Hamburg.") == "Hamburg"
+    assert extract_residence_city("Wohnort = Berlin, aktuell = Hamburg.") == "Hamburg"
+    assert extract_residence_city("Wohnort: Berlin, aktuell gemeldet in Hamburg.") == "Hamburg"
     assert extract_residence_city("Wohnort: Berlin, seit heute Hamburg.") == "Hamburg"
     assert extract_residence_city("Wohnort: Berlin, seit heute in Hamburg.") == "Hamburg"
     assert extract_residence_city("Wohnort: Berlin, seit 2024 Hamburg.") == "Hamburg"
