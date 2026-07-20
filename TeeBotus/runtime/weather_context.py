@@ -7953,8 +7953,10 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
             re.IGNORECASE,
         ),
         re.compile(
-            rf"(?:[.!?;,:]\s*|\bund\s+)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
-            r"(?:mein(?:e)?|unser(?:e)?)\s+"
+            rf"(?:[.!?;,:]\s*(?!(?:und|aber|doch|jedoch|sondern)\b)|"
+            rf"\b(?:und|aber|doch|jedoch|sondern)\s+)"
+            rf"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{{1,80}}?)\s+"
+            r"(?:ist\s+)?(?:mein(?:e)?|unser(?:e)?)\s+"
             rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)*"
             r"(?:hauptadresse|adresse|wohnadresse|wohnanschrift|privatadresse|"
             r"privatanschrift|anschrift)\b",
@@ -8618,7 +8620,7 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
     same_city_residence_label = re.search(
         r"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:und|,)\s+"
-        r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+ist\s+"
+        r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+(?:ist\s+)?"
         r"(?:mein(?:e)?|unser(?:e)?)\s+"
         rf"(?:(?:{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
         r"(?:meldeadresse|meldeanschrift|meldesitz|wohnadresse|wohnanschrift|"
