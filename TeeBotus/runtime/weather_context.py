@@ -2758,6 +2758,14 @@ CITY_PATTERNS = (
     re.compile(
         rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
         r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]?\s*"
+        r"(?:und|aber|doch|jedoch)\s+(?:(?:ich|wir)\s+)?(?:bin|sind)\s+"
+        r"(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
+        r"(?:zu\s+besuch|auf\s+besuch)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        rf"\b(?:ich|wir)\s+(?:wohne|wohnen|lebe|leben)\s+(?:in|bei)\s+"
+        r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]?\s*"
         r"(?:und|aber|doch|jedoch)\s+(?:(?:in|bei)\s+)?"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+"
         r"(?:"
