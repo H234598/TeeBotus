@@ -1667,6 +1667,13 @@ def test_extract_residence_city_handles_sentence_boundary_short_self_clause() ->
     assert extract_residence_city("Ich wohne in Berlin. Mein Partner in Hamburg.") == "Berlin"
 
 
+def test_extract_residence_city_handles_self_first_short_person_clause() -> None:
+    assert extract_residence_city("Ich in Berlin, mein Partner in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich in Berlin und meine Freundin wohnt in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich in Berlin; meine Eltern leben in Hamburg.") == "Berlin"
+    assert extract_residence_city("Ich in Berlin, mein Partner arbeitet in Hamburg.") == ""
+
+
 def test_extract_residence_city_rejects_unknown_label_values() -> None:
     assert extract_residence_city("Mein Wohnort ist irgendwo.") == ""
     assert extract_residence_city("Mein Wohnort ist unklar.") == ""
