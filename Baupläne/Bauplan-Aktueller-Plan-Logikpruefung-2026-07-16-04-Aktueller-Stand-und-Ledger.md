@@ -2674,3 +2674,18 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
   grün. Code-Commit: `a0a4b778`.
 - Neuer Zyklusstand: `14/20` Commits seit dem Restart, Ledgercommit eingerechnet.
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Genitivische Wohnadressangaben
+
+- `Die Adresse meines Wohnorts ist Berlin` wurde durch einen zu breiten
+  generischen Pattern als `meines Wohnorts ist Berlin` gelesen.
+- Ein geteilter Matcher erkennt jetzt genitivische Formen wie `Adresse meines
+  Wohnorts`, `Adresse unseres Wohnsitzes` und `Wohnanschrift meines
+  Hauptwohnsitzes`. Der Matcher wird auch von der Konfliktprüfung genutzt.
+- Genitivische Fremd-/unbestimmte Angaben bleiben unberücksichtigt; eine
+  abweichende Meldeadresse führt weiterhin zu leerem Ergebnis.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `253 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `dd5cb02d`.
+- Neuer Zyklusstand: `16/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
