@@ -1968,3 +1968,21 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `8eaa5a7d`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-14
+
+- `teebotus.service` aktiv/running, `MainPID 2292168`, Start `2026-07-20 03:25:05 CEST`.
+- Invertierte Eigenangaben wie `während ich in Berlin wohne` werden erkannt;
+  reine Fremdpersonen-Sätze bleiben ohne eigenen Wohnort.
+- Negierte Inversionen wie `In Berlin wohne ich nicht` bleiben ausgeschlossen.
+- Neuer Zyklus: `10/20` Commits seit diesem Restart. Kein Push. Restart erst
+  bei 20/20.
+
+### Folgefix 2026-07-20: Invertierte Wohnortklauseln
+
+- Neues Muster für `in/bei Stadt wohne/lebe ich/wir` mit Satz- oder
+  Konnektorabschluss.
+- Verhindert positive Treffer bei Negation und unbestimmten Nachsätzen.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f1c64444`.
