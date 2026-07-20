@@ -1185,7 +1185,7 @@ _DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR = re.compile(
 _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE = re.compile(
     r"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*(?:,|;|:|[-–—])\s*"
     r"(?:wo|in\s+(?:der|dem|welcher)|worin)\s+(?:ich|wir)\s+"
-    rf"(?:(?:heute|polizeilich|{_RESIDENCE_TIME_QUALIFIER}|{_RESIDENCE_LABEL_CURRENT_QUALIFIER}|{_RESIDENCE_LOCATION_ADVERB})\s+(?:wohne|wohnen|lebe|leben)\b|"
+    rf"(?:(?:heute|polizeilich|nur\s+(?:{_RESIDENCE_TIME_QUALIFIER})|{_RESIDENCE_TIME_QUALIFIER}|{_RESIDENCE_LABEL_CURRENT_QUALIFIER}|{_RESIDENCE_LOCATION_ADVERB})\s+(?:wohne|wohnen|lebe|leben)\b|"
     rf"(?:(?:heute|polizeilich|{_RESIDENCE_TIME_QUALIFIER}|{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
     r"(?:bin(?:d)?\s+(?:wohnhaft|ansässig|ansaessig|beheimatet|gemeldet|registriert|zu\s+hause|zuhause|daheim)|"
     r"(?:wohnhaft|ansässig|ansaessig|beheimatet|gemeldet|registriert|zu\s+hause|zuhause|daheim)\s+bin(?:d)?)\b)",
@@ -1216,7 +1216,7 @@ _CITY_BEFORE_RELATIVE_RESIDENCE_LABEL = re.compile(
 _CITY_BEFORE_RELATIVE_COMPANION_RESIDENCE = re.compile(
     r"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*(?:,|;|:|[-–—])\s*"
     r"(?:wo|in\s+(?:der|dem|welcher)|worin)\s+(?:ich|wir)\s+"
-    rf"(?:(?:heute|polizeilich|{_RESIDENCE_TIME_QUALIFIER}|{_RESIDENCE_LABEL_CURRENT_QUALIFIER}|{_RESIDENCE_LOCATION_ADVERB})\s+)?"
+    rf"(?:(?:heute|polizeilich|nur\s+(?:{_RESIDENCE_TIME_QUALIFIER})|{_RESIDENCE_TIME_QUALIFIER}|{_RESIDENCE_LABEL_CURRENT_QUALIFIER}|{_RESIDENCE_LOCATION_ADVERB})\s+)?"
     r"(?:zusammen\s+mit|mit|bei)\s+"
     r"(?![^,.;!?]*\b(?:arbeit\w*|job\w*|büro\w*|buero\w*|studier\w*|studium\w*|lern\w*)\b)"
     r"[^,.;!?]{1,80}\s+(?:wohne|wohnen|lebe|leben)\b",
