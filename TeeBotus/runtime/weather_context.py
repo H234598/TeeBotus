@@ -9969,12 +9969,16 @@ def fetch_weather_summary(city: str) -> str:
     if not isinstance(area, Mapping):
         area = {}
     name = _area_name(area) or city
-    temp = str(current.get("temp_C") or "").strip()
-    feels = str(current.get("FeelsLikeC") or "").strip()
+    temp_value = current.get("temp_C")
+    feels_value = current.get("FeelsLikeC")
+    humidity_value = current.get("humidity")
+    wind_value = current.get("windspeedKmph")
+    temp = "" if temp_value is None else str(temp_value).strip()
+    feels = "" if feels_value is None else str(feels_value).strip()
     desc_values = current.get("weatherDesc") if isinstance(current.get("weatherDesc"), list) else []
     desc = str(desc_values[0].get("value") or "").strip() if desc_values and isinstance(desc_values[0], Mapping) else ""
-    humidity = str(current.get("humidity") or "").strip()
-    wind = str(current.get("windspeedKmph") or "").strip()
+    humidity = "" if humidity_value is None else str(humidity_value).strip()
+    wind = "" if wind_value is None else str(wind_value).strip()
     parts = [name]
     if temp:
         parts.append(f"{temp} C")

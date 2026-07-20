@@ -1742,6 +1742,26 @@ def test_fetch_weather_summary_escapes_city_path_separators() -> None:
     assert requests == ["https://wttr.in/A%2FB?format=j1"]
 
 
+def test_fetch_weather_summary_preserves_numeric_zero_values() -> None:
+    payload = {
+        "current_condition": [{"temp_C": 0, "FeelsLikeC": 0, "humidity": 0, "windspeedKmph": 0}],
+        "nearest_area": [{"areaName": [{"value": "Berlin"}]}],
+    }
+
+    class Response:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc_value, traceback):
+            return False
+
+        def read(self):
+            return json.dumps(payload).encode("utf-8")
+
+    with patch("TeeBotus.runtime.weather_context.urllib.request.urlopen", return_value=Response()):
+        assert fetch_weather_summary("Berlin") == "Berlin, 0 C, Luftfeuchte 0%, Wind 0 km/h"
+
+
 def test_extract_residence_city_accepts_activity_prefix_city_names() -> None:
     for city in ("Fahren", "Gehrden", "Reiskirchen", "Machern", "Sehnde", "Treffurt"):
         assert extract_residence_city(f"Ich wohne in {city}.") == city
