@@ -3310,6 +3310,8 @@ def test_extract_residence_city_rejects_secondary_residence_without_primary() ->
     assert extract_residence_city("Ich wohne in Berlin, meine Hauptadresse ist ebenfalls Berlin.") == "Berlin"
     assert extract_residence_city("Hamburg ist meine Hauptadresse.") == "Hamburg"
     assert extract_residence_city("Berlin ist mein Wohnort, Hamburg ist meine Hauptadresse.") == ""
+    assert extract_residence_city("Ich wohne in Berlin, aber meine Adresse ist aktuell Hamburg.") == ""
+    assert extract_residence_city("Ich wohne aktuell in Berlin, meine Adresse ist derzeit Hamburg.") == ""
     assert extract_residence_city("Hamburg ist meine Hauptadresse, Berlin mein Wohnort.") == ""
     assert extract_residence_city("Berlin ist mein Wohnort und Hamburg ist meine aktuelle Adresse.") == ""
     assert extract_residence_city("Berlin ist mein Wohnort, Hamburg meine private Adresse.") == ""

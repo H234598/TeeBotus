@@ -7764,6 +7764,14 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         _GENITIVE_RESIDENCE_ADDRESS_CITY,
         re.compile(
             rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
+            r"(?:wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s+"
+            r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
+            rf"(?:(?:derzeit|{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)*"
+            rf"(?:(?:in|bei)\s+)?{city_capture}",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            rf"\b(?:{_RESIDENCE_LABEL_DETERMINER})?\s*"
             r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
             r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse)\s+"
             r"(?:ist|lautet|liegt|befindet\s+sich)\s+"
