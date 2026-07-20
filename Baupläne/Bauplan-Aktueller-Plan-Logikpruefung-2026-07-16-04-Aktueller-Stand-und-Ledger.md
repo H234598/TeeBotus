@@ -1833,3 +1833,21 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `feeb44b8`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-06
+
+- `teebotus.service` aktiv/running, `MainPID 2038659`, Start `2026-07-20 02:24:52 CEST`.
+- Fremdpersonen-Wohnlabels werden auch bei possessiven `hat ... Wohnsitz/
+  Wohnadresse ... in/bei`-Formen am tatsächlichen City-Start gefiltert.
+- Nach Codefix und diesem Ledger-Commit: `16/20` Commits seit Restart. Kein
+  Push. Restart erst bei 20/20.
+
+### Folgefix 2026-07-20: Possessive Fremdpersonen-Wohnlabels
+
+- `Ich wohne in Berlin und meine Frau hat ihren Wohnsitz in Hamburg` sowie
+  `... ihre Wohnadresse bei Hamburg` behalten Berlin als eigene Wohnstadt.
+- Der Offset-Check nutzt Pattern- und tatsächlichen City-Start; dadurch werden
+  Präpositionsvarianten nicht mehr als eigener Wohnort gewertet.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `e12a06c9`.
