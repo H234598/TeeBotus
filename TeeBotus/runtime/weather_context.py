@@ -931,7 +931,20 @@ _DIRECT_RESIDENCE_REGISTRATION_LABEL_PAIR = re.compile(
     r"(?P<second_label>wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
     r"meldeadresse|meldeanschrift|meldesitz)"
     r"\s*(?::|=|,|\s+)\s*(?:(?:in|bei)\s+)?"
-    r"(?P<second_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    r"(?P<second_city>(?!(?:auch|ebenfalls|ebenso)(?=\s*(?:[.!?;,]|$)))"
+    r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
+    re.IGNORECASE,
+)
+_DIRECT_RESIDENCE_REGISTRATION_LABEL_ALIAS_PAIR = re.compile(
+    rf"(?:^|[.!?;\n]\s*)(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    r"(?P<first_label>wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"meldeadresse|meldeanschrift|meldesitz)"
+    r"\s*(?::|=|,|\s+)\s*(?:(?:in|bei)\s+)?"
+    r"(?P<first_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
+    rf"(?:{_RESIDENCE_LABEL_DETERMINER}\s+)?"
+    r"(?P<second_label>wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"meldeadresse|meldeanschrift|meldesitz)"
+    r"\s*(?::|=|,|\s+)\s*(?:auch|ebenfalls|ebenso)(?=\s*(?:[.!?;,]|$))",
     re.IGNORECASE,
 )
 _CITY_BEFORE_RESIDENCE_LABEL_WITH_LAUTET = re.compile(
@@ -5503,6 +5516,19 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
             and second
             and _city_comparison_key(first) == _city_comparison_key(second)
         ):
+            return False
+    for pair in _DIRECT_RESIDENCE_REGISTRATION_LABEL_ALIAS_PAIR.finditer(multiplicity_source):
+        first_is_registration = pair.group("first_label").casefold() in {
+            "meldeadresse",
+            "meldeanschrift",
+            "meldesitz",
+        }
+        second_is_registration = pair.group("second_label").casefold() in {
+            "meldeadresse",
+            "meldeanschrift",
+            "meldesitz",
+        }
+        if first_is_registration != second_is_registration:
             return False
     if any(
         pattern.search(source)

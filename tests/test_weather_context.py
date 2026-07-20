@@ -3152,6 +3152,14 @@ def test_extract_residence_city_handles_direct_residence_registration_label_pair
     assert extract_residence_city("Ich lebe in Berlin und Berlin ist mein Wohnsitz.") == "Berlin"
 
 
+def test_extract_residence_city_handles_direct_residence_registration_aliases() -> None:
+    for alias in ("auch", "ebenfalls", "ebenso"):
+        assert extract_residence_city(f"Wohnort: Berlin, Meldeadresse {alias}.") == "Berlin"
+        assert extract_residence_city(f"Meldeadresse: Berlin, Wohnort {alias}.") == "Berlin"
+        assert extract_residence_city(f"Meine Meldeadresse: Berlin, mein Wohnort {alias}.") == "Berlin"
+    assert extract_residence_city("Wohnort: Berlin, Meldeadresse ebenfalls Hamburg.") == ""
+
+
 def test_extract_residence_city_handles_labeled_area_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Region um Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Berliner Region.") == "Berlin"
