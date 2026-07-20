@@ -888,7 +888,8 @@ _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY = re.compile(
     rf"seit\s+{_RESIDENCE_DURATION}\b|"
     r"seit\s+(?:heute|gestern|vorgestern)|ab\s+(?:sofort|jetzt)|"
     r"inzwischen|mittlerweile|momentan|weiterhin|nach\s+wie\s+vor|noch\s+immer|"
-    r"immer\s+noch|zurzeit|zur\s+zeit|seitdem)\b\s*[:=]?\s*"
+    r"immer\s+noch|zurzeit|zur\s+zeit|seitdem|dauerhaft|permanent|langfristig|"
+    r"endgültig|endgueltig|unbefristet|stabil)\b\s*[:=]?\s*"
     r"(?:(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+)?"
     r"(?:(?:in|bei)\s+)?"
     r"(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)(?=\s*(?:[.!?;,]|$))",
