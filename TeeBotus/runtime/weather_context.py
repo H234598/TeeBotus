@@ -1184,7 +1184,7 @@ _DIRECT_RESIDENCE_LABEL_CITY_ALIAS_PAIR = re.compile(
 )
 _CITY_BEFORE_RELATIVE_CURRENT_RESIDENCE = re.compile(
     r"(?:^|[.!?;,:]\s*)(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*(?:,|;|:|[-–—])\s*"
-    r"(?:wo|in\s+(?:der|dem))\s+(?:ich|wir)\s+"
+    r"(?:wo|in\s+(?:der|dem|welcher)|worin)\s+(?:ich|wir)\s+"
     rf"(?:(?:heute|polizeilich|{_RESIDENCE_TIME_QUALIFIER}|{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+(?:wohne|wohnen|lebe|leben)\b|"
     rf"(?:(?:heute|polizeilich|{_RESIDENCE_TIME_QUALIFIER}|{_RESIDENCE_LABEL_CURRENT_QUALIFIER})\s+)?"
     r"(?:bin(?:d)?\s+(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert|zu\s+hause|zuhause|daheim)|"
