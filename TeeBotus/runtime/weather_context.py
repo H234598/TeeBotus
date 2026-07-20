@@ -7894,7 +7894,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
 
 
 def _has_conflicting_current_relative_residence(source: str) -> bool:
-    current_targets: set[str] = set()
+    current_targets: dict[int, set[str]] = {}
     relative_pattern = re.compile(
         r"\b(?:es\s+ist\s+)?(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*,?\s+"
         r"(?:wo|in\s+(?:der|dem|welcher)|worin)\s+(?:ich|wir)\s+"
@@ -7912,11 +7912,17 @@ def _has_conflicting_current_relative_residence(source: str) -> bool:
         r"(?:zuhause|zu\s+hause|daheim|wohnhaft|ansässig|ansaessig|gemeldet|registriert)\b",
         re.IGNORECASE,
     )
+    inverted_pattern = re.compile(
+        r"\b(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:wohne|wohnen|lebe|leben)\s+(?:ich|wir)\b",
+        re.IGNORECASE,
+    )
     relative_matches = tuple(relative_pattern.finditer(source))
     home_matches = tuple(home_pattern.finditer(source))
-    if not relative_matches and not home_matches:
+    inverted_matches = tuple(inverted_pattern.finditer(source))
+    if not relative_matches and not home_matches and not inverted_matches:
         return False
-    for pattern in (direct_pattern, relative_pattern, home_pattern):
+    for pattern in (direct_pattern, relative_pattern, home_pattern, inverted_pattern):
         for match in pattern.finditer(source):
             if pattern is not direct_pattern and re.match(
                 r"(?i)^(?:ich|wir)\b",
@@ -7927,8 +7933,11 @@ def _has_conflicting_current_relative_residence(source: str) -> bool:
                 continue
             city = _clean_city(match.group("city"))
             if city:
-                current_targets.add(_city_comparison_key(city))
-    return len(current_targets) > 1
+                sentence_index = len(
+                    re.findall(r"(?<!\bSt)[.!?]", source[: match.start("city")], flags=re.IGNORECASE)
+                )
+                current_targets.setdefault(sentence_index, set()).add(_city_comparison_key(city))
+    return any(len(targets) > 1 for targets in current_targets.values())
 
 
 def _has_ambiguous_residence_targets(source: str) -> bool:

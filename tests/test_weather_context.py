@@ -3887,6 +3887,12 @@ def test_extract_residence_city_handles_temporal_label_forms() -> None:
     assert extract_residence_city(
         "Ich wohne in Berlin und verbringe manchmal Nächte in Hamburg."
     ) == "Berlin"
+    assert extract_residence_city(
+        "In Berlin wohne ich und in Hamburg bin ich zuhause."
+    ) == ""
+    assert extract_residence_city(
+        "In Berlin wohne ich und in Hamburg wohne ich."
+    ) == ""
     assert extract_residence_city("Hamburg; wo ich jetzt wohne.") == "Hamburg"
     assert extract_residence_city("Hamburg: wo ich jetzt wohne.") == "Hamburg"
     assert extract_residence_city("Hamburg – wo ich jetzt wohne.") == "Hamburg"
