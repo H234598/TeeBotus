@@ -5931,6 +5931,17 @@ def _has_explicit_residence_multiplicity(source: str) -> bool:
     ):
         return True
     if re.search(
+        r"\b(?:wohne|wohnen|lebe|leben)\b\s+sowohl\s+(?:in|bei)\s+[^,.;!?]{1,80}?\s+"
+        r"als\s+auch\s+(?:in|bei)\s+[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}(?=\s*(?:[.!?;,]|$))|"
+        r"\b(?:wohne|wohnen|lebe|leben)\b\s+(?:in|bei)\s+[^,.;!?]{1,80}?"
+        r"(?:[,;]\s*(?:(?:und|aber|doch|jedoch)\s+)?|\s+(?:und|aber|doch|jedoch)\s+)"
+        r"auch\s+(?:in|bei)\s+"
+        r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}(?=\s*(?:[.!?;,]|$))",
+        multiplicity_source,
+        re.IGNORECASE,
+    ):
+        return True
+    if re.search(
         r"\b(?:wohne|wohnen|lebe|leben|wohnort|wohnsitz)\b[^.!?;\n]*\b"
         r"(?:außerhalb|ausserhalb)\s+(?:der\s+stadt\s+|von\s+)?"
         r"[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?\s+und\s+"
