@@ -3082,6 +3082,12 @@ def test_extract_residence_city_handles_labeled_center_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist am Berliner Stadtrand.") == "Berlin"
 
 
+def test_extract_residence_city_handles_implicit_same_city_aliases() -> None:
+    assert extract_residence_city("Meine Meldeadresse ist in Berlin, mein Wohnort auch.") == "Berlin"
+    assert extract_residence_city("Meine Meldeadresse ist in Berlin, mein Wohnort ebenfalls.") == "Berlin"
+    assert extract_residence_city("Meine Meldeadresse ist in Berlin, mein Wohnort Hamburg.") == ""
+
+
 def test_extract_residence_city_handles_labeled_area_relations() -> None:
     assert extract_residence_city("Mein Wohnort ist in der Region um Berlin.") == "Berlin"
     assert extract_residence_city("Mein Wohnort ist in der Berliner Region.") == "Berlin"

@@ -5323,6 +5323,8 @@ def extract_residence_city(text: str) -> str:
                     pattern_start = offset + match.start()
                     city_start = offset + match.start("city")
                     city_end = offset + match.end("city")
+                    if _is_implicit_residence_alias_fragment(source, city_start, city_end):
+                        continue
                     if _has_historical_residence_prefix(source, pattern_start):
                         continue
                     if _has_companion_residence_prefix(source, city_start):
@@ -6007,6 +6009,21 @@ def _has_non_residential_companion_context(source: str) -> bool:
     return False
 
 
+def _is_implicit_residence_alias_fragment(source: str, city_start: int, city_end: int) -> bool:
+    if source[city_start:city_end].strip().casefold() not in {"auch", "ebenfalls"}:
+        return False
+    return bool(
+        re.search(
+            r"\b(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+            r"wohnadresse|wohnanschrift|meldeadresse|meldeanschrift|meldesitz|"
+            r"adresse|anschrift|zuhause|zu\s+hause|daheim)\s*"
+            r"(?:(?:ist|liegt|lautet|befindet\s+sich)\s+)?$",
+            source[:city_start].rstrip(),
+            re.IGNORECASE,
+        )
+    )
+
+
 def _has_conflicting_residence_address_targets(source: str) -> bool:
     city_capture = (
         r"(?:\d{5}\s+)?"
@@ -6347,6 +6364,8 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
                 pattern_start = match.start()
                 city_start = match.start("city")
                 city_end = match.end("city")
+                if _is_implicit_residence_alias_fragment(source, city_start, city_end):
+                    continue
                 if (
                     _has_historical_residence_prefix(source, pattern_start)
                     or _has_future_residence_prefix(source, pattern_start, city_start)
