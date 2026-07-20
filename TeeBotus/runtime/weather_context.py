@@ -132,6 +132,7 @@ _NON_CITY_CONTEXT_TOKENS = frozenset(
         "gemeinsam",
     }
 )
+_RESIDENCE_ALIAS_WORDS = frozenset({"auch", "ebenfalls", "ebenso"})
 _NON_CITY_REGION_NAMES = frozenset(
     {
         "brandenburg",
@@ -6010,7 +6011,7 @@ def _has_non_residential_companion_context(source: str) -> bool:
 
 
 def _is_implicit_residence_alias_fragment(source: str, city_start: int, city_end: int) -> bool:
-    if source[city_start:city_end].strip().casefold() not in {"auch", "ebenfalls", "ebenso"}:
+    if source[city_start:city_end].strip() not in _RESIDENCE_ALIAS_WORDS:
         return False
     return bool(
         re.search(
@@ -6022,6 +6023,22 @@ def _is_implicit_residence_alias_fragment(source: str, city_start: int, city_end
             re.IGNORECASE,
         )
     )
+
+
+def _standalone_residence_aliases(source: str) -> set[str]:
+    aliases: set[str] = set()
+    for match in re.finditer(
+        r"\b(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|meldeadresse|meldeanschrift|meldesitz|"
+        r"adresse|anschrift|zuhause|zu\s+hause|daheim)\s+"
+        r"(?P<alias>auch|ebenfalls|ebenso)(?=\s*(?:[,.;!?]|$))",
+        source,
+        re.IGNORECASE,
+    ):
+        alias = match.group("alias")
+        if alias == alias.casefold():
+            aliases.add(alias)
+    return aliases
 
 
 def _has_conflicting_residence_address_targets(source: str) -> bool:
@@ -6722,6 +6739,7 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         if city:
             foreign_registered_city_keys.add(_city_comparison_key(city))
     registered_address_cities.difference_update(foreign_registered_city_keys)
+    registered_address_cities.difference_update(_standalone_residence_aliases(source))
     residence_address_cities = residence_cities | address_cities
     if (
         residence_address_cities
@@ -7166,7 +7184,10 @@ def _has_ambiguous_residence_targets(source: str) -> bool:
         r"umgebung\b|region\b|nähe\b|naehe\b|"
         r"(?:mein(?:e)?|unser(?:e)?)?\s*(?:geburtsort|geburtsstadt|heimat|heimatstadt|"
         r"herkunftsort|herkunftsstadt|arbeitsort|arbeitsadresse|geschäftsadresse|"
-        r"geschaeftsadresse|dienstadresse|büroadresse|bueroadresse)\b))"
+        r"geschaeftsadresse|dienstadresse|büroadresse|bueroadresse|"
+        r"wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+        r"wohnadresse|wohnanschrift|privatadresse|privatanschrift|anschrift|adresse|"
+        r"meldeadresse|meldeanschrift|meldesitz|zuhause|zu\s+hause|daheim)\b))"
         r"(?P<second>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]*?)\s*(?:[.!?;,]|$)",
         source,
         re.IGNORECASE,
@@ -7777,6 +7798,8 @@ def _clean_city(value: str) -> str:
         "",
         source,
     ).strip()
+    city = re.sub(r"(?i)^(?:(?:auch|ebenfalls|ebenso)\s+)?(?:in|bei)\s+", "", city)
+    city = re.sub(r"(?i)^(?:auch|ebenfalls|ebenso)\s+", "", city)
     city = CITY_TRAILING_STOP_RE.sub("", city).strip(" .,:;!?")
     city = re.sub(r"\s+", " ", city)
     city = re.sub(
@@ -7797,7 +7820,7 @@ def _clean_city(value: str) -> str:
         city,
     ).strip()
     city = re.split(r"(?<!\bSt)[.!?]\s+", city, maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,:;!?")
-    city = re.sub(r"(?i)^(?:in|bei)\s+", "", city)
+    city = re.sub(r"(?i)^(?:(?:auch|ebenfalls|ebenso)\s+)?(?:in|bei)\s+", "", city)
     city = re.sub(r"(?i)^(?:auch|ebenfalls|ebenso)\s+", "", city)
     city = re.sub(r"(?i)(?<!er)(?:[-\s]+)(?:nähe|umgebung)\b$", "", city).strip()
     city = re.sub(
