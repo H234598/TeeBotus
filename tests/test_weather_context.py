@@ -1645,6 +1645,13 @@ def test_extract_residence_city_handles_pronoun_first_short_self_clause() -> Non
     assert extract_residence_city("Ihr Wohnort ist Hamburg und du in Berlin.") == ""
 
 
+def test_extract_residence_city_handles_possessive_short_self_clause() -> None:
+    assert extract_residence_city("Der Wohnort meiner Frau ist Hamburg; meiner ist Berlin.") == "Berlin"
+    assert extract_residence_city("Der Wohnort meiner Frau ist Hamburg, meine ist Berlin.") == "Berlin"
+    assert extract_residence_city("Der Wohnsitz meiner Eltern ist Hamburg und unserer ist Berlin.") == "Berlin"
+    assert extract_residence_city("Der Wohnort meiner Frau ist Hamburg; meiner liegt in Berlin.") == "Berlin"
+
+
 def test_extract_residence_city_rejects_unknown_label_values() -> None:
     assert extract_residence_city("Mein Wohnort ist irgendwo.") == ""
     assert extract_residence_city("Mein Wohnort ist unklar.") == ""
