@@ -2346,3 +2346,18 @@
   Telegram-Wettertest -> `1 passed`. Code-Commit: `6b25178d`.
 - Neuer Zyklus: `12/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
+
+### Folgefix 2026-07-20: Zukunfts- und Modalformulierungen
+
+- `Ich werde/soll/könnte in Hamburg wohnen`, `Ich plane, in Hamburg zu wohnen`,
+  `Ich beabsichtige ...` und `Ich habe vor ...` wurden teilweise als aktueller
+  Wohnort erkannt.
+- Zukunfts- und Modalverben werden jetzt als nicht aktuelle Wohnortbehauptung
+  verworfen. Die Prüfung bleibt auf die relevante Klausel begrenzt, damit ein
+  späterer aktueller Zusatz wie `derzeit in Berlin` erhalten bleibt.
+- Regressionen decken alle genannten Formen sowie den Klauselkonflikt ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `f39af1b4`.
+- Neuer Zyklus: `14/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
