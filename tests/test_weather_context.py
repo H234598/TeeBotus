@@ -1689,6 +1689,14 @@ def test_extract_residence_city_handles_qualified_short_self_clause() -> None:
     assert extract_residence_city("Ich beruflich in Berlin, mein Partner in Hamburg.") == ""
 
 
+def test_extract_residence_city_handles_temporal_short_self_clause() -> None:
+    assert extract_residence_city("Mein Partner wohnt in Hamburg, ich seit 2020 in Berlin.") == "Berlin"
+    assert extract_residence_city("Meine Freundin lebt in Hamburg, ich seit Jahren in Berlin.") == "Berlin"
+    assert extract_residence_city("Meine Eltern wohnen in Hamburg, wir seit dem Studium in Berlin.") == "Berlin"
+    assert extract_residence_city("Ich vorübergehend in Berlin, mein Partner in Hamburg.") == "Berlin"
+    assert extract_residence_city("Mein Partner wohnt in Hamburg, ich beruflich seit 2020 in Berlin.") == ""
+
+
 def test_extract_residence_city_rejects_unknown_label_values() -> None:
     assert extract_residence_city("Mein Wohnort ist irgendwo.") == ""
     assert extract_residence_city("Mein Wohnort ist unklar.") == ""
