@@ -323,6 +323,17 @@ def _structured_reminder_intent(
     recurrence = str(decision.recurrence or "").strip()
     anchor_day, anchor_end_of_month = _recurrence_anchor_from_text(raw, recurrence, fallback=resolved_now)
     if not decision.datetime_iso:
+        interval_due = _initial_interval_due(resolved_now, recurrence)
+        if interval_due:
+            return ReminderIntent(
+                True,
+                due_at=interval_due,
+                subject=subject,
+                recurrence=recurrence,
+                recurrence_anchor_day=anchor_day,
+                recurrence_anchor_end_of_month=anchor_end_of_month,
+                source="model",
+            )
         return ReminderIntent(
             True,
             subject=subject,
