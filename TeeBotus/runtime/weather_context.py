@@ -911,7 +911,8 @@ _CITY_CHANGE_LABELLED_OLD_CURRENT_CITY = re.compile(
 _CITY_CHANGE_LABELLED_OLD_CURRENT_SHORT = re.compile(
     r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
     r"(?:alt\w*|ehemalig\w*|früh\w*|frueh\w*)\s+"
-    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*[:=]?\s*"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"zuhause|zu\s+hause|daheim)\s*[:=]?\s*"
     r"(?P<old_city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s*[,;]\s*"
     r"(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
     r"(?:neu\w*|aktuell\w*|jetzig\w*|gegenwärtig\w*|gegenwaertig\w*)\s*[:=]\s*"
@@ -920,7 +921,8 @@ _CITY_CHANGE_LABELLED_OLD_CURRENT_SHORT = re.compile(
 )
 _LABELLED_PRIMARY_TEMPORARY_RESIDENCE = re.compile(
     r"\b(?:(?:mein(?:e)?|unser(?:e)?)\s+)?"
-    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt)\s*[:=]?\s*"
+    r"(?:wohnort|wohnsitz|wohnstadt|hauptwohnsitz|lebensmittelpunkt|"
+    r"zuhause|zu\s+hause|daheim)\s*[:=]?\s*"
     r"(?P<first>[A-ZÄÖÜ][\wÄÖÜäöüß '-]{1,80}?)\s*[,;.!?]\s*"
     rf"{_TEMPORARY_RESIDENCE_QUALIFIER}\s+"
     r"(?:(?:wohnhaft|ansässig|ansaessig|gemeldet|registriert)\s+)?"
