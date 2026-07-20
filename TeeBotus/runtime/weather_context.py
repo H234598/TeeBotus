@@ -6307,9 +6307,26 @@ def _append_city_memory(
         if not obsolete_rows and current_memory_count < 2:
             if has_current_memory:
                 return True, None
+            previous_rows = [dict(row) for row in rows if isinstance(row, Mapping)]
             previous_index = account_store.read_memory_index(account_id)
-            account_store.append_structured_memory_entry(account_id, entry)
-            return True, ([dict(row) for row in rows if isinstance(row, Mapping)], deepcopy(previous_index))
+            try:
+                account_store.append_structured_memory_entry(account_id, entry)
+            except Exception:
+                rollback_errors: list[Exception] = []
+                for restore in (
+                    lambda: account_store.write_memory_entries(account_id, previous_rows),
+                    lambda: account_store.write_memory_index(account_id, previous_index),
+                ):
+                    try:
+                        restore()
+                    except Exception as rollback_exc:  # noqa: BLE001 - expose incomplete recovery.
+                        rollback_errors.append(rollback_exc)
+                if rollback_errors:
+                    raise _ResidenceMemoryRollbackError(
+                        "residence memory rollback failed; entries and index may be inconsistent"
+                    ) from rollback_errors[0]
+                raise
+            return True, (previous_rows, deepcopy(previous_index))
         previous_rows = [dict(row) for row in rows if isinstance(row, Mapping)]
         previous_index = account_store.read_memory_index(account_id)
         retained_rows: list[dict[str, Any]] = []

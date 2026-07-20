@@ -4429,6 +4429,34 @@ def test_city_memory_append_is_retried_after_transient_failure(tmp_path) -> None
     assert len(memories) == 1
 
 
+def test_initial_city_memory_rolls_back_after_append_persist_failure(tmp_path) -> None:
+    account_store = store(tmp_path)
+    _identity, account_id = prepare_account(account_store)
+    previous_index = account_store.read_memory_index(account_id)
+    original_append = account_store.append_structured_memory_entry
+
+    def append_then_fail(write_account_id: str, entry: dict[str, object], **kwargs: object) -> str:
+        memory_id = original_append(write_account_id, entry, **kwargs)
+        raise OSError("residence append failed after persist")
+
+    with patch.object(account_store, "append_structured_memory_entry", side_effect=append_then_fail):
+        result = update_city_and_weather_context(
+            account_store,
+            account_id,
+            "Ich wohne in Berlin.",
+            now=datetime(2026, 6, 15, 9, tzinfo=timezone.utc),
+            provider=lambda city: f"{city}: 12 C",
+        )
+
+    assert result.skipped_reason == "memory_error"
+    assert not [
+        entry
+        for entry in account_store.read_memory_entries(account_id)
+        if str(entry.get("id") or "").startswith("mem_residence_city_")
+    ]
+    assert account_store.read_memory_index(account_id) == previous_index
+
+
 def test_city_change_invalidates_weather_cache_and_checks_new_city(tmp_path) -> None:
     account_store = store(tmp_path)
     _identity, account_id = prepare_account(account_store)
