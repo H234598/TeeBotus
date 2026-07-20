@@ -2051,3 +2051,24 @@
 - Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
   und `git diff --check` gruen. Kein Provider/API-Aufruf.
 - Code-Commit: `9e0dc0e4`.
+
+## Aktueller Ledger 2026-07-20-Post-Restart-8-20
+
+- Vor Restart: `teebotus.service` aktiv/running, `MainPID 2292168`, Start
+  `2026-07-20 03:25:05 CEST`.
+- Organisationsbezüge wie Arbeitgeber, Firma, Unternehmen, Verein, Schule,
+  Praxis und Klinik werden bei fremden Wohnortlabels berücksichtigt.
+- Sweep mit 196 Kombinationen aus 14 Organisations-/Pronominalformen, sieben
+  Konnektoren und beiden Satzrichtungen: `196/196` korrekt.
+- Zyklus erreicht: `20/20` Commits seit letztem Restart. Kein Push.
+
+### Folgefix 2026-07-20: Organisations-Wohnortbezüge
+
+- `Wohnort meines Arbeitgebers ist Hamburg` wird nicht als eigene Stadt
+  übernommen.
+- `Hamburg gehört als Wohnort meiner Firma` wird als Fremdbezug verworfen.
+- Kandidaten- und Suffixfilter verwenden dafür das vorhandene
+  `_OTHER_RESIDENCE_OWNER_LABEL`.
+- Verifikation: `tests/test_weather_context.py` -> `238 passed`, `py_compile`
+  und `git diff --check` gruen. Kein Provider/API-Aufruf.
+- Code-Commit: `f6418555`.
