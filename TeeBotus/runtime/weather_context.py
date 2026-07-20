@@ -293,7 +293,7 @@ _RESIDENCE_DURATION = (
     r"tag(?:e|en)?|woche(?:n)?|monat(?:e|en)?|jahr(?:e|en)?))"
 )
 _RESIDENCE_TIME_QUALIFIER = (
-    rf"(?:(?:schon\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|schon\s+immer|seitdem|"
+    rf"(?:(?:(?:schon|bereits)\s+)?seit\s+{_RESIDENCE_DURATION}|schon\s+lange|schon\s+immer|seitdem|"
     r"(?:schon\s+)?seit\s+(?:gestern|heute|vorgestern)|jetzt|nun|nunmehr|aktuell|derzeit|gerade|grad|momentan|inzwischen|mittlerweile|zurzeit|zur\s+zeit|"
     r"weiterhin|nach\s+wie\s+vor|noch\s+immer|immer\s+noch|"
     rf"dauerhaft|permanent|langfristig|kurzfristig|befristet|unbefristet|vorläufig|vorlaeufig|endgültig|endgueltig|"
