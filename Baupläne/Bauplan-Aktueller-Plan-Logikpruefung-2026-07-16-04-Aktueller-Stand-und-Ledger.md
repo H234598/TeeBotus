@@ -2378,6 +2378,19 @@
 - Neuer Zyklus: `17/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
   Kein Push. Restart erst bei `20/20`.
 
+### Folgefix 2026-07-20: Compound-City im Kontrastsatz
+
+- `Ich arbeite in Hamburg, aber/doch wohne in Frankfurt (Oder)` und
+  `wohne aber` wurden wegen fehlendem Subjekt-/Kontrastpfad verworfen.
+- Bekannte Compound-Cities werden jetzt auch in diesen Kontrastklauseln erkannt;
+  der Multiplicity-Guard akzeptiert den spezifischen Match.
+- Regressionen decken beide Wortstellungen und den bestehenden direkten Pfad ab.
+- Verifikation: komplette `tests/test_weather_context.py` -> `249 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  gruen. Code-Commit: `e903440a`.
+- Neuer Zyklus: `19/20` Commits seit diesem Restart (Ledgercommit eingerechnet).
+  Kein Push. Restart erst bei `20/20`.
+
 ### Folgefix 2026-07-20: Verkürzte Registrierungsformulierungen
 
 - Varianten wie `bin in Hamburg gemeldet`, `offiziell gemeldet in Hamburg`,
