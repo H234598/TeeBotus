@@ -2848,3 +2848,16 @@ die Detailblöcke bleiben unverändert als Nachweis erhalten.
 - Code-Commit erreichte `20/20`; `teebotus.service` danach neu gestartet,
   Status `active/running`, neue PID `3706892`. Dieser Ledger-Commit startet
   neuen Zyklus mit `1/20`. Kein Push.
+
+### Folgefix 2026-07-20: Eigenperson vor Fremdpersonen-Kurzsatz
+
+- `Ich in Berlin, mein Partner in Hamburg` und entsprechende `und`-/`;`-
+  Varianten wurden bisher nicht erkannt.
+- Ein enger Gegenstück-Matcher akzeptiert `ich/wir in/bei Stadt` nur, wenn
+  danach ein bekannter Fremdpersonen-Wohnsatz folgt. Arbeitsangaben wie
+  `mein Partner arbeitet in Hamburg` bleiben ausgeschlossen.
+- Regressionen: vollständige `tests/test_weather_context.py` -> `262 passed`;
+  Telegram-Wettertest -> `1 passed`; `py_compile` und `git diff --check`
+  grün. Code-Commit: `4b11fde3`.
+- Neuer Zyklusstand: `3/20` Commits seit dem Restart, Ledgercommit eingerechnet.
+  Kein Push. Restart erst bei `20/20`.
