@@ -6558,6 +6558,17 @@ def _has_conflicting_residence_address_targets(source: str) -> bool:
         if city:
             registered_address_cities.add(_city_comparison_key(city))
     for match in re.finditer(
+        r"\b(?:(?:ich|wir)\s+|und\s+)(?:bin|sind)\s+"
+        r"(?:(?:offiziell\w*|amtlich\w*|polizeilich\w*|dauerhaft\w*|aktuell\w*)\s+)?"
+        r"(?:in|bei)\s+(?P<city>[A-ZÄÖÜ][\wÄÖÜäöüß .'-]{1,80}?)\s+"
+        r"(?:gemeldet|registriert)\b",
+        source,
+        re.IGNORECASE,
+    ):
+        city = _clean_city(match.group("city"))
+        if city:
+            registered_address_cities.add(_city_comparison_key(city))
+    for match in re.finditer(
         rf"\b(?:(?:{_RESIDENCE_LABEL_DETERMINER})\s+)?"
         r"(?:meldeadresse|meldeanschrift|meldesitz)\s*"
         r"(?:ist|lautet|liegt|befindet\s+sich)\s+(?:(?:in|bei)\s+)?"
